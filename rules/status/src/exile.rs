@@ -40,8 +40,8 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // 「任意玩家获得[除外]…时」 -- the landing clause (already raised from
         // the engine's `exile_log` as `TriggerKind::Exile`; this `Abnormal`
         // hook is the same moment from the abnormal path).
-        On::Action(&[ActionKind::Abnormal], "", Some(exile_landed), on_exile_landed),
-        On::Action(&[ActionKind::Exile], "", None, on_exile_granted),
+        On::Action(&[ActionKind::Abnormal], "", "", Some(exile_landed), on_exile_landed),
+        On::Action(&[ActionKind::Exile], "", "", None, on_exile_granted),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
         // TODO(规则书): 「不能被[指定]」 and the on-board clause are still

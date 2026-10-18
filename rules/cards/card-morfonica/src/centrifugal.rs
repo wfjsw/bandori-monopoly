@@ -32,7 +32,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
         On::FilterFlag(&[FilterKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", None, turn_start),
+        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"离心力，不为所动"#)

@@ -32,16 +32,16 @@ const ORIG: &str = "skill.aveMujica.orig";
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
-        On::Play("", Some(can_halve), halve),
-        On::Action(&[ActionKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
+        On::Play("", "", Some(can_halve), halve),
+        On::Action(&[ActionKind::TurnStartBefore], "slot('skillState') != 0", "", None, at_turn_start),
         // Latch the declared figure for the PayAfter one-sided fixup. `Effect`
         // is the payment declaration (pre-PaySplitAdd); see `latch_orig`.
-        On::Action(&[ActionKind::Effect], "slot('skillState') == 2 && card.placed", None, latch_orig),
+        On::Action(&[ActionKind::Effect], "slot('skillState') == 2 && card.placed", "", None, latch_orig),
         On::Filter(&[FilterKind::PaySplitMul], "slot('skillState') == 2 && card.placed", None, bend),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
         // figure, so the counterpart's side is restored here.
-        On::Action(&[ActionKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
+        On::Action(&[ActionKind::PayAfter], "slot('skillState') == 2 && card.placed", "", None, after_bend),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skillState') == 2", "", None, at_turn_end),
     ],
 );
 

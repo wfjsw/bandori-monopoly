@@ -48,7 +48,7 @@ pub const RETURNS: CardDef = CardDef::new(
         // per non-通用 play by the owner.
         On::Action(
             &[card_sdk::abi::ActionKind::CardPlayed],
-            card_sdk::pre::MINE,
+            card_sdk::pre::MINE, "",
             Some(on_played_is_general),
             on_played,
         ),
@@ -57,17 +57,17 @@ pub const RETURNS: CardDef = CardDef::new(
         // band card to borrow. Derived scans (pool + `is_placed`), residual.
         On::Action(
             &[card_sdk::abi::ActionKind::TurnStartBefore],
-            card_sdk::pre::MINE,
+            card_sdk::pre::MINE, "",
             Some(choose_band_applies),
             choose_band,
         ),
         // [特]（1）「如果此卡被加入初始卡组则卡组卡数添加8」 -- the +8 is
         // unconditional on the rulebook, but the pick prompt only exists when
         // the pool can feed eight draws. Empty pool = no offer, no flash.
-        On::Action(&[ActionKind::DeckBeforeGame], "", Some(deck_pool_ready), deck_before_game),
+        On::Action(&[ActionKind::DeckBeforeGame], "", "", Some(deck_pool_ready), deck_before_game),
         On::Action(
             &[ActionKind::DeckAtGameStart],
-            "trigger_card == card.id",
+            "trigger_card == card.id", "",
             None,
             deck_at_game_start,
         ),

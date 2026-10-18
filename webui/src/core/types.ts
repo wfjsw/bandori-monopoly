@@ -2,12 +2,12 @@
 //
 // Identity rows come from `glue.roster_json()` (`{id, group, name, owner,
 // derived, tags}` / `{name, group, skill, exclusiveCards, preset, variantOf}` /
-// `{name, skill, sharesExclusives}`). Display fields (`text`, `display`,
-// `color`, `shortName`, `rawName`, `cell`, `logo`, `variantTag`, `costume`,
-// `cnId`, `art`, ...) are merged on top from `generated/display.json` and the
-// `data/*.json` tables the page fetches itself -- see `core/data.ts`. Tile
-// `shortName` / `color` / `note` stay on `board.json`; event `name` / `text` /
-// `cell` stay on `events.json`. Match-state shapes mirror the Rust serde wire
+// `{name, skill, sharesExclusives}` / `{id, name, derived, text}`). Display
+// fields (`text`, `display`, `color`, `shortName`, `rawName`, `cell`, `logo`,
+// `variantTag`, `costume`, `cnId`, `art`, ...) are merged on top from
+// `generated/display.json` and the `data/*.json` tables the page fetches
+// itself -- see `core/data.ts`. Tile `shortName` / `color` / `note` stay on
+// `board.json`. Match-state shapes mirror the Rust serde wire
 // (crates/game-core). Field names are the JSON names. All display text that is
 // not a data-table string is a localizable `Msg` (see i18n/msg.ts).
 
@@ -45,7 +45,8 @@ export interface GroupData {
   /** Band-skill traits the deck rules read. */
   sharesExclusives?: boolean;
 }
-/** One event card, from `data/events.json` (identity + display together). */
+/** Merged event row: identity + game prose from `glue.roster_json()`, `cell`
+ *  from `generated/display.json`. */
 export interface EventData { id: string; name: string; derived: boolean; text: string; cell: string }
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }
 
@@ -61,6 +62,10 @@ export interface DisplayFile {
   }>;
   groups: Record<string, {
     text?: string; shortName?: string; color?: string; logo?: string;
+  }>;
+  /** Event display chrome. Absent on a stale export; `dump_display` writes it. */
+  events?: Record<string, {
+    name?: string; text?: string; cell?: string;
   }>;
 }
 

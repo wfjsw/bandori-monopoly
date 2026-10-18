@@ -22,7 +22,7 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
     // (string match on the played id); hand size is CEL.
     &[On::Action(
         &[ActionKind::Card],
-        "actor == owner && hand(owner) >= 1",
+        "actor == owner && hand(owner) >= 1", "",
         Some(is_general_card),
         on_played,
     )],

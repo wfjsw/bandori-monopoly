@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     "Mujica:（睦/mortis）表演的本能",
-    &[On::Play("", None, play), On::Counteract(&[], "", r#"此卡复制[反击]卡时可在符合条件时打出"#, Some(can_counteract), counteract)],
+    &[On::Play("", "", None, play), On::Counteract(&[], "", r#"此卡复制[反击]卡时可在符合条件时打出"#, Some(can_counteract), counteract)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"表演的本能"#)
         .raw_name(r#"（睦/mortis）表演的本能"#)

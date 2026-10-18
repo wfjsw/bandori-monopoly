@@ -23,7 +23,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
             Some(can_counteract),
             counteract,
         ),
-        On::Play("", Some(counter_only), no_play),
+        On::Play("", "", Some(counter_only), no_play),
     ],
 )
 .props(&[(prop::COUNTERACT_GROUP, 1)])

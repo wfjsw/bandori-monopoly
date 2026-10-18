@@ -17,17 +17,18 @@
 //!                                     "variantTag": "...", "art": "...", "costume": "...",
 //!                                     "cnId": "..." } },
 //!   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
-//!                                     "logo": "..." } }
+//!                                     "logo": "..." } },
+//!   "events":   { "<eventId>":     { "name": "...", "text": "...", "cell": "..." } }
 //! }
 //! ```
 //!
 //! * camelCase keys; empty / absent fields are omitted (so only [反击] cards
 //!   carry `counterReason`).
-//! * `counterReason` is read from the card's [`On::Counteract`] reason field
-//!   (the human-readable 「…时」 clause the counteraction prompt shows). Several
-//!   `Counteract` entries join their non-empty reasons with `\n`. A [反击]
-//!   whose clause rides an `On::Action` interrupt (no `Counteract` entry) uses
-//!   `CardMeta::counter_reason` instead.
+//! * Event keys are the **bare** event id (`对邦`), not the `event:` rule-id
+//!   prefix. `derived` is engine data and is not exported.
+//! * `counterReason` is read from the card's [`On::counter_reason`] -- the
+//!   human-readable 「…时」 clause the counteraction prompt shows. Several
+//!   entries join their non-empty reasons with `\n`.
 //! * Deterministic: every map is a `BTreeMap` (sorted keys), pretty JSON,
 //!   one trailing newline -- byte-stable across runs.
 //! * No argument prints the document to stdout. A path argument (or
@@ -92,30 +93,36 @@ fn main() {
     }
 }
 
-/// `{"cards":…,"personas":…,"groups":…}` -- pretty, sorted, trailing newline.
+/// `{"cards":…,"personas":…,"groups":…,"events":…}` -- pretty, sorted,
+/// trailing newline.
 fn display_json() -> String {
     let mut root = JsonMap::new();
     root.insert("cards".into(), Value::Object(cards_map()));
     root.insert("personas".into(), Value::Object(personas_map()));
     root.insert("groups".into(), Value::Object(groups_map()));
+    root.insert("events".into(), Value::Object(events_map()));
     let mut s = serde_json::to_string_pretty(&Value::Object(root)).unwrap();
     s.push('\n');
     s
 }
 
-/// Every `CardDef` that declares a [`card_sdk::meta::CardMeta`], keyed by card id.
-/// The same set `ruleset_metadata` emits (cards without meta are rule-only
-/// pseudo cards: tiles / marks / status / events).
+/// Every `CardDef` that declares a [`card_sdk::meta::CardMeta`] and is **not**
+/// an event (those go in [`events_map`]), keyed by card id. The same set
+/// `ruleset_metadata` emits as `kind = "card"` (cards without meta are
+/// rule-only pseudo cards: tiles / marks / status).
 fn cards_map() -> JsonMap {
     let mut map = JsonMap::new();
     for module in rules_native::RULESET {
         for card in module.iter() {
+            if card.id.starts_with("event:") {
+                continue;
+            }
             let Some(meta) = card.meta else { continue };
             let mut row = JsonMap::new();
             insert_str(&mut row, "text", meta.text);
             insert_str(&mut row, "rawName", meta.raw_name);
             insert_str(&mut row, "cell", meta.cell);
-            insert_str(&mut row, "counterReason", &counter_reason(card, meta));
+            insert_str(&mut row, "counterReason", &counter_reason(card));
             map.insert(card.id.to_string(), Value::Object(row));
         }
     }
@@ -123,10 +130,8 @@ fn cards_map() -> JsonMap {
 }
 
 /// The [反击] trigger's `counterReason`: every non-empty
-/// [`card_sdk::On::Counteract`] reason on this card, joined with `\n`, plus the
-/// [`card_sdk::meta::CardMeta::counter_reason`] fallback for a [反击] whose
-/// clause rides an `On::Action` interrupt (no hand-window `Counteract` entry).
-fn counter_reason(card: &card_sdk::CardDef, meta: &card_sdk::meta::CardMeta) -> String {
+/// [`card_sdk::On::counter_reason`] on this card, joined with `\n`.
+fn counter_reason(card: &card_sdk::CardDef) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for entry in card.on {
         let reason = entry.counter_reason();
@@ -134,10 +139,24 @@ fn counter_reason(card: &card_sdk::CardDef, meta: &card_sdk::meta::CardMeta) -> 
             parts.push(reason);
         }
     }
-    if !meta.counter_reason.is_empty() {
-        parts.push(meta.counter_reason);
-    }
     parts.join("\n")
+}
+
+/// Every event card, keyed by the **bare** event id (`对邦`, matching
+/// `data`'s `EventData::id` / `display.json`). `derived` is engine data and
+/// stays out.
+fn events_map() -> JsonMap {
+    let mut map = JsonMap::new();
+    for card in rules_events::CARDS {
+        let Some(meta) = card.meta else { continue };
+        let bare = card.id.strip_prefix("event:").unwrap_or(card.id);
+        let mut row = JsonMap::new();
+        insert_str(&mut row, "name", meta.name);
+        insert_str(&mut row, "text", meta.text);
+        insert_str(&mut row, "cell", meta.cell);
+        map.insert(bare.to_string(), Value::Object(row));
+    }
+    map
 }
 
 /// Every persona row, keyed by persona name (`personas::roster_table::PERSONAS`).

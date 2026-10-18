@@ -17,7 +17,7 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         // a play gate must not trade its specific refusal
         // (`no_breakup_repeated`) for the generic `err.play_pre` a pre-reject
         // surfaces (GUARDS.md §4.4).
-        "",
+        "", "",
         Some(cant_play),
         no_breakup,
     )],

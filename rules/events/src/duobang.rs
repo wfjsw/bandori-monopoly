@@ -1,6 +1,6 @@
 //! `event:对邦` -- 事件卡「对邦」（中立事件 A2）.
 //!
-//! 事件文本（data/events.json, id `对邦`）:
+//! 事件文本（`CardMeta` beside the rule body, id `对邦`）:
 //! > 所有人立刻进行一次1d20骰子拼点，所有点数最高者从所有点数最低者获得胜出点数x50的钱（例：最高点数18，最低点数16，则需支付 (18-16)x50=100）
 
 use alloc::vec::Vec;
@@ -10,7 +10,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const DUI_BANG: CardDef = CardDef::new("event:对邦", &[On::Play("", None, play)]);
+pub const DUI_BANG: CardDef = CardDef::new("event:对邦", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"对邦"#)
+            .text(r#"所有人立刻进行一次1d20骰子拼点，所有点数最高者从所有点数最低者获得胜出点数x50的钱（例：最高点数18，最低点数16，则需支付 (18-16)x50=100）"#)
+            .cell(r#"A2"#)
+            .derived(false));
 
 /// 规则书: 「所有人立刻进行一次1d20骰子拼点」 -- one 1d20 per player, no
 /// [反击] window (the text says 立刻, not 掷骰结算前).

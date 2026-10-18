@@ -183,7 +183,7 @@ pub fn on(
     };
     match (*o, op) {
         (On::Counteract(_, _, _, guard, _), export::OP_GUARD)
-        | (On::Action(_, _, guard, _), export::OP_GUARD)
+        | (On::Action(_, _, _, guard, _), export::OP_GUARD)
         | (On::Filter(_, _, guard, _), export::OP_GUARD)
         | (On::FilterFlag(_, _, guard, _), export::OP_GUARD)
         | (On::FilterValue(_, _, guard, _), export::OP_GUARD)
@@ -199,7 +199,7 @@ pub fn on(
             None => 1,
             Some(g) => g(player_id) as i64,
         },
-        (On::Play(_, why, _), export::OP_GUARD) => match why {
+        (On::Play(_, _, why, _), export::OP_GUARD) => match why {
             Some(why) => match why(player_id) {
                 None => 0,
                 // Kani: the Play `why` reason is a `Msg`; serialising it allocates
@@ -250,8 +250,8 @@ pub fn on(
             0
         }
         (On::Counteract(_, _, _, _, run), _)
-        | (On::Play(_, _, run), _)
-        | (On::Action(_, _, _, run), _)
+        | (On::Play(_, _, _, run), _)
+        | (On::Action(_, _, _, _, run), _)
         | (On::Settle(_, _, run), _)
         | (On::Mortgage(_, _, run), _)
         | (On::Redeem(_, _, run), _)

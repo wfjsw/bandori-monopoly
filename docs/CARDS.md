@@ -31,11 +31,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 /// C# `CardPress` -- 压: gain 1,000.
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
-    On::Play("", None, press),
-    // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
-    // On::Counteract(&[ChainKind::Pay], "", guard, counteract),  // [反击]: kinds + condition + guard + effect
-    // On::Action(&[ActionKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
-    // On::Action(&[ActionKind::AtEnd], "", None, at_end),        // scheduled turn-end body
+    On::Play("", "", None, press),
+    // On::Play("", "", Some(cant_play), press),          // C# `Card.WhyNot` gate
+    // On::Counteract(&[ChainKind::Pay], "", r#"你将要失去或支付资金"#, guard, counteract),  // [反击]: kinds + condition + reason + guard + effect
+    // On::Action(&[ActionKind::TurnEnd], "", "", guard, decay),          // field hooks, auto-run in play
+    // On::Action(&[ActionKind::AtEnd], "", "", None, at_end),        // scheduled turn-end body
     // On::FilterValue(&[FilterKind::DiceRollPlan], "", None, roll_plan), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
@@ -69,7 +69,7 @@ final `On` set (ABI v83):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
-| `On::Play(pre, gate, body)` | `fn(i32) -> Asked` | play from hand | yes |
+| `On::Play(pre, reason, gate, body)` | `fn(i32) -> Asked` | play from hand (`reason` = counterReason) | yes |
 | `On::Counteract(kinds, pre, reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`reason` = counterReason) | yes |
 | `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
@@ -77,7 +77,7 @@ final `On` set (ABI v83):
 | `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
 | `On::Buy(pre, guard, body)` | `fn(i32) -> Asked` | a deed's buy / perform body (v80) | yes (`ctx::pay_buy`, `ctx::assign_deed`, `ctx::raise`, `ctx::log`) |
 | `On::Build(pre, guard, body)` | `fn(i32) -> Asked` | a deed's build / perform body (v80) | yes (`ctx::pay_build`, `ctx::raise`, `ctx::log`) |
-| `On::Action(kinds, pre, guard, body)` | `fn(i32) -> Asked` | **event reaction** | yes (`ctx::gain`, log, place, …) |
+| `On::Action(kinds, pre, reason, guard, body)` | `fn(i32) -> Asked` | **event reaction** (`reason` = counterReason) | yes (`ctx::gain`, log, place, …) |
 | `On::Filter(kinds, pre, guard, body)` | `fn(i32, value: i32) -> i32` | **integer value transform** | no (pure) |
 | `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / allow decision** | no (pure) |
 | `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **struct rewrite** (deal / plan / payee / gate) | no (pure) |
@@ -309,13 +309,13 @@ use card_sdk::{pre, On};
 
 // condition (`pre: &'static str`) before the guard
 On::Counteract(&[ChainKind::DiceRollValue], "actor == owner && move.roll != null",
-               can_counteract, counteract),
+               r#"你将要失去或支付资金"#, can_counteract, counteract),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Action(&[ActionKind::TurnEnd], pre::MINE, guard, decay),
+On::Action(&[ActionKind::TurnEnd], pre::MINE, "", guard, decay),
 
 // or the const builder
-On::Play("", Some(cant_play), play).pre("owner.money >= 1500"),
+On::Play("", "", Some(cant_play), play).pre("owner.money >= 1500"),
 ```
 
 **Distinct layers (nothing is rejected twice).** The category filter (the
@@ -345,11 +345,11 @@ player never sees as a clause firing. Those run their body but post no
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
+        On::Play("", "", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
-                 "", None, declare_cap),                               // 1: bookkeeping
-        On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
+                 "", "", None, declare_cap),                               // 1: bookkeeping
+        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
     ],
 )
 .silent(&[1]);
@@ -394,8 +394,8 @@ pulse) shows:
 
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
-    On::Play("", None, use_skill),                  // 0: Auto
-    On::Action(&[ActionKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    On::Play("", "", None, use_skill),                  // 0: Auto
+    On::Action(&[ActionKind::TurnEnd], "", "", None, tick), // 1: Always (self-only)
 ]).flash(&[(1, Flash::Always)]);
 ```
 
@@ -439,7 +439,7 @@ expression. Declare it with `CardDef::new(...).props(&[(prop::EST_COST, N)])`.
 `0` (the default) means unknown / assume free.
 
 ```rust
-pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play("", None, gacha10)])
+pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play("", "", None, gacha10)])
     .props(&[(card_sdk::abi::prop::EST_COST, 1500)]);
 ```
 
@@ -602,9 +602,10 @@ are deleted). The roster is ruleset metadata end to end:
 | `webui/src/core/cards.test.ts` | the same fixture for `text` / `tags` |
 
 `GameData::load(read, roster)` is the one constructor. `DATA_FILES` is the
-remaining three engine tables (board / events / match_rules). The data hash
-(`EngineStamp::data_sha256`) covers exactly those; the roster is covered by
-`ruleset_sha256` (the metadata lives in the modules that hash names).
+remaining two engine tables (board / match_rules). The data hash
+(`EngineStamp::data_sha256`) covers exactly those; the roster (cards /
+personas / groups / events) is covered by `ruleset_sha256` (the metadata lives
+in the modules that hash names).
 
 Display-only overlays live in `webui/src/generated/display.json` (rule text,
 sheet cells, art / costume / logo ids, and the card `counterReason` list).
@@ -787,8 +788,8 @@ The shape:
 
 ```rust
 // 通用:该清CP了
-On::Play("", Some(cant_play), clear_cp),
-On::Action(&[ActionKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Play("", "", Some(cant_play), clear_cp),
+On::Action(&[ActionKind::CpChanged], "", "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -811,8 +812,8 @@ asking it to place CP units; `mark:cp`'s `On::Message` handler runs
 
 ```rust
 // 通用:该清CP了
-On::Play("", Some(cant_play), clear_cp),
-On::Action(&[ActionKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Play("", "", Some(cant_play), clear_cp),
+On::Action(&[ActionKind::CounterChanged], "", "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -846,7 +847,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
 
 // rules/tile_marks/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
-On::Action(&[ActionKind::SettleBody], "", Some(lands_on_cp), on_land),
+On::Action(&[ActionKind::SettleBody], "", "", Some(lands_on_cp), on_land),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();

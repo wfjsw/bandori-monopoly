@@ -16,12 +16,12 @@ const ID: &str = "Mujica:#J11";
 pub const J11: CardDef = CardDef::new(
     "Mujica:#J11",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
         // reactions, not [反击]s.
         On::Action(
             &[ActionKind::TurnEnd, ActionKind::Targeted],
-            "card.placed",
+            "card.placed", "",
             None,
             counteract,
         ),
@@ -29,9 +29,9 @@ pub const J11: CardDef = CardDef::new(
         // `set_pay_amount(0)`. Rides `PaySplitChooseBefore` (v78), restoring the
         // rulebook PaySplitChoose position (its own entry; the TurnEnd/Targeted
         // dispatcher is separate). The pure stun cancel stays on FilterFlag.
-        On::Action(&[ActionKind::PaySplitChooseBefore], "card.placed", None, pay_choose_ask),
+        On::Action(&[ActionKind::PaySplitChooseBefore], "card.placed", "", None, pay_choose_ask),
         On::FilterFlag(&[FilterKind::PaySplitChoose], "card.placed", None, pay_choose_cancel),
-        On::Action(&[ActionKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

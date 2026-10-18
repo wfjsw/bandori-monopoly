@@ -1,6 +1,6 @@
 //! `event:上学时间` -- 事件卡「上学时间」（中立事件 A21）.
 //!
-//! 事件文本（data/events.json, id `上学时间`）:
+//! 事件文本（`CardMeta` beside the rule body, id `上学时间`）:
 //! > 全体玩家移动到操作角色当前上学的学校的格子然后获得1层[除外]（如果剧情没有明说则移动到周边学区）。
 
 use ruleset_core::ctx;
@@ -8,7 +8,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const SCHOOL_TIME: CardDef = CardDef::new("event:上学时间", &[On::Play("", None, play)]);
+pub const SCHOOL_TIME: CardDef = CardDef::new("event:上学时间", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"上学时间"#)
+            .text(r#"全体玩家移动到操作角色当前上学的学校的格子然后获得1层[除外]（如果剧情没有明说则移动到周边学区）。"#)
+            .cell(r#"A21"#)
+            .derived(false));
 
 /// 规则书: 「如果剧情没有明说则移动到周边学区」 -- the fallback school tile.
 const FALLBACK: &str = "周边学区";

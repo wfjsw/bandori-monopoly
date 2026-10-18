@@ -30,15 +30,20 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
     &[
-        On::Play("", Some(can_buy), buy_one),
-        On::Action(&[ActionKind::DeckBeforeGame], "", None, deck_before_game),
-        On::Action(&[ActionKind::Drew], "actor == owner && card.placed", None, drew),
+        On::Play(
+            "",
+            r#"[拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]"#,
+            Some(can_buy),
+            buy_one,
+        ),
+        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, deck_before_game),
+        On::Action(&[ActionKind::Drew], "actor == owner && card.placed", "", None, drew),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
         On::Action(
             &[ActionKind::SettleBody],
-            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner",
+            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner", "",
             None,
             settle_body,
         ),
@@ -59,7 +64,6 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
 （3）[拥有者]以外的玩家在[拥有者]拥有的格子[结算]时额外[支付][拥有者]“[拥有者]拥有的[P✽P粉丝]数量”×X+MIN(X×30, 300)。
 （4）[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意[拥有者]所在格子前后3格以内的无主的[可购买格子]。"#)
         .cell(r#"D10"#)
-        .counter_reason(r#"[拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]"#)
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).

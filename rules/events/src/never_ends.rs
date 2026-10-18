@@ -1,6 +1,6 @@
 //! `event:一切不会结束` -- 事件卡「一切不会结束」（中立事件 A28，衍生）.
 //!
-//! 事件文本（data/events.json, id `一切不会结束`）:
+//! 事件文本（`CardMeta` beside the rule body, id `一切不会结束`）:
 //! > 抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层在回合开始时移除的[除外]。
 
 use alloc::format;
@@ -10,7 +10,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play("", None, play)]);
+pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"一切不会结束"#)
+            .text(r#"抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层在回合开始时移除的[除外]。"#)
+            .cell(r#"A28"#)
+            .derived(true));
 
 /// 规则书: 「抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG」 -- the
 /// drawer rolls 1d4 and everyone teleports to RiNG 1..4 (board names in

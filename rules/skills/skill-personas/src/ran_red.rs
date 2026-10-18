@@ -25,9 +25,9 @@ pub const REST_TURNS: &str = "skill.afterglow.restTurns";
 pub const RAN_RED: CardDef = CardDef::new(
     "skill:美竹兰:叛逆的红挑染",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
     ],
 ).silent(&[1]);
 

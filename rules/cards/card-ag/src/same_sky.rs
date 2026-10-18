@@ -13,8 +13,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
-        On::Action(&[ActionKind::Drawn], "trigger_card == card.id", None, counteract),
-        On::Action(&[ActionKind::DeckAtGameStart], "", None, return_at_opening),
+        On::Action(&[ActionKind::Drawn], "trigger_card == card.id", r#"抽出此卡"#, None, counteract),
+        On::Action(&[ActionKind::DeckAtGameStart], "", "", None, return_at_opening),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"朝同一片天空迈进"#)
@@ -22,7 +22,6 @@ pub const SAME_SKY: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击]抽出此卡时立刻打出，如果你手牌数至少为3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）"#)
         .cell(r#"C11"#)
-        .counter_reason(r#"抽出此卡"#)
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 const ID: &str = "AG:朝同一片天空迈进";

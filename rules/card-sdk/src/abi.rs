@@ -2757,8 +2757,10 @@ pub struct ManifestOn {
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnKind {
-    /// `On::Play(cond, gate, body)` -- play this card from hand (or press it as
-    /// a skill via `invoke_skill`). `cond` is the gate's CEL condition, `gate`
+    /// `On::Play(cond, reason, gate, body)` -- play this card from hand (or press it as
+    /// a skill via `invoke_skill`). `cond` is the gate's CEL condition, `reason`
+    /// is the human-readable 「…时」 clause the counteraction prompt shows
+    /// (`""` when this entry is not a [反击] window), `gate`
     /// is the playability query (a pure `Option<Msg>`; `None` = playable,
     /// `Some(why)` = blocked with a reason), `body` is the effect. The host
     /// calls it between the [`TriggerKind::Card`] raise and `cardAfter`.
@@ -2772,10 +2774,9 @@ pub enum OnKind {
     /// answered link. Called at the counteraction offer, then again at LIFO
     /// resolution.
     Counteract = 2,
-    /// `On::Action(kinds, cond, guard, body)` -- an **event reaction** at those
+    /// `On::Action(kinds, cond, reason, guard, body)` -- an **event reaction** at those
     /// [`ActionKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
-    /// `cond`/`guard`/`body` shape as [`Self::Counteract`] (minus its `reason`
-    /// display string). The host calls it
+    /// `cond`/`reason`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
     /// **automatically** for every placed card (placement order per player)
     /// whenever one of the kinds is raised -- no window. May emit effects;
     /// does not modify the triggering value. Kinds must be non-filter

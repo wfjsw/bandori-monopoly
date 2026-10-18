@@ -24,14 +24,14 @@ const SEEN: &str = "skill.crychic.seen";
 pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        On::Action(&[ActionKind::Drawn], card_sdk::pre::MINE, None, on_drawn),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
+        On::Action(&[ActionKind::Drawn], card_sdk::pre::MINE, "", None, on_drawn),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
-        On::Action(&[ActionKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
+        On::Action(&[ActionKind::TurnEndBefore], card_sdk::pre::MINE, "", Some(decks_empty), at_turn_end),
         On::Filter(&[FilterKind::PaySplitChoose], "", Some(in_lock), lock_pay),
-        On::Action(&[ruleset_core::kind::PassRewardAffected], "", Some(in_lock), force_card),
+        On::Action(&[ruleset_core::kind::PassRewardAffected], "", "", Some(in_lock), force_card),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
@@ -43,7 +43,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
         On::FilterFlag(&[FilterKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
-        On::Play("", Some(can_transform), transform_now),
+        On::Play("", "", Some(can_transform), transform_now),
     ],
 )
     .silent(&[0]);

@@ -29,17 +29,17 @@ const PENALTY: &str = "skill.soyoClear.penalty";
 pub const SOYO_CLEAR: CardDef = CardDef::new(
     "skill:长崎素世:通透的颜色",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
         // （2）「移动掷骰后可消耗一个火罐」 -- only with a pot to spend, and
         // only on a free roll.
         On::Action(
             &[ActionKind::DiceRollAfter],
-            "actor == owner && charge(owner) >= 1 && plan.fixed_roll == null",
+            "actor == owner && charge(owner) >= 1 && plan.fixed_roll == null", "",
             None,
             offer,
         ),
-        On::Action(&[ActionKind::Settle], "actor == owner && slot('skill.soyoClear.armed') != 0", None, on_settle),
+        On::Action(&[ActionKind::Settle], "actor == owner && slot('skill.soyoClear.armed') != 0", "", None, on_settle),
     ],
 )
     .silent(&[0]);

@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
-        On::Play("", Some(cant_play), play),
+        On::Play("", "", Some(cant_play), play),
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
         On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", "", None, counteract),
@@ -26,8 +26,8 @@ pub const DETOUR: CardDef = CardDef::new(
         On::FilterValue(&[FilterKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, next_roll),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
-        On::Action(&[ActionKind::DiceRollAfter], "slot('detour_next_roll') != 0", None, consume_next_roll),
-        On::Action(&[ActionKind::AtEnd], "", None, clear_no_reward),
+        On::Action(&[ActionKind::DiceRollAfter], "slot('detour_next_roll') != 0", "", None, consume_next_roll),
+        On::Action(&[ActionKind::AtEnd], "", "", None, clear_no_reward),
     ],
 )
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()

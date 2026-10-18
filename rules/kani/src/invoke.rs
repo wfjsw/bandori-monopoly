@@ -158,9 +158,9 @@ fn find_or_fail(id: &str) -> &'static card_sdk::CardDef {
 /// Entry body of `On` (the `fn(i32) -> Asked`).
 fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
-        On::Play(_, _, f)
+        On::Play(_, _, _, f)
         | On::Counteract(_, _, _, _, f)
-        | On::Action(_, _, _, f)
+        | On::Action(_, _, _, _, f)
         | On::Settle(_, _, f)
         | On::Mortgage(_, _, f)
         | On::Redeem(_, _, f)
@@ -484,7 +484,7 @@ pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
 pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::ActionKind, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if let On::Action(kinds, _, _, _) = on {
+        if let On::Action(kinds, _, _, _, _) = on {
             // Zero-loop kind match (`iter().any` over a short slice unrolls
             // to the global bound under CBMC).
             let mut hit = false;

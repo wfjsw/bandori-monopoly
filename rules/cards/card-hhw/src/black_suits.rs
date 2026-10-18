@@ -28,7 +28,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // the residual guard.
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner && tile.id == tile_named('弦卷集团')",
+            "actor == owner && tile.id == tile_named('弦卷集团')", "",
             Some(pass_tile_guard),
             pass_tile,
         ),

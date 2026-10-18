@@ -35,11 +35,11 @@ pub const ASAHI_AIM: CardDef = CardDef::new(
         // (not CEL's tile-kind `is_venue`), so it is the residual.
         On::Action(
             &[ActionKind::Bought],
-            "actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')",
+            "actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')", "",
             Some(not_live_house_for_me),
             on_bought,
         ),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, Some(owns_bath_with_lh), at_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", Some(owns_bath_with_lh), at_turn_start),
     ],
 );
 

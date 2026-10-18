@@ -23,13 +23,13 @@ const ID: &str = "HHW:（育美）";
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 规则书（1）: 「你经过育美标记时可在那格强制停下」 -- the offer exists
         // only when one of this player's 育美标记 sits on the tile. Mark count
         // is a derived scan, residual (docs/GUARDS.md §4.2).
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner && card.placed && move.kind != Teleport && tile.id >= 0",
+            "actor == owner && card.placed && move.kind != Teleport && tile.id >= 0", "",
             Some(has_mark_here),
             hook,
         ),

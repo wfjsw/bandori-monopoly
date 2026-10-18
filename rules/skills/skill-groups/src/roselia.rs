@@ -29,17 +29,17 @@ pub const ROSELIA: CardDef = CardDef::new(
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
         On::Action(
             &[ActionKind::Bought],
-            "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
+            "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0", "",
             Some(on_bought_applies),
             on_bought,
         ),
         On::Action(
             &[ActionKind::Bought],
-            "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0",
+            "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0", "",
             Some(on_live_bought_applies),
             on_live_bought,
         ),
-        On::Action(&[ActionKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", "", None, at_turn_start),
     ],
 )
     .silent(&[1]);

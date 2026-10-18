@@ -55,12 +55,6 @@ pub struct CardMeta {
     /// Sheet cell this row was lifted from (`cell`). Display-only: exported to
     /// `display.json`, not emitted on [`MetaRow`].
     pub cell: &'static str,
-    /// The [反击] trigger's human-readable 「…时」 clause (`counterReason`).
-    /// Normally authored on the card's [`crate::On::Counteract`] reason field;
-    /// this slot is the fallback for a [反击] whose clause rides an
-    /// [`crate::On::Action`] interrupt instead of a hand-window counteraction.
-    /// Display-only: exported to `display.json`, not emitted on [`MetaRow`].
-    pub counter_reason: &'static str,
     /// Game-specific string slots, `(key, value)`. This game's card-row keys
     /// are `band` and `owner` (`ruleset_core::meta_key`). Missing key = empty.
     pub fields: &'static [(&'static str, &'static str)],
@@ -75,7 +69,6 @@ impl CardMeta {
             tags: &[],
             derived: false,
             cell: "",
-            counter_reason: "",
             fields: &[],
         }
     }
@@ -107,13 +100,6 @@ impl CardMeta {
 
     pub const fn cell(mut self, cell: &'static str) -> Self {
         self.cell = cell;
-        self
-    }
-
-    /// The [反击] prompt's 「…时」 clause, for a card whose [反击] rides an
-    /// [`crate::On::Action`] interrupt (see [`Self::counter_reason`]).
-    pub const fn counter_reason(mut self, counter_reason: &'static str) -> Self {
-        self.counter_reason = counter_reason;
         self
     }
 

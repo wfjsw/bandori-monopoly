@@ -22,7 +22,7 @@ pub const MORFONICA: CardDef = CardDef::new(
         // are the condition (`value` / `target`, docs/GUARDS.md §4.2).
         On::Action(
             &[ActionKind::PayAfter],
-            "actor == owner && value >= 2000 && target != owner",
+            "actor == owner && value >= 2000 && target != owner", "",
             None,
             after_pay,
         ),
@@ -30,7 +30,7 @@ pub const MORFONICA: CardDef = CardDef::new(
         // half of the CiRCLE pick.
         On::Action(
             &[ruleset_core::kind::PassRewardAffected],
-            "actor == owner && value == 0",
+            "actor == owner && value == 0", "",
             None,
             on_circle,
         ),

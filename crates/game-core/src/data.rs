@@ -10,13 +10,14 @@
 //! `game-core` never touches the filesystem: [`GameData::load`] takes a reader so the
 //! server (fs) and the browser (fetch) can both supply the files.
 //!
-//! **Roster (ABI v63).** `cards` / `personas` / `groups` no longer come from
-//! `data/{cards,personas,groups}.json`. They are authored beside the rule code
-//! and handed over as [`Roster`] (ruleset `ruleset_metadata` ->
-//! [`crate::data::Roster`]). [`DATA_FILES`] covers only the remaining tables
-//! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
-//! roster is covered by the ruleset hash (`EngineStamp::ruleset_sha256`),
-//! which already names the modules the metadata lives in.
+//! **Roster (ABI v63).** `cards` / `personas` / `groups` / `events` no longer
+//! come from `data/{cards,personas,groups,events}.json`. They are authored
+//! beside the rule code and handed over as [`Roster`] (ruleset
+//! `ruleset_metadata` -> [`crate::data::Roster`]). [`DATA_FILES`] covers only
+//! the remaining tables and the data hash (`EngineStamp::data_sha256`) hashes
+//! exactly those; the roster -- including event prose -- is covered by the
+//! ruleset hash (`EngineStamp::ruleset_sha256`), which already names the
+//! modules the metadata lives in.
 //!
 //! **Display text is not engine data.** Card / persona / group / event copy,
 //! tile chrome (short names, colors, notes), home lines, voice lines, schools
@@ -180,23 +181,25 @@ pub struct GroupData {
     pub text: String,
 }
 
-/// The roster half of [`GameData`] -- cards / personas / groups -- handed over
-/// by the ruleset host (ABI v63 `ruleset_metadata`, converted in `game-rules`).
-/// `game-core` stays free of the card crates; this is the plain struct of
-/// vectors it already iterates in roster order (the Rust ordinal table).
+/// The roster half of [`GameData`] -- cards / personas / groups / events --
+/// handed over by the ruleset host (ABI v63 `ruleset_metadata`, converted in
+/// `game-rules`). `game-core` stays free of the card crates; this is the plain
+/// struct of vectors it already iterates in roster order (the Rust ordinal
+/// table).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Roster {
     pub cards: Vec<CardData>,
     pub personas: Vec<PersonaData>,
     pub groups: Vec<GroupData>,
+    pub events: Vec<EventData>,
 }
 
 impl Roster {
     /// Parse the synthetic test fixture (`crates/game-core/tests/fixtures/
-    /// roster.json`). One JSON object `{cards, personas, groups}` in the same
-    /// camelCase row shapes the roster metadata carries. Tests of crates that
-    /// have no ruleset (game-core / game-rules / bot-core / server) load this
-    /// instead of depending on the card crates.
+    /// roster.json`). One JSON object `{cards, personas, groups, events}` in
+    /// the same camelCase row shapes the roster metadata carries. Tests of
+    /// crates that have no ruleset (game-core / game-rules / bot-core / server)
+    /// load this instead of depending on the card crates.
     pub fn from_fixture(text: &str) -> Result<Self, String> {
         #[derive(serde::Deserialize)]
         struct Fixture {
@@ -206,6 +209,8 @@ impl Roster {
             personas: Vec<PersonaData>,
             #[serde(default)]
             groups: Vec<GroupData>,
+            #[serde(default)]
+            events: Vec<EventData>,
         }
         let f: Fixture = serde_json::from_str(text.trim_start_matches('\u{feff}'))
             .map_err(|e| format!("roster fixture: {e}"))?;
@@ -213,24 +218,27 @@ impl Roster {
             cards: f.cards,
             personas: f.personas,
             groups: f.groups,
+            events: f.events,
         })
     }
 
-    /// Serialize back to the fixture document (`{cards, personas, groups}`),
-    /// the byte-stable pretty JSON form [`Self::from_fixture`] reads. External
-    /// gates may compare this against a checked-in fixture so the two cannot
-    /// drift.
+    /// Serialize back to the fixture document (`{cards, personas, groups,
+    /// events}`), the byte-stable pretty JSON form [`Self::from_fixture`]
+    /// reads. External gates may compare this against a checked-in fixture so
+    /// the two cannot drift.
     pub fn to_fixture_json(&self) -> String {
         #[derive(serde::Serialize)]
         struct Fixture<'a> {
             cards: &'a [CardData],
             personas: &'a [PersonaData],
             groups: &'a [GroupData],
+            events: &'a [EventData],
         }
         let mut s = serde_json::to_string_pretty(&Fixture {
             cards: &self.cards,
             personas: &self.personas,
             groups: &self.groups,
+            events: &self.events,
         })
         .expect("roster fixture serializes");
         s.push('\n');
@@ -238,11 +246,12 @@ impl Roster {
     }
 }
 
-/// One event card from `events.json`. `name` and `text` are game content (the
-/// rulebook body and what the card is called) and stay on the engine's view of
-/// the table -- the spec harness classifies 「将此卡…」 discard overrides by
-/// reading `text`. `cell` (the sheet column the row was lifted from) is
-/// authoring chrome and stays in `events.json` for the client only.
+/// One event card of the roster (was `events.json`; now ruleset metadata).
+/// `name` and `text` are game content (the rulebook body and what the card is
+/// called) and stay on the engine's view of the table -- the spec harness
+/// classifies 「将此卡…」 discard overrides by reading `text`. `cell` (the sheet
+/// column the row was lifted from) is authoring chrome and lives in
+/// `display.json` for the client only.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct EventData {
@@ -291,12 +300,6 @@ struct BoardFile {
     tiles: Vec<TileData>,
 }
 
-#[derive(Deserialize)]
-struct EventFile {
-    #[serde(default)]
-    events: Vec<EventData>,
-}
-
 /// The rule id of a persona or group skill (the crates under `rules/skills`).
 ///
 /// The id **names its owner**, which is the binding: a player's two skills
@@ -309,12 +312,13 @@ pub fn skill_id(owner: &str, skill: &str) -> String {
 
 /// The rule id of an **event card**'s effect (the crate under `rules/events`).
 ///
-/// The id names the event (`data/events.json`), so drawing a ruleset event id
-/// resolves the rule `event:<id>`. The `event:` prefix keeps it from ever
-/// colliding with a card id or a `tile:*` / `skill:*` rule id, the same way
-/// [`skill_id`] and [`tile_rule_id`] do. Gaps in the text are the rule body's
-/// `TODO(规则书)`; an event with no rule in the ruleset falls back to the
-/// engine's `StubRules::event` (log 「还没有移植」 and file it away).
+/// The id names the event ([`EventData::id`], the bare key the roster row
+/// carries), so drawing a ruleset event id resolves the rule `event:<id>`. The
+/// `event:` prefix keeps it from ever colliding with a card id or a `tile:*` /
+/// `skill:*` rule id, the same way [`skill_id`] and [`tile_rule_id`] do. Gaps
+/// in the text are the rule body's `TODO(规则书)`; an event with no rule in the
+/// ruleset falls back to the engine's `StubRules::event` (log 「还没有移植」 and
+/// file it away).
 pub fn event_rule_id(id: &str) -> String {
     format!("event:{id}")
 }
@@ -343,22 +347,22 @@ pub struct GameData {
 }
 
 /// Data files, as named in `web/data/`, that the **engine** loads and hashes.
-/// Three tables only: the board, the event roster and the match numbers.
+/// Two tables only: the board and the match numbers.
 ///
 /// The hash covers each file's bytes as a whole, so *every* column in these
-/// three moves `data_sha256` -- including the game prose (`EventData::name` /
-/// `text`, the rulebook body the spec harness reads) and the chrome that
-/// happens to sit beside it in the same file (tile `shortName` / `color`).
-/// That is deliberate for the prose: it is game content, not presentation.
+/// two moves `data_sha256` -- including the chrome that happens to sit beside
+/// the identity columns in `board.json` (tile `shortName` / `color`).
 ///
 /// What left the hash is the display-only files the client parses on its own
 /// (`rules.txt`, `home_lines.json`, `voice_lines.json`, `skill_simple.json`,
 /// `schools.json`) and the roster's display columns (`display.json`). The
-/// roster (`cards` / `personas` / `groups`) is **not** here either: it comes
-/// from the ruleset (ABI v63 `ruleset_metadata`) or, in tests, from the
-/// synthetic fixture (`Roster::from_fixture`), and is covered by the ruleset
-/// hash, not this one.
-pub const DATA_FILES: [&str; 3] = ["board.json", "events.json", "match_rules.json"];
+/// roster (`cards` / `personas` / `groups` / `events`) is **not** here either:
+/// it comes from the ruleset (ABI v63 `ruleset_metadata`) or, in tests, from
+/// the synthetic fixture (`Roster::from_fixture`), and is covered by the
+/// ruleset hash, not this one. Event prose (`EventData::name` / `text`) is
+/// game content that lives on that roster now, so it moves `ruleset_sha256`
+/// rather than `data_sha256`.
+pub const DATA_FILES: [&str; 2] = ["board.json", "match_rules.json"];
 
 fn parse<T: serde::de::DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {
     serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| format!("{file}: {e}"))
@@ -398,7 +402,8 @@ impl GameData {
     /// plus the [`Roster`] the ruleset host supplies (ABI v63 `ruleset_metadata`
     /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`),
     /// or, in tests, [`Roster::from_fixture`]. There is no JSON-roster path
-    /// left in the runtime.
+    /// left in the runtime. Cards, personas, groups **and events** all come
+    /// from that roster -- event prose is rule-authored like card prose.
     ///
     /// The deck book / strategy book are loaded here so every entry point
     /// shares that path.
@@ -412,7 +417,7 @@ impl GameData {
             cards: roster.cards,
             personas: roster.personas,
             groups: roster.groups,
-            events: parse::<EventFile>("events.json", &get("events.json")?)?.events,
+            events: roster.events,
             match_rules: parse("match_rules.json", &get("match_rules.json")?)?,
             deck_book: DeckBook::default(),
             strategy_book: StrategyBook::default(),

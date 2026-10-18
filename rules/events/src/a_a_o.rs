@@ -1,6 +1,6 @@
 //! `event:A！A！O！` -- 事件卡「A！A！O！」（中立事件 A15）.
 //!
-//! 事件文本（data/events.json, id `A！A！O！`）:
+//! 事件文本（`CardMeta` beside the rule body, id `A！A！O！`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。
 
 use ruleset_core::ctx;
@@ -17,10 +17,15 @@ const DRAWER: &str = "drawer";
 pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
-        On::Play("", None, play),
-        On::Action(&[ActionKind::AtEnd], "", None, expire_at_end),
+        On::Play("", "", None, play),
+        On::Action(&[ActionKind::AtEnd], "", "", None, expire_at_end),
     ],
-);
+)
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"A！A！O！"#)
+            .text(r#"将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。"#)
+            .cell(r#"A15"#)
+            .derived(false));
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌」
 /// -- keep the event and schedule the drawer's next turn end (`AtEnd`).

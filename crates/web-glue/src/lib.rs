@@ -4,7 +4,7 @@
 //! uses, so the web client has one set of types for online and solo play.
 //!
 //! * `load_data` -- the contents of `/data/*` (`DATA_FILES`, no roster)
-//! * `roster_json` -- cards / personas / groups from the built ruleset
+//! * `roster_json` -- cards / personas / groups / events from the built ruleset
 //! * deck rules and saved deck slots (`deck_*`)
 //! * profile and progression (`profile_*`), persisted by the client
 //! * [`SoloMatch`] -- the full match engine running locally
@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{GroupData, CardData, PersonaData, GameData, Roster, DATA_FILES};
+use game_core::data::{EventData, GroupData, CardData, PersonaData, GameData, Roster, DATA_FILES};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
@@ -181,10 +181,11 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
     Ok(())
 }
 
-/// The ruleset roster in the three legacy data-file shapes, one object:
-/// `{"cards":[...],"personas":[...],"groups":[...]}` with camelCase rows
-/// (the old `cards.json` / `personas.json` / `groups.json` shapes minus the
-/// display-only overlay fields, which live in `display.json`).
+/// The ruleset roster in the three legacy data-file shapes plus events, one
+/// object: `{"cards":[...],"personas":[...],"groups":[...],"events":[...]}`
+/// with camelCase rows (the old `cards.json` / `personas.json` / `groups.json`
+/// / `events.json` shapes minus the display-only overlay fields, which live in
+/// `display.json`).
 ///
 /// Empty arrays when no ruleset is built -- does not throw. Call
 /// [`ruleset_build`] first for a real roster; hosts that only need the tables
@@ -196,12 +197,14 @@ pub fn roster_json() -> String {
         cards: Vec<CardData>,
         personas: Vec<PersonaData>,
         groups: Vec<GroupData>,
+        events: Vec<EventData>,
     }
     let r = roster();
     json(&RosterJson {
         cards: r.cards,
         personas: r.personas,
         groups: r.groups,
+        events: r.events,
     })
 }
 

@@ -20,13 +20,13 @@ const ID: &str = "通用:[衍生]FEVER!";
 pub const FEVER: CardDef = CardDef::new(
     "通用:[衍生]FEVER!",
     &[
-        On::Play("", None, fever),
+        On::Play("", "", None, fever),
         // C# `CardFever.PaySplitAdd` (value modifier) / `CardFever.TurnStart` (event
         // reaction) -- field hooks, not [反击]. Mixed kinds split (ABI v73);
         // bodies split to match the variant (Filter = pure integer, Action =
         // event reaction).
         On::Filter(&[FilterKind::PaySplitAdd], "card.placed", None, pay_add),
-        On::Action(&[ActionKind::TurnStart], "card.placed", None, turn_start),
+        On::Action(&[ActionKind::TurnStart], "card.placed", "", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"FEVER!"#)

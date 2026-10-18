@@ -6,7 +6,7 @@ code** beside the rule bodies (data lives with the rule) but no longer ride
 webui bundles.
 
 ```
-rules/cards/**  +  rules/personas/**  +  rules/skills/**
+rules/cards/**  +  rules/personas/**  +  rules/skills/**  +  rules/events/**
         │  CardMeta / PersonaDef / GroupDef (authoring surface)
         ▼
 cargo run -q -p rules-native --example dump_display
@@ -46,15 +46,18 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
                                    "variantTag": "...", "art": "...", "costume": "...",
                                    "cnId": "..." } },
   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
-                                   "logo": "..." } }
+                                   "logo": "..." } },
+  "events":   { "<eventId>":     { "name": "...", "text": "...", "cell": "..." } }
 }
 ```
 
 * Keys are camelCase. Empty / absent fields are omitted.
+* Event keys are the **bare** event id (`对邦`), not the `event:` rule-id
+  prefix. `derived` is engine data and is not exported.
 * Ordering is deterministic (sorted map keys, pretty JSON, one trailing
   newline) so the file is byte-stable across runs and machines.
-* Cards without a `CardMeta` (rule-only pseudo cards: tiles / marks / status /
-  events) are absent. Every roster card / persona / group that carries the
+* Cards without a `CardMeta` (rule-only pseudo cards: tiles / marks / status)
+  are absent. Every roster card / persona / group / event that carries the
   relevant fields appears.
 
 ### Field list
@@ -64,7 +67,7 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 | card | `text` | `CardMeta::text` | rule text |
 | card | `rawName` | `CardMeta::raw_name` | untrimmed sheet name |
 | card | `cell` | `CardMeta::cell` | sheet cell the row was lifted from |
-| card | `counterReason` | `On::Counteract` reason field (or `CardMeta::counter_reason`) | 「…时」 clause the counteraction prompt shows; several `Counteract` entries join non-empty reasons with `\n`. A [反击] whose clause rides an `On::Action` interrupt uses `CardMeta::counter_reason` |
+| card | `counterReason` | `On` reason field (`Counteract` / `Action` / `Play`) | 「…时」 clause the counteraction prompt shows; several entries join non-empty reasons with `\n` |
 | persona | `display` | `PersonaDef::display` | compact display label |
 | persona | `text` | `PersonaDef::text` | skill text |
 | persona | `color` | `PersonaDef::color` | accent colour |
@@ -76,6 +79,9 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 | group | `shortName` | `GroupDef::short_name` | short name |
 | group | `color` | `GroupDef::color` | accent colour |
 | group | `logo` | `GroupDef::logo` | logo id |
+| event | `name` | `CardMeta::name` | event name |
+| event | `text` | `CardMeta::text` | event rulebook body |
+| event | `cell` | `CardMeta::cell` | sheet cell the row was lifted from |
 
 ## Split from the runtime roster
 
@@ -88,6 +94,7 @@ what the **webui** reads. Runtime `ruleset_metadata` (`docs/CARDS.md`
 | card | `name`, `group`, `owner`, `derived`, `tags`, **`text`** |
 | persona | `name`, `group`, `skill`, `exclusiveCards`, `preset`, `variantOf`, **`text`** |
 | group | `name`, `skill`, `sharesExclusives`, **`text`** |
+| event | `name`, `derived`, **`text`** |
 
 **Rule-body `text` is dual-role and stays in both.** The ruleset queries it at
 runtime (`card_text_mentions` -- 「效果包含[奇迹水晶]」, 「技能中含有火罐」), so it

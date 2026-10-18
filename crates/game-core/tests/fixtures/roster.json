@@ -330,5 +330,25 @@
       "skill": "gs",
       "sharesExclusives": false
     }
+  ],
+  "events": [
+    {
+      "id": "EVT1",
+      "name": "Event One",
+      "derived": false,
+      "text": "Synthetic event one."
+    },
+    {
+      "id": "EVT2",
+      "name": "Event Two",
+      "derived": false,
+      "text": "Synthetic event two."
+    },
+    {
+      "id": "EVT-D",
+      "name": "Derived Event",
+      "derived": true,
+      "text": "Synthetic derived event."
+    }
   ]
 }

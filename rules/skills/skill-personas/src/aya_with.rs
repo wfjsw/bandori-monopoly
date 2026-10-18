@@ -28,7 +28,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
     &[
         On::Action(
             &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')",
+            "group_is(owner, 'Pastel✽Palettes')", "",
             None,
             at_start,
         ),
@@ -42,7 +42,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(
             &[ActionKind::PayCombinedAddBefore],
-            "value > 0 && slot('ppFansUp') >= 1",
+            "value > 0 && slot('ppFansUp') >= 1", "",
             Some(mine),
             on_pay,
         ),

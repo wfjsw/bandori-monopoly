@@ -20,7 +20,8 @@ then goes to the discard (`data/rules.txt`, 「基础[结算]规则」, lines 97
 > 　· 抽取的事件卡不进入手卡并向所有玩家公开，效果立刻生效。
 > 　· 事件结算后进入事件弃卡区。如果没有事件可抽取则将事件弃卡区洗切并当作新的事件卡堆来抽取。
 
-and the per-event text lives in `data/events.json` (the sheet's 中立事件 tab).
+and the per-event text lives on each event's `CardMeta` beside the rule body
+(the sheet's 中立事件 tab).
 The engine's job is the deck and the filing; **what the event does is content**,
 the same split [TILES.md](TILES.md) draws for tiles. Until now the engine had
 the deck and a `CardRules::event` hook but no rules crate, so every event fell
@@ -69,12 +70,12 @@ of its roots (alongside `rules/cards`, `rules/skills`, `rules/tiles` and
 `rules/tile_marks`) so `card-all` links it; `tools/build-ruleset.mjs` runs that
 aggregate first.
 
-Each body quotes the event text from `data/events.json` and cites it per line,
-exactly like a card (`docs/CARDS.md` → 「Every line cites the rule book」).
-`python tools/rulebook/check.py` requires the quote on `rules/events/*` the way
-it does on `rules/cards/*`, `rules/tiles/*` and `rules/tile_marks/*` -- the
-passage is the event's
-`text` field, since `docs/rulebook/cards.json` has no `event:*` ids.
+Each body quotes the event text from its `CardMeta` beside the rule and cites
+it per line, exactly like a card (`docs/CARDS.md` → 「Every line cites the rule
+book」). `python tools/rulebook/check.py` requires the quote on `rules/events/*`
+the way it does on `rules/cards/*`, `rules/tiles/*` and `rules/tile_marks/*` --
+the passage is the event's `CardMeta::text`, since `docs/rulebook/cards.json`
+has no `event:*` ids.
 
 Log lines are `log.event.*` keys in `webui/src/i18n/locales/<lang>/game.json`,
 the same namespace the tile bodies use (`log.land_*`).
@@ -171,7 +172,8 @@ Checked: `card_sdk::abi::ABI_VERSION = 39`,
 
 ## Conventions
 
-* The rulebook / `data/events.json` decides *what*; the C# port is not a spec.
+* The rulebook / the event's `CardMeta` text decides *what*; the C# port is not
+  a spec.
 * No raw money pokes, no side-channel flags, no prose-keyed behaviour.
 * 「…时」 clauses go in event handlers on that state's change, not inline
   checks at each spend site.
@@ -203,7 +205,7 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
 * **Song-card count** (Kizuna Music's X) reads the static card property
   `prop::SONG` via `ctx::card_prop` on each card in every player's draw pile.
 * **Non-derived event id table** (让我来结束一切's 3 picks) is duplicated from
-  `data/events.json` (`derived` is not reachable from `ctx`).
+  the roster's `derived` flags (`derived` is not reachable from `ctx`).
 * **「累计在上述格子上加盖后」** (修复公告) read as one build per designated tile
   (3 total); the text does not say how many.
 * **飞鸟山之战's B12 「衍生迷子的追逐」** is a sheet annotation the event text

@@ -1,4 +1,4 @@
-//! P2 tests against the data dir (board / events) plus the synthetic roster fixture.
+//! P2 tests against the data dir (board / match rules) plus the synthetic roster fixture.
 
 use game_core::net::{clean_name, NetMessage};
 use game_core::state::{MatchEvent, MatchPlayer, MatchState};
@@ -23,12 +23,14 @@ fn group_traits_and_variants_come_from_data() {
 #[test]
 fn game_data_counts_match_the_board_and_fixture() {
     let d = data();
-    // Board / events come from `data/`; roster comes from the synthetic fixture.
+    // Board / match rules come from `data/`; the roster (cards / personas /
+    // groups / events) comes from the synthetic fixture.
     assert_eq!(d.tiles.len(), 60);
     assert_eq!(d.cards.len(), 21);
     assert_eq!(d.personas.len(), 5);
     assert_eq!(d.groups.len(), 3);
-    assert_eq!(d.events.len(), 28);
+    assert_eq!(d.events.len(), 3);
+    assert_eq!(d.events.iter().filter(|e| !e.derived).count(), 2);
     assert_eq!(d.match_rules.rule_params.get("rentUnitMult"), Some(&10));
 
     assert_eq!(d.tiles.iter().filter(|t| t.is_buyable()).count(), 45);

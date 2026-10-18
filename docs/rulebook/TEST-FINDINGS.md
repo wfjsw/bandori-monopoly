@@ -83,7 +83,7 @@ See coverage gaps below.
 ### Event rules (2026-10-07)
 
 `rules/events` (`docs/EVENTS.md`) is the event-card category: 28 `event:*`
-`CardDef`s, one per `data/events.json` entry. The engine keeps only the deck /
+`CardDef`s, one per event-card entry. The engine keeps only the deck /
 draw / active list / filing away; the bodies live in the crate.
 
 Engine-side coverage is `crates/game-core/tests/events.rs` (7 tests: the

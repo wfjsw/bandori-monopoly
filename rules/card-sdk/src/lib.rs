@@ -95,8 +95,8 @@ pub mod rt;
 ///
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
-///     On::Play("", None, play),
-///     On::Action(&[ActionKind::TurnEnd], pre::MINE, guard, tick),
+///     On::Play("", "", None, play),
+///     On::Action(&[ActionKind::TurnEnd], pre::MINE, "", guard, tick),
 ///     On::FilterFlag(&[FilterKind::ImmuneAll], pre::MINE, None, immune),
 /// ]);
 /// ```
@@ -239,9 +239,9 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", None, use_skill),                                     // 0: flashes
+    ///     On::Play("", "", None, use_skill),                                     // 0: flashes
     ///     On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
-    ///              "", None, declare_cap),                                   // 1: bookkeeping
+    ///              "", "", None, declare_cap),                                   // 1: bookkeeping
     /// ]).silent(&[1]);
     /// ```
     pub const fn silent(self, entries: &'static [i32]) -> Self {
@@ -291,8 +291,8 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", None, use_skill),                 // 0: Auto
-    ///     On::Action(&[ActionKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    ///     On::Play("", "", None, use_skill),                 // 0: Auto
+    ///     On::Action(&[ActionKind::TurnEnd], "", "", None, tick), // 1: Always (self-only)
     /// ]).flash(&[(1, Flash::Always)]);
     /// ```
     pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
@@ -349,7 +349,7 @@ impl CardDef {
     /// use card_sdk::abi::text_slot;
     /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
     ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Action(&[ActionKind::PassTile], "", Some(pass_pays), on_pass),      // 1
+    ///     On::Action(&[ActionKind::PassTile], "", "", Some(pass_pays), on_pass),      // 1
     /// ]).texts(&[
     ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
     ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
@@ -490,12 +490,15 @@ impl CardDef {
 #[derive(Clone, Copy)]
 pub enum On {
     /// Play this card from hand. The first field is the gate's
-    /// condition (see the type doc). The second is the gate
+    /// condition (see the type doc). The second is `counterReason` -- the
+    /// human-readable 「…时」 clause the counteraction prompt shows for this
+    /// trigger (often `""` here). The third is the gate
     /// (the old `On::CantPlay`): a pure query with no prompts,
     /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
-    /// show. `None` for the gate itself means no gate. The third field is the
+    /// show. `None` for the gate itself means no gate. The fourth field is the
     /// effect.
     Play(
+        &'static str,
         &'static str,
         Option<fn(player_id: i32) -> Option<Msg>>,
         fn(player_id: i32) -> Asked,
@@ -518,8 +521,11 @@ pub enum On {
     /// while the card is in play. Same shape as [`On::Counteract`]. May emit
     /// effects; does not modify the triggering value. Kinds are
     /// [`abi::ActionKind`] (non-filter: [`abi::TriggerKind::is_filter`] == false).
+    /// Third field: `counterReason` -- the human-readable 「…时」 clause the
+    /// counteraction prompt shows when this trigger is the [反击] window.
     Action(
         &'static [abi::ActionKind],
+        &'static str,
         &'static str,
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
@@ -648,9 +654,9 @@ impl On {
     /// ```
     pub const fn pre(self, pre: &'static str) -> Self {
         match self {
-            On::Play(_, g, r) => On::Play(pre, g, r),
+            On::Play(_, reason, g, r) => On::Play(pre, reason, g, r),
             On::Counteract(k, _, reason, g, r) => On::Counteract(k, pre, reason, g, r),
-            On::Action(k, _, g, r) => On::Action(k, pre, g, r),
+            On::Action(k, _, reason, g, r) => On::Action(k, pre, reason, g, r),
             On::Filter(k, _, g, r) => On::Filter(k, pre, g, r),
             On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
             On::FilterValue(k, _, g, r) => On::FilterValue(k, pre, g, r),
@@ -668,7 +674,7 @@ impl On {
     pub const fn no_guard(self) -> Self {
         match self {
             On::Counteract(k, pre, reason, _, r) => On::Counteract(k, pre, reason, None, r),
-            On::Action(k, pre, _, r) => On::Action(k, pre, None, r),
+            On::Action(k, pre, reason, _, r) => On::Action(k, pre, reason, None, r),
             On::Filter(k, pre, _, r) => On::Filter(k, pre, None, r),
             On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
             On::FilterValue(k, pre, _, r) => On::FilterValue(k, pre, None, r),
@@ -688,7 +694,7 @@ impl On {
     pub const fn guard(&self) -> Option<fn(i32) -> bool> {
         match self {
             On::Counteract(_, _, _, g, _)
-            | On::Action(_, _, g, _)
+            | On::Action(_, _, _, g, _)
             | On::Filter(_, _, g, _)
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
@@ -706,9 +712,9 @@ impl On {
     /// `false` = G4-deleted: the condition alone decides (`admits_pre`).
     pub const fn has_guard(&self) -> bool {
         match self {
-            On::Play(_, g, _) => g.is_some(),
+            On::Play(_, _, g, _) => g.is_some(),
             On::Counteract(_, _, _, g, _)
-            | On::Action(_, _, g, _)
+            | On::Action(_, _, _, g, _)
             | On::Filter(_, _, g, _)
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
@@ -725,9 +731,9 @@ impl On {
     /// ruleset build (`docs/GUARDS.md` §4.3).
     pub const fn condition(&self) -> &'static str {
         match self {
-            On::Play(pre, _, _)
+            On::Play(pre, _, _, _)
             | On::Counteract(_, pre, _, _, _)
-            | On::Action(_, pre, _, _)
+            | On::Action(_, pre, _, _, _)
             | On::Filter(_, pre, _, _)
             | On::FilterFlag(_, pre, _, _)
             | On::FilterValue(_, pre, _, _)
@@ -740,11 +746,13 @@ impl On {
         }
     }
 
-    /// The [反击] trigger's `counterReason` -- the human-readable 「…时」 clause
-    /// the counteraction prompt shows (`""` for non-`Counteract` entries).
+    /// The trigger's `counterReason` -- the human-readable 「…时」 clause the
+    /// counteraction prompt shows (`""` for entries that carry no clause).
     pub const fn counter_reason(&self) -> &'static str {
         match self {
-            On::Counteract(_, _, reason, _, _) => *reason,
+            On::Counteract(_, _, reason, _, _)
+            | On::Action(_, _, reason, _, _)
+            | On::Play(_, reason, _, _) => *reason,
             _ => "",
         }
     }
@@ -1022,19 +1030,19 @@ mod tests {
         const ACTION_MIXED: &[ActionKind] = &[ActionKind::TurnEnd, ActionKind(55)];
         let filter_ok = On::Filter(FILTER_OK, "", None, fbody);
         assert!(filter_ok.check_kind_variant().is_ok());
-        let action_ok = On::Action(ACTION_OK, "", None, body);
+        let action_ok = On::Action(ACTION_OK, "", "", None, body);
         assert!(action_ok.check_kind_variant().is_ok());
         let filter_bad = On::Filter(FILTER_BAD, "", None, fbody);
         assert_eq!(
             filter_bad.check_kind_variant(),
             Err(TriggerKind::TurnEnd.as_i32())
         );
-        let action_bad = On::Action(ACTION_BAD, "", None, body);
+        let action_bad = On::Action(ACTION_BAD, "", "", None, body);
         assert_eq!(
             action_bad.check_kind_variant(),
             Err(TriggerKind::PaySplitAdd.as_i32())
         );
-        let mixed = On::Action(ACTION_MIXED, "", None, body);
+        let mixed = On::Action(ACTION_MIXED, "", "", None, body);
         assert_eq!(
             mixed.check_kind_variant(),
             Err(TriggerKind::PaySplitAdd.as_i32())

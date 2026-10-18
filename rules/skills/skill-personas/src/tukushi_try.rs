@@ -27,12 +27,12 @@ const SPELL: &str = "skill.tukushiTry.spell";
 pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, at_start),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[ActionKind::DiceRollAfter], "", Some(paired), on_roll),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, at_start),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::DiceRollAfter], "", "", Some(paired), on_roll),
         On::Filter(&[FilterKind::PaySplitChoose], "", Some(paired), on_pay),
-        On::Action(&[ruleset_core::kind::HouseAdded], "", Some(partner), on_built),
+        On::Action(&[ruleset_core::kind::HouseAdded], "", "", Some(partner), on_built),
     ],
 );
 

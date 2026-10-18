@@ -115,8 +115,9 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     cards: { id: string; group: string; name: string; owner: string; derived: boolean; tags: string[]; text: string }[];
     personas: { name: string; group: string; skill: string; exclusiveCards: string[]; preset: string[]; variantOf?: string; text: string }[];
     groups: { name: string; skill: string; sharesExclusives?: boolean; text: string }[];
+    events: { id: string; name: string; derived: boolean; text: string }[];
   };
-  // Engine tables only (post-split: board / events / match_rules).
+  // Engine tables only (post-split: board / match_rules).
   const engineNames: string[] = JSON.parse(glue.data_files());
   const allNames = [...new Set([...engineNames, ...UI_DATA_FILES])];
   const files: Record<string, string> = {};
@@ -194,7 +195,16 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       logo: d.logo ?? "",
     };
   });
-  const events: EventData[] = j("events.json").events;
+  // Events: identity + game prose from the roster, `cell` from display.json.
+  const events: EventData[] = roster.events.map((e) => {
+    const d = display.events?.[e.id] ?? {};
+    return {
+      ...e,
+      text: d.text ?? e.text ?? "",
+      name: d.name ?? e.name ?? "",
+      cell: d.cell ?? "",
+    };
+  });
   const homeLines = j("home_lines.json").personas ?? [];
   const byId = new Map(cards.map((c) => [c.id, c]));
   D = {
@@ -230,7 +240,7 @@ export function cardTitle(id: string): string {
   const skill = skillCard(id);
   if (skill) return skill.title;
   // An event's activation names it as `event:<id>` (the rule id) or as the
-  // bare `data/events.json` id the draw event carries -- both resolve here.
+  // bare roster id the draw event carries -- both resolve here.
   const ev = D.event(id.startsWith("event:") ? id.slice(6) : id)?.name;
   if (ev) return ev;
   // A tile rule instance (`tile:circle`) is named after the board tile of that
