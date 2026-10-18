@@ -1523,6 +1523,9 @@ impl CardWorld for Run {
     fn mark_rule_instances(&self) -> Vec<(i32, String)> {
         self.world.mark_rule_instances()
     }
+    fn status_rule_instances(&self) -> Vec<(i32, String)> {
+        self.world.status_rule_instances()
+    }
     fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
         self.world.tok_names(player_id, prefix)
     }
@@ -4755,6 +4758,23 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                 }
+                // **Status** hosts (`status:*`, `rules/status`) are board-wide
+                // the same way: one standing instance each on `BOARD_OWNER`,
+                // `tile = -1`. Collected last among the field hooks (after
+                // tile / event / mark) so a suppressing tile rule still gets
+                // its say first. `noHand`'s turn-flow fold / clear lives here.
+                if self
+                    .ruleset
+                    .cards()
+                    .iter()
+                    .any(|c| c.id.starts_with("status:") && c.hooks(kind))
+                {
+                    for ent in world.status_rule_instances() {
+                        if !board.iter().any(|(u, _)| *u == ent.0) {
+                            board.push(ent);
+                        }
+                    }
+                }
                 for (uid, id) in board {
                     if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                         continue;
@@ -4936,6 +4956,20 @@ impl<M: CardModules> RulesBridge<M> {
             .any(|c| c.id.starts_with("mark:") && c.hooks(kind))
         {
             for ent in world.mark_rule_instances() {
+                if !board.iter().any(|(u, _)| *u == ent.0) {
+                    board.push(ent);
+                }
+            }
+        }
+        // **Status** hosts (`status:*`) -- last among field hooks, same shape
+        // as `mark:*` (see `counteract_orig`'s mirror).
+        if self
+            .ruleset
+            .cards()
+            .iter()
+            .any(|c| c.id.starts_with("status:") && c.hooks(kind))
+        {
+            for ent in world.status_rule_instances() {
                 if !board.iter().any(|(u, _)| *u == ent.0) {
                     board.push(ent);
                 }
