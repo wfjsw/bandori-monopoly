@@ -1759,7 +1759,7 @@ Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
 | row | dominant cost | lever applies? | status after levers |
 |---|---|---|---|
 | `skills_pp::aya_with_02_*` | fmt/memchr + symbolic world | yes (stubs) | BMC reached; residual solver-bound (re-time pending) |
-| `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | re-time queued |
+| `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | memchr 2705→**0**; residual `ask_pick` 16 + `fmt::num::__fmt_inner` 2 + RawVec `with_capacity` aborts; BMC reached |
 | `ras::riot_02_03_*` | RawVec grow abort paths | yes (kani-bump + handle_error stub) | re-time queued |
 | `pp::chisato_mask_01_total_iff` | `split_pay` find + `others` Vec | partial (memchr); body `Vec` ABI remains | irreducible without body edit (TUNING §11 residual) |
 | `pp::ranger_01_02_steps_by_count_iff` | `cards_in` facade + String eq | partial (exact-length facade already on master) | re-time queued |
