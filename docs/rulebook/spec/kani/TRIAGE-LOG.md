@@ -1593,7 +1593,7 @@ is per-player, matching the 2026-10-06 ruling.
 | `mygo::rainday_01_place_five_crystals_iff` | **SUCCESSFUL** 2/3 covers |
 | `mygo::rainday_01_user1_place_five_crystals_iff` | **SUCCESSFUL** 2/3 covers |
 | `mygo::rainday_01_mutant_is_detected` | **SUCCESSFUL** 1/1 cover |
-| `ras::riot_02_03_cycle_iff` + `_user1_` + `riot_03_extra_draw_mutant_is_detected` | **needs re-time** (loop bounds + kani-bump landed; BMC still heavy) |
+| `ras::riot_02_03_cycle_iff` + `_user1_` + `riot_03_extra_draw_mutant_is_detected` | **TIMEOUT 1800 s** (class E — BMC never reached `Generated VCC`; bounded loops + kani-bump + exact-length `cards_in` landed; still `RawVec` abort-path cliff) |
 
 kani-bump validated on `skills_mygo::band_04_ineffective_overcap_iff`
 (SUCCESSFUL, 3/3 covers) before `card-sdk` dependency features enabled it for
