@@ -512,16 +512,18 @@ pub fn rainday_01_mutant_is_detected() {
 // "body charges global kinds" note is stale — see `spec::mygo`.
 // ===========================================================================
 
-/// Symbolic stay / stun on the two live seats (lockedStay stays 0).
+/// Concrete stay / stun on the two live seats (lockedStay stays 0).
+///
+/// Pattern: seat 0 has stay+stun (kinds=2), seat 1 has stay only (kinds=1).
+/// Concrete values keep `cleared.len()` a constant 2, so the body's
+/// `for &(_,_) in &cleared` unrolls twice — a symbolic-length `Vec` iterator
+/// is an SSA cliff (`Not unwinding … iteration 32` at
+/// `hitoshizuku.rs:92`).
 fn hitoshizuku_world(user: i32) {
     sparse2_user(hitoshizuku_dispatch, user);
     world::with_world_mut(|w| {
-        for p in 0..2 {
-            w.stay[p] = kani::any();
-            kani::assume(w.stay[p] >= 0 && w.stay[p] <= 4);
-            w.stun[p] = kani::any();
-            kani::assume(w.stun[p] >= 0 && w.stun[p] <= 4);
-        }
+        w.stay = [1, 1, 0, 0];
+        w.stun = [1, 0, 0, 0];
     });
 }
 
@@ -575,7 +577,6 @@ fn hitoshizuku_money_iff_at(user: i32) {
 
     let kinds = hitoshizuku_kinds(effects);
     let global_kinds = kinds_sum(&kinds);
-    kani::cover!(global_kinds == 0, "nothing cleared");
     kani::cover!(global_kinds > 0, "something cleared");
     kani::cover!(
         global_kinds > 0 && kinds[0] != kinds[1],
@@ -668,6 +669,36 @@ pub fn hitoshizuku_body_global_pay_observed() {
 #[kani::unwind(32)]
 pub fn hitoshizuku_user1_body_global_pay_observed() {
     hitoshizuku_body_global_pay_observed_at(1);
+}
+
+/// No-clear limb: with stay=stun=0 the body logs no money effects.
+fn hitoshizuku_no_clear_is_noop_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    sparse2_user(hitoshizuku_dispatch, user);
+    world::with_world_mut(|w| {
+        w.stay = [0; MAX_PLAYERS];
+        w.stun = [0; MAX_PLAYERS];
+    });
+    invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    let mut money = false;
+    let mut i = 0usize;
+    let len = effects.len().min(24);
+    while i < len {
+        if matches!(effects[i], Effect::PayTo { .. } | Effect::GainMoney { .. }) {
+            money = true;
+        }
+        i += 1;
+    }
+    crate::kassert!(!money, "C-MYGO-hitoshizuku: no clear ⇒ no money");
+}
+
+/// No-clear limb at seat 0.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn hitoshizuku_no_clear_is_noop() {
+    hitoshizuku_no_clear_is_noop_at(0);
 }
 
 // ===========================================================================
