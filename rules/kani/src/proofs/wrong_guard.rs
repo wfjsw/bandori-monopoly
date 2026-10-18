@@ -70,6 +70,7 @@ fn fill(actor: i64, owner: i64, value: i64) -> IrCtx {
 /// Kani must find the `value == 0` counterexample where `value >= 0` admits
 /// but `value > 0` rejects.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(6)]
 #[kani::should_panic]
 pub fn wrong_guard_too_loose_is_caught() {
@@ -95,6 +96,7 @@ pub fn wrong_guard_too_loose_is_caught() {
 
 /// The real guard satisfies the iff — non-vacuous companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(6)]
 pub fn real_guard_matches_clause_iff() {
     let actor: i64 = kani::any();
@@ -117,6 +119,7 @@ pub fn real_guard_matches_clause_iff() {
 /// wrong guard is **distinguishable** from the clause — reachable disagreement.
 /// If this FAILS, the mutant is equivalent (vacuous iff).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(6)]
 pub fn wrong_guard_disagreement_is_reachable() {
     let actor: i64 = kani::any();
@@ -149,6 +152,7 @@ pub fn wrong_guard_disagreement_is_reachable() {
 
 /// Sanity: `#[kani::should_panic]` plumbing works at all.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(2)]
 #[kani::should_panic]
 pub fn sanity_should_panic() {
@@ -158,6 +162,7 @@ pub fn sanity_should_panic() {
 
 /// Sanity 2: the range assume actually keeps `value == 0`.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(2)]
 #[kani::should_panic]
 pub fn sanity_value_zero_reachable() {

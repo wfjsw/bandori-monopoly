@@ -1717,3 +1717,122 @@ Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening. Production bodies untouched. Allowed Kani-only surface:
 `rules/kani/**` + `cfg(kani)` wrappers in `rules/card-sdk/src/ctx.rs`
 (`field_instances` / `find_card` facades, same pattern as `cards_in`).
+
+## class-E deep dive — library stubs + global kani-bump (branch `kani-triage3`)
+
+Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
+(`aya_with_02_*`, `tsukushi_01_*`, `riot_02_03_*`, `chisato_mask_01_*`,
+`moca_02_*`, `rimi_skill_02_*`, …). Full lever table: TUNING.md §12.
+
+### Method
+
+1. Phase-split 4 representative central logs (`aya_with_02_pay_discount_iff`,
+   `chisato_mask_01_total_iff`, `riot_02_03_cycle_iff`, `tsukushi_01_redirect_iff`).
+2. Two shared cliffs:
+   * **fmt/memchr** (`aya_with`, `tsukushi`): `memchr_naive` 1868–2705,
+     `memchr_aligned` 574–867, `memcmp` 558–837, `PadAdapter` recursion,
+     `slice_index_fail` 38, `RawVec handle_error` 27. Root: panic-message
+     assembly + `format!("key:{p}")` (`rec_key`) + `ask_number` → Msg.
+   * **RawVec / Vec iters** (`riot`, `chisato`): `RawVec::grow_one` abort
+     paths, `split_pay` `find`/`try_fold`, `arm_others_at`.
+3. Levers landed (TUNING §12): global `kani-bump`; `LIB_COST` /
+   `LIB_COST_NOFMT` stub sets on every harness (`-Z stubbing`).
+
+### Profile delta — `skills_pp::aya_with_02_pay_discount_iff`
+
+| metric | central | + stubs (NOFMT) |
+|---|---|---|
+| memchr_naive | 1868 | **0** |
+| memchr_aligned | 574 | **0** |
+| aborting paths | 5477 | 25 |
+| BMC started? | no | **yes** |
+| residual | memchr/fmt cliff | `fmt::write` 2, `sparse_play_world` 2, solver-bound world |
+
+### Rejected levers
+
+* `Formatter::pad` / `pad_integral` stubs — Kani generic-count mismatch.
+* `PadAdapter::write_str` stub — `core::fmt::builders` private.
+* `--no-unwinding-checks` — unsound, never used.
+
+### Per-row notes (class-E, central TIMEOUT)
+
+| row | dominant cost | lever applies? | status after levers |
+|---|---|---|---|
+| `skills_pp::aya_with_02_*` | fmt/memchr + symbolic world | yes (stubs) | BMC reached; residual solver-bound (re-time pending) |
+| `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | memchr 2705→**0**; residual `ask_pick` 16 + `fmt::num::__fmt_inner` 2 + RawVec `with_capacity` aborts; BMC reached |
+| `ras::riot_02_03_*` | RawVec grow abort paths | yes (kani-bump + handle_error stub) | re-time queued |
+| `pp::chisato_mask_01_total_iff` | `split_pay` find + `others` Vec | partial (memchr); body `Vec` ABI remains | irreducible without body edit (TUNING §11 residual) |
+| `pp::ranger_01_02_steps_by_count_iff` | `cards_in` facade + String eq | partial (exact-length facade already on master) | re-time queued |
+| `skills_ag::moca_02_*` | body ABI / Msg | partial | re-time queued |
+| `skills_ppp::rimi_skill_02_spend_charge_iff` | (check log) | partial | re-time queued |
+
+`chisato_mask` residual: the unmodified body's `split_pay` `find`/`try_fold`
+over `ctx::others`'s `Vec<i32>` is a card-body ABI cost (TUNING §11
+"Remaining intractable patterns"). No library stub replaces a body loop.
+
+### Commits
+
+* `kani/card-sdk: always-on kani-bump under cfg(kani)`
+* `kani: LIB_COST library stubs + use_stub_set on every harness`
+* `kani/stubs: LIB_COST_NOFMT (panic_fmt + handle_error) on non-mutants`
+* `kani/stubs: alloc::fmt::format stub (skip estimated_capacity)`
+
+### Soundness
+
+Unwinding assertions ON; no `#[ignore]`; no allowlist; no spec weakening;
+card bodies unmodified; `panic_fmt` stub excluded from `should_panic`
+mutants; production `cfg(not(kani))` untouched.
+
+## class-E parity evidence (coordinator item A)
+
+Branch `kani-triage3`, stubs+bump on. One CBMC at a time via
+`tools/kani/run.sh`. Baseline times from TRIAGE-LOG re-times / central.
+
+### Known-GREEN (must stay SUCCESSFUL, covers non-vacuous)
+
+| harness | baseline | with stubs | covers (base → stubs) | verdict |
+|---|---|---|---|---|
+| `mor::nnm_05_empty_discard_iff` | 160 s | **197 s** | 1/1 → **1/1** | OK |
+| `mor::starry_05_circle_iff` | 306 s | **384 s** | 3/3 → **3/3** | OK |
+| `mor::tritone_02_tick_iff` | 335 s | **417 s** | 3/3 → **3/3** | OK |
+| `sumimi::twoinone_01b_fire_iff` | 457 s | **431 s** | 1/1 → **1/1** | OK (faster) |
+| `pp::same_dream_01_band_plus_3_iff` | 563 s (4/4 stale) | **834 s** | 3/4 → **3/4** | OK; see control |
+| `skills_ppp::kasumi_skill_02_spend_charge_iff` | 532 s | **651 s** | (none) → (none) | OK |
+| `mygo::rainday_01_place_five_crystals_iff` | (2/3) | **1107 s** | 2/3 → **2/3** | OK |
+| `events::chart_rush_01_spends_fire` | 909 s | **593 s** | 2/2 → **2/2** | OK (faster) |
+
+**Cover control (`same_dream`, item A cover-divergence check):**
+cover.3 `step 3 has reverses to flip` is UNSATISFIABLE **with and without**
+stubs (no-stub control 871 s, also 3/4). Pre-existing sparse-world shape,
+not stub-induced. Cover parity holds.
+
+Times are same order (0.7–1.5×; chart_rush and twoinone faster). No
+verdict flip, no cover-count flip vs the no-stub control / recorded baseline.
+
+### Known-FAILING / mutant (must NOT be masked)
+
+| harness | expect | with stubs | notes |
+|---|---|---|---|
+| `skills_mygo::band_02_crystal_on_16_iff` | FAILED (D over-cap eater) | **FAILED 182 s** | same class D; stubs did not mask |
+| `events::aao_02_hand_veto_is_armed` | FAILED (D GENUINE E-aao-02) | **FAILED 278 s** | same assert fires |
+| `money_shave::aya_haruka_02_mutant_x_off_by_one` | should_panic | **SUCCESSFUL (encountered one or more panics as expected)** | real `panic!` still observed (`LIB_COST` keeps `panic_fmt` off mutants) |
+
+**Stale-D note:** `mor::rainbow_01_half_iff` / `_mutant` are **no longer**
+expected-FAILING. The 2026-10-15 OPEN-取整 ruling (card writes the fold, engine
+`round10`s once) is in `spec/mor.rs`; both rows are SUCCESSFUL (244 s / 185 s,
+4/4 and 2/2 covers). Not a stub mask.
+
+### Item B — timeout rows reaching a verdict
+
+**Plainly: none of the class-E TIMEOUT rows finished in 1800 s** with the
+stubs+bump+Display levers. `aya_with_02_pay_discount_iff` and
+`tsukushi_01_redirect_iff` both now **start BMC** (they previously died in
+symex) but remain solver-bound / residual-`fmt::write` / RawVec
+`with_capacity` abort paths. Display stubs for `{u32,i32,i64}` are landed
+(`<u32 as Display>::fmt`); a further `Formatter::pad` stub is blocked by
+Kani's generic-count check.
+
+### Soundness
+
+See TUNING.md §12 "Soundness argument per stub". panic_fmt stub keeps
+non-mutant panics as FAILED properties; mutants keep a real panic! event.

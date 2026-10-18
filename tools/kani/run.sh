@@ -13,6 +13,7 @@
 #   TIMEOUT  default 900 seconds per harness
 #   CARGO_TARGET_DIR  forced to /home/monopoly/kani-target-f (NOT kani-target)
 #   CARGO_BUILD_JOBS  forced to 8
+#   KANI_EXTRA_ARGS  optional extra `cargo kani` flags (default empty; exploration only)
 
 set -euo pipefail
 
@@ -330,14 +331,19 @@ run_one() {
   # Pass --default-unwind matching the resolved bound so the CLI value and any
   # #[kani::unwind] attribute cannot disagree (attribute wins in Kani; we
   # keep them equal). Unwinding assertions stay ON unless --no-unwind-checks.
+  # `-Z stubbing` enables `#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]`
+  # (library-cost stubs; semantics-preserving, see rules/kani/src/kani_stubs.rs).
+  # KANI_EXTRA_ARGS is an optional exploration hook (default off/empty).
   set +e
   timeout --signal=TERM --kill-after=30 "${TIMEOUT}s" \
     cargo kani -p rules-kani \
+      -Z stubbing \
       --no-default-features \
       --features "$(unit_features "$unit")" \
       --harness "$name" \
       --default-unwind "$unwind" \
       $( [[ "$NO_UNWIND_CHECKS" == 1 ]] && echo --no-unwinding-checks ) \
+      ${KANI_EXTRA_ARGS:-} \
     >"$log" 2>&1
   exit_code=$?
   set -e

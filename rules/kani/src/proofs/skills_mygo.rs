@@ -114,6 +114,7 @@ fn band_02_crystal_on_16_iff_at(user: i32) {
 
 /// Band-02 iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_02_crystal_on_16_iff() {
     band_02_crystal_on_16_iff_at(0);
@@ -121,6 +122,7 @@ pub fn band_02_crystal_on_16_iff() {
 
 /// Band-02 iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_02_user1_crystal_on_16_iff() {
     band_02_crystal_on_16_iff_at(1);
@@ -128,6 +130,7 @@ pub fn band_02_user1_crystal_on_16_iff() {
 
 /// Mutant companion: a +2 spec must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_02_mutant_is_detected() {
     after_roll_world(0);
@@ -188,6 +191,7 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
 
 /// Band-04 iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_04_ineffective_overcap_iff() {
     band_04_ineffective_overcap_iff_at(0);
@@ -195,6 +199,7 @@ pub fn band_04_ineffective_overcap_iff() {
 
 /// Band-04 iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_04_user1_ineffective_overcap_iff() {
     band_04_ineffective_overcap_iff_at(1);
@@ -202,6 +207,7 @@ pub fn band_04_user1_ineffective_overcap_iff() {
 
 /// Mutant: empty log when the gain should fire.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_04_mutant_is_detected() {
     on_discarded_world(0, 0);

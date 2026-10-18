@@ -178,6 +178,7 @@ fn kasumi_01_world() -> (World, i32, i32) {
 /// IFF: another player settles on the hill ⇒ fire +1 (cap 1) and log exactly
 /// `GainFire(+1)`. Residual false (own settle) is the no-op arm.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kasumi_skill_01_iff() {
     let (w, owner, settler) = kasumi_01_world();
@@ -218,6 +219,7 @@ pub fn kasumi_skill_01_iff() {
 
 /// NO-OP: own settle on the hill must not pay out. Host residual excludes it.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn kasumi_skill_01_noop_own_settle() {
     let owner: i32 = 0;
@@ -237,6 +239,7 @@ pub fn kasumi_skill_01_noop_own_settle() {
 
 /// MUTANT: reference wants +2. Card must FAIL to match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn kasumi_skill_01_mutant_extra_fire() {
@@ -275,6 +278,7 @@ fn kasumi_02_world() -> (World, i32) {
 /// Leaf: spend exactly 1 [火罐]. The teleport / settle / optional build are
 /// PROTOCOL-LEVEL (move plan + offers stubs).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn kasumi_skill_02_spend_charge_iff() {
     let (w, owner) = kasumi_02_world();
@@ -299,6 +303,7 @@ pub fn kasumi_skill_02_spend_charge_iff() {
 
 /// NO-OP: 0 fire ⇒ the gate refuses (host would not call the body).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn kasumi_skill_02_noop_no_fire() {
     let owner: i32 = 0;
@@ -322,6 +327,7 @@ pub fn kasumi_skill_02_noop_no_fire() {
 
 /// MUTANT: reference wants the pot unchanged. Card must FAIL (it spends 1).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 #[kani::should_panic]
 pub fn kasumi_skill_02_mutant_no_spend() {
@@ -345,6 +351,7 @@ pub fn kasumi_skill_02_mutant_no_spend() {
 
 /// IFF: 3d20 sum is symbolic 3..=60; place a rabbit on `#S格` unless 星空齿科.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn megumi_skill_01a_rabbit_iff() {
     let me: i32 = 0;
@@ -391,6 +398,7 @@ pub fn megumi_skill_01a_rabbit_iff() {
 
 /// Spec-level: `#S格` mapping and the 星空齿科 veto.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn megumi_skill_01a_tile_map() {
     let s: i32 = kani::any();
@@ -405,6 +413,7 @@ pub fn megumi_skill_01a_tile_map() {
 /// MUTANT: wants a rabbit even on 星空齿科 (wrong). Companion covers the
 /// disagreement at S=7.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn megumi_skill_01a_mutant_stardust_is_reachable() {
     let s = 7; // #7格 = 星空齿科
@@ -424,6 +433,7 @@ pub fn megumi_skill_01a_mutant_stardust_is_reachable() {
 
 /// Fire leg: gain one pot per rabbit (「等量」), cap 4.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn megumi_skill_01b_fire_iff() {
     let me: i32 = 0;
@@ -499,6 +509,7 @@ pub fn megumi_skill_01b_fire_iff() {
 
 /// Spec: fire gain amount under cap 4.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn megumi_skill_01b_fire_amount_spec() {
     let rabbits: i32 = kani::any();
@@ -512,6 +523,7 @@ pub fn megumi_skill_01b_fire_amount_spec() {
 
 /// MUTANT: wants 2 pots per rabbit. Companion at rabbits=1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn megumi_skill_01b_mutant_double_gain_reachable() {
     let rabbits = 1;
@@ -529,6 +541,7 @@ pub fn megumi_skill_01b_mutant_double_gain_reachable() {
 
 /// Leaf: declare the counteraction ⇒ spend 4 fire, negate, +500 / +2000.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn megumi_skill_02_leaf_iff() {
     let me: i32 = 0;
@@ -569,6 +582,7 @@ pub fn megumi_skill_02_leaf_iff() {
 
 /// MUTANT: wants +500 to the other seat. Companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn megumi_skill_02_mutant_money_swap() {
@@ -620,6 +634,7 @@ fn rimi_turn_end_guard() -> bool {
 
 /// IFF: latch set on own turn ⇒ turn-end +1 fire (cap 3).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn rimi_skill_01_turn_end_iff() {
     let me: i32 = 0;
@@ -660,6 +675,7 @@ pub fn rimi_skill_01_turn_end_iff() {
 
 /// NO-OP: latch 0 ⇒ guard rejects.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn rimi_skill_01_noop_no_latch() {
     let me: i32 = 0;
@@ -679,6 +695,7 @@ pub fn rimi_skill_01_noop_no_latch() {
 
 /// MUTANT: wants +2 fire. Companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn rimi_skill_01_mutant_plus_two() {
@@ -711,6 +728,7 @@ pub fn rimi_skill_01_mutant_plus_two() {
 
 /// Spec: absolute-distance map (not the engine's forward `dist`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(12)]
 pub fn rimi_skill_02_abs_dist_spec() {
     let a: i32 = kani::any();
@@ -724,6 +742,7 @@ pub fn rimi_skill_02_abs_dist_spec() {
 
 /// Leaf: spend 3 fire when the skill press runs (PROTOCOL for the teleport).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn rimi_skill_02_spend_charge_iff() {
     let me: i32 = 0;
@@ -752,6 +771,7 @@ pub fn rimi_skill_02_spend_charge_iff() {
 /// farthest agent is 高级住宅区 (59, abs-dist 29); a property at the same
 /// forward distance is offered instead.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn rimi_skill_02_wrong_class_is_reachable() {
     // Book target class: agent tiles at max absolute distance.
@@ -787,6 +807,7 @@ pub fn rimi_skill_02_wrong_class_is_reachable() {
 
 /// MUTANT: dest may be any tile. Companion rejects a non-agent dest.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn rimi_skill_02_mutant_any_tile_reachable() {
     crate::kassert!(
@@ -830,6 +851,7 @@ fn saaya_01a_world(accept: bool) -> (World, i32, i32) {
 
 /// IFF: accept ⇒ mark +1, fire +1, payer +200.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn saaya_skill_01a_accept_iff() {
     let (w, me, payer) = saaya_01a_world(true);
@@ -862,6 +884,7 @@ pub fn saaya_skill_01a_accept_iff() {
 
 /// NO-OP: payer is self ⇒ residual rejects (host would not call).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn saaya_skill_01a_noop_self_pay() {
     crate::kassert!(
@@ -872,6 +895,7 @@ pub fn saaya_skill_01a_noop_self_pay() {
 
 /// MUTANT: +200 to self instead of payer. Companion at accept.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn saaya_skill_01a_mutant_payee_swap() {
@@ -891,6 +915,7 @@ pub fn saaya_skill_01a_mutant_payee_swap() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn saaya_skill_01b_cut_spec() {
     let before: i32 = kani::any();
@@ -911,6 +936,7 @@ pub fn saaya_skill_01b_cut_spec() {
 
 /// IFF: accept ⇒ spend 5 fire, pay amount = max(pre-5000, 0).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn saaya_skill_02_shave_iff() {
     let me: i32 = 0;
@@ -964,6 +990,7 @@ pub fn saaya_skill_02_shave_iff() {
 
 /// MUTANT: shave one extra. Companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn saaya_skill_02_mutant_off_by_one_reachable() {
     let pre = 6000;
@@ -984,6 +1011,7 @@ pub fn saaya_skill_02_mutant_off_by_one_reachable() {
 
 /// IFF: other draws at 流星堂 ⇒ fire +1 (cap 2).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn aoki_skill_01_iff() {
     let me: i32 = 0;
@@ -1022,6 +1050,7 @@ pub fn aoki_skill_01_iff() {
 
 /// NO-OP: self draw, or not at 流星堂.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn aoki_skill_01_noop() {
     crate::kassert!(!spec::aoki_01_applies(0, 0, spec::TILE_RYUSEIDO), "self");
@@ -1033,6 +1062,7 @@ pub fn aoki_skill_01_noop() {
 
 /// MUTANT: +2 fire. Companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn aoki_skill_01_mutant_plus_two() {
@@ -1063,6 +1093,7 @@ pub fn aoki_skill_01_mutant_plus_two() {
 
 /// IFF (turn-end leg): latch set and end ≠ 流星堂 ⇒ draw 1 + fire +1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn aoki_skill_02_turn_end_iff() {
     let me: i32 = 0;
@@ -1099,6 +1130,7 @@ pub fn aoki_skill_02_turn_end_iff() {
 
 /// NO-OP: standing on 流星堂 at turn end.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn aoki_skill_02_noop_end_on_station() {
     let me: i32 = 0;
@@ -1127,6 +1159,7 @@ pub fn aoki_skill_02_noop_end_on_station() {
 
 /// MUTANT: fire without the draw. Companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn aoki_skill_02_mutant_no_draw() {
@@ -1158,6 +1191,7 @@ pub fn aoki_skill_02_mutant_no_draw() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn aoki_skill_03_spend_spec() {
     let pre: i32 = kani::any();
@@ -1195,6 +1229,7 @@ fn band_pass_guard(tile: i32, actor: i32, owner: i32) -> bool {
 /// or the 1-based labels (1,16,31,46) — a WRONG-class off-by-one if they
 /// disagree.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(12)]
 pub fn band_skill_01a_corner_set() {
     let owner: i32 = 0;
@@ -1224,6 +1259,7 @@ pub fn band_skill_01a_corner_set() {
 
 /// IFF: owner passes a tile the body's guard admits ⇒ sticker +1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_skill_01a_sticker_iff() {
     let me: i32 = 0;
@@ -1256,6 +1292,7 @@ pub fn band_skill_01a_sticker_iff() {
 
 /// NO-OP: actor ≠ owner ⇒ guard rejects.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_skill_01a_noop_other() {
     crate::kassert!(
@@ -1266,6 +1303,7 @@ pub fn band_skill_01a_noop_other() {
 
 /// MUTANT: two stickers. Companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn band_skill_01a_mutant_two_stickers() {
@@ -1293,6 +1331,7 @@ pub fn band_skill_01a_mutant_two_stickers() {
 
 /// IFF: sticker-only press ⇒ −2 stickers, +1 crystal.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_skill_01b_crystal_iff() {
     let me: i32 = 0;
@@ -1323,6 +1362,7 @@ pub fn band_skill_01b_crystal_iff() {
 
 /// NO-OP: stickers < 2 and crystals < 2 ⇒ gate refuses.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn band_skill_01b_noop_no_stickers() {
     let me: i32 = 0;
@@ -1341,6 +1381,7 @@ pub fn band_skill_01b_noop_no_stickers() {
 
 /// MUTANT: +1 sticker instead of −2. Companion.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn band_skill_01b_mutant_gains_sticker() {
@@ -1376,6 +1417,7 @@ pub fn band_skill_01b_mutant_gains_sticker() {
 
 /// IFF: crystal-only press ⇒ −2 crystals, USED=1, then draw 1 **or** +2000.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_skill_01c_crystal_spend_iff() {
     let me: i32 = 0;
@@ -1415,6 +1457,7 @@ pub fn band_skill_01c_crystal_spend_iff() {
 
 /// Once-per-turn: USED already 1 ⇒ no crystal spend.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn band_skill_01c_noop_already_used() {
     let me: i32 = 0;
@@ -1438,6 +1481,7 @@ pub fn band_skill_01c_noop_already_used() {
 /// MUTANT: always draws and never pays cash. Reachable disagreement on the
 /// cash branch (symbolic ask_yes = false).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_skill_01c_mutant_cash_branch_reachable() {
     let me: i32 = 0;
@@ -1475,6 +1519,7 @@ pub fn band_skill_01c_mutant_cash_branch_reachable() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn band_skill_02_no_reward_prop() {
     let me: i32 = 0;
@@ -1503,6 +1548,7 @@ pub fn band_skill_02_no_reward_prop() {
 /// 03a: every PPP character co-owns the hill (claim).
 /// Unwind 16: the spec compares the 14-byte string "Poppin' Party".
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn band_skill_03a_co_own_spec() {
     crate::kassert!(spec::band_03a_co_owns("Poppin' Party", spec::TILE_HILL));
@@ -1511,6 +1557,7 @@ pub fn band_skill_03a_co_own_spec() {
 
 /// 03b OPEN-分摊: payee *set* is exactly the unmortgaged PPP seats.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(12)]
 pub fn band_skill_03b_payee_set_spec() {
     let n = 3;
@@ -1524,6 +1571,7 @@ pub fn band_skill_03b_payee_set_spec() {
 
 /// 03c: BuyGate lock while any PPP character is alive.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn band_skill_03c_buy_gate_iff() {
     let me: i32 = 0;
@@ -1562,6 +1610,7 @@ pub fn band_skill_03c_buy_gate_iff() {
 /// MUTANT companion: the book locks the hill while PPP lives; a wrong
 /// "unlock" spec disagrees on that reachable input.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_skill_03c_mutant_unlock_reachable() {
     let any_ppp_alive = true;
@@ -1579,6 +1628,7 @@ pub fn band_skill_03c_mutant_unlock_reachable() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_skill_04_no_build_spec() {
     crate::kassert!(spec::band_04_build_forbidden(true));
@@ -1590,6 +1640,7 @@ pub fn band_skill_04_no_build_spec() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn skills_ppp_frame_helpers() {
     let pre = world::snapshot();

@@ -155,12 +155,14 @@ fn firepot_01_tick_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn firepot_01_tick_iff() {
     firepot_01_tick_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn firepot_01_user1_tick_iff() {
     firepot_01_tick_iff_at(1);
@@ -168,6 +170,7 @@ pub fn firepot_01_user1_tick_iff() {
 
 /// Companion: the every-other-turn mutant must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn firepot_01_mutant_is_detected() {
     // pre_rest = 0: the card does not grant; the mutant (grant at +1>=2) does.
@@ -218,6 +221,7 @@ fn alloc_key(src: i32) -> &'static str {
 
 /// C-AG-moca-02 iff (CardPlayed hook; residual `trigger::player_id() != owner`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn moca_02_teleport_iff() {
     let pre_fire: i32 = kani::any();
@@ -273,6 +277,7 @@ pub fn moca_02_teleport_iff() {
 
 /// Companion: wrong-tile mutant must not match the accepted path.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn moca_02_mutant_is_detected() {
     let w = moca_offer_world(1, 10, 0);
@@ -301,6 +306,7 @@ pub fn moca_02_mutant_is_detected() {
 
 /// C-AG-ran-02: the fire-spend half (plan reverse / NO_REWARD are stubs).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn ran_02_spend_charge_iff() {
     let pre_fire: i32 = kani::any();
@@ -332,6 +338,7 @@ pub fn ran_02_spend_charge_iff() {
 
 /// Companion: spending 2 must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn ran_02_mutant_is_detected() {
     skills_ag_world();
@@ -354,6 +361,7 @@ pub fn ran_02_mutant_is_detected() {
 
 /// C-AG-firepot-01 tick arithmetic.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn firepot_01_tick_formula() {
     let pre_rest: i32 = kani::any();
@@ -378,6 +386,7 @@ pub fn firepot_01_tick_formula() {
 
 /// C-AG-band-01 filter formula.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_01_filter_formula() {
     let is_shop: bool = kani::any();
