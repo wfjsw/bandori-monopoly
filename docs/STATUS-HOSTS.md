@@ -322,8 +322,8 @@ stun / stay checks run after it.
 | `ops.rs` `give_stay` (incl. the un-skip latch) | `status:stay` host + generic `skip_main_move` | **done**: wear-off declared by `stay::add` (`set_expires`); `give_stay` is a dumb service (abnormal window + layer write + the turn's move latch). `stay_unlatch` stays the documented interim home of the count-changed un-skip. |
 | `ops.rs` `give_stun` | `status:stun` host | **done**: wear-off declared by `stun::add` / `add_start`; STA-01 stun half (refuse under [不可阻挡]) lives in the host verbs. `give_stun` is a dumb service. |
 | `ops.rs` `give_exile` | `status:exile` host | parallel branch |
-| `ops.rs` `gain_fire` / `add_fire_max` | resource API (`rules_status::fire`) over generic `charge` | **done**: 火罐 is a **指示物**, not a status. Cap / partial / pull-down policy is `fire::{gain_clamped, pull_under_cap}`; the engine service still moves values + logs (`TODO(ABI)` `marker::*`). |
-| `wasm_rules` `spend_fire` + `markerSpend` | resource API (window stays generic `HostRequest::Marker`) | left in the engine service (`TODO(ABI)`) |
+| `ops.rs` `gain_fire` / `add_fire_max` | resource API (`rules_status::fire`) over generic `charge` | **out of scope here** -- the `markers` worktree owns 火罐/charge end-to-end. This batch only records the taxonomy (指示物, not a status). |
+| `wasm_rules` `spend_fire` + `markerSpend` | resource API (window stays generic `HostRequest::Marker`) | `markers` worktree |
 | `wasm_rules` `can_pay` / `cant_move` | generic gates + `status::can_act` / `move_blocked` | already gate-based (ABI 58+) |
 | `play.rs` exile tick / return teleport | generic turn-start tick + `status:exile` hook / engine verb `teleport_as` | parallel branch |
 | `play.rs` stun skip / stay skip | gates (hosts maintain); engine reads gates | already gate-based; leave the flow alone |
@@ -341,8 +341,7 @@ stun / stay checks run after it.
   turn-flow, not status policy. No `CounterChanged` hook on the state key
   yet, so the count-changed clause cannot live entirely on the host.
 * `gain_charge` / `spend_charge` / `add_charge_max` + `HostRequest::Marker` --
-  the value-moving primitive and the [反击] window. `TODO(ABI)`
-  `marker::{gain_capped,spend}`.
+  the `markers` worktree's charge/Marker layer (out of scope here).
 * `MatchPlayer::status_gates` -- the engine-side mirror of the CEL gate
   conditions, kept for `StubRules` (`tests/status_gate_drift.rs` pins them
   equal).
