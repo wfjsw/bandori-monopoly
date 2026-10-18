@@ -10,13 +10,14 @@
 //! * **「无视已存在的[停留]」** -- the stay host's move gate stays clear
 //!   while `unstoppable` > 0 (`status::stay::blocks_move`).
 //! * **「[晕眩]效果也不会获得新的层数；无法获得新的[除外]层数」** --
-//!   grant sites consult this host before adding stun / exile layers.
-//!   TODO(规则书): today `give_stun` / `give_exile` do not refuse; Phase C
-//!   adds the check in the hosts' grant verbs.
+//!   the stun host's grant verbs (`status::stun::add` / `add_start`) refuse
+//!   while `unstoppable > 0` (STA-01 stun half, done). The exile half is on
+//!   the parallel exile batch. TODO(规则书): the exile host's `send` still
+//!   needs the same check.
 //! * **「[停留]，[晕眩]，[除外]在适当时机依旧掉层」** -- wear-off is
 //!   unchanged (the items keep their ticks).
 //! * **「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」** --
-//!   TODO(规则书): a separate prompt surface; not in this batch.
+//!   TODO(规则书): a separate prompt surface; not in this batch (STA-02).
 
 use card_sdk::CardDef;
 

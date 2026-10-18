@@ -28,8 +28,9 @@ pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play(
 /// 规则书: 「上一位玩家获得2层回合开始时减少一层的[眩晕]」 -- `stunStart`, the
 /// stun that loses a layer at turn start (not the end-of-turn `stun`).
 /// 规则书: 「下一位玩家在下个自己的回合结束前不可使用手牌」 -- `noHand` = 2: the
-/// engine ticks 2->1 at their turn start and 1->0 at their turn end, so the
-/// veto lifts exactly at the end of their next own turn.
+/// `status:no_hand` host folds 2->1 at their turn start and
+/// 1->0 at their turn end, so the veto lifts exactly at the end of their next
+/// own turn.
 /// 规则书: 「其余玩家获得1层在回合开始时移除的[除外]」 -- `give_exile(p, 1, -1)`.
 fn play(player_id: i32) -> card_sdk::Asked {
     let park = ctx::tile_named("飞鸟山公园");
@@ -66,9 +67,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let prev = ctx::neighbor(player_id, -1);
     let next = ctx::neighbor(player_id, 1);
     if prev >= 0 {
-        // 「获得2层回合开始时减少一层的[眩晕]」
-        ctx::state::add(prev, state_key::STUN_START, 2);
-        ctx::state::set_expires(prev, state_key::STUN_START, ctx::state::TURN_START);
+        // 「获得2层回合开始时减少一层的[眩晕]」 -- `stunStart`, through the
+        // host verb so [不可阻挡] 「晕眩效果也不会获得新的层数」 refuses
+        // (STA-01) and the wear-off tick is declared.
+        rules_status::stun::add_start(prev, 2);
         ctx::log(
             prev,
             &Msg::new("log.event.asukayama_stun").player_id("who", prev).i("n", 2),
