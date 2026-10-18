@@ -1582,11 +1582,22 @@ is per-player, matching the 2026-10-06 ruling.
 
 | id | after |
 |---|---|
-| `skills_mygo::band_02_crystal_on_16_iff` | **FAILED** (D — over-cap eater) |
+| `skills_mygo::band_02_crystal_on_16_iff` | **FAILED** (D — over-cap eater; book formula kept) |
 | `skills_mygo::band_04_ineffective_overcap_iff` | **SUCCESSFUL** 3/3 covers |
 | `skills_mygo::band_04_user1_ineffective_overcap_iff` | **SUCCESSFUL** 3/3 covers |
-| `mygo::hitoshizuku_money_iff` | (in flight / queued) |
-| remaining rows | **needs re-time** |
+| `mygo::hitoshizuku_money_iff` | **SUCCESSFUL** 3/3 covers |
+| `mygo::hitoshizuku_user1_money_iff` | **SUCCESSFUL** 3/3 covers |
+| `mygo::hitoshizuku_body_global_pay_observed` | **SUCCESSFUL** 2/2 covers |
+| `mygo::hitoshizuku_user1_body_global_pay_observed` | **SUCCESSFUL** 2/2 covers |
+| `mygo::hitoshizuku_no_clear_is_noop` | **SUCCESSFUL** |
+| `mygo::rainday_01_place_five_crystals_iff` | **SUCCESSFUL** 2/3 covers |
+| `mygo::rainday_01_user1_place_five_crystals_iff` | **SUCCESSFUL** 2/3 covers |
+| `mygo::rainday_01_mutant_is_detected` | **SUCCESSFUL** 1/1 cover |
+| `ras::riot_02_03_cycle_iff` + `_user1_` + `riot_03_extra_draw_mutant_is_detected` | **needs re-time** (loop bounds + kani-bump landed; BMC still heavy) |
+
+kani-bump validated on `skills_mygo::band_04_ineffective_overcap_iff`
+(SUCCESSFUL, 3/3 covers) before `card-sdk` dependency features enabled it for
+`rules-kani`.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening (band-02 book formula kept despite the D); production bodies

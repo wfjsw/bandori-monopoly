@@ -202,19 +202,19 @@ Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf.
 | harness | before | class | root cause | fix | re-time |
 |---|---|---|---|---|---|
 | `band_02_crystal_on_16_iff` | FAILED 196 s | **B** then **D** | (1) harness read `key_get(user,"crystals")` but `arm_add_counter_self` stores on `field_crystals(last_uid)` / `self_crystals` (class B — same as `events.rs`). Covers unreachable behind the failing assert. (2) After the storage fix the book formula `if pre<1 {1} else {pre}` FAILS at `pre∈{2,3}`: body `add_crystals(1,1)` + production `add_counter_at` `(*slot+n).max(0).min(max)` **clamps down** and eats (3)'s over-cap crystals | storage → `self_crystals()`; log pins host clamped delta. Book formula kept — **D kept FAILING** | yes |
-| `band_02_user1_crystal_on_16_iff` | FAILED 209 s | **B**+**D** | same | same | yes |
+| `band_02_user1_crystal_on_16_iff` | FAILED 209 s | **B**+**D** | same | same | FAILED (D) |
 | `band_02_mutant_is_detected` | SUCCESSFUL 154 s | — | — | — | — |
-| `band_04_ineffective_overcap_iff` | FAILED 220 s | **B** | crystals via `key_get`; `over` was a symbolic input to the formula but the body *sets* `skill.mygo.over` as audit. Expected `band_04_crystals_after(pre,over)` did not match `add_crystals(1,MAX)` + `if have>=3 return` | `self_crystals()`; formula is `pre>=3 ? pre : pre+1` (book ceiling 3). Log tolerates `SetState` audit | **SUCCESSFUL** 3/3 covers |
-| `band_04_user1_ineffective_overcap_iff` | FAILED 202 s | **B** | same | same | **SUCCESSFUL** 3/3 covers |
+| `band_04_ineffective_overcap_iff` | FAILED 220 s → **SUCCESSFUL** 3/3 | **B** | crystals via `key_get`; `over` was a symbolic input to the formula but the body *sets* `skill.mygo.over` as audit. Expected `band_04_crystals_after(pre,over)` did not match `add_crystals(1,MAX)` + `if have>=3 return` | `self_crystals()`; formula is `pre>=3 ? pre : pre+1` (book ceiling 3). Log tolerates `SetState` audit | **SUCCESSFUL** 3/3 covers |
+| `band_04_user1_ineffective_overcap_iff` | FAILED 202 s → **SUCCESSFUL** 3/3 | **B** | same | same | **SUCCESSFUL** 3/3 covers |
 | `band_04_mutant_is_detected` | SUCCESSFUL 157 s | — | — | — | — |
 
 ### mygo
 
 | harness | before | class | root cause | fix | re-time |
 |---|---|---|---|---|---|
-| `rainday_01_place_five_crystals_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | **E** | BMC stuck in `sparse_play_world` then the body `rain()` `Vec<i32> area` + `contains` over 10 symbolic 1d10 agents (production `that_day_rain.rs`). No memchr; the cliff is the agent-area Vec | placement dispatch pins the die to face 1 (`arm_roll_face_one` — a real face, not silent-zero) and stands `user` on 「主要街道」; stay leg is PROTOCOL-adjacent (`rainday_02`) | queued |
-| `hitoshizuku_money_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **E** (+ stale D note) | Symex 1739 s / 3.6M steps on `hitoshizuku_body_global_pay_ok` `for e in effects` (unwind 32) + `filter().count()` fold + `zip().all()` stay check. Older "body charges 1000×global kinds" note is **stale**: body `card-mygo/src/hitoshizuku.rs` does `transfer(j,user,1000*n)` per-player, matching the 2026-10-06 ruling | bounded `while` scans; book assert kept (body matches book — not D) | queued |
-| `hitoshizuku_body_global_pay_observed` + `_user1_` | TIMEOUT 1800 s ×2 | **E** | same effect-list loop | repurposed as a **mutant**: when per-player kinds are uneven the body must not match the global-kinds reading | queued |
+| `rainday_01_place_five_crystals_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 → **SUCCESSFUL** | **E** | BMC stuck in `sparse_play_world` then the body `rain()` `Vec<i32> area` + `contains` over 10 symbolic 1d10 agents (production `that_day_rain.rs`). No memchr; the cliff is the agent-area Vec | placement dispatch pins the die to face 1 (`arm_roll_face_one` — a real face, not silent-zero) and stands `user` on 「主要街道」; stay leg is PROTOCOL-adjacent (`rainday_02`) | SUCCESSFUL |
+| `hitoshizuku_money_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **E** (+ stale D note) | Symex 1739 s / 3.6M steps on `hitoshizuku_body_global_pay_ok` `for e in effects` (unwind 32) + `filter().count()` fold + `zip().all()` stay check. Older "body charges 1000×global kinds" note is **stale**: body `card-mygo/src/hitoshizuku.rs` does `transfer(j,user,1000*n)` per-player, matching the 2026-10-06 ruling | bounded `while` scans; book assert kept (body matches book — not D) | SUCCESSFUL |
+| `hitoshizuku_body_global_pay_observed` + `_user1_` | TIMEOUT 1800 s ×2 | **E** | same effect-list loop | repurposed as a **mutant** | SUCCESSFUL |
 
 ### CONFIRMED genuine discrepancies
 
