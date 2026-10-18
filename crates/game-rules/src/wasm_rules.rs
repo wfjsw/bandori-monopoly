@@ -21,8 +21,10 @@ use game_core::engine::{Ask, CardRules, Cx, Dest, Flow, Halt, Trigger as CoreTri
 use game_core::msg::Msg;
 
 use crate::host::{
-    Call, CardModules, HookRun, HostRequest, Outcome, Prompt, PromptOption, RuleError, Ruleset,
+    Call, CardModules, HostRequest, Outcome, Prompt, PromptOption, RuleError,
 };
+#[cfg(feature = "sandbox")]
+use crate::host::Ruleset;
 use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
@@ -2448,8 +2450,10 @@ pub struct RulesBridge<M: CardModules> {
 type CardPropsTable = std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>;
 
 /// The sandboxed bridge: `CardRules` over wasmi/wasmtime card modules.
+#[cfg(feature = "sandbox")]
 pub type WasmRules = RulesBridge<Ruleset>;
 
+#[cfg(feature = "sandbox")]
 impl RulesBridge<Ruleset> {
     /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh)
     /// and bind the tables. `Ok(None)` when the directory or index is missing --

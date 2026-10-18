@@ -785,10 +785,18 @@ policy, the solo / 托管 drivers. `tools/build-ruleset.mjs` rebuilds the
 monolith after `dist/cards` so the two cannot drift; `tools/check-bot-monolith.mjs`
 asserts the built `glue_bg.wasm` has no `ruleset` import module.
 
-Still deferred: making `wasmi` an optional `sandbox` dep of `game-rules`
-(`host.rs`'s 5k-line `Ruleset` / `Linker` surface is still coupled to the
-backend). The release monolith currently GC's wasmi out of the bundle anyway
-(`tools/check-bot-monolith.mjs` reports `wasmi strings: absent`).
+**Follow-up: `wasmi` is an optional `sandbox` dep of `game-rules`.** The
+`host.rs` `Ruleset` / `Linker` surface, `WasmRules`, and the wasmi/wasmtime
+backend select are gated behind `feature = "sandbox"` (`default = ["sandbox"]`,
+`sandbox = ["dep:wasmi", "dep:wasmtime"]`). `bot-glue` / `bot-service` with
+`native-rules` (default) take `game-rules` with `default-features = false`, so
+`cargo tree -p bot-glue --target wasm32-unknown-unknown` contains **no wasmi
+crate at all** -- not merely GC'd out of the bundle. The linked path still
+shares `HostCtx` / `RulesBridge` / `Run` / `hostfns` with the sandbox.
+`rules-native`'s drift test re-enables `sandbox` through its dev-dependency so
+it can still compare against `WasmRules`. The old wasmi bot path is
+`--no-default-features --features sandbox` (Cargo cannot express "sandbox iff
+not `native-rules`").
 
 ### 3.7 Deck book (offline)
 

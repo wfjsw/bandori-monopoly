@@ -7,7 +7,9 @@ description = "The card ruleset linked as plain native Rust for the bot's simula
 
 [dependencies]
 game-core = { path = "../game-core" }
-game-rules = { path = "../game-rules", features = ["native-rules"] }
+# Linked path: no sandbox / wasmi. The drift test re-enables `sandbox` through
+# the dev-dependency below so it can compare against `WasmRules`.
+game-rules = { path = "../game-rules", default-features = false, features = ["native-rules"] }
 card-sdk = { workspace = true, features = ["guest", "native-rules"] }
 ruleset-core = { path = "../../rules/ruleset-core" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
@@ -37,6 +39,9 @@ rules-status = { path = "../../rules/status" }
 rules-events = { path = "../../rules/events" }
 
 [dev-dependencies]
+# drift.rs compares the native backend against the sandboxed `WasmRules`, so
+# the test build of `game-rules` turns `sandbox` (wasmi/wasmtime) back on.
+game-rules = { path = "../game-rules", default-features = false, features = ["native-rules", "sandbox"] }
 serde_json = { workspace = true }
 
 [features]

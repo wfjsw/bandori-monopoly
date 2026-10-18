@@ -8,7 +8,10 @@ description = "Host for the WASM card ruleset. The browser runs wasmi (interpret
 game-core = { path = "../game-core" }
 card-sdk = { workspace = true }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
-wasmi = { workspace = true }
+# Optional: only the sandboxed card-module host (wasmi / wasmtime) needs an
+# engine. `sandbox = ["dep:wasmi"]` keeps wasmi out of the bot monolith
+# (`bot-glue` + `native-rules`) entirely -- not merely GC'd from the bundle.
+wasmi = { workspace = true, optional = true }
 sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -18,20 +21,26 @@ serde_json = { workspace = true }
 # compiled form with `runtime-only` and never ships the parser (§8.3).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rules-cond = { path = "../../rules/cond" }
-wasmtime = "37"
+# wasmtime is the native sandbox backend. Optional so a `sandbox = false`
+# build (`rules-native` / the bot monolith) does not compile an unused engine.
+wasmtime = { version = "37", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 rules-cond = { path = "../../rules/cond", default-features = false, features = ["runtime-only"] }
 
 [features]
-# The sandboxed card-module host (wasmi / wasmtime) is the default and still a
-# hard dep: splitting `host.rs`'s 5k-line `Ruleset` / `Linker` surface away from
-# the shared types (`HostState`, `RulesHandle`, `CardModules`) is a large
-# invasive change. The bot monolith (`native-rules`) links wasmi-but-unused and
-# instead proves it has no `ruleset` wasm-import module (tools/check-bot-monolith.mjs).
-# Deferred: optional `sandbox = ["dep:wasmi"]` once host.rs is split.
+default = ["sandbox"]
+# The sandboxed card-module host (wasmi on wasm32 / wasmi-native, wasmtime on
+# native). Off for the linked path (`native-rules`): `rules-native` and the bot
+# monolith share `HostCtx` / `RulesBridge` / `hostfns` and never name a wasm
+# engine. On by default so `web-glue`, `server`, `rules-worker` and the
+# `game-rules` tests are unchanged.
+#
+# `dep:wasmtime` is target-gated (native only); on wasm32 the feature pulls
+# just wasmi.
+sandbox = ["dep:wasmi", "dep:wasmtime"]
 # Run the interpreter even natively (the tests then cover both backends).
-wasmi-native = []
+wasmi-native = ["sandbox"]
 # Measurement counters for docs/BOT.md §5 (B0). Off by default; zero
 # behavioural difference -- a few `AtomicU64` bumps around each card run.
 bot-cost = ["game-core/bot-cost"]

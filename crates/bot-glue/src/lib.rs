@@ -13,8 +13,10 @@
 //! bundled [`ruleset_sha256`] is compared to the page's `index.json` and the
 //! worker refuses to answer on mismatch.
 //!
-//! `--no-default-features` keeps the old wasmi sandbox path (fetch the card
-//! modules the page loads) for fallback and tests.
+//! `--no-default-features --features sandbox` keeps the old wasmi sandbox path
+//! (fetch the card modules the page loads) for fallback and tests. Cargo cannot
+//! express "sandbox iff not `native-rules`", so the fallback names the feature
+//! explicitly; bare `--no-default-features` is a compile error.
 //!
 //! **Information boundary** (`docs/BOT.md` §1): the only input is one seat's
 //! view -- the exact frame the page renders for that seat (`MatchState` + own
@@ -56,10 +58,17 @@ use bot_core::{
     action, heuristic_message_view, view_extras, Ismcts, MatchSim, SearchConfig, SearchOutcome,
     SeatView,
 };
+
+#[cfg(all(not(feature = "native-rules"), not(feature = "sandbox")))]
+compile_error!(
+    "bot-glue: enable `native-rules` (the default monolith) or `sandbox` \
+     (`--no-default-features --features sandbox` for the old wasmi path)"
+);
+
 use game_core::data::{GameData, Roster};
 use game_core::engine::{CardRules, StubRules};
 use game_core::net::NetMessage;
-#[cfg(not(feature = "native-rules"))]
+#[cfg(all(not(feature = "native-rules"), feature = "sandbox"))]
 use game_rules::{Ruleset, WasmRules};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;

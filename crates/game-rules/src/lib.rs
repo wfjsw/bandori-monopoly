@@ -52,15 +52,21 @@ pub use cond_pre::{
 pub use game_core::msg::Msg;
 pub use host::{
     Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,
-    HostState, Outcome, Prompt, PromptOption, RuleError, Ruleset, RulesetBuilder, RulesHandle,
-    MAX_NESTING,
+    HostState, Outcome, Prompt, PromptOption, RuleError, RulesHandle, MAX_NESTING,
 };
+/// Sandbox-only: the wasmi/wasmtime card-module host (`Ruleset` is the
+/// `CardModules` over loaded wasm; `RulesetBuilder` assembles one).
+#[cfg(feature = "sandbox")]
+pub use host::{Ruleset, RulesetBuilder};
 /// Simulation-mode inline answers (`docs/BOT.md` §3.2).
 pub use inline::{with_inline_host, InlineHost};
 /// Shared with `rules-native`: the engine-side `Msg` decoder and the per-run
 /// fuel budget the nested-call plumbing shares.
 pub use host::{engine_msg, DEFAULT_FUEL};
-pub use wasm_rules::{take_silent_visible, RulesBridge, Run, WasmRules};
+pub use wasm_rules::{take_silent_visible, RulesBridge, Run};
+/// Sandbox-only `CardRules` over [`Ruleset`].
+#[cfg(feature = "sandbox")]
+pub use wasm_rules::WasmRules;
 mod trigger_why;
 pub use world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 /// The 「效果适用」 why-clause builder.

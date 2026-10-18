@@ -11,7 +11,9 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 bot-core = { path = "../bot-core" }
 game-core = { path = "../game-core" }
-game-rules = { path = "../game-rules" }
+# Default-features off: the monolith must not compile wasmi. The non-native
+# path re-enables the sandbox through the `sandbox` feature below.
+game-rules = { path = "../game-rules", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # Must match the wasm-bindgen CLI exactly (tools/build-bot-glue.mjs).
@@ -33,7 +35,11 @@ js-sys = "0.3"
 [features]
 # Rules compiled into the module (docs/BOT.md §3.6 follow-up): `rules-native`
 # supplies `NativeRules` instead of sandboxed `WasmRules`. On by default so
-# `tools/build-bot-glue.mjs` produces the monolith. `--no-default-features`
-# keeps the old wasmi path (fetch `/assets/rules/*.wasm`) for fallback / tests.
+# `tools/build-bot-glue.mjs` produces the monolith (and `cargo tree -p bot-glue`
+# contains no wasmi). The old wasmi path is
+# `--no-default-features --features sandbox` (fetch `/assets/rules/*.wasm`)
+# for fallback / tests. Cargo cannot express "sandbox iff not native-rules",
+# so the fallback names the feature explicitly.
 default = ["native-rules"]
 native-rules = ["dep:rules-native", "game-rules/native-rules"]
+sandbox = ["game-rules/sandbox"]

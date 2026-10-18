@@ -40,6 +40,13 @@ use bot_core::{
 };
 use game_core::data::GameData;
 use game_core::engine::CardRules;
+
+#[cfg(all(not(feature = "native-rules"), not(feature = "sandbox")))]
+compile_error!(
+    "bot-service: enable `native-rules` (the default) or `sandbox` \
+     (`--no-default-features --features sandbox` for the wasmi `WasmRules` path)"
+);
+
 #[cfg(not(feature = "native-rules"))]
 use game_core::engine::StubRules;
 use game_core::net::NetMessage;
