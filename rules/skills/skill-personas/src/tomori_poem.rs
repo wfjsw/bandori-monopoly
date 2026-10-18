@@ -249,3 +249,10 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 pub fn before_settle_kani(player_id: i32) -> card_sdk::Asked {
     before_settle(player_id)
 }
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_acted_kani(player_id: i32) -> card_sdk::Asked {
+    clear_acted(player_id)
+}
