@@ -576,17 +576,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::place_card_on => arm_place_card_on(a),
                 Op::set_dest => arm_set_dest(a),
         Op::set_transfer_to_dest => 0,
-        Op::send_to_dest => {
-            world::with_world_mut(|w| {
-                w.push(Effect::Teleport {
-                    player: w.trig_player,
-                    tile: w.dest,
-                });
-                let p = player_idx(w.trig_player);
-                w.pos[p] = w.dest;
-            });
-            0
-        }
+        Op::send_to_dest => arm_send_to_dest(a),
         Op::transfer_to_dest => 0,
                 Op::teleport_to => arm_teleport_to(a),
                 Op::unplace_card | Op::unplace_at | Op::unplace_card_named => arm_unplace_card(a),
@@ -1024,11 +1014,21 @@ fn _w(_w: World) {}
 
 // ---- merged bands-a + bands-b subset arms (deduped) ----
 
+/// `Op::add_group_pool(player, np, nl, n, max)` — band-skill pool.
+/// Args are `(player, name_ptr, name_len, n, max)`; `n` is the delta (a3),
+/// not the name handle (a1). Model bound keeps the pool in `0..=99`.
 pub fn arm_add_band_crystals(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
+    let [a0, _np, _nl, n, max, ..] = a;
     world::with_world_mut(|w| {
         let p = player_idx(a0);
-        w.group_pool[p] = (w.group_pool[p] + a1).clamp(0, 99);
+        let mut now = w.group_pool[p] + n;
+        if now < 0 {
+            now = 0;
+        }
+        if max > 0 && now > max {
+            now = max;
+        }
+        w.group_pool[p] = now.clamp(0, 99);
         w.group_pool[p] as i64
     })
 }
@@ -2425,6 +2425,31 @@ pub fn arm_set_dest(a: Args) -> i64 {
             });
             0
         }
+}
+
+/// `Op::send_to_dest` — apply the running instance's fate **now**
+/// (`ctx::send_to_dest`), not at the run commit. Same pile routing as
+/// [`arm_set_dest`]; returns the owner the card left, or -1 when it was
+/// not in play. The old inline arm mistook `w.dest` for a tile and
+/// teleported the player there (class C host-model defect).
+pub fn arm_send_to_dest(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| {
+        w.dest = a0;
+        let uid = w.last_uid;
+        let owner = w.field_by_uid(uid).map(|c| c.player).unwrap_or(-1);
+        if a0 != 2 {
+            if let Some(card) = w.remove_field(uid) {
+                match a0 {
+                    0 => world::pile_push(&mut w.discard_pile, &mut w.discard_n, card),
+                    1 => world::pile_push(&mut w.hand_pile, &mut w.hand_n, card),
+                    // 3 = Banished 「[移除]」: left the field, goes nowhere.
+                    _ => {}
+                }
+            }
+        }
+        owner as i64
+    })
 }
 
 pub fn arm_set_held_name(a: Args) -> i64 {

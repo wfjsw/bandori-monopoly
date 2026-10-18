@@ -1604,3 +1604,52 @@ weakening (band-02 book formula kept despite the D); production bodies
 untouched. Allowed Kani-only surface: `rules/kani/**` + `cfg(kani)` in
 `rules/card-sdk` (`cards_in` exact-length facade — the old padded 0\|4 shape
 was a host-model defect for every body that reads `len()`).
+
+## triage3 batch 15 — mujica / skills_mujica / crychic central non-success rows (kani-pass@fc3ff3e1)
+
+Per-proof detail lives in `docs/rulebook/spec/kani/mujica.md` and `crychic.md`.
+Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
+
+| unit | id | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|---|
+| mujica | `sparkler_last_crystal_stun_two_iff` + `_user1_` | FAILED 158/135 s (`C-MUJICA-花火-03: dest becomes Graveyard`) | **B** | Spec `sparkler_last_crystal_dest` pinned `dest_after == 1` (Hand). Wire `Dest::Graveyard = 0` (`card-sdk/src/ctx.rs`). Body `set_dest(Graveyard)` is correct | `dest_after == 0` | queued |
+| skills_mujica | `band_state2_bend_hook_rewrites_amount` + `_user1_` + `band_state2_bend_mutant_is_detected` | FAILED 184 s ×3 (`host op outside declared per-harness subset`) | **C** | Central body was the pre-v78 `bend(player)` that did `state::set(ORIG)` + `trig_set_pay_amount`; `ave_bend_dispatch` had no `state_set`. Master ABI v78 pure Filter `bend(player, value) -> fold` only reads `trig_player`/`trig_target` | already on this tree after `git merge master` (pure bend + harness `bend_kani(user, amount) -> i32`); subset matches | queued |
+| crychic | `debut_02_turn_end_iff` + `_user1_` | FAILED 174/196 s (`C-CRYCHIC-debut-02: band crystal +1`) | **C** | `arm_add_band_crystals` treated `a1` as the delta. ABI is `add_group_pool(player, np, nl, n, max)` so the delta is `a3`; `a1` is the interned name handle (`0x4000_0000 \| id`) | use `a3` as `n`, honor `max > 0`, keep the `0..=99` model bound | queued |
+| crychic | `ifonly_01_cashout_iff` + `_user1_` | FAILED 322/302 s (`C-CRYCHIC-ifonly-01: all band crystals removed`) | **C** | same `arm_add_band_crystals` arg bug — the drain wrote the name handle, never `-x` | same | queued |
+| crychic | `ifonly_02_discard_at_seven_iff` + `_user1_` | FAILED 140/175 s (`host op outside declared per-harness subset`) | **C** | Body is `ctx::send_to_dest(Graveyard)` (not `set_dest`). Subset omitted `send_to_dest`; host `Op::send_to_dest` was a player-teleport-into-`w.dest` stub | `arm_send_to_dest` unplaces `last_uid` into the dest pile (same world-state commit as `arm_set_dest`); subset declares it; harness observes field drop + discard gain | queued |
+| crychic | `soyoreturn_01_branch2_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **E**+**B** | Symbolic `ask_pick` forced BMC down branch 1 (discard-all: `cards_in` + `discard_from_hand` loop) even though the harness name is branch 2 | pin pick = 1 (`symbolic_answers=false`, `answers[0]=1`) so the leaf is 「获得1000资金并将此卡加入手牌」 only | queued |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch. All six failing rows are class B/C/E.
+
+### Book quotes checked
+
+* 花火-03: 「最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。」
+  (`docs/rulebook/cards.json` id `Mujica:燃尽前的线香花火`)
+* debut-02: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。」
+  (id `CRYCHIC:初演大成功`)
+* ifonly-01/02: 「移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金」 /
+  「若你的手牌大于等于7，此卡立即置入弃牌堆。」
+  (id `CRYCHIC:如果能一直持续下去...`)
+* soyoreturn-01 branch 2: 「获得1000资金并将此卡加入手牌」
+  (id `CRYCHIC:（soyo）回到曾经`)
+* Dest wire order: `Graveyard=0, Hand=1, Field=2, Banished=3` (`card-sdk/src/ctx.rs`)
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-mujica`, `band-mujica,skills-groups`, `band-crychic`,
+  `band-crychic,skills-groups,skills-personas` — Finished, no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed; includes
+  `wrapper_check`, `fnid_seat_args`, `conf_*`).
+
+No CBMC re-times this batch: central `tools/kani/central.sh --retry-nonsuccess`
+already has its own `cbmc` on `skills_crychic::band_01_hand_limit_iff`
+(~270 MB RSS but the gate is 12000 MB available and a sibling big proof is
+running). All six rows are **needs re-time**.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening (sparkler dest pin is the wire constant, not a softer pin; soyoreturn
+pick pin is setup isolation, same class as `arm_roll_face_one`). Production
+bodies untouched. Allowed Kani-only surface: `rules/kani/**`.

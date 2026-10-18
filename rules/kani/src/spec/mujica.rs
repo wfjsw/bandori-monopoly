@@ -244,9 +244,10 @@ pub fn sparkler_last_crystal_effects(effects: &[Effect], user: i32) -> bool {
         && matches!(effects[0], Effect::GiveStun { player: p, n } if p == user && n == 2)
 }
 
-/// Dest flag after the last-crystal body: Graveyard (1).
+/// Dest flag after the last-crystal body: Graveyard (0).
+/// Wire values (`card_sdk::ctx::Dest`): Graveyard=0, Hand=1, Field=2, Banished=3.
 pub fn sparkler_last_crystal_dest(dest_after: i32) -> bool {
-    dest_after == 1
+    dest_after == 0
 }
 
 /// Turn-end burn body: one crystal removed. The extra-turn grant is a
