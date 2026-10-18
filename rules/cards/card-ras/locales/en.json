@@ -66,6 +66,7 @@
   "please_choose_opt2": "Let {{who}} [teleport] to your tile",
   "please_choose_title": "PLEASE CHOOSE",
   "repaint_cut": "{{who}} moves {{n}} fewer tile(s) this time (now {{roll}}) (Repaint)",
+  "studio_storm_charge": "Studio Storm charges {{to}} {{amount}} at {{tile}}",
   "studio_storm_crystal": "{{who}} passed {{tile}}: Studio Storm gains 1 miracle crystal",
   "studio_storm_fired": "Studio Storm fired at {{tile}}: {{who}} is {{x}} tile(s) away",
   "studio_storm_not_on_lh": "can only be played while standing on your own Live House tile",

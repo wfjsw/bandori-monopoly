@@ -66,6 +66,7 @@
   "please_choose_opt2": "让 {{who}} [传送] 到你这格",
   "please_choose_title": "PLEASE CHOOSE",
   "repaint_cut": "{{who}} 这次少走 {{n}} 格（现在 {{roll}}）（Repaint）",
+  "studio_storm_charge": "「练习室里的风暴」向 {{to}} 收取 {{amount}}（{{tile}}）",
   "studio_storm_crystal": "{{who}} 经过 {{tile}}：「练习室里的风暴」获得 1 个奇迹水晶",
   "studio_storm_fired": "「练习室里的风暴」在 {{tile}} 触发：{{who}} 距 {{x}} 格",
   "studio_storm_not_on_lh": "只有站在自己的 Live House 格子上才能打出",

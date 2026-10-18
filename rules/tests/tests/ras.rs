@@ -700,7 +700,7 @@ fn storm_gains_crystal_on_circle_pass() {
 }
 
 #[test]
-fn storm_part2_discards_and_forces_a_settle() {
+fn storm_part2_discards_and_charges() {
     // 规则书 (sheet 2026-10-06 新卡组卡 H8 (2)): 「[使用者]以外的玩家在距此卡所在格子X个
     // 格子处[结算]时将此卡放入弃牌堆且对那个玩家进行一次相当于此卡所在格子普通[结算]的
     // (4-X)/4倍价格的收费，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动」
@@ -735,8 +735,9 @@ fn storm_part2_discards_and_forces_a_settle() {
     t.roll(1).unwrap();
     drain(&mut t);
     assert!(!t.on_field(0, "RAS:练习室里的风暴"), "「将此卡放入弃牌堆」");
-    // p1 settled the card's tile (武道馆) on top of its own landing.
-    assert!(t.money(0) > 24_000, "owner collected rent: {:?}", t.money(0));
+    // 「对那个玩家进行一次…(4-X)/4倍价格的收费」 -- a direct charge to the
+    // tile owner, not a re-settle of 武道馆 on top of p1's own landing.
+    assert!(t.money(0) > 24_000, "owner collected the 收费: {:?}", t.money(0));
 }
 
 #[test]

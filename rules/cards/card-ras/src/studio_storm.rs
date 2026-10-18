@@ -20,9 +20,8 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
         On::Action(&[ActionKind::PassTile], "actor == owner && card.placed && tile_is(tile.id, \"circle\")", None, pass_tile),
         // （2）「在距此卡所在格子X个格子处[结算]时」 is 行动阶段 15
         // (`SETTLE-STAGES.md` §4 M2) -- an entry in the settle's effect list.
-        // `docs/TILES.md` names the long-term home as a remote-settle rule
-        // instance on this card's tile; the `settleBody` hook is the same list
-        // entry for now and is skipped when a field card replaces the body.
+        // The body is a one-shot 「收费」 (sheet 2026-10-06), not a re-settle;
+        // `settleBody` is still the raise point for 「[结算]时」.
         On::Action(&[ActionKind::SettleBody], "actor != owner && card.placed", None, settle_body),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -125,8 +124,8 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if x < 1 || x > crystals {
         return Ok(());
     }
-    // 规则书（2）: 「将此卡放入弃牌堆」 -- C# `Storm`: unplace to discard.
-    // The [结算] below settles, so the card must be gone before it runs.
+    // 规则书（2）: 「将此卡放入弃牌堆」 -- C# `Storm`: unplace to discard. The text
+    // order puts the discard before the 收费, so the card is gone first either way.
     ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
@@ -138,18 +137,34 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍
     // 价格的收费」 -- sheet 2026-10-06 新卡组卡 H8 rewrote this from the older
     // 「那个玩家进行一次此卡所在格子的[结算]」 (a forced re-settle) into a direct
-    // charge. The tests (`ras.rs` `storm_part2_*`) already quote the new text and
-    // only assert the money, so both readings pass them.
+    // charge. A one-shot 「收费」 to the tile owner, **not** a `card_settle_at`:
+    // a full settle also fires settle hooks / counteractions and offers
+    // build/buy, none of which the printed wording asks for.
     //
-    // TODO(规则书): this still runs a full `card_settle_at` (the pre-2026-10-06
-    // reading) rather than a one-shot 「收费」 to the tile owner. A full settle
-    // also fires settle hooks / counteractions and offers build/buy, which the
-    // 「收费」 wording does not. The amount is the same (milli-units:
-    // 1000 * (4-X)/4 = 250 * (4-X)); the side effects are not. Class C on who
-    // receives the 收费 when the tile is mortgaged (「普通[结算]」 there is a
-    // forced-buy offer, not rent) -- charge vs settle needs that ruling first.
-    ctx::plan::set_rent_factor(250 * (4 - x));
-    ctx::card_settle_at(trigger::player_id(), tile, true);
+    // 「普通[结算]的价格」 is `rent_of` (the table rent at the tile's current
+    // house count); the scale is integer (4-X)/4, the same figure the old
+    // `set_rent_factor(250 * (4-X))` produced (`3340 * 2 / 4 = 1670` in
+    // `ras.rs` `storm_part2_rent_factor`). `scale_settle_payment` truncates
+    // (`spec/ROUNDING.md`), so the multiply-then-divide keeps that.
+    //
+    // TODO(规则书)[ruling]: when the tile is **mortgaged**, 「普通[结算]」 is a
+    // forced-buy offer, not a rent, so there is no obvious 收费 recipient.
+    // Class C -- charge nothing for now rather than guess.
+    if !ctx::mortgaged_of(tile) {
+        let owner = ctx::tile_owner(tile);
+        let amount = ctx::rent_of(tile) * (4 - x) / 4;
+        if owner >= 0 && amount > 0 {
+            ctx::transfer(
+                trigger::player_id(),
+                owner,
+                amount,
+                &Msg::new(key!("studio_storm_charge"))
+                    .player_id("to", owner)
+                    .tile("tile", tile)
+                    .i("amount", amount as i64),
+            )?;
+        }
+    }
     Ok(())
 }
 
