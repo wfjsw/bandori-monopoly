@@ -160,7 +160,7 @@ for free.
 
 Checked: `card_sdk::abi::ABI_VERSION = 39`,
 `game_core::engine::mod::SAVE_VERSION = 3` (the match save),
-`game_core::profile::SAVE_VERSION = 3` (the player profile -- untouched here).
+`player_meta::profile::SAVE_VERSION = 3` (the player profile -- untouched here).
 
 | bump | when | why |
 |---|---|---|

@@ -1,4 +1,5 @@
-//! Shared match state, data models, profile logic and wire types.
+//! Shared match state, data models and wire types. The player meta layer
+//! (profile, progression, saved decks) lives in `player-meta`.
 //!
 //! Compiles for **both** native (server) and `wasm32-unknown-unknown` (browser).
 //! No filesystem, no clock, no ambient randomness: time enters as `tick(dt)` or as
@@ -16,8 +17,6 @@ pub mod engine;
 pub mod fair;
 pub mod msg;
 pub mod net;
-pub mod profile;
-pub mod progression;
 pub mod record;
 pub mod rng;
 pub mod scoring;

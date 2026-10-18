@@ -4,15 +4,16 @@
 //! otherwise come from the environment -- today's date (`yyyy-MM-dd`), the
 //! timestamp (`yyyy-MM-dd HH:mm`) and a random 9-digit player id -- and
 //! persists the result (server: file/DB; browser: IndexedDB). That keeps
-//! `game-core` wasm-safe and the logic deterministic under test.
+//! `player-meta` wasm-safe and the logic deterministic under test.
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{PersonaData, GameData};
+use game_core::data::{PersonaData, GameData};
+use game_core::MatchMode;
+
 use crate::progression::{
     self, MatchReward, CHARGE_DAILY_MAX, CHARGE_MAX_PER_GAME, MAX_LEVEL, STARS_PER_GAME,
 };
-use crate::MatchMode;
 
 pub const SAVE_VERSION: i32 = 4;
 /// Match history entries kept on the profile.

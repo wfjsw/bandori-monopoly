@@ -1,4 +1,4 @@
-//! Browser bridge over `game-core`.
+//! Browser bridge over `game-core` + `player-meta`.
 //!
 //! Everything crosses the boundary as JSON strings in the same shapes the server
 //! uses, so the web client has one set of types for online and solo play.
@@ -18,9 +18,10 @@ use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
-use game_core::profile::{PlayerProfile, Seen};
-use game_core::progression;
 use game_core::rng::Seed256;
+use player_meta::decks as saved_decks;
+use player_meta::profile::{PlayerProfile, Seen};
+use player_meta::progression;
 use game_core::record::{
     decode_record, encode_record_zst, parse_header, parse_header_bytes, parse_record, EngineStamp,
     MatchSetup, RecordedMatch, Replayer, RECORD_VERSION,
@@ -365,7 +366,7 @@ pub fn deck_slot_cards(
 ) -> Result<String, JsError> {
     let d = data()?;
     let p: PlayerProfile = parse("profile", profile_json)?;
-    Ok(json(&deck::cards(
+    Ok(json(&saved_decks::cards(
         &d,
         &p,
         persona(&d, persona_name)?,
@@ -385,7 +386,7 @@ pub fn deck_save(
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let ids: Vec<String> = parse("ids", ids_json)?;
-    deck::save(&d, &mut p, persona(&d, persona_name)?, slot, &ids);
+    saved_decks::save(&d, &mut p, persona(&d, persona_name)?, slot, &ids);
     Ok(json(&p))
 }
 
@@ -406,19 +407,19 @@ pub fn deck_list(profile_json: &str, persona_name: &str) -> Result<String, JsErr
         name: String,
         cards: Vec<String>,
     }
-    let list: Vec<Entry> = deck::list(&p, c)
+    let list: Vec<Entry> = saved_decks::list(&p, c)
         .into_iter()
         .map(|sd| Entry {
             id: sd.slot,
             name: sd.name.clone(),
-            cards: deck::cards(&d, &p, c, sd.slot),
+            cards: saved_decks::cards(&d, &p, c, sd.slot),
         })
         .collect();
     Ok(json(&list))
 }
 
 /// Create a deck from `ids_json` (may be empty) named `name` ("" = auto).
-/// Returns the updated profile (no-op past `deck::DECKS_MAX`).
+/// Returns the updated profile (no-op past `saved_decks::DECKS_MAX`).
 #[wasm_bindgen]
 pub fn deck_create(
     profile_json: &str,
@@ -429,7 +430,7 @@ pub fn deck_create(
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let ids: Vec<String> = parse("ids", ids_json)?;
-    deck::create(&d, &mut p, persona(&d, persona_name)?, name, &ids);
+    saved_decks::create(&d, &mut p, persona(&d, persona_name)?, name, &ids);
     Ok(json(&p))
 }
 
@@ -443,7 +444,7 @@ pub fn deck_duplicate(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::duplicate(&d, &mut p, persona(&d, persona_name)?, slot);
+    saved_decks::duplicate(&d, &mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -458,7 +459,7 @@ pub fn deck_rename(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::rename(&mut p, persona(&d, persona_name)?, slot, name);
+    saved_decks::rename(&mut p, persona(&d, persona_name)?, slot, name);
     Ok(json(&p))
 }
 
@@ -472,7 +473,7 @@ pub fn deck_delete(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::delete(&mut p, persona(&d, persona_name)?, slot);
+    saved_decks::delete(&mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -487,7 +488,7 @@ pub fn deck_move(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::move_by(&mut p, persona(&d, persona_name)?, slot, delta);
+    saved_decks::move_by(&mut p, persona(&d, persona_name)?, slot, delta);
     Ok(json(&p))
 }
 
@@ -495,7 +496,7 @@ pub fn deck_move(
 pub fn deck_choose(profile_json: &str, persona_name: &str, slot: i32) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::choose(&mut p, persona(&d, persona_name)?, slot);
+    saved_decks::choose(&mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -504,7 +505,7 @@ pub fn deck_choose(profile_json: &str, persona_name: &str, slot: i32) -> Result<
 pub fn deck_chosen_slot(profile_json: &str, persona_name: &str) -> Result<i32, JsError> {
     let d = data()?;
     let p: PlayerProfile = parse("profile", profile_json)?;
-    Ok(deck::chosen_slot(&d, &p, persona(&d, persona_name)?))
+    Ok(saved_decks::chosen_slot(&d, &p, persona(&d, persona_name)?))
 }
 
 // ------------------------------------------------------------------ profile
