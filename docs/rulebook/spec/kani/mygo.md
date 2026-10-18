@@ -47,8 +47,8 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 | `C-MYGO-journey-02` | 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶」 | **BLOCKED-HOST** | — | — | `turn_main_steps` is a protocol stub returning 0; the `>6` drain never runs under Kani. Missing: real `turn_main_steps` / main-move step count | — |
 | `C-MYGO-journey-03` | 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 | **PROTOCOL-LEVEL** | — | — | CounterChanged → set_dest(Graveyard) is a zone move; the emptying write itself is engine-side | — |
 | `C-MYGO-journey-04` | 「（2）[持续] 触发结算时，获得X*60资金」 | **BLOCKED-HOST** | — | — | `trigger::move_total` is a protocol stub returning 0; the `X*60` gain never runs. Missing: `trig_move_total` | OPEN-触发结算 |
-| `C-MYGO-hitoshizuku-01` | 「清除场上所有[停留]与[眩晕]效果」 | **BLOCKED-HOST** | `hitoshizuku_money_iff` (partial) | pending | host conflates stay/stun on one `w.stay` array (`stay_of`==`stun_of`); cannot set them independently. Missing: distinct `stun` field | — |
-| `C-MYGO-hitoshizuku-02` | 「所有玩家…每清除一种效果则支付…1000资金」 | **FAILS (MORE/WRONG)** | `hitoshizuku_money_iff`, `hitoshizuku_body_global_pay_observed` | pending | book: 1000 per type **per affected player** (ruling 2026-10-06); body charges `1000 * global kinds` from **every** living player | — |
+| `C-MYGO-hitoshizuku-01` | 「清除场上所有[停留]与[眩晕]效果」 | PROVEN (with -02) | `hitoshizuku_money_iff` | pending | world now has distinct `stay` / `stun` arrays | — |
+| `C-MYGO-hitoshizuku-02` | 「所有玩家…每清除一种效果则支付…1000资金」 | PROVEN (body matches book) | `hitoshizuku_money_iff` | pending | book: 1000 per type **per affected player** (ruling 2026-10-06). Body `transfer(j,user,1000*n)` is per-player. The older "body charges 1000×global kinds" note is **stale** | — |
 | `C-MYGO-hitoshizuku-03` | 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」 | PROVEN (with -02) | same | pending | user's extra `GainMoney 1000*n` matches the book | — |
 | `C-MYGO-hitoshizuku-04` | 「（此卡可在眩晕时打出）」 | PROVEN (property) | — | — | `prop::PLAYABLE_STUNNED` on the CardDef; not a body effect | — |
 | `C-MYGO-haneoka-01` | 「位于属于自己的格子上时，投掷1d20」 | **PROVEN** | `haneoka_thresholds_iff` | pending | own-tile gate + symbolic 1d20 | — |
@@ -190,3 +190,66 @@ concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
 body calls, per-harness `host_subset!`, sparse in-place world. See
 TRIAGE-LOG.md `bands-b`. Results accumulate in
 `/home/monopoly/kani-bands-b-results/results-all.tsv`.
+
+## triage3 batch 14 — mygo / skills_mygo central non-success rows (kani-pass@fc3ff3e1)
+
+Central pass rows (unit `mygo` features `band-mygo`; unit `skills_mygo`
+features `band-mygo,skills-groups` — `tools/kani/run.sh` `unit_features`).
+Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf.
+
+### skills_mygo
+
+| harness | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|
+| `band_02_crystal_on_16_iff` | FAILED 196 s | **B** then **D** | (1) harness read `key_get(user,"crystals")` but `arm_add_counter_self` stores on `field_crystals(last_uid)` / `self_crystals` (class B — same as `events.rs`). Covers unreachable behind the failing assert. (2) After the storage fix the book formula `if pre<1 {1} else {pre}` FAILS at `pre∈{2,3}`: body `add_crystals(1,1)` + production `add_counter_at` `(*slot+n).max(0).min(max)` **clamps down** and eats (3)'s over-cap crystals | storage → `self_crystals()`; log pins host clamped delta. Book formula kept — **D kept FAILING** | yes |
+| `band_02_user1_crystal_on_16_iff` | FAILED 209 s | **B**+**D** | same | same | yes |
+| `band_02_mutant_is_detected` | SUCCESSFUL 154 s | — | — | — | — |
+| `band_04_ineffective_overcap_iff` | FAILED 220 s | **B** | crystals via `key_get`; `over` was a symbolic input to the formula but the body *sets* `skill.mygo.over` as audit. Expected `band_04_crystals_after(pre,over)` did not match `add_crystals(1,MAX)` + `if have>=3 return` | `self_crystals()`; formula is `pre>=3 ? pre : pre+1` (book ceiling 3). Log tolerates `SetState` audit | **SUCCESSFUL** 3/3 covers |
+| `band_04_user1_ineffective_overcap_iff` | FAILED 202 s | **B** | same | same | **SUCCESSFUL** 3/3 covers |
+| `band_04_mutant_is_detected` | SUCCESSFUL 157 s | — | — | — | — |
+
+### mygo
+
+| harness | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|
+| `rainday_01_place_five_crystals_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | **E** | BMC stuck in `sparse_play_world` then the body `rain()` `Vec<i32> area` + `contains` over 10 symbolic 1d10 agents (production `that_day_rain.rs`). No memchr; the cliff is the agent-area Vec | placement dispatch pins the die to face 1 (`arm_roll_face_one` — a real face, not silent-zero) and stands `user` on 「主要街道」; stay leg is PROTOCOL-adjacent (`rainday_02`) | queued |
+| `hitoshizuku_money_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **E** (+ stale D note) | Symex 1739 s / 3.6M steps on `hitoshizuku_body_global_pay_ok` `for e in effects` (unwind 32) + `filter().count()` fold + `zip().all()` stay check. Older "body charges 1000×global kinds" note is **stale**: body `card-mygo/src/hitoshizuku.rs` does `transfer(j,user,1000*n)` per-player, matching the 2026-10-06 ruling | bounded `while` scans; book assert kept (body matches book — not D) | queued |
+| `hitoshizuku_body_global_pay_observed` + `_user1_` | TIMEOUT 1800 s ×2 | **E** | same effect-list loop | repurposed as a **mutant**: when per-player kinds are uneven the body must not match the global-kinds reading | queued |
+
+### CONFIRMED genuine discrepancies
+
+**C-MYGO-band-02 over-cap eater (class D).** Quote
+(`docs/rulebook/spec/cards/mygo.md` / `bands.json`):
+「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。」
+plus (3) 「为此卡添加一个可超出上限的[奇迹水晶]（最多超出2个）」.
+Clause doc: the (2) cap applies to the **roll gain**; (3)'s over-cap crystals
+are a different clause. Body `ctx::add_crystals(1, 1)` and production
+`game-core/src/engine/ops.rs` `add_counter_at` (`min(was+n, max)`) force the
+held total down to 1, destroying over-cap crystals. Setup is legal
+(`pre ∈ 0..=3`, which (3) can produce). Proof kept FAILING.
+
+Hitoshizuku is **not** D: body and book agree on per-player kinds.
+
+### Book quotes checked
+
+* band-02 / band-04: see the quotes above
+* hitoshizuku: 「清除场上所有[停留]与[眩晕]效果，所有玩家因本效果每清除一种效果则支付此卡使用者1000资金，若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金。」
+  (`docs/rulebook/cards.json` id `MyGO:壱雫空`)
+* rainday-01: 「将此卡放置于自己场上并为其放置5个奇迹水晶」
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-ras`, `band-mygo`, `band-mygo,skills-groups`, `band-pp,skills-groups`
+  — Finished, no `error` lines. (`band-ras,skills-personas` is **not** a
+  `run.sh` unit set and fails codegen on pre-existing private `at_turn_end` /
+  `clear_acted` from master sheet-sync.)
+* `cargo test -p rules-kani` ×2 (`--no-fail-fast`) — every suite `ok` except
+  pre-existing `wrapper_check` (missing `at_turn_end_kani` /
+  `clear_acted_kani` in `skill-personas` from master; production files, out of
+  scope). Confirmed failing on the unmodified tree as well.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening (band-02 book formula kept despite the D); production bodies
+untouched. Allowed Kani-only surface: `rules/kani/**` + `cfg(kani)` in
+`rules/card-sdk` (`cards_in` exact-length facade).

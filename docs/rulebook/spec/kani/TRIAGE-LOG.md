@@ -1529,3 +1529,67 @@ running. All nine rows are **needs re-time**.
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening; production bodies untouched. Allowed Kani-only surface used:
 `rules/kani/**` + `cfg(kani)` in `rules/card-sdk`.
+
+## triage3 batch 14 — ras / mygo / skills_mygo central non-success rows (kani-pass@fc3ff3e1)
+
+Per-proof detail lives in `docs/rulebook/spec/kani/ras.md` and `mygo.md`
+§ triage3 batch 14. Classes: A bound-low / B setup-spec / C host-model /
+D rulebook gap / E perf / F vacuous.
+
+| unit | id | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|---|
+| skills_mygo | `band_02_crystal_on_16_iff` + `_user1_` | FAILED 196/209 s | **B** → **D** | (1) `key_get(user,"crystals")` vs `field_crystals(last_uid)` (class B). (2) After the fix: body `add_crystals(1,1)` + production `add_counter_at` clamp-down eats (3)'s over-cap crystals at `pre∈{2,3}` | `self_crystals()`; book formula kept | FAILED (D) |
+| skills_mygo | `band_04_ineffective_overcap_iff` + `_user1_` | FAILED 220/202 s | **B** | crystals via `key_get`; `over` was treated as a formula input but the body *sets* `skill.mygo.over` as audit. Book ceiling is the held total (3) | `self_crystals()`; `pre>=3 ? pre : pre+1`; SetState audit tolerated | **SUCCESSFUL** 3/3 covers ×2 |
+| mygo | `rainday_01_place_five_crystals_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT ×3 | **E** | body `rain()` `Vec` area over 10 symbolic 1d10 agents (production) | pin die to face 1 (`arm_roll_face_one`); stand user on 「主要街道」 | queued |
+| mygo | `hitoshizuku_money_iff` + `_user1_` | TIMEOUT ×2 | **E** (stale D note) | effect-list `for` + `filter().count()` + `zip().all()` SSA cliff. Body is per-player (matches book) | bounded `while` scans | queued |
+| mygo | `hitoshizuku_body_global_pay_observed` + `_user1_` | TIMEOUT ×2 | **E** | same | repurposed as global-kinds **mutant** detector | queued |
+| ras | `riot_02_03_cycle_iff` + `_user1_` + `riot_03_extra_draw_mutant_is_detected` | TIMEOUT ×3 | **E**+**C** | RawVec grow cliff + `cards_in` facade length 0\|4 so `hand.len()` ≠ real count | `cfg(kani)` `cards_in` exact-length Vec; ranger pin updated | queued |
+
+### CONFIRMED genuine discrepancies
+
+**C-MYGO-band-02 over-cap eater (class D).** Quote
+(「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。」 +
+(3) 「为此卡添加一个可超出上限的[奇迹水晶]（最多超出2个）」):
+the (2) cap applies to the roll gain; (3)'s over-cap crystals are a different
+clause. Body `add_crystals(1,1)` and production
+`game-core/src/engine/ops.rs` `add_counter_at` (`min(was+n, max)`) force the
+held total down to 1 and destroy over-cap crystals. Setup legal
+(`pre ∈ 0..=3`). Proof kept FAILING.
+
+Hitoshizuku is **not** D (stale note retired): body `transfer(j,user,1000*n)`
+is per-player, matching the 2026-10-06 ruling.
+
+### Book quotes checked
+
+* band-02 / band-04: `docs/rulebook/spec/cards/mygo.md` § Band skill
+* hitoshizuku: `docs/rulebook/cards.json` id `MyGO:壱雫空`
+* rainday-01: 「将此卡放置于自己场上并为其放置5个奇迹水晶」
+* riot: `docs/rulebook/cards.json` id `RAS:R. I. O. T.`
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-ras`, `band-mygo`, `band-mygo,skills-groups`, `band-pp,skills-groups`
+  — Finished, no `error` lines. (`band-ras,skills-personas` is not a
+  `run.sh` unit set; it fails codegen on pre-existing private `at_turn_end` /
+  `clear_acted` from master sheet-sync.)
+* `cargo test -p rules-kani` ×2 (`--no-fail-fast`) — all suites `ok` except
+  pre-existing `wrapper_check` (missing `at_turn_end_kani` / `clear_acted_kani`
+  wrappers in `skill-personas`; production files, out of scope; fails on the
+  unmodified tree too).
+
+### batch-14 re-times (one CBMC at a time, `tools/kani/run.sh`)
+
+| id | after |
+|---|---|
+| `skills_mygo::band_02_crystal_on_16_iff` | **FAILED** (D — over-cap eater) |
+| `skills_mygo::band_04_ineffective_overcap_iff` | **SUCCESSFUL** 3/3 covers |
+| `skills_mygo::band_04_user1_ineffective_overcap_iff` | **SUCCESSFUL** 3/3 covers |
+| `mygo::hitoshizuku_money_iff` | (in flight / queued) |
+| remaining rows | **needs re-time** |
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening (band-02 book formula kept despite the D); production bodies
+untouched. Allowed Kani-only surface: `rules/kani/**` + `cfg(kani)` in
+`rules/card-sdk` (`cards_in` exact-length facade — the old padded 0\|4 shape
+was a host-model defect for every body that reads `len()`).
