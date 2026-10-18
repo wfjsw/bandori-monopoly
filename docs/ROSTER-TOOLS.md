@@ -27,8 +27,11 @@ Do **not** set `CARGO_TARGET_DIR` for this (or `tools/build-ruleset.mjs`) -- an
 externally set one stages stale artifacts.
 
 Display-only columns that live outside the engine structs (`simple`,
-`counterReason`) are **not** in the dump. `data/skill_simple.json` remains the
-source for `simple` skill text.
+`counterReason`, and the slimmed roster copy -- card `text` / `rawName` /
+`cell`, persona `display` / `text` / `color` / `variantTag` / `art` /
+`costume` / `cnId`, group `shortName` / `color` / `text` / `logo`) are **not**
+in the dump. `data/skill_simple.json` and `display.json` remain the sources
+for skill text and the rest of the display copy.
 
 ## Consume the dump (Python)
 

@@ -241,7 +241,11 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
 
 * **web-glue** (additive):
   * **Stamp inputs:** `load_data` computes `data_sha256` (sha256 of the
-    `DATA_FILES` contents in order). `ruleset_build` captures `set.sha256()`.
+    `DATA_FILES` contents in order). `DATA_FILES` is the three engine tables
+    (`board.json` / `events.json` / `match_rules.json`) -- display text
+    (`display.json`, `skill_simple.json`, `rules.txt`, home / voice / schools)
+    is no longer hashed and no longer moves the replay bundle id.
+    `ruleset_build` captures `set.sha256()`.
     `engine_stamp()` exposes both.
   * **`SoloMatch`** holds a `RecordedMatch`. New methods:
     * `tick_steps(k)`;
@@ -306,8 +310,9 @@ design — all of them forced by something the design already says:
   hand.
 * **`CardRules::ruleset_sha256()`** (a defaulted trait method) is how the
   worker fills `EngineStamp.ruleset_sha256`; `StubRules` reports `"stub"`.
-  `Ctx::load` hashes the `DATA_FILES` contents for `data_sha256`, the same
-  recipe web-glue uses. The in-process `Ctx::new` (tests, and the fallback
+  `Ctx::load` hashes the `DATA_FILES` contents for `data_sha256` (the three
+  engine tables; display text does not move it), the same recipe web-glue
+  uses. The in-process `Ctx::new` (tests, and the fallback
   when no worker binary is installed) leaves `data_sha256` empty, which
   `compat` reads as "unknown" and skips.
 * **The in-memory store has no clock.** `record:{room}:last` is an LRU of 64
@@ -419,7 +424,8 @@ A **bundle** is one replay engine plus the inputs its stamp hashed:
 
 * the glue (`webui/src/wasm/glue.js` + `glue_bg.wasm`);
 * the ruleset index and its content-addressed modules;
-* the game tables (`DATA_FILES`);
+* the game tables (`DATA_FILES` -- board / events / match_rules; display text
+  is excluded, so editing copy does not fork the bundle id);
 * the record format / save format versions and the card ABI.
 
 The id is a sha256 over those identities -- one recipe, in
@@ -846,9 +852,10 @@ or the bundle is not deployed at all, the embedded engine runs -- that is the
 whole point of carrying it. The user is told: 「正在使用回放文件内嵌的引擎」 /
 "Playing on the engine embedded in this record (bundle …)".
 
-**BOM note (`data_sha256`).** Some of the game tables (`skill_simple.json` and
-historically the retired roster files) begin with a UTF-8 BOM, and a
-byte-preserving decode keeps it (`as_bytes()` puts `EF BB BF` back) while
+**BOM note (`data_sha256`).** Game tables (the three `DATA_FILES`, and
+historically the display tables that are no longer hashed) may begin with a
+UTF-8 BOM, and a byte-preserving decode keeps it (`as_bytes()` puts
+`EF BB BF` back) while
 `TextDecoder`'s default and `Response.text()` strip it. The stamp recipe is
 unified on **hash without the BOM**: `load_data`, `Ctx::load` and
 `tools/archive-engine.mjs` all drop a leading `U+FEFF` before hashing, so a

@@ -511,6 +511,8 @@ pub fn deck_chosen_slot(profile_json: &str, persona_name: &str) -> Result<i32, J
 // ------------------------------------------------------------------ profile
 
 /// `player_id`: random 9-digit string; `now`: `yyyy-MM-dd HH:mm`; `today`: `yyyy-MM-dd`.
+/// The home persona starts empty; the client sets it (it knows the display
+/// roster and any default from `match_rules.json`).
 #[wasm_bindgen]
 pub fn profile_create(
     name: &str,
@@ -520,15 +522,17 @@ pub fn profile_create(
 ) -> Result<String, JsError> {
     let d = data()?;
     Ok(json(&PlayerProfile::create(
-        &d, name, player_id, now, today,
+        &d, name, player_id, now, today, "",
     )))
 }
 
-/// Parse and repair/migrate a saved profile.
+/// Parse and repair/migrate a saved profile. An unknown home persona falls
+/// back to empty -- the client substitutes its own default.
 #[wasm_bindgen]
 pub fn profile_load(profile_json: &str) -> Result<String, JsError> {
     let d = data()?;
-    let p = PlayerProfile::from_json(&d, profile_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let p = PlayerProfile::from_json(&d, profile_json, "")
+        .map_err(|e| JsError::new(&e.to_string()))?;
     Ok(json(&p))
 }
 

@@ -30,7 +30,6 @@ fn game_data_counts_match_the_board_and_fixture() {
     assert_eq!(d.groups.len(), 3);
     assert_eq!(d.events.len(), 28);
     assert_eq!(d.match_rules.rule_params.get("rentUnitMult"), Some(&10));
-    assert!(!d.rules_text.is_empty());
 
     assert_eq!(d.tiles.iter().filter(|t| t.is_buyable()).count(), 45);
     assert_eq!(
@@ -58,18 +57,8 @@ fn lookups() {
     assert_eq!(d.cards.iter().filter(|c| c.is_universal()).count(), 13);
 
     let alpha = d.persona("Alpha").unwrap();
-    assert_eq!(alpha.art_id(), "syn-001");
-    assert!(d.voice_lines_for(alpha).is_empty(), "fixture personas ship no voice lines");
-    // Personas added later carry an explicit `art` id instead of cnId.
-    assert!(d
-        .personas
-        .iter()
-        .any(|c| !c.art.is_empty() && c.art_id() == c.art));
-
-    // Fixture personas are not in `schools.json`; both fall back.
-    let fallback = d.school_of("nobody");
-    assert_eq!(d.school_of("Alpha"), fallback);
-    assert_eq!(d.group("GroupA").unwrap().short_name, "GA");
+    assert_eq!(alpha.skill, "skill");
+    assert!(d.group("GroupA").is_some());
     assert!(d.group("nope").is_none());
 }
 

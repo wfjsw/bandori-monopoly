@@ -160,6 +160,12 @@ pub struct DeckChoice {
 }
 
 /// "NEW" badge areas (the [`PlayerProfile::has_new`] keys).
+///
+/// `Rules` is a **client-driven boolean**: the engine no longer carries a
+/// rules version (the rules book is display data). The profile only tracks
+/// whether the player has acknowledged the rules at all
+/// ([`PlayerProfile::seen_rules_version`]: `0` = never, non-zero = seen).
+/// Whether the content is newer than the last visit is the webui's call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Seen {
     Gallery,
@@ -170,8 +176,18 @@ pub enum Seen {
 
 impl PlayerProfile {
     /// A fresh profile with everything marked seen.
-    /// `player_id`: random 9-digit string; `now`: `yyyy-MM-dd HH:mm`; `today`: `yyyy-MM-dd`.
-    pub fn create(data: &GameData, name: &str, player_id: &str, now: &str, today: &str) -> Self {
+    /// `player_id`: random 9-digit string; `now`: `yyyy-MM-dd HH:mm`;
+    /// `today`: `yyyy-MM-dd`. `default_home_persona` is the fallback home
+    /// when this profile (or a migrated one) has no valid persona -- UI
+    /// config, not match data.
+    pub fn create(
+        data: &GameData,
+        name: &str,
+        player_id: &str,
+        now: &str,
+        today: &str,
+        default_home_persona: &str,
+    ) -> Self {
         let name = name.trim();
         let mut p = Self {
             player_name: name.into(),
@@ -181,17 +197,17 @@ impl PlayerProfile {
             ..Self::default()
         };
         p.mark_all_seen(data);
-        p.normalize(data);
+        p.normalize(data, default_home_persona);
         p
     }
 
-    /// Repair and migrate a loaded profile. A missing
-    /// or unknown home persona falls back to the data's default.
-    pub fn normalize(&mut self, data: &GameData) {
+    /// Repair and migrate a loaded profile. A missing or unknown home persona
+    /// falls back to `default_home_persona` (caller-supplied UI config).
+    pub fn normalize(&mut self, data: &GameData, default_home_persona: &str) {
         self.level = self.level.clamp(0, MAX_LEVEL);
         self.charge_per_game = self.charge_per_game.clamp(0, CHARGE_MAX_PER_GAME);
         if data.persona(&self.home_persona).is_none() {
-            self.home_persona = data.match_rules.default_home_persona.clone();
+            self.home_persona = default_home_persona.into();
         }
         if self.save_version < 2 {
             // v1 only had the `ranked` flag.
@@ -240,9 +256,13 @@ impl PlayerProfile {
     }
 
     /// Parse `profile.json` and normalize it.
-    pub fn from_json(data: &GameData, text: &str) -> Result<Self, serde_json::Error> {
+    pub fn from_json(
+        data: &GameData,
+        text: &str,
+        default_home_persona: &str,
+    ) -> Result<Self, serde_json::Error> {
         let mut p: Self = serde_json::from_str(text.trim_start_matches('\u{feff}'))?;
-        p.normalize(data);
+        p.normalize(data, default_home_persona);
         Ok(p)
     }
 
@@ -400,7 +420,9 @@ impl PlayerProfile {
                 .iter()
                 .any(|c| !self.seen_personas.contains(&c.name)),
             Seen::Deck => data.cards.iter().any(|c| !self.seen_cards.contains(&c.id)),
-            Seen::Rules => data.rules_version > self.seen_rules_version,
+            // Client-driven boolean: "new" until the player acknowledges the
+            // rules once. The webui decides when the content itself is new.
+            Seen::Rules => self.seen_rules_version == 0,
             Seen::History => self.unread_result,
         }
     }
@@ -440,7 +462,8 @@ impl PlayerProfile {
                     }
                 }
             }
-            Seen::Rules => self.seen_rules_version = data.rules_version,
+            // Non-zero = acknowledged. There is no engine-side rules version.
+            Seen::Rules => self.seen_rules_version = 1,
             Seen::History => self.unread_result = false,
         }
     }
@@ -450,12 +473,14 @@ impl PlayerProfile {
         self.seen_cards.clear();
         self.mark_seen(data, Seen::Gallery);
         self.mark_seen(data, Seen::Deck);
-        self.seen_rules_version = data.rules_version;
+        self.seen_rules_version = 1;
     }
 
-    /// Chosen Live2D variant, or the persona's own.
-    /// `options`: ids valid for this persona (the portrait's options for `art_id`).
-    pub fn live2d_for<'a>(&'a self, c: &'a PersonaData, options: &[&str]) -> &'a str {
+    /// Chosen Live2D variant, or the persona's own (`options[0]`, the
+    /// portrait's default model -- art ids are display data, not on
+    /// [`PersonaData`]).
+    pub fn live2d_for<'a>(&'a self, c: &'a PersonaData, options: &'a [&str]) -> &'a str {
+        let default = options.first().copied().unwrap_or("");
         let prefix = format!("{}=", c.name);
         match self
             .live2d_picks
@@ -463,18 +488,20 @@ impl PlayerProfile {
             .find_map(|p| p.strip_prefix(&prefix))
         {
             Some(id) if options.contains(&id) => id,
-            _ => c.art_id(),
+            _ => default,
         }
     }
 
-    /// Store a Live2D pick. Returns whether the profile changed.
+    /// Store a Live2D pick. Returns whether the profile changed. The default
+    /// model is `options[0]`; picking it clears the stored override.
     pub fn set_live2d(&mut self, c: &PersonaData, id: &str, options: &[&str]) -> bool {
+        let default = options.first().copied().unwrap_or("");
         if self.live2d_for(c, options) == id {
             return false;
         }
         let prefix = format!("{}=", c.name);
         self.live2d_picks.retain(|p| !p.starts_with(&prefix));
-        if id != c.art_id() {
+        if id != default {
             self.live2d_picks.push(format!("{prefix}{id}"));
         }
         true

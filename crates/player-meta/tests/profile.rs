@@ -53,6 +53,7 @@ fn profile_create_and_apply_match() {
         "123456789",
         "2026-10-04 12:00",
         "2026-10-04",
+        "Alpha",
     );
     assert_eq!(p.player_name, "Tomori");
     assert!(!p.has_any_new(&d), "a new profile has seen everything");
@@ -95,12 +96,12 @@ fn profile_normalize_migrates_v1_saves() {
     let v1 = r#"{"saveVersion":1,"level":900,"chargePerGame":9,"homePersona":"",
                  "history":[{"ranked":true,"rank":1},{"ranked":false,"rank":2}]}"#;
     let d = data();
-    let p = PlayerProfile::from_json(&d, v1).unwrap();
+    let p = PlayerProfile::from_json(&d, v1, "Alpha").unwrap();
     assert_eq!(p.save_version, 4);
     assert_eq!((p.level, p.charge_per_game), (500, 3));
     assert_eq!(
-        p.home_persona, d.match_rules.default_home_persona,
-        "empty home -> data default"
+        p.home_persona, "Alpha",
+        "empty home -> the caller-supplied default"
     );
     assert_eq!(p.history[0].mode, MatchMode::Ranked);
     assert_eq!(p.history[1].mode, MatchMode::Casual);
@@ -117,7 +118,7 @@ fn live2d_picks() {
     let c = d.persona("Alpha").unwrap();
     let mut p = PlayerProfile::default();
     let opts = ["syn-001", "syn-001b"];
-    assert_eq!(p.live2d_for(c, &opts), "syn-001");
+    assert_eq!(p.live2d_for(c, &opts), "syn-001", "options[0] is the default");
     assert!(p.set_live2d(c, "syn-001b", &opts));
     assert_eq!(p.live2d_for(c, &opts), "syn-001b");
     assert_eq!(

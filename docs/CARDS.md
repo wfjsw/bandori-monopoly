@@ -512,7 +512,7 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 `(prop::PLAYABLE_STUNNED, 1)`; the twenty song-title cards declare
 `(prop::SONG, 1)`.
 
-## Card metadata (ABI v63) -- data lives with the rule
+## Card metadata (ABI v63 / v86) -- data lives with the rule
 
 The deck-builder / gallery / home-screen rows (cards / characters / bands) are
 **authored beside the rule code** and exported from the ruleset. There is no
@@ -523,18 +523,33 @@ commit `7c3d115`).
 * **Cards** -- `CardDef::meta(&CardMeta::new()...)` on the card's `CardDef`
   (`rules/cards/card-*/src/*.rs`). Carries `name` / `rawName` / `text` /
   `tags` / `derived` / `cell`, plus a generic `fields` map for the game slots
-  `band` and `owner` (`ruleset_core::roster::meta_key`). Multi-line CJK text is
+  `group` and `owner` (`ruleset_core::roster::meta_key`). Multi-line CJK text is
   a raw string literal -- byte-exact newlines, full-width punctuation and
   trailing spaces round-trip untouched.
-* **Characters** -- `ruleset_core::roster::CharacterDef` beside each character
-  skill (`rules/skills/skill-characters/src/*.rs`), collected in that crate's
-  `roster_table::CHARACTERS`.
-* **Bands** -- `ruleset_core::roster::BandDef` beside each band skill
-  (`rules/skills/skill-bands/src/*.rs`), collected in `roster_table::BANDS`.
+* **Characters** -- `ruleset_core::roster::PersonaDef` beside each character
+  skill (`rules/personas/src/*.rs`), collected in that crate's
+  `roster_table::PERSONAS`.
+* **Bands** -- `ruleset_core::roster::GroupDef` beside each band skill
+  (`rules/skills/skill-groups/src/*.rs`), collected in `roster_table::GROUPS`.
 
 `card-sdk` stays vocabulary-free: `CardMeta` is the generic card-row shape and
-`MetaRow` / `MetaDoc` the wire form. `CharacterDef` / `BandDef` name this
+`MetaRow` / `MetaDoc` the wire form. `PersonaDef` / `GroupDef` name this
 game's concepts and live in `ruleset-core` / the skill crates.
+
+### Display columns leave `ruleset_metadata` (ABI v86)
+
+Display-only columns (rule text, sheet cells, art / costume / logo ids, accent
+colours, short labels, CN ids) are still **authored** on the same defs -- the
+`.text(...)` / `.display(...)` / `.color(...)` / `.art(...)` / … builders stay
+-- but they no longer ride `ruleset_metadata`. The runtime blob carries only
+the engine's roster fields (card `name` / `group` / `owner` / `derived` /
+`tags`; persona `name` / `group` / `skill` / `exclusiveCards` / `preset` /
+`variantOf`; group `name` / `skill` / `sharesExclusives`).
+
+The display columns are exported at build time into
+`webui/src/generated/display.json` by `tools/export-display.mjs` (wired into
+`webui`'s `predev` / `prebuild`). Pipeline, field list and regenerate command:
+`docs/DISPLAY.md`.
 
 ### Transport
 

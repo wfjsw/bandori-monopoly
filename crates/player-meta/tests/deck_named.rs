@@ -104,7 +104,7 @@ fn old_slot_profile_migrates_to_named_decks() {
       ]
     }}"#
     );
-    let p = PlayerProfile::from_json(&d, &old).unwrap();
+    let p = PlayerProfile::from_json(&d, &old, "Alpha").unwrap();
     assert_eq!(p.save_version, 4);
     assert_eq!(p.player_name, "灯", "everything else survives");
 
@@ -132,7 +132,7 @@ fn old_slot_profile_migrates_to_named_decks() {
 
     // Round-trip: what normalize() writes out loads back identically.
     let json = serde_json::to_string(&p).unwrap();
-    let back = PlayerProfile::from_json(&d, &json).unwrap();
+    let back = PlayerProfile::from_json(&d, &json, "Alpha").unwrap();
     assert_eq!(back, p);
 
     // A deck whose cards are all stale ids cleans to empty but keeps its slot;
@@ -142,7 +142,7 @@ fn old_slot_profile_migrates_to_named_decks() {
       "decks": [{"persona": "Alpha", "slot": 1, "cards": ["nope:gone"]}],
       "deckChoices": [{"persona": "Alpha", "slot": 1}]
     }"#;
-    let p2 = PlayerProfile::from_json(&d, stale).unwrap();
+    let p2 = PlayerProfile::from_json(&d, stale, "Alpha").unwrap();
     assert_eq!(decks::list(&p2, c).len(), 1);
     assert_eq!(decks::list(&p2, c)[0].slot, 1);
     assert!(decks::cards(&d, &p2, c, 1).is_empty());
@@ -188,7 +188,7 @@ fn hand_edited_deck_ids_are_repaired_on_load() {
         {"persona": "Alpha", "slot": -3, "cards": [], "name": "C"}
       ]
     }"#;
-    let p = PlayerProfile::from_json(&d, messy).unwrap();
+    let p = PlayerProfile::from_json(&d, messy, "Alpha").unwrap();
     let ids: Vec<i32> = decks::list(&p, c).iter().map(|x| x.slot).collect();
     let mut sorted = ids.clone();
     sorted.sort_unstable();

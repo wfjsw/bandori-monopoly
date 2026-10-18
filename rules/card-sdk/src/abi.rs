@@ -668,7 +668,21 @@ use alloc::{string::String, vec::Vec};
 ///      exactly. `ChainKind` remains the [`TriggerKind`] alias for
 ///      `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
 ///      same name tables, no id renumbering. Source-only: ABI_VERSION stays 85.
-pub const ABI_VERSION: i32 = 85;
+/// v86: **display columns leave `ruleset_metadata`**. Printed text / display
+///      strings stay authored on [`crate::meta::CardMeta`] /
+///      `ruleset_core::roster::{PersonaDef, GroupDef}` (the builder calls are
+///      unchanged) but no longer ride the runtime metadata blob. Dropped
+///      MetaRow keys: card `text` / `rawName` / `cell`; persona `display` /
+///      `text` / `color` / `variantTag` / `art` / `costume` / `cnId`; group
+///      `text` / `shortName` / `color` / `logo`. They are serialized at build
+///      time into `webui/src/generated/display.json` by
+///      `tools/export-display.mjs` (`docs/DISPLAY.md`). Keys that stay:
+///      card `name` / `group` / `owner` / `derived` / `tags`; persona `name` /
+///      `group` / `skill` / `exclusiveCards` / `preset` / `variantOf`; group
+///      `name` / `skill` / `sharesExclusives`. Postcard field order of
+///      [`crate::meta::MetaRow`] is unchanged (dropped columns are empty /
+///      absent map pairs). SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 86;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

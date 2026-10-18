@@ -1,14 +1,33 @@
-// Game data: fetched once from /data, handed to the wasm rules and kept typed here
-// for display.
+// Game data: the identity roster from the wasm ruleset, merged with the
+// display fields the webui owns (generated/display.json + data/*.json) and
+// kept typed here for display.
 
 import { settings } from "./store";
 import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
+import displayJson from "../generated/display.json";
 import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
 import { bandLogo, charArt } from "./assets";
-import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine } from "./types";
+import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile } from "./types";
+
+/** Build-exported presentation fields (empty entries omitted). */
+const display = displayJson as DisplayFile;
+
+/**
+ * Current rules-book version, client-owned. Drives the rules NEW badge
+ * (`Seen::Rules` used to read `game_core::data::RULES_VERSION`; the webui
+ * supplies it now). Bump when the rules book changes.
+ */
+export const RULES_VERSION = 1;
+
+/** Persona a new profile starts with (was `match_rules.defaultHomePersona`). */
+export const DEFAULT_HOME_PERSONA = "高松灯";
+
+/** UI-only tables the engine no longer carries in `glue.data_files()` after
+ *  the presentation split. Fetched here, outside `glue.load_data`. */
+const UI_DATA_FILES = ["home_lines.json", "voice_lines.json", "skill_simple.json", "rules.txt"] as const;
 
 export interface GameData {
   tiles: TileData[];
@@ -79,11 +98,12 @@ interface SkillSimple {
  * 1. wasm init + glue identity;
  * 2. **ruleset first** -- `roster_json()` is empty until `ruleset_build`, and
  *    deck builder / gallery / home read `D` as soon as this resolves;
- * 3. `roster_json()` for cards / characters / bands;
- * 4. the remaining `data_files()` tables + optional bot books, `load_data`;
- * 5. merge the display-only overlay (`skill_simple.json`) and assign `D` here,
- *    only at the end, so a throw leaves `D` untouched and Boot shows the error
- *    stage instead of a half-initialized table.
+ * 3. `roster_json()` for the identity rows (cards / personas / groups);
+ * 4. the remaining `data_files()` tables + the UI-only tables + optional bot
+ *    books, `load_data` (engine tables only);
+ * 5. merge `generated/display.json` + `skill_simple.json` onto the roster and
+ *    assign `D` here, only at the end, so a throw leaves `D` untouched and
+ *    Boot shows the error stage instead of a half-initialized table.
  */
 export async function loadGameData(progress: (p: number) => void): Promise<void> {
   await init();
@@ -97,20 +117,24 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // degraded (empty roster + StubRules), not fatal -- `loadRuleset` toasts.
   await loadRuleset();
 
+  // Identity-only roster after the presentation split. Display fields are
+  // merged below from `generated/display.json`.
   const roster = JSON.parse(glue.roster_json()) as {
-    cards: CardData[];
-    personas: PersonaData[];
-    groups: GroupData[];
+    cards: { id: string; group: string; name: string; owner: string; derived: boolean; tags: string[] }[];
+    personas: { name: string; group: string; skill: string; exclusiveCards: string[]; preset: string[]; variantOf?: string }[];
+    groups: { name: string; skill: string; sharesExclusives?: boolean }[];
   };
-  const names: string[] = JSON.parse(glue.data_files());
+  // Engine tables only (post-split: board / events / match_rules).
+  const engineNames: string[] = JSON.parse(glue.data_files());
+  const allNames = [...new Set([...engineNames, ...UI_DATA_FILES])];
   const files: Record<string, string> = {};
   let done = 0;
   await Promise.all(
-    names.map(async (n) => {
+    allNames.map(async (n) => {
       const r = await fetch("/data/" + n);
       if (!r.ok) throw new Error(tr("boot.dataError", { name: n }));
       files[n] = await r.text();
-      progress(++done / names.length);
+      progress(++done / allNames.length);
     }),
   );
   // Optional: the bot deck book (`docs/BOT.md` §3.7). Missing = empty book =
@@ -131,21 +155,50 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   } catch {
     /* absent book is fine */
   }
-  glue.load_data(JSON.stringify(files));
+  // Only the engine tables (+ the optional bot books) cross into wasm. The
+  // UI-only tables above stay on this side -- they are presentation.
+  const engineFiles: Record<string, string> = {};
+  for (const n of [...engineNames, "deck_book.json", "strategy_book.json"]) {
+    if (files[n] !== undefined) engineFiles[n] = files[n];
+  }
+  glue.load_data(JSON.stringify(engineFiles));
 
   const j = (n: string) => JSON.parse(files[n].replace(/^﻿/, ""));
-  // Cards / characters / bands come from the ruleset roster (was
-  // `cards.json` / `characters.json` / `bands.json`; those stay on disk for
-  // authoring tools until they retire).
-  const cards = roster.cards;
-  const personas = roster.personas;
-  const groups = roster.groups;
+  // Cards / personas / groups: identity from the ruleset roster, display from
+  // `generated/display.json` (authored in Rust rule code, exported at build).
+  const cards: CardData[] = roster.cards.map((c) => {
+    const d = display.cards[c.id] ?? {};
+    return { ...c, text: d.text ?? "", rawName: d.rawName ?? "", cell: d.cell ?? "" };
+  });
+  const personas: PersonaData[] = roster.personas.map((p) => {
+    const d = display.personas[p.name] ?? {};
+    return {
+      ...p,
+      display: d.display ?? "",
+      text: d.text ?? "",
+      color: d.color ?? "",
+      cnId: d.cnId ?? "",
+      art: d.art ?? "",
+      costume: d.costume ?? "",
+      ...(d.variantTag ? { variantTag: d.variantTag } : {}),
+    };
+  });
+  const groups: GroupData[] = roster.groups.map((g) => {
+    const d = display.groups[g.name] ?? {};
+    return {
+      ...g,
+      text: d.text ?? "",
+      shortName: d.shortName ?? "",
+      color: d.color ?? "",
+      logo: d.logo ?? "",
+    };
+  });
   const events: EventData[] = j("events.json").events;
   const homeLines = j("home_lines.json").personas ?? [];
   // `skill_simple.json` is the display-only overlay: the hand-written newcomer
   // version of each skill body (`· ` bullets) rides on the character/band
   // record as `simple` (what `skillText` picks when the setting is on -- the
-  // roster's `text` is the fallback), and the card `counterReason` column
+  // merged `text` is the fallback), and the card `counterReason` column
   // (the [反击] prompt's "why this card may be declared") rides on each card.
   const simple = j("skill_simple.json") as SkillSimple;
   for (const c of personas) c.simple = simple.personas.find((x) => x.name === c.name)?.text;

@@ -1731,7 +1731,6 @@ dependencies = [
  "rules-status",
  "rules-tiles",
  "ruleset-core",
- "serde_json",
 ]
 
 [[package]]

@@ -17,6 +17,13 @@
 //! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
 //! roster is covered by the ruleset hash (`EngineStamp::ruleset_sha256`),
 //! which already names the modules the metadata lives in.
+//!
+//! **Display text is not engine data.** Card / persona / group / event copy,
+//! tile chrome (short names, colors, notes), home lines, voice lines, schools
+//! and the rules book live in the webui (`display.json` and the `data/*.json`
+//! files the client already parses). The structs here carry only what the
+//! engine resolves and the match rules read -- so editing display text no
+//! longer moves the replay bundle id.
 
 use std::collections::HashMap;
 
@@ -66,22 +73,21 @@ impl<'de> Deserialize<'de> for TileKind {
     }
 }
 
-/// One tile of the board, as the data file names it.
+/// One tile of the board, as the data file names it. `name` **stays**: the
+/// engine resolves tiles by name (`ctx::tile_named`, `engine/ops.rs`).
+/// Display chrome (`shortName`, `color`, `note`) is client-side.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct TileData {
     pub index: i32,
     pub name: String,
-    pub short_name: String,
     pub kind: TileKind,
     pub group: i32,
-    pub color: String,
     pub tier: i32,
     pub area: String,
     pub price: i32,
     pub house: i32,
     pub rent: Vec<i32>,
-    pub note: String,
 }
 
 impl TileData {
@@ -100,18 +106,21 @@ impl TileData {
 /// The engine keeps no kind→rule table.
 
 /// One card row of the roster (was `cards.json`; now ruleset metadata).
+/// Display-only copy (`rawName`, `cell`) lives in `display.json`. `text` is
+/// dual-role and stays here: the ruleset queries it at runtime
+/// (`card_text_mentions`, 「效果包含…」), so it is a rule input as well as the
+/// printed body the client shows.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CardData {
     pub id: String,
     pub group: String,
     pub name: String,
-    pub raw_name: String,
     pub owner: String,
     pub derived: bool,
     pub tags: Vec<String>,
+    /// Printed rule body. Searched by `card_text_mentions`.
     pub text: String,
-    pub cell: String,
 }
 
 impl CardData {
@@ -136,53 +145,39 @@ impl CardData {
     }
 }
 
-/// One playable persona of the roster (was `personas.json`).
+/// One playable persona of the roster (was `personas.json`). Display-only copy
+/// (`display`, `color`, `variantTag`, `art`, `costume`, `cnId`) lives in
+/// `display.json`. `text` is dual-role and stays here: `card_text_mentions`
+/// searches it over `skill:<persona>:<skill>` (「技能中含有…」).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PersonaData {
     pub name: String,
-    pub display: String,
     pub group: String,
-    pub color: String,
     pub skill: String,
-    pub text: String,
-    pub cn_id: String,
-    pub art: String,
-    pub costume: String,
     pub exclusive_cards: Vec<String>,
     pub preset: Vec<String>,
     /// The persona this one is an alternate form of (`高松灯（CRYCHIC）` ->
     /// `高松灯`); empty when it is a base persona.
     pub variant_of: String,
-    /// Short label for compact displays of a variant (`c`).
-    pub variant_tag: String,
+    /// Printed skill body. Searched by `card_text_mentions`.
+    pub text: String,
 }
 
-impl PersonaData {
-    /// Key for art and Live2D: `art` if set, else `cn_id`.
-    pub fn art_id(&self) -> &str {
-        if self.art.is_empty() {
-            &self.cn_id
-        } else {
-            &self.art
-        }
-    }
-}
-
-/// One group of the roster (was `groups.json`; skill text + branding).
+/// One group of the roster (was `groups.json`). Display-only copy (`shortName`,
+/// `color`, `logo`) lives in `display.json`. `text` is dual-role and stays
+/// here: `card_text_mentions` searches it over `skill:<group>:<skill>`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GroupData {
     pub name: String,
-    pub short_name: String,
-    pub color: String,
     pub skill: String,
-    pub text: String,
-    pub logo: String,
     /// Group-skill trait: members may carry each other's exclusive cards in a
     /// starting deck. Deck-legal only -- the in-match play gate is the
     /// group-skill card's `ExclusiveUse` entry (or the generic own/base rule).
     pub shares_exclusives: bool,
+    /// Printed skill body. Searched by `card_text_mentions`.
+    pub text: String,
 }
 
 /// The roster half of [`GameData`] -- cards / personas / groups -- handed over
@@ -243,90 +238,32 @@ impl Roster {
     }
 }
 
-/// One event card from `events.json`.
+/// One event card from `events.json`. `name` / `text` / `cell` stay in that
+/// file for the client; the engine only needs the id and whether the card is
+/// a derived (face-down / spawned) one.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct EventData {
     pub id: String,
-    pub name: String,
     pub derived: bool,
-    pub text: String,
-    pub cell: String,
 }
 
 /// `group` value of the cards every persona may take. A roster group key (the
 /// data set is Chinese), not display text.
 pub const GENERAL_GROUP: &str = "通用";
 
-/// Persona → school tile-name map.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SchoolsData {
-    /// Tile name to use when a persona's school is not in the data.
-    pub fallback: String,
-    pub schools: Vec<SchoolEntry>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SchoolEntry {
-    pub persona: String,
-    pub school: String,
-}
-
-/// Home-screen line tags per persona.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct HomeLinesData {
-    pub personas: Vec<PersonaLines>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PersonaLines {
-    pub name: String,
-    pub tag: String,
-}
-
-/// Voice / motion lines per persona.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct VoiceLinesData {
-    pub personas: Vec<PersonaVoiceLines>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PersonaVoiceLines {
-    pub id: String,
-    pub name: String,
-    pub lines: Vec<VoiceLine>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct VoiceLine {
-    pub text: String,
-    pub voice: String,
-    pub motion: String,
-    pub from: String,
-}
-
 /// Tunable match numbers from `match_rules.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchRulesData {
-    pub note: String,
     pub money: f32,
     pub property: f32,
     pub houses: f32,
     /// Generic named rule parameters (the ruleset reads them by name).
     /// The shipped ruleset uses `rentUnitMult` as the dice-rent unit multiplier.
     pub rule_params: std::collections::BTreeMap<String, i32>,
-    /// Names given to bot players, in order.
+    /// Names given to bot players, in order. Match naming policy, not chrome.
     pub bot_names: Vec<String>,
-    /// Home persona of a new profile (a persona `name`).
-    pub default_home_persona: String,
 }
 
 impl Default for MatchRulesData {
@@ -334,13 +271,11 @@ impl Default for MatchRulesData {
         let mut rule_params = std::collections::BTreeMap::new();
         rule_params.insert("rentUnitMult".to_string(), 10);
         Self {
-            note: String::new(),
             money: 1.0,
             property: 1.0,
             houses: 1.0,
             rule_params,
             bot_names: vec![],
-            default_home_persona: String::new(),
         }
     }
 }
@@ -356,9 +291,6 @@ struct EventFile {
     #[serde(default)]
     events: Vec<EventData>,
 }
-
-/// Bump when the rules book changes; drives the "NEW" badge (`rules_version`).
-pub const RULES_VERSION: i32 = 1;
 
 /// The rule id of a persona or group skill (the crates under `rules/skills`).
 ///
@@ -390,12 +322,7 @@ pub struct GameData {
     pub personas: Vec<PersonaData>,
     pub groups: Vec<GroupData>,
     pub events: Vec<EventData>,
-    pub schools: SchoolsData,
-    pub home_lines: HomeLinesData,
-    pub voice_lines: VoiceLinesData,
     pub match_rules: MatchRulesData,
-    pub rules_text: String,
-    pub rules_version: i32,
     /// Bot deck book (`docs/BOT.md` §3.7) from the optional
     /// `data/deck_book.json`. Empty when the file is absent or unparsable --
     /// bots then keep using [`crate::deck::preset`]. Not part of
@@ -410,26 +337,17 @@ pub struct GameData {
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`. The roster (`cards` / `personas` /
-/// `groups`) is **not** here: it comes from the ruleset (ABI v63
-/// `ruleset_metadata`) or, in tests, from the synthetic fixture
-/// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
-/// `skill_simple.json` and the card display overlay stay because they are
-/// display-only and the client merges them.
-pub const DATA_FILES: [&str; 8] = [
-    "board.json",
-    "events.json",
-    "schools.json",
-    "home_lines.json",
-    "voice_lines.json",
-    "match_rules.json",
-    "rules.txt",
-    // Hand-written simplified skill bodies (and the card `counterReason`
-    // overlay), for the client's skill-text setting and the counteraction prompt
-    // reason. Display-only: the engine reads the full skill text from the
-    // roster.
-    "skill_simple.json",
-];
+/// Data files, as named in `web/data/`, that the **engine** loads and hashes.
+/// Three tables only: the board, the event roster and the match numbers.
+///
+/// Display-only files the client parses on its own (`skill_simple.json`,
+/// `rules.txt`, `home_lines.json`, `voice_lines.json`, ...) are **not** here
+/// and never move `data_sha256` -- see `webui/src/generated/display.json`.
+/// The roster (`cards` / `personas` / `groups`) is **not** here either: it
+/// comes from the ruleset (ABI v63 `ruleset_metadata`) or, in tests, from the
+/// synthetic fixture (`Roster::from_fixture`), and is covered by the ruleset
+/// hash, not this one.
+pub const DATA_FILES: [&str; 3] = ["board.json", "events.json", "match_rules.json"];
 
 fn parse<T: serde::de::DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {
     serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| format!("{file}: {e}"))
@@ -484,12 +402,7 @@ impl GameData {
             personas: roster.personas,
             groups: roster.groups,
             events: parse::<EventFile>("events.json", &get("events.json")?)?.events,
-            schools: parse("schools.json", &get("schools.json")?)?,
-            home_lines: parse("home_lines.json", &get("home_lines.json")?)?,
-            voice_lines: parse("voice_lines.json", &get("voice_lines.json")?)?,
             match_rules: parse("match_rules.json", &get("match_rules.json")?)?,
-            rules_text: get("rules.txt")?.trim_start_matches('\u{feff}').to_string(),
-            rules_version: RULES_VERSION,
             deck_book: DeckBook::default(),
             strategy_book: StrategyBook::default(),
             card_by_id: HashMap::new(),
@@ -547,43 +460,5 @@ impl GameData {
     /// Event card by id.
     pub fn event(&self, id: &str) -> Option<&EventData> {
         self.events.iter().find(|e| e.id == id)
-    }
-
-    /// School tile name for `persona`, or [`SchoolsData::fallback`].
-    pub fn school_of(&self, persona: &str) -> &str {
-        self.schools
-            .schools
-            .iter()
-            .find(|s| s.persona == persona)
-            .map(|s| s.school.as_str())
-            .unwrap_or(&self.schools.fallback)
-    }
-
-    /// Short name on the home screen.
-    pub fn home_tag<'a>(&'a self, c: &'a PersonaData) -> &'a str {
-        self.home_lines
-            .personas
-            .iter()
-            .find(|x| x.name == c.name && !x.tag.is_empty())
-            .map(|x| x.tag.as_str())
-            .unwrap_or(&c.display)
-    }
-
-    /// Lines with both text and audio.
-    pub fn voice_lines_for(&self, c: &PersonaData) -> Vec<&VoiceLine> {
-        if c.cn_id.is_empty() {
-            return vec![];
-        }
-        self.voice_lines
-            .personas
-            .iter()
-            .find(|x| x.id == c.cn_id)
-            .map(|x| {
-                x.lines
-                    .iter()
-                    .filter(|l| !l.text.is_empty() && !l.voice.is_empty())
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 }

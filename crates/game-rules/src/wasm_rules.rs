@@ -1165,9 +1165,9 @@ impl CardWorld for Run {
         if let Some(c) = self.data.card(card) {
             return c.text.contains(needle);
         }
-        // A `skill:<owner>:<skill>` rule id is not in `cards.json`; the skill's
-        // text is the owner's (persona's or group's) `text` field
-        // (a bear-cookie emote targeting 「every player whose skills mention charge pots」).
+        // A `skill:<owner>:<skill>` rule id is not in `cards`; the skill's
+        // text is the owner's (persona's or group's) `text` field (a bear-cookie
+        // emote targeting 「every player whose skills mention charge pots」).
         if let Some(rest) = card.strip_prefix("skill:") {
             if let Some((owner, _)) = rest.split_once(':') {
                 if let Some(c) = self.data.persona(owner) {

@@ -14,8 +14,11 @@
 //! * No argument prints the three files' rows to stdout.
 //!
 //! Display-only columns that live outside the engine structs (`simple`,
-//! `counterReason`) stay in `data/skill_simple.json` and are **not** printed
-//! here -- they are not part of `CardData` / `PersonaData` / `GroupData`.
+//! `counterReason`, card `rawName` / `cell`, persona `display` / `color` /
+//! `variantTag` / `art` / `costume` / `cnId`, group `shortName` / `color` /
+//! `logo`) stay in `display.json` and `data/skill_simple.json` and are **not**
+//! printed here. Rule-body `text` IS printed: `card_text_mentions` searches it,
+//! so it is part of `CardData` / `PersonaData` / `GroupData`.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -115,7 +118,7 @@ fn key_str_array(k: &str, vs: &[String], level: usize) -> String {
     out
 }
 
-/// `cards.json` row order: id, group, rawName, name, owner, derived, tags, text, cell.
+/// `cards.json` row order: id, group, name, owner, derived, tags, text.
 fn cards_json(cards: &[CardData]) -> String {
     let mut out = String::from("{\n    \"cards\": [\n");
     for (i, c) in cards.iter().enumerate() {
@@ -124,13 +127,11 @@ fn cards_json(cards: &[CardData]) -> String {
         let fields = [
             key_str("id", &c.id, 3),
             key_str("group", &c.group, 3),
-            key_str("rawName", &c.raw_name, 3),
             key_str("name", &c.name, 3),
             key_str("owner", &c.owner, 3),
             key_bool("derived", c.derived, 3),
             key_str_array("tags", &c.tags, 3),
             key_str("text", &c.text, 3),
-            key_str("cell", &c.cell, 3),
         ];
         out.push_str(&fields.join(",\n"));
         out.push('\n');
@@ -142,34 +143,20 @@ fn cards_json(cards: &[CardData]) -> String {
     out
 }
 
-/// `personas.json` row order: name, display, [variantOf], [variantTag], group,
-/// color, skill, text, cnId, [art], [costume], exclusiveCards, [preset].
+/// `personas.json` row order: name, [variantOf], group, skill, text,
+/// exclusiveCards, [preset].
 fn personas_json(chars: &[PersonaData]) -> String {
     let mut out = String::from("{\n    \"personas\": [\n");
     for (i, c) in chars.iter().enumerate() {
         out.push_str(&indent(2));
         out.push_str("{\n");
-        let mut fields = vec![
-            key_str("name", &c.name, 3),
-            key_str("display", &c.display, 3),
-        ];
+        let mut fields = vec![key_str("name", &c.name, 3)];
         if !c.variant_of.is_empty() {
             fields.push(key_str("variantOf", &c.variant_of, 3));
         }
-        if !c.variant_tag.is_empty() {
-            fields.push(key_str("variantTag", &c.variant_tag, 3));
-        }
         fields.push(key_str("group", &c.group, 3));
-        fields.push(key_str("color", &c.color, 3));
         fields.push(key_str("skill", &c.skill, 3));
         fields.push(key_str("text", &c.text, 3));
-        fields.push(key_str("cnId", &c.cn_id, 3));
-        if !c.art.is_empty() {
-            fields.push(key_str("art", &c.art, 3));
-        }
-        if !c.costume.is_empty() {
-            fields.push(key_str("costume", &c.costume, 3));
-        }
         fields.push(key_str_array("exclusiveCards", &c.exclusive_cards, 3));
         if !c.preset.is_empty() {
             fields.push(key_str_array("preset", &c.preset, 3));
@@ -184,8 +171,7 @@ fn personas_json(chars: &[PersonaData]) -> String {
     out
 }
 
-/// `groups.json` row order: name, shortName, [sharesExclusives],
-/// color, skill, text, logo.
+/// `groups.json` row order: name, skill, text, [sharesExclusives].
 fn groups_json(groups: &[GroupData]) -> String {
     let mut out = String::from("{\n    \"groups\": [\n");
     for (i, b) in groups.iter().enumerate() {
@@ -193,15 +179,12 @@ fn groups_json(groups: &[GroupData]) -> String {
         out.push_str("{\n");
         let mut fields = vec![
             key_str("name", &b.name, 3),
-            key_str("shortName", &b.short_name, 3),
+            key_str("skill", &b.skill, 3),
+            key_str("text", &b.text, 3),
         ];
         if b.shares_exclusives {
             fields.push(key_bool("sharesExclusives", true, 3));
         }
-        fields.push(key_str("color", &b.color, 3));
-        fields.push(key_str("skill", &b.skill, 3));
-        fields.push(key_str("text", &b.text, 3));
-        fields.push(key_str("logo", &b.logo, 3));
         out.push_str(&fields.join(",\n"));
         out.push('\n');
         out.push_str(&indent(2));

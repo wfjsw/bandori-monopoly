@@ -43,41 +43,30 @@ fn card_from_row(r: &MetaRow) -> CardData {
         id: r.id.clone(),
         group: r.field("group").to_string(),
         name: r.name.clone(),
-        raw_name: r.raw_name.clone(),
         owner: r.field("owner").to_string(),
         derived: r.derived,
         tags: r.tags.clone(),
         text: r.text.clone(),
-        cell: r.cell.clone(),
     }
 }
 
 fn persona_from_row(r: &MetaRow) -> PersonaData {
     PersonaData {
         name: r.name.clone(),
-        display: r.field("display").to_string(),
         group: r.field("group").to_string(),
-        color: r.field("color").to_string(),
         skill: r.field("skill").to_string(),
-        text: r.text.clone(),
-        cn_id: r.field("cnId").to_string(),
-        art: r.field("art").to_string(),
-        costume: r.field("costume").to_string(),
         exclusive_cards: r.list("exclusiveCards").to_vec(),
         preset: r.list("preset").to_vec(),
         variant_of: r.field("variantOf").to_string(),
-        variant_tag: r.field("variantTag").to_string(),
+        text: r.text.clone(),
     }
 }
 
 fn group_from_row(r: &MetaRow) -> GroupData {
     GroupData {
         name: r.name.clone(),
-        short_name: r.field("shortName").to_string(),
-        color: r.field("color").to_string(),
         skill: r.field("skill").to_string(),
-        text: r.text.clone(),
-        logo: r.field("logo").to_string(),
         shares_exclusives: r.flag("sharesExclusives"),
+        text: r.text.clone(),
     }
 }

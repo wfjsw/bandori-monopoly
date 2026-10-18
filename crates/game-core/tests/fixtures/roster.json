@@ -4,287 +4,219 @@
       "id": "Gen:01",
       "group": "通用",
       "name": "General 01",
-      "rawName": "General 01",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:02",
       "group": "通用",
       "name": "General 02",
-      "rawName": "General 02",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:03",
       "group": "通用",
       "name": "General 03",
-      "rawName": "General 03",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:04",
       "group": "通用",
       "name": "General 04",
-      "rawName": "General 04",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:05",
       "group": "通用",
       "name": "General 05",
-      "rawName": "General 05",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:06",
       "group": "通用",
       "name": "General 06",
-      "rawName": "General 06",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:07",
       "group": "通用",
       "name": "General 07",
-      "rawName": "General 07",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:08",
       "group": "通用",
       "name": "General 08",
-      "rawName": "General 08",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:09",
       "group": "通用",
       "name": "General 09",
-      "rawName": "General 09",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:10",
       "group": "通用",
       "name": "General 10",
-      "rawName": "General 10",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:11",
       "group": "通用",
       "name": "General 11",
-      "rawName": "General 11",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Gen:12",
       "group": "通用",
       "name": "General 12",
-      "rawName": "General 12",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "A:01",
       "group": "GroupA",
       "name": "GroupA card 01",
-      "rawName": "GroupA card 01",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "A:02",
       "group": "GroupA",
       "name": "GroupA card 02",
-      "rawName": "GroupA card 02",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "B:01",
       "group": "GroupB",
       "name": "GroupB card 01",
-      "rawName": "GroupB card 01",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "B:02",
       "group": "GroupB",
       "name": "GroupB card 02",
-      "rawName": "GroupB card 02",
       "owner": "",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "A:alpha-excl",
       "group": "GroupA",
       "name": "Alpha exclusive",
-      "rawName": "Alpha exclusive",
       "owner": "Alpha",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "A:beta-excl",
       "group": "GroupA",
       "name": "Beta exclusive",
-      "rawName": "Beta exclusive",
       "owner": "Beta",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "B:eps-excl",
       "group": "GroupB",
       "name": "Epsilon exclusive",
-      "rawName": "Epsilon exclusive",
       "owner": "Epsilon",
       "derived": false,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Der:01",
       "group": "GroupA",
       "name": "Derived one",
-      "rawName": "Derived one",
       "owner": "",
       "derived": true,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     },
     {
       "id": "Der:02",
       "group": "通用",
       "name": "Derived two",
-      "rawName": "Derived two",
       "owner": "",
       "derived": true,
       "tags": [
         "hand"
-      ],
-      "text": "",
-      "cell": ""
+      ]
     }
   ],
   "personas": [
     {
       "name": "Alpha",
-      "display": "Alpha",
+      "variantOf": "",
       "group": "GroupA",
-      "color": "#3366AA",
       "skill": "skill",
-      "text": "",
-      "cnId": "syn-001",
-      "art": "",
-      "costume": "",
       "exclusiveCards": [
         "A:alpha-excl"
       ],
@@ -299,20 +231,13 @@
         "Gen:08",
         "Gen:09",
         "Gen:10"
-      ],
-      "variantOf": "",
-      "variantTag": ""
+      ]
     },
     {
       "name": "Beta",
-      "display": "Beta",
+      "variantOf": "",
       "group": "GroupA",
-      "color": "#3366AA",
       "skill": "skill",
-      "text": "",
-      "cnId": "syn-002",
-      "art": "",
-      "costume": "",
       "exclusiveCards": [
         "A:beta-excl"
       ],
@@ -327,20 +252,13 @@
         "Gen:08",
         "Gen:09",
         "Gen:10"
-      ],
-      "variantOf": "",
-      "variantTag": ""
+      ]
     },
     {
       "name": "Gamma",
-      "display": "Gamma",
+      "variantOf": "Alpha",
       "group": "GroupA",
-      "color": "#3366AA",
       "skill": "skill",
-      "text": "",
-      "cnId": "",
-      "art": "art-gamma",
-      "costume": "",
       "exclusiveCards": [],
       "preset": [
         "Gen:01",
@@ -353,20 +271,13 @@
         "Gen:08",
         "Gen:09",
         "Gen:10"
-      ],
-      "variantOf": "Alpha",
-      "variantTag": "g"
+      ]
     },
     {
       "name": "Delta",
-      "display": "Delta",
+      "variantOf": "",
       "group": "GroupB",
-      "color": "#3366AA",
       "skill": "skill",
-      "text": "",
-      "cnId": "syn-004",
-      "art": "",
-      "costume": "",
       "exclusiveCards": [],
       "preset": [
         "Gen:01",
@@ -379,20 +290,13 @@
         "Gen:08",
         "Gen:09",
         "Gen:10"
-      ],
-      "variantOf": "",
-      "variantTag": ""
+      ]
     },
     {
       "name": "Epsilon",
-      "display": "Epsilon",
+      "variantOf": "Delta",
       "group": "GroupB",
-      "color": "#3366AA",
       "skill": "skill",
-      "text": "",
-      "cnId": "",
-      "art": "art-eps",
-      "costume": "",
       "exclusiveCards": [
         "B:eps-excl"
       ],
@@ -407,37 +311,23 @@
         "Gen:08",
         "Gen:09",
         "Gen:10"
-      ],
-      "variantOf": "Delta",
-      "variantTag": "e"
+      ]
     }
   ],
   "groups": [
     {
       "name": "GroupA",
-      "shortName": "GA",
-      "color": "#224488",
       "skill": "gs",
-      "text": "",
-      "logo": "",
       "sharesExclusives": true
     },
     {
       "name": "GroupB",
-      "shortName": "GB",
-      "color": "#224488",
       "skill": "gs",
-      "text": "",
-      "logo": "",
       "sharesExclusives": false
     },
     {
       "name": "通用",
-      "shortName": "GEN",
-      "color": "#224488",
       "skill": "gs",
-      "text": "",
-      "logo": "",
       "sharesExclusives": false
     }
   ]
