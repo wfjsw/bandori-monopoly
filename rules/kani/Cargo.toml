@@ -32,10 +32,13 @@ band-general = ["dep:card-general"]
 band-hhw = ["dep:card-hhw"]
 band-morfonica = ["dep:card-morfonica"]
 band-mujica = ["dep:card-mujica"]
-band-mygo = ["dep:card-mygo"]
+# kani-bump (TUNING §11): static bump GlobalAlloc so unmodified bodies' Vec /
+# String grow/drop is array arithmetic (kills RawVec OOM paths). Opt-in per
+# unit that needs it; validated on known-green proofs before the unit flips.
+band-mygo = ["dep:card-mygo", "card-sdk/kani-bump"]
 band-pp = ["dep:card-pp"]
 band-ppp = ["dep:card-ppp"]
-band-ras = ["dep:card-ras"]
+band-ras = ["dep:card-ras", "card-sdk/kani-bump"]
 band-roselia = ["dep:card-roselia"]
 band-sumimi = ["dep:card-sumimi"]
 skills-groups = ["dep:skill-groups"]
