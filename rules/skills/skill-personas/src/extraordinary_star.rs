@@ -35,11 +35,11 @@ fn hill() -> i32 {
 pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     "skill:户山香澄:非凡之星",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
         // （1） is 「其他玩家"星之鼓动山丘"上[结算]时」 -- who and where are the
         // hook's applicability (the residual guard), not its effect.
-        On::Action(&[ActionKind::Settle], "", Some(on_settle_applies), on_settle),
+        On::Action(&[ActionKind::Settle], "", "", Some(on_settle_applies), on_settle),
     ],
 )
 .silent(&[1])

@@ -30,18 +30,37 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
     &[
-        On::Play("", Some(can_buy), buy_one),
-        On::Action(&[ActionKind::DeckBeforeGame], "", None, deck_before_game),
-        On::Action(&[ActionKind::Drew], "actor == owner && card.placed", None, drew),
+        // （4）「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有
+        // 无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…」 --
+        // a [持续] clause with a [反击] rider: `[反击]X：Y` = Y resolves before
+        // X, so the buy is a counteraction at the owner's turn-end timing.
+        //
+        // TODO(规则书) LOY-DREAM-01: the turn-end family (`TurnEnd` /
+        // `TurnEndBefore` / `TurnEndAfter`) is hook-only (`is_hook_only` in
+        // `wasm_rules.rs`) -- `hand_counteractions` never opens there, so
+        // `On::Counteract(&[ChainKind::TurnEndBefore], …)` is a dead entry.
+        // Missing shape: a counteraction window on turn-end (Class-B blocker).
+        // Wired as a field-card `On::Action` at `TurnEndBefore` (skill-personas:
+        // a field card answers settlement points automatically, no declaration)
+        // so the buy still settles before the turn end's own effects.
+        On::Action(
+            &[ActionKind::TurnEndBefore],
+            "actor == owner && card.placed && card.counter('crystals') >= 3", r#"[拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]"#,
+            // No residual guard: the condition covers placed + ≥3 crystals and
+            // `buy_one` owns the "is there a tile" scan (one board walk per
+            // turn-end instead of two).
+            None,
+            buy_one),
+        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, deck_before_game),
+        On::Action(&[ActionKind::Drew], "actor == owner && card.placed", "", None, drew),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
         On::Action(
             &[ActionKind::SettleBody],
-            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner",
+            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner", "",
             None,
-            settle_body,
-        ),
+            settle_body),
     ],
 )
 // 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous
@@ -155,23 +174,13 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
 
 // [持续]（4）「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的
 // [可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意[拥有者]所在格子前后3格以内
-// 的无主的[可购买格子]」 -- a press; the buy is `card_buy`, the resonance cost is
+// 的无主的[可购买格子]」 -- the buy is `card_buy`, the resonance cost is
 // the same `try_resonance` every other [共鸣] card uses.
 
-/// （4）「使用此卡上3个[奇迹水晶]，[拥有者]购买…无主的[可购买格子]」.
-fn can_buy(player_id: i32) -> Option<Msg> {
-    if !ctx::is_placed() {
-        return Some(Msg::new(key!("dream_ahead_not_placed")));
-    }
-    if ctx::crystals() < 3 {
-        return Some(Msg::new(key!("dream_ahead_no_crystal")));
-    }
-    if free_near(player_id).is_empty() {
-        return Some(Msg::new(key!("dream_ahead_no_tile")));
-    }
-    None
-}
-
+/// Free buyable tiles within 3 of the owner (「所在格子前后3格以内的无主的
+/// [可购买格子]」). The `TurnEndBefore` condition already covers placed + ≥3
+/// crystals, so this is the only residual fact -- and `buy_one` owns the scan
+/// (one board walk per turn-end, not two).
 fn free_near(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
     (0..ctx::tile_count())
@@ -190,6 +199,13 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     if !crate::resonance::try_resonance(player_id)? {
         return Ok(());
     }
+    // 规则书（4）: 「使用此卡上3个[奇迹水晶]，[拥有者]购买任意…无主的[可购买格子]」
+    // -- printed order is spend-then-buy, so the crystals go **before** the
+    // purchase attempt. Paying after `card_buy` let a failed buy keep the
+    // crystals while the [共鸣] fuel was already gone; both costs now sit on
+    // the same side of the purchase. The text offers no refund on a refused
+    // buy.
+    ctx::add_crystals(-3, 0)?;
     let opts: Vec<Msg> = pool
         .iter()
         .map(|&t| Msg::new(key!("dream_ahead_tile")).tile("tile", t))
@@ -206,7 +222,6 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     if !ctx::card_buy(player_id, t) {
         return Ok(());
     }
-    ctx::add_crystals(-3, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("dream_ahead_bought")).tile("tile", t),

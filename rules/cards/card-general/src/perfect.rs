@@ -11,7 +11,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play("", None, perfect)]).meta(&card_sdk::meta::CardMeta::new()
+pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play("", "", None, perfect)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"PERFECT"#)
         .raw_name(r#"[衍生]PERFECT"#)
         .derived(true)

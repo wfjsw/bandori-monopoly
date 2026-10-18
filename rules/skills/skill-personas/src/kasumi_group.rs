@@ -25,8 +25,8 @@ const DONE: &str = "skill.kasumiGroup.start";
 pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
-        On::Action(&[ActionKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", None, at_start),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", "", None, at_start),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
     ],
 );
 

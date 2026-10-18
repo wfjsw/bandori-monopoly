@@ -1,6 +1,6 @@
 //! `event:很噜的感觉` -- 事件卡「很噜的感觉」（中立事件 A4）.
 //!
-//! 事件文本（data/events.json, id `很噜的感觉`）:
+//! 事件文本（`CardMeta` beside the rule body, id `很噜的感觉`）:
 //! > 所有玩家可选择[传送]至快餐店（不触发场地效果），如果选择[传送]需支付500资金并喊出“噜噜噜！”（只要玩家嗓子允许，必须喊出“噜噜噜！”）
 
 use ruleset_core::ctx;
@@ -8,7 +8,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const LULU: CardDef = CardDef::new("event:很噜的感觉", &[On::Play("", None, play)]);
+pub const LULU: CardDef = CardDef::new("event:很噜的感觉", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"很噜的感觉"#)
+            .text(r#"所有玩家可选择[传送]至快餐店（不触发场地效果），如果选择[传送]需支付500资金并喊出“噜噜噜！”（只要玩家嗓子允许，必须喊出“噜噜噜！”）"#)
+            .cell(r#"A4"#)
+            .derived(false));
 
 /// 规则书: 「所有玩家可选择[传送]至快餐店（不触发场地效果）」 -- each player in
 /// turn order is asked; `teleport_to` jumps with no settle (「不触发场地效果」).

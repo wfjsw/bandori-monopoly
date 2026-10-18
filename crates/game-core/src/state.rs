@@ -1374,6 +1374,14 @@ pub struct TileMark {
     /// wire spelling is still `-1` for none).
     #[serde(default, with = "opt_i32_neg1")]
     pub instance: Option<i32>,
+    /// The other tile of a **paired** mark ([`Self::partner`] is the cross-end
+    /// of one unit bound to two tiles, placed by `place_mark_pair`). `None` =
+    /// an unpaired row (the default placement). The row on `a` names `b` and
+    /// the row on `b` names `a`; both die with the creating instance like any
+    /// mark. Serde-defaulted so pre-`partner` saves still load (the wire
+    /// spelling is still `-1` for none).
+    #[serde(default, with = "opt_i32_neg1")]
+    pub partner: Option<i32>,
     pub note: Msg,
 }
 
@@ -1389,6 +1397,7 @@ impl Default for TileMark {
             card: String::new(),
             src: None,
             instance: None,
+            partner: None,
             note: Msg::default(),
         }
     }

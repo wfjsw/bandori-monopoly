@@ -1529,3 +1529,310 @@ running. All nine rows are **needs re-time**.
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening; production bodies untouched. Allowed Kani-only surface used:
 `rules/kani/**` + `cfg(kani)` in `rules/card-sdk`.
+
+## triage3 batch 14 — ras / mygo / skills_mygo central non-success rows (kani-pass@fc3ff3e1)
+
+Per-proof detail lives in `docs/rulebook/spec/kani/ras.md` and `mygo.md`
+§ triage3 batch 14. Classes: A bound-low / B setup-spec / C host-model /
+D rulebook gap / E perf / F vacuous.
+
+| unit | id | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|---|
+| skills_mygo | `band_02_crystal_on_16_iff` + `_user1_` | FAILED 196/209 s | **B** → **D** | (1) `key_get(user,"crystals")` vs `field_crystals(last_uid)` (class B). (2) After the fix: body `add_crystals(1,1)` + production `add_counter_at` clamp-down eats (3)'s over-cap crystals at `pre∈{2,3}` | `self_crystals()`; book formula kept | FAILED (D) |
+| skills_mygo | `band_04_ineffective_overcap_iff` + `_user1_` | FAILED 220/202 s | **B** | crystals via `key_get`; `over` was treated as a formula input but the body *sets* `skill.mygo.over` as audit. Book ceiling is the held total (3) | `self_crystals()`; `pre>=3 ? pre : pre+1`; SetState audit tolerated | **SUCCESSFUL** 3/3 covers ×2 |
+| mygo | `rainday_01_place_five_crystals_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT ×3 | **E** | body `rain()` `Vec` area over 10 symbolic 1d10 agents (production) | pin die to face 1 (`arm_roll_face_one`); stand user on 「主要街道」 | queued |
+| mygo | `hitoshizuku_money_iff` + `_user1_` | TIMEOUT ×2 | **E** (stale D note) | effect-list `for` + `filter().count()` + `zip().all()` SSA cliff. Body is per-player (matches book) | bounded `while` scans | queued |
+| mygo | `hitoshizuku_body_global_pay_observed` + `_user1_` | TIMEOUT ×2 | **E** | same | repurposed as global-kinds **mutant** detector | queued |
+| ras | `riot_02_03_cycle_iff` + `_user1_` + `riot_03_extra_draw_mutant_is_detected` | TIMEOUT ×3 | **E**+**C** | RawVec grow cliff + `cards_in` facade length 0\|4 so `hand.len()` ≠ real count | `cfg(kani)` `cards_in` exact-length Vec; ranger pin updated | queued |
+
+### CONFIRMED genuine discrepancies
+
+**C-MYGO-band-02 over-cap eater (class D).** Quote
+(「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。」 +
+(3) 「为此卡添加一个可超出上限的[奇迹水晶]（最多超出2个）」):
+the (2) cap applies to the roll gain; (3)'s over-cap crystals are a different
+clause. Body `add_crystals(1,1)` and production
+`game-core/src/engine/ops.rs` `add_counter_at` (`min(was+n, max)`) force the
+held total down to 1 and destroy over-cap crystals. Setup legal
+(`pre ∈ 0..=3`). Proof kept FAILING.
+
+Hitoshizuku is **not** D (stale note retired): body `transfer(j,user,1000*n)`
+is per-player, matching the 2026-10-06 ruling.
+
+### Book quotes checked
+
+* band-02 / band-04: `docs/rulebook/spec/cards/mygo.md` § Band skill
+* hitoshizuku: `docs/rulebook/cards.json` id `MyGO:壱雫空`
+* rainday-01: 「将此卡放置于自己场上并为其放置5个奇迹水晶」
+* riot: `docs/rulebook/cards.json` id `RAS:R. I. O. T.`
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-ras`, `band-mygo`, `band-mygo,skills-groups`, `band-pp,skills-groups`
+  — Finished, no `error` lines. (`band-ras,skills-personas` is not a
+  `run.sh` unit set; it fails codegen on pre-existing private `at_turn_end` /
+  `clear_acted` from master sheet-sync.)
+* `cargo test -p rules-kani` ×2 (`--no-fail-fast`) — all suites `ok` except
+  pre-existing `wrapper_check` (missing `at_turn_end_kani` / `clear_acted_kani`
+  wrappers in `skill-personas`; production files, out of scope; fails on the
+  unmodified tree too).
+
+### batch-14 re-times (one CBMC at a time, `tools/kani/run.sh`)
+
+| id | after |
+|---|---|
+| `skills_mygo::band_02_crystal_on_16_iff` | **FAILED** (D — over-cap eater; book formula kept) |
+| `skills_mygo::band_04_ineffective_overcap_iff` | **SUCCESSFUL** 3/3 covers |
+| `skills_mygo::band_04_user1_ineffective_overcap_iff` | **SUCCESSFUL** 3/3 covers |
+| `mygo::hitoshizuku_money_iff` | **SUCCESSFUL** 3/3 covers |
+| `mygo::hitoshizuku_user1_money_iff` | **SUCCESSFUL** 3/3 covers |
+| `mygo::hitoshizuku_body_global_pay_observed` | **SUCCESSFUL** 2/2 covers |
+| `mygo::hitoshizuku_user1_body_global_pay_observed` | **SUCCESSFUL** 2/2 covers |
+| `mygo::hitoshizuku_no_clear_is_noop` | **SUCCESSFUL** |
+| `mygo::rainday_01_place_five_crystals_iff` | **SUCCESSFUL** 2/3 covers |
+| `mygo::rainday_01_user1_place_five_crystals_iff` | **SUCCESSFUL** 2/3 covers |
+| `mygo::rainday_01_mutant_is_detected` | **SUCCESSFUL** 1/1 cover |
+| `ras::riot_02_03_cycle_iff` + `_user1_` + `riot_03_extra_draw_mutant_is_detected` | **TIMEOUT 1800 s** (class E — BMC never reached `Generated VCC`; bounded loops + kani-bump + exact-length `cards_in` landed; still `RawVec` abort-path cliff) |
+
+kani-bump validated on `skills_mygo::band_04_ineffective_overcap_iff`
+(SUCCESSFUL, 3/3 covers) before `card-sdk` dependency features enabled it for
+`rules-kani`.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening (band-02 book formula kept despite the D); production bodies
+untouched. Allowed Kani-only surface: `rules/kani/**` + `cfg(kani)` in
+`rules/card-sdk` (`cards_in` exact-length facade — the old padded 0\|4 shape
+was a host-model defect for every body that reads `len()`).
+
+## triage3 batch 15 — mujica / skills_mujica / crychic central non-success rows (kani-pass@fc3ff3e1)
+
+Per-proof detail lives in `docs/rulebook/spec/kani/mujica.md` and `crychic.md`.
+Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
+
+| unit | id | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|---|
+| mujica | `sparkler_last_crystal_stun_two_iff` + `_user1_` | FAILED 158/135 s (`C-MUJICA-花火-03: dest becomes Graveyard`) | **B** | Spec `sparkler_last_crystal_dest` pinned `dest_after == 1` (Hand). Wire `Dest::Graveyard = 0` (`card-sdk/src/ctx.rs`). Body `set_dest(Graveyard)` is correct | `dest_after == 0` | queued |
+| skills_mujica | `band_state2_bend_hook_rewrites_amount` + `_user1_` + `band_state2_bend_mutant_is_detected` | FAILED 184 s ×3 (`host op outside declared per-harness subset`) | **C** | Central body was the pre-v78 `bend(player)` that did `state::set(ORIG)` + `trig_set_pay_amount`; `ave_bend_dispatch` had no `state_set`. Master ABI v78 pure Filter `bend(player, value) -> fold` only reads `trig_player`/`trig_target` | already on this tree after `git merge master` (pure bend + harness `bend_kani(user, amount) -> i32`); subset matches | queued |
+| crychic | `debut_02_turn_end_iff` + `_user1_` | FAILED 174/196 s (`C-CRYCHIC-debut-02: band crystal +1`) | **C** | `arm_add_band_crystals` treated `a1` as the delta. ABI is `add_group_pool(player, np, nl, n, max)` so the delta is `a3`; `a1` is the interned name handle (`0x4000_0000 \| id`) | use `a3` as `n`, honor `max > 0`, keep the `0..=99` model bound | queued |
+| crychic | `ifonly_01_cashout_iff` + `_user1_` | FAILED 322/302 s (`C-CRYCHIC-ifonly-01: all band crystals removed`) | **C** | same `arm_add_band_crystals` arg bug — the drain wrote the name handle, never `-x` | same | queued |
+| crychic | `ifonly_02_discard_at_seven_iff` + `_user1_` | FAILED 140/175 s (`host op outside declared per-harness subset`) | **C** | Body is `ctx::send_to_dest(Graveyard)` (not `set_dest`). Subset omitted `send_to_dest`; host `Op::send_to_dest` was a player-teleport-into-`w.dest` stub | `arm_send_to_dest` unplaces `last_uid` into the dest pile (same world-state commit as `arm_set_dest`); subset declares it; harness observes field drop + discard gain | queued |
+| crychic | `soyoreturn_01_branch2_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **E**+**B** | Symbolic `ask_pick` forced BMC down branch 1 (discard-all: `cards_in` + `discard_from_hand` loop) even though the harness name is branch 2 | pin pick = 1 (`symbolic_answers=false`, `answers[0]=1`) so the leaf is 「获得1000资金并将此卡加入手牌」 only | queued |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch. All six failing rows are class B/C/E.
+
+### Book quotes checked
+
+* 花火-03: 「最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。」
+  (`docs/rulebook/cards.json` id `Mujica:燃尽前的线香花火`)
+* debut-02: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。」
+  (id `CRYCHIC:初演大成功`)
+* ifonly-01/02: 「移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金」 /
+  「若你的手牌大于等于7，此卡立即置入弃牌堆。」
+  (id `CRYCHIC:如果能一直持续下去...`)
+* soyoreturn-01 branch 2: 「获得1000资金并将此卡加入手牌」
+  (id `CRYCHIC:（soyo）回到曾经`)
+* Dest wire order: `Graveyard=0, Hand=1, Field=2, Banished=3` (`card-sdk/src/ctx.rs`)
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-mujica`, `band-mujica,skills-groups`, `band-crychic`,
+  `band-crychic,skills-groups,skills-personas` — Finished, no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed; includes
+  `wrapper_check`, `fnid_seat_args`, `conf_*`).
+
+No CBMC re-times this batch: central `tools/kani/central.sh --retry-nonsuccess`
+already has its own `cbmc` on `skills_crychic::band_01_hand_limit_iff`
+(~270 MB RSS but the gate is 12000 MB available and a sibling big proof is
+running). All six rows are **needs re-time**.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening (sparkler dest pin is the wire constant, not a softer pin; soyoreturn
+pick pin is setup isolation, same class as `arm_roll_face_one`). Production
+bodies untouched. Allowed Kani-only surface: `rules/kani/**`.
+
+## triage3 batch 16 — sumimi / skills_sumimi central non-success rows (kani-pass@fc3ff3e1)
+
+Per-proof detail lives in `docs/rulebook/spec/kani/sumimi.md`.
+Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
+Also scanned `skills_bands`, `skills_characters`, `skills_general` — no non-success rows
+(stub units, empty/ok).
+
+| unit | id | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|---|
+| skills_sumimi | `band_02_rent_bonus_iff` + `_user1_` + `band_02_rent_bonus_mutant_is_detected` | FAILED 225/225/143 s ×3 (`host op outside declared per-harness subset`) | **C** | Central body was the pre-v74 `bend(player)` that did `trigger::value()` + `trigger::set_pay_amount`; `sumimi_bend_dispatch` had no `trig_value` / `trig_set_pay_amount`. Master ABI pure Filter `bend(player, value) -> fold` only reads `counter_self` / `trig_target` / `trig_player` | already on this tree after `git merge master` (pure bend + harness `bend_kani(user, amount) -> i32`); subset matches | queued |
+| sumimi | `hina_01_pass_circle_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **C** (+E cliff) | Log profile: 296 `fill_for_guard` + 216 `bin_set` + 71 `fill_geometry_bins`. `fill_for_guard` bit masks at `fc3ff3e1` were the retired `>> 6` / `>> 27` magic numbers, so `OWN_START` (`tile_is(tile.id,'circle')` = `FnId::TileIs`) pulled the expensive geometry bins (same cliff as `kokoro_02_circle_pass_1500_iff`, batch 11) | FnId-derived masks already on master (batch 11 / `c897fffa`); `TileIs` now only fills board sets | queued |
+| sumimi | `twoinone_01b_fire_iff` + `_user1_` + `twoinone_01b_mutant_is_detected` | TIMEOUT 1800 s ×3 | **E** | (1) Body `swap` calls `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32, String)>>` (unbounded deserializer in the GOTO). (2) Symbolic `is_hina` muxed two CJK intern paths; BMC stalled at the first `sparse_play_world` unwind (log: 1 unwind line, then 1800 s of cadical). GOTO is *smaller* than childhood (3.5 MB vs 5.5 MB) so this is SAT hardness, not size | (1) `cfg(kani)` `field_instances`/`find_card` facades: compact LE `i32` `[uid, name_id]` pairs, intern-id compare, no postcard. (2) Pin swap direction per seat harness (seat0 三角初华→纯田真奈 fire 1, seat1 纯田真奈→三角初华 fire 2) — setup isolation (soyoreturn pick / rainday die class); the pair covers both halves of 「替换为另一名角色」. Spec effect scan is a bounded while | queued |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch. The two earlier `sumimi.md` FAILS rows
+(`C-SUMIMI-twoinone-01` character identity, `C-SUMIMI-band-01` add half) are
+pre-existing class-D LESS findings, not new central-pass rows. Band-01 add was
+fixed earlier (guard `actor == owner`, both halves proven — batch 4).
+twoinone-01 character identity remains a **genuine discrepancy** (book
+「将自己的角色卡替换为sumimi的另一名角色」 vs body that only swaps the bound
+skill entry + fire; `player.character` stays the old name) — kept failing.
+
+### Book quotes checked
+
+* twoinone: 「打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
+  (`docs/rulebook/cards.json` id `Sumimi:Sumimi是二人一体的`)
+* band 人气偶像组合: 「（1）若你在一回合内从其他玩家处获得过资金，你的回合结束时
+  为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶。（2）此卡上的每个奇迹
+  水晶可使你在向其他人收费时让金额额外提高100资金。」
+  (roster band row / `data/skill_simple.json` groups[9] Sumimi)
+* hina-01: 「经过CiRCLE时获得1个[火罐]」 (`skill:三角初华（Sumimi）:成为偶像`)
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-sumimi,skills-personas` and `band-sumimi,skills-groups` — Finished,
+  no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed; includes
+  `wrapper_check`, `fnid_seat_args`, `conf_*`).
+
+No CBMC re-times completed this batch at doc-write time: central
+`tools/kani/central.sh --retry-nonsuccess` is still occupying a cbmc slot and
+`free -m` available hovered at the 12000 MB gate. Re-times completed this batch (`CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`,
+`tools/kani/run.sh --unit <u> --harness <h> --timeout 1800`):
+
+* `sumimi::twoinone_01b_fire_iff` **SUCCESSFUL 457 s** (1/1 cover)
+* `sumimi::twoinone_01b_user1_fire_iff` **SUCCESSFUL 542 s** (1/1 cover)
+* `sumimi::twoinone_01b_mutant_is_detected` **SUCCESSFUL 396 s**
+* `sumimi::hina_01_pass_circle_iff` **SUCCESSFUL 605 s** (4/4 covers)
+
+Still needs re-time (central-pass cbmc holds the box): `hina_01_user1_pass_circle_iff`,
+`band_02_rent_bonus_iff` + `_user1_` + `band_02_rent_bonus_mutant_is_detected`.
+
+First twoinone re-time (pre-pin) confirmed **TIMEOUT 1800 s** even after the
+postcard facades — the `is_hina` mux was the remaining cliff. A cover-pair
+variant of the pin was **VACUOUS** (1 of 2 covers unreachable); one cover site
+per harness is required.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening. Production bodies untouched. Allowed Kani-only surface:
+`rules/kani/**` + `cfg(kani)` wrappers in `rules/card-sdk/src/ctx.rs`
+(`field_instances` / `find_card` facades, same pattern as `cards_in`).
+
+## class-E deep dive — library stubs + global kani-bump (branch `kani-triage3`)
+
+Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
+(`aya_with_02_*`, `tsukushi_01_*`, `riot_02_03_*`, `chisato_mask_01_*`,
+`moca_02_*`, `rimi_skill_02_*`, …). Full lever table: TUNING.md §12.
+
+### Method
+
+1. Phase-split 4 representative central logs (`aya_with_02_pay_discount_iff`,
+   `chisato_mask_01_total_iff`, `riot_02_03_cycle_iff`, `tsukushi_01_redirect_iff`).
+2. Two shared cliffs:
+   * **fmt/memchr** (`aya_with`, `tsukushi`): `memchr_naive` 1868–2705,
+     `memchr_aligned` 574–867, `memcmp` 558–837, `PadAdapter` recursion,
+     `slice_index_fail` 38, `RawVec handle_error` 27. Root: panic-message
+     assembly + `format!("key:{p}")` (`rec_key`) + `ask_number` → Msg.
+   * **RawVec / Vec iters** (`riot`, `chisato`): `RawVec::grow_one` abort
+     paths, `split_pay` `find`/`try_fold`, `arm_others_at`.
+3. Levers landed (TUNING §12): global `kani-bump`; `LIB_COST` /
+   `LIB_COST_NOFMT` stub sets on every harness (`-Z stubbing`).
+
+### Profile delta — `skills_pp::aya_with_02_pay_discount_iff`
+
+| metric | central | + stubs (NOFMT) |
+|---|---|---|
+| memchr_naive | 1868 | **0** |
+| memchr_aligned | 574 | **0** |
+| aborting paths | 5477 | 25 |
+| BMC started? | no | **yes** |
+| residual | memchr/fmt cliff | `fmt::write` 2, `sparse_play_world` 2, solver-bound world |
+
+### Rejected levers
+
+* `Formatter::pad` / `pad_integral` stubs — Kani generic-count mismatch.
+* `PadAdapter::write_str` stub — `core::fmt::builders` private.
+* `--no-unwinding-checks` — unsound, never used.
+
+### Per-row notes (class-E, central TIMEOUT)
+
+| row | dominant cost | lever applies? | status after levers |
+|---|---|---|---|
+| `skills_pp::aya_with_02_*` | fmt/memchr + symbolic world | yes (stubs) | BMC reached; residual solver-bound (re-time pending) |
+| `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | memchr 2705→**0**; residual `ask_pick` 16 + `fmt::num::__fmt_inner` 2 + RawVec `with_capacity` aborts; BMC reached |
+| `ras::riot_02_03_*` | RawVec grow abort paths | yes (kani-bump + handle_error stub) | re-time queued |
+| `pp::chisato_mask_01_total_iff` | `split_pay` find + `others` Vec | partial (memchr); body `Vec` ABI remains | irreducible without body edit (TUNING §11 residual) |
+| `pp::ranger_01_02_steps_by_count_iff` | `cards_in` facade + String eq | partial (exact-length facade already on master) | re-time queued |
+| `skills_ag::moca_02_*` | body ABI / Msg | partial | re-time queued |
+| `skills_ppp::rimi_skill_02_spend_charge_iff` | (check log) | partial | re-time queued |
+
+`chisato_mask` residual: the unmodified body's `split_pay` `find`/`try_fold`
+over `ctx::others`'s `Vec<i32>` is a card-body ABI cost (TUNING §11
+"Remaining intractable patterns"). No library stub replaces a body loop.
+
+### Commits
+
+* `kani/card-sdk: always-on kani-bump under cfg(kani)`
+* `kani: LIB_COST library stubs + use_stub_set on every harness`
+* `kani/stubs: LIB_COST_NOFMT (panic_fmt + handle_error) on non-mutants`
+* `kani/stubs: alloc::fmt::format stub (skip estimated_capacity)`
+
+### Soundness
+
+Unwinding assertions ON; no `#[ignore]`; no allowlist; no spec weakening;
+card bodies unmodified; `panic_fmt` stub excluded from `should_panic`
+mutants; production `cfg(not(kani))` untouched.
+
+## class-E parity evidence (coordinator item A)
+
+Branch `kani-triage3`, stubs+bump on. One CBMC at a time via
+`tools/kani/run.sh`. Baseline times from TRIAGE-LOG re-times / central.
+
+### Known-GREEN (must stay SUCCESSFUL, covers non-vacuous)
+
+| harness | baseline | with stubs | covers (base → stubs) | verdict |
+|---|---|---|---|---|
+| `mor::nnm_05_empty_discard_iff` | 160 s | **197 s** | 1/1 → **1/1** | OK |
+| `mor::starry_05_circle_iff` | 306 s | **384 s** | 3/3 → **3/3** | OK |
+| `mor::tritone_02_tick_iff` | 335 s | **417 s** | 3/3 → **3/3** | OK |
+| `sumimi::twoinone_01b_fire_iff` | 457 s | **431 s** | 1/1 → **1/1** | OK (faster) |
+| `pp::same_dream_01_band_plus_3_iff` | 563 s (4/4 stale) | **834 s** | 3/4 → **3/4** | OK; see control |
+| `skills_ppp::kasumi_skill_02_spend_charge_iff` | 532 s | **651 s** | (none) → (none) | OK |
+| `mygo::rainday_01_place_five_crystals_iff` | (2/3) | **1107 s** | 2/3 → **2/3** | OK |
+| `events::chart_rush_01_spends_fire` | 909 s | **593 s** | 2/2 → **2/2** | OK (faster) |
+
+**Cover control (`same_dream`, item A cover-divergence check):**
+cover.3 `step 3 has reverses to flip` is UNSATISFIABLE **with and without**
+stubs (no-stub control 871 s, also 3/4). Pre-existing sparse-world shape,
+not stub-induced. Cover parity holds.
+
+Times are same order (0.7–1.5×; chart_rush and twoinone faster). No
+verdict flip, no cover-count flip vs the no-stub control / recorded baseline.
+
+### Known-FAILING / mutant (must NOT be masked)
+
+| harness | expect | with stubs | notes |
+|---|---|---|---|
+| `skills_mygo::band_02_crystal_on_16_iff` | FAILED (D over-cap eater) | **FAILED 182 s** | same class D; stubs did not mask |
+| `events::aao_02_hand_veto_is_armed` | FAILED (D GENUINE E-aao-02) | **FAILED 278 s** | same assert fires |
+| `money_shave::aya_haruka_02_mutant_x_off_by_one` | should_panic | **SUCCESSFUL (encountered one or more panics as expected)** | real `panic!` still observed (`LIB_COST` keeps `panic_fmt` off mutants) |
+
+**Stale-D note:** `mor::rainbow_01_half_iff` / `_mutant` are **no longer**
+expected-FAILING. The 2026-10-15 OPEN-取整 ruling (card writes the fold, engine
+`round10`s once) is in `spec/mor.rs`; both rows are SUCCESSFUL (244 s / 185 s,
+4/4 and 2/2 covers). Not a stub mask.
+
+### Item B — timeout rows reaching a verdict
+
+**Plainly: none of the class-E TIMEOUT rows finished in 1800 s** with the
+stubs+bump+Display levers. `aya_with_02_pay_discount_iff` and
+`tsukushi_01_redirect_iff` both now **start BMC** (they previously died in
+symex) but remain solver-bound / residual-`fmt::write` / RawVec
+`with_capacity` abort paths. Display stubs for `{u32,i32,i64}` are landed
+(`<u32 as Display>::fmt`); a further `Formatter::pad` stub is blocked by
+Kani's generic-count check.
+
+### Soundness
+
+See TUNING.md §12 "Soundness argument per stub". panic_fmt stub keeps
+non-mutant panics as FAILED properties; mutants keep a real panic! event.

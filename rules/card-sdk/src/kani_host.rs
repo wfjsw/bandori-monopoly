@@ -341,6 +341,12 @@ pub enum Op {
     pay_buy = 320,
     pay_build = 321,
     assign_deed = 322,
+    // v73: paired-mark placement (one unit bound to two tiles).
+    place_mark_pair = 323,
+    mark_partner = 324,
+    trig_settle_redirect = 325,
+    // A rent-shaped 「收费」 at milli_scale of the tile's ordinary-settle rent.
+    charge_rent = 326,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

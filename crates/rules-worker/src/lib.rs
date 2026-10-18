@@ -10,7 +10,7 @@
 //! checkpoint when the turn key moved, and `replay` re-runs a `.bdrec` and
 //! reports the hash it ended on.
 
-use game_core::data::{GameData, DATA_FILES};
+use game_core::data::GameData;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::record::{decode_record, hash_save, EngineStamp, Replayer, RECORD_VERSION};
@@ -18,7 +18,6 @@ use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 use game_rules::WasmRules;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 /// Immutable content loaded once: game tables and card modules. Read-only
@@ -27,9 +26,8 @@ use std::sync::Arc;
 pub struct Ctx {
     pub data: Arc<GameData>,
     pub rules: Arc<dyn CardRules>,
-    /// Sha256 over the `DATA_FILES` contents in order (see [`Ctx::load`]).
-    /// Empty when the caller never supplied one -- [`EngineStamp`] then leaves
-    /// `data_sha256` unknown and [`game_core::record::compat`] skips it.
+    /// `EngineStamp::data_sha256`. Always empty on this build: the tables a
+    /// replay depends on ride in `MatchSetup`, not in a host-side hash.
     pub data_sha256: String,
 }
 
@@ -44,15 +42,16 @@ impl Ctx {
     }
 
     /// Record where the game tables came from, so the [`EngineStamp`] can name
-    /// them. `Ctx::load` fills this in; callers of [`Ctx::new`] may too.
+    /// them. Kept for API compatibility; this build always writes `""`.
     pub fn with_data_sha(mut self, sha: impl Into<String>) -> Self {
         self.data_sha256 = sha.into();
         self
     }
 
     /// Load the game tables and card modules once. Read-only from here on.
-    /// The tables' sha256 (in [`DATA_FILES`] order) is captured here too, so a
-    /// record written by this worker says which board / card data it saw.
+    /// `data_sha256` stays empty -- the record carries its own board and rule
+    /// parameters (`MatchSetup`), so host tables are not part of a record's
+    /// identity.
     ///
     /// Order matters: the ruleset loads first (it does not need the tables) and
     /// its [`game_rules::Ruleset::roster`] supplies the tables' roster (ABI v63).
@@ -82,46 +81,13 @@ impl Ctx {
             .as_ref()
             .map(|s| s.roster())
             .unwrap_or_default();
-        let mut contents: Vec<(String, String)> = Vec::new();
         let data = Arc::new(
             GameData::load(
-                |f| {
-                    let text =
-                        std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string())?;
-                    contents.push((f.to_string(), text.clone()));
-                    Ok(text)
-                },
+                |f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()),
                 roster,
             )
             .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
         );
-        let mut hasher = Sha256::new();
-        for name in DATA_FILES {
-            // Same recipe as web-glue's `load_data`: every `DATA_FILES` entry
-            // in order (missing entries are skipped), a leading BOM is not
-            // content. `GameData::load` does not ask for all of them
-            // (`skill_simple.json` is display-only and the engine never reads
-            // it), so read the ones it skipped -- otherwise this hash disagrees
-            // with the browser's and the record names an engine bundle the
-            // replay loader has never seen. The roster (`cards.json` /
-            // `personas.json` / `groups.json`) is no longer in `DATA_FILES`:
-            // it comes from the ruleset and is covered by the ruleset hash.
-            let owned;
-            let text: Option<&str> = match contents.iter().find(|(f, _)| f == name) {
-                Some((_, text)) => Some(text),
-                None => match std::fs::read_to_string(data_dir.join(name)) {
-                    Ok(t) => {
-                        owned = t;
-                        Some(owned.as_str())
-                    }
-                    Err(_) => None,
-                },
-            };
-            if let Some(text) = text {
-                hasher.update(text.strip_prefix('\u{feff}').unwrap_or(text).as_bytes());
-            }
-        }
-        let data_sha256 = hex(&hasher.finalize());
         let rules: Arc<dyn CardRules> = match ruleset {
             Some(set) => Arc::new(WasmRules::new(set, data.clone())),
             None => Arc::new(StubRules),
@@ -129,7 +95,7 @@ impl Ctx {
         Self {
             data,
             rules,
-            data_sha256,
+            data_sha256: String::new(),
         }
     }
 
@@ -202,14 +168,6 @@ fn deployed_glue_sha() -> String {
     .clone()
 }
 
-fn hex(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        s.push_str(&format!("{b:02x}"));
-    }
-    s
-}
-
 /// One request. `req` is trusted only to be JSON -- every field is validated
 /// here and a problem becomes an error response, never a panic.
 pub fn handle(ctx: &Ctx, req: Value) -> Value {
@@ -265,7 +223,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             // G-FLOW-12 / G-FLOW-14: refuse a seat count the book forbids.
             let mode = MatchMode::from_i32(mode).unwrap_or_default();
             mode.check_seats(members.len())?;
-            let m = match req.get("seed256").and_then(Value::as_str) {
+            let mut m = match req.get("seed256").and_then(Value::as_str) {
                 Some(hex) => {
                     let key = game_core::fair::unhex32(hex)
                         .map_err(|e| format!("seed256: {e}"))?;
@@ -294,7 +252,15 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     )
                 }
             };
-            Ok(json!({"ok": true, "state": m.save()}))
+            // Fresh match: code-default rule params. Stamp the host board onto
+            // the match so `save()` (and the record's `MatchSetup::board`) is
+            // self-contained for replay.
+            m.set_board(ctx.data.tiles.clone());
+            Ok(json!({
+                "ok": true,
+                "state": m.save(),
+                "board": ctx.data.tiles,
+            }))
         }
 
         // Mutating ops: restore -> op -> save. The caller gets the new blob and

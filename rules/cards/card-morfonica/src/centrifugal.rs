@@ -24,6 +24,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
             // player's card. 「第二次」 -- C# `H._targeted[seat] >= 2` --
             // `targeted_count(owner) >= 2` (a derived-list counter).
             "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
+            r#"你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标"#,
             None,
             counteract,
         ),
@@ -31,7 +32,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
         On::FilterFlag(&[FilterKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", None, turn_start),
+        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"离心力，不为所动"#)

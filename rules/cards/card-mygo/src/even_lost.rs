@@ -16,10 +16,11 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
-        On::Play("", Some(can_go), go),
+        On::Play("", "", Some(can_go), go),
         On::Counteract(
             &[ChainKind::Effect],
             "by != owner && by >= 0 && effect.hits(owner)",
+            r#"你被其他人的卡的效果影响"#,
             None,
             counteract,
         ),

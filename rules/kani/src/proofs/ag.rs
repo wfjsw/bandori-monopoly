@@ -203,6 +203,7 @@ fn half_speed_01_place_iff_at(user: i32) {
 
 /// C-AG-half-speed-01 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_01_place_iff() {
     half_speed_01_place_iff_at(0);
@@ -211,6 +212,7 @@ pub fn half_speed_01_place_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「你的」; symbolic user is a BMC cliff).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_01_place_user1_iff() {
     half_speed_01_place_iff_at(1);
@@ -218,6 +220,7 @@ pub fn half_speed_01_place_user1_iff() {
 
 /// MUTANT companion: the 4-crystal spec must disagree with the card.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_01_mutant_is_detected() {
     let user = 0i32;
@@ -270,6 +273,7 @@ fn half_speed_02_decay_iff_at(user: i32) {
 
 /// C-AG-half-speed-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_02_decay_iff() {
     half_speed_02_decay_iff_at(0);
@@ -277,6 +281,7 @@ pub fn half_speed_02_decay_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「你的」).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_02_decay_user1_iff() {
     half_speed_02_decay_iff_at(1);
@@ -284,6 +289,7 @@ pub fn half_speed_02_decay_user1_iff() {
 
 /// MUTANT: decay by 2 must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_02_mutant_is_detected() {
     let user = 0i32;
@@ -362,6 +368,7 @@ fn half_speed_04_pay_mul_iff_at(user: i32) {
 
 /// C-AG-half-speed-04 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_04_pay_mul_iff() {
     half_speed_04_pay_mul_iff_at(0);
@@ -369,6 +376,7 @@ pub fn half_speed_04_pay_mul_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「你的」).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_04_pay_mul_user1_iff() {
     half_speed_04_pay_mul_iff_at(1);
@@ -376,6 +384,7 @@ pub fn half_speed_04_pay_mul_user1_iff() {
 
 /// Companion: the off-by-one spec must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn half_speed_04_mutant_is_detected() {
     let user = 0i32;
@@ -458,6 +467,7 @@ fn sky_02_03_play_iff_at(user: i32) {
 
 /// C-AG-sky-02/03 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn sky_02_03_play_iff() {
     sky_02_03_play_iff_at(0);
@@ -465,6 +475,7 @@ pub fn sky_02_03_play_iff() {
 
 /// Same iff at seat 1 (seat-symmetric actor).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn sky_02_03_play_user1_iff() {
     sky_02_03_play_iff_at(1);
@@ -472,6 +483,7 @@ pub fn sky_02_03_play_user1_iff() {
 
 /// MUTANT companion: n*601 must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn sky_02_mutant_is_detected() {
     let user = 0i32;
@@ -508,6 +520,7 @@ pub fn sky_02_mutant_is_detected() {
 
 /// C-AG-sky-03 dedicated draw branch (hand < 3).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn sky_03_draws_one() {
     let user = 0i32;
@@ -604,6 +617,7 @@ fn colors_01_02_03_04_play_iff_at(user: i32) {
 
 /// C-AG-colors-01/02/03/04 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn colors_01_02_03_04_play_iff() {
     colors_01_02_03_04_play_iff_at(0);
@@ -611,6 +625,7 @@ pub fn colors_01_02_03_04_play_iff() {
 
 /// Same iff at seat 1 (seat-symmetric actor).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn colors_01_02_03_04_play_user1_iff() {
     colors_01_02_03_04_play_iff_at(1);
@@ -618,6 +633,7 @@ pub fn colors_01_02_03_04_play_user1_iff() {
 
 /// C-AG-colors-02 dedicated mutant (off-by-one).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn colors_02_mutant_is_detected() {
     // Force roll = 1 by a concrete answer is impossible (roll is symbolic).
@@ -636,6 +652,7 @@ pub fn colors_02_mutant_is_detected() {
 /// C-AG-colors-06 with a frozen 2-card discard (pick branch).
 /// `w.symbolic_answers` explores both picks when branch 5 fires.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn colors_06_pick_to_hand() {
     let user = 0i32;
@@ -742,6 +759,7 @@ fn soul_01_place_and_load_iff_at(user: i32) {
 
 /// C-AG-soul-01 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_01_place_and_load_iff() {
     soul_01_place_and_load_iff_at(0);
@@ -749,6 +767,7 @@ pub fn soul_01_place_and_load_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「[使用者]」).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_01_place_and_load_user1_iff() {
     soul_01_place_and_load_iff_at(1);
@@ -756,6 +775,7 @@ pub fn soul_01_place_and_load_user1_iff() {
 
 /// Companion: k+1 crystals must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_01_mutant_is_detected() {
     let user = 0i32;
@@ -829,6 +849,7 @@ fn soul_02_pay_choose_yes_iff_at(owner: i32, payee: i32) {
 
 /// C-AG-soul-02 iff at (owner=0, payee=1).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_02_pay_choose_yes_iff() {
     soul_02_pay_choose_yes_iff_at(0, 1);
@@ -836,6 +857,7 @@ pub fn soul_02_pay_choose_yes_iff() {
 
 /// Same iff at (owner=1, payee=0) — the other seat pair.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_02_pay_choose_yes_user1_iff() {
     soul_02_pay_choose_yes_iff_at(1, 0);
@@ -843,6 +865,7 @@ pub fn soul_02_pay_choose_yes_user1_iff() {
 
 /// Companion: off-by-one amount must not match the accepted path.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_02_mutant_is_detected() {
     let user = 0i32;
@@ -895,6 +918,7 @@ fn soul_03_skill_used_iff_at(user: i32) {
 
 /// C-AG-soul-03 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_03_skill_used_iff() {
     soul_03_skill_used_iff_at(0);
@@ -902,6 +926,7 @@ pub fn soul_03_skill_used_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「[拥有者]」).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn soul_03_skill_used_user1_iff() {
     soul_03_skill_used_iff_at(1);
@@ -961,6 +986,7 @@ fn glory_02_03_swap_iff_at(user: i32, other: i32) {
 
 /// C-AG-glory-02/03 iff at (user=0, other=1).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn glory_02_03_swap_iff() {
     glory_02_03_swap_iff_at(0, 1);
@@ -969,6 +995,7 @@ pub fn glory_02_03_swap_iff() {
 /// Same iff at (user=1, other=0) — the other seat pair
 /// (clause names 「你」 and 「对方」; not single-seat symmetric).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn glory_02_03_swap_user1_iff() {
     glory_02_03_swap_iff_at(1, 0);
@@ -976,6 +1003,7 @@ pub fn glory_02_03_swap_user1_iff() {
 
 /// Companion: +1 on the first leg must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn glory_mutant_is_detected() {
     let user = 0i32;
@@ -1045,6 +1073,7 @@ fn one_of_us_01_place_iff_at(user: i32) {
 
 /// C-AG-one-of-us-01 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn one_of_us_01_place_iff() {
     one_of_us_01_place_iff_at(0);
@@ -1052,6 +1081,7 @@ pub fn one_of_us_01_place_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「[使用者]」).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn one_of_us_01_place_user1_iff() {
     one_of_us_01_place_iff_at(1);
@@ -1063,6 +1093,7 @@ pub fn one_of_us_01_place_user1_iff() {
 
 /// C-AG-colors-01: the >6 wrap is identity on a real 1d6 face.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn colors_01_wrap_formula() {
     let raw: i32 = kani::any();
@@ -1075,6 +1106,7 @@ pub fn colors_01_wrap_formula() {
 
 /// C-AG-half-speed-04 formula: `final = round10(fold of add/mul)`.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn half_speed_04_amount_formula() {
     let amount: i32 = kani::any();
@@ -1102,6 +1134,7 @@ pub fn half_speed_04_amount_formula() {
 
 /// C-AG-glory-02/03 formula: floor half of a non-negative base price.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn glory_half_formula() {
     let base: i32 = kani::any();
@@ -1116,6 +1149,7 @@ pub fn glory_half_formula() {
 
 /// C-AG-soul-02 formula: amount = max(pre-1000, 0).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn soul_02_amount_formula() {
     let amount: i32 = kani::any();
@@ -1127,6 +1161,7 @@ pub fn soul_02_amount_formula() {
 
 /// C-AG-sky-02 formula: n*600 for n >= 3.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn sky_02_amount_formula() {
     let n: i32 = kani::any();

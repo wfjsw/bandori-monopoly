@@ -96,10 +96,12 @@ crate::host_subset!(forever_play_dispatch {
 });
 
 /// `CRYCHIC:如果能一直持续下去...` on_drew — dest to graveyard + narration.
-/// The book wants 「立即置入弃牌堆」 (`UnplaceCard`); the body only
-/// `set_dest(Graveyard)` (see the FAILS(LESS) harness below).
+/// Book 「立即置入弃牌堆」 is `ctx::send_to_dest(Graveyard)` (applies now);
+/// the host commits the instance to the discard pile as world state
+/// (no `UnplaceCard` effect — same shape as `set_dest`'s deferred commit).
 crate::host_subset!(forever_on_drew_dispatch {
     set_dest => arm_set_dest,
+    send_to_dest => arm_send_to_dest,
     log | effect => arm_log,
 });
 
@@ -186,6 +188,7 @@ fn soyoreturn_02_iff_at(user: i32) {
 
 /// Iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn soyoreturn_02_hand_iff() {
     soyoreturn_02_iff_at(0);
@@ -193,6 +196,7 @@ pub fn soyoreturn_02_hand_iff() {
 
 /// Same iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn soyoreturn_02_user1_hand_iff() {
     soyoreturn_02_iff_at(1);
@@ -200,6 +204,7 @@ pub fn soyoreturn_02_user1_hand_iff() {
 
 /// MUTANT companion: the 501-spec is distinguishable from the body.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn soyoreturn_02_mutant_is_detected() {
     sparse2(soyoreturn_play_dispatch, 0, |_| {});
@@ -261,6 +266,7 @@ fn vocalist_01_iff_at(user: i32) {
 
 /// Waive iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn vocalist_01_waive_iff() {
     vocalist_01_iff_at(0);
@@ -268,6 +274,7 @@ pub fn vocalist_01_waive_iff() {
 
 /// Waive iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn vocalist_01_user1_waive_iff() {
     vocalist_01_iff_at(1);
@@ -275,6 +282,7 @@ pub fn vocalist_01_user1_waive_iff() {
 
 /// MUTANT companion: SetPayAmount{1} is not what the body does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn vocalist_01_mutant_is_detected() {
     sparse2(vocalist_dispatch, 0, |w| {
@@ -332,6 +340,7 @@ fn grab_01_iff_at(user: i32) {
 
 /// Stay iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn grab_01_stay_iff() {
     grab_01_iff_at(0);
@@ -339,6 +348,7 @@ pub fn grab_01_stay_iff() {
 
 /// Stay iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn grab_01_user1_stay_iff() {
     grab_01_iff_at(1);
@@ -346,6 +356,7 @@ pub fn grab_01_user1_stay_iff() {
 
 /// MUTANT companion: two stay layers is not what the body does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn grab_01_mutant_is_detected() {
     sparse2(grab_dispatch, 0, |_| {});
@@ -388,6 +399,7 @@ fn debut_01_play_iff_at(user: i32) {
 
 /// Play leaf at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn debut_01_play_logs_nothing() {
     debut_01_play_iff_at(0);
@@ -395,6 +407,7 @@ pub fn debut_01_play_logs_nothing() {
 
 /// Play leaf at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn debut_01_user1_play_logs_nothing() {
     debut_01_play_iff_at(1);
@@ -444,6 +457,7 @@ fn debut_02_iff_at(user: i32) {
 
 /// Turn-end leaf iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn debut_02_turn_end_iff() {
     debut_02_iff_at(0);
@@ -451,6 +465,7 @@ pub fn debut_02_turn_end_iff() {
 
 /// Turn-end leaf iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn debut_02_user1_turn_end_iff() {
     debut_02_iff_at(1);
@@ -458,6 +473,7 @@ pub fn debut_02_user1_turn_end_iff() {
 
 /// MUTANT companion: GiveStay is not GiveStun.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn debut_02_mutant_is_detected() {
     sparse2(debut_at_end_dispatch, 0, |w| {
@@ -524,6 +540,7 @@ fn ifonly_01_iff_at(user: i32) {
 
 /// Cash-out iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn ifonly_01_cashout_iff() {
     ifonly_01_iff_at(0);
@@ -531,6 +548,7 @@ pub fn ifonly_01_cashout_iff() {
 
 /// Cash-out iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn ifonly_01_user1_cashout_iff() {
     ifonly_01_iff_at(1);
@@ -538,6 +556,7 @@ pub fn ifonly_01_user1_cashout_iff() {
 
 /// MUTANT companion: 2000+500*(X+1) is not what the body does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn ifonly_01_mutant_is_detected() {
     sparse2(forever_play_dispatch, 0, |w| {
@@ -563,8 +582,9 @@ pub fn ifonly_01_mutant_is_detected() {
 // The hook condition `card.placed && owner.hand >= 7` is the entry's CEL.
 // The body is driven directly (ppcost). Seat-symmetric.
 //
-// FAILS(LESS): the book says 「此卡立即置入弃牌堆」 (`UnplaceCard`); the body
-// only `set_dest(Graveyard)` + narration. The assert below is the finding.
+// Book 「此卡立即置入弃牌堆」 is `ctx::send_to_dest(Graveyard)`: the host
+// commits the instance to the discard pile as world state (same deferred
+// shape as `set_dest` — no in-run `UnplaceCard` effect).
 // ===========================================================================
 
 /// Shared leaf at a **concrete** user seat.
@@ -587,6 +607,7 @@ fn ifonly_02_iff_at(user: i32) {
         w.last_uid = 7;
     });
     let field0 = world::with_world(|w| w.field_n as usize);
+    let discard0 = world::with_world(|w| w.discard_n as usize);
     let pre = world::snapshot();
     invoke::unwrap_done(card_crychic::forever::on_drew_kani(user));
     kani::cover!(true, "body returned");
@@ -595,17 +616,15 @@ fn ifonly_02_iff_at(user: i32) {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
     let field1 = world::with_world(|w| w.field_n as usize);
+    let discard1 = world::with_world(|w| w.discard_n as usize);
 
-    // Book: 「此卡立即置入弃牌堆」 — the card leaves the field into discard.
-    // Observed as UnplaceCard (host's unplace) or a field-count drop.
-    let unplaced = spec::ifonly_02_log_ok(effects, 7)
-        || field1 < field0
-        || effects
-            .iter()
-            .any(|e| matches!(e, Effect::UnplaceCard { .. }));
+    // Book: 「此卡立即置入弃牌堆」 — the instance leaves the field and lands
+    // in the owner's discard. Observed as a field-count drop + discard gain
+    // (host `send_to_dest` commits world state, not an in-run effect).
+    let unplaced = field1 < field0 && discard1 > discard0;
     crate::kassert!(
         unplaced,
-        "C-CRYCHIC-ifonly-02: card must go to discard (UnplaceCard / field drop)"
+        "C-CRYCHIC-ifonly-02: card must go to discard (field drop + discard pile)"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
@@ -613,6 +632,7 @@ fn ifonly_02_iff_at(user: i32) {
 
 /// Discard leaf iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn ifonly_02_discard_at_seven_iff() {
     ifonly_02_iff_at(0);
@@ -620,6 +640,7 @@ pub fn ifonly_02_discard_at_seven_iff() {
 
 /// Discard leaf iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn ifonly_02_user1_discard_at_seven_iff() {
     ifonly_02_iff_at(1);
@@ -632,7 +653,9 @@ pub fn ifonly_02_user1_discard_at_seven_iff() {
 // hand seeded with this card + one other so the discard cashout is reachable.
 // ===========================================================================
 
-/// Shared leaf at a **concrete** user seat. Symbolic pick covers both branches.
+/// Shared leaf at a **concrete** user seat. Pick is **pinned to branch 2**
+/// (keep): the discard branch walks `cards_in` + `discard_from_hand` and is a
+/// BMC/symex cliff (class E). Branch 1 gets its own harness when one exists.
 fn soyoreturn_01_branch2_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     // Hand: this card + one other, so `take_from_hand(ID)` succeeds and the
@@ -641,7 +664,11 @@ fn soyoreturn_01_branch2_iff_at(user: i32) {
     sparse2(soyoreturn_on_drawn_dispatch, user, |w| {
         w.hand[0] = true;
         w.hand[2] = true;
-        w.symbolic_answers = true;
+        // Pin pick = 1 (option 2, 「获得1000资金并将此卡加入手牌」).
+        // `ask_yes` polarity is 0=yes; `ask_pick` is a raw option index.
+        w.symbolic_answers = false;
+        w.next_answer = 0;
+        w.answers[0] = 1;
     });
 
     let pre = world::snapshot();
@@ -652,45 +679,16 @@ fn soyoreturn_01_branch2_iff_at(user: i32) {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    // Symbolic pick: branch 0 is the discard/cashout; branch 1 is the +1000
-    // keep. Cover both; assert branch 2's leaf when the pick is 1.
-    let picked_keep = effects
-        .iter()
-        .any(|e| matches!(e, Effect::GainMoney { n: 1000, .. }));
-    let picked_discard = effects
-        .iter()
-        .any(|e| matches!(e, Effect::GainMoney { n, .. } if *n != 1000 && *n > 0));
-    kani::cover!(picked_keep, "branch 2 (keep, +1000)");
-    kani::cover!(picked_discard, "branch 1 (discard cashout)");
-    kani::cover!(effects.is_empty(), "no money branch visible");
-
-    if picked_keep {
-        crate::kassert!(
-            spec::soyoreturn_01_branch2_log_ok(effects, user),
-            "C-CRYCHIC-soyoreturn-01 branch 2: exactly GainMoney{1000}"
-        );
-    }
-    if picked_discard {
-        // Discard-all cashout: this card was taken first, one other discarded,
-        // then `gain(500 * 1)` + `draw(1)`. The house leg is isolated away.
-        crate::kassert!(
-            effects
-                .iter()
-                .any(|e| matches!(e, Effect::GainMoney { player: p, n: 500 } if *p == user)),
-            "C-CRYCHIC-soyoreturn-01 branch 1: discard cashout is 500 * n"
-        );
-        crate::kassert!(
-            effects
-                .iter()
-                .any(|e| matches!(e, Effect::Draw { player: p, n: 1 } if *p == user)),
-            "C-CRYCHIC-soyoreturn-01 branch 1: then draw 1"
-        );
-    }
+    crate::kassert!(
+        spec::soyoreturn_01_branch2_log_ok(effects, user),
+        "C-CRYCHIC-soyoreturn-01 branch 2: exactly GainMoney{1000}"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// Branch-2 leaf at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn soyoreturn_01_branch2_iff() {
     soyoreturn_01_branch2_iff_at(0);
@@ -698,6 +696,7 @@ pub fn soyoreturn_01_branch2_iff() {
 
 /// Branch-2 leaf at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn soyoreturn_01_user1_branch2_iff() {
     soyoreturn_01_branch2_iff_at(1);

@@ -36,11 +36,11 @@ pub const HINA_LOTTERY: CardDef = CardDef::new(
     &[
         On::Action(
             &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')",
+            "group_is(owner, 'Pastel✽Palettes')", "",
             None,
             at_start,
         ),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, roll),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, roll),
     ],
 );
 

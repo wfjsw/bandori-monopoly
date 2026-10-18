@@ -17,7 +17,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const FOREVER: CardDef = CardDef::new(
     "CRYCHIC:如果能一直持续下去...",
     &[
-        On::Play("", None, forever),
+        On::Play("", "", None, forever),
         // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a
         // continuous condition, so the check runs at every point a hand size
         // moves (draw, discard-from-hand, play-from-hand) and at the turn
@@ -30,7 +30,7 @@ pub const FOREVER: CardDef = CardDef::new(
                 ActionKind::TurnEndBefore,
                 ActionKind::TurnEnd,
             ],
-            "card.placed && owner.hand >= 7",
+            "card.placed && owner.hand >= 7", "",
             None,
             on_drew
         ),

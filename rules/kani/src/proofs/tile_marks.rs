@@ -30,7 +30,7 @@ use crate::world::{self, Effect, Mark, World, MAX_PLAYERS};
 fn call_mark_cp_land(player: i32) {
     let def = rules_tile_marks::MARK_CP;
     for on in def.on.iter() {
-        if let card_sdk::On::Action(_, _, _, f) = on {
+        if let card_sdk::On::Action(_, _, _, _, f) = on {
             invoke::unwrap_done(f(player));
             return;
         }
@@ -80,7 +80,7 @@ fn symbolic_cp_world(settler: i32, tile: i32) -> World {
 fn mark_cp_guard(player: i32) -> bool {
     let card = rules_tile_marks::MARK_CP;
     for on in card.on.iter() {
-        if let card_sdk::On::Action(_, _, Some(g), _) = on {
+        if let card_sdk::On::Action(_, _, _, Some(g), _) = on {
             return g(player);
         }
     }
@@ -100,6 +100,7 @@ fn mark_cp_guard(player: i32) -> bool {
 /// never admit while `mark_src_at` is stubbed). The full three-write book
 /// shape is `spec::mark_cp_land_effects_book` and stays BLOCKED-HOST.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(48)]
 pub fn mark_cp_land_gain_iff() {
     let settler = any_seat();
@@ -143,6 +144,7 @@ pub fn mark_cp_land_gain_iff() {
 
 /// MUTANT: the reference wants 900. Must be distinguishable.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(48)]
 #[kani::should_panic]
 pub fn mark_cp_land_mutant_900() {
@@ -162,6 +164,7 @@ pub fn mark_cp_land_mutant_900() {
 
 /// MUTANT: the reference pays another seat.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(48)]
 #[kani::should_panic]
 pub fn mark_cp_land_mutant_wrong_seat() {
@@ -187,6 +190,7 @@ pub fn mark_cp_land_mutant_wrong_seat() {
 /// We evaluate the shipped guard; the host then does not call the body
 /// (the effect log of a *not-called* body is empty by construction).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn mark_cp_land_guard_rejects_without_tile_cp() {
     let settler = any_seat();
@@ -208,6 +212,7 @@ pub fn mark_cp_land_guard_rejects_without_tile_cp() {
 
 /// NO-OP / guard: a cancelled settle (「将该次结算改为…」) skips the entry.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn mark_cp_land_guard_rejects_when_cancelled() {
     let settler = any_seat();
@@ -229,6 +234,7 @@ pub fn mark_cp_land_guard_rejects_when_cancelled() {
 /// *earlier* conjuncts (tile CP present ⇒ the prefix of the guard is true
 /// once `mark_src_at` works) by checking `count_marks` sees the mark.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn mark_cp_land_tile_cp_visible_to_count_marks() {
     let settler = any_seat();

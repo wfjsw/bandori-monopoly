@@ -687,8 +687,8 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 
 **G0 — surface.** `On::Counteract` / `On::Action` / `On::Play` (the guarded
 entries) carry a `pre: &'static str` condition immediately before the residual
-guard (`On::Counteract(kinds, pre, guard, body)`, `On::Action(kinds, pre, guard,
-body)`, `On::Play(pre, gate, body)`); `""` = none. `On::pre(..)` is
+guard (`On::Counteract(kinds, pre, reason, guard, body)`, `On::Action(kinds, pre, reason, guard,
+body)`, `On::Play(pre, reason, gate, body)`); `""` = none. `On::pre(..)` is
 the const builder and `card_sdk::pre::MINE` (`actor == owner`) the sugar.
 `ManifestOn` gains `pre: Option<String>` (the CEL source) and `ABI_VERSION`
 goes **44 → 45**. `rt::manifest` serialises it (postcard; never

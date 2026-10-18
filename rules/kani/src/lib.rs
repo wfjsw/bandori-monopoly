@@ -14,6 +14,8 @@
 #![allow(dead_code)]
 
 pub mod board;
+#[cfg(kani)]
+pub mod kani_stubs;
 pub mod harness;
 pub mod host;
 pub mod intern;

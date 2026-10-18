@@ -21,8 +21,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
         // （2）/（3）「主要移动结束时，[触发结算]前若在你的前后5格内」 -- the
         // move-main fact is the condition; the within-5 geometry is residual
         // (`dist` is not in the condition vocabulary).
@@ -30,7 +30,7 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         // CEL; split from (2) so the other-mover arm is not gated on it.
         On::Action(
             &[ActionKind::SettleBefore],
-            "actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1",
+            "actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1", "",
             Some(within5),
             before_settle_self,
         ),
@@ -38,7 +38,7 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         // -- the other-mover offer (the mover is prompted to pay).
         On::Action(
             &[ActionKind::SettleBefore],
-            "actor != owner && move.main && tile.id >= 0",
+            "actor != owner && move.main && tile.id >= 0", "",
             Some(within5),
             before_settle_other,
         ),

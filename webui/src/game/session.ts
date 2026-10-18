@@ -973,7 +973,8 @@ export async function resumeOnline(id: string, player: string, persona: string, 
 }
 
 /** Which part of the match screen the phase belongs in. */
-export function matchScene(v: MatchView | null): "select" | "board" | null {
+export function matchScene(v: MatchView | null): "select" | "deck" | "board" | null {
   if (!v || !v.state.phase) return null;
-  return ["order", "ban", "pick", "deck"].includes(v.state.phase) ? "select" : "board";
+  if (v.state.phase === "deck") return "deck";
+  return ["order", "ban", "pick"].includes(v.state.phase) ? "select" : "board";
 }

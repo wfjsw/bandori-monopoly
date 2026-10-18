@@ -33,6 +33,18 @@
 | `setup.rs` | turn order, ban (Ranked), pick, deck (bots take the deck book entry) |
 | `rules.rs` | `CardRules` — where card/event content plugs in; `StubRules` = no effects |
 
+**Pick timeout / preselect (engine + UI behaviour, not a rulebook clause).**
+A seat may send `act: "preselect"` at any time during the pick phase (before
+it has picked) to mark the character it last clicked. The intent is private
+(`Hidden::pick_intent` — never in `MatchState`) and is recorded like any other
+input so replays resolve timeouts the same way. When that seat's pick window
+expires, the engine takes the intent if the character is still free (not
+banned, not taken); otherwise it falls back to a random free character, which
+is also what bots and seats with no intent do. Confirming still sends
+`act: "pick"`. Solo never expires a choice, so the intent is unused there.
+TODO(规则书): the book has no timeout-fallback clause; keep this as engine/UI
+behaviour unless the rulebook grows one.
+
 The card content itself lives in `game-rules`: `wasm_rules.rs` is the
 `CardRules` bridge (`RulesBridge<M>`, with `WasmRules = RulesBridge<Ruleset>`
 for the sandboxed modules and `rules-native`'s `NativeRules` for the bot's

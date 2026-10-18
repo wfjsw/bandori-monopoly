@@ -99,6 +99,9 @@ pub struct TriggerMove {
     /// The move was shaped or started by a rule whose card id starts with
     /// `skill:` (cond `move.by_skill`).
     pub by_skill: bool,
+    /// Was this settle initiated by a card (`card_settle_at`), not by the
+    /// player's own move landing? Mirrors [`super::move_ctx::MoveCtx::settle_redirect`].
+    pub settle_redirect: bool,
 }
 
 /// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
@@ -421,6 +424,7 @@ impl Trigger {
             total: m.total,
             roll: None,
             by_skill: m.by_skill,
+            settle_redirect: m.settle_redirect,
         });
         self.main = m.main;
         self

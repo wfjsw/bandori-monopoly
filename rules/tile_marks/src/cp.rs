@@ -88,7 +88,7 @@ pub const MARK_CP: CardDef = CardDef::new(
     "mark:cp",
     &[
         On::Message(&["place"], "", Some(place_ok), on_place),
-        On::Action(&[ActionKind::SettleBody], "", Some(lands_on_cp), on_land),
+        On::Action(&[ActionKind::SettleBody], "", "", Some(lands_on_cp), on_land),
     ],
 )
     .board_role("mark");

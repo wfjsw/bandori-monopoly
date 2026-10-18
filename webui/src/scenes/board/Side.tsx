@@ -61,8 +61,7 @@ export const SettleVote = memo(function SettleVote({ m, sess }: { m: Model; sess
 /**
  * One pressable skill on the stack. `id` / `enabled` / `reason` come from the
  * engine's `MatchView.skills` (gated through the same `why_not_act` the
- * `act: "skill"` request takes). Name / body resolve from the rule id so the
- * skill-text simple/full setting applies.
+ * `act: "skill"` request takes). Name / body resolve from the rule id.
  */
 type SkillSlot = {
   id: string;

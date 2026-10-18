@@ -36,8 +36,8 @@ Harnesses written: **22** (13 card + 9 skill). Run to verdict: **1** so far
 
 | classification | count | notes |
 |---|---:|---|
-| PROVEN (leaf iff) | 6 clauses / 11 harnesses | soyoreturn-02, vocalist-01, debut-02, ifonly-01, grab-01(stay), tomoriskill-02, soyoskill-01(waive), band-03(crystal leaf), soyoreturn-01 branch-2 |
-| FAILS | 2 | ifonly-02 (LESS), band-01b (LESS) |
+| PROVEN (leaf iff) | 6 clauses / 11 harnesses | soyoreturn-02, vocalist-01, debut-02, ifonly-01, ifonly-02, grab-01(stay), tomoriskill-02, soyoskill-01(waive), band-03(crystal leaf), soyoreturn-01 branch-2 (pick pinned) |
+| FAILS | 1 | band-01b (LESS) |
 | PROTOCOL-LEVEL | 18 | windows, walks, transforms, deferrals |
 | BLOCKED-HOST | 7 | `state_set` value drop, `trig_move_roll`, `fire_pot` |
 | OPEN | 7 | see OPEN table |
@@ -52,10 +52,10 @@ Harnesses written: **22** (13 card + 9 skill). Run to verdict: **1** so far
 | C-CRYCHIC-vocalist-01 | 「一次性向其他玩家支付5000以上资金时，免除此次支付」 | PROVEN (leaf) / PROTOCOL-LEVEL (window) | `vocalist_01_waive_iff`, `vocalist_01_mutant_is_detected` | see log | body: `SetPayAmount{0}` exact | OPEN-分摊 (「一次性」 excludes it) |
 | C-CRYCHIC-elegant-01 | 「回合外受到抽卡效果时打出…下回合结束时抽一张卡」 | PROTOCOL-LEVEL | — | — | deferred draw is multi-turn scheduling | — |
 | C-CRYCHIC-debut-01 | 「本回合内你的资金不会下降…」 | PROTOCOL-LEVEL | `debut_01_play_logs_nothing` (leaf) | see log | play body only arms `set_no_money_loss` stub | auction / immune-payment exemptions out of scope |
-| C-CRYCHIC-debut-02 | 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」 | PROVEN | `debut_02_turn_end_iff`, `debut_02_mutant_is_detected` | see log | `GiveStun{1}` + unlogged `band_crystals+1` | — |
+| C-CRYCHIC-debut-02 | 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」 | PROVEN (needs re-time) | `debut_02_turn_end_iff`, `debut_02_mutant_is_detected` | see log | `GiveStun{1}` + `add_group_pool(+1)`. triage3 batch 15: host `arm_add_band_crystals` was reading the name handle as the delta (class C) | — |
 | C-CRYCHIC-karaoke-01 | 「进行至多5次掷骰，并选择其中一个结果…」 | PROTOCOL-LEVEL | — | — | dice loop + walk-as-main-move | — |
-| C-CRYCHIC-ifonly-01 | 「移除…奇迹水晶，获得2000+500*X资金」 | PROVEN | `ifonly_01_cashout_iff`, `ifonly_01_mutant_is_detected` | see log | `GainMoney{2000+500X}` + `PlaceCard` field; crystals drained unlogged | — |
-| C-CRYCHIC-ifonly-02 | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | PROVEN | `ifonly_02_discard_at_seven_iff` | **SUCCESSFUL 253/461 s** (class C host `set_dest` commit; body is correct) | — | — |
+| C-CRYCHIC-ifonly-01 | 「移除…奇迹水晶，获得2000+500*X资金」 | PROVEN (needs re-time) | `ifonly_01_cashout_iff`, `ifonly_01_mutant_is_detected` | see log | `GainMoney{2000+500X}` + `PlaceCard` field; drain via `add_group_pool(-x)`. Same class C arm bug as debut-02 (batch 15) | — |
+| C-CRYCHIC-ifonly-02 | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | PROVEN (needs re-time) | `ifonly_02_discard_at_seven_iff` | central FAILED `outside_subset` | body is `ctx::send_to_dest(Graveyard)` (not `set_dest`). batch 15: host `arm_send_to_dest` commits the instance to the dest pile (was a player-teleport stub); subset declares `send_to_dest` | — |
 | C-CRYCHIC-human-01 | 「从1-20间选择并声明X…掷骰小于等于X…添加一个奇迹水晶」 | mixed | — | — | placement + X write-down is `ask_number` + `set_slot`/props; roll hook needs move-roll | — |
 | C-CRYCHIC-human-02 | 「回合开始时…两个或以上奇迹水晶…移除…+（20-X）」 | PROTOCOL-LEVEL | — | — | turn-start consume + move-modifier latch | [异常移动效果] set is G-STATUS's clause |
 | C-CRYCHIC-grab-01 | 「（1）获得一层[停留]」 | PROVEN (stay) / BLOCKED-HOST (PASSER value) | `grab_01_stay_iff`, `grab_01_mutant_is_detected` | see log | `GiveStay{1}` exact; `state::set(PASSER,-1)` value host-dropped | — |
@@ -65,7 +65,7 @@ Harnesses written: **22** (13 card + 9 skill). Run to verdict: **1** so far
 | C-CRYCHIC-haruhikage-02 | 「使用一次Crychic角色的技能」 | PROTOCOL-LEVEL | — | — | [反击] borrows a character skill | — |
 | C-CRYCHIC-myown-01 | 「主要移动结束时…远离绝对距离最近的玩家一格」 | OPEN / PROTOCOL-LEVEL | — | — | settle-before window + nearest-player rule | OPEN-触发结算 |
 | C-CRYCHIC-myown-02 | 「若受到[异常移动效果]影响，此卡不生效」 | OPEN | — | — | G-STATUS [异常移动效果] set | — |
-| C-CRYCHIC-soyoreturn-01 | 「[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一」 | PROTOCOL-LEVEL (trigger) / PROVEN candidate (branch-2 leaf) | `soyoreturn_01_branch2_iff` | triage3: TIMEOUT 1800 s **E** (BMC/symex on `arm_cards_in` + `ask_pick`); no cheap lever | branch 2 = `GainMoney{1000}`; branch 1 is multi-step | — |
+| C-CRYCHIC-soyoreturn-01 | 「[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一」 | PROTOCOL-LEVEL (trigger) / PROVEN candidate (branch-2 leaf, needs re-time) | `soyoreturn_01_branch2_iff` | central TIMEOUT 1800 s **E** (BMC on discard branch `cards_in` + `ask_pick`) | batch 15: pick pinned to option 2 (`answers[0]=1`) so the leaf is branch 2 only — discard branch is a separate multi-step leaf | — |
 | C-CRYCHIC-soyoreturn-02 | 「（2）[手] 获得500资金」 | PROVEN | `soyoreturn_02_hand_iff`, `soyoreturn_02_mutant_is_detected` | see log | exactly `GainMoney{500}` | — |
 | C-CRYCHIC-tomoricry-01 | 「重置一次…X…获得两个X差值*120的资金」 | OPEN | — | — | formula ambiguous | OPEN-两个X差值 |
 | C-CRYCHIC-tomoricry-02 | 「不会被…（2）效果移除…洗入抽牌堆」 | PROTOCOL-LEVEL | — | — | band-(2) transform exemption | — |
@@ -124,8 +124,11 @@ that the wrong spec disagrees.
 * **PROTOCOL-LEVEL** — [反击] windows, multi-turn deferrals, walk/settle
   pipelines, band transform. Cite KANI.md §6. Leaf bodies that are single
   entries (waive, gain, give_stay/stun, cash-out) are still proven.
-* **ifonly-02** — proof asserts the book's discard move; the body does not
-  make it. Left as a plain FAILING harness (no `#[ignore]`).
+* **ifonly-02** — body is `ctx::send_to_dest(Graveyard)` (applies the fate
+  now). The Kani host's `Op::send_to_dest` was a player-teleport stub and the
+  per-harness subset did not declare the op (central `outside_subset`).
+  Fixed in triage3 batch 15: `arm_send_to_dest` commits the instance to the
+  dest pile (same world-state shape as `arm_set_dest`).
 
 ## Harness verdict log
 
@@ -141,13 +144,13 @@ worktree still has the old grep — read the log).
 | crychic | vocalist_01_mutant_is_detected | written, verdict pending | | |
 | crychic | grab_01_stay_iff | written, verdict pending | | |
 | crychic | grab_01_mutant_is_detected | written, verdict pending | | |
-| crychic | debut_02_turn_end_iff | written, verdict pending | | |
+| crychic | debut_02_turn_end_iff | central FAILED (class C band-pool arm); batch 15 fix, re-time queued | | |
 | crychic | debut_02_mutant_is_detected | written, verdict pending | | |
 | crychic | debut_01_play_logs_nothing | written, verdict pending | | |
-| crychic | ifonly_01_cashout_iff | written, verdict pending | | |
+| crychic | ifonly_01_cashout_iff | central FAILED (class C band-pool arm); batch 15 fix, re-time queued | | |
 | crychic | ifonly_01_mutant_is_detected | written, verdict pending | | |
-| crychic | ifonly_02_discard_at_seven_iff | **SUCCESSFUL 253 s** (was FAILED; class C host) | | |
-| crychic | soyoreturn_01_branch2_iff | triage3: TIMEOUT 1800 s class E (symex `arm_cards_in` + `ask_pick`) | | |
+| crychic | ifonly_02_discard_at_seven_iff | central FAILED `outside_subset`; batch 15 `arm_send_to_dest`, re-time queued | | |
+| crychic | soyoreturn_01_branch2_iff | central TIMEOUT class E; batch 15 pick pinned to branch 2, re-time queued | | |
 | skills_crychic | tomoriskill_02_spend_iff | written, verdict pending | | |
 | skills_crychic | tomoriskill_02_mutant_is_detected | written, verdict pending | | |
 | skills_crychic | soyoskill_01_cancel_iff | written, verdict pending | | |
@@ -167,10 +170,11 @@ verdicts land as slots free; coordinator can re-run
 
 1. **C-CRYCHIC-ifonly-02 — RECLASSIFIED (triage3).** Was recorded LESS;
    it is a **class C host** gap, not a book/body discrepancy. Book
-   「此卡立即置入弃牌堆」; body `ctx::set_dest(Dest::Graveyard)` is the
-   SDK's field-fate API (applied at the run's commit by the real engine's
-   `apply_dest`). The Kani host only stored `w.dest`. Fixed on
-   `kani-triage3` (host applies the fate when the instance is on the field).
+   「此卡立即置入弃牌堆」; body `ctx::send_to_dest(Dest::Graveyard)` applies
+   the fate immediately (engine `apply_dest`). The Kani host's
+   `Op::send_to_dest` used to teleport the player to tile `w.dest`.
+   Fixed in batch 15: `arm_send_to_dest` unplaces the running instance into
+   the dest pile (world state, no in-run `UnplaceCard` effect).
 2. **C-CRYCHIC-band-01b LESS** — book 「任何时刻拥有手牌数大于等于6时…无法从
    手中打出任何牌」; `skill-bands/src/crychic.rs` has a TODO and no play-gate
    body. Unit test `crychic_band_blocks_play_at_six` stays red (engine accepts

@@ -172,21 +172,22 @@ test("a record of bundle A replays clean on archived A while current is B", asyn
   }
 
   // -- build B: same engine, a trivial data override ----------------------
-  // Drop one event card: same schema, different `data_sha256`, and a
-  // different event deck to shuffle -- so the whole state trajectory drifts
-  // and a forced replay on B diverges at the first checkpoint.
+  // Tweak one board price: same schema, different `data_sha256`, and a
+  // different money trajectory -- so a forced replay on B diverges at the
+  // first checkpoint. (Event prose is ruleset metadata now and is covered by
+  // `ruleset_sha256`, not this hash.)
   const dataB = join(TMP, "dataB");
   mkdirSync(dataB, { recursive: true });
   for (const n of JSON.parse(A.data_files())) {
     const p = join(dataDir, n);
     if (!existsSync(p)) continue;
-    if (n !== "events.json") {
+    if (n !== "board.json") {
       copyFileSync(p, join(dataB, n));
       continue;
     }
-    const ev = JSON.parse(readFileSync(p, "utf8"));
-    ev.events.pop();
-    writeFileSync(join(dataB, n), JSON.stringify(ev));
+    const board = JSON.parse(readFileSync(p, "utf8"));
+    if (board.tiles?.length) board.tiles[0].price = (board.tiles[0].price || 0) + 1;
+    writeFileSync(join(dataB, n), JSON.stringify(board));
   }
   const B = await loadGlue({ glueJs, glueWasm, dataDir: dataB, tag: "B", glueSha: gsha });
   const stampB = JSON.parse(B.engine_stamp());

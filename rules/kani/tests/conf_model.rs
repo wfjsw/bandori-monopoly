@@ -769,6 +769,7 @@ impl CardWorld for ConfWorld {
                     None
                 },
                 by_skill: false,
+                settle_redirect: false,
             });
         }
         if self.trig_pay_is_rent {
@@ -1949,6 +1950,12 @@ fn op_trig_move_payload_matches_engine() {
         "trig_move_main",
         |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
         Op::trig_move_main,
+        [0; 6],
+    );
+    trig_get(
+        "trig_settle_redirect",
+        |c| game_rules::hostfns::trig_settle_redirect(c).unwrap() as i64,
+        Op::trig_settle_redirect,
         [0; 6],
     );
     trig_get(

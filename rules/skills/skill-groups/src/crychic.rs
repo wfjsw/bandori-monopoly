@@ -24,14 +24,14 @@ const SEEN: &str = "skill.crychic.seen";
 pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        On::Action(&[ActionKind::Drawn], card_sdk::pre::MINE, None, on_drawn),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
+        On::Action(&[ActionKind::Drawn], card_sdk::pre::MINE, "", None, on_drawn),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
-        On::Action(&[ActionKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
+        On::Action(&[ActionKind::TurnEndBefore], card_sdk::pre::MINE, "", Some(decks_empty), at_turn_end),
         On::Filter(&[FilterKind::PaySplitChoose], "", Some(in_lock), lock_pay),
-        On::Action(&[ruleset_core::kind::PassRewardAffected], "", Some(in_lock), force_card),
+        On::Action(&[ruleset_core::kind::PassRewardAffected], "", "", Some(in_lock), force_card),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
@@ -43,7 +43,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
         On::FilterFlag(&[FilterKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
-        On::Play("", Some(can_transform), transform_now),
+        On::Play("", "", Some(can_transform), transform_now),
     ],
 )
     .silent(&[0]);
@@ -217,6 +217,11 @@ fn force_card(player_id: i32) -> card_sdk::Asked {
 /// can run it out of turn (`mutsumi_never` calls `ctx::invoke_skill` on the id
 /// `ctx::group_skill` names).
 fn can_transform(player_id: i32) -> Option<Msg> {
+    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
+    if let Some(why) = crate::copy_sticker_gate(player_id) {
+        return Some(why);
+    }
     if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
         return Some(Msg::new(key!("crychic_not_empty")));
     }
@@ -236,7 +241,6 @@ fn transform_now(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"CRYCHIC"#)
     .short_name(r#"CRYCHIC"#)
-    .boot_art(r#"045"#)
     .color(r#"#5AC7BE"#)
     .skill(r#"美好的往日幻影"#)
     .text(r#"CRYCHIC团技能：（1）你的手牌数没有上限，任何时刻拥有手牌数大于等于6时，你无法获得或失去资金，无法从手中打出任何牌且领取CiRCLE奖励时必须选择抽一张卡。（2）你的回合结束时，若你的抽牌堆与弃牌堆中都没有卡，移除此卡与你所有区域的所有“CRYCHIC”卡，将你剩余的所有手牌放入抽牌堆，并向抽牌堆中加入角色对应的自选“MyGO”或“Ave Mujica”卡至抽牌堆中总共有10张卡并洗切；获得角色对应的“MyGO”或“Ave Mujica”乐队技能卡，然后抽2张卡。（3）每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶 （上限10）；当此卡移除时，你获得X*500资金，X为此卡上的奇迹水晶数。"#)

@@ -6,7 +6,8 @@ same concept across units. Sources: `docs/rulebook/spec/README.md` index,
 `kani/*.md` OPEN columns. Where a unit poses no explicit question, a neutral
 yes/no question is suggested for the rulebook owner (rulebook / sheet).
 
-Snapshot 2026-10-12. A clause that depends on one of these records the OPEN id
+Snapshot 2026-10-12; **staleness pass 2026-10-17** against master `1cd71939`.
+A clause that depends on one of these records the OPEN id
 in its **Rulings & OPEN** field and specifies only what the text determines.
 
 ## Shared / cross-unit
@@ -222,8 +223,8 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 | **OPEN-传送主要移动结算** | teleport-as-main settle | childhood / §6.1 | Does a teleport that *is* the main move open a normal landing settle? |
 | **OPEN-afterglow式移动** | 「初始Afterglow角色的（2）」 | detour-02 | Which character's (2) is "afterglow-style"? |
 | **OPEN-@Tsugu / OPEN-@Tsugu-ycm** | garbled sheet mentions | tiny-can-01/02 | Are these typos for a real card id? |
-| **OPEN-每三回合** | fire-pot 「每三回合没有使用」 | fire-pot | Whose turns count the three? |
-| **OPEN-2次cd** | moca skill 「2次使用cd」 | moca skill | Per player / per skill / per card instance? |
+| **OPEN-每三回合** | fire-pot 「每四回合没有使用」 (sheet-sync 2026-10-17 renamed 每三→每四) | fire-pot | Whose turns count the four? *(wording updated 2026-10-17)* |
+| ~~**OPEN-2次cd**~~ | ~~moca skill 「2次使用cd」~~ | — | **RESOLVED / moot 2026-10-17** — the live sheet **dropped** 「该效果对每个玩家的被动技能和卡存在2次使用cd」 entirely (`rules/skills/skill-personas/src/moca_self.rs:15`). There is no cd to scope. |
 | **OPEN-每圈** | tomoe (3) 「每圈限一次」 | tomoe skill (3) | How is a lap counted? |
 
 ### CRYCHIC
@@ -284,7 +285,7 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 
 | OPEN id | description | depends on | suggested question |
 |---|---|---|---|
-| **OPEN-花火额外回合** | does **last** crystal also grant extra turn? | 花火-02/03 (TEST-FINDINGS §6.2 / C-Q26) | Does the last-crystal removal also grant an extra turn? |
+| ~~**OPEN-花火额外回合**~~ | does **last** crystal also grant extra turn? | 花火-02/03 (C-Q26) | **RESOLVED 2026-10-13 (C-Q26a)**: **no.** The terminal effect is discard + 2 [眩晕]; granting an extra turn would auto-skip it on the stun and eat one layer. Implemented at `rules/cards/card-mujica/src/sparkler.rs:62-66` (`if before > 1` before `give_extra_turn`). |
 | **OPEN-花火眩晕掉层** | stun layer vs turn-end remove-layer order | 花火-03 | Must 2 layers remain after both the grant and the turn-end tick? |
 | **OPEN-前方20格** | 「前方」 = clockwise? | doll garden | — |
 | **OPEN-箱庭0步** | sum-0 forced walk still [主要移动]? | 箱庭 | — |
@@ -389,7 +390,7 @@ to confirm or overturn (CANDIDATE where the source poses no question).
 | item | summary | suggested question |
 |---|---|---|
 | §6.1 Teleport-as-main | see above | — |
-| §6.2 燃尽前的线香花火 | last crystal extra turn? | see OPEN-花火额外回合 |
+| §6.2 燃尽前的线香花火 | last crystal extra turn? | **RESOLVED 2026-10-13** — no extra turn (see OPEN-花火额外回合). C-Q26b (「until your next turn start」 vs an extra turn's start) is still open. |
 | §6.3 Ringing Bloom (3) X | counted vs real houses | see OPEN-视为房屋数 |
 | §6.4 Two halvings | stack to ¼ or one window? | Do two different half-pay clauses on one settle stack to ¼? |
 | §6.5 Sweet Escape | see OPEN-收费标价 | — |

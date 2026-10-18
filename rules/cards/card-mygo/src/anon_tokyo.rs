@@ -22,7 +22,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
-        On::Play("", Some(cant_play), anon_tokyo),
+        On::Play("", "", Some(cant_play), anon_tokyo),
         On::Filter(&[FilterKind::PaySplitAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -38,8 +38,7 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
         .cell(r#"I8"#)
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"千早爱音"#)]));
 
-/// Slot key prefix that maps a marked tile to its linked partner.
-const LINK: &str = "anon_tokyo_link_";
+/// The field stand-in the `PaySplitAdd` rider hangs on (see [`link_rent`]).
 const ID: &str = "MyGO:[千早爱音]Anon Tokyo";
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -105,45 +104,42 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         if amount > 0 {
             ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
         }
-        // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- C#
-        // `AnonLinkFx.Link(here, t)` puts an `Anon Tokyo` mark on both tiles; the
-        // sheet's 「（上限1）」 means a tile that already carries the mark gets none.
-        for (tile, other) in [(here, t), (t, here)] {
-            if ctx::count_marks(
-                tile,
-                &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
-            ) > 0
-            {
-                continue;
-            }
-            // One row per mark (`place_mark_new`, the old `add_mark` semantics).
-            ctx::place_mark(
-                tile,
-                key!("anon_tokyo_mark"),
-                "",
-                player_id,
-                ctx::self_uid(),
-                1,
-                &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other), card_sdk::abi::Stack::Fresh);
-            // Remember the pairing so the `PaySplitAdd` hook below can find the partner
-            // (mark notes are not readable across the ABI).
-            ctx::set_slot(player_id, &alloc::format!("{LINK}{tile}"), other);
-        }
-        ctx::log(
-            player_id,
-            &Msg::new(key!("anon_tokyo_linked"))
-                .tile("a", here)
-                .tile("b", t)
-                .card("card", "MyGO:[千早爱音]Anon Tokyo"),
-        );
         // 规则书[手]1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的
         // 一半」 -- rides the `PaySplitAdd` hook on a field stand-in (the C# puts the body
         // on `AnonLinkFx`, an `H.ExtraOf` attachment; the hook surface only dispatches
         // to placed cards, so this placement stands in for it -- same pattern as
-        // `HHW:（育美）`'s `HagumiMarkFx`).
+        // `HHW:（育美）`'s `HagumiMarkFx`). Place the stand-in **before** the
+        // crystal so the two rows bind to its instance and die with it.
         if !ctx::is_placed() {
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("anon_tokyo_linked")));
+        }
+        // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- the
+        // cap is on **the pair** (「放置1个…（上限1）」). `place_mark_pair` is
+        // place-or-refuse atomic: if either end already carries a matching mark
+        // it places **neither** row (no half-link). TODO(规则书) Class C:
+        // whether a tile may sit in two links at once; the singular
+        // 「1个…（上限1）」 leans no, and `place_mark_pair`'s either-end refusal
+        // is that reading.
+        let placed = ctx::place_mark_pair(
+            here,
+            t,
+            key!("anon_tokyo_mark"),
+            "",
+            player_id,
+            ctx::self_uid(),
+            1,
+            &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", t),
+            card_sdk::abi::Stack::Fresh,
+        );
+        if placed {
+            ctx::log(
+                player_id,
+                &Msg::new(key!("anon_tokyo_linked"))
+                    .tile("a", here)
+                    .tile("b", t)
+                    .card("card", "MyGO:[千早爱音]Anon Tokyo"),
+            );
         }
     } else if rules_status::move_blocked(player_id).is_none() {
         // 规则书[手]2: 「[使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]
@@ -179,9 +175,12 @@ fn link_rent(player_id: i32, value: i32) -> i32 {
     if tile < 0 {
         return value;
     }
-    // The settled tile is one end of a link; the partner is the other end.
-    let key_name = alloc::format!("{LINK}{tile}");
-    let other = ctx::slot(player_id, &key_name);
+    // The settled tile is one end of a link; the partner is the other end
+    // (`TileMark.partner`, placed by `place_mark_pair`).
+    let other = ctx::mark_partner(
+        tile,
+        &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
+    );
     if other < 0 {
         return value;
     }

@@ -13,11 +13,11 @@ use ruleset_core::ctx::{self, plan};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SHOP_FRIENDS: CardDef =
-    CardDef::new("AG:商店街的青梅竹马", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("AG:商店街的青梅竹马", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"商店街的青梅竹马"#)
         .raw_name(r#"商店街的青梅竹马"#)
         .tags(&[])
-        .text(r#"投掷1d6mod6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动"#)
+        .text(r#"投掷1d6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动"#)
         .cell(r#"C4"#)
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

@@ -442,6 +442,20 @@ pub enum HostRequest {
         tile: i32,
         half: bool,
     },
+    /// A rent-shaped 「收费」 at `milli_scale` (1000 = ×1.0) of the tile's
+    /// ordinary-settle rent, outside a full [触发结算] (`ctx::charge_rent`).
+    /// 规则书 (`RAS:练习室里的风暴` (2)): 「对那个玩家进行一次相当于此卡所在格子
+    /// 普通[结算]的(4-X)/4倍价格的收费」. Computes the same figure `pay_rent`
+    /// does and runs it through the money pipeline as `PayKind::Rent`, scaled
+    /// at `scale_settle_payment` -- no settle hooks, no buy/build offer.
+    /// Answers the amount actually paid (0 = refused / cancelled).
+    ChargeRent {
+        /// The player charged.
+        player_id: i32,
+        tile: i32,
+        /// Milli-units (500 = ×0.5); `RAS:练习室里的风暴` passes `250 * (4-X)`.
+        milli_scale: i32,
+    },
     /// 「可选择spend购买格子地契和建造已有房子的资金总价」 on a
     /// non-main landing on unowned land. `ctx::offer_buy`.
     OfferBuy { player_id: i32, tile: i32 },
@@ -2826,6 +2840,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "place_mark_pair",
+        |mut c: C<W>, a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::place_mark_pair(&mut c, a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "count_marks_f",
         |mut c: C<W>, tile: i32, fp: i32, fl: i32| -> Result<i32, Error> {
             hostfns::count_marks_f(&mut c, tile, fp, fl).map_err(HostErr::into_err)
@@ -2857,6 +2878,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "mark_instance_at",
         |mut c: C<W>, tile: i32, fp: i32, fl: i32| -> Result<i32, Error> {
             hostfns::mark_instance_at(&mut c, tile, fp, fl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "mark_partner",
+        |mut c: C<W>, tile: i32, fp: i32, fl: i32| -> Result<i32, Error> {
+            hostfns::mark_partner(&mut c, tile, fp, fl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3424,6 +3452,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "pay_rent",
         |mut c: C<W>, player_id: i32, tile: i32, half: i32| -> Result<i32, Error> {
             hostfns::pay_rent(&mut c, player_id, tile, half).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "charge_rent",
+        |mut c: C<W>, player_id: i32, tile: i32, milli_scale: i32| -> Result<i32, Error> {
+            hostfns::charge_rent(&mut c, player_id, tile, milli_scale).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4418,6 +4453,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trig_move_main",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::trig_move_main(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_settle_redirect",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_settle_redirect(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

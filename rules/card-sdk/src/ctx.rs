@@ -561,6 +561,24 @@ pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Promp
     asked(unsafe { sys::pay_to(from, to, amount, p, l) })
 }
 
+/// A rent-shaped 「收费」 at `milli_scale` (1000 = ×1.0) of `tile`'s
+/// ordinary-settle rent, outside a full [触发结算].
+///
+/// 规则书 (`RAS:练习室里的风暴` (2)): 「对那个玩家进行一次相当于此卡所在格子
+/// 普通[结算]的(4-X)/4倍价格的收费」 -- pass `250 * (4 - x)` as `milli_scale`.
+/// The figure is the same one `pay_rent` charges (table / houses / dice-rent
+/// roll) and the scale rides the money pipeline's `paySplitMul` stage
+/// (`scale_settle_payment`) with the rent factors. Runs as `PayKind::Rent`
+/// (so `PaySplitAdd` / `pay_is_rent` see a rent), but it is a 「收费」, not a
+/// 「结算」: no settle hooks, no buy/build offer.
+///
+/// Returns the amount actually paid. Refuses (0) when the tile is unowned or
+/// mortgaged (the mortgaged case is `TODO(规则书)[ruling]` -- 「普通[结算]」
+/// there is a forced-buy offer with no obvious 收费 recipient).
+pub fn charge_rent(payer: i32, tile: i32, milli_scale: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::charge_rent(payer, tile, milli_scale) })
+}
+
 // ------------------------------------------------------------- 「[分摊]」 / 分摊前
 
 /// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2): `payCombinedAdd` →
@@ -763,16 +781,17 @@ pub fn take_from_hand(player_id: i32, card: &str) -> bool {
 /// Every card id in a player's `pile`, in pile order (the deck's top card
 /// first). Duplicates are listed once per copy.
 ///
-/// Under `cfg(kani)` the result is a `Vec<String>` of **length 0 or 4**
-/// (never 1..=3): empty pile → empty vec; otherwise 4 slots where unused
-/// slots repeat earlier facade ids. Short static strings (`"c0"`..`"c3"`)
-/// — no `from_raw_parts`, no arena intern, no `postcard`. The unmodified
-/// body's `ids.contains` dedups the repeats, so `ids` still holds exactly
-/// the distinct cards — and every `Vec<String>` walk in the body sees a
-/// **constant** length 0 or 4.
+/// Under `cfg(kani)` the result is a `Vec<String>` of **exact** length `n`
+/// (the real pile count, `0..=MAX_CARDS`). Host `arm_cards_in` encodes
+/// `[n, id…]` and the first probe returns `1 + n`. Short static strings
+/// (`"c0"`..`"c3"`) — no `from_raw_parts`, no arena intern, no `postcard`.
+/// Bodies that read `hand.len()` / `placed_count` (riot redraw amount,
+/// ranger's 「数量」) therefore see the true count, not a padded 0|4 shape.
+/// A bounded `while` keeps the unwind at `MAX_CARDS`.
 #[cfg(kani)]
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
+    // `need` is the encoded buffer size `1 + n`; `n = 0` is the empty pile.
     if need < 2 {
         return Vec::new();
     }
@@ -785,21 +804,14 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     // Short static strings — `String::from` over a literal is a single
     // small `alloc` + byte copy (no `from_raw_parts`, no `memchr`).
     const SLOTS: [&str; 4] = ["c0", "c1", "c2", "c3"];
-    fn slot_str(buf: &[u8], i: usize) -> String {
+    let n = (need - 1).min(8) as usize;
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < n {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
-        String::from(SLOTS[slot as usize])
+        out.push(String::from(SLOTS[slot as usize]));
+        i += 1;
     }
-    let s0 = slot_str(&buf, 0);
-    let s1 = slot_str(&buf, 1);
-    let s2 = slot_str(&buf, 2);
-    let a = if need >= 2 { s0.clone() } else { s1.clone() };
-    let b = if need >= 3 { s1.clone() } else { a.clone() };
-    let c = if need >= 4 { s2.clone() } else { b.clone() };
-    let mut out = Vec::new();
-    out.push(a);
-    out.push(b);
-    out.push(c);
-    out.push(if need >= 2 { s0 } else { s1 });
     out
 }
 
@@ -1143,6 +1155,33 @@ pub fn place_mark(
     }
 }
 
+/// Place **one** paired mark spanning tiles `a` and `b` (the miracle-crystal
+/// shape: one unit bound to two tiles). One row per tile, each row's
+/// `partner` naming the other. Place-or-refuse atomic: returns `false` and
+/// places **nothing** when either tile already carries a matching mark for
+/// that owner (the pair cap 「上限1」 is on the pair; a tile cannot sit in two
+/// links at once). `owner` / `category` / `src` / `note` / `stack` speak as in
+/// [`place_mark`]; both rows die with the creating instance like any mark.
+#[cfg_attr(kani, inline(always))]
+pub fn place_mark_pair(
+    a: i32,
+    b: i32,
+    kind: &str,
+    category: &str,
+    owner: i32,
+    src: i32,
+    count: i32,
+    note: &Msg,
+    stack: crate::abi::Stack,
+) -> bool {
+    let (kp, kl) = s(kind);
+    let (cp, cl) = s(category);
+    let (np, nl) = mj(note);
+    unsafe {
+        sys::place_mark_pair(a, b, kp, kl, cp, cl, owner, src, count, stack as i32, np, nl) != 0
+    }
+}
+
 /// Units on `tile` matching `filter` (empty kind/category, `mark::ANY` owner
 /// / src / instance = any).
 pub fn count_marks(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
@@ -1173,6 +1212,13 @@ pub fn mark_src_at(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
 pub fn mark_instance_at(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
     let (fp, fl) = mf(filter);
     unsafe { sys::mark_instance_at(tile, fp, fl) }
+}
+
+/// Partner tile (`TileMark.partner`) of the first matching mark on `tile`,
+/// or -1 (none / unpaired). The cross-end of a [`place_mark_pair`] row.
+pub fn mark_partner(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
+    let (fp, fl) = mf(filter);
+    unsafe { sys::mark_partner(tile, fp, fl) }
 }
 
 /// Units of **this** instance's counter `kind` bound to `tile`.
@@ -2565,6 +2611,17 @@ pub mod trigger {
         unsafe { sys::trig_move_main() != 0 }
     }
 
+    /// `t.Move.SettleRedirect` -- was this settle initiated by a card
+    /// (`ctx::card_settle_at`), rather than by the player's own move landing?
+    ///
+    /// A `tileResolved` / `settleBody` hook uses this to tell a card's own
+    /// redirected settle from a real player settle on the same tile (笑容大游行
+    /// （3）'s 「在此卡放置的格子上[触发结算]后」 must not fire for the redirect
+    /// that swap itself caused).
+    pub fn is_settle_redirect() -> bool {
+        unsafe { sys::trig_settle_redirect() != 0 }
+    }
+
     /// `t.Move.Dir` -- the direction of the move: 1 forward, -1 backward.
     /// Only meaningful when the move caused the trigger ([`move_kind`]`().is_some()`).
     pub fn move_dir() -> i32 {
@@ -3240,6 +3297,49 @@ pub fn set_self_immune(on: bool) -> bool {
 /// order. Walk this rather than [`placed_cards`] whenever the next step
 /// addresses the instance -- the *name* is not an identity, so a name-keyed
 /// op would hit the first copy twice when one player holds two.
+///
+/// Under `cfg(kani)` the host writes LE `i32` pairs `[uid, name_id]` (never
+/// postcard — the `Vec<(i32, String)>` deserializer is a BMC cliff). Names are
+/// rebuilt from the intern table without the UTF-8 validation loop.
+#[cfg(kani)]
+pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
+    const MAX_F: usize = 8;
+    let n = unsafe { sys::field_instances(player_id, 0, 0) };
+    if n <= 0 || n > MAX_F as i32 {
+        return Vec::new();
+    }
+    let need = (n as usize) * 8;
+    let (p, scratch) = out_buf(need);
+    let got = unsafe { sys::field_instances(player_id, p, need as i32) };
+    if got != n {
+        return Vec::new();
+    }
+    let buf = out_read(p, need as i32, scratch);
+    let mut out: Vec<(i32, String)> = Vec::new();
+    let mut i = 0usize;
+    while i < n as usize {
+        let base = i * 8;
+        let uid = i32::from_le_bytes([
+            buf.get(base).copied().unwrap_or(0),
+            buf.get(base + 1).copied().unwrap_or(0),
+            buf.get(base + 2).copied().unwrap_or(0),
+            buf.get(base + 3).copied().unwrap_or(0),
+        ]);
+        let nid = u16::from_le_bytes([
+            buf.get(base + 4).copied().unwrap_or(0),
+            buf.get(base + 5).copied().unwrap_or(0),
+        ]);
+        // Interned names came from `&str`, so the bytes are UTF-8; skip the
+        // validation loop (TUNING: `resolve_str` is a kani cliff).
+        let bytes = crate::intern::resolve(crate::intern::NameId(nid));
+        let s = unsafe { String::from_utf8_unchecked(bytes.to_vec()) };
+        out.push((uid, s));
+        i += 1;
+    }
+    out
+}
+
+#[cfg(not(kani))]
 pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
     let cap = 8192;
     let (p, scratch) = out_buf(cap as usize);
@@ -3291,6 +3391,46 @@ pub fn set_immune_at(uid: i32, on: bool) -> bool {
 /// A *resolver*, not an identity: with several copies in play it answers the
 /// first, so a rule that means "a specific copy" has to hold the uid from
 /// [`place_card`] instead of asking by name.
+///
+/// Under `cfg(kani)` this walks the compact `[uid, name_id]` host encoding and
+/// compares intern ids — no `field_instances` `Vec<(i32, String)>`, no postcard.
+#[cfg(kani)]
+pub fn find_card(player_id: i32, name: &str) -> Option<i32> {
+    const MAX_F: usize = 8;
+    let want = crate::intern::intern(name);
+    let n = unsafe { sys::field_instances(player_id, 0, 0) };
+    if n <= 0 || n > MAX_F as i32 {
+        return None;
+    }
+    let need = (n as usize) * 8;
+    let (p, scratch) = out_buf(need);
+    let got = unsafe { sys::field_instances(player_id, p, need as i32) };
+    if got != n {
+        return None;
+    }
+    let buf = out_read(p, need as i32, scratch);
+    let mut i = 0usize;
+    while i < n as usize {
+        let base = i * 8;
+        let uid = i32::from_le_bytes([
+            buf.get(base).copied().unwrap_or(0),
+            buf.get(base + 1).copied().unwrap_or(0),
+            buf.get(base + 2).copied().unwrap_or(0),
+            buf.get(base + 3).copied().unwrap_or(0),
+        ]);
+        let nid = crate::intern::NameId(u16::from_le_bytes([
+            buf.get(base + 4).copied().unwrap_or(0),
+            buf.get(base + 5).copied().unwrap_or(0),
+        ]));
+        if nid == want {
+            return Some(uid);
+        }
+        i += 1;
+    }
+    None
+}
+
+#[cfg(not(kani))]
 pub fn find_card(player_id: i32, name: &str) -> Option<i32> {
     field_instances(player_id)
         .into_iter()

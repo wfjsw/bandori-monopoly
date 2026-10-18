@@ -12,8 +12,9 @@ Resolution order for the dump directory:
   2. ``<repo>/target/roster-dump/`` (the default ``tools/roster-dump.mjs`` out)
 
 Missing dump -> a clear error naming the command to run. Display-only columns
-(``simple``, ``counterReason``) live outside the engine structs and are **not**
-in the dump; read ``data/skill_simple.json`` for those.
+(``counterReason`` and the rest of the display copy) live outside the engine
+structs and are **not** in the dump; read ``webui/src/generated/display.json``
+for those (``counterReason`` is authored on each card's ``On::Counteract``).
 
 Usage (isolated mode safe, stdlib only)::
 

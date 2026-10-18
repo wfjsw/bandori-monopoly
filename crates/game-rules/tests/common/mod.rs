@@ -750,7 +750,7 @@ impl Table {
     /// the top (`draw_event` pops from the end). There is no other event-deck
     /// seam in this harness -- `MatchState::event_top` is only the public view
     /// of face-down cards pushed on top -- so this is the test setter for it.
-    /// Ids are the `data/events.json` ids (`"对邦"`), not the `event:*` rule ids.
+    /// Ids are the roster's bare event ids (`"对邦"`), not the `event:*` rule ids.
     pub fn set_event_deck(&mut self, top_first: &[&str]) {
         self.m.world_mut().event_deck = top_first.iter().rev().map(|s| s.to_string()).collect();
     }

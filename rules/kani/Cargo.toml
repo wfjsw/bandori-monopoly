@@ -26,22 +26,27 @@ all = [
     "skills-groups", "skills-personas",
     "tiles", "events",
 ]
+# kani-bump (TUNING §11): static bump GlobalAlloc so unmodified bodies' Vec /
+# String grow/drop is array arithmetic (kills RawVec OOM paths). Always on
+# under cfg(kani) (class-E deep dive); this feature remains as a no-op alias
+# so existing `--features` lists keep compiling.
+kani-bump = ["card-sdk/kani-bump"]
 band-ag = ["dep:card-ag"]
 band-crychic = ["dep:card-crychic"]
 band-general = ["dep:card-general"]
 band-hhw = ["dep:card-hhw"]
 band-morfonica = ["dep:card-morfonica"]
 band-mujica = ["dep:card-mujica"]
-band-mygo = ["dep:card-mygo"]
-band-pp = ["dep:card-pp"]
-band-ppp = ["dep:card-ppp"]
-band-ras = ["dep:card-ras"]
-band-roselia = ["dep:card-roselia"]
-band-sumimi = ["dep:card-sumimi"]
-skills-groups = ["dep:skill-groups"]
-skills-personas = ["dep:skill-personas"]
-tiles = ["dep:rules-tiles", "dep:rules-tile-marks"]
-events = ["dep:rules-events"]
+band-mygo = ["dep:card-mygo", "kani-bump"]
+band-pp = ["dep:card-pp", "kani-bump"]
+band-ppp = ["dep:card-ppp", "kani-bump"]
+band-ras = ["dep:card-ras", "kani-bump"]
+band-roselia = ["dep:card-roselia", "kani-bump"]
+band-sumimi = ["dep:card-sumimi", "kani-bump"]
+skills-groups = ["dep:skill-groups", "kani-bump"]
+skills-personas = ["dep:skill-personas", "kani-bump"]
+tiles = ["dep:rules-tiles", "dep:rules-tile-marks", "kani-bump"]
+events = ["dep:rules-events", "kani-bump"]
 
 [dependencies]
 card-sdk = { workspace = true, features = ["guest"] }

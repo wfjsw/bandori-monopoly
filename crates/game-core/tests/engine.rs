@@ -209,6 +209,154 @@ fn solo_without_presets_still_picks() {
     assert!(m.state().players.iter().all(|p| !p.persona.is_empty()));
 }
 
+/// Online pick windows, all-human seats so only timeouts resolve picks.
+/// Short `pick_seconds` keeps the expiry ticks cheap.
+fn new_pick_match(members: &[RoomMember], seed: u64) -> Match {
+    let clock = game_core::clock::ClockSettings {
+        pick_seconds: 0.4,
+        ..Default::default()
+    };
+    let mut m = Match::new_with_clock(
+        data(),
+        Arc::new(StubRules),
+        members,
+        seed,
+        MatchMode::Casual,
+        ScoreWeights::default(),
+        clock,
+        false,
+    );
+    // Casual opens on pick after the order beat (no ban).
+    let mut guard = 0;
+    while m.state().phase != "pick" {
+        m.tick(0.5);
+        guard += 1;
+        assert!(guard < 100, "never reached pick: {:?}", m.state().phase);
+    }
+    m
+}
+
+fn free_personas(m: &Match) -> Vec<String> {
+    let st = m.state();
+    data()
+        .personas
+        .iter()
+        .map(|c| c.name.clone())
+        .filter(|n| !st.bans.contains(n) && st.players.iter().all(|p| p.persona != *n))
+        .collect()
+}
+
+/// A seat's last pick-screen click (`preselect`) is what a pick timeout
+/// resolves to, while that persona is still free.
+#[test]
+fn pick_timeout_uses_preselect_intent() {
+    let members = [member(1, false), member(2, false), member(3, false)];
+    let mut m = new_pick_match(&members, 7);
+    let st = m.state();
+    let turn = st.turn as usize;
+    let member = st.players[turn].member;
+    let want = free_personas(&m).into_iter().next().expect("free persona");
+
+    m.act(
+        member,
+        &NetMessage {
+            persona: want.clone(),
+            ..NetMessage::act("preselect")
+        },
+    )
+    .expect("preselect a free persona");
+
+    // Expire the current pick window.
+    m.tick(2.0);
+    let st = m.state();
+    assert_eq!(
+        st.players[turn].persona, want,
+        "timeout must honour the seat's preselect"
+    );
+}
+
+/// A preselect whose persona is taken by another seat before the timeout
+/// does not fire: the seat falls back to a random free persona.
+#[test]
+fn pick_timeout_ignores_a_stolen_preselect() {
+    let members = [member(1, false), member(2, false), member(3, false)];
+    let mut m = new_pick_match(&members, 7);
+    let st = m.state();
+    let first = st.turn as usize;
+    let later = (first + 1) % st.players.len();
+    let first_member = st.players[first].member;
+    let later_member = st.players[later].member;
+    let x = free_personas(&m).into_iter().next().expect("free persona");
+
+    // The waiting seat marks a favourite first.
+    m.act(
+        later_member,
+        &NetMessage {
+            persona: x.clone(),
+            ..NetMessage::act("preselect")
+        },
+    )
+    .expect("preselect while waiting");
+
+    // The acting seat steals it with a real pick.
+    m.act(
+        first_member,
+        &NetMessage {
+            persona: x.clone(),
+            ..NetMessage::act("pick")
+        },
+    )
+    .expect("pick the stolen persona");
+    assert_eq!(m.state().players[first].persona, x);
+
+    // Stale preselect is not stored for a taken persona.
+    let err = m
+        .act(
+            later_member,
+            &NetMessage {
+                persona: x.clone(),
+                ..NetMessage::act("preselect")
+            },
+        )
+        .unwrap_err();
+    assert_eq!(err.key(), "err.chara_taken");
+
+    // Expire the waiting seat: random free, never the stolen one.
+    while m.state().players[later].persona.is_empty() {
+        m.tick(2.0);
+    }
+    let got = m.state().players[later].persona.clone();
+    assert_ne!(got, x, "a stolen preselect must not fire");
+    let st = m.state();
+    assert!(data().persona(&got).is_some(), "result is a real persona: {got}");
+    assert!(!st.bans.contains(&got), "result is not banned: {got}");
+    assert_eq!(
+        st.players.iter().filter(|p| p.persona == got).count(),
+        1,
+        "result is not already taken: {got}"
+    );
+}
+
+/// No preselect + timeout still picks a random free persona.
+#[test]
+fn pick_timeout_without_preselect_is_random_free() {
+    let members = [member(1, false), member(2, false), member(3, false)];
+    let mut m = new_pick_match(&members, 7);
+    let turn = m.state().turn as usize;
+
+    m.tick(2.0);
+    let st = m.state();
+    let got = st.players[turn].persona.clone();
+    assert!(!got.is_empty(), "timeout still picks something");
+    assert!(data().persona(&got).is_some(), "result is a real persona: {got}");
+    assert!(!st.bans.contains(&got), "result is not banned: {got}");
+    assert_eq!(
+        st.players.iter().filter(|p| p.persona == got).count(),
+        1,
+        "result is not already taken: {got}"
+    );
+}
+
 #[test]
 fn same_seed_same_game() {
     let d = data();

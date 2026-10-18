@@ -25,7 +25,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
             Some(redirect_applies),
             redirect,
         ),
-        On::Play("", Some(cant_play), no_road),
+        On::Play("", "", Some(cant_play), no_road),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

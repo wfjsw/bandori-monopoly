@@ -15,6 +15,7 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
         "actor == owner && move.roll != null",
+        r#"进入移动阶段"#,
         None,
         counteract,
     )],

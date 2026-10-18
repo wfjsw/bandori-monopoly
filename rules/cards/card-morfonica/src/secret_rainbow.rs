@@ -25,6 +25,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         // `!t.Pay.cancel` -- a payment an earlier counteraction already
         // reduced to 0 reads as `value() == 0`.
         "value > 0 && chain_has(Pay) && actor >= 0 && target >= 0 && actor != target",
+        r#"你向学妹或同级生支付"#,
         Some(can_counteract),
         counteract,
     )],

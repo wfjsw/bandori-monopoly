@@ -458,6 +458,16 @@ impl Match {
         // and are mirrored at the Saved top level for the bot mirror / docs.
         world.clock = s.clock;
         world.legacy_clock = s.legacy_clock;
+        // The record / save carries its own board when one was in force
+        // (`MatchSetup::board`); fall back to the host's `data.tiles`.
+        let data = match &world.board {
+            Some(board) => {
+                let mut d = (*data).clone();
+                d.tiles = board.clone();
+                Arc::new(d)
+            }
+            None => data,
+        };
         Ok(Self {
             data,
             rules,
@@ -480,6 +490,34 @@ impl Match {
             flushing_deferred: false,
             prompt_log: Vec::new(),
         })
+    }
+
+    /// Apply the tunables a [`crate::record::MatchSetup`] records: the named
+    /// rule parameters and (when present) the tile table. Call after any
+    /// [`Match::new*`] constructor that did not take a setup, so the match
+    /// runs on -- and `save()` carries -- exactly what the record names.
+    /// Empty `rule_params` / `board: None` mean the code default and the
+    /// host's `data.tiles` respectively.
+    pub fn apply_setup_tunables(
+        &mut self,
+        rule_params: &std::collections::BTreeMap<String, i32>,
+        board: Option<&[crate::data::TileData]>,
+    ) {
+        self.world.rule_params = rule_params.clone();
+        if let Some(board) = board {
+            self.set_board(board.to_vec());
+        }
+    }
+
+    /// Force the tile table for this match (from [`crate::record::MatchSetup::board`]
+    /// or a host that wants a non-default board). Replaces `data.tiles` on a
+    /// private copy of the shared [`GameData`] and records the table on the
+    /// world so `save()` / restore stay self-contained.
+    pub fn set_board(&mut self, board: Vec<crate::data::TileData>) {
+        let mut d = (*self.data).clone();
+        d.tiles = board.clone();
+        self.data = Arc::new(d);
+        self.world.board = Some(board);
     }
 
     /// A match from `(members, seed, mode, weights)`. At most 10 players.
@@ -614,7 +652,7 @@ impl Match {
         // `MatchMode::check_seats` is the bound; the lobby (web-glue) is the
         // refusal point. `Match::new` stays a harness constructor so unit
         // tests and the sim can hand-build small tables. Solo is unbounded.
-        let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
+        let w = weights.sanitized(ScoreWeights::default());
         // Solo with a persona already on every seat (the solo setup screen's
         // picks, its randoms resolved before the match is built) skips the
         // timed ban / pick entirely and opens the deck phase instead. Online
@@ -1868,8 +1906,17 @@ impl Match {
                 cx.do_ban(turn, &pick);
             });
         } else {
+            // A seat's last click on the pick screen wins the timeout while
+            // that persona is still free; an empty / stale intent falls back
+            // to a random free one (the pre-timeout behaviour). Bots never
+            // set an intent, so they keep the random path.
+            let intent = self.world.hidden[turn].pick_intent.clone();
             self.direct(|cx| {
-                let c = cx.random_persona(true);
+                let c = if !intent.is_empty() && cx.pickable(&intent) {
+                    intent
+                } else {
+                    cx.random_persona(true)
+                };
                 cx.do_pick(turn, &c);
             });
         }
@@ -2281,6 +2328,24 @@ impl Match {
                 }
                 self.direct(|cx| cx.do_pick(i, &c));
                 self.after_choice();
+            }
+            // Private pick-screen click: recorded (so a timeout in a replay
+            // resolves the same way) but never broadcast. Legal any time
+            // during the pick phase for a seat that has not picked yet -- the
+            // player may mark a favourite while waiting. Does not advance the
+            // turn or touch `time_left`.
+            "preselect" => {
+                if phase != "pick" || !self.world.st.players[i].persona.is_empty() {
+                    return Err(Msg::new("err.no_preselect_now"));
+                }
+                let c = m.persona.clone();
+                if c.is_empty() {
+                    return Ok(());
+                }
+                if !self.with_cx(|cx| cx.pickable(&c)) {
+                    return Err(Msg::new("err.chara_taken"));
+                }
+                self.world.hidden[i].pick_intent = c;
             }
             "deck" => {
                 if phase != "deck" || self.world.st.players[i].deck_ready {

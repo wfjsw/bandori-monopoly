@@ -576,17 +576,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::place_card_on => arm_place_card_on(a),
                 Op::set_dest => arm_set_dest(a),
         Op::set_transfer_to_dest => 0,
-        Op::send_to_dest => {
-            world::with_world_mut(|w| {
-                w.push(Effect::Teleport {
-                    player: w.trig_player,
-                    tile: w.dest,
-                });
-                let p = player_idx(w.trig_player);
-                w.pos[p] = w.dest;
-            });
-            0
-        }
+        Op::send_to_dest => arm_send_to_dest(a),
         Op::transfer_to_dest => 0,
                 Op::teleport_to => arm_teleport_to(a),
                 Op::unplace_card | Op::unplace_at | Op::unplace_card_named => arm_unplace_card(a),
@@ -782,6 +772,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
         // ---- marks ----
                 Op::place_mark => arm_place_mark(a),
+        // Paired mark: model as two single marks (the kani world has no
+        // `partner` field; `mark_partner` is stubbed −1 like `mark_src_at`).
+        Op::place_mark_pair => {
+            let _ = arm_place_mark([a0, a1, a2, a3, a4, a5]);
+            let _ = arm_place_mark([a1, a0, a2, a3, a4, a5]);
+            1
+        }
         Op::count_marks_f => {
             world::with_world(|w| {
                 let mut n = 0;
@@ -797,7 +794,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         Op::bump_mark_f => 0,
         Op::remove_marks_f => 0,
-        Op::mark_src_at | Op::mark_instance_at => -1,
+        // `mark_partner` is BLOCKED-HOST (no partner field on the kani world
+        // `Mark`) -- same stub shape as `mark_src_at`.
+        Op::mark_src_at | Op::mark_instance_at | Op::mark_partner => -1,
 
         // ---- status ----
                 Op::charge => arm_fire(a),
@@ -912,6 +911,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         // `trig_move_main` is `Trigger::main`, not `mv.main` (hostfns 1848).
                 Op::trig_move_main => arm_trig_move_main(a),
+        // `trig_settle_redirect` is `TriggerMove::settle_redirect` (hostfns).
+        Op::trig_settle_redirect => world::with_world(|w| w.move_snap.settle_redirect as i64),
         Op::trig_move_dir => {
             world::with_world(|w| if w.move_snap.present() { w.move_snap.dir as i64 } else { 1 })
         }
@@ -987,7 +988,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::rent_unit_mult => arm_ring_multiplier(a),
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
-                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+                Op::pay_rent | Op::charge_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
 
         // ---- cross-card messages (`ctx::send` / `On::Message`) ----
         Op::send => arm_send(a),
@@ -1024,11 +1025,21 @@ fn _w(_w: World) {}
 
 // ---- merged bands-a + bands-b subset arms (deduped) ----
 
+/// `Op::add_group_pool(player, np, nl, n, max)` — band-skill pool.
+/// Args are `(player, name_ptr, name_len, n, max)`; `n` is the delta (a3),
+/// not the name handle (a1). Model bound keeps the pool in `0..=99`.
 pub fn arm_add_band_crystals(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
+    let [a0, _np, _nl, n, max, ..] = a;
     world::with_world_mut(|w| {
         let p = player_idx(a0);
-        w.group_pool[p] = (w.group_pool[p] + a1).clamp(0, 99);
+        let mut now = w.group_pool[p] + n;
+        if now < 0 {
+            now = 0;
+        }
+        if max > 0 && now > max {
+            now = max;
+        }
+        w.group_pool[p] = now.clamp(0, 99);
         w.group_pool[p] as i64
     })
 }
@@ -1588,12 +1599,52 @@ pub fn arm_exile_of(a: Args) -> i64 {
 }
 
 pub fn arm_field_instances(a: Args) -> i64 {
-    let _ = a;
-{
-            // Write uid list into out-buffer: [n, uid…] as i32s is overkill;
-            // return count.
-            world::with_world(|w| w.field_n as i32) as i64
+    let [a0, buf, cap, ..] = a;
+    // Compact pairs under Kani (see `ctx::field_instances` cfg(kani) facade):
+    // `buf == 0` → just the player's field-instance count.
+    // `buf != 0` → LE `i32` pairs `[uid, name_id]` per instance, return count
+    // (or -1 when `cap` is too small). Never postcard — that deserializer is
+    // the `twoinone_01b_*` 1800 s cliff (unbounded `Vec<(i32, String)>`).
+    const MAX_F: usize = world::MAX_FIELD;
+    let mut uids = [0i32; MAX_F];
+    let mut names = [0u16; MAX_F];
+    let mut n = 0usize;
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize && n < MAX_F {
+            if w.field[i].player == a0 {
+                uids[n] = w.field[i].uid;
+                names[n] = w.field[i].card;
+                n += 1;
+            }
+            i += 1;
         }
+    });
+    if buf == 0 {
+        return n as i64;
+    }
+    let need = (n * 8) as i32;
+    if cap < need {
+        return -1;
+    }
+    let mut encoded = [0u8; MAX_F * 8];
+    let mut i = 0usize;
+    while i < n {
+        let base = i * 8;
+        let ub = uids[i].to_le_bytes();
+        let nb = (names[i] as i32).to_le_bytes();
+        encoded[base] = ub[0];
+        encoded[base + 1] = ub[1];
+        encoded[base + 2] = ub[2];
+        encoded[base + 3] = ub[3];
+        encoded[base + 4] = nb[0];
+        encoded[base + 5] = nb[1];
+        encoded[base + 6] = nb[2];
+        encoded[base + 7] = nb[3];
+        i += 1;
+    }
+    card_sdk::native::write(buf, &encoded[..need as usize]);
+    n as i64
 }
 
 pub fn arm_fire(a: Args) -> i64 {
@@ -2336,6 +2387,13 @@ pub fn arm_roll(a: Args) -> i64 {
     roll_dice(a1, a2) as i64
 }
 
+/// Concrete face of 1 — isolation for harnesses that pin the die so a
+/// downstream `Vec` walk (rainday's agent-area build) sees a single branch.
+/// Not a silent-zero: a real 1d10 face.
+pub fn arm_roll_face_one(_a: Args) -> i64 {
+    1
+}
+
 pub fn arm_roll_ask(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     roll_dice(a1, a2) as i64
@@ -2418,6 +2476,31 @@ pub fn arm_set_dest(a: Args) -> i64 {
             });
             0
         }
+}
+
+/// `Op::send_to_dest` — apply the running instance's fate **now**
+/// (`ctx::send_to_dest`), not at the run commit. Same pile routing as
+/// [`arm_set_dest`]; returns the owner the card left, or -1 when it was
+/// not in play. The old inline arm mistook `w.dest` for a tile and
+/// teleported the player there (class C host-model defect).
+pub fn arm_send_to_dest(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| {
+        w.dest = a0;
+        let uid = w.last_uid;
+        let owner = w.field_by_uid(uid).map(|c| c.player).unwrap_or(-1);
+        if a0 != 2 {
+            if let Some(card) = w.remove_field(uid) {
+                match a0 {
+                    0 => world::pile_push(&mut w.discard_pile, &mut w.discard_n, card),
+                    1 => world::pile_push(&mut w.hand_pile, &mut w.hand_n, card),
+                    // 3 = Banished 「[移除]」: left the field, goes nowhere.
+                    _ => {}
+                }
+            }
+        }
+        owner as i64
+    })
 }
 
 pub fn arm_set_held_name(a: Args) -> i64 {

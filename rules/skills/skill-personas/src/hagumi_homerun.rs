@@ -35,22 +35,22 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Action(&[ActionKind::TurnEnd], "", None, at_turn_end),
+        On::Action(&[ActionKind::TurnEnd], "", "", None, at_turn_end),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
-        On::Action(&[ActionKind::Pass], "", Some(on_pass_has_croquette), on_pass),
+        On::Action(&[ActionKind::Pass], "", "", Some(on_pass_has_croquette), on_pass),
         // 「育美经过其他角色时」 -- the passer's step onto a tile another player
         // stands on (行动阶段 12 [经过]). The other player is read off the tile
         // (`passTile` has no `target`).
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner",
+            "actor == owner", "",
             Some(passing_a_player),
             on_pass_player,
         ),
         // 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the skill button.
-        On::Play("", Some(can_cash), cash),
+        On::Play("", "", Some(can_cash), cash),
         On::FilterValue(&[FilterKind::DiceRollPlan], "", None, on_plan),
     ],
 );
@@ -297,4 +297,10 @@ pub fn cash_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn sweep_overflow_kani(player_id: i32) -> card_sdk::Asked {
     sweep_overflow(player_id)
+}
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
 }

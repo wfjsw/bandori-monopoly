@@ -164,6 +164,14 @@ pub struct MoveCtx {
     pub rent_factor: f64,
     /// Settle on another player's behalf.
     pub settle_as_agent: bool,
+    /// This settle was initiated by a card (`card_settle_at`), not by the
+    /// player's own move landing. The engine sets it on the nested move
+    /// `card_settle_move` builds; it is **never** a plan write (`plan::set_*`)
+    /// and the plan's own flag stays default `false` so a later move cannot
+    /// inherit it. Readable from a hook as
+    /// `card_sdk::ctx::trigger::is_settle_redirect()`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub settle_redirect: bool,
     /// Whether this move can build on the tile it lands on. `false` is the
     /// "no build" case (`ctx::plan::set_no_build` folds into this, HOST-08) --
     /// one flag, not two.
@@ -243,6 +251,7 @@ impl Default for MoveCtx {
             pay_factor: 1.0,
             rent_factor: 1.0,
             settle_as_agent: false,
+            settle_redirect: false,
             can_build: true,
             build_anywhere: false,
             more_steps: 0,

@@ -182,8 +182,8 @@ pub fn on(
         panic!("bad entry {entry} on card {idx}")
     };
     match (*o, op) {
-        (On::Counteract(_, _, guard, _), export::OP_GUARD)
-        | (On::Action(_, _, guard, _), export::OP_GUARD)
+        (On::Counteract(_, _, _, guard, _), export::OP_GUARD)
+        | (On::Action(_, _, _, guard, _), export::OP_GUARD)
         | (On::Filter(_, _, guard, _), export::OP_GUARD)
         | (On::FilterFlag(_, _, guard, _), export::OP_GUARD)
         | (On::FilterValue(_, _, guard, _), export::OP_GUARD)
@@ -199,7 +199,7 @@ pub fn on(
             None => 1,
             Some(g) => g(player_id) as i64,
         },
-        (On::Play(_, why, _), export::OP_GUARD) => match why {
+        (On::Play(_, _, why, _), export::OP_GUARD) => match why {
             Some(why) => match why(player_id) {
                 None => 0,
                 // Kani: the Play `why` reason is a `Msg`; serialising it allocates
@@ -249,9 +249,9 @@ pub fn on(
             write_filter_value(input, out);
             0
         }
-        (On::Counteract(_, _, _, run), _)
-        | (On::Play(_, _, run), _)
-        | (On::Action(_, _, _, run), _)
+        (On::Counteract(_, _, _, _, run), _)
+        | (On::Play(_, _, _, run), _)
+        | (On::Action(_, _, _, _, run), _)
         | (On::Settle(_, _, run), _)
         | (On::Mortgage(_, _, run), _)
         | (On::Redeem(_, _, run), _)
@@ -542,7 +542,7 @@ macro_rules! ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", r#"你的一次掷骰小于6"#, Some(can_counteract), counteract)]);
 /// card_sdk::ruleset_card!(CARD);
 /// ```
 #[macro_export]

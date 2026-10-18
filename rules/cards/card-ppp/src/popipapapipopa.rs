@@ -25,7 +25,7 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // are the condition.
         On::Action(
             &[ActionKind::PassTile],
-            "card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))",
+            "card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))", "",
             None,
             pass_tile,
         ),
@@ -37,7 +37,7 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // `PaySplitChoose` filter stage.
         On::Action(
             &[ActionKind::PaySplitChooseBefore],
-            "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0",
+            "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0", "",
             None,
             pay_choose,
         ),

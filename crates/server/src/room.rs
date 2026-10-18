@@ -1136,7 +1136,7 @@ impl Room {
         let mut canon = CanonSettings::new(mode, step, &self.info.weights, &members);
         canon.clock = self.info.clock;
         let settings = canon.canon();
-        let blob = self
+        let (blob, board) = self
             .engine
             .new_match(&members, derived, mode as i32, &self.info.weights, self.info.clock)
             .map_err(|e| ApiError::bad(e.as_str()))?;
@@ -1160,6 +1160,10 @@ impl Room {
                 seed256: Some(Seed256(derived)),
                 weights: self.info.weights.clone(),
                 clock: Some(self.info.clock),
+                // Fresh match: code-default rule params (empty map). The board
+                // rides in the record so a replay does not re-read host tables.
+                rule_params: Default::default(),
+                board: Some(board),
             }),
             stamp,
             step,

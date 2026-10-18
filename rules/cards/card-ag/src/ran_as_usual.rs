@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RAN_AS_USUAL: CardDef = CardDef::new(
     "AG:(兰) 像往常一样",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // G4: kind (Effect) is the category. The condition carries the whole
         // guard body: target rel + `effect.has(Abnormal)` + the once-per-turn
         // slot. Residual guard deleted.
@@ -31,13 +31,14 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::Effect],
             "target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key",
+            "",
             None,
             counteract,
         ),
         // The body-top applicability checks are the condition / residual guard
         // now: a seat still in the game (`owner.out == 0`) that actually took
         // an abnormal effect this turn (`at_end_something_to_undo`).
-        On::Action(&[ActionKind::AtEnd], "owner.out == 0", Some(at_end_something_to_undo), at_end),
+        On::Action(&[ActionKind::AtEnd], "owner.out == 0", "", Some(at_end_something_to_undo), at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"像往常一样"#)

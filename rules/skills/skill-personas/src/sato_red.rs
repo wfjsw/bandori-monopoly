@@ -18,14 +18,14 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SATO_RED: CardDef = CardDef::new(
     "skill:佐藤益木:与燃烧的红色一起驰骋",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
         // （1）「每次[经过]"白雪学园"或"银河拉面馆"时」 -- the two named tiles
         // are the hook's applicability (`tile_named` is in the condition
         // vocabulary).
         On::Action(
             &[ActionKind::Pass],
-            "actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))",
+            "actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))", "",
             None,
             on_pass,
         ),

@@ -1831,9 +1831,85 @@ impl World {
             card,
             src,
             instance,
+            partner: None,
             note,
         });
         count
+    }
+
+    /// Partner tile (`TileMark::partner`) of the first matching mark on `tile`,
+    /// encoded as `i32` (`-1` when none / unpaired) for the guest ABI.
+    pub fn mark_partner(&self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
+        self.st
+            .marks
+            .iter()
+            .find(|m| m.tile == tile && filter.matches(m))
+            .and_then(|m| m.partner)
+            .unwrap_or(-1)
+    }
+
+    /// Place **one** paired mark spanning tiles `a` and `b`: one row per tile,
+    /// each row's [`TileMark::partner`] naming the other. Place-or-refuse
+    /// atomic -- if either tile already carries a matching mark (same kind /
+    /// category / owner), place **nothing** and return `false`. The pair cap
+    /// 「放置1个…（上限1）」 is therefore on the pair, and a tile cannot sit in
+    /// two links at once (either-end refusal). Returns `true` when both rows
+    /// landed. `instance` / `src` / `note` stamp both rows like [`Self::place_mark`];
+    /// both die with the creating instance via [`Self::destroy_instance_units`].
+    pub fn place_mark_pair(
+        &mut self,
+        instance: i32,
+        kind: &str,
+        category: &str,
+        a: i32,
+        b: i32,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+    ) -> bool {
+        if count <= 0 || a < 0 || b < 0 || a == b {
+            return false;
+        }
+        let instance = (instance >= 0).then_some(instance);
+        let src = (src >= 0).then_some(src);
+        let cat = if category.is_empty() {
+            crate::state::mark_category::PLAYER
+        } else {
+            category
+        };
+        // Pair cap 1: refuse if either end already carries a matching mark for
+        // that owner. Atomic -- neither row is placed when this trips.
+        let marked = |tile: i32| {
+            self.st.marks.iter().any(|m| {
+                m.tile == tile && m.kind == kind && m.category == cat && m.owner == owner
+            })
+        };
+        if marked(a) || marked(b) {
+            return false;
+        }
+        let card = src
+            .and_then(|s| self.field_by_uid(s))
+            .map(|f| f.card.clone())
+            .unwrap_or_default();
+        let mut next = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+        for (tile, partner) in [(a, b), (b, a)] {
+            self.st.marks.push(TileMark {
+                uid: next,
+                tile,
+                kind: kind.to_string(),
+                category: cat.to_string(),
+                owner,
+                count,
+                card: card.clone(),
+                src,
+                instance,
+                partner: Some(partner),
+                note: note.clone(),
+            });
+            next += 1;
+        }
+        true
     }
 
     /// Move one matching mark's `count` by `delta`; the row is dropped at 0.
@@ -2196,10 +2272,16 @@ impl World {
         }
     }
 
-    /// A generic named rule parameter in force: the match-rules base plus any
-    /// card-applied bonus ([`Self::add_rule_param_bonus`]).
-    pub fn rule_param(&self, data: &GameData, name: &str) -> i32 {
-        let base = data.match_rules.rule_params.get(name).copied().unwrap_or(0);
+    /// A generic named rule parameter in force: the match base
+    /// ([`Self::rule_params`], or the code default when the map is empty /
+    /// lacks the name) plus any card-applied bonus
+    /// ([`Self::add_rule_param_bonus`]).
+    pub fn rule_param(&self, name: &str) -> i32 {
+        let base = self
+            .rule_params
+            .get(name)
+            .copied()
+            .unwrap_or_else(|| crate::data::default_rule_param(name));
         let bonus = self.rule_param_bonus.get(name).copied().unwrap_or(0);
         base + bonus
     }
@@ -2215,8 +2297,8 @@ impl World {
     }
 
     /// Dice-rent unit multiplier (`rentUnitMult`): at least 1.
-    pub fn rent_unit_mult(&self, data: &GameData) -> i32 {
-        self.rule_param(data, "rentUnitMult").max(1)
+    pub fn rent_unit_mult(&self) -> i32 {
+        self.rule_param("rentUnitMult").max(1)
     }
 
     pub fn add_rent_unit_bonus(&mut self, n: i32) -> i32 {

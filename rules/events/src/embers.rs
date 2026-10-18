@@ -1,6 +1,6 @@
 //! `event:火种燃尽之后会怎么样呢？` -- 事件卡「火种燃尽之后会怎么样呢？」（中立事件 A29）.
 //!
-//! 事件文本（data/events.json, id `火种燃尽之后会怎么样呢？`）:
+//! 事件文本（`CardMeta` beside the rule body, id `火种燃尽之后会怎么样呢？`）:
 //! > （1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。
 
 use card_sdk::abi::{state_key, AbKind, ActionKind, MarkFilter, TriggerKind};
@@ -22,23 +22,28 @@ const SPREAD: &str = "spread";
 pub const EMBERS: CardDef = CardDef::new(
     "event:火种燃尽之后会怎么样呢？",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // Safety net: 「任意玩家获得[除外]…时，移除所有此卡的复制品」 re-checked
         // at a turn boundary for grants that did not raise `exile`. Residual
         // admits only when someone is actually exiled, so a no-op turn start
         // does not activate.
-        On::Action(&[ActionKind::TurnStartBefore], "", Some(any_exiled_guard), on_turn_start_clear),
+        On::Action(&[ActionKind::TurnStartBefore], "", "", Some(any_exiled_guard), on_turn_start_clear),
         // 「触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格」
         // -- one-shot at the drawer's own turn start.
-        On::Action(&[ActionKind::TurnStartBefore], "", Some(spread_applies), on_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], "", "", Some(spread_applies), on_turn_start),
         // 「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect list
         // (`SETTLE-STAGES.md` §4 M2), not a pre-settle write and not an after
         // hook. `settleBody` is the list; a field card that replaces the body
         // (`trigger::cancelled()`) skips this entry like every other.
-        On::Action(&[ActionKind::SettleBody], "", Some(on_settle_applies), on_settle),
-        On::Action(&[ActionKind::Exile, ActionKind::Bankrupt, ActionKind::Abnormal], "", Some(on_out_applies), on_out),
+        On::Action(&[ActionKind::SettleBody], "", "", Some(on_settle_applies), on_settle),
+        On::Action(&[ActionKind::Exile, ActionKind::Bankrupt, ActionKind::Abnormal], "", "", Some(on_out_applies), on_out),
     ],
-);
+)
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"火种燃尽之后会怎么样呢？"#)
+            .text(r#"（1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。"#)
+            .cell(r#"A29"#)
+            .derived(false));
 
 /// Residual guard for [`on_turn_start_clear`]: someone is carrying [除外].
 fn any_exiled_guard(_player_id: i32) -> bool {

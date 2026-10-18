@@ -32,7 +32,7 @@ const PROP_EXTRA: &str = "charity.extra";
 pub const CHARITY_SHOW: CardDef = CardDef::new(
     "HHW:爱心义演",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 规则书: 「本回合中向其他玩家支付时你的付款减半」 -- only payments to
         // other players, only on the armed turn (`charity.turn`). The turn-key
         // latch is an instance prop (residual).
@@ -47,12 +47,12 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // time this turn. `mine` / the first-pass marker are residual.
         On::Action(
             &[ActionKind::PassTile],
-            "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0",
+            "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0", "",
             Some(pass_applies),
             pass_tile,
         ),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
-        On::Action(&[ActionKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
+        On::Action(&[ActionKind::TurnEndAfter], "card.placed && actor == owner", "", None, turn_end_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"爱心义演"#)

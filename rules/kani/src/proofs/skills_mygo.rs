@@ -49,7 +49,6 @@ fn after_roll_world(user: i32) {
 
 fn on_discarded_world(user: i32, pre_c: i32) {
     host::install_backend(mygo_on_discarded_dispatch);
-    let key = crate::intern::intern("crystals");
     world::with_world_mut(|w| {
         w.n_players = 2;
         for p in 0..MAX_PLAYERS {
@@ -58,12 +57,17 @@ fn on_discarded_world(user: i32, pre_c: i32) {
             w.charge[p] = 0;
         }
         w.trig_player = user;
-        w.key_set(user, key, pre_c);
+        // Crystals live on the on-card counter (`field_crystals` /
+        // `self_crystals` via `arm_add_counter_self` / `arm_counter_self`),
+        // **not** the player key map (class B — same fix as `events.rs`
+        // `key_get(0, "crystals")` and `skills_pp` band-idol-04).
+        w.self_crystals = pre_c;
     });
 }
 
-fn crystals_key() -> crate::intern::NameId {
-    crate::intern::intern("crystals")
+/// Miracle crystals of the skill instance (`field_crystals(last_uid)`).
+fn self_crystals() -> i32 {
+    world::with_world(|w| w.field_crystals(w.last_uid))
 }
 
 // ===========================================================================
@@ -76,9 +80,11 @@ fn crystals_key() -> crate::intern::NameId {
 fn band_02_crystal_on_16_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     after_roll_world(user);
+    // Seed the on-card crystal counter (see `self_crystals`).
+    world::with_world_mut(|w| w.self_crystals = kani::any());
+    kani::assume(self_crystals() >= 0 && self_crystals() <= 3);
     let pre = world::snapshot();
-    let pre_c = world::with_world(|ww| ww.key_get(user, crystals_key()));
-    kani::assume(pre_c >= 0 && pre_c <= 3);
+    let pre_c = self_crystals();
 
     invoke::unwrap_done(skill_groups::mygo::after_roll_kani(user));
 
@@ -86,13 +92,13 @@ fn band_02_crystal_on_16_iff_at(user: i32) {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    let post_c = world::with_world(|ww| ww.key_get(user, crystals_key()));
+    let post_c = self_crystals();
 
     // `add_crystals(1, 1)` clamps at max=1. Host `add_counter_self` logs the
-    // raw `n` (not the clamped delta) and clamps the stored value.
+    // clamped delta (`now - was`) — +1 when the gain lands, 0 at the cap.
     crate::kassert!(
-        spec::skills_mygo::band_02_log_ok(effects, user),
-        "C-MYGO-band-02: effect log must be exactly one AddCounter(+1)"
+        spec::skills_mygo::band_02_log_ok(effects, user, pre_c),
+        "C-MYGO-band-02: effect log is one AddCounter (clamped delta)"
     );
     crate::kassert!(
         post_c == spec::skills_mygo::band_02_crystals_after(pre_c),
@@ -108,6 +114,7 @@ fn band_02_crystal_on_16_iff_at(user: i32) {
 
 /// Band-02 iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_02_crystal_on_16_iff() {
     band_02_crystal_on_16_iff_at(0);
@@ -115,6 +122,7 @@ pub fn band_02_crystal_on_16_iff() {
 
 /// Band-02 iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_02_user1_crystal_on_16_iff() {
     band_02_crystal_on_16_iff_at(1);
@@ -122,6 +130,7 @@ pub fn band_02_user1_crystal_on_16_iff() {
 
 /// Mutant companion: a +2 spec must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_02_mutant_is_detected() {
     after_roll_world(0);
@@ -141,8 +150,9 @@ pub fn band_02_mutant_is_detected() {
 // 「每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶]
 //  （最多超出2个）」
 // Hook entry index 2 (`On::Action(Discarded)`).
-// KNOWN black-box LESS: the over-cap crystal does not land when the band card
-// is already at the roll cap of 1. Spec from the book.
+// Book: +1 crystal that may exceed the roll cap of 1, at most 2 over (ceiling 3).
+// The body's `skill.mygo.over` counter is audit/display only (SetState
+// bookkeeping) — the ceiling is the held total, not that key.
 // ===========================================================================
 
 /// Shared iff at a **concrete** user seat.
@@ -158,13 +168,12 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    let post_c = world::with_world(|ww| ww.key_get(user, crystals_key()));
-    let over = world::with_world(|ww| ww.key_get(user, crate::intern::intern("skill.mygo.over")));
-    kani::assume(over >= 0 && over <= 2);
+    let post_c = self_crystals();
 
-    let expected = spec::skills_mygo::band_04_crystals_after(pre_c, over);
-    kani::cover!(pre_c == 1 && over == 0, "at roll cap, over=0 (book: must still grow)");
+    let expected = spec::skills_mygo::band_04_crystals_after(pre_c);
+    kani::cover!(pre_c == 1, "at roll cap (book: must still grow)");
     kani::cover!(pre_c < expected, "gain fires");
+    kani::cover!(pre_c >= 3, "at the +2 ceiling (gain refused)");
 
     crate::kassert!(
         post_c == expected,
@@ -173,7 +182,7 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
     if post_c > pre_c {
         crate::kassert!(
             spec::skills_mygo::band_04_log_ok(effects, user),
-            "C-MYGO-band-04: gain logs exactly one AddCounter(+1)"
+            "C-MYGO-band-04: gain logs exactly one AddCounter(+1) (SetState audit tolerated)"
         );
     }
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
@@ -182,6 +191,7 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
 
 /// Band-04 iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_04_ineffective_overcap_iff() {
     band_04_ineffective_overcap_iff_at(0);
@@ -189,6 +199,7 @@ pub fn band_04_ineffective_overcap_iff() {
 
 /// Band-04 iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_04_user1_ineffective_overcap_iff() {
     band_04_ineffective_overcap_iff_at(1);
@@ -196,6 +207,7 @@ pub fn band_04_user1_ineffective_overcap_iff() {
 
 /// Mutant: empty log when the gain should fire.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_04_mutant_is_detected() {
     on_discarded_world(0, 0);

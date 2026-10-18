@@ -39,8 +39,8 @@ const ACTED: &str = "skill.tomoriPoem.acted";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_DEED, "", None, on_pass),
         // （2）/（3） applicability: a landing within five tiles of the other
         // party. `actor == owner` is （3） (own landing near someone else);
         // `actor != owner` is （2） (someone else's landing near us). Both arms
@@ -49,15 +49,15 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
         // `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
         On::Action(
             &[ActionKind::SettleBefore],
-            "tile.id >= 0",
+            "tile.id >= 0", "",
             Some(before_settle_applies),
             before_settle,
         ),
         On::Filter(&[FilterKind::PaySplitMul], "", Some(half), on_pay),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", "", None, at_turn_end),
         // Drop the once-per-move latch when the move is fully resolved (after
         // any settle), so the next move gets a fresh press.
-        On::Action(&[ActionKind::MoveResolved], "", None, clear_acted),
+        On::Action(&[ActionKind::MoveResolved], "", "", None, clear_acted),
     ],
 )
     .silent(&[0]);
@@ -248,4 +248,11 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn before_settle_kani(player_id: i32) -> card_sdk::Asked {
     before_settle(player_id)
+}
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_acted_kani(player_id: i32) -> card_sdk::Asked {
+    clear_acted(player_id)
 }

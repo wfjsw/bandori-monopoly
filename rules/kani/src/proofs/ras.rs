@@ -96,8 +96,15 @@ fn riot_world() -> ([usize; MAX_PLAYERS], [[u8; 4]; MAX_PLAYERS]) {
             w.hand_resonance[p] = h;
             w.hand[p] = false;
             hand_ns[p] = h as usize;
-            for k in 0..h as usize {
-                hands[p][k] = 1;
+            // Bounded while: `for k in 0..h as usize` is an unbounded trip
+            // count when `h` is a symbolic i32 (negative casts to a huge
+            // usize) — CBMC `Not unwinding … iteration 32` at this site.
+            let mut k = 0usize;
+            while k < 2 {
+                if (k as i32) < h {
+                    hands[p][k] = 1;
+                }
+                k += 1;
             }
         }
         w.symbolic_answers = true;
@@ -169,6 +176,7 @@ fn unstoppable_card_03_money_iff_at(user: i32, face: i32) {
 
 /// Iff at seat 0, face 1 (low band → 2000).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_money_iff() {
     unstoppable_card_03_money_iff_at(0, 1);
@@ -176,6 +184,7 @@ pub fn unstoppable_card_03_money_iff() {
 
 /// Iff at seat 0, face 4 (high band → 1000) — the two faces cover both legs.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_face4_money_iff() {
     unstoppable_card_03_money_iff_at(0, 4);
@@ -183,6 +192,7 @@ pub fn unstoppable_card_03_face4_money_iff() {
 
 /// Iff at seat 1, face 1 — the two user seats of the 2-seat world.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_user1_money_iff() {
     unstoppable_card_03_money_iff_at(1, 1);
@@ -190,6 +200,7 @@ pub fn unstoppable_card_03_user1_money_iff() {
 
 /// No-op: an out player gains nothing. (Concrete user, forced `out`.)
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_money_noop_when_out() {
     unstoppable_world(0, 1);
@@ -211,6 +222,7 @@ pub fn unstoppable_card_03_money_noop_when_out() {
 
 /// Mutant companion: the off-by-one money spec does NOT match the card.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_money_mutant_is_detected() {
     unstoppable_world(0, 4);
@@ -274,6 +286,7 @@ fn riot_02_03_cycle_iff_at(holder: i32) {
 
 /// Riot cycle iff at holder seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn riot_02_03_cycle_iff() {
     riot_02_03_cycle_iff_at(0);
@@ -281,6 +294,7 @@ pub fn riot_02_03_cycle_iff() {
 
 /// Riot cycle iff at holder seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn riot_02_03_user1_cycle_iff() {
     riot_02_03_cycle_iff_at(1);
@@ -288,6 +302,7 @@ pub fn riot_02_03_user1_cycle_iff() {
 
 /// Mutant companion: dropping the holder's extra draw disagrees with the card.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn riot_03_extra_draw_mutant_is_detected() {
     let (hand_ns, hands) = riot_world();
@@ -304,24 +319,29 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
     let n = pre.n_players;
 
     // Rebuild the expected log with the mutant draw count (no extra).
+    // Bounded whiles: `0..hand_ns[p]` is a symbolic usize bound (class A).
     let mut i = 0usize;
     let mut ok = true;
-    for p in 0..n {
-        let p = p as usize;
-        if pre.out[p] {
-            continue;
-        }
-        for k in 0..hand_ns[p] {
-            match effects.get(i) {
-                Some(Effect::DiscardFromHand { player, card }) => {
-                    if *player != p as i32 || *card != hands[p][k] {
-                        ok = false;
+    let mut p = 0usize;
+    while p < n as usize {
+        if !pre.out[p] {
+            let mut k = 0usize;
+            while k < 2 {
+                if k < hand_ns[p] {
+                    match effects.get(i) {
+                        Some(Effect::DiscardFromHand { player, card }) => {
+                            if *player != p as i32 || *card != hands[p][k] {
+                                ok = false;
+                            }
+                        }
+                        _ => ok = false,
                     }
+                    i += 1;
                 }
-                _ => ok = false,
+                k += 1;
             }
-            i += 1;
         }
+        p += 1;
     }
     for p in 0..n {
         let p = p as usize;
@@ -390,6 +410,7 @@ fn pareo_01_marks_iff_at(user: i32) {
 
 /// Pareo marks iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pareo_01_marks_iff() {
     pareo_01_marks_iff_at(0);
@@ -397,6 +418,7 @@ pub fn pareo_01_marks_iff() {
 
 /// Pareo marks iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pareo_01_user1_marks_iff() {
     pareo_01_marks_iff_at(1);
@@ -404,6 +426,7 @@ pub fn pareo_01_user1_marks_iff() {
 
 /// Mutant companion: +3 marks is not what the card does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pareo_01_marks_mutant_is_detected() {
     pareo_world(0, 0);
