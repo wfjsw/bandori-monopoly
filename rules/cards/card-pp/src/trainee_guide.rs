@@ -15,13 +15,16 @@
 //! > 2. 每个双色效果为将自己的所有反面[P✽P粉丝]变正。
 //!
 //! in play with crystals and mono/dual marks; cash the marks in at 5 crystals.
-//! The crystal counter and the turn-end tick are live; the mark bookkeeping
-//! and the cash-in still need hooks the ABI lacks.
+//! The crystal counter, the turn-end tick, the resonance marks and the
+//! (3) cash-in are live. The marks themselves still need per-card storage
+//! (player-level `trainee_guide.mono` / `.dual` slots stand in).
 
 use card_sdk::abi::{prop, state_key, ActionKind};
 use skill_groups::fans;
-use ruleset_core::ctx;
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
+
+const ID: &str = "PP:练习生解密指南";
 
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
@@ -29,7 +32,24 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
         On::Action(&[card_sdk::abi::ActionKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
         On::Action(&[card_sdk::abi::ActionKind::BuildAfter], card_sdk::pre::MINE, None, after_build),
         On::Play("", None, trainee_guide),
+        // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- the tick only.
+        // （3）'s cash-in lives on `CounterChanged` below: the +1 is a write
+        // like any other and trips it when it crosses 5, so firing here too
+        // would cash in twice.
         On::Action(&[ActionKind::TurnEnd], "", Some(turn_end_guard), turn_end),
+        // 规则书[持续]（3）: 「此卡拥有至少5个[奇迹水晶]时…随后进入弃卡区」 -- a
+        // state clause on the crystal count. `CounterChanged` (crimson_soul /
+        // smile_parade) rather than an inline re-check at each spend site: a
+        // count that reaches 5 from *any* write -- the [手] placement
+        // `set_crystals`, the turn-end +1, another card's `add_card_crystals` --
+        // leaves the field just the same. `set_crystals` at placement is a
+        // write like any other (crimson_soul.rs:94-96).
+        On::Action(
+            &[ActionKind::CounterChanged],
+            "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') >= 5",
+            Some(cash_in_guard),
+            cash_in,
+        ),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
@@ -86,14 +106,34 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
         ctx::inc_slot(player_id, "trainee_guide.dual", 1);
     }
     // 规则书[手]: 「如果[共鸣]则[消耗]500资金并添加任意2个标记」 -- the [共鸣]
-    // cost, then the 500 and the two extra marks. The marks themselves still
-    // need per-card storage (see the [持续]（3） TODO in `turn_end`).
+    // cost, then the 500 and the two extra marks. 「任意2个」 = the player
+    // picks 2 (2 mono, 2 dual, or 1 of each); the marks are the same
+    // mono/dual pair the reveal above writes. The marks themselves still need
+    // per-card storage (player-level slots stand in).
     if crate::resonance::try_resonance(player_id)? {
         ctx::pay(
             player_id,
             500,
             &Msg::new(key!("trainee_guide_resonance_cost")),
         )?;
+        // 「添加任意2个标记」 -- one pick per mark, each mono or dual.
+        for _ in 0..2 {
+            let pick = ctx::ask_pick(
+                player_id,
+                &Msg::new(key!("trainee_guide_mark_title")),
+                &Msg::new(key!("trainee_guide_mark_ask")),
+                &[
+                    Msg::new(key!("trainee_guide_mark_mono")),
+                    Msg::new(key!("trainee_guide_mark_dual")),
+                ],
+            )?;
+            if pick == 0 {
+                ctx::inc_slot(player_id, "trainee_guide.mono", 1);
+            } else {
+                ctx::inc_slot(player_id, "trainee_guide.dual", 1);
+            }
+        }
+        ctx::log(player_id, &Msg::new(key!("trainee_guide_marks_added")));
     }
     // 规则书[持续]（1）: 「手卡上限数量减1」 -- the continuous delta declared on
     // the `CardDef` above (`props(&[(prop::HAND_LIMIT_DELTA, -1)])`), stamped on the instance at
@@ -101,7 +141,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardTraineeGuide.TurnEnd` -> `Tick`: +1 crystal, then the 5-crystal cash-in.
+/// C# `CardTraineeGuide.TurnEnd` -> `Tick`: +1 crystal only.
 /// Pure guard for [`turn_end`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn turn_end_guard(player_id: i32) -> bool {
@@ -111,12 +151,27 @@ fn turn_end_guard(player_id: i32) -> bool {
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- C# `AddCrystals(1, "回合结束")`.
     ctx::add_crystals(1, 0)?;
-    // [持续]（3）「此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作
-    // 随后进入弃卡区」 -- the marks are the `trainee_guide.mono` / `.dual` slots
-    // the reveal above wrote.
-    if ctx::crystals() < 5 {
-        return Ok(());
-    }
+    // [持续]（3）'s cash-in lives on [`cash_in`] (`CounterChanged`): this +1
+    // is a write like any other and trips it when it crosses 5. Do not also
+    // fire here -- the handler runs once per write that lands on >= 5.
+    Ok(())
+}
+
+/// Residual guard for [`cash_in`] -- `card_is`, the counter name and the
+/// >= 5 state stay here (the name is not yet in the condition vocabulary
+/// beyond `counter_is`).
+fn cash_in_guard(_player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::card_is(ID)
+        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && ctx::crystals() >= 5
+}
+
+/// 规则书[持续]（3）: 「此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作
+/// 随后进入弃卡区」 -- the marks are the `trainee_guide.mono` / `.dual` slots
+/// the reveal above wrote. Fires on any crystal write that lands on >= 5
+/// (placement `set_crystals`, the turn-end +1, another card's grant).
+fn cash_in(player_id: i32) -> card_sdk::Asked {
     let mono = ctx::slot(player_id, "trainee_guide.mono");
     let dual = ctx::slot(player_id, "trainee_guide.dual");
     // 2. 「每个双色效果为将自己的所有反面[P✽P粉丝]变正」 -- X = all face-downs.
@@ -188,4 +243,10 @@ pub fn trainee_guide_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
     turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn cash_in_kani(player_id: i32) -> card_sdk::Asked {
+    cash_in(player_id)
 }

@@ -30,7 +30,25 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
     &[
-        On::Play("", Some(can_buy), buy_one),
+        // （4）「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有
+        // 无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…」 --
+        // a [持续] clause with a [反击] rider: `[反击]X：Y` = Y resolves before
+        // X, so the buy is a counteraction at the owner's turn-end timing.
+        //
+        // TODO(规则书) LOY-DREAM-01: the turn-end family (`TurnEnd` /
+        // `TurnEndBefore` / `TurnEndAfter`) is hook-only (`is_hook_only` in
+        // `wasm_rules.rs`) -- `hand_counteractions` never opens there, so
+        // `On::Counteract(&[ChainKind::TurnEndBefore], …)` is a dead entry.
+        // Missing shape: a counteraction window on turn-end (Class-B blocker).
+        // Wired as a field-card `On::Action` at `TurnEndBefore` (skill-personas:
+        // a field card answers settlement points automatically, no declaration)
+        // so the buy still settles before the turn end's own effects.
+        On::Action(
+            &[ActionKind::TurnEndBefore],
+            "actor == owner && card.placed && card.counter('crystals') >= 3",
+            Some(can_buy),
+            buy_one,
+        ),
         On::Action(&[ActionKind::DeckBeforeGame], "", None, deck_before_game),
         On::Action(&[ActionKind::Drew], "actor == owner && card.placed", None, drew),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
@@ -155,21 +173,14 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
 
 // [持续]（4）「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的
 // [可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意[拥有者]所在格子前后3格以内
-// 的无主的[可购买格子]」 -- a press; the buy is `card_buy`, the resonance cost is
+// 的无主的[可购买格子]」 -- the buy is `card_buy`, the resonance cost is
 // the same `try_resonance` every other [共鸣] card uses.
 
-/// （4）「使用此卡上3个[奇迹水晶]，[拥有者]购买…无主的[可购买格子]」.
-fn can_buy(player_id: i32) -> Option<Msg> {
-    if !ctx::is_placed() {
-        return Some(Msg::new(key!("dream_ahead_not_placed")));
-    }
-    if ctx::crystals() < 3 {
-        return Some(Msg::new(key!("dream_ahead_no_crystal")));
-    }
-    if free_near(player_id).is_empty() {
-        return Some(Msg::new(key!("dream_ahead_no_tile")));
-    }
-    None
+/// （4）applicability: placed, 3 crystals, a free buyable tile within 3.
+/// Residual guard for the `TurnEndBefore` action (the condition already
+/// carries `actor == owner && card.placed && card.counter('crystals') >= 3`).
+fn can_buy(player_id: i32) -> bool {
+    ctx::is_placed() && ctx::crystals() >= 3 && !free_near(player_id).is_empty()
 }
 
 fn free_near(player_id: i32) -> Vec<i32> {

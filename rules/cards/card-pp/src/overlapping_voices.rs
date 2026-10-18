@@ -13,6 +13,7 @@
 //! remove itself and 「初次演出事故」, teleport to Bandori车站 without settling.
 //! The teleport is the turn's main move (`ctx::plan::set_teleport_to` +
 //! `ctx::card_move`); the turn-end body is scheduled with `at_turn_end`.
+//! The [特] discard hook banishes the accident when this card enters a discard.
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
@@ -24,6 +25,12 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), overlapping_voices),
         On::Action(&[ActionKind::AtEnd], "", None, at_end),
+        // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的
+        // [场地]上的"初次演出事故"（如果有）」 -- the own-card `Discarded`
+        // dispatch (guerrilla / mygo): the hook fires when *this* card is the
+        // one that entered the discard. Banishing the *other* card does not
+        // re-enter this hook (the raise names the discarded card's id).
+        On::Action(&[ActionKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"重叠的声音"#)
@@ -49,12 +56,15 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
-    // 规则书[手]1: 「[移除]此卡」 -- C# `c.Dest = "removed"`.
+    // 规则书[手]1: 「[移除]此卡」 -- C# `c.Dest = "removed"`; `[移除]` is banish
+    // (`Dest::Banished`), not a discard.
     ctx::set_dest(ctx::Dest::Banished);
-    // 规则书[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」 -- the other
-    // card is named, so it is a named unplace rather than this card's own.
+    // 规则书[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」 -- `[移除]`
+    // the named card too. `unplace_at` is the by-uid banish: the instance
+    // leaves the field and goes nowhere (`Dest::Banished` semantics).
     if let Some(uid) = ctx::find_card(player_id, "PP:初次演出事故") {
         ctx::unplace_at(uid);
+        ctx::log(player_id, &Msg::new(key!("overlapping_voices_removed_accident")));
     }
     // 规则书[手]3: 「回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”
     // 加入手卡」 -- C# `H._turnCtx.AfterEnd.Add(() => After(i))` (before the move).
@@ -86,8 +96,21 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
-// 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
-// 的“初次演出事故”（如果有）」 -- a named unplace on the discard.
+
+/// 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
+/// 的“初次演出事故”（如果有）」 -- banish the accident (`[移除]` = banish,
+/// `Dest::Banished`; `unplace_at` is the by-uid form). The own-card
+/// `Discarded` dispatch already names this card, so no id re-check is needed.
+fn on_discarded(player_id: i32) -> card_sdk::Asked {
+    if let Some(uid) = ctx::find_card(player_id, "PP:初次演出事故") {
+        ctx::unplace_at(uid);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("overlapping_voices_removed_accident")),
+        );
+    }
+    Ok(())
+}
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
@@ -100,4 +123,10 @@ pub fn overlapping_voices_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
     at_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_discarded_kani(player_id: i32) -> card_sdk::Asked {
+    on_discarded(player_id)
 }

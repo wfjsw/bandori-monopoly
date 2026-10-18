@@ -217,6 +217,11 @@ fn force_card(player_id: i32) -> card_sdk::Asked {
 /// can run it out of turn (`mutsumi_never` calls `ctx::invoke_skill` on the id
 /// `ctx::group_skill` names).
 fn can_transform(player_id: i32) -> Option<Msg> {
+    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
+    if let Some(why) = crate::copy_sticker_gate(player_id) {
+        return Some(why);
+    }
     if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
         return Some(Msg::new(key!("crychic_not_empty")));
     }

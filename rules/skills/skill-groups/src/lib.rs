@@ -74,14 +74,44 @@ pub const CARDS: &[CardDef] = &[
     CRYCHIC,
 ];
 
+/// Is the running instance the 「因此卡获得的团卡」 copy?
+///
+/// `PPP:Returns` places the borrowed band and records its uid in
+/// `returns.borrow_uid`; the owner's own band card sits beside it (ruling
+/// 2026-10-06) and its presses are free.
+fn is_borrowed_copy(player_id: i32) -> bool {
+    let borrow = ruleset_core::ctx::tok(player_id, "returns.borrow_uid");
+    borrow != 0 && ruleset_core::ctx::self_uid() == borrow
+}
+
+/// Play-gate half of 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」.
+///
+/// 规则书（`PPP:Returns` [持续]（3））: 「需要支付」 is a **cost of activation**:
+/// with 0 stickers the borrowed band's 主动 effect must not run. `Err(Prompt)`
+/// is the pause sentinel (`card-sdk`), not a refusal -- the refusal belongs on
+/// the press's `cant_play` gate, keyed the same way as [`spend_copy_sticker`].
+/// Returns `Some(msg)` only when the running instance **is** the borrowed copy
+/// and the owner holds fewer than 1 「星星贴纸」.
+pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
+    if !is_borrowed_copy(player_id) {
+        return None;
+    }
+    if ruleset_core::ctx::tok(player_id, "星星贴纸") < 1 {
+        return Some(card_sdk::Msg::new(card_sdk::key!(
+            "skill_band_no_sticker"
+        )));
+    }
+    None
+}
+
 /// Spend the 「星星贴纸」 「使用因此卡获得的团卡的主动效果时需要支付」.
 ///
-/// Only the **borrowed** copy pays: 「因此卡获得的团卡」 is the instance
-/// `PPP:Returns` placed (`returns.borrow_uid` holds its uid). The owner's own
-/// band card sits beside it (ruling 2026-10-06) and its presses are free.
+/// Charges exactly 1 sticker when the borrowed copy's press is payable.
+/// [`copy_sticker_gate`] is the refusal (0 stickers → the press never runs);
+/// this body must still charge when it does, or a payable press would skip
+/// the cost. Only the **borrowed** copy pays (see [`is_borrowed_copy`]).
 pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
-    let borrow = ruleset_core::ctx::tok(player_id, "returns.borrow_uid");
-    if borrow != 0 && ruleset_core::ctx::self_uid() == borrow {
+    if is_borrowed_copy(player_id) {
         ruleset_core::ctx::add_tok(player_id, "星星贴纸", -1, i32::MAX)?;
     }
     Ok(())

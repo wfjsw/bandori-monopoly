@@ -174,6 +174,11 @@ fn can_halve(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
+    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
+    if let Some(why) = crate::copy_sticker_gate(player_id) {
+        return Some(why);
+    }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("ave_mujica_not_two")));
     }
