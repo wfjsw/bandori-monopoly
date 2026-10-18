@@ -165,6 +165,10 @@ fn cash_in_guard(_player_id: i32) -> bool {
         && trigger::card_is(ID)
         && trigger::name() == card_sdk::abi::counter::CRYSTALS
         && ctx::crystals() >= 5
+        // One-shot per instance: `set_dest` is deferred to the raise's commit,
+        // so a second crystal write in the same counter_log batch would still
+        // see `is_placed()` and run the cash-in again.
+        && ctx::slot(_player_id, "trainee_guide.cashed") == 0
 }
 
 /// 规则书[持续]（3）: 「此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作
@@ -172,8 +176,16 @@ fn cash_in_guard(_player_id: i32) -> bool {
 /// the reveal above wrote. Fires on any crystal write that lands on >= 5
 /// (placement `set_crystals`, the turn-end +1, another card's grant).
 fn cash_in(player_id: i32) -> card_sdk::Asked {
+    // One-shot latch -- `set_dest` lands at the raise's commit, so a second
+    // write in the same batch would otherwise run this twice.
+    ctx::set_slot(player_id, "trainee_guide.cashed", 1);
     let mono = ctx::slot(player_id, "trainee_guide.mono");
     let dual = ctx::slot(player_id, "trainee_guide.dual");
+    // 「根据此卡上的标记进行一下操作」 -- the marks are spent here. Clear them
+    // so a later play's cash-in cannot re-apply this instance's marks (the
+    // player-level slots outlive the card).
+    ctx::set_slot(player_id, "trainee_guide.mono", 0);
+    ctx::set_slot(player_id, "trainee_guide.dual", 0);
     // 2. 「每个双色效果为将自己的所有反面[P✽P粉丝]变正」 -- X = all face-downs.
     // Canonical marker name (U+273d); the previous body flipped a sparkle-spelled
     // alias that is not the real marker.

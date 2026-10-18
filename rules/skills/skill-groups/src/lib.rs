@@ -104,6 +104,17 @@ pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
     None
 }
 
+/// How many 「星星贴纸」 the running press owes as the Returns activation tax
+/// (0 for the owner's own band card, 1 for the borrowed copy). Effects that
+/// spend the same token must budget this on top of their own cost.
+pub fn copy_sticker_cost(player_id: i32) -> i32 {
+    if is_borrowed_copy(player_id) {
+        1
+    } else {
+        0
+    }
+}
+
 /// Spend the 「星星贴纸」 「使用因此卡获得的团卡的主动效果时需要支付」.
 ///
 /// Charges exactly 1 sticker when the borrowed copy's press is payable.

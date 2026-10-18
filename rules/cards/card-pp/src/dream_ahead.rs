@@ -201,6 +201,13 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     if !crate::resonance::try_resonance(player_id)? {
         return Ok(());
     }
+    // 规则书（4）: 「使用此卡上3个[奇迹水晶]，[拥有者]购买任意…无主的[可购买格子]」
+    // -- printed order is spend-then-buy, so the crystals go **before** the
+    // purchase attempt. Paying after `card_buy` let a failed buy keep the
+    // crystals while the [共鸣] fuel was already gone; both costs now sit on
+    // the same side of the purchase. The text offers no refund on a refused
+    // buy.
+    ctx::add_crystals(-3, 0)?;
     let opts: Vec<Msg> = pool
         .iter()
         .map(|&t| Msg::new(key!("dream_ahead_tile")).tile("tile", t))
@@ -217,7 +224,6 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     if !ctx::card_buy(player_id, t) {
         return Ok(());
     }
-    ctx::add_crystals(-3, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("dream_ahead_bought")).tile("tile", t),

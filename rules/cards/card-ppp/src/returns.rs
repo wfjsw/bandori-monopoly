@@ -241,8 +241,10 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
 // The borrowed band sits beside the PPP one (ruling 2026-10-06); only a prior
 // borrow is swapped out, and its crystals leave with it.
 // [持续]（3）「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the copy
-// is marked with `returns.copied`, and `skill_groups::skill_ok` charges the
-// sticker before a press.
+// is the instance `place_card` returned (`returns.borrow_uid`); the owner's own
+// band card sits beside it and its presses are free.
+// `skill_groups::copy_sticker_gate` is the activation cost (0 stickers → the
+// press is refused) and `spend_copy_sticker` charges the 1 when it runs.
 // [持续]（4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」 -- the
 // `cardPlayed` hook is in; a card's band is the prefix of its id (`通用:`, `G:`),
 // which is what `H.Db.Card(c.Id)?.group == "通用"` reads.
@@ -423,10 +425,10 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     let borrowed = ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
     ctx::set_prop(PROP_BAND, idx);
     ctx::set_prop(PROP_FROM, who);
-    ctx::set_tok(player_id, "returns.copied", 1);
-    // Which instance is 「因此卡获得的团卡」. The tax in `spend_copy_sticker`
-    // keys on this uid, not on "a borrow exists" -- the owner's own band card
-    // sits beside the copy and its presses are free.
+    // Which instance is 「因此卡获得的团卡」. The tax in `spend_copy_sticker` /
+    // `copy_sticker_gate` keys on this uid, not on "a borrow exists" -- the
+    // owner's own band card sits beside the copy and its presses are free.
+    // (`returns.copied` was the old "any borrow" flag; nothing reads it now.)
     ctx::set_tok(player_id, "returns.borrow_uid", borrowed);
     ctx::log(
         player_id,

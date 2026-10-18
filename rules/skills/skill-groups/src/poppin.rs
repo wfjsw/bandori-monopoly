@@ -206,12 +206,17 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
 
 /// Which press effects are available right now, in rulebook order: the
 /// sticker->crystal exchange and the crystal->draw/cash spend.
+///
+/// The sticker option must budget the Returns activation tax **and** its own
+/// 「使用2个星星贴纸」 -- a borrowed copy with exactly 2 stickers would otherwise
+/// pass the gate, burn the tax, and then skip the effect.
 fn available(player_id: i32) -> [bool; 2] {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return [false, false];
     }
+    let tax = crate::copy_sticker_cost(player_id);
     [
-        ctx::tok(player_id, STICKER) >= 2,
+        ctx::tok(player_id, STICKER) >= 2 + tax,
         state::get(player_id, USED) == 0 && ctx::crystals() >= 2,
     ]
 }
