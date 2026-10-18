@@ -66,25 +66,26 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- C# `H.PlaceFromPlay(c, -1, -1, num)`.
     ctx::set_dest(ctx::Dest::Field);
-    // 规则书[手]: 「选择[消耗]1到5次500资金」 -- C# `H.AskNumber(i, ..., 1, Math.Max(1, min(5, money/500)))`.
-    // Always at least 1: the clause is 「1到5次」, and with the money play gate
-    // gone (NEGATION-AUDIT V2) a 0-cash player still chooses 1 and the payment
-    // takes the Q1 shortfall path.
-    let max = ((ctx::money_of(player_id) / 500).min(5)).max(1);
+    // 规则书[手]: 「选择[消耗]1到5次500资金」 -- the printed range is **1到5**,
+    // unconditionally. C# narrowed it to `Math.Max(1, min(5, money/500))`, a
+    // leftover of the old money play gate; NEGATION-AUDIT V2 removed that gate,
+    // so a shortfall on `ctx::pay(500 * n)` is reachable at any n in 1..=5 and
+    // the choice must not be pre-capped by cash on hand.
     let n = ctx::ask_number(
         player_id,
         &Msg::new(key!("crimson_soul_title")),
         &Msg::new(key!("crimson_soul_ask")),
         1,
-        max,
+        5,
     )?;
-    // C# `n = Math.Max(1, Math.Min(max, r.value))`.
-    let n = n.clamp(1, max);
+    let n = n.clamp(1, 5);
     // 规则书[手]: 「[消耗]1到5次500资金」 -- C# `PayCtx { kind: "lose", must: false, amount = 500 * n }`.
     let paid = ctx::pay(player_id, 500 * n, &Msg::new(key!("crimson_soul_why")))?;
-    // 规则书[手]: 「并在这张卡上放置对应数量的[奇迹水晶]」 -- C# `num = p.paid ? n : 0`,
-    // `H.PlaceFromPlay(c, -1, -1, num)`. A run that moved no money earns no crystals.
-    let num = if paid > 0 { n } else { 0 };
+    // 规则书[手]: 「并在这张卡上放置对应数量的[奇迹水晶]」 -- 「对应数量」 is the
+    // number of 500-consumptions that actually happened (`paid / 500`), not the
+    // menu pick. A shortfall run must not mint crystals for money it never moved
+    // (the Q1 shortfall path makes `paid` land anywhere in 0..=500*n).
+    let num = paid / 500;
     ctx::place_card(player_id, ID, &Msg::new(key!("crimson_soul_note")));
     ctx::set_crystals(num);
     ctx::log(

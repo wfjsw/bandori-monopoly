@@ -650,6 +650,31 @@ fn anon_link_is_capped_at_one() {
 }
 
 #[test]
+fn anon_link_cap_is_on_the_pair_not_per_tile() {
+    // 规则书: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- the cap is on
+    // the pair. A second link that shares an already-marked end places
+    // **neither** mark (otherwise the `LINK{tile}` slots go one-way and
+    // 「被[奇迹水晶]连接的格子收费时」 reads only one direction).
+    // TODO(规则书) Class C: whether a tile may sit in two links at once; the
+    // singular 「1个…（上限1）」 leans no.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    t.set_pos(0, 2); // 天文馆; neighbours 购物中心(1) and 周边学区(3)
+    t.own(0, &[1, 2, 3]);
+    t.give_play(0, "MyGO:[千早爱音]Anon Tokyo").unwrap();
+    t.answer_tile(0, 1).unwrap();
+    assert_eq!(anon_marks(&t, 2), 1, "first link marks 天文馆");
+    assert_eq!(anon_marks(&t, 1), 1, "first link marks 购物中心");
+    // Second link 2-3 shares the marked end at 2. Cap 1 on the pair: neither
+    // end gets a new mark, and tile 3 stays unmarked (no half-link).
+    t.give_play(0, "MyGO:[千早爱音]Anon Tokyo").unwrap();
+    t.answer_tile(0, 3).unwrap();
+    assert_eq!(anon_marks(&t, 2), 1, "shared end stays at 1");
+    assert_eq!(anon_marks(&t, 3), 0, "no half-link onto the fresh end");
+    assert_eq!(anon_marks(&t, 1), 1, "first link untouched");
+}
+
+#[test]
 fn anon_not_both_owned_moves_one_and_settles() {
     // 规则书: 「2. [使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的
     //          [主要移动]改为向前或后移动1格到被[指定]格子且[结算]。」

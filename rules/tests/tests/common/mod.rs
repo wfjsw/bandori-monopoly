@@ -879,6 +879,15 @@ impl Table {
         self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("cp").copied().unwrap_or(0))
     }
 
+    /// Arbitrary on-card counter on `who`'s first field copy of `card`
+    /// (None if not placed) -- the same map `crystals` / `cp_on_card` read.
+    pub fn counter_on_card(&self, who: usize, card: &str, name: &str) -> Option<i32> {
+        self.field(who)
+            .iter()
+            .find(|f| f.card == card)
+            .map(|f| f.counters.get(name).copied().unwrap_or(0))
+    }
+
     /// Put `n` on-card [CP点] on `who`'s first field copy of `card` (test seam,
     /// the same shape as [`Self::set_crystals`]). No-op when the card is not
     /// placed. Does not raise `cpChanged` -- that rides a real write through

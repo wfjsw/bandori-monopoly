@@ -42,8 +42,11 @@ fn ppp_band_table() -> Table {
             .field
             .retain(|f| f.card != "PPP:Returns" && !f.card.contains("Afterglow"));
         // Returns is gone, so its 「使用因此卡获得的团卡的主动效果时需要支付
-        // 1个星星贴纸」 tax must not linger (`spend_copy_sticker`).
-        w.st.players[0].tokens.retain(|c| c.name != "returns.copied");
+        // 1个星星贴纸」 tax must not linger (`spend_copy_sticker` keys on
+        // `returns.borrow_uid`, the borrowed instance's uid).
+        w.st.players[0]
+            .tokens
+            .retain(|c| c.name != "returns.borrow_uid");
     }
     if !t.on_field(0, "skill:Poppin' Party:星之鼓动") {
         t.place_raw(0, "skill:Poppin' Party:星之鼓动");

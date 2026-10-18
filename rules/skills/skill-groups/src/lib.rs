@@ -74,10 +74,43 @@ pub const CARDS: &[CardDef] = &[
     CRYCHIC,
 ];
 
-/// Spend the 「星星贴纸」 「使用因此卡获得的团卡的主动效果时需要支付」.
+/// 「星星贴纸」 owed by the running press as the `PPP:Returns` [持续]（3）
+/// activation tax: 1 for the borrowed copy, 0 for the owner's own band card.
+///
+/// `PPP:Returns` places the borrowed band and records its uid in
+/// `returns.borrow_uid`; the owner's own band card sits beside it (ruling
+/// 2026-10-06) and its presses are free. Single source of truth — every
+/// caller derives from this, and effects that spend the same token budget it
+/// on top of their own cost.
+pub fn copy_sticker_cost(player_id: i32) -> i32 {
+    let borrow = ruleset_core::ctx::tok(player_id, "returns.borrow_uid");
+    if borrow != 0 && ruleset_core::ctx::self_uid() == borrow {
+        1
+    } else {
+        0
+    }
+}
+
+/// Play-gate half of 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」.
+///
+/// 「需要支付」 is a **cost of activation**: with too few stickers the borrowed
+/// band's 主动 effect must not run. `Err(Prompt)` is the pause sentinel
+/// (`card-sdk`), not a refusal — the refusal belongs on the press's `cant_play`.
+pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
+    let cost = copy_sticker_cost(player_id);
+    if cost > 0 && ruleset_core::ctx::tok(player_id, "星星贴纸") < cost {
+        Some(card_sdk::Msg::new(card_sdk::key!("skill_band_no_sticker")))
+    } else {
+        None
+    }
+}
+
+/// Charge the tax once the press is payable (`copy_sticker_gate` is the
+/// refusal). Skipping this would make a payable press free.
 pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
-    if ruleset_core::ctx::tok(player_id, "returns.copied") > 0 {
-        ruleset_core::ctx::add_tok(player_id, "星星贴纸", -1, i32::MAX)?;
+    let cost = copy_sticker_cost(player_id);
+    if cost > 0 {
+        ruleset_core::ctx::add_tok(player_id, "星星贴纸", -cost, i32::MAX)?;
     }
     Ok(())
 }
