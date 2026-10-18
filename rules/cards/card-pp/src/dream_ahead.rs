@@ -46,7 +46,10 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         On::Action(
             &[ActionKind::TurnEndBefore],
             "actor == owner && card.placed && card.counter('crystals') >= 3",
-            Some(can_buy),
+            // No residual guard: the condition covers placed + ≥3 crystals and
+            // `buy_one` owns the "is there a tile" scan (one board walk per
+            // turn-end instead of two).
+            None,
             buy_one,
         ),
         On::Action(&[ActionKind::DeckBeforeGame], "", None, deck_before_game),
@@ -176,13 +179,10 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
 // 的无主的[可购买格子]」 -- the buy is `card_buy`, the resonance cost is
 // the same `try_resonance` every other [共鸣] card uses.
 
-/// （4）applicability: placed, 3 crystals, a free buyable tile within 3.
-/// Residual guard for the `TurnEndBefore` action (the condition already
-/// carries `actor == owner && card.placed && card.counter('crystals') >= 3`).
-fn can_buy(player_id: i32) -> bool {
-    ctx::is_placed() && ctx::crystals() >= 3 && !free_near(player_id).is_empty()
-}
-
+/// Free buyable tiles within 3 of the owner (「所在格子前后3格以内的无主的
+/// [可购买格子]」). The `TurnEndBefore` condition already covers placed + ≥3
+/// crystals, so this is the only residual fact -- and `buy_one` owns the scan
+/// (one board walk per turn-end, not two).
 fn free_near(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
     (0..ctx::tile_count())

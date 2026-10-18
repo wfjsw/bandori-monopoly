@@ -185,6 +185,15 @@ fn settle_body_guard(owner: i32) -> bool {
 /// （1）「当次移动的移动终点视为"弦卷集团"地产商」 then （3）「那格视为与
 /// "弦卷集团"格子交换位置」. One entry so both body-replaces run (the host
 /// runs only the first hook of a kind).
+/// Run `tile`'s settle as the agent, with `SLOT_REPLAY` parked across it so the
+/// nested `tileResolved` consumes the redirect instead of reading as (3)'s
+/// discard. Used by both redirect sites below.
+fn redirect_settle(player_id: i32, tile: i32) {
+    ctx::set_slot(player_id, SLOT_REPLAY, tile + 1);
+    ctx::card_settle_at(player_id, tile, true);
+    ctx::set_slot(player_id, SLOT_REPLAY, 0);
+}
+
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
     if group < 0 {
@@ -193,14 +202,11 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     // （1）: the placement move's endpoint settles as the agent. Keep the
     // `smile_as_agent` tag set across the nested settle so its `tileResolved`
     // does not read as (3)'s 「在此卡放置的格子上[触发结算]」 (the card is on
-    // 弦卷集团 right now). `SLOT_REPLAY` marks the in-flight redirect the same
-    // way, for the nested `tileResolved` to consume.
+    // 弦卷集团 right now).
     if trigger::move_tag(TAG_AS_AGENT) != 0 {
         ctx::trigger::set_cancelled();
         ctx::plan::set_settle_as_agent(true);
-        ctx::set_slot(player_id, SLOT_REPLAY, group + 1);
-        ctx::card_settle_at(player_id, group, true);
-        ctx::set_slot(player_id, SLOT_REPLAY, 0);
+        redirect_settle(player_id, group);
         ctx::plan::set_tag(TAG_AS_AGENT, 0);
         ctx::log(
             player_id,
@@ -223,12 +229,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     }
     ctx::trigger::set_cancelled();
     ctx::plan::set_settle_as_agent(true);
-    // Park the redirect on `SLOT_REPLAY` so the nested settle's `tileResolved`
-    // consumes it instead of reading as (3)'s discard (the nested settle is at
-    // 弦卷集团, not the card's tile, but the consume path is shared).
-    ctx::set_slot(player_id, SLOT_REPLAY, group + 1);
-    ctx::card_settle_at(player_id, group, true);
-    ctx::set_slot(player_id, SLOT_REPLAY, 0);
+    redirect_settle(player_id, group);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_swapped"))
@@ -250,10 +251,13 @@ fn resolve_guard(owner: i32) -> bool {
     if at < 0 {
         return false;
     }
-    if ctx::slot(owner, SLOT_REPLAY) == at + 1 {
+    // One read: `TileResolved` fires at every settle's terminal while the card
+    // is in play, and the slot is keyed by a string.
+    let replay = ctx::slot(owner, SLOT_REPLAY);
+    if replay == at + 1 {
         return true;
     }
-    if ctx::slot(owner, SLOT_REPLAY) > 0 {
+    if replay > 0 {
         return false;
     }
     // (1)'s placement-move redirect: the nested settle is not (3)'s discard.

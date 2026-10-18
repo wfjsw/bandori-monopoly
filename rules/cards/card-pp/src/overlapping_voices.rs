@@ -55,17 +55,21 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     rules_status::move_blocked(player_id)
 }
 
+/// 规则书[手]1 / [特]: 「[移除]…“初次演出事故”」 -- banish the named card if it is
+/// on the owner's field. `unplace_card_named` is the one-call named banish
+/// (same field-leave semantics as `find_card` + `unplace_at`).
+fn banish_accident(player_id: i32) {
+    if ctx::unplace_card_named(player_id, "PP:初次演出事故") {
+        ctx::log(player_id, &Msg::new(key!("overlapping_voices_removed_accident")));
+    }
+}
+
 fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]1: 「[移除]此卡」 -- C# `c.Dest = "removed"`; `[移除]` is banish
     // (`Dest::Banished`), not a discard.
     ctx::set_dest(ctx::Dest::Banished);
-    // 规则书[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」 -- `[移除]`
-    // the named card too. `unplace_at` is the by-uid banish: the instance
-    // leaves the field and goes nowhere (`Dest::Banished` semantics).
-    if let Some(uid) = ctx::find_card(player_id, "PP:初次演出事故") {
-        ctx::unplace_at(uid);
-        ctx::log(player_id, &Msg::new(key!("overlapping_voices_removed_accident")));
-    }
+    // 规则书[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」
+    banish_accident(player_id);
     // 规则书[手]3: 「回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”
     // 加入手卡」 -- C# `H._turnCtx.AfterEnd.Add(() => After(i))` (before the move).
     ctx::at_turn_end(player_id);
@@ -98,17 +102,10 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
-/// 的“初次演出事故”（如果有）」 -- banish the accident (`[移除]` = banish,
-/// `Dest::Banished`; `unplace_at` is the by-uid form). The own-card
-/// `Discarded` dispatch already names this card, so no id re-check is needed.
+/// 的“初次演出事故”（如果有）」 -- the own-card `Discarded` dispatch already
+/// names this card, so no id re-check is needed.
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
-    if let Some(uid) = ctx::find_card(player_id, "PP:初次演出事故") {
-        ctx::unplace_at(uid);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("overlapping_voices_removed_accident")),
-        );
-    }
+    banish_accident(player_id);
     Ok(())
 }
 

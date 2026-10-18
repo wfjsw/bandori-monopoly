@@ -107,23 +107,17 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         }
         // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- the
         // cap is on **the pair** (「放置1个…（上限1）」). If either end already
-        // carries the mark, place **neither**: a half-link would leave the
-        // `LINK{tile}` slots one-way and `link_rent` reading only one direction.
-        // TODO(规则书) Class C: whether a tile may sit in two links at once. The
-        // singular 「1个…（上限1）」 leans no -- a tile already carrying the mark
-        // is already linked, so the whole pair is refused. Alternative reading
-        // (not taken): also refuse the whole branch-1 link including the
-        // payment above; the cost clause 「则[消耗]…并…」 is not under the
-        // parenthetical, so the cost still runs.
+        // carries the mark, place **neither** (pair at cap 1) -- a half-link
+        // would leave the `LINK{tile}` slots one-way and `link_rent` reading
+        // only one direction. TODO(规则书) Class C: whether a tile may sit in
+        // two links at once; the singular 「1个…（上限1）」 leans no.
         let marked = |tile: i32| {
             ctx::count_marks(
                 tile,
                 &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
             ) > 0
         };
-        if marked(here) || marked(t) {
-            // Pair at cap 1 -- place neither, leave any existing `LINK` slots.
-        } else {
+        if !marked(here) && !marked(t) {
             for (tile, other) in [(here, t), (t, here)] {
                 // One row per mark (`place_mark_new`, the old `add_mark` semantics).
                 ctx::place_mark(

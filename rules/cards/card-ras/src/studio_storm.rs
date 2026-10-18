@@ -135,35 +135,29 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
             .i("x", x as i64),
     );
     // 规则书（2）: 「对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍
-    // 价格的收费」 -- sheet 2026-10-06 新卡组卡 H8 rewrote this from the older
-    // 「那个玩家进行一次此卡所在格子的[结算]」 (a forced re-settle) into a direct
-    // charge. A one-shot 「收费」 to the tile owner, **not** a `card_settle_at`:
-    // a full settle also fires settle hooks / counteractions and offers
-    // build/buy, none of which the printed wording asks for.
+    // 价格的收费」 -- a one-shot 「收费」 to the tile owner, **not** a
+    // `card_settle_at` (a full settle also fires settle hooks / counteractions
+    // and offers build/buy, which the printed wording does not ask for).
+    // `rent_of` is 「普通[结算]的价格」; the scale is integer (4-X)/4 and
+    // truncates like `scale_settle_payment` (`spec/ROUNDING.md`).
     //
-    // 「普通[结算]的价格」 is `rent_of` (the table rent at the tile's current
-    // house count); the scale is integer (4-X)/4, the same figure the old
-    // `set_rent_factor(250 * (4-X))` produced (`3340 * 2 / 4 = 1670` in
-    // `ras.rs` `storm_part2_rent_factor`). `scale_settle_payment` truncates
-    // (`spec/ROUNDING.md`), so the multiply-then-divide keeps that.
-    //
-    // TODO(规则书)[ruling]: when the tile is **mortgaged**, 「普通[结算]」 is a
-    // forced-buy offer, not a rent, so there is no obvious 收费 recipient.
-    // Class C -- charge nothing for now rather than guess.
-    if !ctx::mortgaged_of(tile) {
-        let owner = ctx::tile_owner(tile);
-        let amount = ctx::rent_of(tile) * (4 - x) / 4;
-        if owner >= 0 && amount > 0 {
-            ctx::transfer(
-                trigger::player_id(),
-                owner,
-                amount,
-                &Msg::new(key!("studio_storm_charge"))
-                    .player_id("to", owner)
-                    .tile("tile", tile)
-                    .i("amount", amount as i64),
-            )?;
-        }
+    // TODO(规则书)[ruling]: on a **mortgaged** tile 「普通[结算]」 is a forced-buy
+    // offer, not a rent, so there is no obvious 收费 recipient. Class C.
+    let owner = ctx::tile_owner(tile);
+    if owner < 0 || ctx::mortgaged_of(tile) {
+        return Ok(());
+    }
+    let amount = ctx::rent_of(tile) * (4 - x) / 4;
+    if amount > 0 {
+        ctx::transfer(
+            trigger::player_id(),
+            owner,
+            amount,
+            &Msg::new(key!("studio_storm_charge"))
+                .player_id("to", owner)
+                .tile("tile", tile)
+                .i("amount", amount as i64),
+        )?;
     }
     Ok(())
 }

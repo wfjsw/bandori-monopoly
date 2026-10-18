@@ -886,8 +886,9 @@ fn guide_resonance_pays_500_and_adds_two_marks() {
         }
     }
     assert_eq!(t.money(0), money0 - 500, "[消耗]500资金");
-    let mono = t.state(0, "trainee_guide.mono");
-    let dual = t.state(0, "trainee_guide.dual");
+    // The marks are this instance's `mono` / `dual` counters (they die with it).
+    let mono = t.counter_on_card(0, "PP:练习生解密指南", "mono").unwrap_or(0);
+    let dual = t.counter_on_card(0, "PP:练习生解密指南", "dual").unwrap_or(0);
     assert_eq!(mono + dual, 2, "added any 2 marks: mono={mono} dual={dual}");
     assert!(t.on_field(0, "PP:练习生解密指南"), "{:?}", t.field_ids(0));
 }
