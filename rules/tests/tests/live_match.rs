@@ -65,6 +65,47 @@ fn match_with(card: &str) -> Match {
     match_with_rules(card, rules())
 }
 
+/// [`match_with`] for an **exclusive** card: pin the seat-1 persona so the
+/// play is not at the mercy of `quick_start`'s assignment (the event deck is
+/// shuffled at setup, so the stream is not something to rely on).
+fn match_with_exclusive(card: &str, persona: &str) -> Match {
+    let members = vec![member(1, false), member(2, true)];
+    let mut m = Match::new(
+        data(),
+        Arc::new(rules()),
+        &members,
+        20261004,
+        MatchMode::Casual,
+        ScoreWeights::default(),
+    );
+    m.set_persona(1, persona);
+    m.quick_start();
+    // Same wait as `match_with_rules`: the human must be in 运营 before a play.
+    for _ in 0..2000 {
+        let st = m.state();
+        let mine = st.phase == "play"
+            && st.turn >= 0
+            && st
+                .players
+                .get(st.turn as usize)
+                .is_some_and(|s| s.member == 1);
+        if mine && st.step == stage::OPS {
+            break;
+        }
+        m.tick(0.25);
+    }
+    let st = m.state();
+    assert_eq!(st.phase, "play", "match should reach play");
+    assert!(
+        st.players
+            .get(st.turn as usize)
+            .is_some_and(|s| s.member == 1),
+        "should be the human's turn"
+    );
+    m.give_cards(1, &[card]);
+    m
+}
+
 fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     let members = vec![member(1, false), member(2, true)];
     let mut m = Match::new(
@@ -180,7 +221,7 @@ fn the_sample_cards_load_in_the_ruleset() {
 #[test]
 fn a_played_card_runs_its_module_and_answers_a_prompt() {
     // HHW:（育美） rolls 4d20 twice, offers the resulting tiles, places a mark.
-    let mut m = match_with("HHW:（育美）");
+    let mut m = match_with_exclusive("HHW:（育美）", "北泽育美");
     let before = m.hand_of(1).len();
     m.act(1, &play("HHW:（育美）"))
         .expect("play should start the effect");
@@ -272,7 +313,7 @@ fn ported_official_cards_run_in_a_match() {
 
     // R:（ykn）louder -- nudge the RiNG multiplier, no prompt. It is 凑友希那's
     // exclusive card, so the player must be her to play it.
-    let mut m = match_with("R:（ykn）louder");
+    let mut m = match_with_exclusive("R:（ykn）louder", "凑友希那");
     m.set_persona(1, "凑友希那");
     m.act(1, &play("R:（ykn）louder")).expect("play");
     let st = m.state();

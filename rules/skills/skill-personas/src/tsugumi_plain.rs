@@ -27,13 +27,13 @@ const OWED: &str = "skill.tsugumiPlain.owed";
 pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
         // Pure plan reshape; the one-shot latch / CiRCLE-veto arming ride
         // DiceRollAfter (the next event after the plan, before the walk).
         On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
-        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan_after),
+        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", "", None, on_plan_after),
     ],
 )
     .silent(&[1]);

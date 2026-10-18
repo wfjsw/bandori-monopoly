@@ -131,8 +131,8 @@ pub struct Joined {
     pub you: i32,
 }
 
-fn rules_weights(s: &Server) -> ScoreWeights {
-    ScoreWeights::from_rules(&s.data.match_rules)
+fn rules_weights(_s: &Server) -> ScoreWeights {
+    ScoreWeights::default()
 }
 
 /// Leave whatever room the session is in.

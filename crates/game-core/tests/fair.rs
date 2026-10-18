@@ -124,6 +124,7 @@ fn seeded_record_v(o: &Openings, v: u32) -> game_core::record::RecordFile {
         seed256: Some(Seed256(derived)),
         weights: ScoreWeights::default(),
             clock: None,
+        ..Default::default()
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
     rm.set_fair(Fairness {
@@ -370,6 +371,7 @@ fn a_record_without_fairness_material_is_reported_not_faked() {
         seed256: None,
         weights: ScoreWeights::default(),
             clock: None,
+        ..Default::default()
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
     rm.quick_start();
@@ -396,6 +398,7 @@ fn the_match_rng_is_keyed_by_the_derived_seed() {
         seed256: Some(Seed256(derived)),
         weights: ScoreWeights::default(),
             clock: None,
+        ..Default::default()
     };
     let m = Match::new_seeded(
         data(),
@@ -427,6 +430,7 @@ fn legacy_u64_records_still_replay_on_the_legacy_stream() {
         seed256: None,
         weights: ScoreWeights::default(),
             clock: None,
+        ..Default::default()
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
     rm.quick_start();

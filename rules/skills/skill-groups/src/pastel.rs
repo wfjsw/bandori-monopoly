@@ -22,12 +22,12 @@ const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
 pub const PASTEL: CardDef = CardDef::new(
     ID,
     &[
-        On::Action(&[ActionKind::DeckAtGameStart], "", None, at_start),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[ActionKind::DeckAtGameStart], "", "", None, at_start),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
         // （2） overflow crystals. `FansFlip` is raised with the effect's X
         // before the dict writes, so `fans::down` is still the pre-flip count.
         // 「你」 is this card's owner (`actor == owner`).
-        On::Action(&[kind::FansFlip], "actor == owner", None, on_fans_flip),
+        On::Action(&[kind::FansFlip], "actor == owner", "", None, on_fans_flip),
     ],
 );
 
@@ -112,7 +112,6 @@ fn on_fans_flip(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"Pastel✽Palettes"#)
     .short_name(r#"PP"#)
-    .boot_art(r#"004"#)
     .color(r#"#33DDAA"#)
     .skill(r#"与偶像一起"#)
     .text(r#"（1）游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张Pastel✽Palettes乐队卡时此效果不重复发动）。（2）你因任意原因受到“将X个反面[P✽P粉丝]变正”的效果且X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。

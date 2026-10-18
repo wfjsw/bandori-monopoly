@@ -18,22 +18,22 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
-        On::Play("", None, miracle),
-        On::Action(&[ActionKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0", None, before_build),
-        On::Action(&[ActionKind::BuildAfter], "actor == owner && card.counter('crystals') >= 1 && card.placed", None, after_build),
+        On::Play("", "", None, miracle),
+        On::Action(&[ActionKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0", "", None, before_build),
+        On::Action(&[ActionKind::BuildAfter], "actor == owner && card.counter('crystals') >= 1 && card.placed", "", None, after_build),
         // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
         // counts, not only the end-tile [重叠]. Bookkeeping (the running mask)
         // is silent; the reward is the visible entry.
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner && card.placed && players_on(tile.id, owner) > 0",
+            "actor == owner && card.placed && players_on(tile.id, owner) > 0", "",
             Some(record_pass_applies),
             record_pass,
         ),
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner && card.placed",
+            "actor == owner && card.placed", "",
             Some(all_others_passed),
             pass_player,
         ),

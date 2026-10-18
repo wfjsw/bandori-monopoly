@@ -1,2 +1,0 @@
-.toggle { border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 12px; font-size: 12px; line-height: 20px; color: var(--sub); background: var(--surface); cursor: pointer; }
-.toggle:hover { color: var(--pink); border-color: var(--pink); }

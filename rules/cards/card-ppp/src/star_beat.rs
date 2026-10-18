@@ -20,11 +20,11 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         // residual (owned ∩ dist ≤ 5 ∩ can_build_on).
         On::Action(
             &[card_sdk::abi::ActionKind::SettleAfter],
-            "actor == owner && slot('star_beat.layers') > 0",
+            "actor == owner && slot('star_beat.layers') > 0", "",
             Some(has_near_buildable),
             after_settle,
         ),
-        On::Play("", Some(cant_play), play),
+        On::Play("", "", Some(cant_play), play),
     ],
 )
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

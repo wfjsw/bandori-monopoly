@@ -1,6 +1,6 @@
 //! `event:EX任务挑战` -- 事件卡「EX任务挑战」（中立事件 A10）.
 //!
-//! 事件文本（data/events.json, id `EX任务挑战`）:
+//! 事件文本（`CardMeta` beside the rule body, id `EX任务挑战`）:
 //! > 抽出此卡的玩家投掷1d4并记录结果和26相加为X，然后所有玩家各自投掷3d20，结果至少为X的玩家可选择更换角色皮肤（技能相同）
 
 use ruleset_core::ctx;
@@ -8,7 +8,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const EX_QUEST: CardDef = CardDef::new("event:EX任务挑战", &[On::Play("", None, play)]);
+pub const EX_QUEST: CardDef = CardDef::new("event:EX任务挑战", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"EX任务挑战"#)
+            .text(r#"抽出此卡的玩家投掷1d4并记录结果和26相加为X，然后所有玩家各自投掷3d20，结果至少为X的玩家可选择更换角色皮肤（技能相同）"#)
+            .cell(r#"A10"#)
+            .derived(false));
 
 /// 规则书: 「抽出此卡的玩家投掷1d4并记录结果和26相加为X」 -- X = 26 + 1d4
 /// (27..=30), rolled by the drawer as a bare `ctx::roll` (no [反击] window).

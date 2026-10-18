@@ -1,6 +1,6 @@
-// Effect text as structured blocks: lead paragraphs, section labels, lists.
-// Skill bodies and card effect text share it; the parsing (and the shapes it
-// recognises) lives in ./bodyText.ts.
+// Effect text as structured blocks: lead paragraphs, section labels, numbered
+// effects. Skill bodies and card effect text share it; the parsing (and the
+// shape it recognises) lives in ./bodyText.ts.
 
 import { memo, type ReactNode } from "react";
 import { cx } from "../core/cx";
@@ -40,24 +40,23 @@ export const SkillBody = memo(function SkillBody({ text, prefix, className }: { 
             </div>
           );
         }
-        const List = b.t === "ul" ? "ul" : "ol";
         return (
           <div key={i}>
             {before}
-            <List className={s.list}>
+            <ol className={s.list}>
               {b.items.map((it, j) => (
                 <li key={j}>
                   {it.text}
                   {it.sub.length > 0 && (
-                    <List className={s.sub}>
+                    <ol className={s.sub}>
                       {it.sub.map((x, k) => (
                         <li key={k}>{x}</li>
                       ))}
-                    </List>
+                    </ol>
                   )}
                 </li>
               ))}
-            </List>
+            </ol>
           </div>
         );
       })}

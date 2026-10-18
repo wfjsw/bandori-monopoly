@@ -294,6 +294,10 @@ impl Pool {
     /// worker keys its ChaCha12 stream from `seed256`; the legacy `seed`
     /// field is no longer sent (a worker that only understands it is older
     /// than this scheme and must not run a fair match).
+    ///
+    /// Returns `(save, board)`: the match's opening `save()` blob and the tile
+    /// table in force, which the record's `MatchSetup::board` must carry so a
+    /// replay is self-contained.
     pub fn new_match(
         &self,
         members: &[RoomMember],
@@ -301,13 +305,19 @@ impl Pool {
         mode: i32,
         weights: &ScoreWeights,
         clock: game_core::clock::ClockSettings,
-    ) -> Result<String, String> {
+    ) -> Result<(String, Vec<game_core::data::TileData>), String> {
         let hex: String = seed256.iter().map(|b| format!("{b:02x}")).collect();
         let v = self.call(json!({"op": "new", "members": members, "seed256": hex, "mode": mode, "weights": weights, "clock": clock}))?;
-        v.get("state")
+        let state = v
+            .get("state")
             .and_then(Value::as_str)
             .map(str::to_string)
-            .ok_or_else(|| "worker returned no state".to_string())
+            .ok_or_else(|| "worker returned no state".to_string())?;
+        let board = match v.get("board") {
+            None | Some(Value::Null) => Vec::new(),
+            Some(b) => serde_json::from_value(b.clone()).map_err(|e| format!("board: {e}"))?,
+        };
+        Ok((state, board))
     }
 
     /// `Ok` on a rejected command too: the state is returned either way (a

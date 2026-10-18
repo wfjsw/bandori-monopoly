@@ -42,10 +42,9 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // cannot be separate entries.
         On::Action(
             &[ActionKind::SettleBody],
-            "tile.id >= 0",
+            "tile.id >= 0", "",
             Some(settle_body_guard),
-            settle_body,
-        ),
+            settle_body),
         // Consume an in-flight redirect / (2) arrival at its `tileResolved`,
         // and (3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
         // `tileResolved` is the settle's terminal (SETTLE-STAGES §4 M5), after
@@ -54,7 +53,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // discard; (2) parks `PROP_ARRIVED` when it drops the card onto the
         // endpoint so this same settle does not read as (3)'s discard; later
         // settles do, owner included.
-        On::Action(&[ActionKind::TileResolved], "card.placed", Some(resolve_guard), on_resolved),
+        On::Action(&[ActionKind::TileResolved], "card.placed", "", Some(resolve_guard), on_resolved),
         // 规则书（2）: 「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
         // settle is a real move's endpoint. `move.kind != Teleport` keeps the
@@ -64,18 +63,16 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // the zero-crystal discard).
         On::Action(
             &[ActionKind::SettleAfter],
-            "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport",
+            "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport", "",
             None,
-            move_after,
-        ),
+            move_after),
         On::Counteract(
             &[ChainKind::Pass],
-            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null",
+            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null", r#"经过“弦卷集团”（#29格）"#,
             None,
-            counteract,
-        ),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
-        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+            counteract),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", "", None, turn_end),
+        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)

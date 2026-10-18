@@ -1,18 +1,13 @@
 // Effect text as structured blocks: lead paragraphs, section labels, lists.
 // Rendered by `SkillBody`; shared by skill bodies and card effect text.
 //
-// Two shapes live behind `skillText`, and each has its own markers:
+// One shape -- the full rulebook text:
 //
-//   `skill_simple`  `火罐：开局 4，最多 4。\n· effect one\n· effect two`
-//                   one line per effect, `· ` starts a bullet, an indented
-//                   line continues the one above, `  - ` is a sub-bullet.
-//                   -> <ul>
+//   `（1）effect one（2）effect two（3）effect three`
+//   numbered effects run inline, sometimes restarting at （1） for a second
+//   section. -> <ol>
 //
-//   the full text   `（1）effect one（2）effect two（3）effect three`
-//                   numbered effects run inline, sometimes restarting at （1）
-//                   for a second section. -> <ol>
-//
-// Card text is the full shape plus two things of its own:
+// Card text is that shape plus two things of its own:
 //
 //   * section labels on a line of their own (`[特]：`, `[手]：`, `[持续]`), each
 //     restarting the numbering under it -- so the text is cut into sections at
@@ -32,7 +27,6 @@ export interface Item {
 export type Block =
   | { t: "p"; text: string }
   | { t: "label"; text: string }
-  | { t: "ul"; items: Item[] }
   | { t: "ol"; items: Item[] };
 
 /** `（1）` or halfwidth `(1)`; the digits are the list's own numbering. */
@@ -53,31 +47,6 @@ const STEP = /^\s*\d+[.．](?!\d)\s*/;
 function isXref(text: string, end: number): boolean {
   const after = text.slice(end, end + 2);
   return after.startsWith("技能") || after.startsWith("效果") || /^(?:[或和与、。，；,;]|$)/.test(after);
-}
-
-/** `skill_simple`'s `· ` bullets. */
-function parseBullets(text: string): Block[] {
-  let lead = "";
-  const items: Item[] = [];
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-    const indented = /^\s/.test(raw);
-    const body = line.replace(/^[·-]\s*/, "");
-    const marked = /^[·-]/.test(line);
-    const last = items[items.length - 1];
-    if (marked && !indented) items.push({ text: body, sub: [] });
-    else if (indented && line.startsWith("-") && last) last.sub.push(body);
-    else if (last) {
-      // A continuation: join it onto whatever it belongs to, bullet or sub.
-      if (last.sub.length) last.sub[last.sub.length - 1] += ` ${body}`;
-      else last.text += ` ${body}`;
-    } else lead = lead ? `${lead} ${body}` : body;
-  }
-  const out: Block[] = [];
-  if (lead) out.push({ t: "p", text: lead });
-  if (items.length) out.push({ t: "ul", items });
-  return out;
 }
 
 /** One numbered effect, with its `1. / 2.` sub-step lines split out. */
@@ -184,7 +153,6 @@ function sections(text: string): { label?: string; body: string }[] {
 }
 
 export function parse(text: string): Block[] {
-  if (/^\s*·/m.test(text)) return parseBullets(text);
   const out: Block[] = [];
   for (const sec of sections(text)) {
     if (sec.label) out.push({ t: "label", text: sec.label });

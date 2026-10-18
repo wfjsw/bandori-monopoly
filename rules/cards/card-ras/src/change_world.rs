@@ -15,12 +15,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CHANGE_WORLD: CardDef = CardDef::new(
     "RAS:Change the world",
     &[
-        On::Play("", Some(cant_play), play),
+        On::Play("", "", Some(cant_play), play),
         // 规则书: 「期间每经过一个不属于你的livehouse格子」 -- the owner's main
         // walk this turn, over a buyable Live House the owner does not hold.
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner",
+            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner", "",
             None,
             pass_tile,
         ),
@@ -35,7 +35,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         ),
         On::Action(
             &[ActionKind::PayAfter],
-            "card.placed && pay_is_rent && target == owner",
+            "card.placed && pay_is_rent && target == owner", "",
             Some(on_card_tile_with_houses),
             pay_after,
         ),

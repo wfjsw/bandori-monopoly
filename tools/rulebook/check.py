@@ -18,8 +18,8 @@ inline rather than as `//! > ` -- e.g. the 该清CP了 text on `mark:cp` -- is
 fine; only `//! > ` runs are checked.)
 
 Event rules (rules/events/src/*.rs) are `event:*` ids with no roster card entry
-either; their quote is the event's `text` in `data/events.json` (the sheet's
-中立事件 tab), matched the same way.
+either; their quote is the event's `CardMeta::text` beside the rule body (the
+sheet's 中立事件 tab), matched the same way.
 
 Usage: python tools/rulebook/check.py
 """
@@ -31,12 +31,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BOOK = json.load(open(ROOT / "docs" / "rulebook" / "cards.json", encoding="utf-8"))
 RULES = (ROOT / "data" / "rules.txt").read_text(encoding="utf-8")
-EVENTS = {
-    e["id"]: e["text"]
-    for e in json.load(open(ROOT / "data" / "events.json", encoding="utf-8"))["events"]
-}
 CARD_ID = re.compile(r'(?:id: |CardDef::new\(\s*)"([^"]+)"')
 CITES = re.compile(r"//+\s*规则书\s*[:：]")
+# The rulebook body authored on the CardMeta beside the rule (`text` column).
+CARD_META_TEXT = re.compile(r'\.text\(\s*r#"(.*?)"#\s*\)', re.S)
 
 
 def norm(text: str) -> str:
@@ -126,9 +124,10 @@ def main() -> int:
             print(f"{rel}: quotes the passage but no code line cites it (// 规则书: ...)")
     print(f"{tiles} tiles + tile marks checked, {bad - card_bad} problem(s).")
 
-    # Event rules cite data/events.json from the file header (the roster has no
-    # `event:*` ids). The quote is the event's `text` field, matched the same
-    # way a tile's quote is matched against data/rules.txt.
+    # Event rules quote their CardMeta::text in the file header (the roster has
+    # no physical-card row for `event:*` ids). The quote is the `text` column
+    # beside the rule body, matched the same way a tile's quote is matched
+    # against data/rules.txt.
     events = 0
     ev_bad = bad
     for src in sorted(ROOT.glob("rules/events/src/*.rs")):
@@ -145,11 +144,12 @@ def main() -> int:
             bad += 1
             print(f"{rel}: {cid} is not an event:* rule id")
             continue
-        want = EVENTS.get(cid.removeprefix("event:"))
-        if want is None:
+        tm = CARD_META_TEXT.search(text)
+        if tm is None:
             bad += 1
-            print(f"{rel}: {cid} has no data/events.json entry")
+            print(f"{rel}: {cid} has no CardMeta::text")
             continue
+        want = tm.group(1)
         if norm(want) not in norm(quoted_text(text)):
             bad += 1
             print(f"{rel}: {cid} does not quote its event text")

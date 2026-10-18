@@ -1,14 +1,32 @@
-// Game data: fetched once from /data, handed to the wasm rules and kept typed here
-// for display.
+// Game data: the identity roster from the wasm ruleset, merged with the
+// display fields the webui owns (generated/display.json + data/*.json) and
+// kept typed here for display.
 
-import { settings } from "./store";
 import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
+import displayJson from "../generated/display.json";
 import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
 import { bandLogo, charArt } from "./assets";
-import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine } from "./types";
+import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile } from "./types";
+
+/** Build-exported presentation fields (empty entries omitted). */
+const display = displayJson as DisplayFile;
+
+/**
+ * Current rules-book version, client-owned. Drives the rules NEW badge
+ * (`Seen::Rules` used to read `game_core::data::RULES_VERSION`; the webui
+ * supplies it now). Bump when the rules book changes.
+ */
+export const RULES_VERSION = 1;
+
+/** Persona a new profile starts with (was `match_rules.defaultHomePersona`). */
+export const DEFAULT_HOME_PERSONA = "高松灯";
+
+/** UI-only tables the engine no longer carries in `glue.data_files()` after
+ *  the presentation split. Fetched here, outside `glue.load_data`. */
+const UI_DATA_FILES = ["home_lines.json", "voice_lines.json", "rules.txt"] as const;
 
 export interface GameData {
   tiles: TileData[];
@@ -65,24 +83,17 @@ async function loadRuleset(): Promise<void> {
   }
 }
 
-/** Display-only overlay of `skill_simple.json`: newcomer skill bodies and the
- *  card `counterReason` column (once in `cards.json`, no longer fetched). */
-interface SkillSimple {
-  personas: { name: string; text: string }[];
-  groups: { name: string; text: string }[];
-  cards?: { id: string; counterReason: string }[];
-}
-
 /**
  * The one boot gate for the typed `D`. Order matters:
  *
  * 1. wasm init + glue identity;
  * 2. **ruleset first** -- `roster_json()` is empty until `ruleset_build`, and
  *    deck builder / gallery / home read `D` as soon as this resolves;
- * 3. `roster_json()` for cards / characters / bands;
- * 4. the remaining `data_files()` tables + optional bot books, `load_data`;
- * 5. merge the display-only overlay (`skill_simple.json`) and assign `D` here,
- *    only at the end, so a throw leaves `D` untouched and Boot shows the error
+ * 3. `roster_json()` for the identity rows (cards / personas / groups);
+ * 4. the remaining `data_files()` tables + the UI-only tables + optional bot
+ *    books, `load_data` (engine tables only);
+ * 5. merge `generated/display.json` onto the roster and assign `D` here, only
+ *    at the end, so a throw leaves `D` untouched and Boot shows the error
  *    stage instead of a half-initialized table.
  */
 export async function loadGameData(progress: (p: number) => void): Promise<void> {
@@ -97,20 +108,26 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // degraded (empty roster + StubRules), not fatal -- `loadRuleset` toasts.
   await loadRuleset();
 
+  // Game roster after the presentation split: identity plus the rulebook
+  // prose (`text`), which is game content and rides `ruleset_metadata`. Pure
+  // display columns are merged below from `generated/display.json`.
   const roster = JSON.parse(glue.roster_json()) as {
-    cards: CardData[];
-    personas: PersonaData[];
-    groups: GroupData[];
+    cards: { id: string; group: string; name: string; owner: string; derived: boolean; tags: string[]; text: string }[];
+    personas: { name: string; group: string; skill: string; exclusiveCards: string[]; preset: string[]; variantOf?: string; text: string }[];
+    groups: { name: string; skill: string; sharesExclusives?: boolean; text: string }[];
+    events: { id: string; name: string; derived: boolean; text: string }[];
   };
-  const names: string[] = JSON.parse(glue.data_files());
+  // Engine tables only (post-split: board / match_rules).
+  const engineNames: string[] = JSON.parse(glue.data_files());
+  const allNames = [...new Set([...engineNames, ...UI_DATA_FILES])];
   const files: Record<string, string> = {};
   let done = 0;
   await Promise.all(
-    names.map(async (n) => {
+    allNames.map(async (n) => {
       const r = await fetch("/data/" + n);
       if (!r.ok) throw new Error(tr("boot.dataError", { name: n }));
       files[n] = await r.text();
-      progress(++done / names.length);
+      progress(++done / allNames.length);
     }),
   );
   // Optional: the bot deck book (`docs/BOT.md` §3.7). Missing = empty book =
@@ -131,30 +148,64 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   } catch {
     /* absent book is fine */
   }
-  glue.load_data(JSON.stringify(files));
+  // Only the engine tables (+ the optional bot books) cross into wasm. The
+  // UI-only tables above stay on this side -- they are presentation.
+  const engineFiles: Record<string, string> = {};
+  for (const n of [...engineNames, "deck_book.json", "strategy_book.json"]) {
+    if (files[n] !== undefined) engineFiles[n] = files[n];
+  }
+  glue.load_data(JSON.stringify(engineFiles));
 
   const j = (n: string) => JSON.parse(files[n].replace(/^﻿/, ""));
-  // Cards / characters / bands come from the ruleset roster (was
-  // `cards.json` / `characters.json` / `bands.json`; those stay on disk for
-  // authoring tools until they retire).
-  const cards = roster.cards;
-  const personas = roster.personas;
-  const groups = roster.groups;
-  const events: EventData[] = j("events.json").events;
+  // Cards / personas / groups: identity from the ruleset roster, display from
+  // `generated/display.json` (authored in Rust rule code, exported at build).
+  // The [反击] prompt's `counterReason` rides on the card row there too.
+  const cards: CardData[] = roster.cards.map((c) => {
+    const d = display.cards[c.id] ?? {};
+    return {
+      ...c,
+      // Game prose is on the roster too (`CardData.text`); the export is the
+      // build-time copy. Prefer it, but never blank a body the roster has.
+      text: d.text ?? c.text ?? "",
+      rawName: d.rawName ?? "",
+      cell: d.cell ?? "",
+      ...(d.counterReason ? { counterReason: d.counterReason } : {}),
+    };
+  });
+  const personas: PersonaData[] = roster.personas.map((p) => {
+    const d = display.personas[p.name] ?? {};
+    return {
+      ...p,
+      display: d.display ?? "",
+      text: d.text ?? p.text ?? "",
+      color: d.color ?? "",
+      cnId: d.cnId ?? "",
+      art: d.art ?? "",
+      costume: d.costume ?? "",
+      ...(d.variantTag ? { variantTag: d.variantTag } : {}),
+    };
+  });
+  const groups: GroupData[] = roster.groups.map((g) => {
+    const d = display.groups[g.name] ?? {};
+    return {
+      ...g,
+      text: d.text ?? g.text ?? "",
+      shortName: d.shortName ?? "",
+      color: d.color ?? "",
+      logo: d.logo ?? "",
+    };
+  });
+  // Events: identity + game prose from the roster, `cell` from display.json.
+  const events: EventData[] = roster.events.map((e) => {
+    const d = display.events?.[e.id] ?? {};
+    return {
+      ...e,
+      text: d.text ?? e.text ?? "",
+      name: d.name ?? e.name ?? "",
+      cell: d.cell ?? "",
+    };
+  });
   const homeLines = j("home_lines.json").personas ?? [];
-  // `skill_simple.json` is the display-only overlay: the hand-written newcomer
-  // version of each skill body (`· ` bullets) rides on the character/band
-  // record as `simple` (what `skillText` picks when the setting is on -- the
-  // roster's `text` is the fallback), and the card `counterReason` column
-  // (the [反击] prompt's "why this card may be declared") rides on each card.
-  const simple = j("skill_simple.json") as SkillSimple;
-  for (const c of personas) c.simple = simple.personas.find((x) => x.name === c.name)?.text;
-  for (const b of groups) b.simple = simple.groups.find((x) => x.name === b.name)?.text;
-  const reasonById = new Map((simple.cards ?? []).map((x) => [x.id, x.counterReason]));
-  for (const c of cards) {
-    const reason = reasonById.get(c.id);
-    if (reason) c.counterReason = reason;
-  }
   const byId = new Map(cards.map((c) => [c.id, c]));
   D = {
     tiles: j("board.json").tiles,
@@ -189,7 +240,7 @@ export function cardTitle(id: string): string {
   const skill = skillCard(id);
   if (skill) return skill.title;
   // An event's activation names it as `event:<id>` (the rule id) or as the
-  // bare `data/events.json` id the draw event carries -- both resolve here.
+  // bare roster id the draw event carries -- both resolve here.
   const ev = D.event(id.startsWith("event:") ? id.slice(6) : id)?.name;
   if (ev) return ev;
   // A tile rule instance (`tile:circle`) is named after the board tile of that
@@ -210,7 +261,7 @@ export function skillCard(id: string): { title: string; text: string; group?: st
   const band = D.groups.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
   if (band) return { title: band.skill, text: skillText(band), group: band.name, color: band.color, art: bandLogo(band.name) };
   const character = D.personas.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
-  if (character) return { title: character.skill, text: skillText(character), group: character.group, color: character.color, art: charArt(character.art, "thumb") };
+  if (character) return { title: character.skill, text: skillText(character), group: character.group, color: character.color, art: charArt(D.artId(character), "thumb") };
   return undefined;
 }
 
@@ -225,8 +276,8 @@ export function cardText(id: string): string {
 }
 
 /** Why a [反击] card may be declared: its own trigger-condition clause
- *  (「…时」), kept on the card data (`counterReason`). Empty when the card
- *  carries no such clause. */
+ *  (「…时」), from `generated/display.json` and kept on the card data
+ *  (`counterReason`). Empty when the card carries no such clause. */
 export function cardCounterReason(id: string): string {
   if (!id || !D) return "";
   return D.card(id)?.counterReason ?? "";
@@ -243,13 +294,7 @@ function bandColorOf(c: CardData): string {
   return D.group(c.group)?.color ?? "#ED4E76";
 }
 
-/** C# `SkillText.Of(c)`: the simplified skill text when the setting is on. */
-export function skillText(entry: { text: string; simple?: string } | undefined): string {
-  if (!entry) return "";
-  return settings().skillTextSimple && entry.simple ? entry.simple : entry.text;
-}
-
-/** C# `SkillText.SwitchLabel`: the action the toggle performs. */
-export function skillTextSwitch(): string {
-  return settings().skillTextSimple ? "settings.skillFull" : "settings.skillSimple";
+/** The entry's own rulebook skill body. */
+export function skillText(entry: { text: string } | undefined): string {
+  return entry?.text ?? "";
 }

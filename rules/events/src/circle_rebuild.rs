@@ -1,6 +1,6 @@
 //! `event:协助CiRCLE重建` -- 事件卡「协助CiRCLE重建」（中立事件 A8）.
 //!
-//! 事件文本（data/events.json, id `协助CiRCLE重建`）:
+//! 事件文本（`CardMeta` beside the rule body, id `协助CiRCLE重建`）:
 //! > 将此卡放置于场地中央，为其放置5个奇迹水晶，每次有人经过CiRCLE时移除一个，为0时放入事件弃牌，期间CiRCLE的[触发结算]改为选择获得2层[停留]或失去500资金（该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果），CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果
 
 use card_sdk::abi::{prop, text_slot, ActionKind};
@@ -17,24 +17,14 @@ const CAFE: &str = "CiRCLE 咖啡厅";
 pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     "event:协助CiRCLE重建",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 「每次有人经过CiRCLE时」 / 「CiRCLE的[触发结算]」 -- the two tiles this
         // event re-homes are the hooks' applicability, not their effect. The
         // body-top tile check is the condition now (`is_start(tile.id)` and
         // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
         // bail stays a residual guard (not in the CEL schema).
-        On::Action(
-            &[ActionKind::PassTile],
-            "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
-            None,
-            on_pass,
-        ),
-        On::Action(
-            &[ActionKind::SettleBody],
-            "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
-            Some(settle_applies),
-            on_settle_body,
-        ),
+        On::Action(&[ActionKind::PassTile], "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", "", None, on_pass),
+        On::Action(&[ActionKind::SettleBody], "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", "", Some(settle_applies), on_settle_body),
     ],
 )
 // Deed-popup text (`docs/TILES.md` 「Tile text」): one hook covers both tiles,
@@ -50,7 +40,12 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     // SettleBody (entry 2) speaks for the [结算] half.
     (2, text_slot::SETTLE, "CiRCLE", "deed.note.rebuildSettle"),
     (2, text_slot::SETTLE, CAFE, "deed.note.draw"),
-]);
+])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"协助CiRCLE重建"#)
+            .text(r#"将此卡放置于场地中央，为其放置5个奇迹水晶，每次有人经过CiRCLE时移除一个，为0时放入事件弃牌，期间CiRCLE的[触发结算]改为选择获得2层[停留]或失去500资金（该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果），CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果"#)
+            .cell(r#"A8"#)
+            .derived(false));
 
 /// The settle not already claimed by an earlier replacement in the chain
 /// (the `cancelled` bail below). The tile is the entry's condition.

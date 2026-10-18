@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const RIMI_CHOCO: CardDef = CardDef::new(
     "PPP:（里美）我的心就像巧克力螺",
-    &[On::Play("", Some(cant_play), play)],
+    &[On::Play("", "", Some(cant_play), play)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"我的心就像巧克力螺"#)
         .raw_name(r#"（里美）我的心就像巧克力螺"#)

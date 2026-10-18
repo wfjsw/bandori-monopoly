@@ -2272,10 +2272,16 @@ impl World {
         }
     }
 
-    /// A generic named rule parameter in force: the match-rules base plus any
-    /// card-applied bonus ([`Self::add_rule_param_bonus`]).
-    pub fn rule_param(&self, data: &GameData, name: &str) -> i32 {
-        let base = data.match_rules.rule_params.get(name).copied().unwrap_or(0);
+    /// A generic named rule parameter in force: the match base
+    /// ([`Self::rule_params`], or the code default when the map is empty /
+    /// lacks the name) plus any card-applied bonus
+    /// ([`Self::add_rule_param_bonus`]).
+    pub fn rule_param(&self, name: &str) -> i32 {
+        let base = self
+            .rule_params
+            .get(name)
+            .copied()
+            .unwrap_or_else(|| crate::data::default_rule_param(name));
         let bonus = self.rule_param_bonus.get(name).copied().unwrap_or(0);
         base + bonus
     }
@@ -2291,8 +2297,8 @@ impl World {
     }
 
     /// Dice-rent unit multiplier (`rentUnitMult`): at least 1.
-    pub fn rent_unit_mult(&self, data: &GameData) -> i32 {
-        self.rule_param(data, "rentUnitMult").max(1)
+    pub fn rent_unit_mult(&self) -> i32 {
+        self.rule_param("rentUnitMult").max(1)
     }
 
     pub fn add_rent_unit_bonus(&mut self, n: i32) -> i32 {

@@ -25,21 +25,21 @@ const USED: &str = "skill.poppin.used";
 pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
         // returned still flashed -- one per step of every walk.
         On::Action(
             &[ActionKind::Pass],
-            "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
+            "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)", "",
             None,
             on_pass,
         ),
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
-        On::Action(&[ActionKind::SettleBefore], "", Some(before_settle_applies), before_settle),
+        On::Action(&[ActionKind::SettleBefore], "", "", Some(before_settle_applies), before_settle),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（1） chains two independent 「随后可使用…」 actions
         // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather
@@ -48,7 +48,7 @@ pub const POPPIN: CardDef = CardDef::new(
         // either is available; the body lists the available options and skips
         // the prompt when only one is. The 「或」 inside the crystal half is its
         // own sub-choice (draw 1 vs +2000).
-        On::Play("", Some(cant_play), press),
+        On::Play("", "", Some(cant_play), press),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」
@@ -341,7 +341,6 @@ fn cash(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"Poppin' Party"#)
     .short_name(r#"PPP"#)
-    .boot_art(r#"001"#)
     .color(r#"#FF3377"#)
     .skill(r#"星之鼓动"#)
     .text(r#"（1）[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸，随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]，随后可使用此卡的2个[奇迹水晶]抽1张卡或[获得]2000资金（使用此卡[奇迹水晶]的效果为1回合1次）。（2）无法获取[CiRCLE奖励]（3）游戏开始时所有Poppin' Party角色视为同时拥有“星之鼓动山丘”，可正常抵押“星之鼓动山丘”，且非Poppin' Party角色对“星之鼓动山丘”的[结算]改为分摊支付给所有未抵押“星之鼓动山丘”的Poppin' Party角色。“星之鼓动山丘”不可被抵押双倍支付购买，只有全部Poppin' Party角色破产后才可被正常购买。（4）不能通过[主要移动]的[结算]盖房。"#)

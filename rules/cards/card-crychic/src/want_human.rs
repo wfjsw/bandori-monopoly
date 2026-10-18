@@ -16,10 +16,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
-        On::Play("", None, want_human),
+        On::Play("", "", None, want_human),
         On::Action(
             &[ActionKind::TurnStart, ActionKind::DiceRollAfter, ActionKind::TurnEnd],
-            "actor == owner && card.placed",
+            "actor == owner && card.placed", "",
             None,
             counteract,
         ),

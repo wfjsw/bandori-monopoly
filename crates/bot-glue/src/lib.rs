@@ -42,7 +42,7 @@ use bot_core::{
     action, heuristic_message_view, view_extras, Ismcts, MatchSim, SearchConfig, SearchOutcome,
     SeatView,
 };
-use game_core::data::{GameData, Roster, DATA_FILES};
+use game_core::data::{GameData, Roster};
 use game_core::engine::{CardRules, StubRules};
 use game_core::net::NetMessage;
 use game_rules::{Ruleset, WasmRules};
@@ -71,7 +71,7 @@ thread_local! {
     /// Built ruleset, waiting for (or already bound to) the game tables.
     /// Either load order works: `load_data` before `ruleset_build` or after.
     static RULESET: RefCell<Option<Ruleset>> = const { RefCell::new(None) };
-    /// The `DATA_FILES` contents [`load_data`] was given, kept so a later
+    /// The `BOOT_FILES` contents [`load_data`] was given, kept so a later
     /// `ruleset_build` can rebuild the tables with the ruleset's roster.
     static FILES: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
     static RULESET_SHA: RefCell<String> = const { RefCell::new(String::new()) };
@@ -223,7 +223,7 @@ fn assemble() -> Result<(), JsError> {
 }
 
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
-/// `DATA_FILES`, plus the optional `deck_book.json`. Same shape as
+/// `BOOT_FILES`, plus the optional `deck_book.json`. Same shape as
 /// `web-glue::load_data`. The roster is **not** among them: it comes from the
 /// ruleset ([`ruleset_build`]), whichever order the two are called in.
 #[wasm_bindgen]
@@ -233,10 +233,10 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
     assemble()
 }
 
-/// The file names `load_data` needs.
+/// The file names `load_data` needs (the host boot tables).
 #[wasm_bindgen]
 pub fn data_files() -> String {
-    json(&DATA_FILES)
+    json(&game_core::data::BOOT_FILES)
 }
 
 /// Feed one card module (the bytes of `<sha>.wasm`); call `ruleset_build` after.

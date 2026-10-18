@@ -250,6 +250,11 @@ pub fn roster_metadata() -> card_sdk::meta::MetaDoc {
                 ordinals: ruleset_core::roster_order::GROUPS,
                 rows: skill_groups::roster_table::meta_rows,
             },
+            card_sdk::meta::RosterList {
+                kind: "event",
+                ordinals: rules_events::ORDINALS,
+                rows: rules_events::meta_rows,
+            },
         ],
     };
     let _frame = card_sdk::native::enter();

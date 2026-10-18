@@ -1,10 +1,10 @@
-//! Browser bridge over `game-core`.
+//! Browser bridge over `game-core` + `player-meta`.
 //!
 //! Everything crosses the boundary as JSON strings in the same shapes the server
 //! uses, so the web client has one set of types for online and solo play.
 //!
-//! * `load_data` -- the contents of `/data/*` (`DATA_FILES`, no roster)
-//! * `roster_json` -- cards / personas / groups from the built ruleset
+//! * `load_data` -- the contents of `/data/*` (`BOOT_FILES`, no roster)
+//! * `roster_json` -- cards / personas / groups / events from the built ruleset
 //! * deck rules and saved deck slots (`deck_*`)
 //! * profile and progression (`profile_*`), persisted by the client
 //! * [`SoloMatch`] -- the full match engine running locally
@@ -13,14 +13,15 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{GroupData, CardData, PersonaData, GameData, Roster, DATA_FILES};
+use game_core::data::{EventData, GroupData, CardData, PersonaData, GameData, Roster};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
-use game_core::profile::{PlayerProfile, Seen};
-use game_core::progression;
 use game_core::rng::Seed256;
+use player_meta::decks as saved_decks;
+use player_meta::profile::{PlayerProfile, Seen};
+use player_meta::progression;
 use game_core::record::{
     decode_record, encode_record_zst, parse_header, parse_header_bytes, parse_record, EngineStamp,
     MatchSetup, RecordedMatch, Replayer, RECORD_VERSION,
@@ -29,7 +30,6 @@ use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 use game_rules::WasmRules;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::*;
 
 /// The browser engine is long-lived and allocates on every tick, so the
@@ -46,7 +46,8 @@ thread_local! {
     /// The raw [`load_data`] payload, kept so [`ruleset_build`] can rebuild
     /// `GameData` with the ruleset roster when the tables landed first.
     static FILES: RefCell<Option<HashMap<String, String>>> = const { RefCell::new(None) };
-    /// Sha256 over the `DATA_FILES` contents in order, captured by [`load_data`].
+    /// `EngineStamp::data_sha256`. Always empty on this build: the tables a
+    /// replay depends on ride in `MatchSetup`, not in a host-side hash.
     static DATA_SHA: RefCell<String> = const { RefCell::new(String::new()) };
     /// The built ruleset, bound or not: the roster source for [`load_data`] /
     /// [`roster_json`], and the set [`load_data`] binds against.
@@ -145,9 +146,9 @@ fn roster() -> Roster {
 }
 
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
-/// `DATA_FILES` (the remaining tables -- the roster is **not** in here; it
-/// comes from the ruleset via [`roster_json`]), plus the optional
-/// `deck_book.json` (bot deck book, `docs/BOT.md` §3.7) when the client has one.
+/// [`BOOT_FILES`] (the host tables -- the roster is **not** in here; it comes
+/// from the ruleset via [`roster_json`]), plus the optional `deck_book.json`
+/// (bot deck book, `docs/BOT.md` §3.7) when the client has one.
 ///
 /// Either call order works with [`ruleset_build`]:
 /// * ruleset first: this builds `GameData` with that set's roster and binds;
@@ -159,19 +160,11 @@ fn roster() -> Roster {
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
-    // Stamp input: sha256 over the contents in `DATA_FILES` order, so a record
-    // can tell whether the board / card data it was written against is here.
-    // A leading UTF-8 BOM is not content: the browser's decoder strips it and
-    // `read_to_string` keeps it, so hash without it to get one recipe.
-    let mut hasher = Sha256::new();
-    for name in DATA_FILES {
-        if let Some(contents) = files.get(name) {
-            hasher.update(contents.strip_prefix('\u{feff}').unwrap_or(contents).as_bytes());
-        }
-    }
-    let sha = hex(&hasher.finalize());
+    // `data_sha256` is empty on every record this build writes: the board and
+    // rule parameters ride in `MatchSetup`, so host tables no longer fork a
+    // replay (`docs/REPLAY.md` §9 / §10). The hash recipe is a no-op.
     let d = build_data(&files, roster())?;
-    DATA_SHA.with(|s| *s.borrow_mut() = sha);
+    DATA_SHA.with(|s| *s.borrow_mut() = String::new());
     FILES.with(|f| *f.borrow_mut() = Some(files));
     DATA.with(|slot| *slot.borrow_mut() = Some(d.clone()));
     if let Some(set) = SET.with(|s| s.borrow().clone()) {
@@ -180,10 +173,11 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
     Ok(())
 }
 
-/// The ruleset roster in the three legacy data-file shapes, one object:
-/// `{"cards":[...],"personas":[...],"groups":[...]}` with camelCase rows
-/// (the old `cards.json` / `personas.json` / `groups.json` shapes minus the
-/// display-only overlay fields, which live in `skill_simple.json`).
+/// The ruleset roster in the three legacy data-file shapes plus events, one
+/// object: `{"cards":[...],"personas":[...],"groups":[...],"events":[...]}`
+/// with camelCase rows (the old `cards.json` / `personas.json` / `groups.json`
+/// / `events.json` shapes minus the display-only overlay fields, which live in
+/// `display.json`).
 ///
 /// Empty arrays when no ruleset is built -- does not throw. Call
 /// [`ruleset_build`] first for a real roster; hosts that only need the tables
@@ -195,21 +189,15 @@ pub fn roster_json() -> String {
         cards: Vec<CardData>,
         personas: Vec<PersonaData>,
         groups: Vec<GroupData>,
+        events: Vec<EventData>,
     }
     let r = roster();
     json(&RosterJson {
         cards: r.cards,
         personas: r.personas,
         groups: r.groups,
+        events: r.events,
     })
-}
-
-fn hex(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        s.push_str(&format!("{b:02x}"));
-    }
-    s
 }
 
 fn data_sha() -> String {
@@ -253,10 +241,10 @@ fn stamp() -> EngineStamp {
     parse::<EngineStamp>("stamp", &engine_stamp()).unwrap_or_default()
 }
 
-/// The file names `load_data` needs.
+/// The file names `load_data` needs (the host boot tables).
 #[wasm_bindgen]
 pub fn data_files() -> String {
-    json(&game_core::data::DATA_FILES)
+    json(&game_core::data::BOOT_FILES)
 }
 
 // ------------------------------------------------------------------ decks
@@ -365,7 +353,7 @@ pub fn deck_slot_cards(
 ) -> Result<String, JsError> {
     let d = data()?;
     let p: PlayerProfile = parse("profile", profile_json)?;
-    Ok(json(&deck::cards(
+    Ok(json(&saved_decks::cards(
         &d,
         &p,
         persona(&d, persona_name)?,
@@ -385,7 +373,7 @@ pub fn deck_save(
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let ids: Vec<String> = parse("ids", ids_json)?;
-    deck::save(&d, &mut p, persona(&d, persona_name)?, slot, &ids);
+    saved_decks::save(&d, &mut p, persona(&d, persona_name)?, slot, &ids);
     Ok(json(&p))
 }
 
@@ -406,19 +394,19 @@ pub fn deck_list(profile_json: &str, persona_name: &str) -> Result<String, JsErr
         name: String,
         cards: Vec<String>,
     }
-    let list: Vec<Entry> = deck::list(&p, c)
+    let list: Vec<Entry> = saved_decks::list(&p, c)
         .into_iter()
         .map(|sd| Entry {
             id: sd.slot,
             name: sd.name.clone(),
-            cards: deck::cards(&d, &p, c, sd.slot),
+            cards: saved_decks::cards(&d, &p, c, sd.slot),
         })
         .collect();
     Ok(json(&list))
 }
 
 /// Create a deck from `ids_json` (may be empty) named `name` ("" = auto).
-/// Returns the updated profile (no-op past `deck::DECKS_MAX`).
+/// Returns the updated profile (no-op past `saved_decks::DECKS_MAX`).
 #[wasm_bindgen]
 pub fn deck_create(
     profile_json: &str,
@@ -429,7 +417,7 @@ pub fn deck_create(
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let ids: Vec<String> = parse("ids", ids_json)?;
-    deck::create(&d, &mut p, persona(&d, persona_name)?, name, &ids);
+    saved_decks::create(&d, &mut p, persona(&d, persona_name)?, name, &ids);
     Ok(json(&p))
 }
 
@@ -443,7 +431,7 @@ pub fn deck_duplicate(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::duplicate(&d, &mut p, persona(&d, persona_name)?, slot);
+    saved_decks::duplicate(&d, &mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -458,7 +446,7 @@ pub fn deck_rename(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::rename(&mut p, persona(&d, persona_name)?, slot, name);
+    saved_decks::rename(&mut p, persona(&d, persona_name)?, slot, name);
     Ok(json(&p))
 }
 
@@ -472,7 +460,7 @@ pub fn deck_delete(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::delete(&mut p, persona(&d, persona_name)?, slot);
+    saved_decks::delete(&mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -487,7 +475,7 @@ pub fn deck_move(
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::move_by(&mut p, persona(&d, persona_name)?, slot, delta);
+    saved_decks::move_by(&mut p, persona(&d, persona_name)?, slot, delta);
     Ok(json(&p))
 }
 
@@ -495,7 +483,7 @@ pub fn deck_move(
 pub fn deck_choose(profile_json: &str, persona_name: &str, slot: i32) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::choose(&mut p, persona(&d, persona_name)?, slot);
+    saved_decks::choose(&mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -504,12 +492,14 @@ pub fn deck_choose(profile_json: &str, persona_name: &str, slot: i32) -> Result<
 pub fn deck_chosen_slot(profile_json: &str, persona_name: &str) -> Result<i32, JsError> {
     let d = data()?;
     let p: PlayerProfile = parse("profile", profile_json)?;
-    Ok(deck::chosen_slot(&d, &p, persona(&d, persona_name)?))
+    Ok(saved_decks::chosen_slot(&d, &p, persona(&d, persona_name)?))
 }
 
 // ------------------------------------------------------------------ profile
 
 /// `player_id`: random 9-digit string; `now`: `yyyy-MM-dd HH:mm`; `today`: `yyyy-MM-dd`.
+/// The home persona starts empty; the client sets it (it owns the display
+/// roster and the default character).
 #[wasm_bindgen]
 pub fn profile_create(
     name: &str,
@@ -523,11 +513,13 @@ pub fn profile_create(
     )))
 }
 
-/// Parse and repair/migrate a saved profile.
+/// Parse and repair/migrate a saved profile. An unknown home persona falls
+/// back to empty -- the client substitutes its own default.
 #[wasm_bindgen]
 pub fn profile_load(profile_json: &str) -> Result<String, JsError> {
     let d = data()?;
-    let p = PlayerProfile::from_json(&d, profile_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let p = PlayerProfile::from_json(&d, profile_json)
+        .map_err(|e| JsError::new(&e.to_string()))?;
     Ok(json(&p))
 }
 
@@ -780,15 +772,20 @@ impl SoloMatch {
         mode.check_seats(members.len())
             .map_err(|e| JsError::new(&e))?;
         let seed = Seed256::from_hex(seed_hex).map_err(|e| JsError::new(&e))?;
+        let data = data()?;
         let setup = MatchSetup {
             members,
             seed: 0,
             seed256: Some(seed),
             weights,
             clock: Some(clock),
+            // Fresh match: code-default rule params (empty map), and the host
+            // board the boot loaded -- recorded so a replay is self-contained.
+            rule_params: Default::default(),
+            board: Some(data.tiles.clone()),
         };
         Ok(SoloMatch {
-            m: RecordedMatch::new(data()?, rules()?, setup, mode),
+            m: RecordedMatch::new(data, rules()?, setup, mode),
         })
     }
 

@@ -13,7 +13,7 @@ use ruleset_core::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BACKSTAGE_TOUR: CardDef =
-    CardDef::new("HHW:出发！后台之旅！", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("HHW:出发！后台之旅！", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"出发！后台之旅！"#)
         .raw_name(r#"出发！后台之旅！"#)
         .tags(&[])

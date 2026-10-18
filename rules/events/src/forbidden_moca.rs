@@ -1,6 +1,6 @@
 //! `event:Forbidden Moca` -- 事件卡「Forbidden Moca」（中立事件 A20）.
 //!
-//! 事件文本（data/events.json, id `Forbidden Moca`）:
+//! 事件文本（`CardMeta` beside the rule body, id `Forbidden Moca`）:
 //! > 直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！
 
 use card_sdk::abi::{ActionKind, FilterKind};
@@ -14,14 +14,19 @@ const ID: &str = "Forbidden Moca";
 pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
         // deleted (a no-op prefetch); the `value` param is the face being
         // halved (effect), not applicability.
         On::Filter(&[FilterKind::DiceRollValue], "", None, halve),
-        On::Action(&[ActionKind::AtEnd], "", None, expire),
+        On::Action(&[ActionKind::AtEnd], "", "", None, expire),
     ],
-);
+)
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"Forbidden Moca"#)
+            .text(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#)
+            .cell(r#"A20"#)
+            .derived(false));
 
 /// 规则书: 「直到你的下个回合结束…」 -- the event stays in play (「你的」 is the
 /// player who drew it) and its expiry is scheduled on that player's next turn

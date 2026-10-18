@@ -25,7 +25,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
-        On::Play("", None, aya_longing),
+        On::Play("", "", None, aya_longing),
         // ABI v74 Pattern E: the body is interactive (共鸣 prompts + a second
         // amount rewrite) so it cannot be a pure Filter. It rides
         // `ActionKind::Effect` -- the payment declaration, whose `t.value` the
@@ -35,7 +35,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         //   than at the old PaySplitAdd stage, so a sibling PaySplitAdd modifier now sees
         //   the already-shaved figure. Same result when no other add/mul
         //   modifier touches the payment.
-        On::Action(&[ActionKind::Effect], "actor == owner && value > 0", None, pay_add),
+        On::Action(&[ActionKind::Effect], "actor == owner && value > 0", r#"[消耗]或[支付]"#, None, pay_add),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)

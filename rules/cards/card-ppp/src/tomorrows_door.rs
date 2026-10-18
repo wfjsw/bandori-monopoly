@@ -20,10 +20,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         On::Action(
             &[ActionKind::PassTile],
-            "card.placed && actor == owner",
+            "card.placed && actor == owner", "",
             Some(pass_tile_guard),
             pass_tile,
         ),
@@ -41,7 +41,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // that replaces the body skips this entry.
         On::Action(
             &[ActionKind::SettleBody],
-            "card.placed && actor != owner && tile.id >= 0",
+            "card.placed && actor != owner && tile.id >= 0", "",
             Some(settle_body_guard),
             settle_body,
         ),

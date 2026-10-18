@@ -1,6 +1,6 @@
 //! `event:意外的对邦` -- 事件卡「意外的对邦」（中立事件 A19）.
 //!
-//! 事件文本（data/events.json, id `意外的对邦`）:
+//! 事件文本（`CardMeta` beside the rule body, id `意外的对邦`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
@@ -19,14 +19,19 @@ const TURNS: &str = "turns";
 pub const SURPRISE_DUEL: CardDef = CardDef::new(
     "event:意外的对邦",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
         On::FilterValue(&[FilterKind::DiceRollPlan], "", Some(on_plan_others), on_plan),
-        On::Action(&[ActionKind::TurnStartBefore], "", None, on_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], "", "", None, on_turn_start),
     ],
-);
+)
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"意外的对邦"#)
+            .text(r#"将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。"#)
+            .cell(r#"A19"#)
+            .derived(false));
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌」
 /// -- keep the event and remember who drew it; the turn-start hook below counts

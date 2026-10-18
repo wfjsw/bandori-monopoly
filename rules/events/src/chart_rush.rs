@@ -1,6 +1,6 @@
 //! `event:冲榜` -- 事件卡「冲榜」（中立事件 A24，衍生）.
 //!
-//! 事件文本（data/events.json, id `冲榜`）:
+//! 事件文本（`CardMeta` beside the rule body, id `冲榜`）:
 //! > 所有人失去所有[火罐]并且投掷Xd20，X为失去的指示物数量加一，点数最高的人获得2000资金或抽一张卡，点数第二的人获得1500资金，点数第三的人获得1000资金，点数第四的人获得500资金（如果两个人点数相同则同时获得较高的 那一档，例：获得奖励名次为1，2，2，4）
 
 use alloc::vec::Vec;
@@ -10,7 +10,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const CHART_RUSH: CardDef = CardDef::new("event:冲榜", &[On::Play("", None, play)]);
+pub const CHART_RUSH: CardDef = CardDef::new("event:冲榜", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"冲榜"#)
+            .text(r#"所有人失去所有[火罐]并且投掷Xd20，X为失去的指示物数量加一，点数最高的人获得2000资金或抽一张卡，点数第二的人获得1500资金，点数第三的人获得1000资金，点数第四的人获得500资金（如果两个人点数相同则同时获得较高的 那一档，例：获得奖励名次为1，2，2，4）"#)
+            .cell(r#"A24"#)
+            .derived(true));
 
 /// 规则书: 「所有人失去所有[火罐]并且投掷Xd20，X为失去的指示物数量加一」 --
 /// every player loses every fire pot and rolls (lost + 1) d20. One-shot: the

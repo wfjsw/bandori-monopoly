@@ -1,6 +1,6 @@
 //! `event:迷子的追逐` -- 事件卡「迷子的追逐」（中立事件 A26，衍生）.
 //!
-//! 事件文本（data/events.json, id `迷子的追逐`）:
+//! 事件文本（`CardMeta` beside the rule body, id `迷子的追逐`）:
 //! > 所有玩家各投5d20。如果抽到此卡的玩家的点数严格大于所有其他玩家的点数则将一张“[衍生]让我来结束一切”背面朝上放置于事件牌堆顶部，否则将一张“[衍生]一切不会结束”背面朝上放置于事件牌堆顶。
 
 use alloc::vec::Vec;
@@ -10,7 +10,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const LOST_CHASE: CardDef = CardDef::new("event:迷子的追逐", &[On::Play("", None, play)]);
+pub const LOST_CHASE: CardDef = CardDef::new("event:迷子的追逐", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"迷子的追逐"#)
+            .text(r#"所有玩家各投5d20。如果抽到此卡的玩家的点数严格大于所有其他玩家的点数则将一张“[衍生]让我来结束一切”背面朝上放置于事件牌堆顶部，否则将一张“[衍生]一切不会结束”背面朝上放置于事件牌堆顶。"#)
+            .cell(r#"A26"#)
+            .derived(true));
 
 /// 规则书: 「所有玩家各投5d20」 -- one bare 5d20 per player (no [反击] window).
 /// 「如果抽到此卡的玩家的点数严格大于所有其他玩家的点数则将一张

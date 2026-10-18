@@ -15,6 +15,7 @@ pub const BEFORE_LIVE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Pass],
         "actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')",
+        r#"经过江户川乐器店"#,
         None,
         counteract,
     )],

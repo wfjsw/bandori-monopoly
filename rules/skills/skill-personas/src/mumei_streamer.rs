@@ -31,13 +31,13 @@ const BUMP_X: &str = "skill.mumei.bumpX";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
         // mutating, so they ride `ActionKind::Effect` (the payment declaration,
         // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
         On::Action(
             &[ActionKind::Effect],
-            "target == owner && actor != owner && slot('skillState') != 2",
+            "target == owner && actor != owner && slot('skillState') != 2", "",
             None,
             on_pay_declare,
         ),
@@ -52,13 +52,13 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         // the same X).
         On::Action(
             &[ActionKind::PayAfter],
-            "actor == owner && slot('skill.mumei.bumpX') >= 0",
+            "actor == owner && slot('skill.mumei.bumpX') >= 0", "",
             None,
             clear_bump,
         ),
         On::Action(
             &[ActionKind::TurnEnd],
-            "actor == owner && slot('skillState') != 2",
+            "actor == owner && slot('skillState') != 2", "",
             Some(fire_at_cap),
             at_turn_end,
         ),
@@ -68,7 +68,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         // (and so does not flash) when there is nothing to sweep.
         On::Action(
             &[ActionKind::TurnEnd],
-            "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0",
+            "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0", "",
             None,
             at_turn_end_exit,
         ),

@@ -82,12 +82,12 @@ fn effects_of(logbuf: &[Effect; world::MAX_LOG], log_n: usize) -> &[Effect] {
     &logbuf[..log_n]
 }
 
-/// Play gate of a `On::Play(_, Some(gate), _)` entry. `true` = playable.
+/// Play gate of a `On::Play(_, "", Some(gate), _)` entry. `true` = playable.
 /// `idx` is a `crate::card_id!` index (no string scan).
 fn play_gate_allows(idx: usize, player: i32) -> bool {
     let card = invoke::by_idx(idx);
     for on in card.on.iter() {
-        if let card_sdk::On::Play(_, gate, _) = on {
+        if let card_sdk::On::Play(_, _, gate, _) = on {
             return match gate {
                 Some(g) => g(player).is_none(),
                 None => true,

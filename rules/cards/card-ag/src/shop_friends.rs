@@ -13,7 +13,7 @@ use ruleset_core::ctx::{self, plan};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SHOP_FRIENDS: CardDef =
-    CardDef::new("AG:商店街的青梅竹马", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("AG:商店街的青梅竹马", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"商店街的青梅竹马"#)
         .raw_name(r#"商店街的青梅竹马"#)
         .tags(&[])
