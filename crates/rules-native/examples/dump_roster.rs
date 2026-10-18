@@ -184,7 +184,7 @@ fn personas_json(chars: &[PersonaData]) -> String {
     out
 }
 
-/// `groups.json` row order: name, shortName, [sharesExclusives], [bootArt],
+/// `groups.json` row order: name, shortName, [sharesExclusives],
 /// color, skill, text, logo.
 fn groups_json(groups: &[GroupData]) -> String {
     let mut out = String::from("{\n    \"groups\": [\n");
@@ -197,9 +197,6 @@ fn groups_json(groups: &[GroupData]) -> String {
         ];
         if b.shares_exclusives {
             fields.push(key_bool("sharesExclusives", true, 3));
-        }
-        if !b.boot_art.is_empty() {
-            fields.push(key_str("bootArt", &b.boot_art, 3));
         }
         fields.push(key_str("color", &b.color, 3));
         fields.push(key_str("skill", &b.skill, 3));

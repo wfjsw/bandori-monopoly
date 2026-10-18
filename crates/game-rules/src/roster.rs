@@ -79,6 +79,5 @@ fn group_from_row(r: &MetaRow) -> GroupData {
         text: r.text.clone(),
         logo: r.field("logo").to_string(),
         shares_exclusives: r.flag("sharesExclusives"),
-        boot_art: r.field("bootArt").to_string(),
     }
 }

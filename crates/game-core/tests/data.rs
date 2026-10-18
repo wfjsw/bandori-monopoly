@@ -18,7 +18,6 @@ fn group_traits_and_variants_come_from_data() {
         d.group_shares_exclusives(sharing) && !d.group_shares_exclusives(exclusive),
         "GroupA shares exclusives; GroupB does not"
     );
-    assert!(d.groups.iter().all(|g| !g.boot_art.is_empty() || g.name == "通用"));
 }
 
 #[test]

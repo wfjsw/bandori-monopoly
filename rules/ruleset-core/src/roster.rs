@@ -42,8 +42,6 @@ pub mod meta_key {
     pub const SHORT_NAME: &str = "shortName";
     /// Band row: logo id (`logo`).
     pub const LOGO: &str = "logo";
-    /// Band row: boot-screen art id (`bootArt`).
-    pub const BOOT_ART: &str = "bootArt";
     /// Character row: exclusive card names (`exclusiveCards`).
     pub const EXCLUSIVE_CARDS: &str = "exclusiveCards";
     /// Character row: starting-deck preset card names (`preset`).
@@ -198,7 +196,6 @@ pub struct GroupDef {
     pub text: &'static str,
     pub logo: &'static str,
     pub shares_exclusives: bool,
-    pub boot_art: &'static str,
 }
 
 impl GroupDef {
@@ -211,7 +208,6 @@ impl GroupDef {
             text: "",
             logo: "",
             shares_exclusives: false,
-            boot_art: "",
         }
     }
 
@@ -239,10 +235,6 @@ impl GroupDef {
         self.shares_exclusives = shares;
         self
     }
-    pub const fn boot_art(mut self, boot_art: &'static str) -> Self {
-        self.boot_art = boot_art;
-        self
-    }
 }
 
 impl ToMetaRow for GroupDef {
@@ -265,10 +257,6 @@ impl ToMetaRow for GroupDef {
                 (alloc_string(meta_key::COLOR), alloc_string(self.color)),
                 (alloc_string(meta_key::SKILL), alloc_string(self.skill)),
                 (alloc_string(meta_key::LOGO), alloc_string(self.logo)),
-                (
-                    alloc_string(meta_key::BOOT_ART),
-                    alloc_string(self.boot_art),
-                ),
             ]),
             lists: Vec::new(),
             flags: Vec::from([(

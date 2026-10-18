@@ -31,8 +31,6 @@ export interface GroupData {
   logo: string;
   /** Band-skill traits the deck rules read. */
   sharesExclusives?: boolean;
-  /** Boot-screen art id for a home character of this band. */
-  bootArt?: string;
 }
 export interface EventData { id: string; name: string; derived: boolean; text: string; cell: string }
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }

@@ -91,7 +91,6 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"CiRCLE"#)
     .short_name(r#"CiRCLE"#)
-    .boot_art("")
     .color(r#"#E6004E"#)
     .skill(r#"后勤人员的努力"#)
     .text(r#"（1）只能在卡组中加入“通用”卡（2）在你打出的“通用”卡生效时，可额外弃一张牌，将打出的那张卡[手]效果中的一个数字变为两倍（除将牌加入卡组的效果以外）。"#)

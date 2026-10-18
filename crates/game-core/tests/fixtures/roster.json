@@ -420,8 +420,7 @@
       "skill": "gs",
       "text": "",
       "logo": "",
-      "sharesExclusives": true,
-      "bootArt": "boot-a"
+      "sharesExclusives": true
     },
     {
       "name": "GroupB",
@@ -430,8 +429,7 @@
       "skill": "gs",
       "text": "",
       "logo": "",
-      "sharesExclusives": false,
-      "bootArt": "boot-b"
+      "sharesExclusives": false
     },
     {
       "name": "通用",
@@ -440,8 +438,7 @@
       "skill": "gs",
       "text": "",
       "logo": "",
-      "sharesExclusives": false,
-      "bootArt": ""
+      "sharesExclusives": false
     }
   ]
 }

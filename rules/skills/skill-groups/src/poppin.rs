@@ -331,7 +331,6 @@ fn cash(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"Poppin' Party"#)
     .short_name(r#"PPP"#)
-    .boot_art(r#"001"#)
     .color(r#"#FF3377"#)
     .skill(r#"星之鼓动"#)
     .text(r#"（1）[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸，随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]，随后可使用此卡的2个[奇迹水晶]抽1张卡或[获得]2000资金（使用此卡[奇迹水晶]的效果为1回合1次）。（2）无法获取[CiRCLE奖励]（3）游戏开始时所有Poppin' Party角色视为同时拥有“星之鼓动山丘”，可正常抵押“星之鼓动山丘”，且非Poppin' Party角色对“星之鼓动山丘”的[结算]改为分摊支付给所有未抵押“星之鼓动山丘”的Poppin' Party角色。“星之鼓动山丘”不可被抵押双倍支付购买，只有全部Poppin' Party角色破产后才可被正常购买。（4）不能通过[主要移动]的[结算]盖房。"#)

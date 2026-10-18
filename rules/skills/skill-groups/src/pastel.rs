@@ -112,7 +112,6 @@ fn on_fans_flip(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"Pastel✽Palettes"#)
     .short_name(r#"PP"#)
-    .boot_art(r#"004"#)
     .color(r#"#33DDAA"#)
     .skill(r#"与偶像一起"#)
     .text(r#"（1）游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张Pastel✽Palettes乐队卡时此效果不重复发动）。（2）你因任意原因受到“将X个反面[P✽P粉丝]变正”的效果且X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。

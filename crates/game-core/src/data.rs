@@ -183,8 +183,6 @@ pub struct GroupData {
     /// starting deck. Deck-legal only -- the in-match play gate is the
     /// group-skill card's `ExclusiveUse` entry (or the generic own/base rule).
     pub shares_exclusives: bool,
-    /// Boot-screen art id for a home persona of this group; empty = default.
-    pub boot_art: String,
 }
 
 /// The roster half of [`GameData`] -- cards / personas / groups -- handed over

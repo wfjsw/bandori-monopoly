@@ -176,7 +176,6 @@ fn is_my_turn(player_id: i32) -> bool {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"MyGO!!!!!"#)
     .short_name(r#"MyGO"#)
-    .boot_art(r#"045"#)
     .color(r#"#3388BB"#)
     .skill(r#"迷途之星"#)
     .text(r#"（1）开局时投掷3d20，并取出目作为你本局游戏的起始点 （2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶] （3）每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶] （最多超出2个）；你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡。"#)
