@@ -575,11 +575,13 @@ fn twoinone_01b_fire_iff_at(user: i32, is_hina: bool) {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    if is_hina {
-        kani::cover!(true, "from 三角初华（Sumimi） → 纯田真奈 fire 1");
-    } else {
-        kani::cover!(true, "from 纯田真奈 → 三角初华（Sumimi） fire 2");
-    }
+    // Exactly one cover (the pinned direction is live in this harness; the
+    // sibling seat harness covers the other). Never leave a second cover
+    // site — an unreachable cover is VACUOUS.
+    kani::cover!(
+        to == spec::sumimi::twoinone_fire_target(is_hina),
+        "other character's 初始火罐数 is the swap target"
+    );
 
     crate::kassert!(
         spec::sumimi::twoinone_fire_effects_ok(effects, user, fire_key, to),
