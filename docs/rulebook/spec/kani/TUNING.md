@@ -447,6 +447,26 @@ The string/fmt cliff is gone. Residual is `fmt::write` (2 unrolls via
 sparse symbolic world itself. See TRIAGE-LOG `class-E deep dive` for the
 per-row verdict table.
 
+### Soundness argument per stub (coordinator item C)
+
+| stub | what the real function does | why the replacement is equivalent | what it is NOT allowed to change |
+|---|---|---|---|
+| `memchr` / `memchr_naive` / `memchr_aligned` | first index of byte `n` in `text`, or `None` | pure search. Stub is a 128-step `.get` scan; same `Option<usize>` for every haystack of length ≤ 128. **Model bound:** every `format!` key / panic snippet / `split('\n')` piece in this corpus is ≤ 128 bytes (`skill.tsugushi.rec:3` = 20; panic texts ~50). Longer haystacks are a **loud** `kani::assert(false)` — never a silent wrong index. | result value |
+| `slice_index_fail(start,end,len)` | formats "index out of bounds: …" then panics (`-> !`) | reachable OOB is a loud fail either way. Stub: `kani::assert(false)` + diverge. Only the fmt/memchr of the *message* is dropped. | reachability of the OOB |
+| `handle_alloc_error(layout)` | formats the layout then aborts (`-> !`) | reachable OOM is a loud fail either way. Stub: `kani::assert(false)` + diverge. | reachability of OOM |
+| `capacity_overflow` / `handle_error` | panics / dispatches to the two above (`-> !`) | same: loud fail either way. `handle_error`'s `match` is the cost; the arms are already stubbed. | reachability of grow failure |
+| `panic_fmt(fmt)` | formats `fmt` then panics (`-> !`) | reachable panic is a loud fail either way for **iff/no-op** harnesses. Stub: `kani::assert(false)` + diverge — the proof still **FAILS** on a non-mutant panic. **Not applied** to `#[kani::should_panic]` mutants (they need a real `panic!` event; those keep `LIB_COST` without `panic_fmt`). | (a) iff/no-op: panic ⇒ FAIL; (b) mutants: panic still observed |
+| `alloc::fmt::format` (`format!`) | `as_str().to_owned()` or `write_fmt` into a `String` | `as_str()` branch is **exact**. Argument branch: 64-byte `String` + `write_fmt` (skips `estimated_capacity` loop). Key bytes are get/set-consistent within a proof because every `format!` site shares this stub. The proof never pins key bytes to production spellings. | get/set round-trip of the same `format!` expression |
+| `<{u32,i32,i64} as Display>::fmt` | `_fmt_inner` → `pad_integral` → possible `PostPadding`/`PadAdapter` | same decimal digits / sign as production for `{}` and `format!("{p}")` (the only forms in the corpus). Loud FAIL if `width`/`precision` is set (corpus never uses `{:.width$}` on these). | the string produced for no-width `{}` |
+
+**Non-mutant panic:** `panic_fmt` stub is `kani::assert(false, …)` — a failed
+CBMC property. `VERIFICATION` is **FAILED**, never SUCCESSFUL. Covers on the
+panic path stay unreachable (same as a real panic aborting the run).
+
+**memchr > 128:** loud FAIL, not a wrong index. If a future body formats a
+string longer than 128, the proof fails closed and the stub cap is raised
+with a comment.
+
 ### Non-vacuity
 
 Covers + post-invoke `assert!(false)` probes must be re-checked on the
