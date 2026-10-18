@@ -144,13 +144,13 @@ worktree still has the old grep — read the log).
 | crychic | vocalist_01_mutant_is_detected | written, verdict pending | | |
 | crychic | grab_01_stay_iff | written, verdict pending | | |
 | crychic | grab_01_mutant_is_detected | written, verdict pending | | |
-| crychic | debut_02_turn_end_iff | written, verdict pending | | |
+| crychic | debut_02_turn_end_iff | central FAILED (class C band-pool arm); batch 15 fix, re-time queued | | |
 | crychic | debut_02_mutant_is_detected | written, verdict pending | | |
 | crychic | debut_01_play_logs_nothing | written, verdict pending | | |
-| crychic | ifonly_01_cashout_iff | written, verdict pending | | |
+| crychic | ifonly_01_cashout_iff | central FAILED (class C band-pool arm); batch 15 fix, re-time queued | | |
 | crychic | ifonly_01_mutant_is_detected | written, verdict pending | | |
-| crychic | ifonly_02_discard_at_seven_iff | **SUCCESSFUL 253 s** (was FAILED; class C host) | | |
-| crychic | soyoreturn_01_branch2_iff | triage3: TIMEOUT 1800 s class E (symex `arm_cards_in` + `ask_pick`) | | |
+| crychic | ifonly_02_discard_at_seven_iff | central FAILED `outside_subset`; batch 15 `arm_send_to_dest`, re-time queued | | |
+| crychic | soyoreturn_01_branch2_iff | central TIMEOUT class E; batch 15 pick pinned to branch 2, re-time queued | | |
 | skills_crychic | tomoriskill_02_spend_iff | written, verdict pending | | |
 | skills_crychic | tomoriskill_02_mutant_is_detected | written, verdict pending | | |
 | skills_crychic | soyoskill_01_cancel_iff | written, verdict pending | | |
