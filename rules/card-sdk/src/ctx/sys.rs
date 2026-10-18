@@ -351,6 +351,12 @@ extern "C-unwind" {
     pub fn give_exile(player_id: i32, n: i32, to: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_give_extra_turn")]
     pub fn give_extra_turn(player_id: i32);
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_end_turn_now")]
+    pub fn end_turn_now(player_id: i32);
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_teleport_as")]
+    pub fn teleport_as(player_id: i32, tile: i32, resolve: i32, as_main: i32);
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_log_as")]
+    pub fn log_as(player_id: i32, kp: i32, kn: i32, p: i32, n: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_can_pay")]
     pub fn can_pay(player_id: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_cant_move")]

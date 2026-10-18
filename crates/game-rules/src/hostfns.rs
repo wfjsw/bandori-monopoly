@@ -1418,6 +1418,61 @@ pub fn give_extra_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), Host
         Ok(())
 }
 
+/// Generic "end this player's turn now" latch. `turn_start` honors it after
+/// the `turnStartBefore` / `turnStart` raises (auto-skip pacing).
+pub fn end_turn_now<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
+        c.st_mut().w().end_turn_now(player_id);
+        Ok(())
+}
+
+/// Teleport with the move's `main` flag named and **no** abnormal window
+/// (the caller's own clause -- see [`HostRequest::TeleportAs`]).
+pub fn teleport_as<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    resolve: i32,
+    as_main: i32,
+) -> Result<(), HostErr> {
+            {
+                let st = c.st_mut();
+                if st.answers.get(st.next_answer).is_some() {
+                    let answer = st.next_answer;
+                    st.w().after_host(answer);
+                    st.next_answer += 1;
+                    return Ok(());
+                }
+            }
+            let make = || HostRequest::TeleportAs {
+                player_id,
+                tile,
+                resolve: resolve != 0,
+                as_main: as_main != 0,
+            };
+            if crate::inline::request_or_inline(c, make())?.is_some() {
+                return Ok(());
+            }
+            let st = c.st_mut();
+            st.host_request = Some(make());
+            Err(HostErr::NeedInput)
+}
+
+/// [`log`] with an explicit event kind (the engine's own skip / over lines use
+/// `"status"`; cards use the default `"text"` via [`log`]).
+pub fn log_as<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    kind_p: i32,
+    kind_n: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostErr> {
+            let kind = guest_str(c, kind_p, kind_n)?;
+            let msg = guest_msg(c, p, n)?;
+            c.st_mut().w().log_as(player_id, &kind, msg);
+            Ok(())
+}
+
 /// The payer's gate. Not out, and the `PayGate` conditions of the standing
 /// `status:*` rules (CEL-only, evaluated natively) all leave it open
 /// (`docs/STATUS-HOSTS.md`). A handle-less run (a test world) falls back to

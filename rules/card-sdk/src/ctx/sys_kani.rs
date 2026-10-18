@@ -603,6 +603,18 @@ pub fn give_extra_turn(player_id: i32) {
     kani_host::call_unit(Op::give_extra_turn, [player_id, 0, 0, 0, 0, 0]);
 }
 
+pub fn end_turn_now(player_id: i32) {
+    kani_host::call_unit(Op::end_turn_now, [player_id, 0, 0, 0, 0, 0]);
+}
+
+pub fn teleport_as(player_id: i32, tile: i32, resolve: i32, as_main: i32) {
+    kani_host::call_unit(Op::teleport_as, [player_id, tile, resolve, as_main, 0, 0]);
+}
+
+pub fn log_as(player_id: i32, kp: i32, kn: i32, p: i32, n: i32) {
+    kani_host::call_unit(Op::log_as, [player_id, kp, kn, p, n, 0]);
+}
+
 pub fn can_pay(player_id: i32) -> i32 {
     kani_host::call_i32(Op::can_pay, [player_id, 0, 0, 0, 0, 0])
 }

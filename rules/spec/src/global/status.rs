@@ -527,6 +527,12 @@ pub fn g_status_06(step: &Step<'_>) -> Result<(), String> {
 ///   (MyGO:无路矢 「获得2层[除外]」) -- 「无法重复获得」 bars a *second*
 ///   acquisition while the first is active, not a multi-layer first grant.
 ///   A grant after the decay leaves 0 is a fresh acquisition.
+/// * **Duration grants (「获得[除外]直至X」)** (user ruling 2026-10-18,
+///   `docs/rulebook/spec/global/status.md`): continuous -- the turn-start
+///   layer tick does **not** apply. A held grant (`exileHold != 0` across the
+///   owner's turn start) must leave the layer count unchanged (`after ==
+///   before`); the turn is still auto-skipped. Layered grants
+///   (「获得N层[除外]」) leave the hold marker 0 and still tick.
 /// * **Executable:** [`g_status_07`].
 const G_STATUS_07: Clause = Clause::new(
     "G-STATUS-07",
@@ -891,7 +897,8 @@ pub fn verify_stun_turn_end(
 }
 
 /// G-STATUS-07: [除外] never re-stacks while active; loses exactly one layer
-/// before the owner's turn start (quiet).
+/// before the owner's turn start (quiet). A **held** duration grant
+/// (「获得[除外]直至X」, `exileHold != 0`) is continuous -- no peel.
 pub fn verify_exile_turn_start(
     pre: &World,
     post: &World,
@@ -913,10 +920,14 @@ pub fn verify_exile_turn_start(
         // still `START` while 开始阶段 is mid-flight.
         let start_still_open = post.st.step == game_core::state::stage::START;
         if !start_still_open {
-            let expected = (before - 1).max(0);
+            // Duration grant (「获得[除外]直至X」): the hold marker suppresses
+            // the layer tick (G-STATUS-07 ruling 2026-10-18). The turn is
+            // still auto-skipped; the layer count must not move.
+            let held = layers(pre, who, "exileHold") != 0 || layers(post, who, "exileHold") != 0;
+            let expected = if held { before } else { (before - 1).max(0) };
             if after != expected {
                 return Err(format!(
-                    "G-STATUS-07: player {who} [除外] {before} -> {after} over their turn start (expected {expected})"
+                    "G-STATUS-07: player {who} [除外] {before} -> {after} over their turn start (expected {expected}, held={held})"
                 ));
             }
         }

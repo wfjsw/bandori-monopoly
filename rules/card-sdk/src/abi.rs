@@ -682,7 +682,11 @@ use alloc::{string::String, vec::Vec};
 ///      `name` / `skill` / `sharesExclusives`. Postcard field order of
 ///      [`crate::meta::MetaRow`] is unchanged (dropped columns are empty /
 ///      absent map pairs). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 86;
+/// v87: **generic turn-flow / logging verbs** for status hosts: `end_turn_now`
+///      (auto-skip latch), `teleport_as` (move-tail teleport with the `main`
+///      flag and no abnormal window), `log_as` (typed log line). Additive
+///      imports; SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 87;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

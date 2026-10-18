@@ -54,7 +54,9 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::PayTotal { .. }
         | HostRequest::PayRent { .. }
         | HostRequest::ChargeRent { .. } => Some("pay/gain/transfer"),
-        HostRequest::Move { .. } | HostRequest::Teleport { .. } => Some("move"),
+        HostRequest::Move { .. } | HostRequest::Teleport { .. } | HostRequest::TeleportAs { .. } => {
+            Some("move")
+        }
         HostRequest::Draw { .. } | HostRequest::DrawEvent { .. } => Some("draw"),
         HostRequest::Build { .. }
         | HostRequest::OfferBuild { .. }
@@ -1523,6 +1525,9 @@ impl CardWorld for Run {
     fn mark_rule_instances(&self) -> Vec<(i32, String)> {
         self.world.mark_rule_instances()
     }
+    fn status_rule_instances(&self) -> Vec<(i32, String)> {
+        self.world.status_rule_instances()
+    }
     fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
         self.world.tok_names(player_id, prefix)
     }
@@ -1681,6 +1686,23 @@ impl CardWorld for Run {
     }
     fn give_extra_turn(&mut self, player_id: i32) {
         self.world.give_extra_turn(player_id as usize);
+    }
+    fn end_turn_now(&mut self, player_id: i32) {
+        self.world.end_turn_now(player_id);
+    }
+    fn teleport_as(&mut self, player_id: i32, tile: i32, resolve: i32, as_main: i32) {
+        // Nested / stub shape: a bare position write plus the `main` flag. The
+        // full move tail is `HostRequest::TeleportAs` (hostfns) ->
+        // `Cx::teleport_as`.
+        self.world.teleport_to(player_id, tile);
+        if as_main != 0 {
+            self.world.turn.main_moved = true;
+        }
+        let _ = resolve;
+    }
+    fn log_as(&mut self, player_id: i32, kind: &str, msg: Msg) {
+        let msg = self.attribute(msg);
+        self.post_log(kind, player_id, msg, "");
     }
 
     // board extensions ------------------------------------------------------
@@ -3555,6 +3577,29 @@ impl<M: CardModules> RulesBridge<M> {
             }
             return Ok(allowed as i32);
         }
+        // The status's own return clause: engine `teleport_as` with **no**
+        // abnormal window (`HostRequest::TeleportAs`). `as_main` marks the
+        // move as the turn's [主要移动] and sets `turn.main_moved`.
+        HostRequest::TeleportAs {
+            player_id,
+            tile,
+            resolve,
+            as_main,
+        } => {
+            if as_main {
+                let mut w = cx.world_copy();
+                w.turn.main_moved = true;
+                cx.swap_world(w);
+            }
+            cx.teleport_as(
+                player_id.max(0) as usize,
+                tile.max(0) as usize,
+                resolve,
+                None,
+                as_main,
+            )?;
+            return Ok(1);
+        }
         // The rest of the routine family -- see `HostRequest`.
         HostRequest::SettleAt {
             player_id,
@@ -4755,6 +4800,21 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                 }
+                // **Status** hosts (`status:*`) are board-wide the same way.
+                // Collected **last** among the field hooks so sibling hooks
+                // still see pre-tick state (the exile layer tick runs here).
+                if self
+                    .ruleset
+                    .cards()
+                    .iter()
+                    .any(|c| c.id.starts_with("status:") && c.hooks(kind))
+                {
+                    for ent in world.status_rule_instances() {
+                        if !board.iter().any(|(u, _)| *u == ent.0) {
+                            board.push(ent);
+                        }
+                    }
+                }
                 for (uid, id) in board {
                     if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                         continue;
@@ -4936,6 +4996,20 @@ impl<M: CardModules> RulesBridge<M> {
             .any(|c| c.id.starts_with("mark:") && c.hooks(kind))
         {
             for ent in world.mark_rule_instances() {
+                if !board.iter().any(|(u, _)| *u == ent.0) {
+                    board.push(ent);
+                }
+            }
+        }
+        // **Status** hosts (`status:*`): board-wide, collected last among the
+        // field hooks (see the inline walk above).
+        if self
+            .ruleset
+            .cards()
+            .iter()
+            .any(|c| c.id.starts_with("status:") && c.hooks(kind))
+        {
+            for ent in world.status_rule_instances() {
                 if !board.iter().any(|(u, _)| *u == ent.0) {
                     board.push(ent);
                 }

@@ -11,8 +11,9 @@
 //!   while `unstoppable` > 0 (`status::stay::blocks_move`).
 //! * **「[晕眩]效果也不会获得新的层数；无法获得新的[除外]层数」** --
 //!   grant sites consult this host before adding stun / exile layers.
-//!   TODO(规则书): today `give_stun` / `give_exile` do not refuse; Phase C
-//!   adds the check in the hosts' grant verbs.
+//!   [除外] is enforced in `rules/status/src/exile.rs::grant`.
+//!   TODO(规则书): `give_stun` still does not refuse; that half stays open
+//!   (BACKLOG STA-01).
 //! * **「[停留]，[晕眩]，[除外]在适当时机依旧掉层」** -- wear-off is
 //!   unchanged (the items keep their ticks).
 //! * **「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」** --

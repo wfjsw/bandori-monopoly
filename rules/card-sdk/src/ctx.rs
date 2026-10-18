@@ -1674,6 +1674,27 @@ pub fn give_extra_turn(player_id: i32) {
     unsafe { sys::give_extra_turn(player_id) }
 }
 
+/// End this player's turn now (generic auto-skip latch). The engine honors it
+/// after the current `turnStartBefore` / `turnStart` raise: log nothing here,
+/// just ask; the host paces and closes the turn.
+pub fn end_turn_now(player_id: i32) {
+    unsafe { sys::end_turn_now(player_id) }
+}
+
+/// Teleport with the move's `main` flag named. Opens **no** abnormal window
+/// (the caller's own clause). `as_main` marks the move as the turn's
+/// [主要移动] and consumes the main-move slot.
+pub fn teleport_as(player_id: i32, tile: i32, resolve: bool, as_main: bool) {
+    unsafe { sys::teleport_as(player_id, tile, resolve as i32, as_main as i32) }
+}
+
+/// [`log`] with an explicit event kind (`"status"` for host skip / over lines).
+pub fn log_as(player_id: i32, kind: &str, msg: &Msg) {
+    let (kp, kn) = s(kind);
+    let (p, l) = mj(msg);
+    unsafe { sys::log_as(player_id, kp, kn, p, l) }
+}
+
 /// Can the player pay? Not out, not stunned, not exiled.
 #[doc(hidden)]
 pub fn can_pay(player_id: i32) -> bool {

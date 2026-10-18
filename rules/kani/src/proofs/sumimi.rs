@@ -45,10 +45,12 @@ crate::host_subset!(childhood_after_move_dispatch {
 /// `Sumimi:一人两个甜甜圈` play body — pos / exile hold / slots / dest / place /
 /// log. Isolation: the multi-act `PassTile` / `SettleAfter` half (clause (2)) is
 /// PROTOCOL-LEVEL and not entered here.
+/// `state_get` reads [不可阻挡] in the host `grant` guard (STA-01).
 crate::host_subset!(two_donuts_dispatch {
     player_pos => arm_player_pos,
     exile_of => arm_exile_of,
     give_exile => arm_give_exile,
+    state_get => arm_state_get,
     state_set => arm_state_set,
     set_slot => arm_set_slot,
     set_dest => arm_set_dest,

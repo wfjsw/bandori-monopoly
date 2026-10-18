@@ -273,7 +273,14 @@ in time for `turn_start`'s stun / stay checks. So:
 `ctx::turn`):
 
 * `skip_main_move(p)` -- set the move gate for this turn (today `skip_move`);
-* `end_turn_now(p)` -- the stunned / exiled auto-skip path;
+* `end_turn_now(p)` -- the stunned / exiled auto-skip path (a transient
+  latch on `World::end_turn_request`; `turn_start` honors it after the
+  `turnStartBefore` / `turnStart` raises with the auto-skip pacing);
+* `teleport_as(p, tile, resolve, as_main)` -- the engine's `Cx::teleport_as`
+  with `why = None` and **no** abnormal window (`HostRequest::TeleportAs`);
+  `as_main` sets `turn.main_moved` and marks the move as the [主要移动];
+* `log_as(p, kind, msg)` -- a typed log line (`"status"` for host skip / over
+  lines; cards keep `ctx::log` → `"text"`).
 * `extra_turn(p)` -- push `extra_turns` (engine order, not a marker).
 
 **Ordering is frozen.** Today (`play.rs` `turn_start` / `end_turn`):
@@ -307,14 +314,14 @@ stun / stay checks run after it.
 |---|---|
 | `ops.rs` `give_stay` (incl. the un-skip latch) | `status:stay` host + generic `skip_main_move` |
 | `ops.rs` `give_stun` | `status:stun` host |
-| `ops.rs` `give_exile` | `status:exile` host |
+| `ops.rs` `give_exile` | **done**: dumb layer write; policy in `status:exile::grant` / `hold` / `clear` / the turn-start tick |
 | `ops.rs` `gain_fire` / `add_fire_max` | `status:fire` host |
 | `wasm_rules` `spend_fire` + `markerSpend` | `status:fire` host (window stays generic `HostRequest::Marker`) |
 | `wasm_rules` `can_pay` / `cant_move` | generic gates + `status::can_act` / `move_blocked` |
-| `play.rs` exile tick / return teleport | generic turn-start tick + `status:exile` hook / engine verb `teleport_as` |
+| `play.rs` exile tick / return teleport | **done**: `status:exile` `TurnStartBefore` hook + generic `end_turn_now` / `teleport_as` / `log_as` |
 | `play.rs` stun skip / stay skip | gates (hosts maintain); engine reads gates |
 | `state.rs` `is_status_key` / `default_expiry` | stay: expiry stays item-carried (`Tick::TurnEnd` etc.); clamping floor-at-0 moves to the host verbs (or stays as the generic `state_set` floor -- see §6) |
-| `key::{STAY,STUN,...}` constants | **kept** (wire + host vocabulary); the engine just stops *branching* on them |
+| `key::{STAY,STUN,...}` constants | **kept** (wire + host vocabulary); the engine just stops *branching* on them. `key::EXILE_HOLD` is host-owned (`rules/status/src/exile.rs::KEY_HOLD`) |
 
 `give_extra_turn` / `extra_turns` stays engine-side (turn order).
 
@@ -345,6 +352,19 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
   game-named imports (HOST-09/10 dead-surface removal) and bump
   `ABI_VERSION` 53 -> 54.
 * `give_extra_turn` stays an engine verb (turn order, not a marker).
+* **`status:*` hook collection (done).** `bind_tiles` already placed the hosts
+  on `BOARD_OWNER` (`tile = -1`), but `collect_hook_jobs` / the inline
+  `counteract` walk only collected `tile:*` / `event:*` / `mark:*` / lingering
+  instances -- so `status:exile`'s `On::Action` bodies never dispatched. Both
+  collection sites now walk `status_rule_instances()` **last** among the field
+  hooks (after tile / event / mark, before lingering), the same shape as
+  `mark_rule_instances`.
+* **Generic verbs (done, ABI 87).** `end_turn_now` / `teleport_as` / `log_as`
+  are wired `ctx` -> `sys` -> `hostfns` -> `World` trait (plus the kani Op
+  enum and native shims). `end_turn_now` is a transient `World::end_turn_request`
+  latch (serde-skip, not in the save blob). `teleport_as` is
+  `HostRequest::TeleportAs` (no abnormal window) -> `Cx::teleport_as`.
+  `log_as` posts the given event kind.
 * `SAVE_VERSION` bumps only if the serialized `MatchState` shape changes.
   Keeping `MatchPlayer.state` as storage means **no save bump** in the
   default plan. Gates are derived (not stored) -- no shape change.
@@ -373,12 +393,13 @@ is additive.
 |---|---|---|---|
 | turn begins | `next_turn` | same | `TurnBegan`, `log.turn` / `log.turn_extra` |
 | before status tick | `turnStartBefore` | same | `turnStartBefore` |
-| exile layer tick | `play.rs` names `exile` | `status:exile` wear-off via generic tick + hook | `log.exiled_skip` / `log.exile_over` |
-| exile return teleport | `play.rs` + `exileMain` | `status:exile` hook + engine `teleport_as` | walk / teleport triggers |
+| exile layer tick | **done**: `status:exile` hook (collected last among field hooks) | same | `log.exiled_skip` / `log.exiled_skip_hold` / `log.exile_over` |
+| exile return teleport | **done**: `status:exile` hook + `teleport_as` | same | walk / teleport triggers |
+| generic end-turn latch | `play.rs` names `exile` | **done**: `end_turn_now` latch after the raise | -- |
 | `stunStart` -> `stun` | `tick_state(TurnStart)` | same (item expiry) | -- |
 | `noHand` 2->1 | `play.rs` | `status:no_hand` hook | -- |
 | snapshot | `turn_snap` | same (reads the keys) | -- |
-| `turnStart` | same | same | `turnStart` |
+| `turnStart` | same | same (+ latch check after) | `turnStart` |
 | stun auto-skip | `play.rs` names `stunned()` | engine reads `act`/`move` gate | `log.stunned_skip` |
 | stay skip | `play.rs` names `stay()` | engine reads `move` gate (host sets it) | `log.stay_skip` |
 | ops / move / settle | engine | same, gates consulted | -- |

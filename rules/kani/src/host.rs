@@ -831,6 +831,23 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             0
         }
+        // Generic turn-flow / logging verbs: protocol-level, like
+        // `give_extra_turn`. The model records them; the engine owns the
+        // real pacing / move tail.
+        Op::end_turn_now => {
+            world::with_world_mut(|w| w.push(Effect::GiveExtraTurn { player: a0 }));
+            0
+        }
+        Op::teleport_as => {
+            let [a0, a1, ..] = a;
+            world::with_world_mut(|w| {
+                if a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
+                    w.pos[a0 as usize] = a1;
+                }
+            });
+            0
+        }
+        Op::log_as => arm_log(a),
                 Op::stay_of => arm_stay_of(a),
                 Op::stun_of => arm_stun_of(a),
                 Op::exile_of => arm_exile_of(a),

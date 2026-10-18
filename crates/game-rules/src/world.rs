@@ -579,6 +579,11 @@ pub trait CardWorld: Clone + 'static {
     fn mark_rule_instances(&self) -> Vec<(i32, String)> {
         Vec::new()
     }
+    /// Standing board-owned status hosts (`status:*`), as `(uid, id)`. Same
+    /// shape as [`Self::mark_rule_instances`].
+    fn status_rule_instances(&self) -> Vec<(i32, String)> {
+        Vec::new()
+    }
     /// The named counter on the instance at `uid`.
     fn pool_at(&self, uid: i32, name: &str) -> i32 {
         self.counter_at(uid, name)
@@ -950,6 +955,16 @@ pub trait CardWorld: Clone + 'static {
     fn give_stun(&mut self, player_id: i32, n: i32);
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32);
     fn give_extra_turn(&mut self, player_id: i32);
+    /// End this player's turn now (generic auto-skip latch). `turn_start`
+    /// honors it after the `turnStartBefore` / `turnStart` raises.
+    fn end_turn_now(&mut self, player_id: i32);
+    /// Teleport with the move's `main` flag named (no abnormal window). The
+    /// engine runs the full move tail (`moveBefore` / [pass] / overlap /
+    /// `moveAfter`); `resolve` gates only the settle stages.
+    fn teleport_as(&mut self, player_id: i32, tile: i32, resolve: i32, as_main: i32);
+    /// Like [`Self::log`], but the event carries `kind` (e.g. `"status"`)
+    /// instead of the default `"text"`.
+    fn log_as(&mut self, player_id: i32, kind: &str, msg: Msg);
     /// May this player act at all? Not out, not stunned, not exiled.
     fn can_pay(&self, player_id: i32) -> i32;
     /// May this player still take the main move? 0 = available, 1 = not your

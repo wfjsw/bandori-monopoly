@@ -387,10 +387,6 @@ pub mod key {
     /// (MyGO:无路矢). The expiry tick reads and consumes it:
     /// `TurnCtx::main_moved` is set so the player cannot also roll.
     pub const EXILE_MAIN: &str = "exileMain";
-    /// Duration grant (「获得[除外]直至X」) marker: while set, the turn-start
-    /// layer tick does not peel [除外]; the granting effect ends it. A layered
-    /// grant (「获得N层[除外]」) leaves this 0 and still ticks.
-    pub const EXILE_HOLD: &str = "exileHold";
     /// A capped spendable resource held by the player (ruleset-defined; the
     /// shipped ruleset uses it for spendable pots). Its `max` is the mandated cap, written
     /// by the owning skill -- and that is the one number to show: there is no
@@ -570,9 +566,9 @@ fn default_flags(key: &str) -> u8 {
         key::STAY | key::STUN | key::STUN_START | key::EXILE | key::CHARGE => {
             NEVER_NEGATIVE | ENGINE_OWNED
         }
-        key::EXILE_TO | key::EXILE_MAIN | key::EXILE_HOLD | key::NO_HAND | key::UNSTOPPABLE
-        | key::HAND_LIMIT | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT
-        | key::REDEEMED | key::MORTGAGED | key::NO_BUILD => ENGINE_OWNED,
+        key::EXILE_TO | key::EXILE_MAIN | key::NO_HAND | key::UNSTOPPABLE | key::HAND_LIMIT
+        | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT | key::REDEEMED
+        | key::MORTGAGED | key::NO_BUILD => ENGINE_OWNED,
         _ => 0,
     }
 }

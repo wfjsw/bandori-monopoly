@@ -1246,6 +1246,20 @@ impl World {
             .collect()
     }
 
+    /// The board-wide **status hosts** (`status:*`, [`crate::data::status_rule_ids`])
+    /// -- one instance each on the neutral board owner. Same shape as
+    /// [`Self::mark_rule_instances`]: they govern no single tile, so they hear
+    /// every trigger their rule declares wherever it points. Collected **last**
+    /// among the field hooks so sibling hooks still see pre-tick state.
+    pub fn status_rule_instances(&self) -> Vec<(i32, String)> {
+        self.st
+            .board_field
+            .iter()
+            .filter(|f| f.tile < 0 && f.card.starts_with("status:"))
+            .map(|f| (f.uid, f.card.clone()))
+            .collect()
+    }
+
     /// On-card named counter on the instance at `uid` (generic).
     pub fn pool_at(&self, uid: i32, name: &str) -> i32 {
         self.counter_at(uid, name)
@@ -2245,38 +2259,22 @@ impl World {
         }
     }
 
-    pub fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
-        // 「exile」 grants [无法移动] (glossary 13) but does **not** skip the
-        // main-move phase (that is 停留's step-7 clause). Do not touch
-        // `skip_move` here: a mid-turn grant (无路矢) still owes the roll, and
-        // the turn-start `exiled_skip` auto-skip is what drops a whole later
-        // turn. See `engine/mod.rs`'s live-latch note.
+    /// Dumb [除外] counter service: write `exile = max(0, exile + n)`.
+    /// Policy (「无法重复获得」, hold / return markers, [不可阻挡]) lives in the
+    /// `status:exile` host -- this only moves the layer. The `to` argument is
+    /// unused (markers are the host's job) and kept for ABI shape.
+    pub fn give_exile(&mut self, player_id: i32, n: i32, _to: i32) {
         if let Some(s) = self.player_mut(player_id) {
-            // 「该效果生效时无法重复获得该效果」 (rulebook 50): while [除外] is
-            // active a new grant gains no layer and writes no return tile. A
-            // multi-layer first grant (MyGO:无路矢 「获得2层[除外]」) is one
-            // acquisition and still lands.
-            if n > 0 && s.exile() > 0 {
-                return;
-            }
             let v = (s.exile() + n).max(0);
             s.state_set(key::EXILE, v);
-            if n > 0 {
-                // Grants write the return tile and are always a fresh
-                // acquisition (re-grants are refused above): a layered grant
-                // ticks, so it must not inherit a stale hold marker.
-                s.state_set(key::EXILE_TO, to);
-                s.state_set(key::EXILE_HOLD, 0);
-            }
-            // Removals (「移除一层[除外]」) must not clobber the return tile; when
-            // they empty the stack, drop every exile marker so nothing stale
-            // survives into the next acquisition.
-            if v == 0 {
-                s.state_set(key::EXILE_TO, -1);
-                s.state_set(key::EXILE_HOLD, 0);
-                s.state_set(key::EXILE_MAIN, 0);
-            }
         }
+    }
+
+    /// Generic "end this player's turn now" latch. A status host (or any
+    /// guest) sets it during `turnStartBefore` / `turnStart`; `turn_start`
+    /// honors it with the auto-skip pacing. No game vocabulary here.
+    pub fn end_turn_now(&mut self, player_id: i32) {
+        self.end_turn_request = Some(player_id);
     }
 
     /// The player gets another turn after this one.

@@ -1726,9 +1726,9 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **suggested batch**: crystal/marker accounting
 - **locations**: `rules/status/src/unstoppable.rs:14-15`
 - **rulebook**: glossary 14 「无法获得新的[除外]层数」/「也不会获得新的层数」.
-- **current**: only `abnormal_gate` refuses (that is CH-12's fix); `give_stun` /
-  `give_exile` themselves do not refuse. Phase C is the planned check in the
-  hosts' grant verbs.
+- **current**: **[除外] half done** (2026-10-18) -- `rules/status/src/exile.rs::grant`
+  refuses while `unstoppable > 0`. The [晕眩] half is still open (`give_stun`
+  does not refuse).
 
 ## STA-02 — no prompt surface for 「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」
 - **kind**: ABI defect
@@ -1751,9 +1751,10 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **class**: A
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
-- **locations**: `rules/status/src/exile.rs:19-21`, `:119-121`
+- **locations**: `rules/status/src/exile.rs::grant`
 - **rulebook**: 「该效果生效时无法重复获得该效果」 (`data/rules.txt`).
-- **current**: layers stack on `give_exile`.
+- **current**: **done** (2026-10-18) -- the guard lives in the host grant verbs
+  (`grant` / `send` / `hold`); `give_exile` is a dumb layer write.
 
 ## STA-05 — [除外] 「不能被[指定]」 / on-board clause still engine-side
 - **kind**: ABI defect
