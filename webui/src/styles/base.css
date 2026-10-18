@@ -183,6 +183,19 @@ body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+/* The stage is laid out under CSS `zoom`, so every used font size is the
+   design size times the fit scale -- 18px design lands at 7-12px on a phone.
+   Mobile browsers "helpfully" inflate small text back up to a readable
+   minimum *without* inflating the fixed-size boxes around it, so every label
+   overflows its pill, bar or tile and the layout stops lining up. The design
+   already chose these sizes on purpose (they are the original's reference
+   resolution scaled to the window), so tell the browser the sizing is final.
+   This is what `transform: scale()` used to provide for free: it left the
+   computed font sizes at design values, above the inflation threshold. */
+* {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; padding: 0; }
 button:disabled { cursor: default; }
