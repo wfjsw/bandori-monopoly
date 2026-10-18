@@ -154,6 +154,7 @@ mod tomori_spend {
 
     /// Spend iff at seat 0.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tomoriskill_02_spend_iff() {
         tomoriskill_02_iff_at(0);
@@ -161,6 +162,7 @@ mod tomori_spend {
 
     /// Spend iff at seat 1.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tomoriskill_02_user1_spend_iff() {
         tomoriskill_02_iff_at(1);
@@ -168,6 +170,7 @@ mod tomori_spend {
 
     /// MUTANT companion: the body is not a one-effect body (empty log).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tomoriskill_02_mutant_is_detected() {
         let stay_key = intern::intern("stay");
@@ -278,6 +281,7 @@ mod soyo_cancel {
     /// Yes-branch iff at (owner=0, actor=1) — the two combos cover every
     /// ordered distinct pair of the 2-seat world.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn soyoskill_01_cancel_iff() {
         soyoskill_01_iff_at(0, 1);
@@ -285,6 +289,7 @@ mod soyo_cancel {
 
     /// Yes-branch iff at (owner=1, actor=0).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn soyoskill_01_user1_cancel_iff() {
         soyoskill_01_iff_at(1, 0);
@@ -292,6 +297,7 @@ mod soyo_cancel {
 
     /// No branch: empty log (the body returns before any write).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn soyoskill_01_decline_noop() {
         soyo_world(0, 1, 1);
@@ -308,6 +314,7 @@ mod soyo_cancel {
 
     /// MUTANT companion: SetPayAmount{1} is not the waive.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn soyoskill_01_mutant_is_detected() {
         soyo_world(0, 1, 0);
@@ -384,6 +391,7 @@ fn band_01_iff_at(user: i32) {
 
 /// Hand-limit leaf iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_01_hand_limit_iff() {
     band_01_iff_at(0);
@@ -391,6 +399,7 @@ pub fn band_01_hand_limit_iff() {
 
 /// Hand-limit leaf iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_01_user1_hand_limit_iff() {
     band_01_iff_at(1);
@@ -468,6 +477,7 @@ fn band_03_crossing_iff_at(user: i32) {
 
 /// Crossing iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_03_crystal_on_four_to_five_iff() {
     band_03_crossing_iff_at(0);
@@ -475,6 +485,7 @@ pub fn band_03_crystal_on_four_to_five_iff() {
 
 /// Crossing iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_03_user1_crystal_on_four_to_five_iff() {
     band_03_crossing_iff_at(1);
@@ -482,6 +493,7 @@ pub fn band_03_user1_crystal_on_four_to_five_iff() {
 
 /// Not a crossing (SEEN != 4): no crystal.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_03_no_crossing_noop() {
     let seen_key = intern::intern("skill.crychic.seen");
@@ -508,6 +520,7 @@ pub fn band_03_no_crossing_noop() {
 
 /// MUTANT companion: two crystals is not what the body does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_03_mutant_is_detected() {
     let seen_key = intern::intern("skill.crychic.seen");

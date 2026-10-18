@@ -295,6 +295,7 @@ fn kkr_pay_10000_iff_at(user: i32) {
 
 /// C-HHW-kkr-01/02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn kkr_pay_10000_iff() {
     kkr_pay_10000_iff_at(0);
@@ -303,6 +304,7 @@ pub fn kkr_pay_10000_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn kkr_pay_10000_user1_iff() {
     kkr_pay_10000_iff_at(1);
@@ -348,6 +350,7 @@ fn kkr_place_on_circle_iff_at(user: i32) {
 
 /// C-HHW-kkr-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn kkr_place_on_circle_iff() {
     kkr_place_on_circle_iff_at(0);
@@ -355,6 +358,7 @@ pub fn kkr_place_on_circle_iff() {
 
 /// Same iff at seat 1 — seat-symmetric 「并将此卡置于CiRCLE上」.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn kkr_place_on_circle_user1_iff() {
     kkr_place_on_circle_iff_at(1);
@@ -362,6 +366,7 @@ pub fn kkr_place_on_circle_user1_iff() {
 
 /// MUTANT companion: pay only 1000.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 #[kani::should_panic]
 pub fn kkr_mutant_pay_1000() {
@@ -380,6 +385,7 @@ pub fn kkr_mutant_pay_1000() {
 
 /// MUTANT disagreement is reachable: the card pays −10000, not −1000.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn kkr_mutant_is_detected() {
     let user = 0i32;
@@ -433,6 +439,7 @@ fn athletic_place_three_crystals_iff_at(user: i32) {
 
 /// C-HHW-athletic-01 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn athletic_place_three_crystals_iff() {
     athletic_place_three_crystals_iff_at(0);
@@ -440,6 +447,7 @@ pub fn athletic_place_three_crystals_iff() {
 
 /// Same iff at seat 1 — seat-symmetric 「自己场上」.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn athletic_place_three_crystals_user1_iff() {
     athletic_place_three_crystals_iff_at(1);
@@ -474,6 +482,7 @@ fn athletic_turn_end_decay_iff_at(user: i32) {
 
 /// C-HHW-athletic-02 decay iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn athletic_turn_end_decay_iff() {
     athletic_turn_end_decay_iff_at(0);
@@ -481,6 +490,7 @@ pub fn athletic_turn_end_decay_iff() {
 
 /// Same iff at seat 1 — seat-symmetric owner turn-end.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn athletic_turn_end_decay_user1_iff() {
     athletic_turn_end_decay_iff_at(1);
@@ -489,6 +499,7 @@ pub fn athletic_turn_end_decay_user1_iff() {
 /// Decay from 1 reaches 0 (the decay half alone; discard half is
 /// `athletic_empty_discards`). Concrete user — seat-symmetric.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn athletic_decay_to_zero_discards() {
     let user = 0i32;
@@ -506,6 +517,7 @@ pub fn athletic_decay_to_zero_discards() {
 /// discard pile write). The commit is world-state, not an in-run effect
 /// (matching `again_02` / `starry_06` "exactly N effects" specs).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn athletic_empty_discards() {
     let user = 0i32;
@@ -562,6 +574,7 @@ fn believe_cost_800_iff_at(user: i32) {
 
 /// C-HHW-believe-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn believe_cost_800_iff() {
     believe_cost_800_iff_at(0);
@@ -569,6 +582,7 @@ pub fn believe_cost_800_iff() {
 
 /// Same iff at seat 1 — seat-symmetric 「消耗800资金」.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn believe_cost_800_user1_iff() {
     believe_cost_800_iff_at(1);
@@ -600,6 +614,7 @@ fn believe_discard_one_iff_at(user: i32) {
 
 /// C-HHW-believe-03/04 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn believe_discard_one_iff() {
     believe_discard_one_iff_at(0);
@@ -608,6 +623,7 @@ pub fn believe_discard_one_iff() {
 /// Same iff at seat 1 — seat-symmetric (the chooser is the rival; with
 /// `n_players = 2` that is the other concrete seat either way).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn believe_discard_one_user1_iff() {
     believe_discard_one_iff_at(1);
@@ -615,6 +631,7 @@ pub fn believe_discard_one_user1_iff() {
 
 /// MUTANT: cost 80 must disagree with the card's 800.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn believe_mutant_is_detected() {
     let user = 0i32;
@@ -674,6 +691,7 @@ fn backstage_pays_1000_per_discard_iff_at(user: i32) {
 
 /// C-HHW-backstage-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn backstage_pays_1000_per_discard_iff() {
     backstage_pays_1000_per_discard_iff_at(0);
@@ -681,6 +699,7 @@ pub fn backstage_pays_1000_per_discard_iff() {
 
 /// Same iff at seat 1 — seat-symmetric 「获得1000资金」.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn backstage_pays_1000_per_discard_user1_iff() {
     backstage_pays_1000_per_discard_iff_at(1);
@@ -688,6 +707,7 @@ pub fn backstage_pays_1000_per_discard_user1_iff() {
 
 /// MUTANT: 500-per-flip must disagree.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn backstage_mutant_is_detected() {
     let user = 0i32;
@@ -760,6 +780,7 @@ fn balloon_teleports_to_a_chosen_result_iff_at(user: i32) {
 
 /// C-HHW-balloon-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn balloon_teleports_to_a_chosen_result_iff() {
     balloon_teleports_to_a_chosen_result_iff_at(0);
@@ -767,6 +788,7 @@ pub fn balloon_teleports_to_a_chosen_result_iff() {
 
 /// Same iff at seat 1 — seat-symmetric 「你的主要移动」.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn balloon_teleports_to_a_chosen_result_user1_iff() {
     balloon_teleports_to_a_chosen_result_iff_at(1);
@@ -774,6 +796,7 @@ pub fn balloon_teleports_to_a_chosen_result_user1_iff() {
 
 /// Pure-formula mutant: dest(r) vs dest_mutant(r) differ for r=0 (wrap).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(24)]
 pub fn balloon_mutant_is_detected() {
     // Spec unit check: dest(r) vs dest_mutant(r) differ for r=0 (wrap).
@@ -832,6 +855,7 @@ fn hagumi_over_60_gains_and_draws_iff_at(user: i32) {
 
 /// C-HHW-hagumi-02 over-60 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn hagumi_over_60_gains_and_draws_iff() {
     hagumi_over_60_gains_and_draws_iff_at(0);
@@ -839,6 +863,7 @@ pub fn hagumi_over_60_gains_and_draws_iff() {
 
 /// Same iff at seat 1 — seat-symmetric 「获得1000资金并抽一张卡」.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(40)]
 pub fn hagumi_over_60_gains_and_draws_user1_iff() {
     hagumi_over_60_gains_and_draws_iff_at(1);
@@ -849,6 +874,7 @@ pub fn hagumi_over_60_gains_and_draws_user1_iff() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn hhw_smoke_cover() {
     let x: bool = kani::any();

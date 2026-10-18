@@ -141,6 +141,7 @@ fn rui_demon_01_iff_at(user: i32) {
 
 /// C-MOR-rui-demon-01/02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rui_demon_01_iff() {
     rui_demon_01_iff_at(0);
@@ -148,6 +149,7 @@ pub fn rui_demon_01_iff() {
 
 /// Same iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rui_demon_01_user1_iff() {
     rui_demon_01_iff_at(1);
@@ -155,6 +157,7 @@ pub fn rui_demon_01_user1_iff() {
 
 /// MUTANT companion: a 200-out leg is NOT what the card does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rui_demon_01_mutant_is_detected() {
     rui_world(0);
@@ -176,6 +179,7 @@ pub fn rui_demon_01_mutant_is_detected() {
 /// Every money leg of the resolution fires the skill, so the body sets X=5
 /// after each leg. We observe the final X via the last SetState.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rui_demon_02_x_set_to_5() {
     rui_world(0);
@@ -259,12 +263,14 @@ fn xiaobai_01_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn xiaobai_01_iff() {
     xiaobai_01_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn xiaobai_01_user1_iff() {
     xiaobai_01_iff_at(1);
@@ -272,6 +278,7 @@ pub fn xiaobai_01_user1_iff() {
 
 /// MUTANT companion: the full amount is NOT what the card takes from the payee.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn xiaobai_01_mutant_is_detected() {
     let user = 0i32;
@@ -362,12 +369,14 @@ fn rainbow_01_half_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rainbow_01_half_iff() {
     rainbow_01_half_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rainbow_01_half_user1_iff() {
     rainbow_01_half_iff_at(1);
@@ -407,12 +416,14 @@ fn rainbow_02_boost_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rainbow_02_boost_iff() {
     rainbow_02_boost_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rainbow_02_boost_user1_iff() {
     rainbow_02_boost_iff_at(1);
@@ -420,6 +431,7 @@ pub fn rainbow_02_boost_user1_iff() {
 
 /// MUTANT companion （1）.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rainbow_01_mutant_is_detected() {
     let user = 0i32;
@@ -437,6 +449,7 @@ pub fn rainbow_01_mutant_is_detected() {
 
 /// MUTANT companion （2）.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn rainbow_02_mutant_is_detected() {
     let user = 0i32;
@@ -520,12 +533,14 @@ fn garden_01_gain_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn garden_01_gain_iff() {
     garden_01_gain_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn garden_01_gain_user1_iff() {
     garden_01_gain_iff_at(1);
@@ -533,6 +548,7 @@ pub fn garden_01_gain_user1_iff() {
 
 /// Mutant: the gain is 200, not 100. Must disagree.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn garden_01_mutant_is_detected() {
     let user = 0i32;
@@ -644,12 +660,14 @@ fn courage_03_unowned_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_03_unowned_iff() {
     courage_03_unowned_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_03_unowned_user1_iff() {
     courage_03_unowned_iff_at(1);
@@ -658,6 +676,7 @@ pub fn courage_03_unowned_user1_iff() {
 /// Soundness of the no-op limb in isolation from the agent bit: if the body
 /// produced no effects, the frame is untouched.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_03_empty_when_no_agent_misfire() {
     let user = 0i32;
@@ -720,12 +739,14 @@ fn courage_01_pay_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_01_pay_iff_blocked_host() {
     courage_01_pay_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_01_pay_user1_iff_blocked_host() {
     courage_01_pay_iff_at(1);
@@ -758,12 +779,14 @@ fn courage_02_agent_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_02_agent_iff_blocked_host() {
     courage_02_agent_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_02_agent_user1_iff_blocked_host() {
     courage_02_agent_iff_at(1);
@@ -772,6 +795,7 @@ pub fn courage_02_agent_user1_iff_blocked_host() {
 /// MUTANT companion (courage-01 amount shape): a 200-leg PayTo is NOT the
 /// card. Reachable-disagreement on the shape of the single pay effect.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn courage_01_mutant_is_detected() {
     let user = 0i32;
@@ -849,12 +873,14 @@ fn toko_no_pair_noop_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn toko_no_pair_noop() {
     toko_no_pair_noop_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn toko_no_pair_noop_user1() {
     toko_no_pair_noop_at(1);
@@ -909,12 +935,14 @@ fn toko_swap_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(64)]
 pub fn toko_swap_iff_blocked_host() {
     toko_swap_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(64)]
 pub fn toko_swap_user1_iff_blocked_host() {
     toko_swap_iff_at(1);
@@ -983,12 +1011,14 @@ fn starry_01_place_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_01_place_iff() {
     starry_01_place_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_01_place_user1_iff() {
     starry_01_place_iff_at(1);
@@ -996,6 +1026,7 @@ pub fn starry_01_place_user1_iff() {
 
 /// MUTANT companion: the pay is not 1000·X+1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_01_mutant_is_detected() {
     let user = 0i32;
@@ -1088,12 +1119,14 @@ fn starry_06_payout_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_06_payout_iff() {
     starry_06_payout_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_06_payout_user1_iff() {
     starry_06_payout_iff_at(1);
@@ -1101,6 +1134,7 @@ pub fn starry_06_payout_user1_iff() {
 
 /// MUTANT companion: 500 per crystal is NOT the card.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_06_mutant_is_detected() {
     let user = 0i32;
@@ -1188,12 +1222,14 @@ fn starry_05_circle_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_05_circle_iff() {
     starry_05_circle_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_05_circle_user1_iff() {
     starry_05_circle_iff_at(1);
@@ -1224,12 +1260,14 @@ fn starry_05_noop_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_05_noop() {
     starry_05_noop_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn starry_05_noop_user1() {
     starry_05_noop_at(1);
@@ -1318,12 +1356,14 @@ fn nnm_05_empty_discard_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn nnm_05_empty_discard_iff() {
     nnm_05_empty_discard_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn nnm_05_empty_discard_user1_iff() {
     nnm_05_empty_discard_iff_at(1);
@@ -1356,6 +1396,7 @@ fn nnm_05_press_empty_is_noop_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn nnm_05_press_empty_is_noop() {
     nnm_05_press_empty_is_noop_at(0);
@@ -1396,6 +1437,7 @@ fn nnm_05_atend_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn nnm_05_atend_leaves_field_card() {
     nnm_05_atend_at(0);
@@ -1409,6 +1451,7 @@ pub fn nnm_05_atend_leaves_field_card() {
 /// BLOCKED-HOST on `tok_names`); `reward` is the live figure the reward step
 /// yields, so book == body.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn nnm_03_amount_iff() {
     let x: i32 = kani::any();
@@ -1430,6 +1473,7 @@ pub fn nnm_03_amount_iff() {
 /// MUTANT companion: hard-coding the default 2000 (the pre-CRYSTAL-04 shape)
 /// disagrees with the book whenever the live reward has been rewritten.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn nnm_03_mutant_is_detected() {
     let x: i32 = kani::any();
@@ -1518,12 +1562,14 @@ fn tritone_01_gain_place_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn tritone_01_gain_place_iff() {
     tritone_01_gain_place_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn tritone_01_gain_place_user1_iff() {
     tritone_01_gain_place_iff_at(1);
@@ -1580,12 +1626,14 @@ fn tritone_02_tick_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn tritone_02_tick_iff() {
     tritone_02_tick_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn tritone_02_tick_user1_iff() {
     tritone_02_tick_iff_at(1);
@@ -1593,6 +1641,7 @@ pub fn tritone_02_tick_user1_iff() {
 
 /// MUTANT companion: the payback is not owed+1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn tritone_02_mutant_is_detected() {
     let user = 0i32;
@@ -1673,12 +1722,14 @@ fn noble_02_mark_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn noble_02_mark_iff() {
     noble_02_mark_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn noble_02_mark_user1_iff() {
     noble_02_mark_iff_at(1);
@@ -1704,12 +1755,14 @@ fn noble_02_not_yours_noop_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn noble_02_not_yours_noop() {
     noble_02_not_yours_noop_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn noble_02_not_yours_noop_user1() {
     noble_02_not_yours_noop_at(1);
@@ -1718,6 +1771,7 @@ pub fn noble_02_not_yours_noop_user1() {
 /// MUTANT companion (mark): a mark on tile 0 is NOT the card when the user
 /// stands elsewhere.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn noble_02_mutant_is_detected() {
     let user = 0i32;
@@ -1791,12 +1845,14 @@ fn again_02_cancel_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn again_02_cancel_iff() {
     again_02_cancel_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn again_02_cancel_user1_iff() {
     again_02_cancel_iff_at(1);
@@ -1804,6 +1860,7 @@ pub fn again_02_cancel_user1_iff() {
 
 /// MUTANT companion: cancel-to-1 is NOT the card.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn again_02_mutant_is_detected() {
     let user = 0i32;
@@ -1881,12 +1938,14 @@ fn wing_01_teleport_iff_at(user: i32) {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn wing_01_teleport_iff_blocked_host() {
     wing_01_teleport_iff_at(0);
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn wing_01_teleport_user1_iff_blocked_host() {
     wing_01_teleport_iff_at(1);
@@ -1896,6 +1955,7 @@ pub fn wing_01_teleport_user1_iff_blocked_host() {
 /// is 20 ahead; the stub lands on the current tile. This cover documents the
 /// BLOCKED-HOST gap without hiding it. Spec-only (no body).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn wing_01_dir_stub_gap() {
     let pos: i32 = kani::any();

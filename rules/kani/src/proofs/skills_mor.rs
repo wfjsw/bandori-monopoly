@@ -224,6 +224,7 @@ mod band {
 
     /// C-MOR-band-01 iff at seat 0 (`n_players = 2`).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_01_draw_iff() {
         band_01_iff_at(0);
@@ -231,6 +232,7 @@ mod band {
 
     /// Same iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_01_user1_draw_iff() {
         band_01_iff_at(1);
@@ -242,6 +244,7 @@ mod band {
     /// Concrete user seat 0 (the no-op is seat-symmetric; the iff pair covers
     /// both seats).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_01_noop_below_or_gain() {
         after_pay_world(0);
@@ -263,6 +266,7 @@ mod band {
     /// host gate), so the reachable disagreement is at the gate: 1999 is
     /// inside the mutant's fire region but the card's host gate stays shut.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_01_mutant_is_detected() {
         after_pay_world(0);
@@ -357,6 +361,7 @@ mod band {
 
     /// C-MOR-band-02 iff at seat 0 (`n_players = 2`).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_02_cycle_iff() {
         band_02_iff_at(0);
@@ -364,6 +369,7 @@ mod band {
 
     /// Same iff at seat 1.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_02_user1_cycle_iff() {
         band_02_iff_at(1);
@@ -372,6 +378,7 @@ mod band {
     /// NO-OP: the card half of [CiRCLE奖励] must not touch money or the counter.
     /// Concrete user seat 0.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_02_noop_card_option() {
         on_circle_world(0);
@@ -396,6 +403,7 @@ mod band {
     /// MUTANT companion: cycle rotated by one must be distinguishable.
     /// Concrete user seat 0, first of the cycle (→ 1000; mutant says 1500).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn band_02_mutant_is_detected() {
         on_circle_world(0);
@@ -551,6 +559,7 @@ mod pass_fire {
 
     /// C-MOR-touko-01 IFF at seat 0 (`n_players = 2`).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn touko_01_fire_iff() {
         pass_gain_iff_at(
@@ -563,6 +572,7 @@ mod pass_fire {
 
     /// C-MOR-touko-01 IFF at seat 1.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn touko_01_user1_fire_iff() {
         pass_gain_iff_at(
@@ -575,6 +585,7 @@ mod pass_fire {
 
     /// C-MOR-nanami-01 IFF at seat 0 (same shape, cap 2).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn nanami_01_fire_iff() {
         pass_gain_iff_at(
@@ -587,6 +598,7 @@ mod pass_fire {
 
     /// C-MOR-nanami-01 IFF at seat 1.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn nanami_01_user1_fire_iff() {
         pass_gain_iff_at(
@@ -600,6 +612,7 @@ mod pass_fire {
     /// NO-OP: passing a non-CiRCLE tile produces nothing.
     /// Pure-formula (guard IR only — no body, no host_subset).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(8)]
     pub fn touko_01_noop_not_circle() {
         // Force the residual: owner, but tile is not a CiRCLE (kind 0).
@@ -621,6 +634,7 @@ mod pass_fire {
     /// MUTANT companion: a spec demanding GainFire{2} must be distinguishable.
     /// Concrete user seat 0, below cap.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn touko_01_mutant_is_detected() {
         pass_world(0);
@@ -771,6 +785,7 @@ mod yuri_crit {
 
     /// C-MOR-rui-crit-02 iff at seat 0 (`n_players = 2`).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn rui_crit_02_roll_iff() {
         rui_crit_02_iff_at(0);
@@ -778,6 +793,7 @@ mod yuri_crit {
 
     /// Same iff at seat 1.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn rui_crit_02_user1_roll_iff() {
         rui_crit_02_iff_at(1);
@@ -786,6 +802,7 @@ mod yuri_crit {
     /// NO-OP: a zero amount (or a move that does not touch this seat) is a no-op.
     /// Concrete user seat 0.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn rui_crit_02_noop() {
         yuri_world(0);
@@ -816,6 +833,7 @@ mod yuri_crit {
     /// book hits (X := 0) and the strict mutant misses (X := 2).
     /// Concrete user seat 0.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn rui_crit_02_mutant_is_detected() {
         yuri_world(0);
@@ -964,6 +982,7 @@ mod tsukushi_on_gain {
 
     /// C-MOR-tsukushi-01 iff at owner seat 0 (`n_players = 2`).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tsukushi_01_redirect_iff() {
         tsukushi_01_iff_at(0);
@@ -971,6 +990,7 @@ mod tsukushi_on_gain {
 
     /// Same iff at owner seat 1.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tsukushi_01_user1_redirect_iff() {
         tsukushi_01_iff_at(1);
@@ -979,6 +999,7 @@ mod tsukushi_on_gain {
     /// MUTANT companion: forwarding `2×amount` must be distinguishable.
     /// Concrete owner seat 0; `n_players = 2` already forces one other seat.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tsukushi_01_mutant_is_detected() {
         on_gain_world(0);
@@ -1160,6 +1181,7 @@ mod tsukushi_cash {
 
     /// C-MOR-tsukushi-03 iff at seat 0 (`n_players = 2`).
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tsukushi_03_sweep_iff() {
         tsukushi_03_iff_at(0);
@@ -1167,6 +1189,7 @@ mod tsukushi_cash {
 
     /// Same iff at seat 1.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tsukushi_03_user1_sweep_iff() {
         tsukushi_03_iff_at(1);
@@ -1176,6 +1199,7 @@ mod tsukushi_cash {
     /// Concrete user seat 0; rate already at the floor so the decay mutant
     /// diverges.
     #[kani::proof]
+    #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
     #[kani::unwind(32)]
     pub fn tsukushi_03_mutant_is_detected() {
         cash_world(0);

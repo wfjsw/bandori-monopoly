@@ -33,6 +33,7 @@ fn symbolic_val() -> Val {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_eq_matches_spec_for_all_operands() {
     let a = symbolic_val();
@@ -42,6 +43,7 @@ pub fn ir_eq_matches_spec_for_all_operands() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_lt_matches_spec() {
     let a = symbolic_val();
@@ -50,6 +52,7 @@ pub fn ir_lt_matches_spec() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_le_matches_spec() {
     let a = symbolic_val();
@@ -58,6 +61,7 @@ pub fn ir_le_matches_spec() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_gt_matches_spec() {
     let a = symbolic_val();
@@ -66,6 +70,7 @@ pub fn ir_gt_matches_spec() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_ge_matches_spec() {
     let a = symbolic_val();
@@ -74,6 +79,7 @@ pub fn ir_ge_matches_spec() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_add_matches_spec() {
     let a = symbolic_val();
@@ -82,6 +88,7 @@ pub fn ir_add_matches_spec() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_sub_matches_spec() {
     let a = symbolic_val();
@@ -90,6 +97,7 @@ pub fn ir_sub_matches_spec() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_mul_matches_spec() {
     let a = symbolic_val();
@@ -152,6 +160,7 @@ fn reject_floor_mutant(x: i64, y: i64, q: i64, r: i64) {
 /// Exact rule: `Err` iff a non-Int operand, or `y == 0`, or
 /// `(x, y) == (i64::MIN, -1)`; otherwise `Ok(Int)`.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_div_rem_error_class_matches_spec() {
     let a = symbolic_val();
@@ -206,6 +215,7 @@ pub fn ir_div_rem_error_class_matches_spec() {
 /// composition (covered by `rules-cond/tests/cond_ir_diff.rs` boundary grid,
 /// which is exhaustive on the real evaluator).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 #[kani::solver(kissat)]
 pub fn ir_div_matches_spec() {
@@ -232,6 +242,7 @@ pub fn ir_div_matches_spec() {
 /// Same characterisation for `%` (its own harness so the unit table has a
 /// rem row). Bit-width split as in `ir_div_matches_spec`.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 #[kani::solver(kissat)]
 pub fn ir_rem_matches_spec() {
@@ -256,6 +267,7 @@ pub fn ir_rem_matches_spec() {
 /// MUTANT (wrong error case): `MIN / -1` must be `Err`, not wrapping `MIN`;
 /// `x % 0` must be `Err`, not `0`.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_div_mutant_wrong_error_case_is_detected() {
     let ov = eval_binop(Kind::Div, Val::Int(i64::MIN), Val::Int(-1));
@@ -275,6 +287,7 @@ pub fn ir_div_mutant_wrong_error_case_is_detected() {
 /// (opposite signs, non-zero remainder). Bit-width split (i16 image) so the
 /// run is cheap; the disagree region is covered.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 #[kani::solver(kissat)]
 pub fn ir_div_mutant_floor_rounding_is_detected() {
@@ -299,6 +312,7 @@ pub fn ir_div_mutant_floor_rounding_is_detected() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_logical_matches_spec_for_all_operands() {
     let a = symbolic_val();
@@ -309,6 +323,7 @@ pub fn ir_logical_matches_spec_for_all_operands() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_neg_not_match_spec() {
     let a = symbolic_val();
@@ -318,6 +333,7 @@ pub fn ir_neg_not_match_spec() {
 
 /// Host root rule: any error ⇒ false.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn error_root_is_false() {
     let x: i64 = kani::any();
@@ -335,6 +351,7 @@ pub fn error_root_is_false() {
 
 /// Ternary is lazy and matches the reference.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(4)]
 pub fn ir_tern_matches_spec() {
     let c = symbolic_val();

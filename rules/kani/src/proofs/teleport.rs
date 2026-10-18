@@ -34,6 +34,7 @@ fn symbolic_play_world() -> World {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(80)]
 pub fn tae_sound_teleport_and_fire_iff() {
     let w = symbolic_play_world();
@@ -73,6 +74,7 @@ pub fn tae_sound_teleport_and_fire_iff() {
 
 /// MUTANT: reference demands an extra +1 fire. Card must FAIL to match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(80)]
 #[kani::should_panic]
 pub fn tae_sound_mutant_extra_fire() {

@@ -80,6 +80,7 @@ fn sparse2(
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn uika_state1_roll_is_10_plus_d10() {
     let d10: i32 = kani::any();
@@ -96,6 +97,7 @@ pub fn uika_state1_roll_is_10_plus_d10() {
 
 /// MUTANT: 9 + d10.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn uika_state1_move_mutant_is_detected() {
     let d10: i32 = kani::any();
@@ -146,6 +148,7 @@ fn band_init_iff_at(user: i32) {
 
 /// Band init iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_starts_in_state1() {
     band_init_iff_at(0);
@@ -153,6 +156,7 @@ pub fn band_starts_in_state1() {
 
 /// Band init iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_user1_starts_in_state1() {
     band_init_iff_at(1);
@@ -175,6 +179,7 @@ pub fn band_user1_starts_in_state1() {
 /// Pure amount arithmetic: 1.5x on the user's side, printed amount unchanged
 /// for the other party. Pure-formula harness — no body call.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn band_state2_pay_is_150_only_on_self() {
     let printed: i32 = kani::any();
@@ -259,6 +264,7 @@ fn band_bend_iff_at(user: i32) {
 
 /// Bend hook iff at seat 0 (user is the payer side of the 0→1 payment).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_state2_bend_hook_rewrites_amount() {
     band_bend_iff_at(0);
@@ -266,6 +272,7 @@ pub fn band_state2_bend_hook_rewrites_amount() {
 
 /// Bend hook iff at seat 1 (user is the payee side of the 0→1 payment).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_state2_user1_bend_hook_rewrites_amount() {
     band_bend_iff_at(1);
@@ -273,6 +280,7 @@ pub fn band_state2_user1_bend_hook_rewrites_amount() {
 
 /// MUTANT: the hook must not leave the amount unchanged when the user is a side.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn band_state2_bend_mutant_is_detected() {
     let user = 0i32;
@@ -295,6 +303,7 @@ pub fn band_state2_bend_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn nyamu_pay_raise_uses_new_pot_count() {
     let pots_before: i32 = kani::any();
@@ -316,6 +325,7 @@ pub fn nyamu_pay_raise_uses_new_pot_count() {
 
 /// MUTANT: X is the pot count before the +1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn nyamu_pay_raise_mutant_is_detected() {
     let pots_before: i32 = kani::any();
@@ -332,6 +342,7 @@ pub fn nyamu_pay_raise_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn sakiko_fire_cap_is_three() {
     let pots_before: i32 = kani::any();
@@ -349,6 +360,7 @@ pub fn sakiko_fire_cap_is_three() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn umiri_fire_cap_is_four() {
     let pots_before: i32 = kani::any();
@@ -373,6 +385,7 @@ pub fn umiri_fire_cap_is_four() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn umiri_deed_pay_and_draw_arithmetic() {
     let houses: i32 = kani::any();
@@ -403,6 +416,7 @@ pub fn umiri_deed_pay_and_draw_arithmetic() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn mutsumi_state2_gate_is_hand_exactly_5() {
     let hand: i32 = kani::any();
@@ -422,6 +436,7 @@ pub fn mutsumi_state2_gate_is_hand_exactly_5() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(8)]
 pub fn band_halve_pay_amount() {
     let amount: i32 = kani::any();

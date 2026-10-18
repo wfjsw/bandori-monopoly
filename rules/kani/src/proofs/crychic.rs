@@ -188,6 +188,7 @@ fn soyoreturn_02_iff_at(user: i32) {
 
 /// Iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn soyoreturn_02_hand_iff() {
     soyoreturn_02_iff_at(0);
@@ -195,6 +196,7 @@ pub fn soyoreturn_02_hand_iff() {
 
 /// Same iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn soyoreturn_02_user1_hand_iff() {
     soyoreturn_02_iff_at(1);
@@ -202,6 +204,7 @@ pub fn soyoreturn_02_user1_hand_iff() {
 
 /// MUTANT companion: the 501-spec is distinguishable from the body.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn soyoreturn_02_mutant_is_detected() {
     sparse2(soyoreturn_play_dispatch, 0, |_| {});
@@ -263,6 +266,7 @@ fn vocalist_01_iff_at(user: i32) {
 
 /// Waive iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn vocalist_01_waive_iff() {
     vocalist_01_iff_at(0);
@@ -270,6 +274,7 @@ pub fn vocalist_01_waive_iff() {
 
 /// Waive iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn vocalist_01_user1_waive_iff() {
     vocalist_01_iff_at(1);
@@ -277,6 +282,7 @@ pub fn vocalist_01_user1_waive_iff() {
 
 /// MUTANT companion: SetPayAmount{1} is not what the body does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn vocalist_01_mutant_is_detected() {
     sparse2(vocalist_dispatch, 0, |w| {
@@ -334,6 +340,7 @@ fn grab_01_iff_at(user: i32) {
 
 /// Stay iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn grab_01_stay_iff() {
     grab_01_iff_at(0);
@@ -341,6 +348,7 @@ pub fn grab_01_stay_iff() {
 
 /// Stay iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn grab_01_user1_stay_iff() {
     grab_01_iff_at(1);
@@ -348,6 +356,7 @@ pub fn grab_01_user1_stay_iff() {
 
 /// MUTANT companion: two stay layers is not what the body does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn grab_01_mutant_is_detected() {
     sparse2(grab_dispatch, 0, |_| {});
@@ -390,6 +399,7 @@ fn debut_01_play_iff_at(user: i32) {
 
 /// Play leaf at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn debut_01_play_logs_nothing() {
     debut_01_play_iff_at(0);
@@ -397,6 +407,7 @@ pub fn debut_01_play_logs_nothing() {
 
 /// Play leaf at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn debut_01_user1_play_logs_nothing() {
     debut_01_play_iff_at(1);
@@ -446,6 +457,7 @@ fn debut_02_iff_at(user: i32) {
 
 /// Turn-end leaf iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn debut_02_turn_end_iff() {
     debut_02_iff_at(0);
@@ -453,6 +465,7 @@ pub fn debut_02_turn_end_iff() {
 
 /// Turn-end leaf iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn debut_02_user1_turn_end_iff() {
     debut_02_iff_at(1);
@@ -460,6 +473,7 @@ pub fn debut_02_user1_turn_end_iff() {
 
 /// MUTANT companion: GiveStay is not GiveStun.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn debut_02_mutant_is_detected() {
     sparse2(debut_at_end_dispatch, 0, |w| {
@@ -526,6 +540,7 @@ fn ifonly_01_iff_at(user: i32) {
 
 /// Cash-out iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn ifonly_01_cashout_iff() {
     ifonly_01_iff_at(0);
@@ -533,6 +548,7 @@ pub fn ifonly_01_cashout_iff() {
 
 /// Cash-out iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn ifonly_01_user1_cashout_iff() {
     ifonly_01_iff_at(1);
@@ -540,6 +556,7 @@ pub fn ifonly_01_user1_cashout_iff() {
 
 /// MUTANT companion: 2000+500*(X+1) is not what the body does.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn ifonly_01_mutant_is_detected() {
     sparse2(forever_play_dispatch, 0, |w| {
@@ -615,6 +632,7 @@ fn ifonly_02_iff_at(user: i32) {
 
 /// Discard leaf iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn ifonly_02_discard_at_seven_iff() {
     ifonly_02_iff_at(0);
@@ -622,6 +640,7 @@ pub fn ifonly_02_discard_at_seven_iff() {
 
 /// Discard leaf iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn ifonly_02_user1_discard_at_seven_iff() {
     ifonly_02_iff_at(1);
@@ -669,6 +688,7 @@ fn soyoreturn_01_branch2_iff_at(user: i32) {
 
 /// Branch-2 leaf at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn soyoreturn_01_branch2_iff() {
     soyoreturn_01_branch2_iff_at(0);
@@ -676,6 +696,7 @@ pub fn soyoreturn_01_branch2_iff() {
 
 /// Branch-2 leaf at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 pub fn soyoreturn_01_user1_branch2_iff() {
     soyoreturn_01_branch2_iff_at(1);
