@@ -1,8 +1,9 @@
-// Character select (CharacterSelectController): turn order, ban (Ranked), pick
-// and the tr("deckPick.title") deck popup. Left: preview of the highlighted character;
-// right: band chips + card grid; bottom: turn order strip and the big button.
+// Character select (CharacterSelectController): turn order, ban (Ranked) and
+// pick. Left: preview of the highlighted character; right: band chips + card
+// grid; bottom: turn order strip and the big button. The `deck` phase has its
+// own full-screen scene (`DeckAdjust`).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { navigate } from "../../app/router";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
@@ -19,12 +20,10 @@ import { Avatar, BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../u
 import { Chips, PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
 import { Live2DStand } from "../../ui/Live2DStand";
-import { isModalOpen } from "../../ui/Modal";
 import { toast } from "../../ui/Toast";
 import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 import { TopBar } from "../../ui/TopBar";
-import { showDeckPick } from "./DeckPick";
 import s from "./Select.module.css";
 import { t as tr } from "../../i18n/t";
 
@@ -33,11 +32,10 @@ const modeChip = (mode: number): [string, string] => ([[tr("mode.solo"), "solo"]
 export function Select({ sess }: { sess: GameSession }) {
   const { view, at } = useMatchView(sess);
   useTick(500);
-  const auto = useAutoplay(sess); // 托管: ban / pick / deck input is locked
+  const auto = useAutoplay(sess); // 托管: ban / pick input is locked
   useWakeLock(true); // a match is on from the ban / pick phase
   const [tab, setTab] = useState<string>(tr("common.all"));
   const [picked, setPicked] = useState("");
-  const deckOpenedFor = useRef("");
 
   const act = async (cmd: Command) => {
     if (sess.autoMode !== "off") return false;
@@ -46,20 +44,8 @@ export function Select({ sess }: { sess: GameSession }) {
     return !err;
   };
 
-  // Open tr("deckPick.title") once when the deck phase starts.
-  // While 托管 is on the autopilot submits the preset deck itself, so the
-  // modal is not opened (it would block the board for nothing).
   const me = view?.state.players[view.playerId];
-  const actRef = useLatestRef(act);
   const pickRef = useLatestRef({ auto, hasChar: !!me?.persona });
-  useEffect(() => {
-    if (!view || !me || sess.autoMode !== "off") return;
-    if (view.state.phase === "deck" && !me.deckReady && deckOpenedFor.current !== me.persona && !isModalOpen("deck")) {
-      deckOpenedFor.current = me.persona;
-      showDeckPick(sess, me.persona, actRef.current);
-    }
-  });
-
   const pickChar = useCallback((c: PersonaData) => {
     if (pickRef.current.auto) return;
     sfx("place");
@@ -95,14 +81,10 @@ export function Select({ sess }: { sess: GameSession }) {
   } else if (st.phase === "pick") {
     hint = myTurn ? tr("select.pickHintYou") : tr("select.pickHintWait", { who: cur });
     if (myTurn && !auto && picked && free(picked)) onGo = () => void act({ act: "pick", persona: picked });
-  } else if (st.phase === "deck") {
-    label = tr("select.stepDeck");
-    hint = me.deckReady ? tr("select.deckDone") : tr("select.deckHint");
-    if (!me.deckReady && !auto) onGo = () => showDeckPick(sess, me.persona, act);
   }
 
   const [modeLabel, modeCls] = modeChip(st.mode);
-  const stepIdx = { order: 0, ban: 1, pick: 2, deck: 3 }[st.phase] ?? 0;
+  const stepIdx = st.phase === "order" ? 0 : st.phase === "ban" ? 1 : 2;
   const step = (n: number, text: string, skip = false) => (
     <span className={cx(s.step, skip ? s.skip : n === stepIdx ? s.stepOn : n < stepIdx && s.stepDone)}>{n} {text}</span>
   );
@@ -111,7 +93,7 @@ export function Select({ sess }: { sess: GameSession }) {
     <>
       <TopBar
         section={tr("select.section")}
-        title={st.phase === "deck" ? tr("select.deckTitle") : st.phase === "ban" ? tr("select.banTitle") : tr("select.pickTitle")}
+        title={st.phase === "ban" ? tr("select.banTitle") : tr("select.pickTitle")}
         onBack={leave}
         right={
           <div className={s.steps}>
@@ -123,7 +105,7 @@ export function Select({ sess }: { sess: GameSession }) {
       {/* Outside the TopBar so it can sit above modals: clickable at any time. */}
       <div className={cx(autoFloat, s.autoSlot)}><AutoToggle sess={sess} /></div>
       <AutoBanner sess={sess} />
-      {sess instanceof SoloSession && st.phase !== "deck" && (
+      {sess instanceof SoloSession && (
         <Btn size="small" icon="redo" className={s.quick} title={tr("select.quickHint")} disabled={auto} onClick={() => sess.quickStart()}>{tr("select.quickStart")}</Btn>
       )}
       <div className={s.body}>
@@ -167,7 +149,6 @@ export function Select({ sess }: { sess: GameSession }) {
                       <Avatar c={c} size={56} />
                       <span className={s.n}>{i + 1}</span>
                       {x.bot && <span className={s.bot}><Icon name="smart_toy" /></span>}
-                      {st.phase === "deck" && x.deckReady && <span className={s.ok}><Icon name="check" /></span>}
                     </div>
                     <div className={s.name}>{i === view.playerId ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && x.roll > 0 && <b> {x.roll}</b>}</div>
                     {st.mode === 2 && x.ban && <div className={s.ban}>{tr("select.banMark", { name: D.persona(x.ban)?.display ?? "" })}</div>}
@@ -210,4 +191,3 @@ function Preview({ c }: { c: PersonaData }) {
     </div>
   );
 }
-
