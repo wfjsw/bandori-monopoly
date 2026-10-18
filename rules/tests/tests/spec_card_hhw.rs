@@ -551,6 +551,12 @@ fn hlsy_teleports_and_is_the_main_move() {
     let mut t = Table::vanilla(2);
     let before = t.pos(0);
     t.give(0, &[HLSY]);
+    // Face 1 = 上. From CiRCLE (#1, grid (15,0)) the far 上 tile is 45, so the
+    // piece must move. Faces 2 (下) and 4 (右) from that corner resolve to
+    // tile 0 itself -- the grid math closes on the starting corner -- so the
+    // roll has to be pinned for 「传送」 to be observable. (Before the
+    // player-meta split the unpinned stream happened to land on 1 or 3.)
+    t.dice(&[1]);
     t.play(0, HLSY).unwrap_or_else(|e| panic!("play rejected: {e}"));
     drain(&mut t);
     let after = t.pos(0);

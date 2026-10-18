@@ -14,7 +14,7 @@ const ARRAY_OPS: &[&str] = &[
     "tile_steps_ahead", "rent_of", "buy_price", "build_cost", "mortgage_value", "owned_count", "owned_at",     "tile_is", "tile_attr", "tile_in", "tile_group", "tile_price", "houses_of", "rent_houses_of",
     "set_houses", "add_house", "mortgaged_of", "set_mortgaged", "set_owner", "dist", "tile_forward", "neighbor",
     "players_on_count", "players_on_at", "player_count", "player_out", "others_count", "others_at", "money", "gain",
-    "gain_typed", "pay", "pay_to", "pay_total", "pay_leg", "draw", "draw_event", "pay_rent",
+    "gain_typed", "pay", "pay_to", "pay_total", "pay_leg", "draw", "draw_event", "pay_rent", "charge_rent",
     "offer_buy", "offer_force_buy", "offer_build", "apply_mortgage", "apply_redeem",
     "pay_buy", "pay_build", "assign_deed",
     "add_to_hand", "add_to_deck", "add_to_deck_at", "take_card", "cards_in",
@@ -28,7 +28,7 @@ const ARRAY_OPS: &[&str] = &[
     "can_pay", "cant_move", "spend_charge", "stay_of", "stun_of", "exile_of", "turn_player", "round_no",
     "turn_key", "persona_is", "set_persona", "in_group", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
     "ask", "trig_kind", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",
-    "trig_pay_is_rent", "trig_move_kind", "trig_move_resolve", "trig_move_tag", "trig_move_main", "trig_move_dir", "trig_move_remaining", "trig_move_from",
+    "trig_pay_is_rent", "trig_move_kind", "trig_move_resolve", "trig_move_tag", "trig_move_main", "trig_settle_redirect", "trig_move_dir", "trig_move_remaining", "trig_move_from",
     "trig_move_total", "trig_cards", "trig_move_roll", "trig_roll_source", "trig_buy_kind", "trig_seller", "trig_price", "trig_set_price",
     "trig_deal_owner", "trig_set_deal_owner", "trig_deal_houses", "trig_set_deal_houses", "trig_deal_mortgaged", "trig_set_deal_mortgaged", "trig_set_reason", "trig_set_move_roll",
     "trig_set_pay_amount", "trig_set_pay_target", "trig_set_cancelled", "trig_set_negate_effect", "trig_set_spare", "trig_cancelled", "trig_seq", "trig_answers",
@@ -66,11 +66,13 @@ fn main() {
     }
     // Custom-arity methods (packing matches `card_sdk::ctx::sys_kani`).
     writeln!(s, "    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::place_mark, [tile, kp, kl, cp, cl, owner])) }}").unwrap();
+    writeln!(s, "    fn op_place_mark_pair(&mut self, a: i32, b: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::place_mark_pair, [a, b, kp, kl, cp, cl])) }}").unwrap();
     writeln!(s, "    fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::count_marks_f, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_bump_mark_f(&mut self, tile: i32, fp: i32, fl: i32, delta: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::bump_mark_f, [tile, fp, fl, delta, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_remove_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::remove_marks_f, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_mark_src_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_src_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_instance_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_partner, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::counter_self, [np, nl, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_add_counter_self(&mut self, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_counter_self, [np, nl, n, max, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_set_counter_self(&mut self, np: i32, nl: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::set_counter_self, [np, nl, n, 0, 0, 0])) }}").unwrap();
@@ -117,8 +119,8 @@ fn main() {
         .unwrap_or("");
     // Custom-arity names already written above (not in ARRAY_OPS).
     let custom = [
-        "op_place_mark", "op_count_marks_f", "op_bump_mark_f", "op_remove_marks_f",
-        "op_mark_src_at", "op_mark_instance_at", "op_counter_self", "op_add_counter_self",
+        "op_place_mark", "op_place_mark_pair", "op_count_marks_f", "op_bump_mark_f", "op_remove_marks_f",
+        "op_mark_src_at", "op_mark_instance_at", "op_mark_partner", "op_counter_self", "op_add_counter_self",
         "op_set_counter_self", "op_counter_at", "op_add_counter_at", "op_card_counter",
         "op_add_card_counter", "op_count_held", "op_add_held", "op_count_held_name",
         "op_set_held_name", "op_move_units", "op_self_uid", "op_send", "op_msg_sender_uid",

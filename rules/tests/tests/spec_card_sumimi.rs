@@ -904,11 +904,12 @@ fn hina_pot_placement_keeps_cap() {
     drain(&mut t);
     t.set_fire(0, 1, 2);
     let main = tile("主要街道");
-    let colour = rules_spec::data().tiles[main].color.clone();
+    // `TileData::color` was renamed `area` in the player-meta split.
+    let colour = rules_spec::data().tiles[main].area.clone();
     let target = rules_spec::data()
         .tiles
         .iter()
-        .position(|x| x.color == colour && x.name != "主要街道")
+        .position(|x| x.area == colour && x.name != "主要街道")
         .expect("a same-colour tile");
     // Turn-start placement: answer any tile pick with the same-colour tile.
     t.begin_turn(0);

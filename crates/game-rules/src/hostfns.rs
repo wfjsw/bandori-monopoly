@@ -135,6 +135,35 @@ pub fn place_mark<C: HostCtx>(
     ))
 }
 
+/// Place **one** paired mark spanning tiles `a` and `b` (one row per tile,
+/// `partner` cross-linked). Returns 1 on placement, 0 on the atomic refusal
+/// (either end already carries a matching mark for that owner).
+#[allow(clippy::too_many_arguments)]
+pub fn place_mark_pair<C: HostCtx>(
+    c: &mut C,
+    a: i32,
+    b: i32,
+    kp: i32,
+    kl: i32,
+    cptr: i32,
+    cl: i32,
+    owner: i32,
+    src: i32,
+    count: i32,
+    stack: i32,
+    np: i32,
+    nl: i32,
+) -> Result<i32, HostErr> {
+    let kind = guest_str(c, kp, kl)?;
+    let category = guest_str(c, cptr, cl)?;
+    let note = guest_msg(c, np, nl)?;
+    let fresh = stack != 0; // Stack::Fresh = 1
+    Ok(c
+        .st_mut()
+        .w()
+        .place_mark_pair(a, b, &kind, &category, owner, src, count, note, fresh) as i32)
+}
+
 fn guest_filter<C: HostCtx>(c: &mut C, fp: i32, fl: i32) -> Result<game_core::state::MarkFilter<'static>, HostErr> {
     let bytes = c.read_guest(fp, fl)?;
     let f: card_sdk::abi::MarkFilter = postcard::from_bytes(&bytes)
@@ -179,6 +208,12 @@ pub fn mark_src_at<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result
 pub fn mark_instance_at<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
     let f = guest_filter(c, fp, fl)?;
     Ok(c.st().wr().mark_instance_at(tile, &f))
+}
+
+/// Partner tile of the first matching mark on `tile`, or -1.
+pub fn mark_partner<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
+    let f = guest_filter(c, fp, fl)?;
+    Ok(c.st().wr().mark_partner(tile, &f))
 }
 
 pub fn counter_self<C: HostCtx>(c: &mut C, np: i32, nl: i32) -> Result<i32, HostErr> {
@@ -784,6 +819,26 @@ pub fn pay_rent<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, half: i32) -> 
             };
                 return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
             }
+}
+
+/// `charge_rent(payer, tile, milli_scale) -> paid` -- a rent-shaped 「收费」 at
+/// `milli_scale` (1000 = ×1.0) of the tile's ordinary-settle rent, outside a
+/// full [触发结算] (`ctx::charge_rent`). Answers the amount actually paid
+/// (0 = refused / cancelled).
+pub fn charge_rent<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    milli_scale: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::ChargeRent {
+            player_id,
+            tile,
+            milli_scale,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 pub fn offer_buy<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
@@ -2096,6 +2151,17 @@ pub fn trig_move_tag<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostE
 
 pub fn trig_move_main<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().trigger().main as i32)
+}
+
+/// `t.Move.SettleRedirect` -- was this settle initiated by a card
+/// (`card_settle_at`) rather than by the player's own move landing?
+/// `false` when there is no move payload.
+pub fn trig_settle_redirect<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .mv
+        .map_or(0, |m| m.settle_redirect as i32))
 }
 
 pub fn trig_move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {

@@ -67,14 +67,15 @@ fn popipa_gains_adds_draws_and_removes() {
     t.give_play(0, "PPP:Popipa").unwrap();
     // 规则书: 「获得1000资金」
     assert_eq!(t.money(0), 11_000);
-    // 规则书: 「将一张“Pipopa”加入抽牌堆」
+    // 规则书: 「将一张“Pipopa”加入抽牌堆」 -- shuffled in, so its position is
+    // not specified; it may even be the card 「然后抽一张牌」 takes.
     assert!(t.draw_pile(0).contains(&"PPP:[衍生]Pipopa".to_string()) || {
-        // it was shuffled in behind the drawn card
         t.discard(0).contains(&"PPP:[衍生]Pipopa".to_string())
             || t.hand(0).contains(&"PPP:[衍生]Pipopa".to_string())
     });
-    // 规则书: 「然后抽一张牌」 — the pre-set top card came to hand.
-    assert!(t.hand(0).contains(&"通用:GREAT".to_string()), "hand {:?}", t.hand(0));
+    // 规则书: 「然后抽一张牌」 -- one card came to hand; which one is the
+    // shuffle's business, not the text's.
+    assert_eq!(t.hand(0).len(), 1, "「抽一张牌」: hand {:?}", t.hand(0));
     // 规则书: 「然后此卡[移除]」
     assert!(!t.discard(0).contains(&"PPP:Popipa".to_string()), "discard {:?}", t.discard(0));
 }

@@ -284,12 +284,11 @@ fn g29_maya_look_at_top_inside_the_draw_curve() {
 // 位置」.
 // 规则书 (Parking Space (1)): 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」.
 // Note: `t13_smile_parade` asserts the (1) placement; this adds the Parking
-// Space field-place leg of the (3) swap.
+// Space field-place leg of the (3) swap. `vanilla` keeps persona dice-skills
+// (仓田真白's speed plan) off the roll so the landing is exact.
 #[test]
 fn g30_smile_parade_swap_with_a_field_card_in_place() {
-    let mut t = Table::new(&["都筑诗船", "仓田真白"]);
-    t.clean();
-    t.begin_turn(0);
+    let mut t = Table::vanilla(2);
     drain(&mut t);
     let space = tile("Space");
     place_on_tile(&mut t, 0, "通用:[都筑诗船]Parking Space", space);
@@ -321,6 +320,62 @@ fn g30_smile_parade_swap_with_a_field_card_in_place() {
     // what is on it. No rent moved (Space is unowned; a swapped-in agent body
     // would at least prompt).
     assert_eq!(t.money(1), 10_000, "Parking Space replaced the settle (no rent)");
+    // 规则书 (3): 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
+    // the parade is on Space and P1 just settled there, so it goes to the
+    // discard (「任何玩家」 includes a non-owner).
+    assert!(
+        !t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),
+        "(3) discards the parade after a settle on its tile: {:?}",
+        t.field_ids(0)
+    );
+}
+
+// =====================================================================
+// G30b. tile-swap reverse: a settle on 弦卷集团 runs as the card's tile
+// =====================================================================
+
+// 规则书 (笑容大游行 (3)): 「当此卡位于格子上时，那格视为与"弦卷集团"格子交换
+// 位置」 -- the exchange is two-way. A settle on 弦卷集团 while the card sits
+// elsewhere runs as the card's tile (its body / ownership / rent), and is
+// **not** 「在此卡放置的格子上[触发结算]」 so the card stays.
+// 规则书 (Parking Space (1)): 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」
+// -- the swapped-in body of Space. `vanilla` keeps persona dice-skills off the
+// roll so the landing on 弦卷集团 is exact.
+#[test]
+fn g30b_smile_parade_reverse_swap_runs_as_card_tile() {
+    let mut t = Table::vanilla(2);
+    drain(&mut t);
+    let group = tile("弦卷集团");
+    let space = tile("Space");
+    place_on_tile(&mut t, 0, "通用:[都筑诗船]Parking Space", space);
+    place_on_tile(&mut t, 0, "HHW:笑容大游行", space);
+    t.set_crystals(0, "HHW:笑容大游行", 0);
+    // P1 settles on 弦卷集团. The swap runs the settle as Space: Parking
+    // Space's (1) claims that settle (a stay at turn end). (3)'s discard does
+    // not fire -- the settle was on 弦卷集团, not 「在此卡放置的格子上」.
+    until_turn(&mut t, 1);
+    t.set_pos(1, (group + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let keys = t.recent_keys(30);
+    eprintln!(
+        "g30b record: field0 = {:?}, P1 money = {}, stay = {}, keys = {:?}",
+        t.field_ids(0),
+        t.money(1),
+        t.state(1, "stay"),
+        keys
+    );
+    assert!(
+        keys.iter().any(|k| k.contains("parking_space_park")),
+        "reverse swap: a settle on 弦卷集团 runs as Space (Parking Space claims it): {:?}",
+        keys
+    );
+    assert!(
+        t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),
+        "(3) discards only after a settle on the card's tile, not on 弦卷集团: {:?}",
+        t.field_ids(0)
+    );
 }
 
 // =====================================================================

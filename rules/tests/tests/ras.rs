@@ -774,6 +774,57 @@ fn storm_part2_rent_factor() {
     assert_eq!(t.money(1), 18_330);
 }
 
+#[test]
+fn storm_part2_charge_rent_rides_pay_split_add() {
+    // 规则书 (sheet 2026-10-06 H8 (2)): the 「(4-X)/4倍价格的收费」 is a real
+    // rent-shaped payment through the money pipeline (`ctx::charge_rent`), so
+    // a `PaySplitAdd` rider sees the base figure before the milli-scale.
+    // `TEST:payAddAny` boosts every payment by 100; with `milli_scale = 500`
+    // (X = 2) the charge settles as (3340 + 100) × 0.5 = 1720 -- proof the
+    // rider ran on `charge_rent`'s amount and the scale composed at
+    // `scale_settle_payment` (`spec/ROUNDING.md`).
+    let mut t = Table::vanilla(3);
+    t.own(0, &[BUDOKAN]);
+    t.set_houses(BUDOKAN, 2);
+    t.set_pos(0, BUDOKAN);
+    t.set_money(0, 20_000);
+    t.set_money(1, 20_000);
+    t.give(0, &["RAS:练习室里的风暴"]);
+    t.play(0, "RAS:练习室里的风暴").unwrap();
+    drain(&mut t);
+    for _ in 0..2 {
+        t.begin_turn(1);
+        drain(&mut t);
+        t.begin_turn(0);
+        drain(&mut t);
+        t.set_pos(0, BUDOKAN);
+        t.dice(&[20]);
+        t.roll(0).unwrap();
+        drain(&mut t);
+    }
+    // Place the probe only now, so the CiRCLE pass rewards are untouched.
+    t.place_raw(2, "TEST:payAddAny");
+    let mark = t.mark();
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, SPACE - 1);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.contains("pay_add_any")),
+        "PaySplitAdd rider saw the charge_rent amount: {keys:?}"
+    );
+    // 20000 + 2*2000 (CiRCLE) + 1720 ((3340+100)×0.5).
+    assert_eq!(
+        t.money(0),
+        25_720,
+        "charge = (base + paySplitAdd) × (4-2)/4"
+    );
+    assert_eq!(t.money(1), 18_280);
+}
+
 // ===========================================================================
 // RAS:游击演出
 // ===========================================================================

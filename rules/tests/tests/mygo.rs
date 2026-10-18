@@ -610,6 +610,11 @@ fn anon_both_owned_places_link_marks() {
     t.answer_tile(0, 2).unwrap();
     assert_eq!(anon_marks(&t, 1), 1, "link mark on 购物中心");
     assert_eq!(anon_marks(&t, 2), 1, "link mark on 天文馆");
+    // `mark_partner` round-trip: the row on 1 names 2 and the row on 2 names 1.
+    let m1 = &t.marks_on(1)[0];
+    let m2 = &t.marks_on(2)[0];
+    assert_eq!(m1.partner, Some(2), "row on 1 partners 2");
+    assert_eq!(m2.partner, Some(1), "row on 2 partners 1");
 }
 
 #[test]
@@ -653,10 +658,12 @@ fn anon_link_is_capped_at_one() {
 fn anon_link_cap_is_on_the_pair_not_per_tile() {
     // 规则书: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- the cap is on
     // the pair. A second link that shares an already-marked end places
-    // **neither** mark (otherwise the `LINK{tile}` slots go one-way and
-    // 「被[奇迹水晶]连接的格子收费时」 reads only one direction).
+    // **neither** mark (`place_mark_pair` is place-or-refuse atomic; a
+    // half-link would leave `mark_partner` one-way and 「被[奇迹水晶]连接的
+    // 格子收费时」 reading only one direction).
     // TODO(规则书) Class C: whether a tile may sit in two links at once; the
-    // singular 「1个…（上限1）」 leans no.
+    // singular 「1个…（上限1）」 leans no, and `place_mark_pair`'s either-end
+    // refusal is that reading.
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "千早爱音");
     t.set_pos(0, 2); // 天文馆; neighbours 购物中心(1) and 周边学区(3)
@@ -672,6 +679,69 @@ fn anon_link_cap_is_on_the_pair_not_per_tile() {
     assert_eq!(anon_marks(&t, 2), 1, "shared end stays at 1");
     assert_eq!(anon_marks(&t, 3), 0, "no half-link onto the fresh end");
     assert_eq!(anon_marks(&t, 1), 1, "first link untouched");
+}
+
+#[test]
+fn anon_mark_partner_round_trips_and_second_pair_refuses() {
+    // `mark_partner` reads `TileMark.partner` (the cross-end of a
+    // `place_mark_pair` row) back to the card body. The second
+    // `place_mark_pair` on an already-marked pair refuses and places nothing.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    t.set_pos(0, 1);
+    t.own(0, &[1, 2]);
+    t.give_play(0, "MyGO:[千早爱音]Anon Tokyo").unwrap();
+    t.answer_tile(0, 2).unwrap();
+    // Round-trip: partner of 1 is 2, partner of 2 is 1 (what `mark_partner`
+    // returns to the `PaySplitAdd` rider).
+    assert_eq!(t.marks_on(1)[0].partner, Some(2), "mark_partner(1) = 2");
+    assert_eq!(t.marks_on(2)[0].partner, Some(1), "mark_partner(2) = 1");
+    let before = t.marks().len();
+    // Second `place_mark_pair` on the same 1-2 pair: refuses, places nothing.
+    t.give_play(0, "MyGO:[千早爱音]Anon Tokyo").unwrap();
+    t.answer_tile(0, 2).unwrap();
+    assert_eq!(t.marks().len(), before, "refusal places nothing");
+    assert_eq!(anon_marks(&t, 1), 1);
+    assert_eq!(anon_marks(&t, 2), 1);
+    assert_eq!(t.marks_on(1)[0].partner, Some(2), "partner untouched");
+    assert_eq!(t.marks_on(2)[0].partner, Some(1), "partner untouched");
+}
+
+#[test]
+fn anon_link_marks_die_with_the_creating_instance() {
+    // Mark model: every mark is a counter of its creating (pseudo) card and
+    // dies with the instance. The two `place_mark_pair` rows carry
+    // `instance` = the field stand-in, so `destroy_instance_units` drops both
+    // together when that instance leaves.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    t.set_pos(0, 1);
+    t.own(0, &[1, 2]);
+    t.give_play(0, "MyGO:[千早爱音]Anon Tokyo").unwrap();
+    t.answer_tile(0, 2).unwrap();
+    assert_eq!(anon_marks(&t, 1), 1);
+    assert_eq!(anon_marks(&t, 2), 1);
+    let uid = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == "MyGO:[千早爱音]Anon Tokyo")
+        .expect("field stand-in")
+        .uid;
+    assert!(uid > 0, "field uid {uid}");
+    assert_eq!(
+        t.marks_on(1)[0].instance,
+        Some(uid),
+        "row on 1 is the stand-in's counter: {:?}",
+        t.marks_on(1)[0]
+    );
+    assert_eq!(t.marks_on(2)[0].instance, Some(uid), "{:?}", t.marks_on(2)[0]);
+    // Leaving the field destroys the instance's units (both rows at once).
+    assert!(
+        t.m.world_mut().unplace_card(0, "MyGO:[千早爱音]Anon Tokyo").is_some(),
+        "unplace the field stand-in"
+    );
+    assert_eq!(anon_marks(&t, 1), 0, "row on 1 died with the instance");
+    assert_eq!(anon_marks(&t, 2), 0, "row on 2 died with the instance");
 }
 
 #[test]

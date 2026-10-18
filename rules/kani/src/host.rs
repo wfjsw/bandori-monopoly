@@ -772,6 +772,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
         // ---- marks ----
                 Op::place_mark => arm_place_mark(a),
+        // Paired mark: model as two single marks (the kani world has no
+        // `partner` field; `mark_partner` is stubbed −1 like `mark_src_at`).
+        Op::place_mark_pair => {
+            let _ = arm_place_mark([a0, a1, a2, a3, a4, a5]);
+            let _ = arm_place_mark([a1, a0, a2, a3, a4, a5]);
+            1
+        }
         Op::count_marks_f => {
             world::with_world(|w| {
                 let mut n = 0;
@@ -787,7 +794,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         Op::bump_mark_f => 0,
         Op::remove_marks_f => 0,
-        Op::mark_src_at | Op::mark_instance_at => -1,
+        // `mark_partner` is BLOCKED-HOST (no partner field on the kani world
+        // `Mark`) -- same stub shape as `mark_src_at`.
+        Op::mark_src_at | Op::mark_instance_at | Op::mark_partner => -1,
 
         // ---- status ----
                 Op::charge => arm_fire(a),
@@ -902,6 +911,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         // `trig_move_main` is `Trigger::main`, not `mv.main` (hostfns 1848).
                 Op::trig_move_main => arm_trig_move_main(a),
+        // `trig_settle_redirect` is `TriggerMove::settle_redirect` (hostfns).
+        Op::trig_settle_redirect => world::with_world(|w| w.move_snap.settle_redirect as i64),
         Op::trig_move_dir => {
             world::with_world(|w| if w.move_snap.present() { w.move_snap.dir as i64 } else { 1 })
         }
@@ -977,7 +988,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::rent_unit_mult => arm_ring_multiplier(a),
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
-                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+                Op::pay_rent | Op::charge_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
 
         // ---- cross-card messages (`ctx::send` / `On::Message`) ----
         Op::send => arm_send(a),
