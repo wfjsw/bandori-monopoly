@@ -1782,3 +1782,57 @@ over `ctx::others`'s `Vec<i32>` is a card-body ABI cost (TUNING §11
 Unwinding assertions ON; no `#[ignore]`; no allowlist; no spec weakening;
 card bodies unmodified; `panic_fmt` stub excluded from `should_panic`
 mutants; production `cfg(not(kani))` untouched.
+
+## class-E parity evidence (coordinator item A)
+
+Branch `kani-triage3`, stubs+bump on. One CBMC at a time via
+`tools/kani/run.sh`. Baseline times from TRIAGE-LOG re-times / central.
+
+### Known-GREEN (must stay SUCCESSFUL, covers non-vacuous)
+
+| harness | baseline | with stubs | covers (base → stubs) | verdict |
+|---|---|---|---|---|
+| `mor::nnm_05_empty_discard_iff` | 160 s | **197 s** | 1/1 → **1/1** | OK |
+| `mor::starry_05_circle_iff` | 306 s | **384 s** | 3/3 → **3/3** | OK |
+| `mor::tritone_02_tick_iff` | 335 s | **417 s** | 3/3 → **3/3** | OK |
+| `sumimi::twoinone_01b_fire_iff` | 457 s | **431 s** | 1/1 → **1/1** | OK (faster) |
+| `pp::same_dream_01_band_plus_3_iff` | 563 s (4/4 stale) | **834 s** | 3/4 → **3/4** | OK; see control |
+| `skills_ppp::kasumi_skill_02_spend_charge_iff` | 532 s | **651 s** | (none) → (none) | OK |
+| `mygo::rainday_01_place_five_crystals_iff` | (2/3) | **1107 s** | 2/3 → **2/3** | OK |
+| `events::chart_rush_01_spends_fire` | 909 s | **593 s** | 2/2 → **2/2** | OK (faster) |
+
+**Cover control (`same_dream`, item A cover-divergence check):**
+cover.3 `step 3 has reverses to flip` is UNSATISFIABLE **with and without**
+stubs (no-stub control 871 s, also 3/4). Pre-existing sparse-world shape,
+not stub-induced. Cover parity holds.
+
+Times are same order (0.7–1.5×; chart_rush and twoinone faster). No
+verdict flip, no cover-count flip vs the no-stub control / recorded baseline.
+
+### Known-FAILING / mutant (must NOT be masked)
+
+| harness | expect | with stubs | notes |
+|---|---|---|---|
+| `skills_mygo::band_02_crystal_on_16_iff` | FAILED (D over-cap eater) | **FAILED 182 s** | same class D; stubs did not mask |
+| `events::aao_02_hand_veto_is_armed` | FAILED (D GENUINE E-aao-02) | **FAILED 278 s** | same assert fires |
+| `money_shave::aya_haruka_02_mutant_x_off_by_one` | should_panic | **SUCCESSFUL (encountered one or more panics as expected)** | real `panic!` still observed (`LIB_COST` keeps `panic_fmt` off mutants) |
+
+**Stale-D note:** `mor::rainbow_01_half_iff` / `_mutant` are **no longer**
+expected-FAILING. The 2026-10-15 OPEN-取整 ruling (card writes the fold, engine
+`round10`s once) is in `spec/mor.rs`; both rows are SUCCESSFUL (244 s / 185 s,
+4/4 and 2/2 covers). Not a stub mask.
+
+### Item B — timeout rows reaching a verdict
+
+**Plainly: none of the class-E TIMEOUT rows finished in 1800 s** with the
+stubs+bump+Display levers. `aya_with_02_pay_discount_iff` and
+`tsukushi_01_redirect_iff` both now **start BMC** (they previously died in
+symex) but remain solver-bound / residual-`fmt::write` / RawVec
+`with_capacity` abort paths. Display stubs for `{u32,i32,i64}` are landed
+(`<u32 as Display>::fmt`); a further `Formatter::pad` stub is blocked by
+Kani's generic-count check.
+
+### Soundness
+
+See TUNING.md §12 "Soundness argument per stub". panic_fmt stub keeps
+non-mutant panics as FAILED properties; mutants keep a real panic! event.
