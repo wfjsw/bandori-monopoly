@@ -124,6 +124,59 @@ pub fn panic_fmt_stub(_fmt: core::fmt::Arguments<'_>) -> ! {
     }
 }
 
+/// `alloc::fmt::format` (`format!` macro). Literal-only formats are exact.
+/// Formats with arguments use a 64-byte `String` and `write_fmt` (no
+/// `estimated_capacity` loop). Key bytes stay consistent within a proof
+/// because every `format!` site shares this stub; the proof never asserts
+/// key bytes against production.
+pub fn fmt_format_stub(args: core::fmt::Arguments<'_>) -> String {
+    if let Some(s) = args.as_str() {
+        return String::from(s);
+    }
+    let mut out = String::with_capacity(64);
+    let _ = core::fmt::Write::write_fmt(&mut out, args);
+    out
+}
+
+/// `Formatter::pad_integral` — Display of every integer goes through here.
+/// The real body builds `PostPadding` / may wrap a `PadAdapter`. We write
+/// sign + prefix + digits with **no width/padding** (loud FAIL if width or
+/// precision is set: the corpus never formats `{:.width$}` keys).
+/// Result string is identical to the real `pad_integral` for the no-width
+/// case that `format!("k:{p}")` / `Display` of i32/u32 use.
+pub fn pad_integral_stub<'a, T>(
+    f: &mut core::fmt::Formatter<'a>,
+    is_nonnegative: bool,
+    prefix: &str,
+    buf: &str,
+) -> core::fmt::Result {
+    let _ = core::marker::PhantomData::<T>;
+    if f.width().is_some() || f.precision().is_some() {
+        kani::assert(false, "kani_stubs::pad_integral: width/precision");
+    }
+    if !is_nonnegative {
+        core::fmt::Write::write_str(f, "-")?;
+    }
+    if !prefix.is_empty() {
+        core::fmt::Write::write_str(f, prefix)?;
+    }
+    core::fmt::Write::write_str(f, buf)
+}
+
+/// `Formatter::pad` — Display of `&str` / `String` goes through here.
+/// Same contract as [`pad_integral_stub`]: no-width pieces are written
+/// verbatim (no `PadAdapter` newline split, no indent). Multi-line pieces
+/// are a loud FAIL (corpus keys never contain `\\n`).
+pub fn formatter_pad_stub<'a>(f: &mut core::fmt::Formatter<'a>, s: &str) -> core::fmt::Result {
+    if f.width().is_some() || f.precision().is_some() {
+        kani::assert(false, "kani_stubs::Formatter::pad: width/precision");
+    }
+    if s.as_bytes().contains(&b'\n') {
+        kani::assert(false, "kani_stubs::Formatter::pad: newline piece");
+    }
+    core::fmt::Write::write_str(f, s)
+}
+
 /// `PadAdapter` is left unstubbed (its `Write` impl is the only public
 /// handle and stubbing `write_str` would recurse through `write_char`).
 /// The panic_fmt stub below is the cut that matters for panic-message
@@ -140,6 +193,9 @@ kani::stub_set!(pub LIB_COST,
     stub(std::alloc::handle_alloc_error, crate::kani_stubs::handle_alloc_error_stub),
     stub(alloc::raw_vec::capacity_overflow, crate::kani_stubs::capacity_overflow_stub),
     stub(alloc::raw_vec::handle_error, crate::kani_stubs::handle_error_stub),
+    // `panic_fmt` is NOT stubbed here — `#[kani::should_panic]` mutants need
+    // a real panic! event. format/PadAdapter are fine for mutants.
+    stub(alloc::fmt::format, crate::kani_stubs::fmt_format_stub),
 );
 
 /// Same as [`LIB_COST`] plus `panic_fmt` (drops fmt/memchr of panic messages).
@@ -156,4 +212,5 @@ kani::stub_set!(pub LIB_COST_NOFMT,
     stub(alloc::raw_vec::capacity_overflow, crate::kani_stubs::capacity_overflow_stub),
     stub(alloc::raw_vec::handle_error, crate::kani_stubs::handle_error_stub),
     stub(core::panicking::panic_fmt, crate::kani_stubs::panic_fmt_stub),
+    stub(alloc::fmt::format, crate::kani_stubs::fmt_format_stub),
 );
