@@ -1653,3 +1653,54 @@ Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening (sparkler dest pin is the wire constant, not a softer pin; soyoreturn
 pick pin is setup isolation, same class as `arm_roll_face_one`). Production
 bodies untouched. Allowed Kani-only surface: `rules/kani/**`.
+
+## triage3 batch 16 — sumimi / skills_sumimi central non-success rows (kani-pass@fc3ff3e1)
+
+Per-proof detail lives in `docs/rulebook/spec/kani/sumimi.md`.
+Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
+Also scanned `skills_bands`, `skills_characters`, `skills_general` — no non-success rows
+(stub units, empty/ok).
+
+| unit | id | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|---|
+| skills_sumimi | `band_02_rent_bonus_iff` + `_user1_` + `band_02_rent_bonus_mutant_is_detected` | FAILED 225/225/143 s ×3 (`host op outside declared per-harness subset`) | **C** | Central body was the pre-v74 `bend(player)` that did `trigger::value()` + `trigger::set_pay_amount`; `sumimi_bend_dispatch` had no `trig_value` / `trig_set_pay_amount`. Master ABI pure Filter `bend(player, value) -> fold` only reads `counter_self` / `trig_target` / `trig_player` | already on this tree after `git merge master` (pure bend + harness `bend_kani(user, amount) -> i32`); subset matches | queued |
+| sumimi | `hina_01_pass_circle_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **C** (+E cliff) | Log profile: 296 `fill_for_guard` + 216 `bin_set` + 71 `fill_geometry_bins`. `fill_for_guard` bit masks at `fc3ff3e1` were the retired `>> 6` / `>> 27` magic numbers, so `OWN_START` (`tile_is(tile.id,'circle')` = `FnId::TileIs`) pulled the expensive geometry bins (same cliff as `kokoro_02_circle_pass_1500_iff`, batch 11) | FnId-derived masks already on master (batch 11 / `c897fffa`); `TileIs` now only fills board sets | queued |
+| sumimi | `twoinone_01b_fire_iff` + `_user1_` + `twoinone_01b_mutant_is_detected` | TIMEOUT 1800 s ×3 | **E** | Body `swap` calls `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32, String)>>`. The unbounded postcard deserializer is in the GOTO even when the field is empty (`n<=0` early-return). Unique among this unit's harnesses (childhood/twodonuts do not call `find_card`) | `cfg(kani)` `field_instances` / `find_card` facades (`rules/card-sdk/src/ctx.rs` + `rules/kani/src/host.rs` `arm_field_instances`): compact LE `i32` pairs `[uid, name_id]`, `find_card` compares intern ids, never postcard / `Vec<(i32,String)>` grow paths | queued |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch. The two earlier `sumimi.md` FAILS rows
+(`C-SUMIMI-twoinone-01` character identity, `C-SUMIMI-band-01` add half) are
+pre-existing class-D LESS findings, not new central-pass rows. Band-01 add was
+fixed earlier (guard `actor == owner`, both halves proven — batch 4).
+twoinone-01 character identity remains a **genuine discrepancy** (book
+「将自己的角色卡替换为sumimi的另一名角色」 vs body that only swaps the bound
+skill entry + fire; `player.character` stays the old name) — kept failing.
+
+### Book quotes checked
+
+* twoinone: 「打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
+  (`docs/rulebook/cards.json` id `Sumimi:Sumimi是二人一体的`)
+* band 人气偶像组合: 「（1）若你在一回合内从其他玩家处获得过资金，你的回合结束时
+  为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶。（2）此卡上的每个奇迹
+  水晶可使你在向其他人收费时让金额额外提高100资金。」
+  (roster band row / `data/skill_simple.json` groups[9] Sumimi)
+* hina-01: 「经过CiRCLE时获得1个[火罐]」 (`skill:三角初华（Sumimi）:成为偶像`)
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-sumimi,skills-personas` and `band-sumimi,skills-groups` — Finished,
+  no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed; includes
+  `wrapper_check`, `fnid_seat_args`, `conf_*`).
+
+No CBMC re-times completed this batch at doc-write time: central
+`tools/kani/central.sh --retry-nonsuccess` is still occupying a cbmc slot and
+`free -m` available hovered at the 12000 MB gate. All six rows are **needs
+re-time** (`tools/kani/run.sh --unit <u> --harness <h> --timeout 1800`).
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening. Production bodies untouched. Allowed Kani-only surface:
+`rules/kani/**` + `cfg(kani)` wrappers in `rules/card-sdk/src/ctx.rs`
+(`field_instances` / `find_card` facades, same pattern as `cards_in`).
