@@ -120,12 +120,13 @@ pub struct EngineStamp {
     pub abi: u32,
     /// Sha256 of the built ruleset, or `"stub"`.
     pub ruleset_sha256: String,
-    /// Sha256 of the `DATA_FILES` contents in order (the two engine tables
-    /// -- board / match_rules), bytes as a whole. Presentation-only files
-    /// (`rules.txt`, home / voice lines, `skill_simple`, `schools`) and the
-    /// roster's display columns (`display.json`) are what left the hash. The
-    /// roster (cards / personas / groups / events -- including event prose)
-    /// lives in the ruleset and is covered by `ruleset_sha256`, not this field.
+    /// Sha256 of the [`crate::data::DATA_FILES`] contents in order. **Empty on
+    /// every record this build writes** (`""`): the tables a replay depends on
+    /// ride in the record itself ([`MatchSetup::board`] / [`MatchSetup::rule_params`]),
+    /// so host files no longer fork a replay and [`crate::data::DATA_FILES`] is
+    /// empty. The field is kept for record-format compatibility; [`compat`]
+    /// already skips empty values, and [`bundle_id`] feeds an empty string into
+    /// its recipe (which still hashes the glue + ruleset + format versions).
     pub data_sha256: String,
     /// Engine identity (`"game-core"`).
     pub engine: String,
@@ -153,6 +154,10 @@ pub const BUNDLE_ID_VERSION: &str = "bdre-bundle-v1";
 /// `glue_bg.wasm` bytes (hex). An empty `glue_sha256` means the host cannot
 /// see the glue identity (a pre-bundle build, or the in-process server
 /// fallback) and the result is `""` -- an unknown bundle, never a wrong one.
+///
+/// `data_sha256` is empty on every record this build writes (see
+/// [`EngineStamp::data_sha256`]); the recipe still hashes that empty string so
+/// the field slot stays in the id.
 ///
 /// ```text
 /// sha256_hex("bdre-bundle-v1\n"
@@ -324,6 +329,19 @@ pub struct MatchSetup {
     /// re-serializes byte-identically.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clock: Option<crate::clock::ClockSettings>,
+    /// Named rule parameters in force for this match (the ruleset reads them
+    /// by name, e.g. `rentUnitMult`); recorded so a replay does not re-read
+    /// the host's current table. Empty = the code default
+    /// ([`crate::data::default_rule_params`]). Serde-skipped when empty so an
+    /// old record's body `check` re-serializes byte-identically.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub rule_params: std::collections::BTreeMap<String, i32>,
+    /// The tile table in force for this match. Present on every record this
+    /// build writes; absent on older ones, which replay against the host's
+    /// current `data/board.json` ([`GameData::tiles`]). Serde-skipped when
+    /// absent so an old record's body `check` re-serializes byte-identically.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board: Option<Vec<crate::data::TileData>>,
 }
 
 impl Default for MatchSetup {
@@ -334,6 +352,8 @@ impl Default for MatchSetup {
             weights: ScoreWeights::default(),
             seed256: None,
             clock: None,
+            rule_params: std::collections::BTreeMap::new(),
+            board: None,
         }
     }
 }
@@ -990,7 +1010,7 @@ impl RecordedMatch {
     ) -> Self {
         let rec = Recorder::new_seed(setup.clone());
         let (clock, legacy) = setup_clock(&setup);
-        let m = match setup.seed256 {
+        let mut m = match setup.seed256 {
             Some(seed) => Match::new_seeded_with_clock(
                 data,
                 rules,
@@ -1012,6 +1032,7 @@ impl RecordedMatch {
                 legacy,
             ),
         };
+        m.apply_setup_tunables(&setup.rule_params, setup.board.as_deref());
         let turn_key = turn_key(&m);
         Self {
             m,
@@ -1380,7 +1401,7 @@ impl Replayer {
         let m = match &body.init {
             Init::Seed(setup) => {
                 let (clock, legacy) = setup_clock(setup);
-                match setup.seed256 {
+                let mut m = match setup.seed256 {
                     Some(seed) => Match::new_seeded_with_clock(
                         data.clone(),
                         rules.clone(),
@@ -1401,7 +1422,9 @@ impl Replayer {
                         clock,
                         legacy,
                     ),
-                }
+                };
+                m.apply_setup_tunables(&setup.rule_params, setup.board.as_deref());
+                m
             }
             Init::Snapshot { save } => Match::restore(data.clone(), rules.clone(), save)
                 .map_err(|e| ReplayError::Corrupt(e.to_string()))?,

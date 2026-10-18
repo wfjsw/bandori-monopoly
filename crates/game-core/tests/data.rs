@@ -31,7 +31,11 @@ fn game_data_counts_match_the_board_and_fixture() {
     assert_eq!(d.groups.len(), 3);
     assert_eq!(d.events.len(), 3);
     assert_eq!(d.events.iter().filter(|e| !e.derived).count(), 2);
-    assert_eq!(d.match_rules.rule_params.get("rentUnitMult"), Some(&10));
+    assert_eq!(
+        game_core::data::default_rule_param("rentUnitMult"),
+        10,
+        "code default rule params (not read from JSON)"
+    );
 
     assert_eq!(d.tiles.iter().filter(|t| t.is_buyable()).count(), 45);
     assert_eq!(

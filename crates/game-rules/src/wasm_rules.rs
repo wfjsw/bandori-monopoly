@@ -1104,7 +1104,7 @@ impl CardWorld for Run {
         self.move_now(Some(to), dest)
     }
     fn rent_unit_mult(&self) -> i32 {
-        self.world.rent_unit_mult(&self.data)
+        self.world.rent_unit_mult()
     }
     fn add_rent_unit_bonus(&mut self, n: i32) -> i32 {
         self.world.add_rent_unit_bonus(n)

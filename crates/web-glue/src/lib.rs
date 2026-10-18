@@ -3,7 +3,7 @@
 //! Everything crosses the boundary as JSON strings in the same shapes the server
 //! uses, so the web client has one set of types for online and solo play.
 //!
-//! * `load_data` -- the contents of `/data/*` (`DATA_FILES`, no roster)
+//! * `load_data` -- the contents of `/data/*` (`BOOT_FILES`, no roster)
 //! * `roster_json` -- cards / personas / groups / events from the built ruleset
 //! * deck rules and saved deck slots (`deck_*`)
 //! * profile and progression (`profile_*`), persisted by the client
@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{EventData, GroupData, CardData, PersonaData, GameData, Roster, DATA_FILES};
+use game_core::data::{EventData, GroupData, CardData, PersonaData, GameData, Roster};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
@@ -30,7 +30,6 @@ use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 use game_rules::WasmRules;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::*;
 
 /// The browser engine is long-lived and allocates on every tick, so the
@@ -47,7 +46,8 @@ thread_local! {
     /// The raw [`load_data`] payload, kept so [`ruleset_build`] can rebuild
     /// `GameData` with the ruleset roster when the tables landed first.
     static FILES: RefCell<Option<HashMap<String, String>>> = const { RefCell::new(None) };
-    /// Sha256 over the `DATA_FILES` contents in order, captured by [`load_data`].
+    /// `EngineStamp::data_sha256`. Always empty on this build: the tables a
+    /// replay depends on ride in `MatchSetup`, not in a host-side hash.
     static DATA_SHA: RefCell<String> = const { RefCell::new(String::new()) };
     /// The built ruleset, bound or not: the roster source for [`load_data`] /
     /// [`roster_json`], and the set [`load_data`] binds against.
@@ -146,9 +146,9 @@ fn roster() -> Roster {
 }
 
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
-/// `DATA_FILES` (the remaining tables -- the roster is **not** in here; it
-/// comes from the ruleset via [`roster_json`]), plus the optional
-/// `deck_book.json` (bot deck book, `docs/BOT.md` §3.7) when the client has one.
+/// [`BOOT_FILES`] (the host tables -- the roster is **not** in here; it comes
+/// from the ruleset via [`roster_json`]), plus the optional `deck_book.json`
+/// (bot deck book, `docs/BOT.md` §3.7) when the client has one.
 ///
 /// Either call order works with [`ruleset_build`]:
 /// * ruleset first: this builds `GameData` with that set's roster and binds;
@@ -160,19 +160,11 @@ fn roster() -> Roster {
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
-    // Stamp input: sha256 over the contents in `DATA_FILES` order, so a record
-    // can tell whether the board / card data it was written against is here.
-    // A leading UTF-8 BOM is not content: the browser's decoder strips it and
-    // `read_to_string` keeps it, so hash without it to get one recipe.
-    let mut hasher = Sha256::new();
-    for name in DATA_FILES {
-        if let Some(contents) = files.get(name) {
-            hasher.update(contents.strip_prefix('\u{feff}').unwrap_or(contents).as_bytes());
-        }
-    }
-    let sha = hex(&hasher.finalize());
+    // `data_sha256` is empty on every record this build writes: the board and
+    // rule parameters ride in `MatchSetup`, so host tables no longer fork a
+    // replay (`docs/REPLAY.md` §9 / §10). The hash recipe is a no-op.
     let d = build_data(&files, roster())?;
-    DATA_SHA.with(|s| *s.borrow_mut() = sha);
+    DATA_SHA.with(|s| *s.borrow_mut() = String::new());
     FILES.with(|f| *f.borrow_mut() = Some(files));
     DATA.with(|slot| *slot.borrow_mut() = Some(d.clone()));
     if let Some(set) = SET.with(|s| s.borrow().clone()) {
@@ -206,14 +198,6 @@ pub fn roster_json() -> String {
         groups: r.groups,
         events: r.events,
     })
-}
-
-fn hex(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        s.push_str(&format!("{b:02x}"));
-    }
-    s
 }
 
 fn data_sha() -> String {
@@ -257,10 +241,10 @@ fn stamp() -> EngineStamp {
     parse::<EngineStamp>("stamp", &engine_stamp()).unwrap_or_default()
 }
 
-/// The file names `load_data` needs.
+/// The file names `load_data` needs (the host boot tables).
 #[wasm_bindgen]
 pub fn data_files() -> String {
-    json(&game_core::data::DATA_FILES)
+    json(&game_core::data::BOOT_FILES)
 }
 
 // ------------------------------------------------------------------ decks
@@ -788,15 +772,20 @@ impl SoloMatch {
         mode.check_seats(members.len())
             .map_err(|e| JsError::new(&e))?;
         let seed = Seed256::from_hex(seed_hex).map_err(|e| JsError::new(&e))?;
+        let data = data()?;
         let setup = MatchSetup {
             members,
             seed: 0,
             seed256: Some(seed),
             weights,
             clock: Some(clock),
+            // Fresh match: code-default rule params (empty map), and the host
+            // board the boot loaded -- recorded so a replay is self-contained.
+            rule_params: Default::default(),
+            board: Some(data.tiles.clone()),
         };
         Ok(SoloMatch {
-            m: RecordedMatch::new(data()?, rules()?, setup, mode),
+            m: RecordedMatch::new(data, rules()?, setup, mode),
         })
     }
 

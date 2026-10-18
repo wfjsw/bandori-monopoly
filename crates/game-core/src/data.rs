@@ -13,11 +13,12 @@
 //! **Roster (ABI v63).** `cards` / `personas` / `groups` / `events` no longer
 //! come from `data/{cards,personas,groups,events}.json`. They are authored
 //! beside the rule code and handed over as [`Roster`] (ruleset
-//! `ruleset_metadata` -> [`crate::data::Roster`]). [`DATA_FILES`] covers only
-//! the remaining tables and the data hash (`EngineStamp::data_sha256`) hashes
-//! exactly those; the roster -- including event prose -- is covered by the
-//! ruleset hash (`EngineStamp::ruleset_sha256`), which already names the
-//! modules the metadata lives in.
+//! `ruleset_metadata` -> [`crate::data::Roster`]). [`DATA_FILES`] is empty:
+//! a record carries its own board and rule parameters
+//! (`crate::record::MatchSetup`), so `EngineStamp::data_sha256` is written
+//! `""` and host tables no longer fork a replay. The roster -- including event
+//! prose -- is covered by the ruleset hash (`EngineStamp::ruleset_sha256`),
+//! which already names the modules the metadata lives in.
 //!
 //! **Display text is not engine data.** Card / persona / group / event copy,
 //! tile chrome (short names, colors, notes), home lines, voice lines, schools
@@ -266,32 +267,32 @@ pub struct EventData {
 /// data set is Chinese), not display text.
 pub const GENERAL_GROUP: &str = "通用";
 
-/// Tunable match numbers from `match_rules.json`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Bot-naming policy from `match_rules.json`. Match tunables (score weights,
+/// named rule parameters) and the board travel on [`crate::record::MatchSetup`]
+/// so a replay does not re-read the host's current table.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchRulesData {
-    pub money: f32,
-    pub property: f32,
-    pub houses: f32,
-    /// Generic named rule parameters (the ruleset reads them by name).
-    /// The shipped ruleset uses `rentUnitMult` as the dice-rent unit multiplier.
-    pub rule_params: std::collections::BTreeMap<String, i32>,
     /// Names given to bot players, in order. Match naming policy, not chrome.
     pub bot_names: Vec<String>,
 }
 
-impl Default for MatchRulesData {
-    fn default() -> Self {
-        let mut rule_params = std::collections::BTreeMap::new();
-        rule_params.insert("rentUnitMult".to_string(), 10);
-        Self {
-            money: 1.0,
-            property: 1.0,
-            houses: 1.0,
-            rule_params,
-            bot_names: vec![],
-        }
+/// Code-default named rule parameter: the table a match runs on when its
+/// [`crate::record::MatchSetup::rule_params`] is empty. Not read from JSON.
+pub fn default_rule_param(name: &str) -> i32 {
+    match name {
+        "rentUnitMult" => 10,
+        _ => 0,
     }
+}
+
+/// The code-default rule-parameter table (`{"rentUnitMult": 10}`), as a map.
+/// [`default_rule_param`] is the lookup; this is what a fresh
+/// [`crate::record::MatchSetup`] leaves `rule_params` empty to mean.
+pub fn default_rule_params() -> std::collections::BTreeMap<String, i32> {
+    let mut m = std::collections::BTreeMap::new();
+    m.insert("rentUnitMult".to_string(), default_rule_param("rentUnitMult"));
+    m
 }
 
 #[derive(Deserialize)]
@@ -335,34 +336,30 @@ pub struct GameData {
     /// Bot deck book (`docs/BOT.md` §3.7) from the optional
     /// `data/deck_book.json`. Empty when the file is absent or unparsable --
     /// bots then keep using [`crate::deck::preset`]. Not part of
-    /// [`DATA_FILES`] / the data hash: it tunes bots, not the match.
+    /// [`BOOT_FILES`] / the data hash: it tunes bots, not the match.
     pub deck_book: DeckBook,
     /// Bot strategy book (`docs/BOT.md` §3.8) from the optional
     /// `data/strategy_book.json`. Empty when the file is absent or unparsable
     /// -- bots then keep using the default [`crate::strategy::StrategyParams`]
-    /// (today's constants). Not part of [`DATA_FILES`] / the data hash, like
+    /// (today's constants). Not part of [`BOOT_FILES`] / the data hash, like
     /// [`Self::deck_book`].
     pub strategy_book: StrategyBook,
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`, that the **engine** loads and hashes.
-/// Two tables only: the board and the match numbers.
-///
-/// The hash covers each file's bytes as a whole, so *every* column in these
-/// two moves `data_sha256` -- including the chrome that happens to sit beside
-/// the identity columns in `board.json` (tile `shortName` / `color`).
-///
-/// What left the hash is the display-only files the client parses on its own
-/// (`rules.txt`, `home_lines.json`, `voice_lines.json`, `skill_simple.json`,
-/// `schools.json`) and the roster's display columns (`display.json`). The
-/// roster (`cards` / `personas` / `groups` / `events`) is **not** here either:
-/// it comes from the ruleset (ABI v63 `ruleset_metadata`) or, in tests, from
-/// the synthetic fixture (`Roster::from_fixture`), and is covered by the
-/// ruleset hash, not this one. Event prose (`EventData::name` / `text`) is
-/// game content that lives on that roster now, so it moves `ruleset_sha256`
-/// rather than `data_sha256`.
-pub const DATA_FILES: [&str; 2] = ["board.json", "match_rules.json"];
+/// Host boot tables [`GameData::load`] reads: the board and the bot-naming
+/// policy. These are the **host's current** tables for starting a new match;
+/// a record carries its own board and rule parameters
+/// (`crate::record::MatchSetup::board` / `rule_params`), so editing them
+/// rewrites nothing that has already been recorded.
+pub const BOOT_FILES: [&str; 2] = ["board.json", "match_rules.json"];
+
+/// Inputs to [`crate::record::EngineStamp::data_sha256`]. **Empty**: the
+/// tables a replay depends on ride in the record
+/// (`crate::record::MatchSetup::board` / `rule_params`), not in a host-side
+/// hash, so the hash is written `""` and never moves with host files. Kept as
+/// a list so the hash recipe (every entry, in order) still compiles.
+pub const DATA_FILES: [&str; 0] = [];
 
 fn parse<T: serde::de::DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {
     serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| format!("{file}: {e}"))
@@ -398,7 +395,7 @@ impl GameData {
             .any(|b| !b.skill.is_empty() && skill_id(&b.name, &b.skill) == id)
     }
 
-    /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`,
+    /// Load the [`BOOT_FILES`] tables through `read(file_name) -> contents`,
     /// plus the [`Roster`] the ruleset host supplies (ABI v63 `ruleset_metadata`
     /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`),
     /// or, in tests, [`Roster::from_fixture`]. There is no JSON-roster path
@@ -429,9 +426,8 @@ impl GameData {
                 d.card_by_id.entry(c.id.clone()).or_insert(i);
             }
         }
-        // Optional, outside `DATA_FILES` (so the data hash and records do not
-        // move with it): a missing file is an empty book and bots stay on the
-        // preset decks.
+        // Optional, outside `BOOT_FILES` (so records do not move with it): a
+        // missing file is an empty book and bots stay on the preset decks.
         if let Ok(text) = read(DECK_BOOK_FILE) {
             d.deck_book = DeckBook::parse_or_empty(&text);
         }
