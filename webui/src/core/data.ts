@@ -2,7 +2,6 @@
 // display fields the webui owns (generated/display.json + data/*.json) and
 // kept typed here for display.
 
-import { settings } from "./store";
 import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
 import displayJson from "../generated/display.json";
@@ -27,7 +26,7 @@ export const DEFAULT_HOME_PERSONA = "高松灯";
 
 /** UI-only tables the engine no longer carries in `glue.data_files()` after
  *  the presentation split. Fetched here, outside `glue.load_data`. */
-const UI_DATA_FILES = ["home_lines.json", "voice_lines.json", "skill_simple.json", "rules.txt"] as const;
+const UI_DATA_FILES = ["home_lines.json", "voice_lines.json", "rules.txt"] as const;
 
 export interface GameData {
   tiles: TileData[];
@@ -84,14 +83,6 @@ async function loadRuleset(): Promise<void> {
   }
 }
 
-/** Display-only overlay of `skill_simple.json`: newcomer skill bodies and the
- *  card `counterReason` column (once in `cards.json`, no longer fetched). */
-interface SkillSimple {
-  personas: { name: string; text: string }[];
-  groups: { name: string; text: string }[];
-  cards?: { id: string; counterReason: string }[];
-}
-
 /**
  * The one boot gate for the typed `D`. Order matters:
  *
@@ -101,9 +92,9 @@ interface SkillSimple {
  * 3. `roster_json()` for the identity rows (cards / personas / groups);
  * 4. the remaining `data_files()` tables + the UI-only tables + optional bot
  *    books, `load_data` (engine tables only);
- * 5. merge `generated/display.json` + `skill_simple.json` onto the roster and
- *    assign `D` here, only at the end, so a throw leaves `D` untouched and
- *    Boot shows the error stage instead of a half-initialized table.
+ * 5. merge `generated/display.json` onto the roster and assign `D` here, only
+ *    at the end, so a throw leaves `D` untouched and Boot shows the error
+ *    stage instead of a half-initialized table.
  */
 export async function loadGameData(progress: (p: number) => void): Promise<void> {
   await init();
@@ -166,9 +157,16 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   const j = (n: string) => JSON.parse(files[n].replace(/^﻿/, ""));
   // Cards / personas / groups: identity from the ruleset roster, display from
   // `generated/display.json` (authored in Rust rule code, exported at build).
+  // The [反击] prompt's `counterReason` rides on the card row there too.
   const cards: CardData[] = roster.cards.map((c) => {
     const d = display.cards[c.id] ?? {};
-    return { ...c, text: d.text ?? "", rawName: d.rawName ?? "", cell: d.cell ?? "" };
+    return {
+      ...c,
+      text: d.text ?? "",
+      rawName: d.rawName ?? "",
+      cell: d.cell ?? "",
+      ...(d.counterReason ? { counterReason: d.counterReason } : {}),
+    };
   });
   const personas: PersonaData[] = roster.personas.map((p) => {
     const d = display.personas[p.name] ?? {};
@@ -195,19 +193,6 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   });
   const events: EventData[] = j("events.json").events;
   const homeLines = j("home_lines.json").personas ?? [];
-  // `skill_simple.json` is the display-only overlay: the hand-written newcomer
-  // version of each skill body (`· ` bullets) rides on the character/band
-  // record as `simple` (what `skillText` picks when the setting is on -- the
-  // merged `text` is the fallback), and the card `counterReason` column
-  // (the [反击] prompt's "why this card may be declared") rides on each card.
-  const simple = j("skill_simple.json") as SkillSimple;
-  for (const c of personas) c.simple = simple.personas.find((x) => x.name === c.name)?.text;
-  for (const b of groups) b.simple = simple.groups.find((x) => x.name === b.name)?.text;
-  const reasonById = new Map((simple.cards ?? []).map((x) => [x.id, x.counterReason]));
-  for (const c of cards) {
-    const reason = reasonById.get(c.id);
-    if (reason) c.counterReason = reason;
-  }
   const byId = new Map(cards.map((c) => [c.id, c]));
   D = {
     tiles: j("board.json").tiles,
@@ -278,8 +263,8 @@ export function cardText(id: string): string {
 }
 
 /** Why a [反击] card may be declared: its own trigger-condition clause
- *  (「…时」), kept on the card data (`counterReason`). Empty when the card
- *  carries no such clause. */
+ *  (「…时」), from `generated/display.json` and kept on the card data
+ *  (`counterReason`). Empty when the card carries no such clause. */
 export function cardCounterReason(id: string): string {
   if (!id || !D) return "";
   return D.card(id)?.counterReason ?? "";
@@ -296,13 +281,7 @@ function bandColorOf(c: CardData): string {
   return D.group(c.group)?.color ?? "#ED4E76";
 }
 
-/** C# `SkillText.Of(c)`: the simplified skill text when the setting is on. */
-export function skillText(entry: { text: string; simple?: string } | undefined): string {
-  if (!entry) return "";
-  return settings().skillTextSimple && entry.simple ? entry.simple : entry.text;
-}
-
-/** C# `SkillText.SwitchLabel`: the action the toggle performs. */
-export function skillTextSwitch(): string {
-  return settings().skillTextSimple ? "settings.skillFull" : "settings.skillSimple";
+/** The entry's own rulebook skill body. */
+export function skillText(entry: { text: string } | undefined): string {
+  return entry?.text ?? "";
 }

@@ -28,6 +28,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::Card],
             "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key",
+            r#"本回合内所有其他玩家无法从手牌中使用[反击]"#,
             None,
             counteract,
         ),

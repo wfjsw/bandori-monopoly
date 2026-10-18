@@ -18,6 +18,7 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Mortgage],
         "actor == owner || owner.money >= tile.price / 2",
+        r#"其他玩家抵押商店街地契"#,
         Some(can_counteract),
         counteract,
     )],

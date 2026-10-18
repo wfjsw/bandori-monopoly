@@ -61,6 +61,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
 （1）[反击][拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡未记录且[拥有者]拥有同色地契的颜色，[拥有者][获得]“[拥有者]拥有的1个同色地契的购买价格”÷5的资金和1个正面[P✽P粉丝]。
 （2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。"#)
         .cell(r#"D2"#)
+        .counter_reason(r#"[拥有者][消耗]或[支付]并当前资金不够"#)
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset of the

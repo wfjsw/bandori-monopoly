@@ -70,7 +70,7 @@ final `On` set (ABI v83):
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
 | `On::Play(pre, gate, body)` | `fn(i32) -> Asked` | play from hand | yes |
-| `On::Counteract(kinds, pre, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links | yes |
+| `On::Counteract(kinds, pre, reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`reason` = counterReason) | yes |
 | `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
 | `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
@@ -602,15 +602,13 @@ are deleted). The roster is ruleset metadata end to end:
 | `webui/src/core/cards.test.ts` | the same fixture for `text` / `tags` |
 
 `GameData::load(read, roster)` is the one constructor. `DATA_FILES` is the
-remaining eight tables (board / events / schools / home_lines / voice_lines /
-match_rules / rules.txt / skill_simple.json). The data hash
+remaining three engine tables (board / events / match_rules). The data hash
 (`EngineStamp::data_sha256`) covers exactly those; the roster is covered by
 `ruleset_sha256` (the metadata lives in the modules that hash names).
 
-Display-only overlays stay JSON and are merged by the client:
-`skill_simple.json` (simplified skill bodies + the card `counterReason` list).
-The engine still does not read it; it is hashed via `DATA_FILES` so a record
-names the display tables it was sealed against.
+Display-only overlays live in `webui/src/generated/display.json` (rule text,
+sheet cells, art / costume / logo ids, and the card `counterReason` list).
+The engine does not read them.
 
 Tools that need JSON rows use `tools/roster.py` against a dump written by
 `tools/roster-dump.mjs` (see `docs/ROSTER-TOOLS.md`); they do not read

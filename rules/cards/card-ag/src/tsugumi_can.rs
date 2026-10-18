@@ -15,7 +15,7 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
     "AG:（鸫）微小的『能做到』的事",
     &[
         On::Play("", Some(cant_play), play),
-        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract),
+        On::Counteract(&[ChainKind::Card], "", r#"时机合适"#, Some(can_counteract), counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微小的『能做到』的事"#)

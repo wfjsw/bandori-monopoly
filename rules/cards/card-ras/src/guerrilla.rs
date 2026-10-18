@@ -17,7 +17,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
     &[
-        On::Counteract(&[ChainKind::Paid], "", Some(can_counteract), counteract),
+        On::Counteract(&[ChainKind::Paid], "", r#"你经过属于其他玩家的livehouse格子"#, Some(can_counteract), counteract),
         // 规则书[特]: 「此卡进入弃卡区的回合结束时」 -- entering the discard
         // arms the turn-end check for *this* turn (C# `OnDiscarded`). The
         // counteract body also arms (the card lands in the discard after that

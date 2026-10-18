@@ -18,6 +18,7 @@ pub const YOLO: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
         "actor == owner && (move.roll != null || value >= 0)",
+        "",
         None,
         counteract,
     )],

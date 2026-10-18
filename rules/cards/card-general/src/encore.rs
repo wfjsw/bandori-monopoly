@@ -16,6 +16,7 @@ pub const ENCORE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "target == owner && effect.has(Abnormal)",
+        r#"[使用者]即将因任何原因受到[异常移动效果]影响"#,
         None,
         counteract,
     )],

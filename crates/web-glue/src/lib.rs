@@ -184,7 +184,7 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
 /// The ruleset roster in the three legacy data-file shapes, one object:
 /// `{"cards":[...],"personas":[...],"groups":[...]}` with camelCase rows
 /// (the old `cards.json` / `personas.json` / `groups.json` shapes minus the
-/// display-only overlay fields, which live in `skill_simple.json`).
+/// display-only overlay fields, which live in `display.json`).
 ///
 /// Empty arrays when no ruleset is built -- does not throw. Call
 /// [`ruleset_build`] first for a real roster; hosts that only need the tables

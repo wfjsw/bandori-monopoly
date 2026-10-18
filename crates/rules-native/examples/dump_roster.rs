@@ -13,10 +13,10 @@
 //!   under `target/roster-dump/` for `tools/roster.py`.
 //! * No argument prints the three files' rows to stdout.
 //!
-//! Display-only columns that live outside the engine structs (`simple`,
-//! `counterReason`, card `rawName` / `cell`, persona `display` / `color` /
+//! Display-only columns that live outside the engine structs (`counterReason`,
+//! card `rawName` / `cell`, persona `display` / `color` /
 //! `variantTag` / `art` / `costume` / `cnId`, group `shortName` / `color` /
-//! `logo`) stay in `display.json` and `data/skill_simple.json` and are **not**
+//! `logo`) stay in `display.json` and are **not**
 //! printed here. Rule-body `text` IS printed: `card_text_mentions` searches it,
 //! so it is part of `CardData` / `PersonaData` / `GroupData`.
 

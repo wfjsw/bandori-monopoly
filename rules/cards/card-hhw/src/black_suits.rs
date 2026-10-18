@@ -40,6 +40,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::PassBefore],
             "actor == owner && tile.id == tile_named('CiRCLE')",
+            r#"经过“CiRCLE”格子（#1）"#,
             None,
             counteract,
         ),

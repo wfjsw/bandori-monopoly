@@ -30,6 +30,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
              || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
                  && target == owner && tile.id >= 0 && value > 0)",
+            r#"可作为[反击]打出"#,
             None,
             counteract
         ),

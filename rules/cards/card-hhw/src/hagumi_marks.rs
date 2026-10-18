@@ -42,6 +42,7 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
             // payments landing in this player's favour alike), so a pure-hand
             // (2) sees the count too -- nothing needs to be placed.
             "actor != owner && gains_this_turn(owner) > 0",
+            "",
             None,
             counteract2,
         ),

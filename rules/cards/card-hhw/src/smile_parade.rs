@@ -64,6 +64,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::Pass],
             "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null",
+            r#"经过“弦卷集团”（#29格）"#,
             None,
             counteract,
         ),

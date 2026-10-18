@@ -16,6 +16,7 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
         "actor == owner && move.roll != null && move.roll < 6",
+        r#"你的一次掷骰小于6"#,
         None,
         counteract,
     )],

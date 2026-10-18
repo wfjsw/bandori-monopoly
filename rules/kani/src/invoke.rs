@@ -159,7 +159,7 @@ fn find_or_fail(id: &str) -> &'static card_sdk::CardDef {
 fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
         On::Play(_, _, f)
-        | On::Counteract(_, _, _, f)
+        | On::Counteract(_, _, _, _, f)
         | On::Action(_, _, _, f)
         | On::Settle(_, _, f)
         | On::Mortgage(_, _, f)

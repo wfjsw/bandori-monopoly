@@ -21,6 +21,7 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
             &[ChainKind::SettleBefore],
             // 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
             "actor == owner && turn_player == owner && owned_within(owner, 3) > 0",
+            "",
             None,
             counteract,
         ),

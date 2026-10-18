@@ -502,11 +502,14 @@ pub enum On {
     ),
     /// A [反击] at these chain links: the guard decides whether the card is
     /// offered in the hand window, then the effect resolves. Second field: the
-    /// guard's condition (see the type doc); third, the residual guard -- a
-    /// pure query, `Option`: `None` means G4 deleted it because the condition
-    /// alone decides (docs/GUARDS.md §2/§4.3). Fourth: the effect.
+    /// guard's condition (see the type doc); third: `counterReason` -- the
+    /// human-readable 「…时」 clause the counteraction prompt shows for this
+    /// trigger; fourth: the residual guard -- a pure query, `Option`: `None`
+    /// means G4 deleted it because the condition alone decides
+    /// (docs/GUARDS.md §2/§4.3). Fifth: the effect.
     Counteract(
         &'static [abi::ChainKind],
+        &'static str,
         &'static str,
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
@@ -641,12 +644,12 @@ impl On {
     /// builder so a declaration can stay a one-liner:
     ///
     /// ```ignore
-    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract).pre(pre::MINE)
+    /// On::Counteract(&[ChainKind::DiceRollResult], "", r#"你将要失去或支付资金"#, Some(can_counteract), counteract).pre(pre::MINE)
     /// ```
     pub const fn pre(self, pre: &'static str) -> Self {
         match self {
             On::Play(_, g, r) => On::Play(pre, g, r),
-            On::Counteract(k, _, g, r) => On::Counteract(k, pre, g, r),
+            On::Counteract(k, _, reason, g, r) => On::Counteract(k, pre, reason, g, r),
             On::Action(k, _, g, r) => On::Action(k, pre, g, r),
             On::Filter(k, _, g, r) => On::Filter(k, pre, g, r),
             On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
@@ -664,7 +667,7 @@ impl On {
     /// then skips the `OP_GUARD` instantiation entirely (`admits_pre`).
     pub const fn no_guard(self) -> Self {
         match self {
-            On::Counteract(k, pre, _, r) => On::Counteract(k, pre, None, r),
+            On::Counteract(k, pre, reason, _, r) => On::Counteract(k, pre, reason, None, r),
             On::Action(k, pre, _, r) => On::Action(k, pre, None, r),
             On::Filter(k, pre, _, r) => On::Filter(k, pre, None, r),
             On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
@@ -684,7 +687,7 @@ impl On {
     /// signature -- use [`Self::has_guard`] for the host's skip-the-wasm test.
     pub const fn guard(&self) -> Option<fn(i32) -> bool> {
         match self {
-            On::Counteract(_, _, g, _)
+            On::Counteract(_, _, _, g, _)
             | On::Action(_, _, g, _)
             | On::Filter(_, _, g, _)
             | On::FilterFlag(_, _, g, _)
@@ -704,7 +707,7 @@ impl On {
     pub const fn has_guard(&self) -> bool {
         match self {
             On::Play(_, g, _) => g.is_some(),
-            On::Counteract(_, _, g, _)
+            On::Counteract(_, _, _, g, _)
             | On::Action(_, _, g, _)
             | On::Filter(_, _, g, _)
             | On::FilterFlag(_, _, g, _)
@@ -723,7 +726,7 @@ impl On {
     pub const fn condition(&self) -> &'static str {
         match self {
             On::Play(pre, _, _)
-            | On::Counteract(_, pre, _, _)
+            | On::Counteract(_, pre, _, _, _)
             | On::Action(_, pre, _, _)
             | On::Filter(_, pre, _, _)
             | On::FilterFlag(_, pre, _, _)
@@ -734,6 +737,15 @@ impl On {
             | On::Message(_, pre, _, _) => *pre,
             On::Buy(pre, _, _)
             | On::Build(pre, _, _) => *pre,
+        }
+    }
+
+    /// The [反击] trigger's `counterReason` -- the human-readable 「…时」 clause
+    /// the counteraction prompt shows (`""` for non-`Counteract` entries).
+    pub const fn counter_reason(&self) -> &'static str {
+        match self {
+            On::Counteract(_, _, reason, _, _) => *reason,
+            _ => "",
         }
     }
 

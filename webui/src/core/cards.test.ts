@@ -7,7 +7,8 @@
 //   tags           -- identity roster fixture (`crates/game-core/tests/fixtures/roster.json`)
 //   text           -- `webui/src/generated/display.json` (authored in Rust rule
 //                     code, exported at build; empty fields omitted)
-//   counterReason  -- `data/skill_simple.json` (the runtime merges it onto the roster)
+//   counterReason  -- `webui/src/generated/display.json` (same export; only
+//                     [反击] cards carry the field)
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -16,11 +17,6 @@ interface CardRow {
   id: string;
   tags: string[];
   text: string;
-}
-
-interface CounterRow {
-  id: string;
-  counterReason: string;
 }
 
 const fixture = JSON.parse(
@@ -32,13 +28,13 @@ const fixture = JSON.parse(
 
 const display = JSON.parse(
   readFileSync(new URL("../generated/display.json", import.meta.url), "utf-8"),
-) as { cards: Record<string, { text?: string }> };
+) as { cards: Record<string, { text?: string; counterReason?: string }> };
 
-const simple = JSON.parse(
-  readFileSync(new URL("../../../data/skill_simple.json", import.meta.url), "utf-8"),
-) as { cards?: CounterRow[] };
-
-const reasonById = new Map((simple.cards ?? []).map((x) => [x.id, x.counterReason]));
+const reasonById = new Map(
+  Object.entries(display.cards)
+    .filter(([, v]) => v.counterReason)
+    .map(([id, v]) => [id, v.counterReason!]),
+);
 // Prefer `display.json`'s `text`; a leftover fixture `text` covers the window
 // before the identity dump drops it. CounterReason rows name real cards that
 // the synthetic identity fixture may not list -- include them so the clause

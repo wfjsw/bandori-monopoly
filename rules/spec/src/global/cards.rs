@@ -67,16 +67,19 @@ pub fn pile_multiset(w: &World, i: usize) -> BTreeMap<String, usize> {
 ///
 /// Event cards live in `GameData::events` (`EventData`), not `GameData::cards`
 /// (`CardData`) -- a `event:<id>` lookup on `card()` is `None` and the skip
-/// would never fire. Resolve both, stripping the `event:` rule-id prefix.
-fn card_or_event_text<'a>(data: &'a game_core::data::GameData, id: &str) -> &'a str {
+/// would never fire. Resolve both, stripping the `event:` rule-id prefix. The
+/// event body is display and no longer on `EventData`; the harness reads it
+/// from `data/events.json` via [`crate::event_text`].
+fn card_or_event_text(data: &game_core::data::GameData, id: &str) -> String {
     if let Some(c) = data.card(id) {
-        return c.text.as_str();
+        return c.text.clone();
     }
     let short = id.strip_prefix("event:").unwrap_or(id);
-    data.event(short)
-        .or_else(|| data.event(id))
-        .map(|e| e.text.as_str())
-        .unwrap_or("")
+    let t = crate::event_text(short);
+    if !t.is_empty() {
+        return t;
+    }
+    crate::event_text(id)
 }
 
 /// Does this body place / remove itself instead of 「进入弃卡区」?
@@ -683,11 +686,9 @@ pub fn g_cards_12(step: &Step<'_>) -> Result<(), String> {
         .map(|e| e.card.as_str())
         .collect();
     for id in drawn {
-        let text = step
-            .data
-            .event(id)
-            .map(|e| e.text.as_str())
-            .unwrap_or("");
+        // The event body is display; the harness reads it from
+        // `data/events.json` (see [`crate::event_text`]).
+        let text = crate::event_text(id);
         // Card-effect overrides: stay on the board, or leave the game.
         if text.contains("放置于场地中央") || text.contains("永久移除") || text.contains("[移除]") {
             continue;

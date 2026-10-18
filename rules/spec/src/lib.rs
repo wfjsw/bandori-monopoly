@@ -53,6 +53,33 @@ pub fn data() -> Arc<GameData> {
     .clone()
 }
 
+/// Printed event body (`data/events.json`, keyed by the event `id`), loaded
+/// once. Not on `GameData::events` any more: the engine keeps only `id` /
+/// `derived` there and the body is display. The spec harness still needs it --
+/// G-CARDS classifies 「将此卡…」 discard overrides by reading the clause out of
+/// the rulebook text -- so it reads the same table the webui reads.
+pub fn event_text(id: &str) -> String {
+    static TEXTS: OnceLock<std::collections::HashMap<String, String>> = OnceLock::new();
+    TEXTS
+        .get_or_init(|| {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/events.json");
+            let raw = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+            let v: serde_json::Value = serde_json::from_str(raw.trim_start_matches('\u{feff}'))
+                .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+            let mut m = std::collections::HashMap::new();
+            for row in v["events"].as_array().expect("events.json has `events`") {
+                let id = row["id"].as_str().expect("event id").to_string();
+                let text = row["text"].as_str().unwrap_or("").to_string();
+                m.insert(id, text);
+            }
+            m
+        })
+        .get(id)
+        .cloned()
+        .unwrap_or_default()
+}
+
 /// The shipped cards and skills plus the `TEST:*` fixtures (`dist/`), loaded
 /// once. Run `node tools/build-ruleset.mjs` first.
 pub fn rules() -> Arc<WasmRules> {

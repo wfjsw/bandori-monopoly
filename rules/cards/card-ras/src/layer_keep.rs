@@ -27,6 +27,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::DiceRollBefore],
             "actor == owner && roll_source == 1",
+            "",
             None,
             counter_fire,
         ),

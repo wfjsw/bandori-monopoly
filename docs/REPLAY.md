@@ -243,7 +243,7 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
   * **Stamp inputs:** `load_data` computes `data_sha256` (sha256 of the
     `DATA_FILES` contents in order). `DATA_FILES` is the three engine tables
     (`board.json` / `events.json` / `match_rules.json`) -- display text
-    (`display.json`, `skill_simple.json`, `rules.txt`, home / voice / schools)
+    (`display.json`, `rules.txt`, home / voice / schools)
     is no longer hashed and no longer moves the replay bundle id.
     `ruleset_build` captures `set.sha256()`.
     `engine_stamp()` exposes both.

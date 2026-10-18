@@ -21,6 +21,7 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         // `value > 0` also covers C# `!t.Pay.cancel` -- a payment an earlier
         // counteraction already reduced to 0 reads as `value() == 0`.
         "chain_has(Pay) && actor == owner && value > 0",
+        r#"你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]"#,
         Some(can_counteract),
         counteract,
     )],

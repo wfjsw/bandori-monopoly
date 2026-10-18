@@ -31,6 +31,7 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::Effect],
             "target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key",
+            "",
             None,
             counteract,
         ),

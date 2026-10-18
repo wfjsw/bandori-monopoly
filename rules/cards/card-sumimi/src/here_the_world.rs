@@ -86,6 +86,7 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::TwoCards],
             "actor != owner",
+            r#"有人同一回合内打出两张卡"#,
             Some(can_counteract),
             counteract,
         ),

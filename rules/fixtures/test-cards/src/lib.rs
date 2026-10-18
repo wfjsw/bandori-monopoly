@@ -18,7 +18,7 @@ const ECHO: CardDef = CardDef::new(
     "TEST:echo",
     &[
         On::Play("", None, echo_play),
-        On::Counteract(&[ChainKind::Card], "", Some(never), echo_counteract),
+        On::Counteract(&[ChainKind::Card], "", "", Some(never), echo_counteract),
     ],
 );
 /// Lists its player's hand through `cards_in` (the host->guest list) and logs
@@ -63,7 +63,7 @@ const SHIELD: CardDef = CardDef::new(
 /// the activation" as against "negate the effect".
 const COUNTER: CardDef = CardDef::new(
     "TEST:counter",
-    &[On::Counteract(&[ChainKind::Effect], "", Some(counter_yes), counter)],
+    &[On::Counteract(&[ChainKind::Effect], "", "", Some(counter_yes), counter)],
 );
 
 /// [反击] any effect declaration -- deliberately loose (any declarer, any
@@ -77,7 +77,7 @@ const COUNTER: CardDef = CardDef::new(
 /// settlement in the log (`n` keeps counting on one link, `seq` says which).
 const PROBE: CardDef = CardDef::new(
     "TEST:probe",
-    &[On::Counteract(&[ChainKind::Effect], "", Some(probe_yes), probe)],
+    &[On::Counteract(&[ChainKind::Effect], "", "", Some(probe_yes), probe)],
 );
 
 /// [反击] a counter's own play -- the 「新的时点」 of clause 89. Answers a
@@ -87,7 +87,7 @@ const PROBE: CardDef = CardDef::new(
 /// it).
 const DENY: CardDef = CardDef::new(
     "TEST:deny",
-    &[On::Counteract(&[ChainKind::Card], "", Some(deny_yes), deny)],
+    &[On::Counteract(&[ChainKind::Card], "", "", Some(deny_yes), deny)],
 );
 
 fn aimer(player_id: i32) -> card_sdk::Asked {
@@ -532,7 +532,7 @@ fn lose_1000(player_id: i32) -> card_sdk::Asked {
 /// window yet; this fixture pins the shape.
 const MARKER_DENY: CardDef = CardDef::new(
     "TEST:markerDeny",
-    &[On::Counteract(&[ChainKind::MarkerSpend], "", Some(marker_deny_yes), marker_deny)],
+    &[On::Counteract(&[ChainKind::MarkerSpend], "", "", Some(marker_deny_yes), marker_deny)],
 );
 
 fn marker_deny_yes(player_id: i32) -> bool {
@@ -600,7 +600,7 @@ fn fire_roll_plan(_player_id: i32, v: FilterValue) -> FilterValue {
 /// `crates/game-rules/tests/guard_pre.rs`.
 const PRE_REJECT: CardDef = CardDef::new(
     "TEST:preReject",
-    &[On::Counteract(&[ChainKind::Effect], "actor == owner && value >= 999999", Some(pre_reject_guard), pre_reject_body,)],
+    &[On::Counteract(&[ChainKind::Effect], "actor == owner && value >= 999999", "", Some(pre_reject_guard), pre_reject_body)],
 );
 
 fn pre_reject_guard(_player_id: i32) -> bool {
@@ -618,7 +618,7 @@ fn pre_reject_body(player_id: i32) -> card_sdk::Asked {
 /// `actor == owner`.
 const PRE_ACCEPT: CardDef = CardDef::new(
     "TEST:preAccept",
-    &[On::Counteract(&[ChainKind::Effect], card_sdk::pre::MINE, Some(pre_accept_guard), pre_accept_body,)],
+    &[On::Counteract(&[ChainKind::Effect], card_sdk::pre::MINE, "", Some(pre_accept_guard), pre_accept_body)],
 );
 
 fn pre_accept_guard(_player_id: i32) -> bool {
@@ -845,7 +845,7 @@ fn tile_hook(player_id: i32) -> card_sdk::Asked {
 /// (`TEST:deny` is the same for a *counter's* play.)
 const DENY_PLAY: CardDef = CardDef::new(
     "TEST:denyPlay",
-    &[On::Counteract(&[ChainKind::Card], "", Some(deny_play_yes), deny_play)],
+    &[On::Counteract(&[ChainKind::Card], "", "", Some(deny_play_yes), deny_play)],
 );
 
 fn deny_play_yes(player_id: i32) -> bool {

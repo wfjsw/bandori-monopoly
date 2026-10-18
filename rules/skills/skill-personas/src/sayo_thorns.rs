@@ -54,6 +54,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::MoveBefore],
             "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6",
+            "",
             Some(can_offer),
             offer,
         ),

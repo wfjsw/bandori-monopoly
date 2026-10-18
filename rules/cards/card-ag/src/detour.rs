@@ -19,7 +19,7 @@ pub const DETOUR: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
-        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", None, counteract),
+        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", "", None, counteract),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.

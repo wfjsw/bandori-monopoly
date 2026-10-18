@@ -18,7 +18,7 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new(
     "Mujica:欢迎来到ave mujica的世界",
     &[
         On::Play("", None, play),
-        On::Counteract(&[ChainKind::State], "actor != owner", None, counteract),
+        On::Counteract(&[ChainKind::State], "actor != owner", r#"有其他玩家切换状态"#, None, counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"欢迎来到ave mujica的世界"#)

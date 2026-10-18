@@ -18,6 +18,7 @@ pub const TWO_IN_ONE: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::DiceRollResult],
             "actor == owner && (persona_is(owner, \"三角初华（Sumimi）\") || persona_is(owner, \"纯田真奈\"))",
+            r#"你的移动掷骰后"#,
             None,
             counteract,
         ),

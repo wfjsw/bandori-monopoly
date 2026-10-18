@@ -2764,15 +2764,18 @@ pub enum OnKind {
     /// calls it between the [`TriggerKind::Card`] raise and `cardAfter`.
     Play = 0,
     // 1 was `CantPlay`, folded into `Play`'s gate.
-    /// `On::Counteract(kinds, cond, guard, body)` -- a [反击] at those
+    /// `On::Counteract(kinds, cond, reason, guard, body)` -- a [反击] at those
     /// [`ChainKind`]s. `cond` (CEL) and `guard` (the residual pure `bool` query,
     /// `None` once G4 folded the whole body into `cond`) decide whether the card
-    /// is offered in the hand window; `body` resolves against the answered link.
-    /// Called at the counteraction offer, then again at LIFO resolution.
+    /// is offered in the hand window; `reason` is the human-readable 「…时」
+    /// clause the counteraction prompt shows; `body` resolves against the
+    /// answered link. Called at the counteraction offer, then again at LIFO
+    /// resolution.
     Counteract = 2,
     /// `On::Action(kinds, cond, guard, body)` -- an **event reaction** at those
     /// [`ActionKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
-    /// `cond`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
+    /// `cond`/`guard`/`body` shape as [`Self::Counteract`] (minus its `reason`
+    /// display string). The host calls it
     /// **automatically** for every placed card (placement order per player)
     /// whenever one of the kinds is raised -- no window. May emit effects;
     /// does not modify the triggering value. Kinds must be non-filter

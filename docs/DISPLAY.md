@@ -40,7 +40,8 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 
 ```json
 {
-  "cards":    { "<cardId>":      { "text": "...", "rawName": "...", "cell": "..." } },
+  "cards":    { "<cardId>":      { "text": "...", "rawName": "...", "cell": "...",
+                                   "counterReason": "..." } },
   "personas": { "<personaName>": { "display": "...", "text": "...", "color": "...",
                                    "variantTag": "...", "art": "...", "costume": "...",
                                    "cnId": "..." } },
@@ -63,6 +64,7 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 | card | `text` | `CardMeta::text` | rule text |
 | card | `rawName` | `CardMeta::raw_name` | untrimmed sheet name |
 | card | `cell` | `CardMeta::cell` | sheet cell the row was lifted from |
+| card | `counterReason` | `On::Counteract` reason field (or `CardMeta::counter_reason`) | 「…时」 clause the counteraction prompt shows; several `Counteract` entries join non-empty reasons with `\n`. A [反击] whose clause rides an `On::Action` interrupt uses `CardMeta::counter_reason` |
 | persona | `display` | `PersonaDef::display` | compact display label |
 | persona | `text` | `PersonaDef::text` | skill text |
 | persona | `color` | `PersonaDef::color` | accent colour |

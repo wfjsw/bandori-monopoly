@@ -19,20 +19,18 @@ export interface TileData {
   color: string; tier: number; area: string; price: number; house: number; rent: number[]; note: string;
 }
 /** Merged card row: identity from `glue.roster_json()`, display from
- *  `generated/display.json`, `counterReason` from `skill_simple.json`. */
+ *  `generated/display.json` (including `counterReason`). */
 export interface CardData {
   id: string; group: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string; cell: string;
-  /** The [反击] card's trigger-condition clause (「…时」), extracted once from
-   *  `text` and checked for every 反击-tagged card. Why the card is offered. */
+  /** The [反击] card's trigger-condition clause (「…时」), from
+   *  `generated/display.json`. Why the card is offered. */
   counterReason?: string;
 }
 /** Merged persona row: identity from `glue.roster_json()`, display from
- *  `generated/display.json`, `simple` from `skill_simple.json`. */
+ *  `generated/display.json`. */
 export interface PersonaData {
   name: string; display: string; group: string; color: string; skill: string; text: string;
-  /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
-  simple?: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
   /** Base character of an alternate form (`高松灯（CRYCHIC）` -> `高松灯`). */
   variantOf?: string;
@@ -40,11 +38,9 @@ export interface PersonaData {
   variantTag?: string;
 }
 /** Merged group row: identity from `glue.roster_json()`, display from
- *  `generated/display.json`, `simple` from `skill_simple.json`. */
+ *  `generated/display.json`. */
 export interface GroupData {
   name: string; shortName: string; color: string; skill: string; text: string;
-  /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
-  simple?: string;
   logo: string;
   /** Band-skill traits the deck rules read. */
   sharesExclusives?: boolean;
@@ -57,7 +53,7 @@ export interface VoiceLine { text: string; voice: string; motion: string; from: 
  *  fields omitted). Merged onto the identity roster in `core/data.ts`. */
 export interface DisplayFile {
   cards: Record<string, {
-    text?: string; rawName?: string; cell?: string;
+    text?: string; rawName?: string; cell?: string; counterReason?: string;
   }>;
   personas: Record<string, {
     display?: string; text?: string; color?: string; variantTag?: string;
@@ -376,4 +372,4 @@ export interface MatchReward {
   exp: number; levelBefore: number; levelAfter: number; progressBefore: number; progressAfter: number;
   coins: number; stars: number;
 }
-export interface SoundSettings { bgm: number; voice: number; se: number; skipLine: boolean; greet: boolean; idleTalk: boolean; skillTextSimple: boolean; keepAwake: boolean }
+export interface SoundSettings { bgm: number; voice: number; se: number; skipLine: boolean; greet: boolean; idleTalk: boolean; keepAwake: boolean }

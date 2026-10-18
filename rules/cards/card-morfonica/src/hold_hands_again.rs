@@ -23,6 +23,7 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::Paid],
             "actor != owner && actor == neighbor(owner, -1) && value > 0",
+            r#"[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后"#,
             None,
             counteract,
         ),

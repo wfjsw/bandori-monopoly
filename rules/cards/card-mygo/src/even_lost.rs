@@ -20,6 +20,7 @@ pub const EVEN_LOST: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::Effect],
             "by != owner && by >= 0 && effect.hits(owner)",
+            r#"你被其他人的卡的效果影响"#,
             None,
             counteract,
         ),

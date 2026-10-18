@@ -741,8 +741,8 @@ short list.
 * `data/bands.json` matches `团技能` `D`-column for all 12 bands. No drift.
 * `data/characters.json` matches `角色技能` `E`-column for 53 of 54
   characters. **One drift: 北泽育美 「全垒打！」** -- `data/characters.json`
-  (and the hand-written `data/skill_simple.json`, which is not a second
-  source of truth) carry three extra clauses the sheet does not. `data/` is
+  (and the former hand-written `data/skill_simple.json`, now deleted) carry
+  three extra clauses the sheet does not. `data/` is
   another agent's; not edited here.
 
 ### 9. Design reference: `ileuxali/bangdream-monopoly`

@@ -34,7 +34,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         // [火罐]将其抵消」 -- a [反击] from the bound skill (always in play), so it
         // must be offered from the field (`COUNTERACT_FROM_FIELD`, the same shape
         // as 冰川纱夜（2）'s move-length counteraction).
-        On::Counteract(&[ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()], "", Some(can_negate), negate),
+        On::Counteract(&[ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()], "", "", Some(can_negate), negate),
     ],
 )
     .props(&[

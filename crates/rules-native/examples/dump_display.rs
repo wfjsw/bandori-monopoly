@@ -11,7 +11,8 @@
 //!
 //! ```json
 //! {
-//!   "cards":    { "<cardId>":      { "text": "...", "rawName": "...", "cell": "..." } },
+//!   "cards":    { "<cardId>":      { "text": "...", "rawName": "...", "cell": "...",
+//!                                     "counterReason": "..." } },
 //!   "personas": { "<personaName>": { "display": "...", "text": "...", "color": "...",
 //!                                     "variantTag": "...", "art": "...", "costume": "...",
 //!                                     "cnId": "..." } },
@@ -20,7 +21,13 @@
 //! }
 //! ```
 //!
-//! * camelCase keys; empty / absent fields are omitted.
+//! * camelCase keys; empty / absent fields are omitted (so only [反击] cards
+//!   carry `counterReason`).
+//! * `counterReason` is read from the card's [`On::Counteract`] reason field
+//!   (the human-readable 「…时」 clause the counteraction prompt shows). Several
+//!   `Counteract` entries join their non-empty reasons with `\n`. A [反击]
+//!   whose clause rides an `On::Action` interrupt (no `Counteract` entry) uses
+//!   `CardMeta::counter_reason` instead.
 //! * Deterministic: every map is a `BTreeMap` (sorted keys), pretty JSON,
 //!   one trailing newline -- byte-stable across runs.
 //! * No argument prints the document to stdout. A path argument (or
@@ -100,10 +107,29 @@ fn cards_map() -> JsonMap {
             insert_str(&mut row, "text", meta.text);
             insert_str(&mut row, "rawName", meta.raw_name);
             insert_str(&mut row, "cell", meta.cell);
+            insert_str(&mut row, "counterReason", &counter_reason(card, meta));
             map.insert(card.id.to_string(), Value::Object(row));
         }
     }
     map
+}
+
+/// The [反击] trigger's `counterReason`: every non-empty
+/// [`card_sdk::On::Counteract`] reason on this card, joined with `\n`, plus the
+/// [`card_sdk::meta::CardMeta::counter_reason`] fallback for a [反击] whose
+/// clause rides an `On::Action` interrupt (no hand-window `Counteract` entry).
+fn counter_reason(card: &card_sdk::CardDef, meta: &card_sdk::meta::CardMeta) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for entry in card.on {
+        let reason = entry.counter_reason();
+        if !reason.is_empty() {
+            parts.push(reason);
+        }
+    }
+    if !meta.counter_reason.is_empty() {
+        parts.push(meta.counter_reason);
+    }
+    parts.join("\n")
 }
 
 /// Every persona row, keyed by persona name (`personas::roster_table::PERSONAS`).

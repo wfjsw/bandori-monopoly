@@ -24,6 +24,7 @@ pub const LISA_BOND: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::MoveAfter],
         "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0",
+        r#"你使用技能进行传送"#,
         None,
         counteract,
     )],

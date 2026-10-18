@@ -6,7 +6,6 @@ import { charArt } from "../../core/assets";
 import { skillText } from "../../core/data";
 import { useMountEffect } from "../../hooks/mount";
 import { SkillBody } from "../../ui/SkillBody";
-import { SkillTextToggle } from "../../ui/SkillTextToggle";
 import { Live2DStand } from "../../ui/Live2DStand";
 import { playVoice } from "../../core/audio";
 import { cx } from "../../core/cx";
@@ -67,7 +66,7 @@ function Detail({ list, start }: { list: PersonaData[]; start: number }) {
       </div>
       <div className={s.right}>
         <div className={s.head}><b>{c.display}</b><span className={s.swatch} style={{ background: c.color }} /><span>{tr("gallery.homeColor", { color: c.color })}</span><span className={s.muted}>{c.group}</span></div>
-        <div className={s.skill}><span className={s.skillTag}>{tr("select.skillChar")}</span><SkillTextToggle className={s.skillSwitch} /><b>{c.skill || tr("select.skillTbd")}</b><SkillBody className={s.skillBody} text={skillText(c)} /></div>
+        <div className={s.skill}><span className={s.skillTag}>{tr("select.skillChar")}</span><b>{c.skill || tr("select.skillTbd")}</b><SkillBody className={s.skillBody} text={skillText(c)} /></div>
         <div className={cx(s.skill, s.groupSkill)}><span className={s.skillTag}>{tr("select.skillBand")}</span><b>{band?.skill || tr("select.bandSkillTbd")}</b><SkillBody className={s.skillBody} text={skillText(band)} /></div>
         <div className={s.sub}>{tr("gallery.exclusives")}</div>
         {exclusive.length ? <div className={s.cards}>{exclusive.map((x) => <InspectCard key={x.id} id={x.id} />)}</div> : <p className={s.muted}>{tr("gallery.noExclusives")}</p>}

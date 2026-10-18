@@ -15,7 +15,6 @@ import { endSession, type GameSession, SoloSession } from "../../game/session";
 import { AutoBanner, AutoToggle, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { SkillBody } from "../../ui/SkillBody";
-import { SkillTextToggle } from "../../ui/SkillTextToggle";
 import { Avatar, BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
 import { Chips, PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -206,7 +205,7 @@ function Preview({ c }: { c: PersonaData }) {
           <b>{char ? c.skill || tr("select.skillTbd") : band?.skill || tr("select.bandSkillTbd")}</b>
           <span>{c.group}</span>
         </div>
-        <div className={s.skillText}><SkillTextToggle className={s.skillSwitch} /><SkillBody text={skillText(char ? c : band)} /></div>
+        <div className={s.skillText}><SkillBody text={skillText(char ? c : band)} /></div>
       </div>
     </div>
   );

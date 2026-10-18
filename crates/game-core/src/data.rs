@@ -340,8 +340,8 @@ pub struct GameData {
 /// Data files, as named in `web/data/`, that the **engine** loads and hashes.
 /// Three tables only: the board, the event roster and the match numbers.
 ///
-/// Display-only files the client parses on its own (`skill_simple.json`,
-/// `rules.txt`, `home_lines.json`, `voice_lines.json`, ...) are **not** here
+/// Display-only files the client parses on its own (`rules.txt`,
+/// `home_lines.json`, `voice_lines.json`, ...) are **not** here
 /// and never move `data_sha256` -- see `webui/src/generated/display.json`.
 /// The roster (`cards` / `personas` / `groups`) is **not** here either: it
 /// comes from the ruleset (ABI v63 `ruleset_metadata`) or, in tests, from the

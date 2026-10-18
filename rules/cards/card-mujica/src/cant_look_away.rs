@@ -25,6 +25,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::Counteracted, ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()],
             "target == owner && actor != owner",
+            r#"有玩家对你使用[反击]后"#,
             None,
             counteract,
         ),

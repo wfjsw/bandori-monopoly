@@ -99,9 +99,8 @@ impl Ctx {
         for name in DATA_FILES {
             // Same recipe as web-glue's `load_data`: every `DATA_FILES` entry
             // in order (missing entries are skipped), a leading BOM is not
-            // content. `GameData::load` does not ask for all of them
-            // (`skill_simple.json` is display-only and the engine never reads
-            // it), so read the ones it skipped -- otherwise this hash disagrees
+            // content. `GameData::load` does not ask for all of them, so read
+            // the ones it skipped -- otherwise this hash disagrees
             // with the browser's and the record names an engine bundle the
             // replay loader has never seen. The roster (`cards.json` /
             // `personas.json` / `groups.json`) is no longer in `DATA_FILES`:
