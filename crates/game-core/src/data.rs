@@ -238,14 +238,19 @@ impl Roster {
     }
 }
 
-/// One event card from `events.json`. `name` / `text` / `cell` stay in that
-/// file for the client; the engine only needs the id and whether the card is
-/// a derived (face-down / spawned) one.
+/// One event card from `events.json`. `name` and `text` are game content (the
+/// rulebook body and what the card is called) and stay on the engine's view of
+/// the table -- the spec harness classifies 「将此卡…」 discard overrides by
+/// reading `text`. `cell` (the sheet column the row was lifted from) is
+/// authoring chrome and stays in `events.json` for the client only.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct EventData {
     pub id: String,
+    pub name: String,
     pub derived: bool,
+    /// Rulebook body. Game content, like `CardData::text`.
+    pub text: String,
 }
 
 /// `group` value of the cards every persona may take. A roster group key (the
@@ -340,11 +345,17 @@ pub struct GameData {
 /// Data files, as named in `web/data/`, that the **engine** loads and hashes.
 /// Three tables only: the board, the event roster and the match numbers.
 ///
-/// Display-only files the client parses on its own (`rules.txt`,
-/// `home_lines.json`, `voice_lines.json`, ...) are **not** here
-/// and never move `data_sha256` -- see `webui/src/generated/display.json`.
-/// The roster (`cards` / `personas` / `groups`) is **not** here either: it
-/// comes from the ruleset (ABI v63 `ruleset_metadata`) or, in tests, from the
+/// The hash covers each file's bytes as a whole, so *every* column in these
+/// three moves `data_sha256` -- including the game prose (`EventData::name` /
+/// `text`, the rulebook body the spec harness reads) and the chrome that
+/// happens to sit beside it in the same file (tile `shortName` / `color`).
+/// That is deliberate for the prose: it is game content, not presentation.
+///
+/// What left the hash is the display-only files the client parses on its own
+/// (`rules.txt`, `home_lines.json`, `voice_lines.json`, `skill_simple.json`,
+/// `schools.json`) and the roster's display columns (`display.json`). The
+/// roster (`cards` / `personas` / `groups`) is **not** here either: it comes
+/// from the ruleset (ABI v63 `ruleset_metadata`) or, in tests, from the
 /// synthetic fixture (`Roster::from_fixture`), and is covered by the ruleset
 /// hash, not this one.
 pub const DATA_FILES: [&str; 3] = ["board.json", "events.json", "match_rules.json"];

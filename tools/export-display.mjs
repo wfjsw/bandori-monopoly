@@ -9,17 +9,16 @@
 //
 //   node tools/export-display.mjs              # write the default out file
 //   node tools/export-display.mjs --out PATH   # default: webui/src/generated/display.json
-//   node tools/export-display.mjs --force      # accepted for roster-dump parity
 //
 // PATH may be a `.json` file or a directory (then `display.json` is written
-// inside it). Unlike `tools/roster-dump.mjs` there is no cache: this feeds the
-// webui build and must track every rule-source edit, so the dump is rewritten
-// on every run. `--force` is kept so the CLI shape matches `roster-dump.mjs`.
+// inside it). There is no cache: this feeds the webui build and must track
+// every rule-source edit. The underlying example skips the write when the
+// bytes are unchanged, so an unchanged export does not bump mtime.
 //
 // Wraps `cargo run -q -p rules-native --example dump_display`.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,12 +29,9 @@ const args = process.argv.slice(2);
 let out = DEFAULT_OUT;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
-  if (a === "--force") {
-    // Accepted for CLI parity with tools/roster-dump.mjs. The dump is always
-    // rewritten (this feeds the webui build and must track rule-source edits).
-  } else if (a === "--out") out = resolve(args[++i] ?? ".");
+  if (a === "--out") out = resolve(args[++i] ?? ".");
   else if (a === "--help" || a === "-h") {
-    console.log("usage: node tools/export-display.mjs [--out PATH] [--force]");
+    console.log("usage: node tools/export-display.mjs [--out PATH]");
     process.exit(0);
   } else {
     console.error(`unknown flag: ${a}`);

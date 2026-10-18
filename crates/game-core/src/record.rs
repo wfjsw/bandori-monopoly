@@ -121,11 +121,12 @@ pub struct EngineStamp {
     /// Sha256 of the built ruleset, or `"stub"`.
     pub ruleset_sha256: String,
     /// Sha256 of the `DATA_FILES` contents in order (the three engine tables
-    /// only -- board / events / match_rules). Display text (`display.json`,
-    /// `rules.txt`, home / voice / schools) no longer
-    /// moves this hash or the replay bundle id. The roster (cards / personas /
-    /// groups) lives in the ruleset and is covered by `ruleset_sha256`, not
-    /// this field.
+    /// -- board / events / match_rules), bytes as a whole. That includes each
+    /// table's game prose (event `name` / `text`) -- presentation-only files
+    /// (`rules.txt`, home / voice lines, `skill_simple`, `schools`) and the
+    /// roster's display columns (`display.json`) are what left the hash. The
+    /// roster (cards / personas / groups) lives in the ruleset and is covered
+    /// by `ruleset_sha256`, not this field.
     pub data_sha256: String,
     /// Engine identity (`"game-core"`).
     pub engine: String,

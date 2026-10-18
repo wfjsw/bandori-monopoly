@@ -177,17 +177,10 @@ pub enum Seen {
 impl PlayerProfile {
     /// A fresh profile with everything marked seen.
     /// `player_id`: random 9-digit string; `now`: `yyyy-MM-dd HH:mm`;
-    /// `today`: `yyyy-MM-dd`. `default_home_persona` is the fallback home
-    /// when this profile (or a migrated one) has no valid persona -- UI
-    /// config, not match data.
-    pub fn create(
-        data: &GameData,
-        name: &str,
-        player_id: &str,
-        now: &str,
-        today: &str,
-        default_home_persona: &str,
-    ) -> Self {
+    /// `today`: `yyyy-MM-dd`. The home persona starts empty -- which
+    /// character a new profile opens on is UI config, and the client fills
+    /// it in (it is not match data).
+    pub fn create(data: &GameData, name: &str, player_id: &str, now: &str, today: &str) -> Self {
         let name = name.trim();
         let mut p = Self {
             player_name: name.into(),
@@ -197,17 +190,17 @@ impl PlayerProfile {
             ..Self::default()
         };
         p.mark_all_seen(data);
-        p.normalize(data, default_home_persona);
+        p.normalize(data);
         p
     }
 
     /// Repair and migrate a loaded profile. A missing or unknown home persona
-    /// falls back to `default_home_persona` (caller-supplied UI config).
-    pub fn normalize(&mut self, data: &GameData, default_home_persona: &str) {
+    /// is cleared to empty; the client substitutes its own default.
+    pub fn normalize(&mut self, data: &GameData) {
         self.level = self.level.clamp(0, MAX_LEVEL);
         self.charge_per_game = self.charge_per_game.clamp(0, CHARGE_MAX_PER_GAME);
         if data.persona(&self.home_persona).is_none() {
-            self.home_persona = default_home_persona.into();
+            self.home_persona.clear();
         }
         if self.save_version < 2 {
             // v1 only had the `ranked` flag.
@@ -256,13 +249,9 @@ impl PlayerProfile {
     }
 
     /// Parse `profile.json` and normalize it.
-    pub fn from_json(
-        data: &GameData,
-        text: &str,
-        default_home_persona: &str,
-    ) -> Result<Self, serde_json::Error> {
+    pub fn from_json(data: &GameData, text: &str) -> Result<Self, serde_json::Error> {
         let mut p: Self = serde_json::from_str(text.trim_start_matches('\u{feff}'))?;
-        p.normalize(data, default_home_persona);
+        p.normalize(data);
         Ok(p)
     }
 

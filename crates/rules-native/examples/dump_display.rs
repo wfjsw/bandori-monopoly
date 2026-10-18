@@ -72,6 +72,14 @@ fn main() {
     let json = display_json();
     match out {
         Some(path) => {
+            // Skip the write when the bytes are unchanged: the export runs on
+            // every `predev` / `prebuild`, and an unconditional write bumps
+            // mtime and invalidates the bundler cache for the importing
+            // module even when no rule text moved.
+            if std::fs::read(&path).ok().as_deref() == Some(json.as_bytes()) {
+                eprintln!("unchanged {}", path.display());
+                return;
+            }
             if let Some(parent) = path.parent() {
                 if !parent.as_os_str().is_empty() {
                     std::fs::create_dir_all(parent).unwrap();

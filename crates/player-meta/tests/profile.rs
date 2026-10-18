@@ -47,15 +47,9 @@ fn deck_save_choose_and_clear() {
 #[test]
 fn profile_create_and_apply_match() {
     let d = data();
-    let mut p = PlayerProfile::create(
-        &d,
-        "  Tomori  ",
-        "123456789",
-        "2026-10-04 12:00",
-        "2026-10-04",
-        "Alpha",
-    );
+    let mut p = PlayerProfile::create(&d, "  Tomori  ", "123456789", "2026-10-04 12:00", "2026-10-04");
     assert_eq!(p.player_name, "Tomori");
+    assert_eq!(p.home_persona, "", "home starts empty; the client sets it");
     assert!(!p.has_any_new(&d), "a new profile has seen everything");
     assert!(p.refresh_daily("2026-10-05"));
     assert!(!p.refresh_daily("2026-10-05"));
@@ -96,12 +90,12 @@ fn profile_normalize_migrates_v1_saves() {
     let v1 = r#"{"saveVersion":1,"level":900,"chargePerGame":9,"homePersona":"",
                  "history":[{"ranked":true,"rank":1},{"ranked":false,"rank":2}]}"#;
     let d = data();
-    let p = PlayerProfile::from_json(&d, v1, "Alpha").unwrap();
+    let p = PlayerProfile::from_json(&d, v1).unwrap();
     assert_eq!(p.save_version, 4);
     assert_eq!((p.level, p.charge_per_game), (500, 3));
     assert_eq!(
-        p.home_persona, "Alpha",
-        "empty home -> the caller-supplied default"
+        p.home_persona, "",
+        "empty home stays empty; the client substitutes its own default"
     );
     assert_eq!(p.history[0].mode, MatchMode::Ranked);
     assert_eq!(p.history[1].mode, MatchMode::Casual);

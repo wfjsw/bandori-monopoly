@@ -108,12 +108,13 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // degraded (empty roster + StubRules), not fatal -- `loadRuleset` toasts.
   await loadRuleset();
 
-  // Identity-only roster after the presentation split. Display fields are
-  // merged below from `generated/display.json`.
+  // Game roster after the presentation split: identity plus the rulebook
+  // prose (`text`), which is game content and rides `ruleset_metadata`. Pure
+  // display columns are merged below from `generated/display.json`.
   const roster = JSON.parse(glue.roster_json()) as {
-    cards: { id: string; group: string; name: string; owner: string; derived: boolean; tags: string[] }[];
-    personas: { name: string; group: string; skill: string; exclusiveCards: string[]; preset: string[]; variantOf?: string }[];
-    groups: { name: string; skill: string; sharesExclusives?: boolean }[];
+    cards: { id: string; group: string; name: string; owner: string; derived: boolean; tags: string[]; text: string }[];
+    personas: { name: string; group: string; skill: string; exclusiveCards: string[]; preset: string[]; variantOf?: string; text: string }[];
+    groups: { name: string; skill: string; sharesExclusives?: boolean; text: string }[];
   };
   // Engine tables only (post-split: board / events / match_rules).
   const engineNames: string[] = JSON.parse(glue.data_files());
@@ -162,7 +163,9 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     const d = display.cards[c.id] ?? {};
     return {
       ...c,
-      text: d.text ?? "",
+      // Game prose is on the roster too (`CardData.text`); the export is the
+      // build-time copy. Prefer it, but never blank a body the roster has.
+      text: d.text ?? c.text ?? "",
       rawName: d.rawName ?? "",
       cell: d.cell ?? "",
       ...(d.counterReason ? { counterReason: d.counterReason } : {}),
@@ -173,7 +176,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     return {
       ...p,
       display: d.display ?? "",
-      text: d.text ?? "",
+      text: d.text ?? p.text ?? "",
       color: d.color ?? "",
       cnId: d.cnId ?? "",
       art: d.art ?? "",
@@ -185,7 +188,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     const d = display.groups[g.name] ?? {};
     return {
       ...g,
-      text: d.text ?? "",
+      text: d.text ?? g.text ?? "",
       shortName: d.shortName ?? "",
       color: d.color ?? "",
       logo: d.logo ?? "",
@@ -248,7 +251,7 @@ export function skillCard(id: string): { title: string; text: string; group?: st
   const band = D.groups.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
   if (band) return { title: band.skill, text: skillText(band), group: band.name, color: band.color, art: bandLogo(band.name) };
   const character = D.personas.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
-  if (character) return { title: character.skill, text: skillText(character), group: character.group, color: character.color, art: charArt(character.art, "thumb") };
+  if (character) return { title: character.skill, text: skillText(character), group: character.group, color: character.color, art: charArt(D.artId(character), "thumb") };
   return undefined;
 }
 
