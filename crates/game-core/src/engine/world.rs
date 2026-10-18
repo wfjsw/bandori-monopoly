@@ -37,6 +37,13 @@ pub struct Hidden {
     /// the roll; consumed by that move.
     #[serde(default)]
     pub next_steps: Option<i32>,
+    /// The persona this seat last clicked on the pick screen, before confirming.
+    /// Private: never part of `MatchState`, so opponents never see it. Consumed
+    /// by the pick-timeout fallback (`tick_choice`). Skipped when empty so a
+    /// match that never preselected keeps a byte-identical save (checkpoint
+    /// hashes).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pick_intent: String,
 }
 
 fn full_build_cost() -> i32 {

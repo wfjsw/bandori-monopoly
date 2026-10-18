@@ -45,11 +45,30 @@ export function Select({ sess }: { sess: GameSession }) {
   };
 
   const me = view?.state.players[view.playerId];
-  const pickRef = useLatestRef({ auto, hasChar: !!me?.persona });
+  const pickRef = useLatestRef({
+    auto,
+    hasChar: !!me?.persona,
+    phase: view?.state.phase ?? "",
+    free: (n: string) => {
+      const st = view?.state;
+      if (!st) return false;
+      return !st.bans.includes(n) && !st.players.some((p) => p.persona === n);
+    },
+    sess,
+  });
   const pickChar = useCallback((c: PersonaData) => {
     if (pickRef.current.auto) return;
     sfx("place");
-    if (!pickRef.current.hasChar) setPicked(c.name);
+    if (pickRef.current.hasChar) return;
+    setPicked(c.name);
+    // Private pick-screen intent: if this seat times out, the engine picks
+    // this character while it is still free. Fire-and-forget (no toast); a
+    // preview click on a taken/banned character sends nothing and leaves any
+    // earlier intent in place. The confirm button still sends `act: "pick"`.
+    const { phase, free, sess: s } = pickRef.current;
+    if (phase === "pick" && free(c.name)) {
+      void s.act({ act: "preselect", persona: c.name }).catch(() => {});
+    }
   }, []);
 
   if (!view || !me) return null;
