@@ -1,18 +1,20 @@
-//! `Sumimi:一人两个甜甜圈` -- C# `CardTwoDonuts` (MatchHost.cs:11119-11138): exile
+//! `Sumimi:一人两个甜甜圈` -- 一人两个甜甜圈
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:一人两个甜甜圈`）:
 //! > 一人两个甜甜圈：
-//! >  
+//! >
 //! > （1）获得[除外]直至你原本所在格子被其他玩家经过。
 //! > （2）你原本所在格子被其他玩家经过时，可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家本次移动终点间的任一格并触发结算，之后你们各获得2火罐（超出上限的每个火罐转化为500资金）
 //!
-//! until the original tile is passed by someone else, then a settle-teleport and
-//! 2 fire each. The C# `AiPlay` always returns false (no `H.AiPlay` hook).
+//! （1） is a **duration** grant (「获得[除外]直至X」): a continuous exile
+//! until the original tile is passed, not a layer stack. The turn-start layer
+//! tick does not apply to it (`rules_status::exile::hold`); the pass ends it
+//! (`rules_status::exile::clear`). Then (2) opens the settle-teleport after
+//! the passer's 触发结算, and the fire pots land unexiled.
 //!
-//! C# arms `H.ExtraOf<DonutFx>(i)` (a player attachment, not a placed card). The
-//! hook surface only dispatches to *placed* cards, so the play body places this
-//! card as the `DonutFx` stand-in and files it to the discard pile when the
-//! effect finishes -- the same carrier pattern as the other `Fx` cards.
+//! The hook surface only dispatches to *placed* cards, so the play body places
+//! this card as the live-effect carrier and files it to the discard pile when
+//! the effect finishes -- the same carrier pattern as the other `Fx` cards.
 
 use alloc::vec::Vec;
 
@@ -37,21 +39,28 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 const ID: &str = "Sumimi:一人两个甜甜圈";
-/// C# `DonutFx.Orig` -- the tile the exile waits on.
+/// The tile the exile waits on.
 const SLOT_ORIG: &str = "two_donuts_orig";
-/// C# `DonutFx._by` -- the passer whose settle opens the return window (-1 = none).
+/// The passer whose settle opens the return window (-1 = none).
 const SLOT_BY: &str = "two_donuts_by";
 
 fn two_donuts(player_id: i32) -> card_sdk::Asked {
+    // 「该效果生效时无法重复获得该效果」 bars the (1) acquisition while the
+    // user is already exiled.
+    // TODO(规则书): the book does not say what the card does when the
+    // acquisition is barred; we treat the whole effect as void (no carrier, no
+    // slots, no log). The card is still spent (the play itself is done).
+    if rules_status::exile::get(player_id) > 0 {
+        return Ok(());
+    }
     let pos = ctx::player_pos(player_id);
-    // 规则书（1）: 「获得[除外]直至你原本所在格子被其他玩家经过」
-    // C# `H.GiveExile(i, 99, pos, i, CardName)` -- 99 layers so the per-turn
-    // layer tick does not expire it; `DonutFx` clears the exile early.
-    rules_status::exile::send(player_id, 99, pos);
+    // 规则书（1）: 「获得[除外]直至你原本所在格子被其他玩家经过」 -- a duration
+    // grant (held exile, no layer tick). The pass ends it (see `fx`).
+    rules_status::exile::hold(player_id, pos);
     ctx::set_slot(player_id, SLOT_ORIG, pos);
     ctx::set_slot(player_id, SLOT_BY, -1);
-    // C# `H.ExtraOf<DonutFx>(i).Orig = pos` -- place as the live-effect carrier
-    // so the `PassTile` / `SettleAfter` hooks below run (see the module doc).
+    // Place as the live-effect carrier so the `PassTile` / `SettleAfter` hooks
+    // below run (see the module doc).
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("two_donuts_note")));
     ctx::log(
@@ -60,17 +69,16 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", pos),
     );
-    // C# `CardTwoDonuts.AiPlay` returns false -- CardDef has no H.AiPlay hook.
     Ok(())
 }
 
-/// C# `DonutFx.PassTile` / `DonutFx.SettleAfter` -- run through the Fx hook
-/// dispatch while this card is placed.
+/// The `PassTile` / `SettleAfter` hook pair, while this card is placed.
 fn fx(player_id: i32) -> card_sdk::Asked {
     // `card.placed` is the pre.
     match trigger::kind() {
-        // 规则书（1）: 「直至你原本所在格子被其他玩家经过」 -- C# `DonutFx.PassTile`
-        // records the first other player that steps on `Orig`.
+        // 规则书（1）: 「直至你原本所在格子被其他玩家经过」 -- the exile ends the
+        // moment the original tile is passed, not at the passer's settle. Latch
+        // the first other player that steps on `Orig` and end the exile here.
         TriggerKind::PassTile => {
             if trigger::player_id() == player_id {
                 return Ok(());
@@ -82,9 +90,16 @@ fn fx(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             ctx::set_slot(player_id, SLOT_BY, trigger::player_id());
+            rules_status::exile::clear(player_id);
+            ctx::log(
+                player_id,
+                &Msg::new(key!("two_donuts_ended"))
+                    .player_id("who", player_id)
+                    .player_id("by", trigger::player_id()),
+            );
         }
         // 规则书（2）: 「你原本所在格子被其他玩家经过时，可在那名玩家触发结算后…」
-        // -- C# `DonutFx.SettleAfter` -> `Back(m)` when that passer lands.
+        // -- when that passer lands, offer the settle-teleport.
         TriggerKind::SettleAfter => {
             let by = ctx::slot(player_id, SLOT_BY);
             if by < 0 || trigger::player_id() != by {
@@ -97,27 +112,19 @@ fn fx(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `DonutFx.Back` -- end the exile, return to `Orig`, offer the in-between
-/// settle-teleport, hand out 2 fire each, drop the attachment.
+/// 规则书（2）: the optional settle-teleport onto a square between `Orig`
+/// (exclusive) and the passer's 移动终点, then the fire pots of (3) for both
+/// players. The exile already ended at the pass (clause (1) 「直至」), so the
+/// teleport and the money run unexiled.
 fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_BY, -1);
     let orig = ctx::slot(player_id, SLOT_ORIG);
-    // C# `me.exile = 0; me.exileTo = -1; me.pos = Orig` -- a plain position set,
-    // no settle (`ctx::teleport_to` is `H.ForceTeleport(..., resolve: false)`).
-    rules_status::exile::send(player_id, -99, -1);
+    // The holder sat out the exile on `Orig` (「无法移动」); put them back there
+    // without settle so the (2) window and its stream start from that square.
     ctx::teleport_to(player_id, orig);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("two_donuts_ended"))
-            .player_id("who", player_id)
-            .player_id("by", by),
-    );
     // 规则书（2）: 「可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家
-    // 本次移动终点间的任一格并触发结算」 -- C# `H.AskTileOf(..., allowNone: true)`
-    // over the tiles from `Orig` (exclusive) along the passer's direction to
-    // their end (`for i in 1..=n { t = (Orig + dir*i) mod n; ... break at their end }`),
-    // then `H.Teleport(Seat, r.index, resolve: true)`. `allowNone` has no ctx
-    // counterpart, so a yes/no stands in for the 「不传送」 branch (the
+    // 本次移动终点间的任一格并触发结算」 -- `allowNone` has no ctx counterpart,
+    // so a yes/no stands in for the 「不传送」 branch (the
     // `card-general/tsugu_ycm` pattern).
     let n = ctx::tile_count();
     let mut tiles: Vec<i32> = Vec::new();
@@ -134,7 +141,6 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     }
     if !tiles.is_empty() {
         let title = Msg::new(key!("two_donuts_title"));
-        // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
         if ctx::ask_yes(player_id, &title, &Msg::new(key!("two_donuts_yes")))? {
             let to = ctx::ask_tile(
                 player_id,
@@ -142,12 +148,9 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
                 &Msg::new(key!("two_donuts_ask")).player_id("by", by),
                 &tiles,
             )?;
-            // C# `H.Teleport(Seat, r.index, resolve: true, ...)` (MatchHost.cs
-            // DonutFx.Back) = `set_teleport_to(to)` + `set_resolve(true)` +
-            // `card_move(player_id)`. C# calls `H.Teleport` (TeleportMove) rather
-            // than `H.CardMove` (MainMoveAs), so this settle-teleport does not
-            // consume the main move; `card_move` is the closest shape and only
-            // marks `MainMoved` when the owner is the turn player.
+            // `card_move` is the closest shape to `H.Teleport(..., resolve: true)`
+            // and only marks `MainMoved` when the owner is the turn player, so
+            // this settle-teleport does not consume the main move.
             ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
             ctx::plan::set_teleport_to(to);
             ctx::plan::set_resolve(true);
@@ -175,7 +178,7 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
             )?;
         }
     }
-    // C# `H.RemoveExtra(this)` -- the stand-in leaves the field for the discard.
+    // The stand-in leaves the field for the discard.
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

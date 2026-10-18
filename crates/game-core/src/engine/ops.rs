@@ -2261,7 +2261,21 @@ impl World {
             }
             let v = (s.exile() + n).max(0);
             s.state_set(key::EXILE, v);
-            s.state_set(key::EXILE_TO, to);
+            if n > 0 {
+                // Grants write the return tile and are always a fresh
+                // acquisition (re-grants are refused above): a layered grant
+                // ticks, so it must not inherit a stale hold marker.
+                s.state_set(key::EXILE_TO, to);
+                s.state_set(key::EXILE_HOLD, 0);
+            }
+            // Removals (「移除一层[除外]」) must not clobber the return tile; when
+            // they empty the stack, drop every exile marker so nothing stale
+            // survives into the next acquisition.
+            if v == 0 {
+                s.state_set(key::EXILE_TO, -1);
+                s.state_set(key::EXILE_HOLD, 0);
+                s.state_set(key::EXILE_MAIN, 0);
+            }
         }
     }
 

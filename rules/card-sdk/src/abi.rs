@@ -821,6 +821,10 @@ pub mod state_key {
     /// expiry teleport is that turn's main move (MyGO:无路矢). Read and consumed
     /// by the engine's exile tick.
     pub const EXILE_MAIN: &str = "exileMain";
+    /// Duration grant (「获得[除外]直至X」) marker: while set, the turn-start
+    /// layer tick does not peel [除外]; the granting effect ends it. A layered
+    /// grant (「获得N层[除外]」) leaves this 0 and still ticks.
+    pub const EXILE_HOLD: &str = "exileHold";
     /// Fire pots held. Its `max` is the mandated cap, written by the character
     /// skill -- and that is the one number to show.
     pub const CHARGE: &str = "charge";

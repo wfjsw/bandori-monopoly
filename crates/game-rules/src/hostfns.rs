@@ -1403,7 +1403,11 @@ pub fn give_stun<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), Ho
 }
 
 pub fn give_exile<C: HostCtx>(c: &mut C, player_id: i32, n: i32, to: i32) -> Result<(), HostErr> {
-            if n > 0 && abnormal_gate(c, player_id, AbKind::Exile)? {
+            if n < 0 {
+                // Removals (「移除一层[除外]」) always reach the engine; only
+                // grants are gated by [不可阻挡] 「无法获得新的[除外]层数」.
+                c.st_mut().w().give_exile(player_id, n, to);
+            } else if n > 0 && abnormal_gate(c, player_id, AbKind::Exile)? {
                 c.st_mut().w().give_exile(player_id, n, to);
             }
             Ok(())

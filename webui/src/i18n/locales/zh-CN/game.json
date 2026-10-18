@@ -305,6 +305,7 @@
   "log.events_reshuffled": "事件牌堆抽完了，事件弃牌洗切成新的牌堆",
   "log.exile_over": "{{who}} 的 [除外] 结束了，回到棋盘",
   "log.exiled_skip": "{{who}} 还在 [除外] 中（剩 {{left}} 层），跳过这回合",
+  "log.exiled_skip_hold": "{{who}} 还在 [除外] 中，跳过这回合",
   "log.force_buy": "{{who}} 付给 {{owner}} {{price}}，强制买下了抵押中的 {{tile}}（还是抵押状态）",
   "log.forfeit": "{{who}} 离开了对局（弃权），和破产一样出局",
   "log.gain": "{{who}} 获得 {{amount}}{{src}}",

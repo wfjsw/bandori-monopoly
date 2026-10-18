@@ -527,6 +527,19 @@ impl Cx<'_> {
             return Ok(());
         }
         if self.w.st.players[i].exile() > 0 {
+            // Duration grant (「获得[除外]直至X」): the hold marker suppresses the
+            // layer tick. The granting effect ends the exile (and runs the return
+            // teleport itself if it owes one); until then the turn is auto-skipped
+            // with no layer countdown.
+            if self.w.st.players[i].state_get(key::EXILE_HOLD) != 0 {
+                self.w.log(
+                    "status",
+                    i as i32,
+                    Msg::new("log.exiled_skip_hold").player_id("who", i),
+                );
+                self.wait(1.0);
+                return self.end_turn(i);
+            }
             self.w.st.players[i].state_add(key::EXILE, -1);
             let left = self.w.st.players[i].exile();
             if left > 0 {

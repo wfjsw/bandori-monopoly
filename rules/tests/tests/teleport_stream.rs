@@ -292,9 +292,10 @@ fn two_donuts_settle_teleport_stream_is_continuous() {
         let Some(p) = t.prompt() else { break };
         if p.text.key().contains("two_donuts_yes") {
             t.answer(0, 0).unwrap();
-        } else if p.kind == "tile" {
+        } else if p.text.key().contains("two_donuts_ask") {
             t.answer_tile(0, 12).unwrap();
         } else {
+            // Settling on 中心学区 (agent) opens an optional buy -- decline it.
             t.decline();
         }
     }
