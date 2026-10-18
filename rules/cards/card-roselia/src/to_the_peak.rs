@@ -15,7 +15,7 @@ pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", S
         .name(r#"向着顶点"#)
         .raw_name(r#"向着顶点"#)
         .tags(&[])
-        .text(r#"移动到下一个可被购买的livehouse格子。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋，视为你的主要移动。"#)
+        .text(r#"移动到下一个可被购买的livehouse格子，视为你的主要移动。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋。"#)
         .cell(r#"E4"#)
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

@@ -76,7 +76,7 @@ pub const RETURNS: CardDef = CardDef::new(
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Returns"#)
         .raw_name(r#"Returns"#)
-        .tags(&[r#"手"#, r#"持续"#, r#"特"#])
+        .tags(&[r#"持续"#, r#"特"#])
         .text(r#"[特]：
 （1）如果此卡被加入初始卡组则卡组卡数添加8。
 （2）游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个其他存活玩家的团卡。
@@ -420,10 +420,14 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
             ctx::unplace_card_named(player_id, old);
         }
     }
-    ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
+    let borrowed = ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
     ctx::set_prop(PROP_BAND, idx);
     ctx::set_prop(PROP_FROM, who);
     ctx::set_tok(player_id, "returns.copied", 1);
+    // Which instance is 「因此卡获得的团卡」. The tax in `spend_copy_sticker`
+    // keys on this uid, not on "a borrow exists" -- the owner's own band card
+    // sits beside the copy and its presses are free.
+    ctx::set_tok(player_id, "returns.borrow_uid", borrowed);
     ctx::log(
         player_id,
         &Msg::new(key!("returns_got_band")).card("card", want),

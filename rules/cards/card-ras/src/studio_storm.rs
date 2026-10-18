@@ -30,7 +30,7 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
         .raw_name(r#"练习室里的风暴"#)
         .tags(&[])
         .text(r#"（1）当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上，每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）
-（2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的(4-X)/4倍，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动"#)
+（2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍价格的收费，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动"#)
         .cell(r#"H8"#)
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
@@ -135,9 +135,19 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
             .tile("tile", tile)
             .i("x", x as i64),
     );
-    // 「且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的
-    // (4-X)/4倍」 -- the mover settles here at that rent factor (milli-units:
-    // 1000 * (4-X)/4 = 250 * (4-X)).
+    // 规则书（2）: 「对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍
+    // 价格的收费」 -- sheet 2026-10-06 新卡组卡 H8 rewrote this from the older
+    // 「那个玩家进行一次此卡所在格子的[结算]」 (a forced re-settle) into a direct
+    // charge. The tests (`ras.rs` `storm_part2_*`) already quote the new text and
+    // only assert the money, so both readings pass them.
+    //
+    // TODO(规则书): this still runs a full `card_settle_at` (the pre-2026-10-06
+    // reading) rather than a one-shot 「收费」 to the tile owner. A full settle
+    // also fires settle hooks / counteractions and offers build/buy, which the
+    // 「收费」 wording does not. The amount is the same (milli-units:
+    // 1000 * (4-X)/4 = 250 * (4-X)); the side effects are not. Class C on who
+    // receives the 收费 when the tile is mortgaged (「普通[结算]」 there is a
+    // forced-buy offer, not rent) -- charge vs settle needs that ruling first.
     ctx::plan::set_rent_factor(250 * (4 - x));
     ctx::card_settle_at(trigger::player_id(), tile, true);
     Ok(())

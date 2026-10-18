@@ -2071,10 +2071,195 @@ latent bug is fixed. The `TODO(规则书) PIPELINE-AUDIT Q7` marker at L5 is alr
 
 ---
 
+# Newly filed 2026-10-18 (card loyalty review, wave 1)
+
+Subagent clause-by-clause review of the 15 most quote-dense cards against
+`docs/rulebook/cards.json` (ground fact), plus a mechanical `.text()` /
+quoted-name sweep of all 180. Reports: job tmp `wave1-{mixed,ppp,pp}.md` +
+`findings-main.md`. **Quoted wordings** were the focus: a `.text()` that drops
+or moves a 「…」 clause, and a “...” proper name that fails to resolve.
+
+## Closed in this batch (fixed on `worktree-card-loyalty-review`)
+
+- **LOY-DISP-01 `R:向着顶点` `.text()` moved 「视为你的主要移动」.** The phrase
+  belongs to the walk sentence; `.text()` had it after 「加盖一层房屋」. Behavior
+  already matched the sheet (`to_the_peak.rs` walk = `card_move`, build = not;
+  `spec_card_r.rs:975` asserts the sheet order). **Fixed.**
+- **LOY-DISP-02 `RAS:（和奏瑞依）寄于指尖的执念` `.text()` dropped `[反击]` and
+  「可打出此卡并」.** Read as an automatic keep; the code is an `On::Counteract`.
+  **Fixed.**
+- **LOY-DISP-03 `RAS:练习室里的风暴`（2）`.text()` kept the pre-2026-10-06
+  wording.** Sheet 新卡组卡 H8 rewrote 「那个玩家进行一次…[结算]」 into
+  「对那个玩家进行一次相当于…的收费」. **Fixed** (behavior still open — see
+  LOY-STORM-01).
+- **LOY-DISP-04 `通用:该清CP了` `.text()` showed `[特]：` and 「（2）」.** The
+  sheet has no `[特]：` line and numbers the clause 「（1）」 (a stale number left
+  after sheet 2026-10-06 A8 dropped a gate). **Fixed.**
+- **LOY-DISP-05 `1d6mod6` vs `1d6` on four cards** (`AG:商店街的青梅竹马`,
+  `AG:无论是何种颜色的夕阳`, `Mor:（筑紫）迷茫的庭园`, `R:NFO`). Live sheet says
+  `1d6` (`spec/cards/r.md:103-104` already rules it authoritative). **Fixed.**
+  `RAS:UNSTOPPABLE` is the reverse and stays under `OPEN-unstoppable-mod`.
+- **LOY-DISP-06 `HHW:（花音）Wacha Mocha 啪嗒进行曲` dropped 「此卡」.** **Fixed.**
+- **LOY-SOUL-01 `AG:绯红之魂` [手] choice capped by cash.** 「选择[消耗]1到5次
+  500资金」 is a printed 1..=5; `max = min(5, money/500)` pre-empted the
+  shortfall path (NEGATION-AUDIT V2 removed the money play gate). **Fixed** to
+  `ask_number(…, 1, 5)`. Tests already expected 5 options.
+- **LOY-RET-01 `PPP:Returns` [持续]（3） tax fired on the owner's own PPP
+  presses.** 「使用**因此卡获得的**团卡的主动效果时需要支付1星星贴纸」 — the
+  code keyed on the player token `returns.copied` (armed on every borrow), so
+  from game start every band press paid. Now keys on the borrowed **instance**
+  (`returns.borrow_uid` = the uid `place_card` returned;
+  `spend_copy_sticker` compares `self_uid()`). **Fixed.**
+- **LOY-RET-02 `PPP:Returns` meta `.tags` listed 「手」.** Printed card is
+  [特]/[持续] only. **Fixed.**
+
+## Open
+
+### LOY-TSUGU-01 — unprinted whole-card move gate (and the quirk that blocks the fix)
+- **class**: A on the text; blocked by an engine quirk. **severity**: medium.
+- **rule text**: `通用:@Tsugu ycm` is `[手]：投掷3d10…` with **no [限]**. Steps
+  (1) / (3) and the 「[获得]1000资金」 arm of (4) have nothing to do with the
+  main move.
+- **code**: `card-general/src/tsugu_ycm.rs:61-66` — `cant_play =
+  rules_status::move_blocked` refuses the whole card once the main move is
+  spent (C# `H.MoveWhyNot` carry; C# is not the spec).
+- **attempted fix**: drop the gate, guard the (2) teleport arm with
+  `move_blocked` (the (4) arm already does exactly this and its tests pass).
+- **blocker**: any `cant_move` call from inside this card's `play` body — even
+  hoisted to the top of the function, even bound to a local first — makes the
+  (2) 「可选择购买任意无主的[可购买格子]」 `ask_yes` never appear. 4 tests fail
+  (`tsugu_ge26_teleports_without_settle`, `tsugu_ge26_can_buy_any_unowned`,
+  `tsugu_ge28_buy_discount_1500`, `tsugu_buy_gate_refused_does_not_log_a_buy`).
+  The (4) arm's identical call is fine. `cant_move` is a pure read
+  (`wasm_rules.rs:1955-1967`). Guest/host request-ordering bug.
+- **note**: reverted to master behavior. Do not re-attempt until the quirk is
+  understood — dropping the gate without the (2) guard would let the card
+  teleport twice.
+
+### LOY-DREAM-01 `PP:梦在前方，结彩当下`（4）is a turn-end [反击], not a hand press
+- **class**: A. **severity**: high.
+- **rule text**: 「（4）[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格
+  以内有无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…」
+- **code**: `card-pp/src/dream_ahead.rs:33` — `On::Play("", Some(can_buy),
+  buy_one)`. The card is placed by [特] and never in hand, so the press is
+  either an anytime button or dead. The printed window is a turn-end
+  counteraction.
+- **note**: needs the counteraction shape + the [共鸣] rider. `can_buy` already
+  checks the ≤3-distance candidate set.
+
+### LOY-TRAIN-01 `PP:练习生解密指南` [共鸣] pays 500 and never adds the two marks
+- **class**: A. **severity**: high.
+- **rule text**: 「如果[共鸣]则[消耗]500资金并添加任意2个标记。」
+- **code**: `card-pp/src/trainee_guide.rs:91-97` — pays 500, no mark grant.
+
+### LOY-TRAIN-02 `PP:练习生解密指南`（3）≥5 crystals only sampled in `turn_end`
+- **class**: A. **severity**: high.
+- **rule text**: 「（3）此卡拥有至少5个[奇迹水晶]时…」
+- **code**: `card-pp/src/trainee_guide.rs:111-147` — the cash-in is only looked
+  for at turn end. Placement already puts fans/3 crystals on the card; a ≥5
+  crossing at that moment (or any later moment) must fire. State-clause-on-event
+  rule (`[[state-clauses-belong-on-events]]`).
+
+### LOY-OVERLAP-01 `PP:[衍生]重叠的声音` [特] discard hook is missing
+- **class**: A. **severity**: high.
+- **rule text**: 「[特]：此卡进入拥有此卡的玩家的弃卡区时[移除]此卡和[使用者]
+  [场地]上的“初次演出事故”」 (and the parallel clause on the accident side).
+- **code**: `card-pp/src/overlapping_voices.rs:89-90` — a comment only; there is
+  **no Discarded hook at all**. A whole printed clause is silent.
+- **note**: also, the accident is `unplace_at`'d rather than `[移除]`'d
+  (glossary: `[移除]` = remove from the game / banish).
+
+### LOY-RET-03 `PPP:Returns` 「需要支付1星星贴纸」 is not a cost gate
+- **class**: A. **severity**: high.
+- **rule text**: 「使用因此卡获得的团卡的主动效果时**需要支付**1星星贴纸。」
+- **code**: `skill-groups/src/lib.rs` — `add_tok(…, -1)` floors at 0, so a
+  0-sticker owner still runs the press and the "payment" moves 0.
+- **note**: `Err(Prompt)` is the **pause** sentinel, not a refusal
+  (`card-sdk/src/lib.rs:81`), so a play body cannot refuse its own activation.
+  The gate belongs on the borrowed instance's `On::Play` (`cant_play`), keyed
+  the same way as LOY-RET-01's `returns.borrow_uid`.
+
+### LOY-SMILE-01 `HHW:笑容大游行`（3）discard skips the owner
+- **class**: A. **severity**: medium. (In-source `TODO(规则书)`.)
+- **rule text**: 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。」
+- **code**: `card-hhw/src/smile_parade.rs:246-251` — `resolve_guard` returns
+  false when `trigger::player_id() == owner`. The exclusion protects (1)'s own
+  nested settle; it should key off the placement move, not a blanket owner skip.
+- **related**: (1)'s crystal countdown (`:122-129`) is gated on `on_group()`;
+  the printed tick 「你的每回合结束时移除一个」 is unconditional (only the
+  zero-crystal discard names 弦卷集团). Settled-01's "fixed" line describes the
+  weaker behaviour as if it were the rule.
+
+### LOY-ANON-01 `MyGO:[千早爱音]Anon Tokyo` 「（上限1）」 produces half-links
+- **class**: A. **severity**: medium.
+- **rule text**: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」
+- **code**: `card-mygo/src/anon_tokyo.rs:108-131` — one mark **per tile**,
+  each skipped independently, so a re-link can mark only one end and `LINK`
+  slots disagree. Cap should apply to the pair.
+- **Class C** on whether a tile may sit in two links at once (the singular
+  「1个…（上限1）」 leans no).
+
+### LOY-STORM-01 `RAS:练习室里的风暴`（2）is still a forced re-settle
+- **class**: A on "charge, not settle"; **C** on the recipient when mortgaged.
+  **severity**: medium.
+- **rule text**: sheet 2026-10-06 新卡组卡 H8: 「…对那个玩家进行一次相当于此卡
+  所在格子普通[结算]的(4-X)/4倍价格的**收费**」 (was 「那个玩家进行一次此卡所在
+  格子的[结算]」).
+- **code**: `card-ras/src/studio_storm.rs:138-142` — `set_rent_factor +
+  card_settle_at`. A full settle also fires settle hooks / counteractions and
+  offers build/buy, which the 「收费」 wording does not. Amount is the same
+  (milli-units `250 * (4-X)`), so `ras.rs` `storm_part2_*` pass either way.
+- **note**: `TODO(规则书)` now on the call site. Class C: 「普通[结算]」 of a
+  **mortgaged** tile is a forced-buy offer, not rent — who is the 收费 paid to?
+
+### LOY-C pile (Class C — needs a ruling; do not guess)
+- `PPP:STAR BEAT!` — 「下次结算后…随后减少1层」 is neither one-shot nor a clean
+  bank: the layer survives a decline but burns on a failed build
+  (`star_beat.rs:155-184`).
+- `通用:@Tsugu ycm` — 「依次进行以下操作」 is 1→2→3→4, but the code runs 3
+  (the −1500 BuyAdd) before 2's optional buy so the buy is discounted. 「本回合」
+  vs 「依次」 fight. Related to `OPEN-GEN-tsugu-3-order`; the concrete
+  discount-on-buy question is not yet named there.
+- `AG:绯红之魂`（1）— sheet text 「因导致的[消耗]或[支付]」 is missing its
+  antecedent (both `cards.json` and `cards-sheet.csv`). Implementation takes the
+  maximal reading (any owner consume/pay).
+- `MyGO:[千早爱音]Anon Tokyo` — linked-rent hook requires the payee be the
+  card's owner; the printed clause keys on the tile being linked.
+- `通用:该清CP了` — the "a copy is still in play" play gate is a 2026-10-07 user
+  ruling attached to a `[特]` the sheet no longer carries.
+- `PP:再次闪耀`（2）— 「[共鸣]记录一个此卡未记录的颜色」 has no 同色地契
+  restriction (contrast (1)); `record()` shares (1)'s filter and over-restricts.
+  Also which deed when several match for 「÷5」 (code takes max).
+- `PP:练习生解密指南` build-off layers — `set_build_discount(1000*n, 1)` +
+  peel-1 gives −3000 total at n=2; neither pure reading of the quoted status
+  「下次盖房的价格减少1000（可溢出），盖房后减少1层」.
+- `PP:[若宫伊芙]属于我的武士道！` — 「（1）[使用者]抽卡后」 hooks on owner; they
+  coincide on every normal path (the card is placed on [使用者]的[场地]).
+
+## Quoted-name sweep (all 180) — no unresolved entity names
+
+Every “...” that names a thing resolves: derived cards (`“FEVER!”` →
+`通用:[衍生]FEVER!`, `“觉悟”` → `R:[衍生] 觉悟` **with a space in the id**,
+`“拍卖撤下来了”`, `“表演的本能”`, `“共鸣”`, …), tiles (`“bandori车站”` vs board
+`Bandori车站` — sheet case drift; impls use the canonical spelling via
+`const STATION`), `“MyGO!!!!!”` → `in_group`, `“抹茶芭菲”` → a player token.
+Quoted formulas are expressions. `“afterglow”` is a named movement style and
+already carries `TODO(规则书)[judgement]` in `detour.rs`.
+
+Sheet typos deliberately **not** propagated into `.text()`: `“FEVER!“` /
+`“PERFECT“` (closing quote), 「1000的的的资金」.
+
 # Summary counts
 
 **Recounted 2026-10-17** against master `1cd71939` after the full item audit.
 The 2026-10-10 figures (78 open from 144 TODOs + ~85 ignores) are historical.
+
+**2026-10-18 addendum** — card loyalty review wave 1 (15 quote-dense cards +
+a `.text()`/quoted-name sweep of all 180): **8 display/behavior items closed**
+(LOY-DISP-01..06, LOY-SOUL-01, LOY-RET-01/02) and **11 opened**
+(LOY-TSUGU-01, LOY-DREAM-01, LOY-TRAIN-01/02, LOY-OVERLAP-01, LOY-RET-03,
+LOY-SMILE-01, LOY-ANON-01, LOY-STORM-01, + the LOY-C pile). See "Newly filed
+2026-10-18". 165 cards remain unreviewed at clause level.
 
 What the audit changed:
 - **4 items closed** (the tree had landed them and the doc had not noticed):

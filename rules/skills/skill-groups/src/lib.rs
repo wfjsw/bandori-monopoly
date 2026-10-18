@@ -75,8 +75,13 @@ pub const CARDS: &[CardDef] = &[
 ];
 
 /// Spend the 「星星贴纸」 「使用因此卡获得的团卡的主动效果时需要支付」.
+///
+/// Only the **borrowed** copy pays: 「因此卡获得的团卡」 is the instance
+/// `PPP:Returns` placed (`returns.borrow_uid` holds its uid). The owner's own
+/// band card sits beside it (ruling 2026-10-06) and its presses are free.
 pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
-    if ruleset_core::ctx::tok(player_id, "returns.copied") > 0 {
+    let borrow = ruleset_core::ctx::tok(player_id, "returns.borrow_uid");
+    if borrow != 0 && ruleset_core::ctx::self_uid() == borrow {
         ruleset_core::ctx::add_tok(player_id, "星星贴纸", -1, i32::MAX)?;
     }
     Ok(())
