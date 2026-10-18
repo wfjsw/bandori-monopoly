@@ -200,6 +200,13 @@ test("bot-glue loads the real built ruleset through the shared sequence", async 
   assert.equal(info.service, "bot-glue");
   assert.match(info.modules, /^[0-9a-f]{64}$/, "a real ruleset, not stub");
   assert.ok(info.ponder, "ponder cache on by default");
+  // Monolith identity (docs/BOT.md §3.6): the linked ruleset must be the one
+  // the page's `index.json` names, or the worker refuses to answer.
+  if (typeof glue.ruleset_sha256 === "function") {
+    const idx = JSON.parse(readFileSync(join(rulesDir(), "index.json"), "utf8"));
+    assert.equal(glue.ruleset_sha256(), idx.ruleset_sha256, "linked ruleset == deployed index");
+    assert.equal(info.ruleset_sha256, idx.ruleset_sha256);
+  }
 });
 
 test("decide returns a legal answer for a range of real views", async () => {

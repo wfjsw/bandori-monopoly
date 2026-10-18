@@ -755,30 +755,40 @@ thresholds (`wants_buy` / `wants_build` / …).
   The archive / replay path does **not** need the worker bundle -- replays
   never run the bot (`docs/REPLAY.md`).
 
-**Follow-up: rules compiled into the module (not done here).** Today the
-worker runs the same wasmi-interpreted card modules the page's `web-glue` runs
-(~3–5× slower per BOT.md B0; §5 "B6" shows 3.3 iterations at 1 s / 1 worker on
-the real ruleset). §3.6's original idea -- `game-rules` linked **natively** into
-the wasm32 module so card runs get the browser's JIT -- needs:
-1. `card-sdk`'s **native** mode on wasm32. Its `mod sys` imports are
-   `cfg(target_arch = "wasm32")`-gated to the `ruleset_*` wasm exports today;
-   the native mode is `cfg_attr(not(target_arch = "wasm32"), link_name = ...)`.
-   A third configuration ("wasm32 host, native guest") has to compile the
-   guest as plain Rust and resolve the `ruleset_*` shims inside the module.
-2. The **rules-native drift** closed (`crates/rules-native/tests/drift.rs`'s
-   known divergence, §5 B1). A bot that drifts from the sandbox is weaker
-   (§1), but a *worker* whose rules disagree with the page's live engine makes
-   the search's forks diverge from the match it is advising -- still advisory
-   only, but the strength hit would be silent.
-3. A wasm32 build of `rules-native`'s `HostCtx` (a plain `GuestMem` arena
-   instead of a wasmi `Caller`) and the `catch_unwind` / `extern "C-unwind"`
-   shim ABI checked on wasm32 (panic unwinding across the "guest" is all
-   inside one module there, so the traps have to become plain `Result`s).
+**Follow-up: rules compiled into the module — done.** The worker bundle is now
+a **monolith** (`bot-glue` + `native-rules`, default on): the card crates are
+linked as rlibs via `rules-native`, and the ~318 `ruleset_*` host imports
+resolve inside the one wasm32 module (no `ruleset` import module, no wasmi
+`Store`, no fetch of `/assets/rules/*.wasm`). How the three prerequisites
+landed:
 
-Not needed for the follow-up: the page's glue, the worker protocol, the pool,
-the budget policy, the solo / 托管 drivers, or the tests -- all of that is
-backend-agnostic and would keep working once `rules()` returns a native
-`CardRules` instead of `WasmRules`.
+1. `card-sdk` gained a third cfg, the cargo feature **`native-rules`**:
+   `ctx/sys.rs` drops `wasm_import_module = "ruleset"` and keeps
+   `link_name = "ruleset_*"` on `any(not(target_arch = "wasm32"),
+   feature = "native-rules")`. The guest panic handler / bump allocator stay
+   off under `native-rules` (the monolith is a std cdylib and uses the host's
+   talc + panic machinery). The buffer arena (`native.rs`) is on for the
+   linked path too, because `NativeHost` always reads the arena.
+   `rules-native/tests/abi_link_names.rs` pins the naming for both configs.
+2. The **rules-native drift** is closed (`crates/rules-native/tests/drift.rs`).
+   The monolith is that same `NativeRules` code on wasm32. Identity: the
+   bundle bakes the sandbox `Ruleset::sha256()` (the `index.json`
+   `ruleset_sha256` recipe, not a second hash) and the worker refuses to
+   answer when it disagrees with the page's `index.json`.
+3. `rules-native` compiles for `wasm32-unknown-unknown` (`HostCtx` is
+   `NativeHost` over the arena; `catch_unwind` / `extern "C-unwind"` stay the
+   trap → `RuleError::Trap` contract). `game-rules`'s `native_shims` compile
+   on wasm32 under the same feature.
+
+Not changed: the page's glue, the worker protocol, the pool, the budget
+policy, the solo / 托管 drivers. `tools/build-ruleset.mjs` rebuilds the
+monolith after `dist/cards` so the two cannot drift; `tools/check-bot-monolith.mjs`
+asserts the built `glue_bg.wasm` has no `ruleset` import module.
+
+Still deferred: making `wasmi` an optional `sandbox` dep of `game-rules`
+(`host.rs`'s 5k-line `Ruleset` / `Linker` surface is still coupled to the
+backend). The release monolith currently GC's wasmi out of the bundle anyway
+(`tools/check-bot-monolith.mjs` reports `wasmi strings: absent`).
 
 ### 3.7 Deck book (offline)
 
