@@ -25,11 +25,14 @@ pub mod hostfns;
 pub mod inline;
 /// Roster metadata (ABI v63): `ruleset_metadata` -> [`game_core::data::Roster`].
 pub mod roster;
-/// The `ruleset_*` host-import shims (native only). Lives here, not in
-/// `rules-native`, so every native binary that links `card-sdk` with `guest`
+/// The `ruleset_*` host-import shims. Lives here, not in
+/// `rules-native`, so every binary that links `card-sdk` with `guest`
 /// on -- including a server test binary in a unified `cargo test` -- resolves
-/// the symbols (`docs/BOT.md` B1, the `LNK2019` fix).
-#[cfg(not(target_arch = "wasm32"))]
+/// the symbols (`docs/BOT.md` B1, the `LNK2019` fix). On wasm32 these are only
+/// compiled for the **linked** monolith (`native-rules`): a sandbox guest
+/// module imports them from the host instead. wasm-ld resolves the plain
+/// symbol references inside the one module.
+#[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
 pub mod native_shims;
 /// THE ruleset class registration for `tile_in` (ABI v56).
 pub mod tile_class;

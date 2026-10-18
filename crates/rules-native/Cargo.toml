@@ -7,8 +7,8 @@ description = "The card ruleset linked as plain native Rust for the bot's simula
 
 [dependencies]
 game-core = { path = "../game-core" }
-game-rules = { path = "../game-rules" }
-card-sdk = { workspace = true, features = ["guest"] }
+game-rules = { path = "../game-rules", features = ["native-rules"] }
+card-sdk = { workspace = true, features = ["guest", "native-rules"] }
 ruleset-core = { path = "../../rules/ruleset-core" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = { workspace = true }

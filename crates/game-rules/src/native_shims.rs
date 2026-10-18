@@ -1,12 +1,16 @@
-//! The `ruleset_*` host-import shims (native builds only).
+//! The `ruleset_*` host-import shims (native, and the wasm32-linked monolith).
 //!
 //! `card-sdk`'s `ctx` module declares these as `#[link_name = "ruleset_<name>"]`
-//! externs on non-wasm targets. They live **here**, in `game-rules` -- the crate
-//! every native consumer of `card-sdk` links -- so a `cargo test` that also
-//! builds `rules-native` (which turns `card-sdk/guest` on for everyone via
-//! feature unification) still resolves every symbol. The old copy in
-//! `rules-native/src/symbols.rs` was only linked by binaries that depended on
-//! `rules-native` itself, so a server test binary got `LNK2019` on all 289.
+//! externs whenever the target is not a pure wasm32 guest -- i.e. on native
+//! **and** on wasm32 with `native-rules` (the bot monolith, `bot-glue` +
+//! `rules-native`). On native they resolve as ordinary symbols; on wasm32-linked
+//! wasm-ld resolves them inside the one module (no `ruleset` import module).
+//! They live **here**, in `game-rules` -- the crate every consumer of
+//! `card-sdk` links -- so a `cargo test` that also builds `rules-native` (which
+//! turns `card-sdk/guest` on for everyone via feature unification) still
+//! resolves every symbol. The old copy in `rules-native/src/symbols.rs` was
+//! only linked by binaries that depended on `rules-native` itself, so a server
+//! test binary got `LNK2019` on all 289.
 //!
 //! The bodies are a thin object-safe forwarding layer ([`HostOps`]) over a
 //! [`crate::host::HostCtx`]; `rules-native` installs its concrete host with
