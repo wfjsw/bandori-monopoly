@@ -322,6 +322,7 @@ impl SnapSrc for Fixture {
                 total: m.remaining as i32,
                 roll: m.roll.map(|r| r as i32),
                 by_skill: false,
+                settle_redirect: false,
             });
         }
         tr.effects = t

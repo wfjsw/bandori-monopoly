@@ -315,6 +315,10 @@ fn seeyou_echo_ignores_gate() {
 // ============================================================ PP:不要背负期待
 
 /// 规则书: 「将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。」
+/// 「加入卡组」 shuffles the card in (`ctx::add_to_deck(..., shuffle: true)`), so
+/// which of the two cards the 「抽1张牌」 takes is not specified. Assert what the
+/// text says: 共鸣 is in the deck (draw ∪ hand -- it may be the card drawn), and
+/// one card was drawn.
 #[test]
 fn expect_hand_places_adds_resonance_draws() {
     let mut t = Table::vanilla(2);
@@ -323,8 +327,13 @@ fn expect_hand_places_adds_resonance_draws() {
     drain(&mut t);
     assert!(t.on_field(0, "PP:不要背负期待"), "{:?}", t.field_ids(0));
     let pile = t.draw_pile(0);
-    assert!(pile.contains(&"PP:[衍生]共鸣".to_string()), "共鸣 in draw: {pile:?}");
-    assert!(t.hand(0).contains(&"通用:GREAT".to_string()), "drew: {:?}", t.hand(0));
+    let hand = t.hand(0);
+    let resonance = "PP:[衍生]共鸣".to_string();
+    assert!(
+        pile.contains(&resonance) || hand.contains(&resonance),
+        "共鸣 joined the deck (draw {pile:?} / hand {hand:?})"
+    );
+    assert_eq!(hand.len(), 1, "「抽1张牌」: hand {hand:?}, pile {pile:?}");
 }
 
 /// 规则书: 「非回合开始时进行投掷的投掷结果减少2（…如果为0则此次移动不[结算]）」

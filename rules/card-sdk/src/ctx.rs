@@ -561,6 +561,24 @@ pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Promp
     asked(unsafe { sys::pay_to(from, to, amount, p, l) })
 }
 
+/// A rent-shaped 「收费」 at `milli_scale` (1000 = ×1.0) of `tile`'s
+/// ordinary-settle rent, outside a full [触发结算].
+///
+/// 规则书 (`RAS:练习室里的风暴` (2)): 「对那个玩家进行一次相当于此卡所在格子
+/// 普通[结算]的(4-X)/4倍价格的收费」 -- pass `250 * (4 - x)` as `milli_scale`.
+/// The figure is the same one `pay_rent` charges (table / houses / dice-rent
+/// roll) and the scale rides the money pipeline's `paySplitMul` stage
+/// (`scale_settle_payment`) with the rent factors. Runs as `PayKind::Rent`
+/// (so `PaySplitAdd` / `pay_is_rent` see a rent), but it is a 「收费」, not a
+/// 「结算」: no settle hooks, no buy/build offer.
+///
+/// Returns the amount actually paid. Refuses (0) when the tile is unowned or
+/// mortgaged (the mortgaged case is `TODO(规则书)[ruling]` -- 「普通[结算]」
+/// there is a forced-buy offer with no obvious 收费 recipient).
+pub fn charge_rent(payer: i32, tile: i32, milli_scale: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::charge_rent(payer, tile, milli_scale) })
+}
+
 // ------------------------------------------------------------- 「[分摊]」 / 分摊前
 
 /// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2): `payCombinedAdd` →
@@ -1137,6 +1155,33 @@ pub fn place_mark(
     }
 }
 
+/// Place **one** paired mark spanning tiles `a` and `b` (the miracle-crystal
+/// shape: one unit bound to two tiles). One row per tile, each row's
+/// `partner` naming the other. Place-or-refuse atomic: returns `false` and
+/// places **nothing** when either tile already carries a matching mark for
+/// that owner (the pair cap 「上限1」 is on the pair; a tile cannot sit in two
+/// links at once). `owner` / `category` / `src` / `note` / `stack` speak as in
+/// [`place_mark`]; both rows die with the creating instance like any mark.
+#[cfg_attr(kani, inline(always))]
+pub fn place_mark_pair(
+    a: i32,
+    b: i32,
+    kind: &str,
+    category: &str,
+    owner: i32,
+    src: i32,
+    count: i32,
+    note: &Msg,
+    stack: crate::abi::Stack,
+) -> bool {
+    let (kp, kl) = s(kind);
+    let (cp, cl) = s(category);
+    let (np, nl) = mj(note);
+    unsafe {
+        sys::place_mark_pair(a, b, kp, kl, cp, cl, owner, src, count, stack as i32, np, nl) != 0
+    }
+}
+
 /// Units on `tile` matching `filter` (empty kind/category, `mark::ANY` owner
 /// / src / instance = any).
 pub fn count_marks(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
@@ -1167,6 +1212,13 @@ pub fn mark_src_at(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
 pub fn mark_instance_at(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
     let (fp, fl) = mf(filter);
     unsafe { sys::mark_instance_at(tile, fp, fl) }
+}
+
+/// Partner tile (`TileMark.partner`) of the first matching mark on `tile`,
+/// or -1 (none / unpaired). The cross-end of a [`place_mark_pair`] row.
+pub fn mark_partner(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
+    let (fp, fl) = mf(filter);
+    unsafe { sys::mark_partner(tile, fp, fl) }
 }
 
 /// Units of **this** instance's counter `kind` bound to `tile`.
@@ -2557,6 +2609,17 @@ pub mod trigger {
     /// `t.Move.Main` -- was this the turn's [主要移动]?
     pub fn move_is_main() -> bool {
         unsafe { sys::trig_move_main() != 0 }
+    }
+
+    /// `t.Move.SettleRedirect` -- was this settle initiated by a card
+    /// (`ctx::card_settle_at`), rather than by the player's own move landing?
+    ///
+    /// A `tileResolved` / `settleBody` hook uses this to tell a card's own
+    /// redirected settle from a real player settle on the same tile (笑容大游行
+    /// （3）'s 「在此卡放置的格子上[触发结算]后」 must not fire for the redirect
+    /// that swap itself caused).
+    pub fn is_settle_redirect() -> bool {
+        unsafe { sys::trig_settle_redirect() != 0 }
     }
 
     /// `t.Move.Dir` -- the direction of the move: 1 forward, -1 backward.

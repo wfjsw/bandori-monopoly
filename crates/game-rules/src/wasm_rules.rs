@@ -50,9 +50,10 @@ fn record_silent_visible(card_id: &str, what: &str) {
 /// are not host requests -- they announce on their own).
 fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
     match req {
-        HostRequest::Pay { .. } | HostRequest::PayTotal { .. } | HostRequest::PayRent { .. } => {
-            Some("pay/gain/transfer")
-        }
+        HostRequest::Pay { .. }
+        | HostRequest::PayTotal { .. }
+        | HostRequest::PayRent { .. }
+        | HostRequest::ChargeRent { .. } => Some("pay/gain/transfer"),
         HostRequest::Move { .. } | HostRequest::Teleport { .. } => Some("move"),
         HostRequest::Draw { .. } | HostRequest::DrawEvent { .. } => Some("draw"),
         HostRequest::Build { .. }
@@ -1374,6 +1375,44 @@ impl CardWorld for Run {
         }
         uid
     }
+    /// Place **one** paired mark spanning tiles `a` and `b` (one row per tile,
+    /// each row's `partner` naming the other). Atomic place-or-refuse: returns
+    /// `false` and places nothing when either end already carries a matching
+    /// mark for that owner. Stamps `instance` / `src` like [`Self::place_mark`].
+    fn place_mark_pair(
+        &mut self,
+        a: i32,
+        b: i32,
+        kind: &str,
+        category: &str,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+        fresh: bool,
+    ) -> bool {
+        let _ = fresh; // pair rows are always one-per-tile; the refusal is the cap
+        let who = self.current_card.clone();
+        self.world.note_marker_owner(kind, &who);
+        let me = self.current_uid;
+        let src = if src < 0 { me } else { src };
+        let ok = self
+            .world
+            .place_mark_pair(me, kind, category, a, b, owner, src, count, note);
+        if ok {
+            let who = self.trigger.player_id;
+            for tile in [a, b] {
+                self.outcome(
+                    who,
+                    Msg::new("log.outcome.mark_add")
+                        .tile("tile", tile)
+                        .msg("kind", Msg::new(kind))
+                        .i("n", count as i64),
+                );
+            }
+        }
+        ok
+    }
     fn count_marks(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         self.world.count_marks(tile, filter)
     }
@@ -1437,6 +1476,9 @@ impl CardWorld for Run {
     }
     fn mark_instance_at(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         self.world.mark_instance_at(tile, filter)
+    }
+    fn mark_partner(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        self.world.mark_partner(tile, filter)
     }
     /// Units of the running instance's counter `name` held by `player_id`.
     fn count_held(&self, name: &str, player_id: i32) -> i32 {
@@ -3646,6 +3688,24 @@ impl<M: CardModules> RulesBridge<M> {
         } => {
             cx.card_pay_rent(player_id.max(0) as usize, tile.max(0) as usize, half)?;
             return Ok(1);
+        }
+        // A rent-shaped 「收费」 at `milli_scale` (1000 = ×1.0) of the tile's
+        // ordinary-settle rent -- `ctx::charge_rent`. Same figure as `pay_rent`
+        // (`card_charge_rent` -> `rent_figure`), scaled at `scale_settle_payment`,
+        // money pipeline `PayKind::Rent`. No settle hooks / buy-build offer.
+        // HOST-06: answers the amount actually paid (0 = refused / cancelled).
+        HostRequest::ChargeRent {
+            player_id,
+            tile,
+            milli_scale,
+        } => {
+            let paid = cx.card_charge_rent(
+                player_id.max(0) as usize,
+                tile.max(0) as usize,
+                milli_scale,
+                Some(call.player_id()),
+            )?;
+            return Ok(paid);
         }
         HostRequest::OfferBuy { player_id, tile } => {
             cx.card_offer_buy(player_id.max(0) as usize, tile.max(0) as usize)?;
@@ -6601,6 +6661,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         total: m.total,
         roll: is_roll_kind.then_some(t.value),
         by_skill: m.by_skill,
+        settle_redirect: m.settle_redirect,
     });
     let buy = t.buy.map(|b| TriggerBuy {
         kind: card_sdk::abi::BuyKind::from_i32(b.kind.as_i32())

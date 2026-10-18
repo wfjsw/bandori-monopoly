@@ -54,11 +54,16 @@ pub mod kani_host;
 
 /// `cfg(kani)` static bump allocator (TUNING §11). Kills the system
 /// allocator's OOM / `RawVec::reserve` CBMC model on every body `String`/`Vec`
-/// (including `alloc::format!`). OPT-IN (feature `kani-bump`, off by default): an earlier
-/// attempt at a bump `GlobalAlloc` broke kani's `__rust_dealloc` hook and made covers
-/// vacuous (TRIAGE-LOG strvec v3), so it must be validated on a known-green proof
-/// before it is enabled anywhere. Not compiled outside `cargo kani`.
-#[cfg(all(kani, feature = "kani-bump"))]
+/// (including `alloc::format!`).
+///
+/// Always on under `cfg(kani)` (class-E deep dive): validated on
+/// `skills_mygo::band_04_ineffective_overcap_iff` (SUCCESSFUL, 3/3 covers)
+/// and `sumimi::twoinone_01b_*` before the global flip. The earlier
+/// `from_raw_parts` + `__rust_dealloc` vacuity (TRIAGE-LOG strvec v3) does not
+/// apply — this arena returns real pointers and `dealloc` is a no-op.
+/// Feature `kani-bump` is kept as a no-op alias so existing `--features`
+/// lists keep compiling. Not compiled outside `cargo kani`.
+#[cfg(kani)]
 mod kani_alloc;
 
 /// Native / wasm32-linked ABI support: how guest buffers cross the boundary as

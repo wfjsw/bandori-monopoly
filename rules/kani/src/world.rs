@@ -201,6 +201,8 @@ pub struct MoveSnap {
     pub roll: i32,
     /// Per-card counters on the move (a [火罐] roll is card-owned state).
     pub tags: NameMap,
+    /// Was this settle initiated by a card (`card_settle_at`)?
+    pub settle_redirect: bool,
 }
 
 impl MoveSnap {
@@ -213,6 +215,7 @@ impl MoveSnap {
         total: 0,
         roll: -1,
         tags: NameMap::new(),
+        settle_redirect: false,
     };
 
     /// A move payload is present when kind is a real `MoveKind` (0/1).

@@ -113,6 +113,7 @@
   "err.name_required": "先起个名字吧",
   "err.no_deck_now": "现在不能选卡组",
   "err.no_option": "没有这个选项",
+  "err.no_preselect_now": "现在不能预选角色",
   "err.no_roll_now": "现在不能掷骰",
   "err.no_such_card": "你没有这张牌",
   "err.no_vote": "现在没有在投票",

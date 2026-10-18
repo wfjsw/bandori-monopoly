@@ -130,6 +130,8 @@ pub trait HostOps {
     fn op_draw_event(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_pay_rent`
     fn op_pay_rent(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_charge_rent`
+    fn op_charge_rent(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_offer_buy`
     fn op_offer_buy(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_offer_force_buy`
@@ -318,6 +320,8 @@ pub trait HostOps {
     fn op_trig_move_tag(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_move_main`
     fn op_trig_move_main(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_trig_settle_redirect`
+    fn op_trig_settle_redirect(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_move_dir`
     fn op_trig_move_dir(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_move_remaining`
@@ -599,6 +603,9 @@ pub trait HostOps {
     /// `ruleset_place_mark` -- 11 args, explicit params (the array is only 6).
     /// `stack`: 0 = merge, 1 = fresh row.
     fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
+    /// `ruleset_place_mark_pair` -- 12 args, explicit params. Places one paired
+    /// mark spanning tiles `a`/`b`; 1 = placed, 0 = atomic refusal.
+    fn op_place_mark_pair(&mut self, a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
     /// `ruleset_count_marks_f`
     fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
     /// `ruleset_bump_mark_f`
@@ -609,6 +616,8 @@ pub trait HostOps {
     fn op_mark_src_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
     /// `ruleset_mark_instance_at`
     fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
+    /// `ruleset_mark_partner`
+    fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
     /// `ruleset_counter_self`
     fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr>;
     /// `ruleset_add_counter_self`
@@ -831,6 +840,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_pay_rent(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::pay_rent(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_charge_rent(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::charge_rent(self, a[0], a[1], a[2])? as i64)
     }
     fn op_offer_buy(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::offer_buy(self, a[0], a[1])? as i64)
@@ -1134,6 +1146,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_trig_move_main(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::trig_move_main(self)? as i64)
+    }
+    fn op_trig_settle_redirect(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::trig_settle_redirect(self)? as i64)
     }
     fn op_trig_move_dir(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::trig_move_dir(self)? as i64)
@@ -1605,6 +1620,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::place_mark(self, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl)? as i64)
     }
+    fn op_place_mark_pair(&mut self, a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::place_mark_pair(self, a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl)? as i64)
+    }
     fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::count_marks_f(self, tile, fp, fl)? as i64)
     }
@@ -1619,6 +1637,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::mark_instance_at(self, tile, fp, fl)? as i64)
+    }
+    fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::mark_partner(self, tile, fp, fl)? as i64)
     }
     fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::counter_self(self, np, nl)? as i64)
@@ -2124,6 +2145,18 @@ pub unsafe extern "C-unwind" fn ruleset_draw_event(player_id: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_pay_rent(player_id: i32, tile: i32, half: i32) -> i32 {
     with_host(|h| match h.op_pay_rent([player_id, tile, half, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_charge_rent(
+    player_id: i32,
+    tile: i32,
+    milli_scale: i32,
+) -> i32 {
+    with_host(|h| match h.op_charge_rent([player_id, tile, milli_scale, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -2894,6 +2927,14 @@ pub unsafe extern "C-unwind" fn ruleset_trig_move_tag(kp: i32, kl: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_move_main() -> i32 {
     with_host(|h| match h.op_trig_move_main([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_settle_redirect() -> i32 {
+    with_host(|h| match h.op_trig_settle_redirect([0, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -4040,6 +4081,13 @@ pub unsafe extern "C-unwind" fn ruleset_place_mark(tile: i32, kp: i32, kl: i32, 
     })
 }
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_place_mark_pair(a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
+    with_host(|h| match h.op_place_mark_pair(a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_count_marks_f(tile: i32, fp: i32, fl: i32) -> i32 {
     with_host(|h| match h.op_count_marks_f(tile, fp, fl) {
         Ok(v) => v as i32,
@@ -4070,6 +4118,13 @@ pub unsafe extern "C-unwind" fn ruleset_mark_src_at(tile: i32, fp: i32, fl: i32)
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_mark_instance_at(tile: i32, fp: i32, fl: i32) -> i32 {
     with_host(|h| match h.op_mark_instance_at(tile, fp, fl) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_mark_partner(tile: i32, fp: i32, fl: i32) -> i32 {
+    with_host(|h| match h.op_mark_partner(tile, fp, fl) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

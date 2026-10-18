@@ -182,6 +182,7 @@ fn idolband_reset_iff_at(user: i32) {
 
 /// Iff at seat 0 (`n_players = 2`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn idolband_reset_iff() {
     idolband_reset_iff_at(0);
@@ -189,6 +190,7 @@ pub fn idolband_reset_iff() {
 
 /// Same iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn idolband_reset_user1_iff() {
     idolband_reset_iff_at(1);
@@ -196,6 +198,7 @@ pub fn idolband_reset_user1_iff() {
 
 /// Mutant companion: the off-by-one target (2999) must NOT match the card.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn idolband_mutant_is_detected() {
     idolband_world(0, 0);
@@ -307,6 +310,7 @@ fn hina_01_pass_circle_iff_at(user: i32) {
 
 /// Iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hina_01_pass_circle_iff() {
     hina_01_pass_circle_iff_at(0);
@@ -314,6 +318,7 @@ pub fn hina_01_pass_circle_iff() {
 
 /// Same iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hina_01_user1_pass_circle_iff() {
     hina_01_pass_circle_iff_at(1);
@@ -321,6 +326,7 @@ pub fn hina_01_user1_pass_circle_iff() {
 
 /// Mutant: +2 instead of +1 (under the cap).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hina_01_mutant_is_detected() {
     hina_pass_world(0, 0); // CiRCLE
@@ -422,6 +428,7 @@ fn childhood_02_fire_iff_at(user: i32) {
 
 /// Iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn childhood_02_fire_iff() {
     childhood_02_fire_iff_at(0);
@@ -429,6 +436,7 @@ pub fn childhood_02_fire_iff() {
 
 /// Same iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn childhood_02_user1_fire_iff() {
     childhood_02_fire_iff_at(1);
@@ -436,6 +444,7 @@ pub fn childhood_02_user1_fire_iff() {
 
 /// Mutant: after-move is +1, not +2.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn childhood_02_mutant_is_detected() {
     childhood_after_move_world(0);
@@ -500,6 +509,7 @@ fn twodonuts_01_exile_iff_at(user: i32) {
 
 /// Iff at seat 0.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn twodonuts_01_exile_iff() {
     twodonuts_01_exile_iff_at(0);
@@ -507,6 +517,7 @@ pub fn twodonuts_01_exile_iff() {
 
 /// Same iff at seat 1.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn twodonuts_01_user1_exile_iff() {
     twodonuts_01_exile_iff_at(1);
@@ -514,6 +525,7 @@ pub fn twodonuts_01_user1_exile_iff() {
 
 /// Mutant: no exile grant at all. The card does grant — disagreement is live.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn twodonuts_01_mutant_is_detected() {
     two_donuts_world(0);
@@ -596,6 +608,7 @@ fn twoinone_01b_fire_iff_at(user: i32, is_hina: bool) {
 
 /// Iff at seat 0, from 三角初华（Sumimi） → 纯田真奈 (fire 1).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn twoinone_01b_fire_iff() {
     twoinone_01b_fire_iff_at(0, true);
@@ -603,6 +616,7 @@ pub fn twoinone_01b_fire_iff() {
 
 /// Same iff at seat 1, from 纯田真奈 → 三角初华（Sumimi） (fire 2).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn twoinone_01b_user1_fire_iff() {
     twoinone_01b_fire_iff_at(1, false);
@@ -610,6 +624,7 @@ pub fn twoinone_01b_user1_fire_iff() {
 
 /// Mutant: fire is not set to 初始+1. Pinned direction (same isolation).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn twoinone_01b_mutant_is_detected() {
     let is_hina = true;
@@ -640,6 +655,7 @@ pub fn twoinone_01b_mutant_is_detected() {
 
 /// C-SUMIMI-idolband money formula.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn idolband_money_formula() {
     let pre: i32 = kani::any();
@@ -660,6 +676,7 @@ pub fn idolband_money_formula() {
 
 /// C-SUMIMI-mana-01 / hina-01 fire formula under the hold cap.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn pass_circle_fire_formula() {
     let pre_fire: i32 = kani::any();
@@ -679,6 +696,7 @@ pub fn pass_circle_fire_formula() {
 
 /// C-SUMIMI-band-02 rent-bonus formula.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_02_rent_bonus_formula() {
     let pre_amount: i32 = kani::any();

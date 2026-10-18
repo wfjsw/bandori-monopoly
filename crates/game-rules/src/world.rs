@@ -113,6 +113,9 @@ pub struct TriggerMove {
     /// The move was shaped or started by a rule whose card id starts with
     /// `skill:` (cond `move.by_skill`).
     pub by_skill: bool,
+    /// Was this settle initiated by a card (`card_settle_at`), not by the
+    /// player's own move landing? `trigger::is_settle_redirect()`.
+    pub settle_redirect: bool,
 }
 
 /// The payment a `pay` / `paid` trigger is about.
@@ -701,6 +704,25 @@ pub trait CardWorld: Clone + 'static {
         let _ = (tile, kind, category, owner, src, count, note, fresh);
         0
     }
+    /// Place **one** paired mark spanning tiles `a` and `b` (one row per tile,
+    /// each row's `partner` naming the other). Place-or-refuse atomic: returns
+    /// `false` and places nothing when either tile already carries a matching
+    /// mark for that owner.
+    fn place_mark_pair(
+        &mut self,
+        a: i32,
+        b: i32,
+        kind: &str,
+        category: &str,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+        fresh: bool,
+    ) -> bool {
+        let _ = (a, b, kind, category, owner, src, count, note, fresh);
+        false
+    }
     fn count_marks(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         let _ = (tile, filter);
         0
@@ -718,6 +740,11 @@ pub trait CardWorld: Clone + 'static {
         -1
     }
     fn mark_instance_at(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        let _ = (tile, filter);
+        -1
+    }
+    /// Partner tile of the first matching mark on `tile`, or -1.
+    fn mark_partner(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         let _ = (tile, filter);
         -1
     }

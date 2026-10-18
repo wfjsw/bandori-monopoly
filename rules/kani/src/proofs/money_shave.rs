@@ -98,6 +98,7 @@ fn assume_not_poorest(w: &World) {
 /// guard admits**. When it rejects, the body is not run (the host's
 /// `admits()` gate) and the log is empty by construction.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_haruka_02_shave_iff() {
     let w = symbolic_pay_world();
@@ -184,6 +185,7 @@ pub fn aya_haruka_02_shave_iff() {
 /// * **poorest** (「资金数是所有存活玩家中最少」 ⇒ shave by X): this half.
 /// * **not-poorest** ⇒ no-op: the other half.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_haruka_02_shave_poorest() {
     let w = symbolic_pay_world();
@@ -223,6 +225,7 @@ pub fn aya_haruka_02_shave_poorest() {
 /// Guard admission is assumed (host invoked the body); see `shave_poorest`
 /// for how the two halves + `shave_iff` cover the full clause.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_haruka_02_shave_not_poorest_noop() {
     let w = symbolic_pay_world();
@@ -248,6 +251,7 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
 
 /// MUTANT: the reference wants X+1. The card does X. Kani must report FAIL.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
 #[kani::unwind(32)]
 #[kani::should_panic]
 pub fn aya_haruka_02_mutant_x_off_by_one() {
@@ -280,6 +284,7 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
 /// Companion (no `should_panic`): the mutant spec does NOT match the card.
 /// If this FAILS, the off-by-one is live — the expected outcome.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_haruka_02_mutant_is_detected() {
     let w = symbolic_pay_world();

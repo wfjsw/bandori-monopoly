@@ -173,6 +173,7 @@ fn eff_any_exile_n(effects: &[Effect], want: i32) -> bool {
 /// 50 in `50..=950`. Money moves exactly that amount. Cover: tie, sheet
 /// example (n==100), gap-1 (n==50).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn duobang_01_02_two_player_iff() {
     let mut w = base_world();
@@ -237,6 +238,7 @@ pub fn duobang_01_02_two_player_iff() {
 /// MUTANT companion: the off-by-one spec (`each+50`) does not match the card.
 /// Successful iff a transfer happens and the card amount is not `n+50`.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn duobang_01_mutant_is_detected() {
     let mut w = base_world();
@@ -292,6 +294,7 @@ fn tears_world(share: bool) -> World {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn tears_01_same_colour_next_pays_700() {
     let w = tears_world(true);
@@ -329,6 +332,7 @@ pub fn tears_01_same_colour_next_pays_700() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn tears_02_different_colour_current_pays_300() {
     let w = tears_world(false);
@@ -359,6 +363,7 @@ pub fn tears_02_different_colour_current_pays_300() {
 
 /// MUTANT: 700/300 swapped is distinguishable.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn tears_mutant_is_detected() {
     let w = tears_world(true);
@@ -400,6 +405,7 @@ fn pico_world(exile: [i32; 4]) -> World {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pico_swap_01_rotates_positions() {
     let w = pico_world([0, 0, 0, 0]);
@@ -433,6 +439,7 @@ pub fn pico_swap_01_rotates_positions() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pico_swap_02_skips_exiled_players() {
     // Player 1 is exiled; ring = [0, 2].
@@ -465,6 +472,7 @@ pub fn pico_swap_02_skips_exiled_players() {
 /// MUTANT: a naive cascade (each reads the *new* position) is distinguishable
 /// from the latched snapshot. Card latches; mutant would send 2 → 20 not 10.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pico_swap_mutant_is_detected() {
     let w = pico_world([0, 0, 0, 0]);
@@ -493,6 +501,7 @@ pub fn pico_swap_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn moca_01_activation_keeps_the_card() {
     let w = base_world();
@@ -520,6 +529,7 @@ pub fn moca_01_activation_keeps_the_card() {
 
 /// Expiry tick: `AtEnd` body permanently removes the event (`EventExpire`).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn moca_02_expiry_tick_files_away() {
     let w = base_world();
@@ -540,6 +550,7 @@ pub fn moca_02_expiry_tick_files_away() {
 
 /// MUTANT: expiry must not also move money.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn moca_02_mutant_is_detected() {
     {
@@ -580,6 +591,7 @@ pub fn moca_02_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn aao_01_activation_keeps_the_card() {
     let w = base_world();
@@ -598,6 +610,7 @@ pub fn aao_01_activation_keeps_the_card() {
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn aao_01_expiry_tick_files_away() {
     {
@@ -618,6 +631,7 @@ pub fn aao_01_expiry_tick_files_away() {
 /// is up; the body arms no such surface. This proof asserts the veto is armed
 /// and is expected to FAIL — the finding.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn aao_02_hand_veto_is_armed() {
     let w = base_world();
@@ -650,6 +664,7 @@ pub fn aao_02_hand_veto_is_armed() {
 /// branch with 2 winners. Each `pay_leg` is 500 (1000/2). Spec
 /// `front_or_back_share_total_ok` on the legs.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn front_or_back_02_same_half_share() {
     let mut w = base_world();
@@ -684,6 +699,7 @@ pub fn front_or_back_02_same_half_share() {
 /// X=Y, X>Y and Y>X are all reachable. Distinguish via GainMoney (equal) vs
 /// PayTo (share).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn front_or_back_01_equal_iff() {
     let mut w = base_world();
@@ -737,6 +753,7 @@ pub fn front_or_back_01_equal_iff() {
 /// (mutant wants 1000) and the share branch pays 1000 (mutant wants 500) —
 /// both disagree on every path.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn front_or_back_mutant_swapped_is_detected() {
     let mut w = base_world();
@@ -800,6 +817,7 @@ pub fn front_or_back_mutant_swapped_is_detected() {
 /// frame. Cover that it completes for every player count.
 /// Body `for &p in &all_players()` unrolls past 16 (class A bound).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn ex_quest_01_rolls_and_files() {
     let w = base_world();
@@ -837,6 +855,7 @@ pub fn ex_quest_01_rolls_and_files() {
 const HABINEL_SMILE: i32 = 26;
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn habinel_01_grants_exiles() {
     let w = base_world();
@@ -873,6 +892,7 @@ pub fn habinel_01_grants_exiles() {
 const RING_TILES: [i32; 4] = [8, 16, 36, 53];
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn never_ends_01_teleport_and_exile() {
     let mut w = base_world();
@@ -930,6 +950,7 @@ fn chart_rush_world(fire0: i32, fire1: i32, answer0: i32) -> World {
 
 /// E-chart-rush-01: every living player loses all fire pots.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn chart_rush_01_spends_fire() {
     let mut w = chart_rush_world(0, 0, 0);
@@ -957,6 +978,7 @@ pub fn chart_rush_01_spends_fire() {
 /// E-chart-rush-02: with 2 players and both answering 「yes」, rank 1 gains
 /// 2000 and rank 2 gains 1500 (equal faces → both rank 1, both 2000).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn chart_rush_02_yes_2000() {
     let w = chart_rush_world(0, 0, 0); // answers[0]=0 → ask_yes is yes
@@ -1012,6 +1034,7 @@ pub fn chart_rush_02_yes_2000() {
 
 /// E-chart-rush-02 OR leg: answering 「no」 draws a card instead of the 2000.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn chart_rush_02_no_draw() {
     let w = chart_rush_world(0, 0, 1); // answers[0]=1 → ask_yes is no
@@ -1053,6 +1076,7 @@ pub fn chart_rush_02_no_draw() {
 
 /// MUTANT: rank-1 money off-by-one (2001). The card's 2000 must not match.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn chart_rush_mutant_off_by_one() {
     let w = chart_rush_world(0, 0, 0);
@@ -1085,6 +1109,7 @@ pub fn chart_rush_mutant_off_by_one() {
 
 /// Clean decline / accept pair (trig_player installed before the hook).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn marina_box_02_decline_is_noop() {
     let mut w = base_world();
@@ -1130,6 +1155,7 @@ pub fn marina_box_02_decline_is_noop() {
 
 /// Mutant: always pays 500 even on decline.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn marina_box_02_mutant_always_pays() {
     let mut w = base_world();
@@ -1194,6 +1220,7 @@ fn assert_activation_keep(idx: usize) {
 // Roll substitution is E-hallucination-02 (follow-up / OPEN-hallucination-effects).
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn hallucination_01_activation_keeps() {
     assert_activation_keep(crate::card_id!("event:幻觉来了"));
@@ -1202,6 +1229,7 @@ pub fn hallucination_01_activation_keeps() {
 /// Expiry tick: TurnStartBefore body. `prop(DRAWER)` is 0 (set_prop no-op),
 /// so seat 0's turn start fires `n = 0+1 >= 1` → EventExpire.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn hallucination_01_expiry_tick() {
     let mut w = base_world();
@@ -1229,6 +1257,7 @@ pub fn hallucination_01_expiry_tick() {
 // set_prop(NO_BUILD_ABOVE) is a no-op — the BuildBefore belt still works.
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn pool_bug_01_activation_keeps() {
     assert_activation_keep(crate::card_id!("event:卡池BUG"));
@@ -1236,6 +1265,7 @@ pub fn pool_bug_01_activation_keeps() {
 
 /// E-pool-bug-02: the Event hook files the card away.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn pool_bug_02_expiry_on_next_event() {
     {
@@ -1255,6 +1285,7 @@ pub fn pool_bug_02_expiry_on_next_event() {
 /// E-pool-bug-03: BuildBefore on a house-cost ≥ 1500 tile cancels the build.
 /// `build_cost` resolves via the 1-based board index (tile 2 = 购物中心, 2000).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn pool_bug_03_blocks_expensive_build() {
     let mut w = base_world();
@@ -1290,6 +1321,7 @@ pub fn pool_bug_03_blocks_expensive_build() {
 // PROTOCOL-LEVEL for the expiry tick.
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn bangdream_chan_01_activation_keeps() {
     assert_activation_keep(crate::card_id!("event:元祖！邦多利酱"));
@@ -1299,6 +1331,7 @@ pub fn bangdream_chan_01_activation_keeps() {
 /// `n = 1` and `n >= 2` is false. Assert the no-op — the book's third-turn
 /// filing is PROTOCOL-LEVEL (set_self_prop).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn bangdream_chan_01_expiry_blocked_by_set_prop() {
     let mut w = base_world();
@@ -1323,12 +1356,14 @@ pub fn bangdream_chan_01_expiry_blocked_by_set_prop() {
 // Expiry uses `set_prop` turn counter → PROTOCOL-LEVEL.
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn surprise_duel_01_activation_keeps() {
     assert_activation_keep(crate::card_id!("event:意外的对邦"));
 }
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn surprise_duel_02_expiry_blocked_by_set_prop() {
     let mut w = base_world();
@@ -1355,6 +1390,7 @@ pub fn surprise_duel_02_expiry_blocked_by_set_prop() {
 // if that host peek is unmodeled it is BLOCKED-HOST. Scheduling is PROTOCOL.
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn heat_head_01_activation_phase_up() {
     let w = base_world();
@@ -1374,6 +1410,7 @@ pub fn heat_head_01_activation_phase_up() {
 
 /// AtEnd while phase 1: flips to phase 2. Phase 2 AtEnd files the card.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn heat_head_03_phase_end_files_away() {
     {
@@ -1411,6 +1448,7 @@ pub fn heat_head_03_phase_end_files_away() {
 // unwind 16 tripped `Not unwinding at 16`. Bound 64 covers the static trip
 // count with margin (early break does not shrink the unwind assertion).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(64)]
 pub fn fix_note_01_activation_keeps() {
     let w = base_world();
@@ -1433,6 +1471,7 @@ pub fn fix_note_01_activation_keeps() {
 // This half only needs dest=Field; pick-count lives in
 // `end_it_all_01_three_picks_counted`. Dropped the unused `picks` scan.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn end_it_all_01_three_picks_and_keep() {
     let mut w = base_world();
@@ -1449,6 +1488,7 @@ pub fn end_it_all_01_three_picks_and_keep() {
 
 /// Concrete-answers companion: 3 `ask_pick`s run (next_answer advances by 3).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn end_it_all_01_three_picks_counted() {
     let mut w = base_world();
@@ -1489,6 +1529,7 @@ pub fn end_it_all_01_three_picks_counted() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn embers_01_places_copies() {
     let mut w = base_world();
@@ -1520,6 +1561,7 @@ pub fn embers_01_places_copies() {
 /// On:: index 3 (SettleBody). Trigger kind SettleBody = 64.
 /// (Index 2 is the TurnStartBefore spread hook — off-by-one was class B.)
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn embers_03_settle_costs_ten_per_copy() {
     let mut w = base_world();
@@ -1552,6 +1594,7 @@ pub fn embers_03_settle_costs_ten_per_copy() {
 /// `give_exile` does not set the EXILE state key, so the `on_out` path cannot
 /// observe a grant. Assert the stub leaves the marks in place (the finding).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn embers_04_clear_on_exile_blocked() {
     let mut w = base_world();
@@ -1588,6 +1631,7 @@ pub fn embers_04_clear_on_exile_blocked() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 // all_players() is a `Range::try_fold` over `0..player_count()`; CBMC does
 // not constant-fold the end across try_fold (TUNING §7/§10), so 16 was a
 // silent cut ("Not unwinding … iteration 16"). 32 covers the 4-seat walk.
@@ -1622,6 +1666,7 @@ pub fn bear_cookie_01_push_is_protocol() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn lost_chase_rolls_and_pushes_stub() {
     let w = base_world();
@@ -1645,6 +1690,7 @@ pub fn lost_chase_rolls_and_pushes_stub() {
 /// body leaves the world alone (the push is a stub either way — the guard is
 /// exercised by the cover, and the empty log is the determined post).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn lost_chase_end_it_all_guard() {
     let mut w = base_world();
@@ -1681,6 +1727,7 @@ pub fn lost_chase_end_it_all_guard() {
 const LULU_SHOP: i32 = 33;
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn lulu_01_pay_500_leg() {
     let mut w = base_world();
@@ -1712,6 +1759,7 @@ pub fn lulu_01_pay_500_leg() {
 
 /// Decline leg: concrete answers 1 (no) ⇒ nobody moves.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn lulu_02_decline_leaves_put() {
     let mut w = base_world();
@@ -1744,6 +1792,7 @@ pub fn lulu_02_decline_leaves_put() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn school_time_01_exile_leg() {
     let w = base_world();
@@ -1775,6 +1824,7 @@ pub fn school_time_01_exile_leg() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kizuna_01_teleport_and_exile() {
     let w = base_world();
@@ -1809,6 +1859,7 @@ pub fn kizuna_01_teleport_and_exile() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn circle_rebuild_01_activation_five_crystals() {
     let w = base_world();
@@ -1836,6 +1887,7 @@ pub fn circle_rebuild_01_activation_five_crystals() {
 /// E-estate-02: every bid 0 ⇒ nobody pays. steps[0] = 0 for each seat.
 /// Body `for t in 0..tile_count()` is a 60-trip scan (class A bound: 64).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(64)]
 pub fn estate_02_all_pass_no_pay() {
     let mut w = base_world();
@@ -1863,6 +1915,7 @@ pub fn estate_02_all_pass_no_pay() {
 /// bids 0 (index 0) ⇒ P0 pays 1000. The deed is PROTOCOL (raise_bought stub).
 /// Body `for t in 0..tile_count()` is a 60-trip scan (class A bound: 64).
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(64)]
 pub fn estate_01_auction_pay() {
     let mut w = base_world();
@@ -1903,6 +1956,7 @@ pub fn estate_01_auction_pay() {
 // ===========================================================================
 
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn this_hand_01_move_is_protocol() {
     let mut w = base_world();
@@ -1944,6 +1998,7 @@ pub fn this_hand_01_move_is_protocol() {
 /// falls into the 「其余」 loop and takes 1 GiveExile. The book's 2-眩晕 /
 /// noHand split is NOT claimed.
 #[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn asukayama_02_status_spread_blocked_neighbor() {
     let mut w = base_world();

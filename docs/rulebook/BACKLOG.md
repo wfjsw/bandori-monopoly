@@ -431,15 +431,15 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **question**: C-Q7 mid-walk half still open (stay gained *during* a walk).
 
 ## SETTLE-01 — 笑容大游行 tile-swap overflows the stack
-- **status**: stack overflow half **fixed** by STACK-01; swap-axes half **fixed**
-  (this batch, `fix: SETTLE-01 …`) — (1)/(3) share one `SettleBody` (the host
-  runs only the first hook of a kind), (3) redirects a settle on the card's
-  tile to the 弦卷集团 agent body and then discards the card. `t13_smile_parade`
-  un-ignored, green. **Open:** the reverse direction (a settle on 弦卷集团
-  while the card sits elsewhere should run as the card's tile) is
-  `TODO(规则书)` — a two-way swap re-enters and hits the settle-depth cap;
-  a host-visible re-entrancy flag is needed (`SLOT_REPLAY` guest writes do not
-  cross `card_settle_at`).
+- **status**: **closed** (2026-10-18 engine-verbs batch). Stack overflow half
+  **fixed** by STACK-01; swap-axes half **fixed**; and the reverse direction
+  (「交换位置」 is a two-way exchange) **landed** with the host-visible
+  `Move::settle_redirect` flag — `trigger::is_settle_redirect()` marks the
+  nested settle a card caused, so the ping-pong that used to hit the
+  settle-depth cap is gone. `SLOT_REPLAY` is deleted (guest `set_slot` writes
+  were the wrong home). `g30b_smile_parade_reverse_swap_runs_as_card_tile`
+  asserts a settle on 弦卷集团 runs as the card's tile and does **not** discard
+  the parade.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (HHW signature continuous)
@@ -2397,6 +2397,69 @@ Display text / quoted names were clean on all 15 — the problems are behavioral
 - **LOY-WAIT-01** `PPP:（有咲）等等等一下` — （2） is already filed as ABI-09 (a)
   `IEventDefer`. (1)'s 「非因为此卡导致」 filter is vacuous until Defer lands
   (OPEN-wait-causality).
+
+# Engine verbs (2026-10-18)
+
+The `/simplify` pass on the loyalty batch deferred four fixes that needed
+engine capabilities rather than rule-side bandaids. Three landed here.
+
+## Landed
+
+### ENG-REDIRECT — host-visible "this settle is a redirect" flag
+- `MoveCtx.settle_redirect: bool` (`crates/game-core/src/engine/move_ctx.rs`),
+  set **only** in `card_settle_move` (`play.rs`) when the engine runs a
+  card-initiated `card_settle_at`. Plan-seed sites force it false so it cannot
+  stick.
+- `card_sdk::ctx::trigger::is_settle_redirect()`, wired through
+  `sys`/`sys_kani`/`Op`/`hostfns`/`native_shims`/`host`/`wasm_rules`/kani.
+- **Consumer:** `HHW:笑容大游行` drops `SLOT_REPLAY` entirely. The nested
+  settle's flag stops the ping-pong, so **SETTLE-01's reverse direction is
+  implemented** — a settle on 弦卷集团 while the card sits elsewhere now runs
+  as the card's tile (`g30b_smile_parade_reverse_swap_runs_as_card_tile`).
+  `TAG_AS_AGENT` stays: it marks (1)'s outer placement-move endpoint, which the
+  nested-move flag does not.
+
+### ENG-CHARGE-RENT — a rent-shaped 「收费」 that is not a settle
+- `ctx::charge_rent(payer, tile, milli_scale) -> paid` (1000 = ×1.0). Computes
+  the rent **as a settle would** (`rent_figure`, shared with `pay_rent`), scales
+  it at the money pipeline's `paySplitMul` stage alongside the rent factors
+  (`Pay::milli_scale`, `spec/ROUNDING.md`), and runs it through `money()` as
+  `PayKind::Rent` — so `pay_is_rent` / `RENT_FACTOR` / `PaySplitAdd` riders see
+  it and `paid_in_settle` is tallied, but settle hooks and buy/build offers do
+  not.
+- Refuses (0) on unowned / mortgaged / payer==owner. Mortgaged is Class C
+  (`TODO(规则书)[ruling]`) — 「普通[结算]」 there is a forced-buy, not a rent.
+- **Consumer:** `RAS:练习室里的风暴`（2）on the verb (was `transfer`+`rent_of`).
+  Unblocks the same shape in `anon_tokyo`'s `link_rent` and `dream_return`'s
+  `rent_of * 2` (not migrated here).
+
+### ENG-PAIRED-MARK — one mark bound to two tiles
+- `TileMark.partner: Option<i32>` (`crates/game-core/src/state.rs`),
+  Serde-defaulted like `src`/`instance` so pre-partner saves load.
+- `ctx::place_mark_pair(a, b, …) -> bool` — place-or-refuse **atomic**: returns
+  false and places neither row when either end already carries a matching mark.
+  `ctx::mark_partner(tile, filter) -> i32` reads the other end.
+- Rows carry `src`/`instance` like any mark, so `destroy_instance_units` drops
+  them with the creating instance (no second lifetime mechanism).
+- **Consumer:** `MyGO:[千早爱音]Anon Tokyo` drops its `LINK{tile}` slot graph.
+  The field stand-in is now placed *before* the crystal so both rows bind to its
+  `instance` (they were legacy `instance: None` rows that would never die).
+  Class C kept: whether a tile may sit in two links; the singular
+  「1个…（上限1）」 leans no and the either-end refusal is that reading.
+
+## Not landed: ENG-COST — a generic press activation cost
+
+`PPP:Returns` 「需要支付1星星贴纸」 is a cost of activation. The rule side keeps
+`copy_sticker_gate` / `spend_copy_sticker` / `copy_sticker_cost`
+(`rules/skills/skill-groups/src/lib.rs`), which works but means every
+sticker-spending body budgets `2 + tax` and calls `spend_copy_sticker` first.
+
+The engine form would be a cost declaration on `On::Play` (the same family as
+the [共鸣] fuel), charged by the press pipeline before the body runs. That is a
+real `card-sdk` mechanism, but it is an ABI shape change to the hook table, and
+three other verbs were landing in the same files. Deferred — the ruleset helper
+is the current home, and a second activation-cost card is the trigger to
+generalize.
 
 # Summary counts
 

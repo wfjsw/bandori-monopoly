@@ -305,6 +305,9 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
 * **Frame:** n/a.
 * **Rulings & OPEN:** 开始游戏 row 1 (禁用角色) is Ranked-only; row 2 (选角色)
   runs in every mode. Casual goes straight to pick (no ban).
+  Engine/UI (not from the book): a seat's last clicked character (`preselect`)
+  is used on pick timeout if still available, else the pick is random.
+  TODO(规则书): no book clause for the timeout fallback.
 * **Executable:** `rules_spec::global::flow::g_flow_16`.
 
 ---

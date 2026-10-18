@@ -1,6 +1,7 @@
-// /play/solo and /play/<roomId>: the match screen. Shows character select
-// or the board depending on the phase; resumes after a refresh (solo from the
-// saved snapshot, online by re-attaching to the player).
+// /play/solo and /play/<roomId>: the match screen. Shows character select,
+// the full-screen deck adjuster, or the board depending on the phase; resumes
+// after a refresh (solo from the saved snapshot, online by re-attaching to the
+// player).
 
 import { useEffect, useState } from "react";
 import { navigate } from "../app/router";
@@ -12,6 +13,7 @@ import { type GameSession, discardSolo, matchScene, resumeSolo } from "../game/s
 import { toast } from "../ui/Toast";
 import { Board } from "./board/Board";
 import { useOnline } from "./lobby/Room";
+import { DeckAdjust } from "./select/DeckAdjust";
 import { Select } from "./select/Select";
 import { t as tr } from "../i18n/t";
 import s from "./Play.module.css";
@@ -92,10 +94,10 @@ function Match({ sess }: { sess: GameSession }) {
   const scene = matchScene(view);
   useLeaveFinishedOnline(sess, view);
 
-  // Fade between select and board like a scene change.
+  // Fade between select / deck / board like a scene change.
   const { shown, fading } = useCrossfade(scene, { initial: scene, outMs: 180, inMs: 0 });
-  // The board and character select each have their own stage plate and BGM
-  // (the App shell already set the /play plate; this refines it per phase).
+  // Character select and the deck window share the select plate and BGM; only
+  // the board differs (the App shell already set the /play plate).
   useBackdrop(shown === "board" ? "bg_common" : "bg_band");
   useEffect(() => {
     playSceneBgm(shown === "board" ? "board" : "select");
@@ -104,6 +106,7 @@ function Match({ sess }: { sess: GameSession }) {
   return (
     <div style={{ opacity: fading ? 0 : 1, transition: "opacity 0.18s" }}>
       {shown === "select" && <Select sess={sess} />}
+      {shown === "deck" && <DeckAdjust sess={sess} />}
       {shown === "board" && <Board sess={sess} />}
     </div>
   );
