@@ -62,7 +62,7 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 | `hina_01_mutant_is_detected` | SUCCESSFUL | 147 s | — | pinned tile 0 / fire 0 | — | done |
 | `childhood_02_fire_iff` + `_user1_` + mutant | SUCCESSFUL | 287/291/176 s | — | — | — | done |
 | `twodonuts_01_exile_iff` + `_user1_` + mutant | SUCCESSFUL | 302/240/225 s | — | — | — | done |
-| `twoinone_01b_fire_iff` + `_user1_` + mutant | TIMEOUT ×3 | 1800 s | **E** | body `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32,String)>>` (unbounded deserializer in the GOTO; unique among this unit's harnesses) | `cfg(kani)` `field_instances` / `find_card` facades: compact LE `i32` pairs `[uid, name_id]`, name-id compare, no postcard | queued |
+| `twoinone_01b_fire_iff` + `_user1_` + mutant | TIMEOUT ×3 | 1800 s | **E** | (1) body `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32,String)>>`; (2) symbolic `is_hina` muxed two CJK intern paths and BMC stalled at the first `sparse_play_world` unwind | (1) `cfg(kani)` `field_instances`/`find_card` facades (compact `[uid, name_id]`, no postcard); (2) pin swap direction per seat harness (seat0 三角初华→纯田真奈, seat1 纯田真奈→三角初华) — pair covers both halves | queued |
 | 3× `*_formula` | SUCCESSFUL | 3–7 s | — | — | — | done |
 
 `skills_sumimi` central rows:
@@ -96,7 +96,7 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 | C-SUMIMI-nobreakup-02 | 「资金变动为拥有相同数字」 | OPEN | — | — | target digit predicate undefined | OPEN-C-SUMIMI-nobreakup-digits |
 | C-SUMIMI-nobreakup-03 | 「回到原处并取消所有受到的效果」 | PROTOCOL-LEVEL / OPEN | — | — | transaction rollback | OPEN-C-SUMIMI-nobreakup-digits, OPEN-触发结算 |
 | C-SUMIMI-twoinone-01 | 「角色卡替换为另一名角色」 | **FAILS** | — | — | LESS: body swaps bound `skill:*` field entry + fire, but `player.character` stays old name (clause-doc Findings) | — |
-| C-SUMIMI-twoinone-01b | 「及其初始火罐数」 | PROVEN* | `twoinone_01b_fire_iff` | TIMEOUT 1800 s (batch 16: postcard cliff in `find_card`/`field_instances`; kani facades landed) | fire set to the other character's 初始火罐数; host `state_set` field/value packing fixed earlier | re-time queued |
+| C-SUMIMI-twoinone-01b | 「及其初始火罐数」 | PROVEN* | `twoinone_01b_fire_iff` | TIMEOUT 1800 s (batch 16: postcard facades + direction pin landed) | fire set to the other character's 初始火罐数 | re-time queued |
 | C-SUMIMI-twoinone-02 | 「移动掷骰后作为[反击]」 | PROTOCOL-LEVEL | — | — | post-roll [反击] window | — |
 | C-SUMIMI-sweetescape-01 | 「前后两格[收费标价]之和≥2000」 | OPEN + BLOCKED-HOST | — | — | body reads `rent_of` | OPEN-收费标价 |
 | C-SUMIMI-sweetescape-02 | 「传送…并触发结算」 | PROTOCOL-LEVEL / OPEN | — | — | settle pipeline | OPEN-收费标价, OPEN-触发结算 |
