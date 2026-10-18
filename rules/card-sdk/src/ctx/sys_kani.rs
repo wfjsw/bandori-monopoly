@@ -215,6 +215,10 @@ pub fn pay_rent(player_id: i32, tile: i32, half: i32) -> i32 {
     kani_host::call_i32(Op::pay_rent, [player_id, tile, half, 0, 0, 0])
 }
 
+pub fn charge_rent(player_id: i32, tile: i32, milli_scale: i32) -> i32 {
+    kani_host::call_i32(Op::charge_rent, [player_id, tile, milli_scale, 0, 0, 0])
+}
+
 pub fn offer_buy(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::offer_buy, [player_id, tile, 0, 0, 0, 0])
 }
@@ -415,6 +419,10 @@ pub fn place_mark(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src
     kani_host::call_i32(Op::place_mark, [tile, kp, kl, cp, cl, owner])
 }
 
+pub fn place_mark_pair(a: i32, b: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
+    kani_host::call_i32(Op::place_mark_pair, [a, b, kp, kl, cp, cl])
+}
+
 pub fn count_marks_f(tile: i32, fp: i32, fl: i32) -> i32 {
     kani_host::call_i32(Op::count_marks_f, [tile, fp, fl, 0, 0, 0])
 }
@@ -433,6 +441,10 @@ pub fn mark_src_at(tile: i32, fp: i32, fl: i32) -> i32 {
 
 pub fn mark_instance_at(tile: i32, fp: i32, fl: i32) -> i32 {
     kani_host::call_i32(Op::mark_instance_at, [tile, fp, fl, 0, 0, 0])
+}
+
+pub fn mark_partner(tile: i32, fp: i32, fl: i32) -> i32 {
+    kani_host::call_i32(Op::mark_partner, [tile, fp, fl, 0, 0, 0])
 }
 
 pub fn count_held(np: i32, nl: i32, player_id: i32) -> i32 {
@@ -713,6 +725,10 @@ pub fn trig_move_tag(kp: i32, kl: i32) -> i32 {
 
 pub fn trig_move_main() -> i32 {
     kani_host::call_i32(Op::trig_move_main, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_settle_redirect() -> i32 {
+    kani_host::call_i32(Op::trig_settle_redirect, [0, 0, 0, 0, 0, 0])
 }
 
 pub fn trig_move_dir() -> i32 {

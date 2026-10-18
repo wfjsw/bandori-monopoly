@@ -13,8 +13,9 @@
 //! ownership / rent) and a settle on 弦卷集团 runs as `e`. Field cards on the
 //! position are untouched (「what the tile *is*, not what is on it」). After any
 //! settle on the card's tile the card goes to the discard. The swap is one
-//! level deep — the redirected settle must not swap back (the `smile_replay`
-//! slot is consumed by that settle's `tileResolved`).
+//! level deep — the redirected settle must not swap back; the engine's
+//! `settle_redirect` flag (`trigger::is_settle_redirect()`) marks the nested
+//! settle so neither hook re-enters (STACK-01 / SETTLE-01).
 
 use card_sdk::abi::{ChainKind, ActionKind};
 use ruleset_core::ctx::{self, trigger};
@@ -22,11 +23,15 @@ use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";
 /// One-shot move tag armed by the (1) counteract: this move's endpoint settles
-/// as the 弦卷集团 agent (「当次移动的移动终点视为"弦卷集团"地产商」).
+/// as the 弦卷集团 agent (「当次移动的移动终点视为"弦卷集团"地产商」). Still
+/// needed -- `settle_redirect` marks the *nested* redirect, not the outer (1)
+/// placement move whose endpoint must become the agent.
 const TAG_AS_AGENT: &str = "smile_as_agent";
-/// Slot: the tile of an in-flight settle redirect (（1） or （3）). Consumed by
-/// that settle's `tileResolved` so neither hook re-enters (STACK-01).
-const SLOT_REPLAY: &str = "smile_replay";
+/// Card-instance latch set by (2) 「[触发结算]后可将…放置于[移动终点]」 when it
+/// drops the card onto the endpoint, so that same settle's `tileResolved` does
+/// not read as (3)'s 「在此卡放置的格子上[触发结算]后」. One-shot, same-settle
+/// only (no nested settle between set and read). Dies with the instance.
+const PROP_ARRIVED: &str = "smile_arrived";
 
 pub const SMILE_PARADE: CardDef = CardDef::new(
     "HHW:笑容大游行",
@@ -44,9 +49,11 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // Consume an in-flight redirect / (2) arrival at its `tileResolved`,
         // and (3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
         // `tileResolved` is the settle's terminal (SETTLE-STAGES §4 M5), after
-        // the body and after (2)'s `settleAfter` move. (2) parks `SLOT_REPLAY`
-        // when it drops the card onto the endpoint so this same settle does not
-        // read as (3)'s discard; later settles do, owner included.
+        // the body and after (2)'s `settleAfter` move. A redirect's
+        // `tileResolved` (`trigger::is_settle_redirect()`) is never (3)'s
+        // discard; (2) parks `PROP_ARRIVED` when it drops the card onto the
+        // endpoint so this same settle does not read as (3)'s discard; later
+        // settles do, owner included.
         On::Action(&[ActionKind::TileResolved], "card.placed", Some(resolve_guard), on_resolved),
         // 规则书（2）: 「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
@@ -162,13 +169,14 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// Combined (1)/(3) residual: either the one-shot `smile_as_agent` tag, or a
 /// real swap (card on a tile other than 弦卷集团, settle on one of the two).
 /// Bail once another field card claimed the body (`trigger::cancelled()` --
-/// Parking Space's (1)) or a redirect is already parked. `SLOT_REPLAY` is
-/// stored as `tile + 1` (0 = unset; `state_get` defaults missing keys to 0).
-fn settle_body_guard(owner: i32) -> bool {
+/// Parking Space's (1)) or the settle is itself a card-initiated redirect
+/// (`trigger::is_settle_redirect()` -- the nested settle of (1)/(3), which
+/// must not re-enter and hit the settle-depth cap).
+fn settle_body_guard(_owner: i32) -> bool {
     if trigger::cancelled() {
         return false;
     }
-    if ctx::slot(owner, SLOT_REPLAY) > 0 {
+    if trigger::is_settle_redirect() {
         return false;
     }
     if trigger::move_tag(TAG_AS_AGENT) != 0 {
@@ -185,28 +193,19 @@ fn settle_body_guard(owner: i32) -> bool {
 /// （1）「当次移动的移动终点视为"弦卷集团"地产商」 then （3）「那格视为与
 /// "弦卷集团"格子交换位置」. One entry so both body-replaces run (the host
 /// runs only the first hook of a kind).
-/// Run `tile`'s settle as the agent, with `SLOT_REPLAY` parked across it so the
-/// nested `tileResolved` consumes the redirect instead of reading as (3)'s
-/// discard. Used by both redirect sites below.
-fn redirect_settle(player_id: i32, tile: i32) {
-    ctx::set_slot(player_id, SLOT_REPLAY, tile + 1);
-    ctx::card_settle_at(player_id, tile, true);
-    ctx::set_slot(player_id, SLOT_REPLAY, 0);
-}
-
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
     if group < 0 {
         return Ok(());
     }
-    // （1）: the placement move's endpoint settles as the agent. Keep the
-    // `smile_as_agent` tag set across the nested settle so its `tileResolved`
-    // does not read as (3)'s 「在此卡放置的格子上[触发结算]」 (the card is on
-    // 弦卷集团 right now).
+    // （1）: the placement move's endpoint settles as the agent. The nested
+    // `card_settle_at` is a redirect (`settle_redirect`), so its
+    // `tileResolved` does not read as (3)'s 「在此卡放置的格子上[触发结算]」
+    // (the card is on 弦卷集团 right now).
     if trigger::move_tag(TAG_AS_AGENT) != 0 {
         ctx::trigger::set_cancelled();
         ctx::plan::set_settle_as_agent(true);
-        redirect_settle(player_id, group);
+        ctx::card_settle_at(player_id, group, true);
         ctx::plan::set_tag(TAG_AS_AGENT, 0);
         ctx::log(
             player_id,
@@ -214,54 +213,57 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // （3）: the card's tile behaves as 弦卷集团 -- a settle *on* the card's
-    // tile runs the agent body, then the card is discarded. One level deep: we
-    // only redirect card-tile → 弦卷集团, never back (a two-way swap here
-    // re-enters and hits the settle-depth cap).
-    // TODO(规则书): 「交换位置」 is a two-way exchange -- a settle on 弦卷集团
-    // while the card sits elsewhere should run as the card's tile. That
-    // direction is not expressible yet without a host-visible re-entrancy flag
-    // (`SLOT_REPLAY` guest writes do not cross `card_settle_at`).
+    // （3）: 「那格视为与"弦卷集团"格子交换位置」 -- a two-way position
+    // exchange. A settle *on* the card's tile runs the agent body; a settle
+    // *on* 弦卷集团 (while the card sits elsewhere) runs as the card's tile.
+    // One level deep: the nested settle carries `settle_redirect`, so its
+    // body does not swap back (STACK-01 / SETTLE-01).
     let card_t = ctx::self_tile().unwrap_or(-1);
     let at = trigger::tile();
-    if card_t < 0 || at < 0 || card_t == group || at != card_t {
+    if card_t < 0 || at < 0 || card_t == group {
         return Ok(());
     }
+    let dest = if at == card_t {
+        group
+    } else if at == group {
+        card_t
+    } else {
+        return Ok(());
+    };
     ctx::trigger::set_cancelled();
     ctx::plan::set_settle_as_agent(true);
-    redirect_settle(player_id, group);
+    ctx::card_settle_at(player_id, dest, true);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_swapped"))
             .tile("a", at)
-            .tile("b", group),
+            .tile("b", dest),
     );
     Ok(())
 }
 
-/// Consume an in-flight redirect at its `tileResolved`, and discard on a
-/// settle of the card's own tile. Residual: either a redirect is parked for
-/// this tile, or the settle is on the card's tile (and not a redirect).
+/// Consume (2)'s arrival latch at its `tileResolved`, and discard on a settle
+/// of the card's own tile. Residual: a redirect's terminal is never (3)'s
+/// discard; (2)'s arrival needs a one-shot clear; otherwise a settle on the
+/// card's tile discards.
 /// 规则书（3）: 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
-/// 「任何玩家」 includes the owner; (1)'s own redirect is the sole exception,
-/// keyed off the placement move (`TAG_AS_AGENT` / `SLOT_REPLAY`), not off
-/// "the actor is the owner".
-fn resolve_guard(owner: i32) -> bool {
-    let at = trigger::tile();
-    if at < 0 {
+/// 「任何玩家」 includes the owner. A card-initiated redirect (（1） or （3）
+/// itself) is keyed off `trigger::is_settle_redirect()`, not off "the actor is
+/// the owner".
+fn resolve_guard(_owner: i32) -> bool {
+    // A redirect's `tileResolved` is the nested settle (1)/(3) just caused --
+    // never (3)'s 「在此卡放置的格子上[触发结算]后」.
+    if trigger::is_settle_redirect() {
         return false;
     }
-    // One read: `TileResolved` fires at every settle's terminal while the card
-    // is in play, and the slot is keyed by a string.
-    let replay = ctx::slot(owner, SLOT_REPLAY);
-    if replay == at + 1 {
+    // (2) 「[触发结算]后可将…放置于[移动终点]」 arrived during this settle's
+    // `settleAfter`. Enter `on_resolved` so the latch is cleared; do not
+    // discard.
+    if ctx::prop(PROP_ARRIVED) != 0 {
         return true;
     }
-    if replay > 0 {
-        return false;
-    }
-    // (1)'s placement-move redirect: the nested settle is not (3)'s discard.
-    if trigger::move_tag(TAG_AS_AGENT) != 0 {
+    let at = trigger::tile();
+    if at < 0 {
         return false;
     }
     match ctx::self_tile() {
@@ -271,15 +273,15 @@ fn resolve_guard(owner: i32) -> bool {
 }
 
 fn on_resolved(owner: i32) -> card_sdk::Asked {
-    let at = trigger::tile();
-    // (1)'s own redirect -- the placement move's nested settle -- is not (3)'s
-    // 「在此卡放置的格子上[触发结算]」. Keyed off the placement move
-    // (`TAG_AS_AGENT`), never off "the actor is the owner".
-    if trigger::move_tag(TAG_AS_AGENT) != 0 {
+    // A redirect's terminal is not (3)'s discard (（1） or （3）'s own nested
+    // settle). Keyed off the engine flag, never off "the actor is the owner".
+    if trigger::is_settle_redirect() {
         return Ok(());
     }
-    if ctx::slot(owner, SLOT_REPLAY) == at + 1 {
-        ctx::set_slot(owner, SLOT_REPLAY, 0);
+    // (2)'s arrival latch: clear it and leave the card in play. Later settles
+    // discard as (3) says, owner included.
+    if ctx::prop(PROP_ARRIVED) != 0 {
+        ctx::set_prop(PROP_ARRIVED, 0);
         return Ok(());
     }
     // （3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
@@ -287,6 +289,7 @@ fn on_resolved(owner: i32) -> card_sdk::Asked {
     let Some(card_t) = ctx::self_tile() else {
         return Ok(());
     };
+    let at = trigger::tile();
     if card_t >= 0 && card_t == at {
         ctx::set_dest(ctx::Dest::Graveyard);
         ctx::log(
@@ -313,10 +316,10 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_self_tile(to);
     // The card just arrived on this settle's tile. (3) 「任何玩家在此卡放置的格子上
     // [触发结算]后」 is for a settle *on* the card's tile -- not the settle whose
-    // `settleAfter` placed it here. Park `SLOT_REPLAY` so this settle's
-    // `tileResolved` consumes it instead of discarding; later settles discard
-    // as (3) says, owner included.
-    ctx::set_slot(player_id, SLOT_REPLAY, to + 1);
+    // `settleAfter` placed it here. Park a one-shot card-instance latch so this
+    // settle's `tileResolved` consumes it instead of discarding; later settles
+    // discard as (3) says, owner included.
+    ctx::set_prop(PROP_ARRIVED, 1);
     let n = ctx::crystals();
     if n > 0 {
         ctx::add_crystals(-n, i32::MAX)?;
@@ -331,7 +334,7 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
 // （2）「[持续] [触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上
 // 并移除其上全部奇迹水晶」 -- a `settleAfter` press; `set_self_tile` is the
 // move, and `place_card_on` is what put it on 弦卷集团 in the first place.
-// （3） is `swap_body` / `discard_after_settle` above: a board position
+// （3） is `settle_body` / `on_resolved` above: a two-way board position
 // exchange for the settle body/ownership/rent reads, then the discard.
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.

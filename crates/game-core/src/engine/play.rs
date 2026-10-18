@@ -250,6 +250,15 @@ pub struct Pay {
     /// payment has already reversed direction. A reverse child starts at
     /// `parent + 1` and is refused past [`MAX_PAY_REVERSALS`].
     pub reverse_depth: u8,
+    /// An extra milli-scale (1000 = ×1.0) the **caller** of the payment baked
+    /// into the figure's formula -- `ctx::charge_rent`'s `milli_scale`
+    /// (「(4-X)/4倍价格」), not a standing tile/plan factor. Multiplied in
+    /// [`Play::scale_settle_payment`] alongside `RENT_FACTOR` / `pay_factor`,
+    /// so every add/mul of one payment composes at the `paySplitMul` stage and
+    /// the one end-of-calc `ceil10` sees the fully shaped figure
+    /// (`spec/ROUNDING.md`). A reverse child does **not** copy this: its
+    /// amount is already the post-scale figure.
+    pub milli_scale: i32,
 }
 
 impl Pay {
@@ -269,6 +278,7 @@ impl Pay {
             by_card: None,
             total_stage: true,
             reverse_depth: 0,
+            milli_scale: 1000,
         }
     }
 }
@@ -767,6 +777,9 @@ impl Cx<'_> {
             if plan.steps < 0 {
                 // No fixed step count: roll it now, with the same raise points.
                 self.w.turn.plan = plan.clone();
+                // `settle_redirect` is engine-set on `card_settle_move` only;
+                // never let a plan seed carry a sticky `true`.
+                self.w.turn.plan.settle_redirect = false;
                 raise!(self, "diceRollPlan", i, @m plan)?;
                 plan = self.w.turn.plan.clone();
                 // A `rollPlan` body may have rewritten this move as a teleport
@@ -933,8 +946,15 @@ impl Cx<'_> {
     /// settle at an arbitrary tile is not the turn's move, and inheriting
     /// `from`/`to`/`steps` left the piece one tile past a `teleport_to` +
     /// `card_settle_at` (游击演出 ends on chosen+1).
+    ///
+    /// Sets [`Move::settle_redirect`] so a hook on the nested settle can tell
+    /// a card-initiated redirect from a real player settle. The plan is
+    /// cloned, never written back: the plan's own flag stays `false` (there
+    /// is no `plan::` setter for it) so a later move cannot inherit a sticky
+    /// `true`.
     pub fn card_settle_move(&self, player_id: usize, tile: usize, main: bool) -> Move {
         let mut m = self.w.turn.plan.clone();
+        m.settle_redirect = true;
         m.player_id = player_id;
         m.main = main;
         m.kind = MoveKind::Teleport;
@@ -1244,6 +1264,9 @@ impl Cx<'_> {
             // plan ops write), so the walk has to take the move back afterwards.
             // Seed first so a body that only reads sees the fresh move.
             self.w.turn.plan = m.clone();
+            // `settle_redirect` is engine-set on `card_settle_move` only;
+            // never let a plan seed carry a sticky `true`.
+            self.w.turn.plan.settle_redirect = false;
             raise!(self, "diceRollPlan", i, @m m)?;
             m = self.w.turn.plan.clone();
             if self.out(i) || !self.playing() {
@@ -2109,6 +2132,75 @@ impl Cx<'_> {
         self.pay_rent(i, t, half)
     }
 
+    /// `ctx::charge_rent` -- a rent-shaped 「收费」 at `milli_scale` (1000 = ×1.0)
+    /// of the tile's ordinary-settle rent, **outside** a full [触发结算].
+    ///
+    /// 规则书 (`RAS:练习室里的风暴` (2), sheet 2026-10-06): 「对那个玩家进行一次
+    /// 相当于此卡所在格子普通[结算]的(4-X)/4倍价格的收费」. The amount is the
+    /// same figure [`Self::pay_rent`] charges ([`Self::rent_figure`] -- table /
+    /// houses / the dice-rent roll) and the scale rides
+    /// [`Self::scale_settle_payment`] with the rent factors
+    /// (`Pay::milli_scale`, `spec/ROUNDING.md`). The payment goes through the
+    /// money pipeline as [`PayKind::Rent`] (so `PaySplitAdd` / rent factors see
+    /// it and `pay_is_rent` is true) -- but this is a 「收费」, not a 「结算」:
+    /// no settle hooks, no counteraction-as-settle, no buy/build offer.
+    ///
+    /// Refuses (returns 0) when the tile is unowned, mortgaged, the payer is
+    /// the owner, or either side is out.
+    ///
+    /// TODO(规则书)[ruling]: on a **mortgaged** tile 「普通[结算]」 is a forced-buy
+    /// offer, not a rent, so there is no obvious 收费 recipient. Class C.
+    /// Refused here rather than guessing.
+    ///
+    /// `by_card` is the player whose card caused the charge (stamped onto the
+    /// `pay` / `paid` triggers so 「被…效果影响」 can tell card from board).
+    /// Returns the amount actually paid. Counts toward the turn's
+    /// `paid_in_settle` -- every caller so far is a settle-caused charge.
+    pub fn card_charge_rent(
+        &mut self,
+        i: usize,
+        t: usize,
+        milli_scale: i32,
+        by_card: Option<i32>,
+    ) -> Flow<i32> {
+        let owner = self.w.st.owners[t];
+        if owner < 0 || owner as usize == i || self.out(i) || self.out(owner as usize) {
+            return Ok(0);
+        }
+        let owner = owner as usize;
+        // TODO(规则书)[ruling]: mortgaged 「普通[结算]」 is a forced-buy offer, not
+        // a rent -- no obvious recipient. Class C; refuse rather than guess.
+        if self.w.st.mortgaged[t] {
+            return Ok(0);
+        }
+        let (amount, detail) = self.rent_figure(owner, t);
+        if amount <= 0 {
+            return Ok(0);
+        }
+        let mut p = Pay::new(amount, PayKind::Rent);
+        p.from = Some(i);
+        p.to = Some(owner);
+        p.typ = Some(PayEvent::Rent);
+        p.tile = Some(t);
+        p.must = true;
+        p.milli_scale = milli_scale;
+        p.by_card = by_card;
+        p.source = "src.rent";
+        p.text = Some(
+            Msg::new("log.rent")
+                .player_id("who", i)
+                .tile("tile", t)
+                .player_id("owner", owner)
+                .opt("note", detail),
+        );
+        let paid = self.money(p)?;
+        // Same turn tally as `pay_rent`: 「本回合的settle向其他玩家支付了至少1000资金」.
+        if paid.paid && paid.loss > 0 {
+            self.w.turn.paid_in_settle += paid.loss;
+        }
+        Ok(if paid.paid { paid.loss } else { 0 })
+    }
+
     /// The `ctx::offer_force_buy` primitive: 「可选择pay…两倍…强行购买」.
     pub fn card_offer_force_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         self.offer_force_buy(i, t)
@@ -2127,18 +2219,15 @@ impl Cx<'_> {
         self.offer_build(i, t)
     }
 
-    fn pay_rent(&mut self, i: usize, t: usize, half: bool) -> Flow<()> {
-        let owner = self.w.st.owners[t];
-        if owner < 0 || owner as usize == i || self.out(i) || self.out(owner as usize) {
-            return Ok(());
-        }
-        let owner = owner as usize;
-        if self.w.st.mortgaged[t] {
-            return self.offer_force_buy(i, t);
-        }
+    /// The ordinary-settle rent figure of `t` as `pay_rent` charges it, plus
+    /// its detail note (`log.part.rent_houses` / `log.part.rent_dice`).
+    /// **Single source** for [`Self::pay_rent`] and [`Self::card_charge_rent`]:
+    /// the table number at the counted house count ([`World::rent_houses`]) or
+    /// the dice-rent roll (`unit × 1d20`).
+    fn rent_figure(&mut self, owner: usize, t: usize) -> (i32, Option<Msg>) {
         let tile = self.tile(t);
         let dice_mult = self.w.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT);
-        let (mut amount, detail) = if dice_mult > 0 {
+        if dice_mult > 0 {
             let d = self.w.rng.d(20);
             let kind = tile.kind.as_str().to_string();
             let unit = purchase::dice_rent_unit(self.data, &self.w, owner, &kind, dice_mult);
@@ -2162,7 +2251,19 @@ impl Cx<'_> {
                 rent,
                 (h > 0).then(|| Msg::new("log.part.rent_houses").i("h", h)),
             )
-        };
+        }
+    }
+
+    fn pay_rent(&mut self, i: usize, t: usize, half: bool) -> Flow<()> {
+        let owner = self.w.st.owners[t];
+        if owner < 0 || owner as usize == i || self.out(i) || self.out(owner as usize) {
+            return Ok(());
+        }
+        let owner = owner as usize;
+        if self.w.st.mortgaged[t] {
+            return self.offer_force_buy(i, t);
+        }
+        let (mut amount, detail) = self.rent_figure(owner, t);
         let mut half_part = None;
         let mut half_only = None;
         if half {
@@ -2218,7 +2319,8 @@ impl Cx<'_> {
     /// The 「支付减半」 / 「地租」 scale, applied at the money pipeline's `paySplitMul`
     /// stage (`docs/TILES.md`; 「支付减半」 ruling 2026-10-06).
     ///
-    /// Two homes, both read here rather than in `pay_rent`:
+    /// Two homes, both read here rather than in `pay_rent`, plus the caller's
+    /// own [`Pay::milli_scale`]:
     ///
     /// * `prop::PAY_FACTOR` / `prop::RENT_FACTOR` (milli-units, 500 = ×0.5) on
     ///   the tile's rule instance -- a card that retunes a tile writes these
@@ -2227,6 +2329,10 @@ impl Cx<'_> {
     ///   card that shapes a *settle* (祥，移动's 「触发结算时进行的支付价格减半」,
     ///   Repaint's 「对方此次结算的支付减半」) arms these, because a hand card
     ///   leaves the field and cannot leave a hook behind.
+    /// * `Pay::milli_scale` (1000 = ×1.0) -- the payment's own formula scale,
+    ///   `ctx::charge_rent`'s 「(4-X)/4倍价格」. Composes here so every add/mul
+    ///   of one figure lands at the same stage and the one end-of-calc `ceil10`
+    ///   sees the fully shaped amount (`spec/ROUNDING.md`).
     ///
     /// Scope: a settlement loss. A purchase (`buy` / `build`), a forced
     /// purchase (rulebook 「此次购买的价格不受任何资金变动效果影响」) and a
@@ -2238,6 +2344,7 @@ impl Cx<'_> {
         kind: PayKind,
         rent: bool,
         tile: Option<usize>,
+        milli_scale: i32,
     ) -> i32 {
         if matches!(kind, PayKind::Buy | PayKind::Build | PayKind::ForceBuy | PayKind::Gain) {
             return amount;
@@ -2247,6 +2354,10 @@ impl Cx<'_> {
             f *= self.w.turn.plan.rent_factor;
         }
         f *= self.w.turn.plan.pay_factor;
+        // The caller's formula scale (1000 = ×1.0; 0 = free; negative clamps
+        // to 0). Always multiplied -- it is a milli-unit figure, not a
+        // 「0 means unset」 prop.
+        f *= f64::from(milli_scale.max(0)) / 1000.0;
         // A prop the tile does not carry reads as its default `0`, which here
         // means 「no scale」 (×1.0) rather than ×0 -- only a positive milli value
         // is a scale. [`purchase::tile_money_scale`] is the single source for
@@ -3227,7 +3338,7 @@ impl Cx<'_> {
             // shaped it and not only `pay_rent`'s table number.
             if kind == "paySplitMul" {
                 let before_scale = amount;
-                amount = self.scale_settle_payment(amount, p.kind, rent, p.tile);
+                amount = self.scale_settle_payment(amount, p.kind, rent, p.tile, p.milli_scale);
                 if amount != before_scale {
                     modified = true;
                 }

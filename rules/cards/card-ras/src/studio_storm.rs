@@ -138,27 +138,18 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     // 价格的收费」 -- a one-shot 「收费」 to the tile owner, **not** a
     // `card_settle_at` (a full settle also fires settle hooks / counteractions
     // and offers build/buy, which the printed wording does not ask for).
-    // `rent_of` is 「普通[结算]的价格」; the scale is integer (4-X)/4 and
-    // truncates like `scale_settle_payment` (`spec/ROUNDING.md`).
+    // `ctx::charge_rent` computes 「普通[结算]的价格」 the way a settle would
+    // (`table_rent` / houses / the dice-rent roll) and scales it at
+    // `scale_settle_payment` -- `250 * (4-X)` milli-units is ×(4-X)/4.
     //
     // TODO(规则书)[ruling]: on a **mortgaged** tile 「普通[结算]」 is a forced-buy
     // offer, not a rent, so there is no obvious 收费 recipient. Class C.
+    // `charge_rent` refuses that case (returns 0) rather than guessing.
     let owner = ctx::tile_owner(tile);
-    if owner < 0 || ctx::mortgaged_of(tile) {
+    if owner < 0 {
         return Ok(());
     }
-    let amount = ctx::rent_of(tile) * (4 - x) / 4;
-    if amount > 0 {
-        ctx::transfer(
-            trigger::player_id(),
-            owner,
-            amount,
-            &Msg::new(key!("studio_storm_charge"))
-                .player_id("to", owner)
-                .tile("tile", tile)
-                .i("amount", amount as i64),
-        )?;
-    }
+    let _ = ctx::charge_rent(trigger::player_id(), tile, 250 * (4 - x))?;
     Ok(())
 }
 
