@@ -58,11 +58,11 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 | harness | central verdict | time | class | root cause | fix | re-time |
 |---|---|---:|---|---|---|---|
 | `idolband_reset_iff` + `_user1_` + mutant | SUCCESSFUL | 507/479/203 s | — | — | — | done |
-| `hina_01_pass_circle_iff` + `_user1_` | TIMEOUT ×2 | 1800 s | **C** | `fill_for_guard` magic-number FnId masks (pre-batch-11): `TileIs`/`OWN_START` pulled `fill_geometry_bins` (kokoro_02 cliff) | masks from `FnId::*` already on master (batch 11) | queued |
+| `hina_01_pass_circle_iff` + `_user1_` | TIMEOUT ×2 | 1800 s | **C** | `fill_for_guard` magic-number FnId masks (pre-batch-11): `TileIs`/`OWN_START` pulled `fill_geometry_bins` (kokoro_02 cliff) | masks from `FnId::*` already on master (batch 11) | `hina_01_pass_circle_iff` **SUCCESSFUL 605 s** (4/4 covers); user1 queued |
 | `hina_01_mutant_is_detected` | SUCCESSFUL | 147 s | — | pinned tile 0 / fire 0 | — | done |
 | `childhood_02_fire_iff` + `_user1_` + mutant | SUCCESSFUL | 287/291/176 s | — | — | — | done |
 | `twodonuts_01_exile_iff` + `_user1_` + mutant | SUCCESSFUL | 302/240/225 s | — | — | — | done |
-| `twoinone_01b_fire_iff` + `_user1_` + mutant | TIMEOUT ×3 | 1800 s | **E** | (1) body `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32,String)>>`; (2) symbolic `is_hina` muxed two CJK intern paths and BMC stalled at the first `sparse_play_world` unwind | (1) `cfg(kani)` `field_instances`/`find_card` facades (compact `[uid, name_id]`, no postcard); (2) pin swap direction per seat harness (seat0 三角初华→纯田真奈, seat1 纯田真奈→三角初华) — pair covers both halves | queued |
+| `twoinone_01b_fire_iff` + `_user1_` + mutant | TIMEOUT ×3 | 1800 s | **E** | (1) body `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32,String)>>`; (2) symbolic `is_hina` muxed two CJK intern paths and BMC stalled at the first `sparse_play_world` unwind | (1) `cfg(kani)` `field_instances`/`find_card` facades (compact `[uid, name_id]`, no postcard); (2) pin swap direction per seat harness (seat0 三角初华→纯田真奈, seat1 纯田真奈→三角初华) — pair covers both halves | **SUCCESSFUL 457 / 542 / 396 s** (1/1 cover each) |
 | 3× `*_formula` | SUCCESSFUL | 3–7 s | — | — | — | done |
 
 `skills_sumimi` central rows:
@@ -96,7 +96,7 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 | C-SUMIMI-nobreakup-02 | 「资金变动为拥有相同数字」 | OPEN | — | — | target digit predicate undefined | OPEN-C-SUMIMI-nobreakup-digits |
 | C-SUMIMI-nobreakup-03 | 「回到原处并取消所有受到的效果」 | PROTOCOL-LEVEL / OPEN | — | — | transaction rollback | OPEN-C-SUMIMI-nobreakup-digits, OPEN-触发结算 |
 | C-SUMIMI-twoinone-01 | 「角色卡替换为另一名角色」 | **FAILS** | — | — | LESS: body swaps bound `skill:*` field entry + fire, but `player.character` stays old name (clause-doc Findings) | — |
-| C-SUMIMI-twoinone-01b | 「及其初始火罐数」 | PROVEN* | `twoinone_01b_fire_iff` | TIMEOUT 1800 s (batch 16: postcard facades + direction pin landed) | fire set to the other character's 初始火罐数 | re-time queued |
+| C-SUMIMI-twoinone-01b | 「及其初始火罐数」 | PROVEN | `twoinone_01b_fire_iff` | SUCCESSFUL 457/542/396 s | fire set to the other character's 初始火罐数 | — |
 | C-SUMIMI-twoinone-02 | 「移动掷骰后作为[反击]」 | PROTOCOL-LEVEL | — | — | post-roll [反击] window | — |
 | C-SUMIMI-sweetescape-01 | 「前后两格[收费标价]之和≥2000」 | OPEN + BLOCKED-HOST | — | — | body reads `rent_of` | OPEN-收费标价 |
 | C-SUMIMI-sweetescape-02 | 「传送…并触发结算」 | PROTOCOL-LEVEL / OPEN | — | — | settle pipeline | OPEN-收费标价, OPEN-触发结算 |
@@ -116,7 +116,7 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 |---|---|---|---|---|---|---|
 | C-SUMIMI-mana-01 | 「经过CiRCLE时获得1个[火罐]」 | BLOCKED-HOST | — | — | body tests `tile_named('CiRCLE')`; host `tile_named` only knows 江户川乐器店 (else −1). Shared fire effect proven via hina-01 | `tile_named` |
 | C-SUMIMI-mana-02 | 「消耗火罐并支付…资金消耗减半」 | OPEN + BLOCKED-HOST | `mana_02_decline_is_empty` | pending | accept needs `rent_of`; decline is empty (determined) | OPEN-收费标价 |
-| C-SUMIMI-hina-01 | 「经过CiRCLE时获得1个[火罐]」 | PROVEN* | `hina_01_pass_circle_iff` | TIMEOUT 1800 s (batch 16: fill_geometry_bins via pre-batch-11 FnId masks; fix on master) | real `is_circle` guard; +1 under cap 2 | re-time queued |
+| C-SUMIMI-hina-01 | 「经过CiRCLE时获得1个[火罐]」 | PROVEN | `hina_01_pass_circle_iff` | SUCCESSFUL 605 s (4/4 covers) | real `is_circle` guard; +1 under cap 2 | user1 re-time queued |
 | C-SUMIMI-hina-01 (formula) | fire formula | formula | `pass_circle_fire_formula` | SUCCESSFUL 6.8 s | cheap spec math | — |
 | C-SUMIMI-hina-01 mutant | +2 | companion | `hina_01_mutant_is_detected` | SUCCESSFUL 147 s | reachable disagreement | — |
 | C-SUMIMI-hina-02 | 「放置火罐…X*30」 | PROTOCOL-LEVEL | — | — | turn-start placement prompt not reachable from arrange seam | — |

@@ -1697,8 +1697,21 @@ skill entry + fire; `player.character` stays the old name) — kept failing.
 
 No CBMC re-times completed this batch at doc-write time: central
 `tools/kani/central.sh --retry-nonsuccess` is still occupying a cbmc slot and
-`free -m` available hovered at the 12000 MB gate. All six rows are **needs
-re-time** (`tools/kani/run.sh --unit <u> --harness <h> --timeout 1800`).
+`free -m` available hovered at the 12000 MB gate. Re-times completed this batch (`CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`,
+`tools/kani/run.sh --unit <u> --harness <h> --timeout 1800`):
+
+* `sumimi::twoinone_01b_fire_iff` **SUCCESSFUL 457 s** (1/1 cover)
+* `sumimi::twoinone_01b_user1_fire_iff` **SUCCESSFUL 542 s** (1/1 cover)
+* `sumimi::twoinone_01b_mutant_is_detected` **SUCCESSFUL 396 s**
+* `sumimi::hina_01_pass_circle_iff` **SUCCESSFUL 605 s** (4/4 covers)
+
+Still needs re-time (central-pass cbmc holds the box): `hina_01_user1_pass_circle_iff`,
+`band_02_rent_bonus_iff` + `_user1_` + `band_02_rent_bonus_mutant_is_detected`.
+
+First twoinone re-time (pre-pin) confirmed **TIMEOUT 1800 s** even after the
+postcard facades — the `is_hina` mux was the remaining cliff. A cover-pair
+variant of the pin was **VACUOUS** (1 of 2 covers unreachable); one cover site
+per harness is required.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening. Production bodies untouched. Allowed Kani-only surface:
