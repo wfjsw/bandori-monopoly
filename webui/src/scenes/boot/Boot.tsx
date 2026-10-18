@@ -8,8 +8,9 @@ import { useBackdrop } from "../../app/Stage";
 import { installFonts, loadManifest, res } from "../../core/assets";
 import { loadCardLocales } from "../../i18n";
 import { playSceneBgm, unlockAudio } from "../../core/audio";
-import { D, loadGameData } from "../../core/data";
-import { createProfile, getProfile, hasProfile, loadProfile } from "../../core/store";
+import { loadGameData } from "../../core/data";
+import { preloadImage } from "../../core/preload";
+import { createProfile, hasProfile, loadProfile } from "../../core/store";
 import { Btn } from "../../ui/Button";
 import { toast } from "../../ui/Toast";
 import s from "./Boot.module.css";
@@ -25,54 +26,67 @@ const TIPS = [
   tr("boot.tip.refresh"),
 ];
 
+/**
+ * Boot-screen splash ids (`BandoriBoot/<id>`). Presentation only: which splash
+ * shows is a UI decision, so the list lives here rather than in the ruleset
+ * metadata. The keys match the asset set (`tools/asset-pipe/check.py`).
+ */
+const BOOT_ART = ["001", "002", "003", "004", "005", "018", "021", "045"];
+
+/** Splash for this page load, picked at random -- not from the home persona.
+ *  The art must not wait on the roster (or the progress bar), so the choice is
+ *  made before any game data is in and every boot of the same page shows it. */
+const bootArtId = BOOT_ART[Math.floor(Math.random() * BOOT_ART.length)];
+
+const bootArtUrl = () => res(`BandoriBoot/${bootArtId}`);
+
+/**
+ * Full-bleed boot splash. The URL lands with the asset manifest (the first
+ * fetch of `loadAll`); until then the layer is just the white plate. It is up
+ * for the whole load, not gated on game data.
+ */
+function BootArt() {
+  const art = bootArtUrl();
+  return <div className={s.art} style={{ backgroundImage: art ? `url("${art}")` : undefined }} />;
+}
+
 let loading: Promise<void> | null = null;
+let progressNow = 0;
+let onProgress: (p: number) => void = () => {};
+
 function loadAll(progress: (p: number) => void): Promise<void> {
+  // The latest caller wins. StrictMode (and any remount) swaps the hook in
+  // while the one-shot load is already in flight; without this the bar froze
+  // at zero and nothing re-rendered once the manifest landed -- so the splash,
+  // whose URL the manifest carries, never painted either.
+  onProgress = progress;
+  if (loading) {
+    onProgress(progressNow);
+    return loading;
+  }
   // `loadGameData` is the single gate: it loads the ruleset first (the roster
   // source), then the tables, and assigns `D` only at the end. Deck builder /
   // gallery / home may read `D` as soon as this resolves -- never before.
-  loading ??= (async () => {
+  loading = (async () => {
+    const tick = (p: number) => {
+      progressNow = p;
+      onProgress(p);
+    };
     await loadManifest();
     installFonts();
     void loadCardLocales();
-    progress(0.15);
-    await loadGameData((p) => progress(0.15 + p * 0.75));
+    // The splash needs only the manifest. Start its download now so it runs
+    // alongside the wasm / ruleset instead of after the progress bar fills.
+    void preloadImage(bootArtUrl());
+    tick(0.15);
+    await loadGameData((p) => tick(0.15 + p * 0.75));
     loadProfile();
-    progress(1);
+    tick(1);
   })();
   return loading;
 }
 
 type Stage = "loading" | "tap" | "create" | "error";
-
-/**
- * Boot-screen art id per band (`BandoriBoot/<id>`). Presentation only: the band
- * name rides on the roster, but which splash a band gets is a UI decision, so
- * the map lives here rather than in the ruleset metadata. Bands on the default
- * splash are simply absent.
- */
-const BOOT_ART: Record<string, string> = {
-  "Poppin' Party": "001",
-  Afterglow: "002",
-  "Hello, Happy World!": "003",
-  "Pastel✽Palettes": "004",
-  Roselia: "005",
-  "RAISE A SUILEN": "018",
-  Morfonica: "021",
-  "MyGO!!!!!": "045",
-  CRYCHIC: "045",
-};
-
-/** Splash when the home character's band has no entry above. */
-const DEFAULT_BOOT_ART = "045";
-
-/**
- * Boot splash for the home character's band. The art id is chosen here, not by
- * the ruleset roster -- boot art is not game data.
- */
-function BootArt({ band }: { band: string }) {
-  const art = res(`BandoriBoot/${(band && BOOT_ART[band]) || DEFAULT_BOOT_ART}`);
-  return <div className={s.art} style={{ backgroundImage: art ? `url("${art}")` : undefined }} />;
-}
 
 /**
  * One-shot boot: manifest, fonts, then `loadGameData` (ruleset + tables + the
@@ -87,17 +101,14 @@ function useBootAssets(opts: {
   setP: (p: number) => void;
   setStage: (s: Stage) => void;
   setError: (e: string) => void;
-  setBand: (band: string) => void;
 }): void {
-  const { resume, onReady, setP, setStage, setError, setBand } = opts;
+  const { resume, onReady, setP, setStage, setError } = opts;
   useEffect(() => {
     let alive = true;
     loadAll((v) => alive && setP(v))
       .then(() => {
         if (!alive) return;
         playSceneBgm("boot");
-        const home = hasProfile() ? D.persona(getProfile().homePersona) : undefined;
-        setBand(home?.group ?? "");
         if (!hasProfile()) setStage("create");
         else if (resume) onReady();
         else setStage("tap");
@@ -120,11 +131,9 @@ export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void
   const [p, setP] = useState(0);
   const [stage, setStage] = useState<Stage>("loading");
   const [error, setError] = useState("");
-  /** Home character's band once game data is in; `null` while still loading. */
-  const [band, setBand] = useState<string | null>(null);
   const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)]);
   const [name, setName] = useState("");
-  useBootAssets({ resume, onReady, setP, setStage, setError, setBand });
+  useBootAssets({ resume, onReady, setP, setStage, setError });
 
   const start = () => {
     if (stage !== "tap") return;
@@ -144,7 +153,7 @@ export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void
 
   return (
     <div className={s.boot} onClick={start}>
-      {band !== null && <BootArt band={band} />}
+      <BootArt />
       <div className={s.panel}>
         {res("BandoriUI/transition_logo") && <img className={s.logo} src={res("BandoriUI/transition_logo")} alt="" />}
         <div className={s.tip}>{tip}</div>
