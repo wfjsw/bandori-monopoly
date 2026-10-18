@@ -60,7 +60,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         state::set(player_id, WAS, 1);
         return Ok(());
     }
-    on_state(player_id);
+    on_state(player_id)?;
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Ok(());
     }
@@ -79,20 +79,33 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// this card watches `skillState` for the 1 → 2 edge and refills on it. Runs at
 /// the turn start and the turn end, which brackets every place a character skill
 /// writes the value.
-fn on_state(player_id: i32) {
+///
+/// MARKERS.md §10(1) pin (implemented as recommended): on entering 状态2 the
+/// **band refill runs first**, then the face's 「进入状态2时」 clauses (so
+/// `skill:八幡海铃:熟练的支援贝斯手`'s 「进入状态2时你可消耗X个火罐」 spends from
+/// the refilled pool). The face entry hooks run after this band-skill hook in
+/// the same `TurnStartBefore` pass (band skills are placed before character
+/// skills; `on_state` is this card's turn-start body).
+fn on_state(player_id: i32) -> card_sdk::Asked {
     let now = state::get(player_id, state_key::SKILL_STATE);
     let was = state::get(player_id, WAS);
     state::set(player_id, WAS, now);
     if now != 2 || was == 2 {
-        return;
+        return Ok(());
     }
-    // 「若你的技能拥有火罐，进入状态2时将火罐补充至上限」
-    let cap = state::max(player_id, state_key::CHARGE);
-    if cap <= 0 {
-        return;
+    // 「若你的技能拥有火罐，进入状态2时将火罐补充至上限」 -- a named regime
+    // guest over the owner's pool (`fire::regime`), never a raw write.
+    if rules_status::fire::max(player_id) <= 0 {
+        return Ok(());
     }
-    state::set(player_id, state_key::CHARGE, cap);
-    ctx::log(player_id, &Msg::new(key!("ave_mujica_refill")));
+    let got = rules_status::fire::regime::fill_to_cap(
+        player_id,
+        &Msg::new(key!("ave_mujica_refill")),
+    )?;
+    if got > 0 {
+        ctx::log(player_id, &Msg::new(key!("ave_mujica_refill")));
+    }
+    Ok(())
 }
 
 /// Latch the declared (pre-PaySplitAdd) payment figure for [`after_bend`]. Rides
@@ -209,29 +222,22 @@ fn halve(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「每回合结束时失去1火罐，回合结束后若火罐为0则退出状态2；退出状态2时，失去
-/// 所有剩余火罐」.
+/// 所有剩余火罐」. Named regime guests (`fire::regime`), never a raw write.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
-    on_state(player_id);
+    on_state(player_id)?;
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Ok(());
     }
     // 「每回合结束时失去1火罐」 -- only when the character skill grants pots.
-    let cap = state::max(player_id, state_key::CHARGE);
-    if cap <= 0 {
+    if rules_status::fire::max(player_id) <= 0 {
         return Ok(());
     }
-    let have = state::get(player_id, state_key::CHARGE);
-    if have > 0 {
-        rules_status::fire::spend(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
-    }
+    rules_status::fire::regime::drain(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
     // 「回合结束后若火罐为0则退出状态2；退出状态2时，失去所有剩余火罐」
-    if state::get(player_id, state_key::CHARGE) == 0 {
+    if rules_status::fire::regime::count(player_id) == 0 {
         state::set(player_id, state_key::SKILL_STATE, 1);
         state::set(player_id, IN_TWO, 0);
-        let left = state::get(player_id, state_key::CHARGE);
-        if left > 0 {
-            rules_status::fire::spend(player_id, left, &Msg::new(key!("ave_mujica_exit")))?;
-        }
+        rules_status::fire::regime::burn_all(player_id, &Msg::new(key!("ave_mujica_exit")))?;
         ctx::log(player_id, &Msg::new(key!("ave_mujica_left")));
     }
     Ok(())

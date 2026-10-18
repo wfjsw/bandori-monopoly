@@ -69,7 +69,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
 
 /// 「初始10，上限10」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 10, 10);
+    crate::fire_pot(player_id);
     // One handler per hook: reset alongside the existing turn-start cap
     // declaration, including an extra turn by the same player.
     state::set(player_id, USED, 0);

@@ -44,6 +44,7 @@ extern crate alloc;
 
 pub mod exile;
 pub mod fire;
+pub mod fire_decl;
 pub mod no_hand;
 pub mod stay;
 pub mod stun;

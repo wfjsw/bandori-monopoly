@@ -76,7 +76,7 @@ fn cap_unset(player_id: i32) -> bool {
 
 /// 「初始1，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 1, 2);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

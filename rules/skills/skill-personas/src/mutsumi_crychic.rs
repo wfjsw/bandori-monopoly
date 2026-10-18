@@ -41,7 +41,7 @@ fn other(player_id: i32) -> bool {
 
 /// 「初始1，上限1」 + （2）「开局时指定一名其他玩家」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 1, 1);
+    crate::fire_pot(player_id);
     if state::get(player_id, OTHER) >= 0 {
         return Ok(());
     }
