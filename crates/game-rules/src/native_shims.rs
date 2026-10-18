@@ -4200,9 +4200,9 @@ pub unsafe extern "C-unwind" fn ruleset_count_held_name(np: i32, nl: i32, player
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_held_name(np: i32, nl: i32, player_id: i32, v: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_set_held_name(np: i32, nl: i32, player_id: i32, v: i32) {
     with_host(|h| match h.op_set_held_name(np, nl, player_id, v) {
-        Ok(v) => v as i32,
+        Ok(_) => {},
         Err(e) => abort_host(e),
     })
 }
@@ -4291,9 +4291,9 @@ pub unsafe extern "C-unwind" fn ruleset_msg_text(p: i32, n: i32) -> i32 {
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_msg_reply(v: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_msg_reply(v: i32) {
     with_host(|h| match h.op_msg_reply(v) {
-        Ok(v) => v as i32,
+        Ok(_) => {},
         Err(e) => abort_host(e),
     })
 }
