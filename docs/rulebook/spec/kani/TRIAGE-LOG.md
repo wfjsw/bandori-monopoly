@@ -1717,3 +1717,68 @@ Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening. Production bodies untouched. Allowed Kani-only surface:
 `rules/kani/**` + `cfg(kani)` wrappers in `rules/card-sdk/src/ctx.rs`
 (`field_instances` / `find_card` facades, same pattern as `cards_in`).
+
+## class-E deep dive — library stubs + global kani-bump (branch `kani-triage3`)
+
+Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
+(`aya_with_02_*`, `tsukushi_01_*`, `riot_02_03_*`, `chisato_mask_01_*`,
+`moca_02_*`, `rimi_skill_02_*`, …). Full lever table: TUNING.md §12.
+
+### Method
+
+1. Phase-split 4 representative central logs (`aya_with_02_pay_discount_iff`,
+   `chisato_mask_01_total_iff`, `riot_02_03_cycle_iff`, `tsukushi_01_redirect_iff`).
+2. Two shared cliffs:
+   * **fmt/memchr** (`aya_with`, `tsukushi`): `memchr_naive` 1868–2705,
+     `memchr_aligned` 574–867, `memcmp` 558–837, `PadAdapter` recursion,
+     `slice_index_fail` 38, `RawVec handle_error` 27. Root: panic-message
+     assembly + `format!("key:{p}")` (`rec_key`) + `ask_number` → Msg.
+   * **RawVec / Vec iters** (`riot`, `chisato`): `RawVec::grow_one` abort
+     paths, `split_pay` `find`/`try_fold`, `arm_others_at`.
+3. Levers landed (TUNING §12): global `kani-bump`; `LIB_COST` /
+   `LIB_COST_NOFMT` stub sets on every harness (`-Z stubbing`).
+
+### Profile delta — `skills_pp::aya_with_02_pay_discount_iff`
+
+| metric | central | + stubs (NOFMT) |
+|---|---|---|
+| memchr_naive | 1868 | **0** |
+| memchr_aligned | 574 | **0** |
+| aborting paths | 5477 | 25 |
+| BMC started? | no | **yes** |
+| residual | memchr/fmt cliff | `fmt::write` 2, `sparse_play_world` 2, solver-bound world |
+
+### Rejected levers
+
+* `Formatter::pad` / `pad_integral` stubs — Kani generic-count mismatch.
+* `PadAdapter::write_str` stub — `core::fmt::builders` private.
+* `--no-unwinding-checks` — unsound, never used.
+
+### Per-row notes (class-E, central TIMEOUT)
+
+| row | dominant cost | lever applies? | status after levers |
+|---|---|---|---|
+| `skills_pp::aya_with_02_*` | fmt/memchr + symbolic world | yes (stubs) | BMC reached; residual solver-bound (re-time pending) |
+| `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | re-time queued |
+| `ras::riot_02_03_*` | RawVec grow abort paths | yes (kani-bump + handle_error stub) | re-time queued |
+| `pp::chisato_mask_01_total_iff` | `split_pay` find + `others` Vec | partial (memchr); body `Vec` ABI remains | irreducible without body edit (TUNING §11 residual) |
+| `pp::ranger_01_02_steps_by_count_iff` | `cards_in` facade + String eq | partial (exact-length facade already on master) | re-time queued |
+| `skills_ag::moca_02_*` | body ABI / Msg | partial | re-time queued |
+| `skills_ppp::rimi_skill_02_spend_charge_iff` | (check log) | partial | re-time queued |
+
+`chisato_mask` residual: the unmodified body's `split_pay` `find`/`try_fold`
+over `ctx::others`'s `Vec<i32>` is a card-body ABI cost (TUNING §11
+"Remaining intractable patterns"). No library stub replaces a body loop.
+
+### Commits
+
+* `kani/card-sdk: always-on kani-bump under cfg(kani)`
+* `kani: LIB_COST library stubs + use_stub_set on every harness`
+* `kani/stubs: LIB_COST_NOFMT (panic_fmt + handle_error) on non-mutants`
+* `kani/stubs: alloc::fmt::format stub (skip estimated_capacity)`
+
+### Soundness
+
+Unwinding assertions ON; no `#[ignore]`; no allowlist; no spec weakening;
+card bodies unmodified; `panic_fmt` stub excluded from `should_panic`
+mutants; production `cfg(not(kani))` untouched.

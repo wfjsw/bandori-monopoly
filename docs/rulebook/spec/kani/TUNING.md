@@ -398,3 +398,66 @@ Its harness must `kani::assume(w.n_players == 4)` (loudly, with a comment), and
 its unit table row must say "n=4 only". Do not report such a clause as
 fully PROVEN for 2..=4 players. (A cheap follow-up is a per-harness world
 constructor that fixes `n_players` to 2, 3 and 4 in three separate proofs.)
+
+---
+
+## 12. class-E deep dive — library stubs + global kani-bump (branch `kani-triage3`)
+
+Goal: a **sound general lever** for the persistent class-E TIMEOUT rows
+(fmt/memchr, RawVec grow, panic-message assembly). Stubs are **library
+only** — never a card body, skill body, event body, host arm, or spec.
+
+### Levers
+
+| lever | what | soundness |
+|---|---|---|
+| **kani-bump always-on** | `card-sdk/kani_alloc` under every `cfg(kani)` build (was opt-in per band-mygo/band-ras) | validated on `skills_mygo::band_04` (SUCCESSFUL 3/3 covers) and sumimi twoinone before the flip. Bump arena returns real pointers; `dealloc` is a no-op. Feature `kani-bump` stays as a no-op alias. |
+| **`LIB_COST` stub set** | `memchr`/`memchr_naive`/`memchr_aligned` → 128-step `.get` scan; `slice_index_fail` / `handle_alloc_error` / `capacity_overflow` / `handle_error` → `kani::assert(false)` + diverge | pure search / loud-fail paths. Panic and OOM are loud fails either way; only the fmt/memchr of the *message* is dropped. |
+| **`LIB_COST_NOFMT`** | `LIB_COST` + `panic_fmt` + `alloc::fmt::format` | `panic_fmt` stub is **not** on `#[kani::should_panic]` mutants (they need a real `panic!` event). `format!` keeps `as_str()` exact; argument formats use a 64-byte `String` + `write_fmt` (no `estimated_capacity` loop). Key bytes stay get/set-consistent within a proof; the proof never pins key bytes to production. |
+| **runner** | `tools/kani/run.sh` always passes `-Z stubbing`; `KANI_EXTRA_ARGS` exploration hook (default empty) | |
+
+Every `#[kani::proof]` gets `#[kani::use_stub_set(crate::kani_stubs::LIB_COST[_NOFMT])]`
+(603 non-mutant → NOFMT, 41 `should_panic` mutants → LIB_COST).
+
+### Tried and rejected
+
+| idea | why not |
+|---|---|
+| `Formatter::pad` / `pad_integral` stubs | Kani rejects: `mismatch in the number of generic parameters` (`Formatter::<'a>::pad` counts 1 generic; a free `fn<'a>` stub counts 0). |
+| `PadAdapter::write_str` stub | `core::fmt::builders` is private — cannot name the type in the stub signature. |
+| `--no-unwinding-checks` | unsound (vacuous proofs); never used. |
+| `-Z stubbing` on production bodies | not allowed (card bodies stay unmodified). |
+
+### Profile delta — `skills_pp::aya_with_02_pay_discount_iff` (TIMEOUT 1800 s central)
+
+| metric | central (no stubs) | + kani-bump + LIB_COST | + NOFMT (panic_fmt + format) |
+|---|---|---|---|
+| `memchr_naive` unrolls | 1868 | **0** | **0** |
+| `memchr_aligned` | 574 | **0** | **0** |
+| `memcmp` | 558 | (see run) | (see run) |
+| `slice_index_fail` | 38 | **0** | **0** |
+| `RawVec handle_error` | 27 | stubbed (assert) | stubbed |
+| `PadAdapter` recursion | 1 | 4–6 | gone from early BMC |
+| aborting paths | 5477 | 34–53 | 25 |
+| top unwind | memchr 1868 | fmt/PadAdapter | `sparse_play_world` 2 + `fmt::write` 2 |
+| BMC reached? | no (died in symex) | yes | yes (`Starting Bounded Model Checking`) |
+
+The string/fmt cliff is gone. Residual is `fmt::write` (2 unrolls via
+`format!`'s `write_fmt`) + `RawVec::with_capacity_in` abort paths + the
+sparse symbolic world itself. See TRIAGE-LOG `class-E deep dive` for the
+per-row verdict table.
+
+### Non-vacuity
+
+Covers + post-invoke `assert!(false)` probes must be re-checked on the
+first row that *finishes*. A run that still TIMEOUTs never reaches a
+property verdict (covers unevaluated). The stubs themselves are fail-closed
+(`kani::assert(false)` on OOB / OOM / panic / newline pad).
+
+### Soundness kept
+
+* Unwinding assertions ON. No `#[ignore]`, no allowlist, no weakened specs.
+* Card bodies unmodified. Only `rules/kani/**` + `cfg(kani)` in `rules/card-sdk`.
+* `panic_fmt` stub excluded from `should_panic` mutants.
+* Production (`cfg(not(kani))`) untouched by stubs (`-Z stubbing` is a Kani
+  compile flag; `kani_alloc` is `cfg(kani)` only).
