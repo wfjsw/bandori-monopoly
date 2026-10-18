@@ -763,16 +763,17 @@ pub fn take_from_hand(player_id: i32, card: &str) -> bool {
 /// Every card id in a player's `pile`, in pile order (the deck's top card
 /// first). Duplicates are listed once per copy.
 ///
-/// Under `cfg(kani)` the result is a `Vec<String>` of **length 0 or 4**
-/// (never 1..=3): empty pile → empty vec; otherwise 4 slots where unused
-/// slots repeat earlier facade ids. Short static strings (`"c0"`..`"c3"`)
-/// — no `from_raw_parts`, no arena intern, no `postcard`. The unmodified
-/// body's `ids.contains` dedups the repeats, so `ids` still holds exactly
-/// the distinct cards — and every `Vec<String>` walk in the body sees a
-/// **constant** length 0 or 4.
+/// Under `cfg(kani)` the result is a `Vec<String>` of **exact** length `n`
+/// (the real pile count, `0..=MAX_CARDS`). Host `arm_cards_in` encodes
+/// `[n, id…]` and the first probe returns `1 + n`. Short static strings
+/// (`"c0"`..`"c3"`) — no `from_raw_parts`, no arena intern, no `postcard`.
+/// Bodies that read `hand.len()` / `placed_count` (riot redraw amount,
+/// ranger's 「数量」) therefore see the true count, not a padded 0|4 shape.
+/// A bounded `while` keeps the unwind at `MAX_CARDS`.
 #[cfg(kani)]
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
+    // `need` is the encoded buffer size `1 + n`; `n = 0` is the empty pile.
     if need < 2 {
         return Vec::new();
     }
@@ -785,21 +786,14 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     // Short static strings — `String::from` over a literal is a single
     // small `alloc` + byte copy (no `from_raw_parts`, no `memchr`).
     const SLOTS: [&str; 4] = ["c0", "c1", "c2", "c3"];
-    fn slot_str(buf: &[u8], i: usize) -> String {
+    let n = (need - 1).min(8) as usize;
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < n {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
-        String::from(SLOTS[slot as usize])
+        out.push(String::from(SLOTS[slot as usize]));
+        i += 1;
     }
-    let s0 = slot_str(&buf, 0);
-    let s1 = slot_str(&buf, 1);
-    let s2 = slot_str(&buf, 2);
-    let a = if need >= 2 { s0.clone() } else { s1.clone() };
-    let b = if need >= 3 { s1.clone() } else { a.clone() };
-    let c = if need >= 4 { s2.clone() } else { b.clone() };
-    let mut out = Vec::new();
-    out.push(a);
-    out.push(b);
-    out.push(c);
-    out.push(if need >= 2 { s0 } else { s1 });
     out
 }
 

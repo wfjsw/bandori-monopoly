@@ -26,9 +26,14 @@ pub fn band_02_crystals_after(pre: i32) -> i32 {
     }
 }
 
-/// Exact effect log of the roll-gain body: one AddCounter(+1) on the band card.
-/// `add_crystals(1, 1)` is `add_counter(CRYSTALS, 1, max=1)`.
-pub fn band_02_log_ok(effects: &[Effect], owner: i32) -> bool {
+/// Exact effect log of the roll-gain body: one AddCounter on the band card
+/// whose `n` is the host's clamped delta (`now - was`) for
+/// `add_crystals(1, 1)`. When `pre < 1` the gain lands (+1); at/above the
+/// roll cap the host clamps the post value to `max=1`, so the logged delta is
+/// `min(pre + 1, 1) - pre` (0 at the cap, negative if over-cap crystals are
+/// present — bookkeeping of the clamp, not a second gain).
+pub fn band_02_log_ok(effects: &[Effect], owner: i32, pre: i32) -> bool {
+    let want_n = spec_clamped_delta(pre, 1, 1);
     effects.len() == 1
         && matches!(
             effects[0],
@@ -36,11 +41,23 @@ pub fn band_02_log_ok(effects: &[Effect], owner: i32) -> bool {
                 owner: o,
                 n,
                 ..
-            } if o == owner && n == 1
+            } if o == owner && n == want_n
         )
 }
 
-/// MUTANT: demands n == 2.
+/// Host `arm_add_counter_self` delta for `add(n, max)`: `clamp(was+n, 0, max) - was`.
+fn spec_clamped_delta(was: i32, n: i32, max: i32) -> i32 {
+    let mut now = was + n;
+    if now < 0 {
+        now = 0;
+    }
+    if max > 0 && now > max {
+        now = max;
+    }
+    now - was
+}
+
+/// MUTANT: demands n == 2 (a double-gain card).
 pub fn band_02_log_ok_mutant(effects: &[Effect], owner: i32) -> bool {
     effects.len() == 1
         && matches!(
@@ -84,34 +101,34 @@ pub fn band_05_log_ok_mutant(effects: &[Effect], owner: i32) -> bool {
 // C-MYGO-band-04
 // 「每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶]
 //  （最多超出2个）」
-// Hook: Discarded (mine). Effect: +1 crystal that may exceed the roll cap,
-// at most 2 over (so max 3 with the cap of 1).
-// KNOWN black-box LESS: the over-cap crystal does not land when the band card
-// is already at the roll cap of 1. Spec from the book.
+// Hook: Discarded (mine). Effect: +1 crystal that may exceed the roll cap of 1,
+// at most 2 over (held total ceiling 3). Body `skill.mygo.over` is audit only.
 // ===========================================================================
 
-/// Post crystals after an ineffective-discard gain, given pre and the current
-/// over-cap count `over` (0..=2). The gain is refused once `over == 2`.
-pub fn band_04_crystals_after(pre: i32, over: i32) -> i32 {
-    let room = 1 + over.min(2);
-    if pre >= room {
+/// Post crystals after an ineffective-discard gain. The +1 may exceed the roll
+/// cap of 1; the held total never exceeds 3 (「最多超出2个」). The gain is
+/// refused once `pre >= 3`.
+pub fn band_04_crystals_after(pre: i32) -> i32 {
+    if pre >= 3 {
         pre
     } else {
         pre + 1
     }
 }
 
-/// Exact log when the gain fires: one AddCounter(+1).
+/// Log when the gain fires: one AddCounter(+1). `state::set(OVER, …)` is a
+/// SetState bookkeeping entry the body also pushes — tolerate it.
 pub fn band_04_log_ok(effects: &[Effect], owner: i32) -> bool {
-    effects.len() == 1
-        && matches!(
-            effects[0],
-            Effect::AddCounter {
-                owner: o,
-                n,
-                ..
-            } if o == owner && n == 1
-        )
+    let mut add = 0;
+    for e in effects {
+        match e {
+            Effect::AddCounter { owner: o, n, .. } if *o == owner && *n == 1 => add += 1,
+            Effect::AddCounter { .. } => return false,
+            Effect::SetState { .. } => {}
+            _ => return false,
+        }
+    }
+    add == 1
 }
 
 /// MUTANT: no effect when the gain should fire.

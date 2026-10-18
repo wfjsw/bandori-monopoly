@@ -298,3 +298,9 @@ pub fn cash_kani(player_id: i32) -> card_sdk::Asked {
 pub fn sweep_overflow_kani(player_id: i32) -> card_sdk::Asked {
     sweep_overflow(player_id)
 }
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}

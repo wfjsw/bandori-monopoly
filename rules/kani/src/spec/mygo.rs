@@ -257,8 +257,12 @@ pub fn rainday_02_stay_ok_mutant(effects: &[Effect], after: usize, zone: &[bool]
 // per AFFECTED PLAYER (stay=1 + stun=1 → 2000 for one player with both).
 // Spec money: each affected player P pays `1000 * kinds(P)` to the user;
 // the user additionally gains `1000 * kinds(user)` (clause -03).
-// KNOWN black-box finding: the body charges `1000 * GLOBAL kinds` from every
-// living player — MORE/WRONG vs the book. The iff proof is expected to FAILS.
+//
+// The body (`card-mygo/src/hitoshizuku.rs`) implements exactly that: `cleared`
+// is a per-player `(j, n)` list and `transfer(j, user, 1000 * n)` / the
+// self-gain uses that player's own `n`. The older "body charges 1000 * GLOBAL
+// kinds" note is **stale** (pre-ruling snapshot); the book and the body agree.
+// `hitoshizuku_body_global_pay_ok` is kept as the *mutant* reading.
 // ===========================================================================
 
 /// kinds(P) = number of effect types cleared on P (0..=2).
@@ -270,17 +274,19 @@ pub fn hitoshizuku_pay_amount(kinds: i32) -> i32 {
 /// has a PayTo { from: j, to: user, n: 1000*kinds(j) }; the user's own extra
 /// gain is `GainMoney { player: user, n: 1000*kinds(user) }` when kinds(user)>0.
 /// The clear leg itself is a sequence of GiveStay / GiveStun / SetState.
+/// Bounded while (slice iterators are an SSA cliff).
 pub fn hitoshizuku_money_ok(
     effects: &[Effect],
     user: i32,
     kinds: &[i32],
     n_players: i32,
 ) -> bool {
-    // collect money effects after the status-clear prefix
     let mut pays = 0;
     let mut gains = 0;
-    for e in effects {
-        match e {
+    let mut i = 0usize;
+    let len = effects.len().min(24);
+    while i < len {
+        match &effects[i] {
             Effect::PayTo { from, to, n } => {
                 if *to != user {
                     return false;
@@ -305,19 +311,24 @@ pub fn hitoshizuku_money_ok(
             }
             _ => {}
         }
+        i += 1;
     }
-    let expected_pays = (0..n_players as usize)
-        .filter(|&j| j != user as usize && kinds[j] > 0)
-        .count();
+    let mut expected_pays = 0;
+    let mut j = 0usize;
+    let np = n_players.max(0) as usize;
+    while j < np && j < kinds.len() {
+        if j != user as usize && kinds[j] > 0 {
+            expected_pays += 1;
+        }
+        j += 1;
+    }
     let expected_gains = if kinds[user as usize] > 0 { 1 } else { 0 };
     pays == expected_pays && gains == expected_gains
 }
 
-/// MUTANT: book-wrong reading the body implements — every living player pays
-/// `1000 * global_kinds`. A correct card must NOT match this mutant when the
-/// spec is the per-player reading... wait, this IS what the body does, so
-/// `hitoshizuku_money_ok_mutant` being true while `hitoshizuku_money_ok` is
-/// false is the FAILS evidence. Name it `hitoshizuku_body_global_pay_ok`.
+/// MUTANT / stale reading: every living player pays `1000 * global_kinds`.
+/// Kept so `hitoshizuku_global_pay_mutant_is_detected` can pin that the body
+/// does **not** take this arm when per-player kinds differ.
 pub fn hitoshizuku_body_global_pay_ok(
     effects: &[Effect],
     user: i32,
@@ -326,18 +337,26 @@ pub fn hitoshizuku_body_global_pay_ok(
 ) -> bool {
     let each = 1000 * global_kinds;
     let mut pays = 0;
-    for e in effects {
-        if let Effect::PayTo { from, to, n } = e {
+    let mut i = 0usize;
+    let len = effects.len().min(24);
+    while i < len {
+        if let Effect::PayTo { to, n, .. } = &effects[i] {
             if *to != user || *n != each {
                 return false;
             }
-            let _ = from;
             pays += 1;
         }
+        i += 1;
     }
-    let expected = (0..n_players as usize)
-        .filter(|&j| j != user as usize)
-        .count();
+    let mut expected = 0;
+    let mut j = 0usize;
+    let np = n_players.max(0) as usize;
+    while j < np {
+        if j != user as usize {
+            expected += 1;
+        }
+        j += 1;
+    }
     pays == expected
 }
 

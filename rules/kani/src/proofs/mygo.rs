@@ -56,11 +56,14 @@ crate::host_subset!(haneoka_dispatch {
 
 /// `MyGO:那天的雨` play — place + 5 crystals + the inlined `rain` leg
 /// (1d10 → agent tiles → +1 [停留] to everyone standing in the zone).
+/// Placement proofs pin the die to face 1 (主要街道) so the rain `Vec`
+/// walk is one agent — the stay leg is PROTOCOL-adjacent (`rainday_02`).
+/// Not a silent-zero: a real face of 1 on the 1d10.
 crate::host_subset!(that_day_rain_dispatch {
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     set_counter_self => arm_set_counter_self,
-    roll => arm_roll,
+    roll => arm_roll_face_one,
     tile_count => arm_tile_count,
     tile_named => arm_tile_named,
     player_count => arm_player_count,
@@ -426,10 +429,18 @@ pub fn haneoka_05_mutant_is_detected() {
 // ===========================================================================
 
 /// Shared iff at a **concrete** user seat: PlaceCard(Field) first; crystals
-/// key == 5; rain may add GiveStays.
+/// key == 5; rain may add GiveStays. Die is pinned to face 1 (see dispatch).
 fn rainday_01_place_five_crystals_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2_user(that_day_rain_dispatch, user);
+    // Pin seats so both rain covers are reachable: `user` stands on the
+    // face-1 agent tile 「主要街道」 (in the colour+neighbour area); the
+    // other seat stays on CiRCLE (tile 0).
+    let agent_tile = crate::board::tile_named("主要街道");
+    world::with_world_mut(|w| {
+        w.pos[user as usize] = if agent_tile >= 0 { agent_tile } else { 0 };
+        w.pos[1 - user as usize] = 0;
+    });
     let pre = world::snapshot();
     invoke::unwrap_done(card_mygo::that_day_rain::that_day_rain_kani(user));
     kani::cover!(true, "body returned");
@@ -449,14 +460,17 @@ fn rainday_01_place_five_crystals_iff_at(user: i32) {
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 
-    kani::cover!(
-        effects.iter().any(|e| matches!(e, Effect::GiveStay { .. })),
-        "rain leg granted stay"
-    );
-    kani::cover!(
-        !effects.iter().any(|e| matches!(e, Effect::GiveStay { .. })),
-        "rain leg granted no stay"
-    );
+    let mut stayed = false;
+    let mut i = 0usize;
+    let len = effects.len().min(24);
+    while i < len {
+        if matches!(effects[i], Effect::GiveStay { .. }) {
+            stayed = true;
+        }
+        i += 1;
+    }
+    kani::cover!(stayed, "rain leg granted stay");
+    kani::cover!(!stayed, "rain leg granted no stay");
 }
 
 /// Placement iff at seat 0.
@@ -494,45 +508,63 @@ pub fn rainday_01_mutant_is_detected() {
 // Seat-symmetric on the user (the payee / extra-gainer).
 // Isolation: `lockedStay` = 0 (locked layers survive the clear). Stay / stun
 // start symbolic per seat so the clear prefix is reachable.
-// KNOWN: the body's money leg charges `1000 * global kinds` from every living
-// player (black-box MORE). The book spec is per-player kinds. We assert the
-// BOOK spec; a FAILS here is the finding.
+// Book vs body: both are per-player kinds (ruling 2026-10-06). The old
+// "body charges global kinds" note is stale — see `spec::mygo`.
 // ===========================================================================
 
-/// Symbolic stay / stun on the two live seats (lockedStay stays 0).
+/// Concrete stay / stun on the two live seats (lockedStay stays 0).
+///
+/// Pattern: seat 0 has stay+stun (kinds=2), seat 1 has stay only (kinds=1).
+/// Concrete values keep `cleared.len()` a constant 2, so the body's
+/// `for &(_,_) in &cleared` unrolls twice — a symbolic-length `Vec` iterator
+/// is an SSA cliff (`Not unwinding … iteration 32` at
+/// `hitoshizuku.rs:92`).
 fn hitoshizuku_world(user: i32) {
     sparse2_user(hitoshizuku_dispatch, user);
     world::with_world_mut(|w| {
-        for p in 0..2 {
-            w.stay[p] = kani::any();
-            kani::assume(w.stay[p] >= 0 && w.stay[p] <= 4);
-            w.stun[p] = kani::any();
-            kani::assume(w.stun[p] >= 0 && w.stun[p] <= 4);
-        }
+        w.stay = [1, 1, 0, 0];
+        w.stun = [1, 0, 0, 0];
     });
 }
 
 /// Recover per-player kinds from the clear prefix: GiveStay with negative n
-/// is the stay clear (1 kind); GiveStun with negative n (or n!=0) plus
-/// SetState stunStart=0 is the stun clear.
+/// is the stay clear (1 kind); GiveStun with nonzero n is the stun clear.
+/// Bounded while (slice iterators are an SSA cliff).
 fn hitoshizuku_kinds(effects: &[Effect]) -> [i32; MAX_PLAYERS] {
     let mut kinds = [0i32; MAX_PLAYERS];
-    for e in effects {
-        match e {
+    let mut i = 0usize;
+    let len = effects.len().min(24);
+    while i < len {
+        match &effects[i] {
             Effect::GiveStay { player: p, n } if *n < 0 => {
-                kinds[*p as usize] += 1;
+                if (*p as usize) < MAX_PLAYERS {
+                    kinds[*p as usize] += 1;
+                }
             }
             Effect::GiveStun { player: p, n } if *n != 0 => {
-                kinds[*p as usize] += 1;
+                if (*p as usize) < MAX_PLAYERS {
+                    kinds[*p as usize] += 1;
+                }
             }
             _ => {}
         }
+        i += 1;
     }
     kinds
 }
 
+fn kinds_sum(kinds: &[i32; MAX_PLAYERS]) -> i32 {
+    let mut s = 0;
+    let mut i = 0;
+    while i < MAX_PLAYERS {
+        s += kinds[i];
+        i += 1;
+    }
+    s
+}
+
 /// Shared iff against the **book** money rule at a concrete user seat.
-/// Expected to FAILS on the money leg (body charges global kinds).
+/// Body matches the book (per-player kinds) since the 2026-10-06 ruling.
 fn hitoshizuku_money_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     hitoshizuku_world(user);
@@ -544,34 +576,43 @@ fn hitoshizuku_money_iff_at(user: i32) {
     let effects = &logbuf[..log_n];
 
     let kinds = hitoshizuku_kinds(effects);
-    let global_kinds: i32 = kinds.iter().sum();
-    kani::cover!(global_kinds == 0, "nothing cleared");
+    let global_kinds = kinds_sum(&kinds);
     kani::cover!(global_kinds > 0, "something cleared");
+    kani::cover!(
+        global_kinds > 0 && kinds[0] != kinds[1],
+        "uneven per-player kinds (book ≠ global mutant)"
+    );
 
     if global_kinds == 0 {
-        // no money leg
-        crate::kassert!(
-            !effects.iter().any(|e| matches!(e, Effect::PayTo { .. } | Effect::GainMoney { .. })),
-            "C-MYGO-hitoshizuku: no clear ⇒ no money"
-        );
+        // no money leg — bounded scan, no iterator `any`
+        let mut money = false;
+        let mut i = 0usize;
+        let len = effects.len().min(24);
+        while i < len {
+            if matches!(effects[i], Effect::PayTo { .. } | Effect::GainMoney { .. }) {
+                money = true;
+            }
+            i += 1;
+        }
+        crate::kassert!(!money, "C-MYGO-hitoshizuku: no clear ⇒ no money");
     } else {
-        // BOOK spec (per-player kinds).
         let book_ok = spec::hitoshizuku_money_ok(effects, user, &kinds, pre.n_players);
-        // BODY behaviour (global kinds) — kept as a diagnostic.
-        let body_ok =
-            spec::hitoshizuku_body_global_pay_ok(effects, user, global_kinds, pre.n_players);
-        kani::cover!(body_ok, "body matches global-kinds reading");
         crate::kassert!(
             book_ok,
             "C-MYGO-hitoshizuku-02: book wants 1000 per type per affected player"
         );
-        let _ = body_ok;
     }
 
-    crate::kassert!(
-        post.stay.iter().zip(pre.stay.iter()).all(|(a, b)| a <= b),
-        "C-MYGO-hitoshizuku-01: stay never rises"
-    );
+    // Stay never rises — bounded compare (zip/all is an SSA cliff).
+    let mut stay_ok = true;
+    let mut p = 0usize;
+    while p < MAX_PLAYERS {
+        if post.stay[p] > pre.stay[p] {
+            stay_ok = false;
+        }
+        p += 1;
+    }
+    crate::kassert!(stay_ok, "C-MYGO-hitoshizuku-01: stay never rises");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 
@@ -589,39 +630,75 @@ pub fn hitoshizuku_user1_money_iff() {
     hitoshizuku_money_iff_at(1);
 }
 
-/// Diagnostic companion at a concrete user seat: the body's global-kinds
-/// reading is what it does. If this is SUCCESSFUL while `hitoshizuku_money_iff`
-/// FAILED, the finding is MORE/WRONG on the money amount.
+/// Companion: the stale global-kinds reading is a **mutant**. When per-player
+/// kinds are uneven the body must not charge `1000 * sum(kinds)` from every
+/// living seat. (Keeps the old harness names so the central pass still finds
+/// a row here; the assertion is now "mutant is not what the body does".)
 fn hitoshizuku_body_global_pay_observed_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     hitoshizuku_world(user);
-    let pre = world::snapshot();
     invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
     kani::cover!(true, "body returned");
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let kinds = hitoshizuku_kinds(effects);
-    let global_kinds: i32 = kinds.iter().sum();
-    if global_kinds > 0 {
+    let global_kinds = kinds_sum(&kinds);
+    // Only the uneven case separates the book from the global mutant.
+    let uneven = global_kinds > 0 && kinds[0] != kinds[1];
+    kani::cover!(uneven, "uneven kinds (mutant distinguishable)");
+    if uneven {
+        let pre = world::snapshot();
+        let body_global =
+            spec::hitoshizuku_body_global_pay_ok(effects, user, global_kinds, pre.n_players);
         crate::kassert!(
-            spec::hitoshizuku_body_global_pay_ok(effects, user, global_kinds, pre.n_players),
-            "diagnostic: body charges 1000 * global kinds from every living player"
+            !body_global,
+            "mutant: body must not charge 1000 * global kinds when per-player kinds differ"
         );
     }
 }
 
-/// Body-global diagnostic at seat 0.
+/// Global-kinds mutant is not what the body does (seat 0).
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn hitoshizuku_body_global_pay_observed() {
     hitoshizuku_body_global_pay_observed_at(0);
 }
 
-/// Body-global diagnostic at seat 1.
+/// Global-kinds mutant is not what the body does (seat 1).
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn hitoshizuku_user1_body_global_pay_observed() {
     hitoshizuku_body_global_pay_observed_at(1);
+}
+
+/// No-clear limb: with stay=stun=0 the body logs no money effects.
+fn hitoshizuku_no_clear_is_noop_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    sparse2_user(hitoshizuku_dispatch, user);
+    world::with_world_mut(|w| {
+        w.stay = [0; MAX_PLAYERS];
+        w.stun = [0; MAX_PLAYERS];
+    });
+    invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    let mut money = false;
+    let mut i = 0usize;
+    let len = effects.len().min(24);
+    while i < len {
+        if matches!(effects[i], Effect::PayTo { .. } | Effect::GainMoney { .. }) {
+            money = true;
+        }
+        i += 1;
+    }
+    crate::kassert!(!money, "C-MYGO-hitoshizuku: no clear ⇒ no money");
+}
+
+/// No-clear limb at seat 0.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn hitoshizuku_no_clear_is_noop() {
+    hitoshizuku_no_clear_is_noop_at(0);
 }
 
 // ===========================================================================

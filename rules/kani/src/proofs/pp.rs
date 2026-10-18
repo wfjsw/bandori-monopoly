@@ -1255,11 +1255,10 @@ pub fn ranger_01_02_steps_by_count_iff() {
     symbolic_play_world();
     let user = any_player_in();
     // Isolation: no [共鸣]; concrete `others` ∈ {0, 1} dummy field cards.
-    // The Kani `cards_in` facade returns an empty Vec for n=0 and a padded
-    // 4-element Vec for n≥1, so the body's `placed_count` is 0 or 4 — not
-    // the literal card count. Pin the two facade shapes (class B: the old
-    // symbolic `others` 0..=3 made the body see 4 for 1..=3, and the
-    // `cards_in` String facade was the symex cliff).
+    // `cards_in` is an exact-length facade (`n` strings for `n` field cards),
+    // so the body's `placed_count` is the literal 0 or 1 (class C fix in the
+    // `cfg(kani)` facade — the old padded 0|4 shape made 1 card look like 4
+    // and unlocked the count≥3 / count≥4 legs).
     let others: i32 = kani::any();
     kani::assume(others == 0 || others == 1);
     let pre_band = kani::any();
@@ -1286,10 +1285,10 @@ pub fn ranger_01_02_steps_by_count_iff() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]魔法战队Pastel✽Ranger"), user));
     let post_money = world::with_world(|ww| ww.money[user as usize]);
     let band = band_crystals_of(user);
-    // Facade shape: 0 when no field cards, 4 when any.
-    let count = if others == 0 { 0 } else { 4 };
+    // Exact facade length == the real placed count.
+    let count = others;
     kani::cover!(count == 0, "empty field: no legs");
-    kani::cover!(count == 4, "non-empty: legs 1+2+3");
+    kani::cover!(count == 1, "one field card: leg 1 only (count>=1)");
     crate::kassert!(
         post_money == pre_money + spec::pp::ranger_01_money(count),
         "C-PP-ranger-01: +500 iff count >= 1"

@@ -279,3 +279,25 @@ concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
 body calls, per-harness `host_subset!`, sparse in-place world. See
 TRIAGE-LOG.md `bands-b`. Results accumulate in
 `/home/monopoly/kani-bands-b-results/results-all.tsv`.
+
+## triage3 batch 14 — ras central non-success rows (kani-pass@fc3ff3e1)
+
+Central pass rows (unit `ras`, features `band-ras` per `tools/kani/run.sh`).
+
+| harness | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|
+| `riot_02_03_cycle_iff` + `riot_02_03_user1_cycle_iff` | TIMEOUT 1800 s ×2 | **E**+**C** | BMC unwinding drowned in `RawVec::grow` abort-paths (body `riot.rs` builds `Vec<(i32,i32)>` + `cards_in` `Vec<String>`). The Kani `cards_in` facade returned length **0 or 4** (padded), so the body's `hand.len()` redraw amount was 0/4 not the real 0..=2 | `cfg(kani)` `cards_in` now returns an **exact-length** Vec (`n` facade strings for `n` cards). Bodies that read `len()` (riot redraw, ranger 「数量」) see the true count. `pp::ranger_01_02_steps_by_count_iff` pin updated to the real count. `riot_world` / cycle-log loops bounded (class A: `0..h as usize` unwinds unbounded). kani-bump enabled | needs re-time |
+| `riot_03_extra_draw_mutant_is_detected` | TIMEOUT 1800 s | **E**+**C** | same | same | needs re-time |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch.
+
+### Book quotes checked
+
+* riot: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。」
+  (`docs/rulebook/cards.json` id `RAS:R. I. O. T.`)
+
+### Gates
+
+See mygo.md § triage3 batch 14 (same gate run; `band-ras` codegen Finished).

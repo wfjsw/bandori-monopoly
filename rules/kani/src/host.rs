@@ -2336,6 +2336,13 @@ pub fn arm_roll(a: Args) -> i64 {
     roll_dice(a1, a2) as i64
 }
 
+/// Concrete face of 1 — isolation for harnesses that pin the die so a
+/// downstream `Vec` walk (rainday's agent-area build) sees a single branch.
+/// Not a silent-zero: a real 1d10 face.
+pub fn arm_roll_face_one(_a: Args) -> i64 {
+    1
+}
+
 pub fn arm_roll_ask(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     roll_dice(a1, a2) as i64
