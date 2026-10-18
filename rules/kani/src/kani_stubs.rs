@@ -177,11 +177,54 @@ pub fn formatter_pad_stub<'a>(f: &mut core::fmt::Formatter<'a>, s: &str) -> core
     core::fmt::Write::write_str(f, s)
 }
 
-/// `PadAdapter` is left unstubbed (its `Write` impl is the only public
-/// handle and stubbing `write_str` would recurse through `write_char`).
-/// The panic_fmt stub below is the cut that matters for panic-message
-/// assembly; a live `format!("key:{p}")` keeps real `Display` so key bytes
-/// match production.
+/// Write an unsigned integer as decimal digits into `f` (no padding).
+fn write_uint(mut n: u64, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    if n == 0 {
+        return core::fmt::Write::write_str(f, "0");
+    }
+    let mut buf = [0u8; 20];
+    let mut i = 20;
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    let s = core::str::from_utf8(&buf[i..]).unwrap_or("0");
+    core::fmt::Write::write_str(f, s)
+}
+
+/// Display for `u32` — used by `format!("{p}")` for player indices.
+/// Real path: `_fmt_inner` → `pad_integral` → `PostPadding`/`PadAdapter`.
+/// This stub writes the same decimal digits with no padding (loud FAIL if
+/// width/precision set). Same string as production for `{}` / `{p}`.
+pub fn u32_display_fmt(x: &u32, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    if f.width().is_some() || f.precision().is_some() {
+        kani::assert(false, "kani_stubs::u32_display_fmt: width/precision");
+    }
+    write_uint(*x as u64, f)
+}
+
+/// Display for `i32` — player indices / small counters.
+pub fn i32_display_fmt(x: &i32, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    if f.width().is_some() || f.precision().is_some() {
+        kani::assert(false, "kani_stubs::i32_display_fmt: width/precision");
+    }
+    if *x < 0 {
+        core::fmt::Write::write_str(f, "-")?;
+    }
+    write_uint(x.unsigned_abs() as u64, f)
+}
+
+/// Display for `i64` — `Msg::i` amounts (`amount as i64`).
+pub fn i64_display_fmt(x: &i64, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    if f.width().is_some() || f.precision().is_some() {
+        kani::assert(false, "kani_stubs::i64_display_fmt: width/precision");
+    }
+    if *x < 0 {
+        core::fmt::Write::write_str(f, "-")?;
+    }
+    write_uint(x.unsigned_abs(), f)
+}
 
 kani::stub_set!(pub LIB_COST,
     stub(core::slice::memchr::memchr, crate::kani_stubs::memchr_stub),
@@ -196,6 +239,9 @@ kani::stub_set!(pub LIB_COST,
     // `panic_fmt` is NOT stubbed here — `#[kani::should_panic]` mutants need
     // a real panic! event. format/PadAdapter are fine for mutants.
     stub(alloc::fmt::format, crate::kani_stubs::fmt_format_stub),
+    stub(<u32 as core::fmt::Display>::fmt, crate::kani_stubs::u32_display_fmt),
+    stub(<i32 as core::fmt::Display>::fmt, crate::kani_stubs::i32_display_fmt),
+    stub(<i64 as core::fmt::Display>::fmt, crate::kani_stubs::i64_display_fmt),
 );
 
 /// Same as [`LIB_COST`] plus `panic_fmt` (drops fmt/memchr of panic messages).
@@ -213,4 +259,7 @@ kani::stub_set!(pub LIB_COST_NOFMT,
     stub(alloc::raw_vec::handle_error, crate::kani_stubs::handle_error_stub),
     stub(core::panicking::panic_fmt, crate::kani_stubs::panic_fmt_stub),
     stub(alloc::fmt::format, crate::kani_stubs::fmt_format_stub),
+    stub(<u32 as core::fmt::Display>::fmt, crate::kani_stubs::u32_display_fmt),
+    stub(<i32 as core::fmt::Display>::fmt, crate::kani_stubs::i32_display_fmt),
+    stub(<i64 as core::fmt::Display>::fmt, crate::kani_stubs::i64_display_fmt),
 );
