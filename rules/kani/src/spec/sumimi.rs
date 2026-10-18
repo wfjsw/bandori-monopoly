@@ -172,8 +172,9 @@ pub fn twoinone_fire_target(from_is_hina: bool) -> i32 {
 /// no GainFire / token writes that would double-count pots.
 pub fn twoinone_fire_effects_ok(effects: &[Effect], player: i32, fire_key: u16, to: i32) -> bool {
     let mut saw_fire = false;
-    for e in effects {
-        match e {
+    let mut i = 0usize;
+    while i < effects.len() {
+        match &effects[i] {
             Effect::SetState { player: p, key, n } => {
                 if *p == player && *key == fire_key {
                     if saw_fire || *n != to {
@@ -187,6 +188,7 @@ pub fn twoinone_fire_effects_ok(effects: &[Effect], player: i32, fire_key: u16, 
             }
             _ => {}
         }
+        i += 1;
     }
     saw_fire
 }
