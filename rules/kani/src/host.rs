@@ -1588,12 +1588,52 @@ pub fn arm_exile_of(a: Args) -> i64 {
 }
 
 pub fn arm_field_instances(a: Args) -> i64 {
-    let _ = a;
-{
-            // Write uid list into out-buffer: [n, uid…] as i32s is overkill;
-            // return count.
-            world::with_world(|w| w.field_n as i32) as i64
+    let [a0, buf, cap, ..] = a;
+    // Compact pairs under Kani (see `ctx::field_instances` cfg(kani) facade):
+    // `buf == 0` → just the player's field-instance count.
+    // `buf != 0` → LE `i32` pairs `[uid, name_id]` per instance, return count
+    // (or -1 when `cap` is too small). Never postcard — that deserializer is
+    // the `twoinone_01b_*` 1800 s cliff (unbounded `Vec<(i32, String)>`).
+    const MAX_F: usize = world::MAX_FIELD;
+    let mut uids = [0i32; MAX_F];
+    let mut names = [0u16; MAX_F];
+    let mut n = 0usize;
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize && n < MAX_F {
+            if w.field[i].player == a0 {
+                uids[n] = w.field[i].uid;
+                names[n] = w.field[i].card;
+                n += 1;
+            }
+            i += 1;
         }
+    });
+    if buf == 0 {
+        return n as i64;
+    }
+    let need = (n * 8) as i32;
+    if cap < need {
+        return -1;
+    }
+    let mut encoded = [0u8; MAX_F * 8];
+    let mut i = 0usize;
+    while i < n {
+        let base = i * 8;
+        let ub = uids[i].to_le_bytes();
+        let nb = (names[i] as i32).to_le_bytes();
+        encoded[base] = ub[0];
+        encoded[base + 1] = ub[1];
+        encoded[base + 2] = ub[2];
+        encoded[base + 3] = ub[3];
+        encoded[base + 4] = nb[0];
+        encoded[base + 5] = nb[1];
+        encoded[base + 6] = nb[2];
+        encoded[base + 7] = nb[3];
+        i += 1;
+    }
+    card_sdk::native::write(buf, &encoded[..need as usize]);
+    n as i64
 }
 
 pub fn arm_fire(a: Args) -> i64 {

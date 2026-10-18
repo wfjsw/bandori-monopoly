@@ -3234,6 +3234,49 @@ pub fn set_self_immune(on: bool) -> bool {
 /// order. Walk this rather than [`placed_cards`] whenever the next step
 /// addresses the instance -- the *name* is not an identity, so a name-keyed
 /// op would hit the first copy twice when one player holds two.
+///
+/// Under `cfg(kani)` the host writes LE `i32` pairs `[uid, name_id]` (never
+/// postcard — the `Vec<(i32, String)>` deserializer is a BMC cliff). Names are
+/// rebuilt from the intern table without the UTF-8 validation loop.
+#[cfg(kani)]
+pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
+    const MAX_F: usize = 8;
+    let n = unsafe { sys::field_instances(player_id, 0, 0) };
+    if n <= 0 || n > MAX_F as i32 {
+        return Vec::new();
+    }
+    let need = (n as usize) * 8;
+    let (p, scratch) = out_buf(need);
+    let got = unsafe { sys::field_instances(player_id, p, need as i32) };
+    if got != n {
+        return Vec::new();
+    }
+    let buf = out_read(p, need as i32, scratch);
+    let mut out: Vec<(i32, String)> = Vec::new();
+    let mut i = 0usize;
+    while i < n as usize {
+        let base = i * 8;
+        let uid = i32::from_le_bytes([
+            buf.get(base).copied().unwrap_or(0),
+            buf.get(base + 1).copied().unwrap_or(0),
+            buf.get(base + 2).copied().unwrap_or(0),
+            buf.get(base + 3).copied().unwrap_or(0),
+        ]);
+        let nid = u16::from_le_bytes([
+            buf.get(base + 4).copied().unwrap_or(0),
+            buf.get(base + 5).copied().unwrap_or(0),
+        ]);
+        // Interned names came from `&str`, so the bytes are UTF-8; skip the
+        // validation loop (TUNING: `resolve_str` is a kani cliff).
+        let bytes = crate::intern::resolve(crate::intern::NameId(nid));
+        let s = unsafe { String::from_utf8_unchecked(bytes.to_vec()) };
+        out.push((uid, s));
+        i += 1;
+    }
+    out
+}
+
+#[cfg(not(kani))]
 pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
     let cap = 8192;
     let (p, scratch) = out_buf(cap as usize);
@@ -3285,6 +3328,46 @@ pub fn set_immune_at(uid: i32, on: bool) -> bool {
 /// A *resolver*, not an identity: with several copies in play it answers the
 /// first, so a rule that means "a specific copy" has to hold the uid from
 /// [`place_card`] instead of asking by name.
+///
+/// Under `cfg(kani)` this walks the compact `[uid, name_id]` host encoding and
+/// compares intern ids — no `field_instances` `Vec<(i32, String)>`, no postcard.
+#[cfg(kani)]
+pub fn find_card(player_id: i32, name: &str) -> Option<i32> {
+    const MAX_F: usize = 8;
+    let want = crate::intern::intern(name);
+    let n = unsafe { sys::field_instances(player_id, 0, 0) };
+    if n <= 0 || n > MAX_F as i32 {
+        return None;
+    }
+    let need = (n as usize) * 8;
+    let (p, scratch) = out_buf(need);
+    let got = unsafe { sys::field_instances(player_id, p, need as i32) };
+    if got != n {
+        return None;
+    }
+    let buf = out_read(p, need as i32, scratch);
+    let mut i = 0usize;
+    while i < n as usize {
+        let base = i * 8;
+        let uid = i32::from_le_bytes([
+            buf.get(base).copied().unwrap_or(0),
+            buf.get(base + 1).copied().unwrap_or(0),
+            buf.get(base + 2).copied().unwrap_or(0),
+            buf.get(base + 3).copied().unwrap_or(0),
+        ]);
+        let nid = crate::intern::NameId(u16::from_le_bytes([
+            buf.get(base + 4).copied().unwrap_or(0),
+            buf.get(base + 5).copied().unwrap_or(0),
+        ]));
+        if nid == want {
+            return Some(uid);
+        }
+        i += 1;
+    }
+    None
+}
+
+#[cfg(not(kani))]
 pub fn find_card(player_id: i32, name: &str) -> Option<i32> {
     field_instances(player_id)
         .into_iter()
