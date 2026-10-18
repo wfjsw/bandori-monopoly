@@ -18,10 +18,10 @@ const ID: &str = "HHW:（薰）怪盗hello happy";
 pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
-        On::Play("", Some(cant_play), play),
+        On::Play("", "", Some(cant_play), play),
         On::Action(
             &[ActionKind::TurnEnd],
-            "actor == owner && card.placed",
+            "actor == owner && card.placed", "",
             None,
             turn_end,
         ),
@@ -30,7 +30,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
         On::Action(
             &[ActionKind::PassPlayer],
-            "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key",
+            "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", "",
             Some(marked_here),
             pass_player,
         ),
@@ -45,7 +45,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         ),
         On::Action(
             &[ActionKind::CounterChanged],
-            "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0",
+            "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", "",
             Some(crystals_changed_guard),
             on_crystals_changed,
         ),

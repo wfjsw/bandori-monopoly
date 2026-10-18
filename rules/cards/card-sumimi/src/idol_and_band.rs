@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const IDOL_AND_BAND: CardDef = CardDef::new(
     "Sumimi:兼顾偶像与乐队",
-    &[On::Play("", Some(cant_play), idol_and_band)],
+    &[On::Play("", "", Some(cant_play), idol_and_band)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"兼顾偶像与乐队"#)
         .raw_name(r#"兼顾偶像与乐队"#)

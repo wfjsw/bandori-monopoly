@@ -17,6 +17,7 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
+        r#"你将要向其他玩家支付"#,
         None,
         counteract,
     )],

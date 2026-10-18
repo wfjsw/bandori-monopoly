@@ -19,10 +19,11 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::MoveBefore],
             "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
+            r#"时机合适"#,
             Some(can_counteract),
             counteract,
         ),
-        On::Play("", Some(counter_only), no_play),
+        On::Play("", "", Some(counter_only), no_play),
     ],
 )
 .props(&[(prop::COUNTERACT_GROUP, 1)])

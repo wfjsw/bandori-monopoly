@@ -12,13 +12,13 @@ use card_sdk::abi::ActionKind;
 pub const RINNE_RAIN: CardDef = CardDef::new(
     "MyGO:轮符雨",
     &[
-        On::Play("", None, rinne_rain),
+        On::Play("", "", None, rinne_rain),
         // 「并在回合结束时额外进行一次[触发结算]」 is a **scheduling** clause
         // (`docs/TILES.md`), not a tile fact: `On::AtEnd` runs it at the turn
         // end, and its body is a plain `ctx::settle`.
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
-        On::Action(&[ActionKind::AtEnd], "owner.pos >= 0", None, settle_now),
+        On::Action(&[ActionKind::AtEnd], "owner.pos >= 0", "", None, settle_now),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

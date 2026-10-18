@@ -17,8 +17,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
-        On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract),
-        On::Action(&[ActionKind::AtEnd], "", None, at_end),
+        On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, r#"你在回合外受到抽卡效果"#, None, counteract),
+        On::Action(&[ActionKind::AtEnd], "", "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"优雅的呐喊"#)

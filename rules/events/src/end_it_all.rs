@@ -1,6 +1,6 @@
 //! `event:让我来结束一切` -- 事件卡「让我来结束一切」（中立事件 A27，衍生，常驻）.
 //!
-//! 事件文本（data/events.json, id `让我来结束一切`）:
+//! 事件文本（`CardMeta` beside the rule body, id `让我来结束一切`）:
 //! > 触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上，此卡在场上则[衍生]让我来结束一切不会被[衍生]迷子的追逐放置在事件牌堆顶部
 
 use alloc::vec::Vec;
@@ -10,10 +10,10 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::keep;
 
-/// Every non-derived event id, in `data/events.json` order.
-/// TODO(规则书)/TODO(engine): the non-derived list lives in `data/events.json`
-/// (`derived: false`) and is not reachable from `ctx`, so the ids are
-/// duplicated here. Keep the table in step with the data file.
+/// Every non-derived event id, in roster / `CARDS` order.
+/// TODO(规则书)/TODO(engine): the non-derived list lives on each event's
+/// `CardMeta` (`derived: false`) and is not reachable from `ctx`, so the ids
+/// are duplicated here. Keep the table in step with the `CardMeta` flags.
 const NON_DERIVED: &[&str] = &[
     "对邦",
     "弦卷集团地产开发",
@@ -40,7 +40,12 @@ const NON_DERIVED: &[&str] = &[
     "火种燃尽之后会怎么样呢？",
 ];
 
-pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play("", None, play)]);
+pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"让我来结束一切"#)
+            .text(r#"触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上，此卡在场上则[衍生]让我来结束一切不会被[衍生]迷子的追逐放置在事件牌堆顶部"#)
+            .cell(r#"A27"#)
+            .derived(true));
 
 /// 规则书: 「触发事件的玩家从所有非衍生事件中选择3个移除」 -- the drawer picks
 /// three distinct non-derived event ids and each is banished for good.

@@ -247,6 +247,36 @@ fn overlap_play_removes_accident() {
     );
 }
 
+/// 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
+/// 的“初次演出事故”（如果有）」 (LOY-OVERLAP-01) -- the discard hook banishes
+/// the accident. `[移除]` = banish (`Dest::Banished`), not a discard.
+#[test]
+fn overlap_discard_hook_banishes_accident() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "PP:初次演出事故");
+    // Put the card in hand over the limit so `discard_card` (the over-hand
+    // discard act) can fire and raise `Discarded`.
+    t.set_hand(0, &[
+        "PP:[衍生]重叠的声音",
+        "通用:GREAT",
+        "通用:GREAT",
+        "通用:GREAT",
+        "通用:GREAT",
+        "通用:GREAT",
+        "通用:GREAT",
+    ]);
+    // Keep the draw pile non-empty so the discard is not reshuffled away.
+    t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
+    assert!(t.on_field(0, "PP:初次演出事故"), "{:?}", t.field_ids(0));
+    t.discard_card(0, "PP:[衍生]重叠的声音").unwrap();
+    drain(&mut t);
+    assert!(
+        !t.on_field(0, "PP:初次演出事故"),
+        "accident banished on the discard: {:?}",
+        t.field_ids(0)
+    );
+}
+
 // ============================================================ PP:[衍生]明天见
 
 /// 规则书: 「（1）只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可使用。」
@@ -504,6 +534,56 @@ fn dream_ahead_extra_rent() {
     let paid = 10_000 - t.money(1);
     // base rent 140 + (4 fans * 1 + MIN(30, 300)) = 140 + 34
     assert_eq!(paid, 140 + 4 * 1 + 30, "rent + fans*X + MIN(X*30,300)");
+}
+
+/// 规则书（4）: 「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有
+/// 无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…无主的
+/// [可购买格子]」 (LOY-DREAM-01) -- wired as `On::Action(TurnEndBefore)` (Class-B:
+/// turn-end is hook-only, no counteraction window). The buy fires at the
+/// owner's turn end, spends 3 crystals and the [共鸣] cost, and buys one free
+/// buyable tile within 3.
+#[test]
+fn dream_ahead_buys_a_tile_at_turn_end() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "PP:梦在前方，结彩当下");
+    t.set_crystals(0, "PP:梦在前方，结彩当下", 3);
+    // Walk onto 富士见坂 (tile 11) so several free buyable tiles sit within
+    // 「前后3格以内」 at turn end. `vanilla` already started player 0's turn.
+    t.give(0, &["PP:[衍生]共鸣"]);
+    t.set_pos(0, 10);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t); // decline the settle's optional buy on 富士见坂
+    assert_eq!(t.pos(0), 11, "landed on 富士见坂");
+    t.end(0).unwrap();
+    // Prompts: [共鸣] yes/no, then the tile pick (「购买任意…无主的[可购买格子]」).
+    let mut bought: Option<usize> = None;
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("resonance") {
+            let _ = t.answer(0, 0); // yes -- pay the [共鸣] cost
+        } else if p.title.key().contains("dream_ahead") {
+            // Pick the first offered tile; record which index it is.
+            let _ = t.answer(0, 0);
+            bought = Some(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(bought.is_some(), "the (4) tile pick never appeared");
+    // 「购买任意[拥有者]所在格子前后3格以内的无主的[可购买格子]」 -- one of
+    // the free buyable tiles within 3 of tile 11 is now owned by player 0.
+    let any = (0..60).any(|tile| t.owner(tile) == Some(0));
+    assert!(
+        any,
+        "bought some tile within 3: owners {:?}",
+        (0..60).map(|i| t.owner(i)).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0),
+        0,
+        "spent 3 [奇迹水晶]"
+    );
 }
 
 // ============================================================ PP:TITLE IDOL
@@ -774,6 +854,97 @@ fn guide_hand_limit_and_turn_end_crystal() {
         t.crystals(0, "PP:练习生解密指南").unwrap_or(0),
         3,
         "2 from placement + 1 from the turn end"
+    );
+}
+
+/// 规则书[手]: 「如果[共鸣]则[消耗]500资金并添加任意2个标记」 (LOY-TRAIN-01) --
+/// after the 500, the player picks 2 marks (mono/dual each).
+#[test]
+fn guide_resonance_pays_500_and_adds_two_marks() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 0, 0);
+    t.give(0, &["PP:[衍生]共鸣", "PP:练习生解密指南"]);
+    let money0 = t.money(0);
+    assert!(t.play(0, "PP:练习生解密指南").is_ok(), "play refused");
+    // Prompts: resonance yes/no, then two mark picks (mono=0 / dual=1).
+    let mut marks = (0, 0);
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("resonance") {
+            let _ = t.answer(0, 0); // yes -- pay the [共鸣] cost
+        } else if p.title.key().contains("trainee_guide_mark") {
+            // pick 0 = mono, 1 = dual; alternate so both branches run
+            let v = marks.0 + marks.1;
+            let _ = t.answer(0, v % 2);
+            if v % 2 == 0 {
+                marks.0 += 1;
+            } else {
+                marks.1 += 1;
+            }
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(t.money(0), money0 - 500, "[消耗]500资金");
+    // The marks are this instance's `mono` / `dual` counters (they die with it).
+    let mono = t.counter_on_card(0, "PP:练习生解密指南", "mono").unwrap_or(0);
+    let dual = t.counter_on_card(0, "PP:练习生解密指南", "dual").unwrap_or(0);
+    assert_eq!(mono + dual, 2, "added any 2 marks: mono={mono} dual={dual}");
+    assert!(t.on_field(0, "PP:练习生解密指南"), "{:?}", t.field_ids(0));
+}
+
+/// 规则书[持续]（3）: 「此卡拥有至少5个[奇迹水晶]时…随后进入弃卡区」
+/// (LOY-TRAIN-02) -- placement `set_crystals(fans/3)` is a write like any
+/// other and trips the cash-in when it lands on >= 5. Rule text quote:
+/// 「此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作随后进入弃卡区」.
+#[test]
+fn guide_cash_in_fires_at_placement_when_crystals_ge_5() {
+    let mut t = Table::vanilla(2);
+    // 15 fans -> fans/3 = 5 crystals stamped at placement.
+    set_fans(&mut t, 0, 15, 0);
+    // Keep the draw pile non-empty so the discard is not reshuffled away.
+    t.set_draw(0, &["通用:GREAT", "通用:GREAT", "通用:GREAT"]);
+    t.give_play(0, "PP:练习生解密指南").unwrap();
+    drain(&mut t);
+    assert!(
+        !t.on_field(0, "PP:练习生解密指南"),
+        "cash-in sent it to the discard: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.discard(0).contains(&"PP:练习生解密指南".to_string()),
+        "discard: {:?}",
+        t.discard(0)
+    );
+}
+
+/// 规则书[持续]（2）+（3）: the turn-end +1 crossing 5 cashes in once
+/// (LOY-TRAIN-02). Rule text quote: 「回合结束时添加1个[奇迹水晶]」 then
+/// 「此卡拥有至少5个[奇迹水晶]时…随后进入弃卡区」.
+#[test]
+fn guide_cash_in_fires_when_turn_end_crosses_5() {
+    let mut t = Table::vanilla(2);
+    // 12 fans -> 4 at placement; the turn-end +1 crosses 5.
+    set_fans(&mut t, 0, 12, 0);
+    // Keep the draw pile non-empty so the discard is not reshuffled away.
+    t.set_draw(0, &["通用:GREAT", "通用:GREAT", "通用:GREAT"]);
+    t.give_play(0, "PP:练习生解密指南").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "PP:练习生解密指南"), "{:?}", t.field_ids(0));
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert!(
+        !t.on_field(0, "PP:练习生解密指南"),
+        "the +1 crossing 5 cashed in: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.discard(0).contains(&"PP:练习生解密指南".to_string()),
+        "discard: {:?}",
+        t.discard(0)
     );
 }
 

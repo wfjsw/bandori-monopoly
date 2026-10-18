@@ -45,6 +45,36 @@ function loadAll(progress: (p: number) => void): Promise<void> {
 type Stage = "loading" | "tap" | "create" | "error";
 
 /**
+ * Boot-screen art id per band (`BandoriBoot/<id>`). Presentation only: the band
+ * name rides on the roster, but which splash a band gets is a UI decision, so
+ * the map lives here rather than in the ruleset metadata. Bands on the default
+ * splash are simply absent.
+ */
+const BOOT_ART: Record<string, string> = {
+  "Poppin' Party": "001",
+  Afterglow: "002",
+  "Hello, Happy World!": "003",
+  "Pastel✽Palettes": "004",
+  Roselia: "005",
+  "RAISE A SUILEN": "018",
+  Morfonica: "021",
+  "MyGO!!!!!": "045",
+  CRYCHIC: "045",
+};
+
+/** Splash when the home character's band has no entry above. */
+const DEFAULT_BOOT_ART = "045";
+
+/**
+ * Boot splash for the home character's band. The art id is chosen here, not by
+ * the ruleset roster -- boot art is not game data.
+ */
+function BootArt({ band }: { band: string }) {
+  const art = res(`BandoriBoot/${(band && BOOT_ART[band]) || DEFAULT_BOOT_ART}`);
+  return <div className={s.art} style={{ backgroundImage: art ? `url("${art}")` : undefined }} />;
+}
+
+/**
  * One-shot boot: manifest, fonts, then `loadGameData` (ruleset + tables + the
  * typed `D`), with a progress meter. On success it plays the boot BGM and
  * either hands back to the shell (`resume`) or offers the tap / create screens.
@@ -57,9 +87,9 @@ function useBootAssets(opts: {
   setP: (p: number) => void;
   setStage: (s: Stage) => void;
   setError: (e: string) => void;
-  setArt: (a: string) => void;
+  setBand: (band: string) => void;
 }): void {
-  const { resume, onReady, setP, setStage, setError, setArt } = opts;
+  const { resume, onReady, setP, setStage, setError, setBand } = opts;
   useEffect(() => {
     let alive = true;
     loadAll((v) => alive && setP(v))
@@ -67,7 +97,7 @@ function useBootAssets(opts: {
         if (!alive) return;
         playSceneBgm("boot");
         const home = hasProfile() ? D.persona(getProfile().homePersona) : undefined;
-        setArt(res(`BandoriBoot/${(home && D.group(home.group)?.bootArt) || "045"}`));
+        setBand(home?.group ?? "");
         if (!hasProfile()) setStage("create");
         else if (resume) onReady();
         else setStage("tap");
@@ -90,10 +120,11 @@ export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void
   const [p, setP] = useState(0);
   const [stage, setStage] = useState<Stage>("loading");
   const [error, setError] = useState("");
-  const [art, setArt] = useState("");
+  /** Home character's band once game data is in; `null` while still loading. */
+  const [band, setBand] = useState<string | null>(null);
   const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)]);
   const [name, setName] = useState("");
-  useBootAssets({ resume, onReady, setP, setStage, setError, setArt });
+  useBootAssets({ resume, onReady, setP, setStage, setError, setBand });
 
   const start = () => {
     if (stage !== "tap") return;
@@ -113,7 +144,7 @@ export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void
 
   return (
     <div className={s.boot} onClick={start}>
-      <div className={s.art} style={{ backgroundImage: art ? `url("${art}")` : undefined }} />
+      {band !== null && <BootArt band={band} />}
       <div className={s.panel}>
         {res("BandoriUI/transition_logo") && <img className={s.logo} src={res("BandoriUI/transition_logo")} alt="" />}
         <div className={s.tip}>{tip}</div>

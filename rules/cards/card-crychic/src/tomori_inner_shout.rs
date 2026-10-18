@@ -24,12 +24,12 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
         On::Action(
             &[card_sdk::abi::ActionKind::SettleBefore],
-            "actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
+            "actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(actor), card.tile) <= 5", "",
             None,
             pull,
         ),
-        On::Action(&[card_sdk::abi::ActionKind::TurnEndBefore], card_sdk::pre::MINE, Some(empty_piles), shuffle_in),
-        On::Play("", None, tomori_inner_shout),
+        On::Action(&[card_sdk::abi::ActionKind::TurnEndBefore], card_sdk::pre::MINE, "", Some(empty_piles), shuffle_in),
+        On::Play("", "", None, tomori_inner_shout),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"内心的呐喊"#)

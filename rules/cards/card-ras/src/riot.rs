@@ -17,6 +17,7 @@ pub const RIOT: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "by >= 0 && by != owner && effect.hits(owner)",
+        r#"你被其他人的卡效果影响"#,
         None,
         counteract,
     )],

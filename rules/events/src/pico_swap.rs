@@ -1,6 +1,6 @@
 //! `event:PICO灵魂交换` -- 事件卡「PICO灵魂交换」（中立事件 A7）.
 //!
-//! 事件文本（data/events.json, id `PICO灵魂交换`）:
+//! 事件文本（`CardMeta` beside the rule body, id `PICO灵魂交换`）:
 //! > 所有未[除外]玩家[传送]到行动顺序的下一位未[除外]玩家的位置（不触发场地效果，例：第一位行动的玩家[传送]到第二位行动的玩家的位置并以此类推，最后行动的玩家[传送]到第一位行动的玩家的位置）
 
 use alloc::vec::Vec;
@@ -11,7 +11,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const PICO_SWAP: CardDef = CardDef::new("event:PICO灵魂交换", &[On::Play("", None, play)]);
+pub const PICO_SWAP: CardDef = CardDef::new("event:PICO灵魂交换", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"PICO灵魂交换"#)
+            .text(r#"所有未[除外]玩家[传送]到行动顺序的下一位未[除外]玩家的位置（不触发场地效果，例：第一位行动的玩家[传送]到第二位行动的玩家的位置并以此类推，最后行动的玩家[传送]到第一位行动的玩家的位置）"#)
+            .cell(r#"A7"#)
+            .derived(false));
 
 /// 规则书: 「所有未[除外]玩家[传送]到行动顺序的下一位未[除外]玩家的位置」 --
 /// every player whose [除外] layer count is 0, rotated onto the next such

@@ -25,16 +25,16 @@ const RABBIT: &str = "多惠兔子";
 pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ruleset_core::kind::PassRewardAffected], card_sdk::pre::MINE, None, on_circle),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ruleset_core::kind::PassRewardAffected], card_sdk::pre::MINE, "", None, on_circle),
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
         // applicability (residual guard; `pre::MINE` already states the actor).
-        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, Some(on_pass_has_rabbits), on_pass),
+        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, "", Some(on_pass_has_rabbits), on_pass),
         // （2） 「在其他玩家使用角色/团技能的[主]效果或使用手牌的[手]效果时你可以使用4个
         // [火罐]将其抵消」 -- a [反击] from the bound skill (always in play), so it
         // must be offered from the field (`COUNTERACT_FROM_FIELD`, the same shape
         // as 冰川纱夜（2）'s move-length counteraction).
-        On::Counteract(&[ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()], "", Some(can_negate), negate),
+        On::Counteract(&[ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()], "", "", Some(can_negate), negate),
     ],
 )
     .props(&[

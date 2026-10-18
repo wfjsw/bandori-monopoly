@@ -1,41 +1,73 @@
-// Mirrors of the Rust serde types (crates/game-core). Field names are the JSON
-// names. All display text is a localizable `Msg` (see i18n/msg.ts), not a string.
+// The UI's view of the game data and match wire.
+//
+// Identity rows come from `glue.roster_json()` (`{id, group, name, owner,
+// derived, tags}` / `{name, group, skill, exclusiveCards, preset, variantOf}` /
+// `{name, skill, sharesExclusives}` / `{id, name, derived, text}`). Display
+// fields (`text`, `display`, `color`, `shortName`, `rawName`, `cell`, `logo`,
+// `variantTag`, `costume`, `cnId`, `art`, ...) are merged on top from
+// `generated/display.json` and the `data/*.json` tables the page fetches
+// itself -- see `core/data.ts`. Tile `shortName` / `color` / `note` stay on
+// `board.json`. Match-state shapes mirror the Rust serde wire
+// (crates/game-core). Field names are the JSON names. All display text that is
+// not a data-table string is a localizable `Msg` (see i18n/msg.ts).
 
 import type { Msg } from "../i18n/msg";
 
+/** One board tile, from `data/board.json` (identity + display together). */
 export interface TileData {
   index: number; name: string; shortName: string; kind: string; group: number;
   color: string; tier: number; area: string; price: number; house: number; rent: number[]; note: string;
 }
+/** Merged card row: identity from `glue.roster_json()`, display from
+ *  `generated/display.json` (including `counterReason`). */
 export interface CardData {
   id: string; group: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string; cell: string;
-  /** The [反击] card's trigger-condition clause (「…时」), extracted once from
-   *  `text` and checked for every 反击-tagged card. Why the card is offered. */
+  /** The [反击] card's trigger-condition clause (「…时」), from
+   *  `generated/display.json`. Why the card is offered. */
   counterReason?: string;
 }
+/** Merged persona row: identity from `glue.roster_json()`, display from
+ *  `generated/display.json`. */
 export interface PersonaData {
   name: string; display: string; group: string; color: string; skill: string; text: string;
-  /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
-  simple?: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
   /** Base character of an alternate form (`高松灯（CRYCHIC）` -> `高松灯`). */
   variantOf?: string;
   /** Short label for compact displays of a variant. */
   variantTag?: string;
 }
+/** Merged group row: identity from `glue.roster_json()`, display from
+ *  `generated/display.json`. */
 export interface GroupData {
   name: string; shortName: string; color: string; skill: string; text: string;
-  /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
-  simple?: string;
   logo: string;
   /** Band-skill traits the deck rules read. */
   sharesExclusives?: boolean;
-  /** Boot-screen art id for a home character of this band. */
-  bootArt?: string;
 }
+/** Merged event row: identity + game prose from `glue.roster_json()`, `cell`
+ *  from `generated/display.json`. */
 export interface EventData { id: string; name: string; derived: boolean; text: string; cell: string }
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }
+
+/** `generated/display.json`: the build-exported presentation fields (empty
+ *  fields omitted). Merged onto the identity roster in `core/data.ts`. */
+export interface DisplayFile {
+  cards: Record<string, {
+    text?: string; rawName?: string; cell?: string; counterReason?: string;
+  }>;
+  personas: Record<string, {
+    display?: string; text?: string; color?: string; variantTag?: string;
+    art?: string; costume?: string; cnId?: string;
+  }>;
+  groups: Record<string, {
+    text?: string; shortName?: string; color?: string; logo?: string;
+  }>;
+  /** Event display chrome. Absent on a stale export; `dump_display` writes it. */
+  events?: Record<string, {
+    name?: string; text?: string; cell?: string;
+  }>;
+}
 
 export interface MatchPlayer {
   member: number; player: string; bot: boolean; ai: boolean; roll: number; banDone: boolean; ban: string;
@@ -335,6 +367,9 @@ export interface PlayerProfile {
   coins: number; stars: number; homePersona: string; games: number; soloGames: number;
   casualGames: number; rankedGames: number; rankedWins: number;
   history: MatchRecord[]; unreadResult: boolean; decks: SavedDeck[];
+  /** Last `RULES_VERSION` the player acknowledged (0 = never). Drives the
+   *  rules NEW badge on the client; Rust only stores a boolean flag. */
+  seenRulesVersion?: number;
   [k: string]: unknown;
 }
 export interface MatchReward {
@@ -342,4 +377,4 @@ export interface MatchReward {
   exp: number; levelBefore: number; levelAfter: number; progressBefore: number; progressAfter: number;
   coins: number; stars: number;
 }
-export interface SoundSettings { bgm: number; voice: number; se: number; skipLine: boolean; greet: boolean; idleTalk: boolean; skillTextSimple: boolean; keepAwake: boolean }
+export interface SoundSettings { bgm: number; voice: number; se: number; skipLine: boolean; greet: boolean; idleTalk: boolean; keepAwake: boolean }

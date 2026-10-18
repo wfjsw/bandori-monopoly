@@ -17,7 +17,3 @@ rules-status = { path = "../status" }
 # the [经过] reward body lives in `rules-tiles` (`tile:circle::settle_reward`)
 # so both call sites share one implementation.
 rules-tiles = { path = "../tiles" }
-
-[build-dependencies]
-# build.rs reads data/schools.json into the 上学时间 table.
-serde_json = "1"

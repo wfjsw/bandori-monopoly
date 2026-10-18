@@ -26,9 +26,11 @@ the flat arrays under the `"cards"` / `"characters"` / `"bands"` keys).
 Do **not** set `CARGO_TARGET_DIR` for this (or `tools/build-ruleset.mjs`) -- an
 externally set one stages stale artifacts.
 
-Display-only columns that live outside the engine structs (`simple`,
-`counterReason`) are **not** in the dump. `data/skill_simple.json` remains the
-source for `simple` skill text.
+Display-only columns that live outside the engine structs (`counterReason`,
+and the slimmed roster copy -- card `text` / `rawName` /
+`cell`, persona `display` / `text` / `color` / `variantTag` / `art` /
+`costume` / `cnId`, group `shortName` / `color` / `text` / `logo`) are **not**
+in the dump. `display.json` is the source for the rest of the display copy.
 
 ## Consume the dump (Python)
 
@@ -73,7 +75,7 @@ sources for ids; they do not read the dump.
 * **`tools/asset-pipe/extract.py`** -- no longer copies or writes
   `cards.json` / `characters.json` / `bands.json`, and no longer merges
   `skill_simple` into those files. Every other extraction (images, audio,
-  fonts, live2d, text, `skill_simple.json`, other `data/*.json`) is unchanged.
+  fonts, live2d, text, other `data/*.json`) is unchanged.
 * **`tools/lift-roster.mjs`** -- **deleted**. It was the one-shot JSON → Rust
   lifter (184 cards / 54 characters / 12 bands, proven byte-equal by
   `cargo test -p rules-native --test roster_equiv`). The lift is complete;

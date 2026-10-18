@@ -2,11 +2,10 @@
 //!
 //! score = money * w.money + property * w.property + houses * w.houses
 //! (property = land prices, mortgaged at half; houses = build costs).
-//! The the flat deed rent multiplier is a separate mechanic ([`MatchRulesData::rent_unit_mult`]).
+//! The flat deed rent multiplier is a separate mechanic
+//! (`MatchSetup::rule_params` / `rentUnitMult`).
 
 use serde::{Deserialize, Serialize};
-
-use crate::data::MatchRulesData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -32,15 +31,6 @@ impl ScoreWeights {
     /// Upper bound for each weight.
     pub const MAX: f32 = 5.0;
 
-    /// Defaults from `match_rules.json`.
-    pub fn from_rules(r: &MatchRulesData) -> Self {
-        Self {
-            money: r.money,
-            property: r.property,
-            houses: r.houses,
-        }
-    }
-
     /// `this[k]`: 0 = money, 1 = property, anything else = houses.
     pub fn get(&self, k: i32) -> f32 {
         match k {
@@ -59,7 +49,7 @@ impl ScoreWeights {
     }
 
     /// Snap each weight to a multiple of 0.5 within [0, 5]. If everything ends up 0,
-    /// fall back to `default` (the rules-file weights).
+    /// fall back to `default` ([`ScoreWeights::default`]).
     pub fn sanitized(&self, default: ScoreWeights) -> Self {
         fn fix(v: f32) -> f32 {
             if !v.is_finite() {

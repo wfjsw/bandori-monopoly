@@ -13,7 +13,7 @@
 // `ROSTER_DIR` also selects the out directory (overridden by --out).
 // Python tools read the dump via tools/roster.py; see docs/ROSTER-TOOLS.md.
 //
-// Display-only columns outside the engine structs (`simple`, `counterReason`)
+// Display-only columns outside the engine structs (`counterReason`)
 // are not in the dump.
 
 import { execFileSync } from "node:child_process";

@@ -19,7 +19,7 @@
 //!
 //! - **Started by the user** -- a skill button (the viewer's `MatchView.skills`
 //!   list). The player presses it, the effect runs. That is
-//!   [`On::Play`], gate and effect: `On::Play("", Some(why_not), run)` where the
+//!   [`On::Play`], gate and effect: `On::Play("", "", Some(why_not), run)` where the
 //!   gate is the "can I press this right now?" query (C# `Card.WhyNot`) and
 //!   `run` is what the press does.
 //! - **Called by a field event** -- the skill is a field card on the player
@@ -57,7 +57,7 @@ use card_sdk::CardDef;
 /// Hook this from both `TurnStartBefore` (so the cap holds from the first turn
 /// even when the skill is placed mid-game) and `DeckAtGameStart` (where
 /// 「初始N」 is created), e.g.
-/// `On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap)`.
+/// `On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap)`.
 ///
 /// The cap is written **only when unset** (0), so a later `add_charge_max`
 /// (「火罐上限加1」, e.g. `PPP:[衍生]拍卖撤下来了`) survives the per-turn

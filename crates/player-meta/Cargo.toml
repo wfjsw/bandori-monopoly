@@ -1,0 +1,10 @@
+[package]
+name = "player-meta"
+version.workspace = true
+edition.workspace = true
+description = "Player meta layer: profile, progression, saved decks. Explicitly NOT the game engine."
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+game-core = { path = "../game-core" }

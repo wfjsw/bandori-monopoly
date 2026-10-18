@@ -1,6 +1,6 @@
 //! `event:麻里奈小姐的礼物箱` -- 事件卡「麻里奈小姐的礼物箱」（中立事件 A16）.
 //!
-//! 事件文本（data/events.json, id `麻里奈小姐的礼物箱`）:
+//! 事件文本（`CardMeta` beside the rule body, id `麻里奈小姐的礼物箱`）:
 //! > 将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金。
 
 use card_sdk::abi::ActionKind;
@@ -19,20 +19,20 @@ const TURNS: &str = "turns";
 pub const MARINA_BOX: CardDef = CardDef::new(
     "event:麻里奈小姐的礼物箱",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 「所有玩家[经过]CiRCLE时可[消耗]一次500资金」 -- the tile and the
         // spendability are the condition now (body-top early-outs). The
         // `always` guard is deleted: it prefetched every pass of every tile
         // for a no-op.
-        On::Action(
-            &[ActionKind::PassTile],
-            "tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500",
-            None,
-            on_pass,
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], "", None, on_turn_start),
+        On::Action(&[ActionKind::PassTile], "tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500", "", None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore], "", "", None, on_turn_start),
     ],
-);
+)
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"麻里奈小姐的礼物箱"#)
+            .text(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金。"#)
+            .cell(r#"A16"#)
+            .derived(false));
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌」
 /// -- keep the event and remember who drew it; the turn-start hook below counts

@@ -26,6 +26,7 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         // does not open this. 「将本格上的房屋转移到…」 -- the tile must have
         // houses to transfer (C# `H.State.houses[t.Tile] > 0`).
         "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
+        r#"在属于你的格子上结算"#,
         Some(can_counteract),
         counteract,
     )],

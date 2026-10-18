@@ -19,13 +19,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[ActionKind::DiceRollAfter], card_sdk::pre::MINE, None, on_roll),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::DiceRollAfter], card_sdk::pre::MINE, "", None, on_roll),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
-        On::Action(&[ActionKind::AtEnd], "owner.pos >= 0", None, settle_now),
+        On::Action(&[ActionKind::AtEnd], "owner.pos >= 0", "", None, settle_now),
     ],
 )
     .silent(&[1]);

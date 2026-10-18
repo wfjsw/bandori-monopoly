@@ -29,12 +29,12 @@ const GROUP: &str = "skill.misakiOther.group";
 pub const MISAKI_OTHER: CardDef = CardDef::new(
     "skill:奥泽美咲:另一个我",
     &[
-        On::Play("", Some(can_use_exile), use_exile),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", None, on_pass),
+        On::Play("", "", Some(can_use_exile), use_exile),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", "", None, on_pass),
         On::Action(
             &[ActionKind::TurnStartBefore],
-            "actor == owner && charge(owner) >= 1",
+            "actor == owner && charge(owner) >= 1", "",
             None,
             at_turn_start,
         ),

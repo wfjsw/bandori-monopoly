@@ -23,9 +23,9 @@ pub const MYGO: CardDef = CardDef::new(
     &[
         // （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」 -- a start
         // position: the before-match-start point decides those.
-        On::Action(&[ActionKind::DeckBeforeGame], "", None, at_start),
-        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && move.roll >= 16", None, after_roll),
-        On::Action(&[ActionKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
+        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, at_start),
+        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && move.roll >= 16", "", None, after_roll),
+        On::Action(&[ActionKind::Discarded], card_sdk::pre::MINE, "", None, on_discarded),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（2）/（3） give two independent 「可」 abilities
         // (move-1 before the move roll for 1 crystal; draw 1 for 2 crystals)
@@ -33,7 +33,7 @@ pub const MYGO: CardDef = CardDef::new(
         // them and the player presses again for the other. The gate admits
         // whenever either is available; the body lists the available options
         // and skips the prompt when only one is.
-        On::Play("", Some(cant_play), press),
+        On::Play("", "", Some(cant_play), press),
     ],
 );
 
@@ -93,6 +93,11 @@ fn available(player_id: i32) -> [bool; 2] {
 fn cant_play(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
+    }
+    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
+    if let Some(why) = crate::copy_sticker_gate(player_id) {
+        return Some(why);
     }
     if !is_my_turn(player_id) {
         return Some(Msg::new(key!("mygo_not_your_turn")));
@@ -176,7 +181,6 @@ fn is_my_turn(player_id: i32) -> bool {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"MyGO!!!!!"#)
     .short_name(r#"MyGO"#)
-    .boot_art(r#"045"#)
     .color(r#"#3388BB"#)
     .skill(r#"迷途之星"#)
     .text(r#"（1）开局时投掷3d20，并取出目作为你本局游戏的起始点 （2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶] （3）每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶] （最多超出2个）；你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡。"#)

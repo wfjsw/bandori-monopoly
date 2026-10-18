@@ -32,16 +32,16 @@ const ORIG: &str = "skill.aveMujica.orig";
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
-        On::Play("", Some(can_halve), halve),
-        On::Action(&[ActionKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
+        On::Play("", "", Some(can_halve), halve),
+        On::Action(&[ActionKind::TurnStartBefore], "slot('skillState') != 0", "", None, at_turn_start),
         // Latch the declared figure for the PayAfter one-sided fixup. `Effect`
         // is the payment declaration (pre-PaySplitAdd); see `latch_orig`.
-        On::Action(&[ActionKind::Effect], "slot('skillState') == 2 && card.placed", None, latch_orig),
+        On::Action(&[ActionKind::Effect], "slot('skillState') == 2 && card.placed", "", None, latch_orig),
         On::Filter(&[FilterKind::PaySplitMul], "slot('skillState') == 2 && card.placed", None, bend),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
         // figure, so the counterpart's side is restored here.
-        On::Action(&[ActionKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
+        On::Action(&[ActionKind::PayAfter], "slot('skillState') == 2 && card.placed", "", None, after_bend),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skillState') == 2", "", None, at_turn_end),
     ],
 );
 
@@ -174,6 +174,11 @@ fn can_halve(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
+    // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
+    // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
+    if let Some(why) = crate::copy_sticker_gate(player_id) {
+        return Some(why);
+    }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("ave_mujica_not_two")));
     }
@@ -236,7 +241,6 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"Ave Mujica"#)
     .short_name(r#"Mujica"#)
-    .boot_art("")
     .color(r#"#881144"#)
     .skill(r#"假面之下的真实"#)
     .text(r#"你拥有“状态1”和“状态2”两种状态，初始处于状态1。处于状态2的第三回合开始时为此卡添加一个奇迹水晶。你在状态2时从[收取]与[支付]的资金改为1.5倍（只对自己结算，对应的其他玩家收支不变），处于状态2时可消耗一个奇迹水晶使你的一次[支付]金额减半。若你的技能拥有火罐，进入状态2时将火罐补充至上限且每回合结束时失去1火罐，回合结束后若火罐为0则退出状态2；退出状态2时，失去所有剩余火罐。"#)

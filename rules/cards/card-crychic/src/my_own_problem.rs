@@ -25,6 +25,7 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::SettleBefore],
         "actor == owner && move.main",
+        r#"主要移动结束时，[触发结算]前"#,
         Some(can_counteract),
         counteract,
     )],

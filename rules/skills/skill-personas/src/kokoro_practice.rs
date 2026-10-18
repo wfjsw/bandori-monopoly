@@ -34,14 +34,14 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
     &[
         // （1）'s starting square and deed: the before-match-start point decides
         // start positions.
-        On::Action(&[ActionKind::DeckBeforeGame], "", None, at_start),
-        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, at_start),
+        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, "", None, on_pass),
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
         On::Action(
             &[ActionKind::PassTile],
-            "actor != owner && tile.id == owner.pos && charge(owner) >= 1 && move.remaining > 0",
+            "actor != owner && tile.id == owner.pos && charge(owner) >= 1 && move.remaining > 0", "",
             None,
             on_passed,
         ),
@@ -50,7 +50,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // settle, for every completed move including a 「不触发结算」 one.
         On::Action(
             &[ActionKind::MoveAfter],
-            ruleset_core::guards::OWN_DEED,
+            ruleset_core::guards::OWN_DEED, "",
             None,
             on_move_end,
         ),
@@ -58,7 +58,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // or `gain_charge` (cap 0 = no pots) drops the grant on the floor.
         On::Action(
             &[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
-            "",
+            "", "",
             None,
             declare_cap,
         ),

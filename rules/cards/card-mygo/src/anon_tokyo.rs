@@ -22,7 +22,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
-        On::Play("", Some(cant_play), anon_tokyo),
+        On::Play("", "", Some(cant_play), anon_tokyo),
         On::Filter(&[FilterKind::PaySplitAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -105,37 +105,43 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         if amount > 0 {
             ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
         }
-        // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- C#
-        // `AnonLinkFx.Link(here, t)` puts an `Anon Tokyo` mark on both tiles; the
-        // sheet's 「（上限1）」 means a tile that already carries the mark gets none.
-        for (tile, other) in [(here, t), (t, here)] {
-            if ctx::count_marks(
+        // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- the
+        // cap is on **the pair** (「放置1个…（上限1）」). If either end already
+        // carries the mark, place **neither** (pair at cap 1) -- a half-link
+        // would leave the `LINK{tile}` slots one-way and `link_rent` reading
+        // only one direction. TODO(规则书) Class C: whether a tile may sit in
+        // two links at once; the singular 「1个…（上限1）」 leans no.
+        let marked = |tile: i32| {
+            ctx::count_marks(
                 tile,
                 &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
             ) > 0
-            {
-                continue;
+        };
+        if !marked(here) && !marked(t) {
+            for (tile, other) in [(here, t), (t, here)] {
+                // One row per mark (`place_mark_new`, the old `add_mark` semantics).
+                ctx::place_mark(
+                    tile,
+                    key!("anon_tokyo_mark"),
+                    "",
+                    player_id,
+                    ctx::self_uid(),
+                    1,
+                    &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other),
+                    card_sdk::abi::Stack::Fresh,
+                );
+                // Remember the pairing so the `PaySplitAdd` hook below can find
+                // the partner (mark notes are not readable across the ABI).
+                ctx::set_slot(player_id, &alloc::format!("{LINK}{tile}"), other);
             }
-            // One row per mark (`place_mark_new`, the old `add_mark` semantics).
-            ctx::place_mark(
-                tile,
-                key!("anon_tokyo_mark"),
-                "",
+            ctx::log(
                 player_id,
-                ctx::self_uid(),
-                1,
-                &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other), card_sdk::abi::Stack::Fresh);
-            // Remember the pairing so the `PaySplitAdd` hook below can find the partner
-            // (mark notes are not readable across the ABI).
-            ctx::set_slot(player_id, &alloc::format!("{LINK}{tile}"), other);
+                &Msg::new(key!("anon_tokyo_linked"))
+                    .tile("a", here)
+                    .tile("b", t)
+                    .card("card", "MyGO:[千早爱音]Anon Tokyo"),
+            );
         }
-        ctx::log(
-            player_id,
-            &Msg::new(key!("anon_tokyo_linked"))
-                .tile("a", here)
-                .tile("b", t)
-                .card("card", "MyGO:[千早爱音]Anon Tokyo"),
-        );
         // 规则书[手]1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的
         // 一半」 -- rides the `PaySplitAdd` hook on a field stand-in (the C# puts the body
         // on `AnonLinkFx`, an `H.ExtraOf` attachment; the hook surface only dispatches

@@ -14,6 +14,7 @@ pub const REPAINT: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
         "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0",
+        r#"任意其他玩家进行移动掷骰并进入移动阶段"#,
         None,
         counteract,
     )],

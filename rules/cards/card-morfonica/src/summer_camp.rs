@@ -18,7 +18,7 @@ const SLOT_BLOCKED: &str = "summer_camp_blocked";
 pub const SUMMER_CAMP: CardDef = CardDef::new(
     "Mor:夏日合宿",
     &[
-        On::Play("", None, summer_camp),
+        On::Play("", "", None, summer_camp),
         // The body-top applicability checks are the condition now: only our own
         // seat, and only against another player's card (C#
         // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
@@ -29,7 +29,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
             None,
             untargetable,
         ),
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", None, turn_start),
+        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"夏日合宿"#)

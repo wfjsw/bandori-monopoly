@@ -57,4 +57,3 @@
 .go { position: absolute; right: 1px; top: 635px; width: 215px; height: 78px; font-size: 32px; }
 .tabs > div { flex-wrap: nowrap; gap: 7px; }
 .tabs button { padding: 0 0.81em; height: 2.375em; font-size: 16px; }
-.skillSwitch { position: absolute; right: 12px; top: 12px; }

@@ -30,7 +30,7 @@ use crate::world::{self, Effect, Mark, World, MAX_PLAYERS};
 fn call_mark_cp_land(player: i32) {
     let def = rules_tile_marks::MARK_CP;
     for on in def.on.iter() {
-        if let card_sdk::On::Action(_, _, _, f) = on {
+        if let card_sdk::On::Action(_, _, _, _, f) = on {
             invoke::unwrap_done(f(player));
             return;
         }
@@ -80,7 +80,7 @@ fn symbolic_cp_world(settler: i32, tile: i32) -> World {
 fn mark_cp_guard(player: i32) -> bool {
     let card = rules_tile_marks::MARK_CP;
     for on in card.on.iter() {
-        if let card_sdk::On::Action(_, _, Some(g), _) = on {
+        if let card_sdk::On::Action(_, _, _, Some(g), _) = on {
             return g(player);
         }
     }

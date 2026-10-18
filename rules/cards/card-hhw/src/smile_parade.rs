@@ -37,17 +37,16 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // cannot be separate entries.
         On::Action(
             &[ActionKind::SettleBody],
-            "tile.id >= 0",
+            "tile.id >= 0", "",
             Some(settle_body_guard),
-            settle_body,
-        ),
-        // Consume an in-flight redirect at its `tileResolved`, and (3）「任何
-        // 玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」. `tileResolved` is
-        // the settle's terminal (SETTLE-STAGES §4 M5), so it is after the body
-        // and after (2)'s `settleAfter` move -- the settle that *moves* the
-        // card onto the endpoint sees the card still on 弦卷集团 here and does
-        // not discard it.
-        On::Action(&[ActionKind::TileResolved], "card.placed", Some(resolve_guard), on_resolved),
+            settle_body),
+        // Consume an in-flight redirect / (2) arrival at its `tileResolved`,
+        // and (3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
+        // `tileResolved` is the settle's terminal (SETTLE-STAGES §4 M5), after
+        // the body and after (2)'s `settleAfter` move. (2) parks `SLOT_REPLAY`
+        // when it drops the card onto the endpoint so this same settle does not
+        // read as (3)'s discard; later settles do, owner included.
+        On::Action(&[ActionKind::TileResolved], "card.placed", "", Some(resolve_guard), on_resolved),
         // 规则书（2）: 「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
         // settle is a real move's endpoint. `move.kind != Teleport` keeps the
@@ -57,18 +56,16 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // the zero-crystal discard).
         On::Action(
             &[ActionKind::SettleAfter],
-            "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport",
+            "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport", "",
             None,
-            move_after,
-        ),
+            move_after),
         On::Counteract(
             &[ChainKind::Pass],
-            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null",
+            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null", r#"经过“弦卷集团”（#29格）"#,
             None,
-            counteract,
-        ),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
-        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+            counteract),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", "", None, turn_end),
+        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)
@@ -117,14 +114,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书（1）: 「你的每回合结束时移除一个」 -- C# `CardSmileParade.TurnEnd`
 /// (`turn == Player && Tile == Group && Crystals > 0` -> `AddCrystals(-1)`).
+/// The printed tick is **unconditional**; only the zero-crystal discard names
+/// 「仍位于"弦卷集团"」. C# had `Tile == Group`; text is ground fact.
 /// The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
 /// [`on_crystals_changed`].
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
-    // C# `Tile == Group` -- the decay only runs while the card still sits on
-    // 弦卷集团.
-    if !on_group() {
-        return Ok(());
-    }
     ctx::decay()?;
     Ok(())
 }
@@ -188,6 +182,15 @@ fn settle_body_guard(owner: i32) -> bool {
 /// （1）「当次移动的移动终点视为"弦卷集团"地产商」 then （3）「那格视为与
 /// "弦卷集团"格子交换位置」. One entry so both body-replaces run (the host
 /// runs only the first hook of a kind).
+/// Run `tile`'s settle as the agent, with `SLOT_REPLAY` parked across it so the
+/// nested `tileResolved` consumes the redirect instead of reading as (3)'s
+/// discard. Used by both redirect sites below.
+fn redirect_settle(player_id: i32, tile: i32) {
+    ctx::set_slot(player_id, SLOT_REPLAY, tile + 1);
+    ctx::card_settle_at(player_id, tile, true);
+    ctx::set_slot(player_id, SLOT_REPLAY, 0);
+}
+
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
     if group < 0 {
@@ -200,7 +203,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if trigger::move_tag(TAG_AS_AGENT) != 0 {
         ctx::trigger::set_cancelled();
         ctx::plan::set_settle_as_agent(true);
-        ctx::card_settle_at(player_id, group, true);
+        redirect_settle(player_id, group);
         ctx::plan::set_tag(TAG_AS_AGENT, 0);
         ctx::log(
             player_id,
@@ -223,7 +226,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     }
     ctx::trigger::set_cancelled();
     ctx::plan::set_settle_as_agent(true);
-    ctx::card_settle_at(player_id, group, true);
+    redirect_settle(player_id, group);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_swapped"))
@@ -236,23 +239,26 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
 /// Consume an in-flight redirect at its `tileResolved`, and discard on a
 /// settle of the card's own tile. Residual: either a redirect is parked for
 /// this tile, or the settle is on the card's tile (and not a redirect).
+/// 规则书（3）: 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
+/// 「任何玩家」 includes the owner; (1)'s own redirect is the sole exception,
+/// keyed off the placement move (`TAG_AS_AGENT` / `SLOT_REPLAY`), not off
+/// "the actor is the owner".
 fn resolve_guard(owner: i32) -> bool {
     let at = trigger::tile();
     if at < 0 {
         return false;
     }
-    // (1)'s nested settle is the owner's own placement-move redirect; (3)'s
-    // discard is for a settle that *lands on* the card's tile. Skip the owner
-    // so (1) does not discard the card it just placed. TODO(规则书): 「任何
-    // 玩家」 includes the owner -- once (1) is keyed off the placement move
-    // alone, drop this exclusion.
-    if trigger::player_id() == owner {
-        return false;
-    }
-    if ctx::slot(owner, SLOT_REPLAY) == at + 1 {
+    // One read: `TileResolved` fires at every settle's terminal while the card
+    // is in play, and the slot is keyed by a string.
+    let replay = ctx::slot(owner, SLOT_REPLAY);
+    if replay == at + 1 {
         return true;
     }
-    if ctx::slot(owner, SLOT_REPLAY) > 0 {
+    if replay > 0 {
+        return false;
+    }
+    // (1)'s placement-move redirect: the nested settle is not (3)'s discard.
+    if trigger::move_tag(TAG_AS_AGENT) != 0 {
         return false;
     }
     match ctx::self_tile() {
@@ -263,6 +269,9 @@ fn resolve_guard(owner: i32) -> bool {
 
 fn on_resolved(owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
+    // (1)'s own redirect -- the placement move's nested settle -- is not (3)'s
+    // 「在此卡放置的格子上[触发结算]」. Keyed off the placement move
+    // (`TAG_AS_AGENT`), never off "the actor is the owner".
     if trigger::move_tag(TAG_AS_AGENT) != 0 {
         return Ok(());
     }
@@ -270,7 +279,8 @@ fn on_resolved(owner: i32) -> card_sdk::Asked {
         ctx::set_slot(owner, SLOT_REPLAY, 0);
         return Ok(());
     }
-    // （3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
+    // （3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
+    // 「任何玩家」 includes the owner.
     let Some(card_t) = ctx::self_tile() else {
         return Ok(());
     };
@@ -298,6 +308,12 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::set_self_tile(to);
+    // The card just arrived on this settle's tile. (3) 「任何玩家在此卡放置的格子上
+    // [触发结算]后」 is for a settle *on* the card's tile -- not the settle whose
+    // `settleAfter` placed it here. Park `SLOT_REPLAY` so this settle's
+    // `tileResolved` consumes it instead of discarding; later settles discard
+    // as (3) says, owner included.
+    ctx::set_slot(player_id, SLOT_REPLAY, to + 1);
     let n = ctx::crystals();
     if n > 0 {
         ctx::add_crystals(-n, i32::MAX)?;

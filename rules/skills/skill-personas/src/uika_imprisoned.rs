@@ -41,7 +41,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // residual is the disjunction. Dynamic latch, residual.
         On::Action(
             &[ActionKind::TurnStartBefore],
-            card_sdk::pre::MINE,
+            card_sdk::pre::MINE, "",
             Some(state2_or_clean),
             at_turn_start,
         ),
@@ -52,14 +52,14 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
             None,
             on_plan,
         ),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
         // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
         // settle that marks the latch is the owner's own settle onto one of the
         // three named tiles. Both facts are CEL (`actor == owner` and the three
         // `tile_named` ids), so a reject runs no body (and so posts no flash).
         On::Action(
             &[ActionKind::Settle],
-            "actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))",
+            "actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))", "",
             None,
             on_settle,
         ),
@@ -68,7 +68,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // not the end-tile [重叠]. The other player is read off the tile.
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner && move.main && slot('skillState') == 2",
+            "actor == owner && move.main && slot('skillState') == 2", "",
             None,
             on_pass_player,
         ),
@@ -77,7 +77,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // 4-shot cap is `slot('skill.uikaImprisoned.bonus') < 4`.
         On::Action(
             &[ActionKind::SettleBefore],
-            "slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4",
+            "slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4", "",
             None,
             before_settle,
         ),

@@ -406,7 +406,7 @@ Board indices: 「#N格」 = index `N-1`, so X is tiles 0–29 and Y is 30–59.
 **Source:** `data/events.json#上学时间`
 **Quote:** 「全体玩家移动到操作角色当前上学的学校的格子然后获得1层[除外]（如果剧情没有明说则移动到周边学区）。」
 
-School tiles come from `data/schools.json` (fallback 周边学区).
+School tiles come from the table in `rules/events/src/school_time.rs` (fallback 周边学区).
 
 ### E-school-time-01
 

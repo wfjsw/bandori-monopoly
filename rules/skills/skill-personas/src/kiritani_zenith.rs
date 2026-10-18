@@ -24,10 +24,10 @@ const USED: &str = "skill.kiritani.used";
 pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     "skill:桐谷透子:天上天下，唯我独尊",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, reset),
     ],
 )
     .silent(&[1, 3]);

@@ -16,6 +16,7 @@ pub const MARINA_WORK: CardDef = CardDef::new(
     &[On::Counteract(
         &[ruleset_core::kind::PassRewardAffected.as_trigger()],
         card_sdk::pre::MINE,
+        r#"[使用者][经过]#1格子且#1格子受到其他效果影响"#,
         None,
         counteract,
     )],

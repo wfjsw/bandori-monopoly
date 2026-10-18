@@ -19,13 +19,13 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // One Play entry for both contexts (the engine dispatches only the
         // first): [场] placement from hand, or the ≥9-marker jump once placed.
         // The gate admits whenever either branch is available.
-        On::Play("", Some(cant_play), play),
+        On::Play("", "", Some(cant_play), play),
         // 「花音每次倒走时」 -- a backward walk that is not a teleport (C#
         // `m.Reverse && !m.Teleport`). `move.dir < 0` is the direction clause:
         // the body-top `move_dir() >= 0` early-out is the condition now.
         On::Action(
             &[ActionKind::Pass],
-            "actor == owner && move.kind != Teleport && move.dir < 0",
+            "actor == owner && move.kind != Teleport && move.dir < 0", "",
             None,
             on_pass,
         ),
@@ -34,7 +34,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         .name(r#"Wacha Mocha 啪嗒进行曲"#)
         .raw_name(r#"（花音）Wacha Mocha 啪嗒进行曲"#)
         .tags(&[])
-        .text(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后置入弃牌堆。"#)
+        .text(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。"#)
         .cell(r#"F13"#)
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"松原花音"#)]));
 

@@ -19,6 +19,7 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         // card-owned state: the card that armed one tagged the move
         // (`ctx::plan::set_tag("fireRoll", 1)`).
         "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
+        r#"使用火罐进行移动掷骰"#,
         None,
         counteract,
     )],

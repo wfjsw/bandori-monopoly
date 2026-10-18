@@ -57,14 +57,14 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
     &[
         On::Action(
             &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')",
+            "group_is(owner, 'Pastel✽Palettes')", "",
             None,
             at_start,
         ),
         // （2） 「投掷前」 -- ask + flips. Action: prompts allowed.
         On::Action(
             &[ActionKind::DiceRollBefore],
-            "actor == owner && slot('ppFansUp') >= 1",
+            "actor == owner && slot('ppFansUp') >= 1", "",
             Some(roll_ok),
             on_before,
         ),
@@ -78,7 +78,7 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
         // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
         On::Action(
             &[ActionKind::DiceRollAfter],
-            "actor == owner",
+            "actor == owner", "",
             None,
             clear_pending,
         ),

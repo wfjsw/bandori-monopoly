@@ -25,11 +25,11 @@ const USER_KEY: &str = "umiri_user";
 pub const UMIRI_CARD: CardDef = CardDef::new(
     "Mujica:（海铃）",
     &[
-        On::Play("", Some(cant_play), umiri_card),
+        On::Play("", "", Some(cant_play), umiri_card),
         // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
         On::Action(
             &[ActionKind::TurnStart],
-            "card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1",
+            "card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1", "",
             None,
             turn_start,
         ),
@@ -37,7 +37,7 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
         On::Action(
             &[ActionKind::TurnEnd],
-            "card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1",
+            "card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1", "",
             None,
             turn_end,
         ),

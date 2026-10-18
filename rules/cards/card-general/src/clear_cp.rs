@@ -34,21 +34,20 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CLEAR_CP: CardDef = CardDef::new(
     "通用:该清CP了",
     &[
-        On::Play("", Some(cant_play), clear_cp),
+        On::Play("", "", Some(cant_play), clear_cp),
         // （1）: the spread runs at the [使用者]'s turn starts for 2 of them.
-        On::Action(&[ActionKind::TurnStart], "", Some(spread_guard), spread),
+        On::Action(&[ActionKind::TurnStart], "", "", Some(spread_guard), spread),
         // User ruling 2026-10-07: the card leaves for the discard as soon as
         // its attached [CP点] is empty -- an event handler on the count, not a
         // check at each spend site. `CpChanged` is gone; `CounterChanged` with
         // the name check in the residual guard speaks for `counter::CP` only.
-        On::Action(&[ActionKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
+        On::Action(&[ActionKind::CounterChanged], "", "", Some(cp_empty_guard), on_cp_empty),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"该清CP了"#)
         .raw_name(r#"该清CP了"#)
         .tags(&[r#"手"#, r#"特"#])
-        .text(r#"[特]：
-（2）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
+        .text(r#"（1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
 [手]：
 在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。"#)
         .cell(r#"A8"#)

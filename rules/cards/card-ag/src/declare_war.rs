@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
-    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Effect], "", r#"你或你拥有的格子被其他玩家的卡效果影响"#, Some(can_counteract), counteract)],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"宣战布告"#)

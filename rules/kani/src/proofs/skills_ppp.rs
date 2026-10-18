@@ -6,7 +6,8 @@
 //!
 //! Isolation (visible + `kani::assume`):
 //! - no `Sumimi:#L11` on the field (band-01c crystal substitution off);
-//! - no `returns.copied` sticker (band press `spend_copy_sticker` no-op);
+//! - no Returns borrow (`returns.borrow_uid` unset, so band press
+//!   `spend_copy_sticker` is a no-op);
 //! - `n_players ∈ 2..=4`, seats 0..n alive unless stated.
 //!
 //! Host notes that shape the frames (not book facts):
