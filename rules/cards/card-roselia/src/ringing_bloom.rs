@@ -19,8 +19,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RINGING_BLOOM: CardDef = CardDef::new(
     "R:（燐子）Ringing Bloom",
     &[
-        On::Play("", None, play),
-        On::Action(&[ActionKind::PayAfter], "card.placed && pay_is_rent && target == owner", None, pay_after),
+        On::Play("", "", None, play),
+        On::Action(&[ActionKind::PayAfter], "card.placed && pay_is_rent && target == owner", "", None, pay_after),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

@@ -83,7 +83,7 @@ See coverage gaps below.
 ### Event rules (2026-10-07)
 
 `rules/events` (`docs/EVENTS.md`) is the event-card category: 28 `event:*`
-`CardDef`s, one per `data/events.json` entry. The engine keeps only the deck /
+`CardDef`s, one per event-card entry. The engine keeps only the deck /
 draw / active list / filing away; the bodies live in the crate.
 
 Engine-side coverage is `crates/game-core/tests/events.rs` (7 tests: the
@@ -741,8 +741,8 @@ short list.
 * `data/bands.json` matches `团技能` `D`-column for all 12 bands. No drift.
 * `data/characters.json` matches `角色技能` `E`-column for 53 of 54
   characters. **One drift: 北泽育美 「全垒打！」** -- `data/characters.json`
-  (and the hand-written `data/skill_simple.json`, which is not a second
-  source of truth) carry three extra clauses the sheet does not. `data/` is
+  (and the former hand-written `data/skill_simple.json`, now deleted) carry
+  three extra clauses the sheet does not. `data/` is
   another agent's; not edited here.
 
 ### 9. Design reference: `ileuxali/bangdream-monopoly`

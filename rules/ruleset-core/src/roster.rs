@@ -1,4 +1,4 @@
-//! Game roster metadata (ABI v63): the typed character / band
+//! Game roster metadata (ABI v86): the typed character / band
 //! rows and the card field keys, beside the rule code.
 //!
 //! `card-sdk` stays vocabulary-free -- [`card_sdk::meta::CardMeta`] carries the
@@ -7,6 +7,12 @@
 //! [`PersonaDef`] / [`GroupDef`] tables live with their skill rules
 //! (`rules/personas`, `rules/skills/skill-groups`); the shared
 //! ordinal tables that restore data-file order live in [`roster_order`].
+//!
+//! Display-only columns (rule text, art ids, accent colours, sheet cells, ...)
+//! stay as fields on the defs -- that is the authoring surface -- but they no
+//! longer ride [`MetaRow`] into `ruleset_metadata`. They are exported at build
+//! time into `webui/src/generated/display.json` by `tools/export-display.mjs`
+//! (`docs/DISPLAY.md`).
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -15,35 +21,20 @@ use card_sdk::meta::{MetaRow, ToMetaRow};
 
 /// Field / list / flag keys this game writes into [`card_sdk::meta::MetaRow`]'s
 /// generic maps. Mirrored by the host converter in `game-rules`
-/// (`roster_from_meta`) and by the JSON field names the data files use.
+/// (`roster_from_meta`).
+///
+/// Display-only columns are **not** listed here: those never enter `MetaRow`
+/// (see `docs/DISPLAY.md`).
 pub mod meta_key {
-    /// Card row: the band the card belongs to (`band`).
+    /// Card row: the band the card belongs to (`group`).
     pub const GROUP: &str = "group";
     /// Card row: the exclusive owner character name (`owner`);
     /// `""` = not exclusive.
     pub const OWNER: &str = "owner";
-    /// Character row: compact display label (`display`).
-    pub const DISPLAY: &str = "display";
-    /// Character / band row: accent colour (`color`).
-    pub const COLOR: &str = "color";
     /// Character / band row: skill name (`skill`).
     pub const SKILL: &str = "skill";
-    /// Character row: CN client id (`cnId`).
-    pub const CN_ID: &str = "cnId";
-    /// Character row: art id (`art`).
-    pub const ART: &str = "art";
-    /// Character row: costume id (`costume`).
-    pub const COSTUME: &str = "costume";
     /// Character row: base character of a variant (`variantOf`).
     pub const VARIANT_OF: &str = "variantOf";
-    /// Character row: short variant label (`variantTag`).
-    pub const VARIANT_TAG: &str = "variantTag";
-    /// Band row: short name (`shortName`).
-    pub const SHORT_NAME: &str = "shortName";
-    /// Band row: logo id (`logo`).
-    pub const LOGO: &str = "logo";
-    /// Band row: boot-screen art id (`bootArt`).
-    pub const BOOT_ART: &str = "bootArt";
     /// Character row: exclusive card names (`exclusiveCards`).
     pub const EXCLUSIVE_CARDS: &str = "exclusiveCards";
     /// Character row: starting-deck preset card names (`preset`).
@@ -141,6 +132,10 @@ impl PersonaDef {
 }
 
 impl ToMetaRow for PersonaDef {
+    /// Runtime-only row. `text` is emitted: the ruleset queries it at runtime
+    /// (`card_text_mentions` over `skill:<owner>:<skill>`, 「技能中含有…」).
+    /// Display columns (`display` / `color` / `variantTag` / `art` / `costume`
+    /// / `cnId`) stay on the def and go to `display.json` (`docs/DISPLAY.md`).
     fn to_meta_row(&self) -> MetaRow {
         MetaRow {
             kind: alloc_string("persona"),
@@ -154,19 +149,10 @@ impl ToMetaRow for PersonaDef {
             cell: String::new(),
             fields: Vec::from([
                 (alloc_string(meta_key::GROUP), alloc_string(self.group)),
-                (alloc_string(meta_key::DISPLAY), alloc_string(self.display)),
-                (alloc_string(meta_key::COLOR), alloc_string(self.color)),
                 (alloc_string(meta_key::SKILL), alloc_string(self.skill)),
-                (alloc_string(meta_key::CN_ID), alloc_string(self.cn_id)),
-                (alloc_string(meta_key::ART), alloc_string(self.art)),
-                (alloc_string(meta_key::COSTUME), alloc_string(self.costume)),
                 (
                     alloc_string(meta_key::VARIANT_OF),
                     alloc_string(self.variant_of),
-                ),
-                (
-                    alloc_string(meta_key::VARIANT_TAG),
-                    alloc_string(self.variant_tag),
                 ),
             ]),
             lists: Vec::from([
@@ -198,7 +184,6 @@ pub struct GroupDef {
     pub text: &'static str,
     pub logo: &'static str,
     pub shares_exclusives: bool,
-    pub boot_art: &'static str,
 }
 
 impl GroupDef {
@@ -211,7 +196,6 @@ impl GroupDef {
             text: "",
             logo: "",
             shares_exclusives: false,
-            boot_art: "",
         }
     }
 
@@ -239,13 +223,13 @@ impl GroupDef {
         self.shares_exclusives = shares;
         self
     }
-    pub const fn boot_art(mut self, boot_art: &'static str) -> Self {
-        self.boot_art = boot_art;
-        self
-    }
 }
 
 impl ToMetaRow for GroupDef {
+    /// Runtime-only row. `text` is emitted: the ruleset queries it at runtime
+    /// (`card_text_mentions` over `skill:<owner>:<skill>`, 「技能中含有…」).
+    /// Display columns (`shortName` / `color` / `logo`) stay on the def and go
+    /// to `display.json` (`docs/DISPLAY.md`).
     fn to_meta_row(&self) -> MetaRow {
         MetaRow {
             kind: alloc_string("group"),
@@ -258,17 +242,7 @@ impl ToMetaRow for GroupDef {
             derived: false,
             cell: String::new(),
             fields: Vec::from([
-                (
-                    alloc_string(meta_key::SHORT_NAME),
-                    alloc_string(self.short_name),
-                ),
-                (alloc_string(meta_key::COLOR), alloc_string(self.color)),
                 (alloc_string(meta_key::SKILL), alloc_string(self.skill)),
-                (alloc_string(meta_key::LOGO), alloc_string(self.logo)),
-                (
-                    alloc_string(meta_key::BOOT_ART),
-                    alloc_string(self.boot_art),
-                ),
             ]),
             lists: Vec::new(),
             flags: Vec::from([(

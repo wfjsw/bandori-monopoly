@@ -1,6 +1,6 @@
 //! `event:前场队还是后场队？` -- 事件卡「前场队还是后场队？」（中立事件 A9）.
 //!
-//! 事件文本（data/events.json, id `前场队还是后场队？`）:
+//! 事件文本（`CardMeta` beside the rule body, id `前场队还是后场队？`）:
 //! > 所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加定位X且站在格子序号31到60的玩家的投掷结果相加定位Y；如果X=Y则所有玩家获得500资金，如果X>Y则站在格子序号1到30的玩家分摊获得1000资金，如果Y>X则站在格子序号31到60的玩家分摊获得1000资金
 
 use alloc::vec::Vec;
@@ -10,7 +10,12 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const FRONT_OR_BACK: CardDef = CardDef::new("event:前场队还是后场队？", &[On::Play("", None, play)]);
+pub const FRONT_OR_BACK: CardDef = CardDef::new("event:前场队还是后场队？", &[On::Play("", "", None, play)])
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"前场队还是后场队？"#)
+            .text(r#"所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加定位X且站在格子序号31到60的玩家的投掷结果相加定位Y；如果X=Y则所有玩家获得500资金，如果X>Y则站在格子序号1到30的玩家分摊获得1000资金，如果Y>X则站在格子序号31到60的玩家分摊获得1000资金"#)
+            .cell(r#"A9"#)
+            .derived(false));
 
 /// 规则书: 「所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加
 /// 定位X且站在格子序号31到60的玩家的投掷结果相加定位Y」 -- one bare 1d20 each.

@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
     "PPP:（香澄）大家我都喜欢哦",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时」 -- a
         // still-walking (non-teleport) pass by someone other than the owner.
         // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家
@@ -24,7 +24,7 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
         // card's own tile (`card.tile`, docs/GUARDS.md §4.2).
         On::Action(
             &[ActionKind::PassTile],
-            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0",
+            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0", "",
             None,
             pass_tile,
         ),

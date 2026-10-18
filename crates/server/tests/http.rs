@@ -450,7 +450,7 @@ async fn drive(
             let pick = d
                 .personas
                 .iter()
-                .find(|c| !c.cn_id.is_empty() && !taken.contains(&c.name.as_str()))
+                .find(|c| !taken.contains(&c.name.as_str()))
                 .unwrap();
             c.ok(&path, json!({ "act": "pick", "persona": pick.name }))
                 .await;

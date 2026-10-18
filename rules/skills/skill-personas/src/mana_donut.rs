@@ -40,16 +40,16 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // 「初始1」 is created at game start; the cap is declared here and
         // re-declared (only when unset) at a turn start so a mid-game
         // placement still gets one. Both write only what they must.
-        On::Action(&[ActionKind::DeckAtGameStart], "card.placed", None, declare_cap),
+        On::Action(&[ActionKind::DeckAtGameStart], "card.placed", "", None, declare_cap),
         On::Action(
             &[ActionKind::TurnStartBefore],
-            "card.placed",
+            "card.placed", "",
             Some(cap_unset),
             declare_cap,
         ),
         // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
         // branch. The choice / spend / pay stay in the body.
-        On::Action(&[ActionKind::Pass], PASS_PRE, None, on_pass),
+        On::Action(&[ActionKind::Pass], PASS_PRE, "", None, on_pass),
         // 「你的资金消耗减半」 -- only the owner's own pays, and only while
         // the window is armed. `value > 0` is the amount floor.
         //

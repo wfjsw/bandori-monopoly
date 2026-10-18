@@ -22,7 +22,7 @@ pub const MORFONICA: CardDef = CardDef::new(
         // are the condition (`value` / `target`, docs/GUARDS.md §4.2).
         On::Action(
             &[ActionKind::PayAfter],
-            "actor == owner && value >= 2000 && target != owner",
+            "actor == owner && value >= 2000 && target != owner", "",
             None,
             after_pay,
         ),
@@ -30,7 +30,7 @@ pub const MORFONICA: CardDef = CardDef::new(
         // half of the CiRCLE pick.
         On::Action(
             &[ruleset_core::kind::PassRewardAffected],
-            "actor == owner && value == 0",
+            "actor == owner && value == 0", "",
             None,
             on_circle,
         ),
@@ -76,7 +76,6 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
 pub const BAND: ruleset_core::roster::GroupDef =
 ruleset_core::roster::GroupDef::new(r#"Morfonica"#)
     .short_name(r#"Mor"#)
-    .boot_art(r#"021"#)
     .color(r#"#33AAFF"#)
     .skill(r#"振翅高飞的练习曲"#)
     .text(r#"（1）当你一次性失去2000以上资金时，抽一张卡。（2）[CiRCLE奖励]选择[获得]资金时根据选择[获得]资金次数设资金量为1000，1500，2000的循环"#)

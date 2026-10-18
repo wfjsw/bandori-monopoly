@@ -68,3 +68,6 @@ docs/ui-ref
 # Derived Kani tables — generated at build time into $OUT_DIR (see
 # rules/kani/build.rs). Never commit them.
 /rules/kani/src/generated/body_dispatch_fn.rs
+
+# generated display export (tools/export-display.mjs)
+/webui/src/generated/

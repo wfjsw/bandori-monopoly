@@ -45,24 +45,22 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         // so the buy still settles before the turn end's own effects.
         On::Action(
             &[ActionKind::TurnEndBefore],
-            "actor == owner && card.placed && card.counter('crystals') >= 3",
+            "actor == owner && card.placed && card.counter('crystals') >= 3", r#"[拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]"#,
             // No residual guard: the condition covers placed + ≥3 crystals and
             // `buy_one` owns the "is there a tile" scan (one board walk per
             // turn-end instead of two).
             None,
-            buy_one,
-        ),
-        On::Action(&[ActionKind::DeckBeforeGame], "", None, deck_before_game),
-        On::Action(&[ActionKind::Drew], "actor == owner && card.placed", None, drew),
+            buy_one),
+        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, deck_before_game),
+        On::Action(&[ActionKind::Drew], "actor == owner && card.placed", "", None, drew),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
         On::Action(
             &[ActionKind::SettleBody],
-            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner",
+            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner", "",
             None,
-            settle_body,
-        ),
+            settle_body),
     ],
 )
 // 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous

@@ -55,6 +55,7 @@ fn setup(members: Vec<RoomMember>, seed: u64) -> MatchSetup {
         seed,
         weights: ScoreWeights::default(),
             clock: None,
+        ..Default::default()
     }
 }
 
@@ -683,6 +684,7 @@ fn u64_and_f32_values_are_bit_exact() {
         seed256: None,
         weights: w,
             clock: None,
+        ..Default::default()
     };
     let body = game_core::record::RecordBody {
         init: Init::Seed(setup.clone()),

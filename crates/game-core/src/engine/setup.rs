@@ -69,7 +69,8 @@ impl Cx<'_> {
         self.bannable(persona) && self.w.st.players.iter().all(|s| s.persona != persona)
     }
 
-    /// Prefers personas with their own art set (`cnId`).
+    /// Uniform over the pickable (or bannable) personas. The engine does not
+    /// care about art.
     pub(crate) fn random_persona(&mut self, for_pick: bool) -> String {
         let all: Vec<&str> = self
             .data
@@ -84,17 +85,11 @@ impl Cx<'_> {
                 }
             })
             .collect();
-        let with_art: Vec<&str> = all
-            .iter()
-            .copied()
-            .filter(|c| self.data.persona(c).is_some_and(|x| !x.cn_id.is_empty()))
-            .collect();
-        let list = if with_art.is_empty() { all } else { with_art };
-        if list.is_empty() {
+        if all.is_empty() {
             return String::new();
         }
-        let k = self.w.rng.below(list.len());
-        list[k].to_string()
+        let k = self.w.rng.below(all.len());
+        all[k].to_string()
     }
 
     /// Ban order: back to front.

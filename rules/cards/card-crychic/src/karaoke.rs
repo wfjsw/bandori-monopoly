@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const KARAOKE: CardDef = CardDef::new(
     "CRYCHIC:去唱卡拉ok吧",
-    &[On::Play("", Some(cant_play), karaoke)],
+    &[On::Play("", "", Some(cant_play), karaoke)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"去唱卡拉ok吧"#)
         .raw_name(r#"去唱卡拉ok吧"#)

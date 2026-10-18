@@ -28,14 +28,14 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
     &[
         On::Action(
             &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')",
+            "group_is(owner, 'Pastel✽Palettes')", "",
             None,
             at_start,
         ),
         // （2） replaces the draw, so it runs at the per-card **before** point.
         On::Action(
             &[ActionKind::DrewBefore],
-            "actor == owner && slot('ppFansUp') >= 1",
+            "actor == owner && slot('ppFansUp') >= 1", "",
             None,
             on_draw,
         ),

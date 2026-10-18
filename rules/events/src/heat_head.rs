@@ -1,6 +1,6 @@
 //! `event:超燃甩头` -- 事件卡「超燃甩头」（中立事件 A18）.
 //!
-//! 事件文本（data/events.json, id `超燃甩头`）:
+//! 事件文本（`CardMeta` beside the rule body, id `超燃甩头`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
@@ -18,7 +18,7 @@ const PHASE_DOWN: i32 = 2;
 pub const HEAT_HEAD: CardDef = CardDef::new(
     "event:超燃甩头",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         // 「所有玩家的移动掷骰」 -- every plan / every face. `always` deleted
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
@@ -27,9 +27,14 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
         // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
         On::FilterValue(&[FilterKind::DiceRollValue], "", None, sub_die_filter),
-        On::Action(&[ActionKind::AtEnd], "", None, phase_end),
+        On::Action(&[ActionKind::AtEnd], "", "", None, phase_end),
     ],
-);
+)
+        .meta(&card_sdk::meta::CardMeta::new()
+            .name(r#"超燃甩头"#)
+            .text(r#"将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。"#)
+            .cell(r#"A18"#)
+            .derived(false));
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动
 /// 掷骰增加1d6」 -- keep the event, start phase 1, schedule the drawer's next

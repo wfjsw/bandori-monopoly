@@ -545,7 +545,7 @@ instantiation per tile body, the same cost a field hook already pays.
 
 Checked: `card_sdk::abi::ABI_VERSION = 78`,
 `game_core::engine::mod::SAVE_VERSION = 4` (the match save),
-`game_core::profile::SAVE_VERSION = 3` (the player profile -- untouched here).
+`player_meta::profile::SAVE_VERSION = 3` (the player profile -- untouched here).
 
 | bump | when | why |
 |---|---|---|

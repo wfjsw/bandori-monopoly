@@ -10,7 +10,7 @@ use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SMILE_PATROL: CardDef =
-    CardDef::new("HHW:微笑巡逻队", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("HHW:微笑巡逻队", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微笑巡逻队"#)
         .raw_name(r#"微笑巡逻队"#)
         .tags(&[])

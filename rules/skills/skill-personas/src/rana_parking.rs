@@ -33,9 +33,9 @@ const PARFAIT: &str = "抹茶芭菲";
 pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, "", None, on_pass),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
         // rides the settle's effect list below.
         //
@@ -49,16 +49,16 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         // so on a split-pay the interactive offer is per leg rather than once
         // on the command total (single-pair behaviour is identical).
         On::FilterFlag(&[FilterKind::PayCombinedCancel], "", Some(any), exempt_flag),
-        On::Action(&[ActionKind::Effect], "", Some(any), exempt_offer),
+        On::Action(&[ActionKind::Effect], "", "", Some(any), exempt_offer),
         // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
-        On::Action(&[ActionKind::SettleBody], "", Some(any), replace_body),
+        On::Action(&[ActionKind::SettleBody], "", "", Some(any), replace_body),
         // （3）「你与其他玩家重合时」 -- 行动阶段 13 [重叠] (`passPlayer`). The
         // pre puts the owner in the actor seat (the mover); `target` is the
         // other player already standing on the landing tile (one raise per
         // such other). The body must read `target`, not `player_id`.
-        On::Action(&[ActionKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
+        On::Action(&[ActionKind::PassPlayer], card_sdk::pre::MINE, "", None, on_overlap),
     ],
 )
     .labels(&[(2, "（1）"), (3, "（2）"), (4, "（2）"), (5, "（2）"), (6, "（3）")])

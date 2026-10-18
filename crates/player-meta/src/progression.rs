@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::MatchMode;
+use game_core::MatchMode;
 
 pub const MAX_LEVEL: i32 = 500;
 /// Charge refilled each day.

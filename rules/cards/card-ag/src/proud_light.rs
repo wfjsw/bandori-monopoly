@@ -22,6 +22,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::PassTile],
         card_sdk::pre::MINE,
+        r#"你经过一名角色"#,
         Some(can_counteract),
         counteract,
     )],

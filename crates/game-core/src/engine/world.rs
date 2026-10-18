@@ -609,10 +609,22 @@ pub struct World {
     pub next_turn_pending: bool,
     /// Deeds of players who left, waiting to be auctioned.
     pub leftovers: VecDeque<Vec<usize>>,
-    /// Per-name bonuses added to [`crate::data::MatchRulesData::rule_params`]
-    /// by cards (generic named rule parameters).
+    /// Per-name bonuses added to [`Self::rule_params`] by cards (generic named
+    /// rule parameters).
     #[serde(default)]
     pub rule_param_bonus: std::collections::BTreeMap<String, i32>,
+    /// Named rule parameters in force (from [`crate::record::MatchSetup::rule_params`]).
+    /// Empty = the code default ([`crate::data::default_rule_params`]). Card
+    /// bonuses live beside this in [`Self::rule_param_bonus`].
+    /// Serde-skipped when empty so a default-param match's `save()` is
+    /// byte-identical to a pre-field save (checkpoint hashes).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub rule_params: std::collections::BTreeMap<String, i32>,
+    /// The tile table in force (from [`crate::record::MatchSetup::board`]).
+    /// `None` = the host's `data.tiles`. Serde-skipped when absent so a
+    /// host-board match's `save()` is byte-identical to a pre-field save.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board: Option<Vec<crate::data::TileData>>,
     /// v78: host-supplied recorded roll for a Filter body. `i32::MIN` = none.
     /// The host pre-rolls into the recorded RNG stream before a DiceRollPlan /
     /// DiceRollValue Filter raise so the body can read it without calling `roll`.
@@ -733,6 +745,8 @@ impl World {
             next_turn_pending: false,
             leftovers: VecDeque::new(),
             rule_param_bonus: Default::default(),
+            rule_params: Default::default(),
+            board: None,
             recorded_roll: i32::MIN,
             ask_seq: 0,
             signals: vec![],

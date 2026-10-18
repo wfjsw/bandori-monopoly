@@ -41,7 +41,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // sits immediately before the pure `PaySplitChoose` filter stage.
         On::Action(
             &[ActionKind::PaySplitChooseBefore],
-            "actor != owner && tile.owner == owner && value > 0",
+            "actor != owner && tile.owner == owner && value > 0", "",
             None,
             on_pay,
         ),
@@ -60,7 +60,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // is the next event for both teleports and walks.
         On::Action(
             &[ActionKind::MoveAfter],
-            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0", "",
             None,
             on_plan_after,
         ),

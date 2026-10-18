@@ -39,18 +39,21 @@ use alloc::vec::Vec;
 #[derive(Clone, Copy)]
 pub struct CardMeta {
     /// Display name (the `name` column). Empty = unnamed (the title falls back
-    /// to the id).
+    /// to the id). Rides `MetaRow` into `ruleset_metadata`.
     pub name: &'static str,
     /// Untrimmed name as printed on the sheet (`rawName`). May carry the
-    /// character prefix the display name drops.
+    /// character prefix the display name drops. Display-only: exported to
+    /// `display.json`, not emitted on [`MetaRow`].
     pub raw_name: &'static str,
-    /// Rule text (the `text` column).
+    /// Rule text (the `text` column). Display-only: exported to
+    /// `display.json`, not emitted on [`MetaRow`].
     pub text: &'static str,
     /// Deck-building tags (「手」 / 「衍生」 / ...).
     pub tags: &'static [&'static str],
     /// Derived / token card (not in the physical deck pool).
     pub derived: bool,
-    /// Sheet cell this row was lifted from (`cell`).
+    /// Sheet cell this row was lifted from (`cell`). Display-only: exported to
+    /// `display.json`, not emitted on [`MetaRow`].
     pub cell: &'static str,
     /// Game-specific string slots, `(key, value)`. This game's card-row keys
     /// are `band` and `owner` (`ruleset_core::meta_key`). Missing key = empty.
@@ -114,18 +117,21 @@ impl CardMeta {
             .unwrap_or("")
     }
 
-    /// Wire form, tagged `kind = "card"`.
+    /// Wire form, tagged `kind = "card"`. `text` is emitted: the ruleset
+    /// queries it at runtime (`card_text_mentions`, 「效果包含…」), so it is a
+    /// rule input as well as display. `raw_name` / `cell` are display-only and
+    /// stay on the def for `display.json` (`docs/DISPLAY.md`).
     pub fn to_row(&self, id: &str, ordinal: i32) -> MetaRow {
         MetaRow {
             kind: "card".to_string(),
             ordinal,
             id: id.to_string(),
             name: self.name.to_string(),
-            raw_name: self.raw_name.to_string(),
+            raw_name: String::new(),
             text: self.text.to_string(),
             tags: self.tags.iter().map(|s| (*s).to_string()).collect(),
             derived: self.derived,
-            cell: self.cell.to_string(),
+            cell: String::new(),
             fields: self
                 .fields
                 .iter()

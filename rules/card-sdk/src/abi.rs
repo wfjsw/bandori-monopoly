@@ -668,7 +668,21 @@ use alloc::{string::String, vec::Vec};
 ///      exactly. `ChainKind` remains the [`TriggerKind`] alias for
 ///      `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
 ///      same name tables, no id renumbering. Source-only: ABI_VERSION stays 85.
-pub const ABI_VERSION: i32 = 85;
+/// v86: **display columns leave `ruleset_metadata`**. Printed text / display
+///      strings stay authored on [`crate::meta::CardMeta`] /
+///      `ruleset_core::roster::{PersonaDef, GroupDef}` (the builder calls are
+///      unchanged) but no longer ride the runtime metadata blob. Dropped
+///      MetaRow keys: card `text` / `rawName` / `cell`; persona `display` /
+///      `text` / `color` / `variantTag` / `art` / `costume` / `cnId`; group
+///      `text` / `shortName` / `color` / `logo`. They are serialized at build
+///      time into `webui/src/generated/display.json` by
+///      `tools/export-display.mjs` (`docs/DISPLAY.md`). Keys that stay:
+///      card `name` / `group` / `owner` / `derived` / `tags`; persona `name` /
+///      `group` / `skill` / `exclusiveCards` / `preset` / `variantOf`; group
+///      `name` / `skill` / `sharesExclusives`. Postcard field order of
+///      [`crate::meta::MetaRow`] is unchanged (dropped columns are empty /
+///      absent map pairs). SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 86;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -2743,22 +2757,26 @@ pub struct ManifestOn {
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnKind {
-    /// `On::Play(cond, gate, body)` -- play this card from hand (or press it as
-    /// a skill via `invoke_skill`). `cond` is the gate's CEL condition, `gate`
+    /// `On::Play(cond, reason, gate, body)` -- play this card from hand (or press it as
+    /// a skill via `invoke_skill`). `cond` is the gate's CEL condition, `reason`
+    /// is the human-readable 「…时」 clause the counteraction prompt shows
+    /// (`""` when this entry is not a [反击] window), `gate`
     /// is the playability query (a pure `Option<Msg>`; `None` = playable,
     /// `Some(why)` = blocked with a reason), `body` is the effect. The host
     /// calls it between the [`TriggerKind::Card`] raise and `cardAfter`.
     Play = 0,
     // 1 was `CantPlay`, folded into `Play`'s gate.
-    /// `On::Counteract(kinds, cond, guard, body)` -- a [反击] at those
+    /// `On::Counteract(kinds, cond, reason, guard, body)` -- a [反击] at those
     /// [`ChainKind`]s. `cond` (CEL) and `guard` (the residual pure `bool` query,
     /// `None` once G4 folded the whole body into `cond`) decide whether the card
-    /// is offered in the hand window; `body` resolves against the answered link.
-    /// Called at the counteraction offer, then again at LIFO resolution.
+    /// is offered in the hand window; `reason` is the human-readable 「…时」
+    /// clause the counteraction prompt shows; `body` resolves against the
+    /// answered link. Called at the counteraction offer, then again at LIFO
+    /// resolution.
     Counteract = 2,
-    /// `On::Action(kinds, cond, guard, body)` -- an **event reaction** at those
+    /// `On::Action(kinds, cond, reason, guard, body)` -- an **event reaction** at those
     /// [`ActionKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
-    /// `cond`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
+    /// `cond`/`reason`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
     /// **automatically** for every placed card (placement order per player)
     /// whenever one of the kinds is raised -- no window. May emit effects;
     /// does not modify the triggering value. Kinds must be non-filter

@@ -16,6 +16,7 @@ pub const ORDINARY: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0",
+        r#"受到异常移动效果影响"#,
         None,
         counteract,
     )],

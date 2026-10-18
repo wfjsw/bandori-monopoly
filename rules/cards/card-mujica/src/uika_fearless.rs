@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const UIKA_FEARLESS: CardDef = CardDef::new(
     "Mujica:（初华）我，无畏悲伤",
-    &[On::Play("", None, uika_fearless)],
+    &[On::Play("", "", None, uika_fearless)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"我，无畏悲伤"#)
         .raw_name(r#"（初华）我，无畏悲伤"#)

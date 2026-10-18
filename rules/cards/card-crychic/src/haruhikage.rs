@@ -17,7 +17,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",
     &[
-        On::Play("", None, play),
+        On::Play("", "", None, play),
         On::Counteract(
             &[
                 ChainKind::Effect,
@@ -30,6 +30,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
              || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
                  && target == owner && tile.id >= 0 && value > 0)",
+            r#"可作为[反击]打出"#,
             None,
             counteract
         ),
@@ -40,7 +41,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         // 「it is still in hand」), so 「手牌」 counts this card.
         On::Action(
             &[ActionKind::Drawn],
-            "trigger_card == card.id",
+            "trigger_card == card.id", "",
             Some(assets_ready),
             on_drawn,
         ),

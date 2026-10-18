@@ -21,8 +21,8 @@ pub const NFO: CardDef = CardDef::new(
         // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
         // live in a Filter. Whole offer on `ActionKind::Effect` (payment
         // declaration; `t.value` folds there).
-        On::Action(&[card_sdk::abi::ActionKind::Effect], "", Some(gain_guard), gain_bump),
-        On::Play("", None, play),
+        On::Action(&[card_sdk::abi::ActionKind::Effect], "", "", Some(gain_guard), gain_bump),
+        On::Play("", "", None, play),
         // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
         // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
@@ -40,8 +40,8 @@ pub const NFO: CardDef = CardDef::new(
             None,
             pay_shave,
         ),
-        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", None, pay_unplace),
-        On::Action(&[ActionKind::AtEnd], "", None, at_end),
+        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", "", None, pay_unplace),
+        On::Action(&[ActionKind::AtEnd], "", "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)

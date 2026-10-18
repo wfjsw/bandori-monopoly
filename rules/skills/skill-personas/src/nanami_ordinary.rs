@@ -45,9 +45,9 @@ fn cd_key(id: &str) -> alloc::string::String {
 pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
@@ -55,11 +55,11 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
         On::Action(
             &[ruleset_core::kind::SkillUsed],
-            "actor != owner && trigger_card != 0 && charge(owner) >= 1",
+            "actor != owner && trigger_card != 0 && charge(owner) >= 1", "",
             Some(on_skill_applies),
             on_skill,
         ),
-        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, None, tick),
+        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, tick),
     ],
 )
     .silent(&[1])

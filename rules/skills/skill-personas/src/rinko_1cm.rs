@@ -24,9 +24,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RINKO_1CM: CardDef = CardDef::new(
     "skill:白金燐子:即使1cm也要前进",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Play("", "", Some(can_use), use_skill),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
     ],
 )
     // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate.

@@ -205,7 +205,10 @@ pub struct RecordHeader { engine: EngineStamp, mode: MatchMode, step: f32, origi
                           seats: Vec<SeatInfo>, partial: bool, ended: bool, reason: String, rounds: i32, total_ticks: u64 /*str*/,
                           #[serde(default)] fair: Option<fair::Fairness> /*docs/FAIRNESS.md, additive*/ }
 pub struct MatchSetup { members: Vec<RoomMember> /*incl. mentality*/, seed: u64 /*str*/ /*legacy xoshiro*/, weights: ScoreWeights,
-                        #[serde(default)] seed256: Option<rng::Seed256> /*hex; the ChaCha key every new match uses*/ }
+                        #[serde(default)] seed256: Option<rng::Seed256> /*hex; the ChaCha key every new match uses*/,
+                        #[serde(default)] clock: Option<clock::ClockSettings>,
+                        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] rule_params: BTreeMap<String, i32>,
+                        #[serde(default, skip_serializing_if = "Option::is_none")] board: Option<Vec<TileData>> }
 pub enum Init { Seed(MatchSetup), Snapshot { save: String } }
 #[serde(tag="t")] pub enum Input { Ticks{k:u8,n:u32}, Act{m:i32,msg:NetMessage,ok:bool}, QuickStart, Finish, Left{m:i32,can_return:bool}, Back{m:i32}, AnimDone{m:i32,seq:i32} }
 pub struct Checkpoint { at: u32, tick: u64, round: i32, turn: i32, hash: String }
@@ -240,8 +243,12 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
 ## 4. Glue, rules-worker, server
 
 * **web-glue** (additive):
-  * **Stamp inputs:** `load_data` computes `data_sha256` (sha256 of the
-    `DATA_FILES` contents in order). `ruleset_build` captures `set.sha256()`.
+  * **Stamp inputs:** `data_sha256` is written `""` on every record this build
+    writes. The tables a replay depends on ride in the record
+    (`MatchSetup::board` / `MatchSetup::rule_params`), so host files no longer
+    fork a replay and `DATA_FILES` is empty. Display text and the roster
+    (cards / personas / groups / events, including event prose) remain covered
+    by `ruleset_sha256`. `ruleset_build` captures `set.sha256()`.
     `engine_stamp()` exposes both.
   * **`SoloMatch`** holds a `RecordedMatch`. New methods:
     * `tick_steps(k)`;
@@ -306,8 +313,10 @@ design — all of them forced by something the design already says:
   hand.
 * **`CardRules::ruleset_sha256()`** (a defaulted trait method) is how the
   worker fills `EngineStamp.ruleset_sha256`; `StubRules` reports `"stub"`.
-  `Ctx::load` hashes the `DATA_FILES` contents for `data_sha256`, the same
-  recipe web-glue uses. The in-process `Ctx::new` (tests, and the fallback
+  `Ctx::load` hashes the `DATA_FILES` contents for `data_sha256` (the two
+  engine tables; display text and the roster do not move it), the same recipe
+  web-glue
+  uses. The in-process `Ctx::new` (tests, and the fallback
   when no worker binary is installed) leaves `data_sha256` empty, which
   `compat` reads as "unknown" and skips.
 * **The in-memory store has no clock.** `record:{room}:last` is an LRU of 64
@@ -419,8 +428,15 @@ A **bundle** is one replay engine plus the inputs its stamp hashed:
 
 * the glue (`webui/src/wasm/glue.js` + `glue_bg.wasm`);
 * the ruleset index and its content-addressed modules;
-* the game tables (`DATA_FILES`);
 * the record format / save format versions and the card ABI.
+
+The **data half is empty** on every record this build writes: the board and
+named rule parameters travel inside the record itself (`MatchSetup::board` /
+`MatchSetup::rule_params`), and the remaining host table (`match_rules.json`)
+is bot-naming policy only. `DATA_FILES` is `[]` and `EngineStamp::data_sha256`
+is written `""`. Display text and the roster (cards / personas / groups /
+events) stay covered by `ruleset_sha256`, so editing copy does not fork the
+bundle id.
 
 The id is a sha256 over those identities -- one recipe, in
 `game_core::record::bundle_id` and its JS twin `tools/engine-bundle.mjs`:
@@ -430,6 +446,9 @@ bundle = sha256_hex("bdre-bundle-v1\n"
                     "<glue_sha256>\n<ruleset_sha256>\n<data_sha256>\n"
                     "<format>\n<save_version>\n<abi>\n")
 ```
+
+`data_sha256` feeds an empty string into that recipe (the field slot stays, so
+the id does not collide with a pre-change build that hashed a real table).
 
 `glue_sha256` is sha256 over the glue's `glue.js` bytes followed by its
 `glue_bg.wasm` bytes. It is computed by `tools/build-glue.mjs` and written to
@@ -473,9 +492,12 @@ rules/**,                                   (card-sdk, cards, skills, tiles,
                                              events, fixtures, both locks)
 Cargo.lock, rules/Cargo.lock,               (dependency resolution)
 Cargo.toml, rules/Cargo.toml,               (the build graph: members, the cel patch)
-the DATA_FILES the bundle hashes,           (the game tables)
 format / save_version / abi                 (the record schema)
 ```
+
+(`DATA_FILES` is empty and `data_sha256` is written `""`, so host tables are
+not in the identity either -- the board and rule parameters ride in the
+record's `MatchSetup`.)
 
 and excludes, on purpose: rustc / cargo / wasm-bindgen versions, build flags
 and recipes (`tools/*.mjs`), paths, timestamps, webui, docs, bots. The
@@ -792,10 +814,12 @@ The **manifest** is the `{path, sha256, len}` list the extension is built on:
 ```
 
 Every file the replay worker loads rides in it: `glue.js` + `glue_bg.wasm`,
-the `data/` tables, `rules/index.json`, the precompiled `conds-*.bin`, the
-content-addressed `modules/*.wasm`, and `bundle.json`. Paths are
-bundle-relative, slash-separated, and rejected if they contain `..`, a
-leading slash, a backslash or a drive letter.
+the `data/` tables (still needed to boot the worker's `GameData`; the record's
+`MatchSetup::board` / `rule_params` are what the replay actually runs on),
+`rules/index.json`, the precompiled `conds-*.bin`, the content-addressed
+`modules/*.wasm`, and `bundle.json`. Paths are bundle-relative,
+slash-separated, and rejected if they contain `..`, a leading slash, a
+backslash or a drive letter.
 
 **Why a trailing section is safe.** Every reader's `expand_record` stops at the
 end of the record frame and ignores what follows -- verified against every
@@ -846,13 +870,16 @@ or the bundle is not deployed at all, the embedded engine runs -- that is the
 whole point of carrying it. The user is told: 「正在使用回放文件内嵌的引擎」 /
 "Playing on the engine embedded in this record (bundle …)".
 
-**BOM note (`data_sha256`).** Some of the game tables (`skill_simple.json` and
-historically the retired roster files) begin with a UTF-8 BOM, and a
-byte-preserving decode keeps it (`as_bytes()` puts `EF BB BF` back) while
-`TextDecoder`'s default and `Response.text()` strip it. The stamp recipe is
-unified on **hash without the BOM**: `load_data`, `Ctx::load` and
+**BOM note (`data_sha256`).** `data_sha256` is empty on every record this
+build writes (§9.1): the board and rule parameters ride in the record's
+`MatchSetup`, so host tables are not hashed. Older records may still carry a
+real `data_sha256` over the two `DATA_FILES` (and historically the display
+tables that are no longer hashed). Those tables may begin with a UTF-8 BOM,
+and a byte-preserving decode keeps it (`as_bytes()` puts `EF BB BF` back)
+while `TextDecoder`'s default and `Response.text()` strip it. The stamp
+recipe was unified on **hash without the BOM**: `load_data`, `Ctx::load` and
 `tools/archive-engine.mjs` all drop a leading `U+FEFF` before hashing, so a
-record sealed by `tools/`, the server or a page carries the same
+record sealed by `tools/`, the server or a page carried the same
 `data_sha256` for the same tables. The embedded loader still decodes the
 tables both ways and feeds the one whose pre-recipe hash is the record's own
 `data_sha256`, so the bytes the engine parses match what the file was sealed

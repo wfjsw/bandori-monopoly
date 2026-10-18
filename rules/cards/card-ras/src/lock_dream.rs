@@ -23,20 +23,20 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
         // before the opening deal) -- the residual guard stays.
         On::Action(
             &[ActionKind::DeckBeforeGame],
-            "",
+            "", "",
             Some(deck_before_game_guard),
             deck_before_game,
         ),
-        On::Action(&[ActionKind::DeckAtGameStart], "card.placed", None, deck_at_game_start),
+        On::Action(&[ActionKind::DeckAtGameStart], "card.placed", "", None, deck_at_game_start),
         On::Action(
             &[ActionKind::PassTile],
-            "actor == owner && move.main && tile.id == tile_named('Bandori车站')",
+            "actor == owner && move.main && tile.id == tile_named('Bandori车站')", "",
             None,
             pass_tile,
         ),
         On::Action(
             &[ActionKind::SettleBefore],
-            "actor == owner && slot('lock_dream_tag') != 0",
+            "actor == owner && slot('lock_dream_tag') != 0", "",
             None,
             settle_before,
         ),

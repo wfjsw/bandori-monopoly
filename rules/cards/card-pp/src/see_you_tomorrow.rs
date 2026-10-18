@@ -18,7 +18,7 @@ use skill_groups::fans;
 
 pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
     "PP:[衍生]明天见",
-    &[On::Play("", Some(cant_play), see_you_tomorrow)],
+    &[On::Play("", "", Some(cant_play), see_you_tomorrow)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"明天见"#)
         .raw_name(r#"[衍生]明天见"#)
