@@ -1653,3 +1653,67 @@ Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening (sparkler dest pin is the wire constant, not a softer pin; soyoreturn
 pick pin is setup isolation, same class as `arm_roll_face_one`). Production
 bodies untouched. Allowed Kani-only surface: `rules/kani/**`.
+
+## triage3 batch 16 — sumimi / skills_sumimi central non-success rows (kani-pass@fc3ff3e1)
+
+Per-proof detail lives in `docs/rulebook/spec/kani/sumimi.md`.
+Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
+Also scanned `skills_bands`, `skills_characters`, `skills_general` — no non-success rows
+(stub units, empty/ok).
+
+| unit | id | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|---|
+| skills_sumimi | `band_02_rent_bonus_iff` + `_user1_` + `band_02_rent_bonus_mutant_is_detected` | FAILED 225/225/143 s ×3 (`host op outside declared per-harness subset`) | **C** | Central body was the pre-v74 `bend(player)` that did `trigger::value()` + `trigger::set_pay_amount`; `sumimi_bend_dispatch` had no `trig_value` / `trig_set_pay_amount`. Master ABI pure Filter `bend(player, value) -> fold` only reads `counter_self` / `trig_target` / `trig_player` | already on this tree after `git merge master` (pure bend + harness `bend_kani(user, amount) -> i32`); subset matches | queued |
+| sumimi | `hina_01_pass_circle_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **C** (+E cliff) | Log profile: 296 `fill_for_guard` + 216 `bin_set` + 71 `fill_geometry_bins`. `fill_for_guard` bit masks at `fc3ff3e1` were the retired `>> 6` / `>> 27` magic numbers, so `OWN_START` (`tile_is(tile.id,'circle')` = `FnId::TileIs`) pulled the expensive geometry bins (same cliff as `kokoro_02_circle_pass_1500_iff`, batch 11) | FnId-derived masks already on master (batch 11 / `c897fffa`); `TileIs` now only fills board sets | queued |
+| sumimi | `twoinone_01b_fire_iff` + `_user1_` + `twoinone_01b_mutant_is_detected` | TIMEOUT 1800 s ×3 | **E** | (1) Body `swap` calls `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32, String)>>` (unbounded deserializer in the GOTO). (2) Symbolic `is_hina` muxed two CJK intern paths; BMC stalled at the first `sparse_play_world` unwind (log: 1 unwind line, then 1800 s of cadical). GOTO is *smaller* than childhood (3.5 MB vs 5.5 MB) so this is SAT hardness, not size | (1) `cfg(kani)` `field_instances`/`find_card` facades: compact LE `i32` `[uid, name_id]` pairs, intern-id compare, no postcard. (2) Pin swap direction per seat harness (seat0 三角初华→纯田真奈 fire 1, seat1 纯田真奈→三角初华 fire 2) — setup isolation (soyoreturn pick / rainday die class); the pair covers both halves of 「替换为另一名角色」. Spec effect scan is a bounded while | queued |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch. The two earlier `sumimi.md` FAILS rows
+(`C-SUMIMI-twoinone-01` character identity, `C-SUMIMI-band-01` add half) are
+pre-existing class-D LESS findings, not new central-pass rows. Band-01 add was
+fixed earlier (guard `actor == owner`, both halves proven — batch 4).
+twoinone-01 character identity remains a **genuine discrepancy** (book
+「将自己的角色卡替换为sumimi的另一名角色」 vs body that only swaps the bound
+skill entry + fire; `player.character` stays the old name) — kept failing.
+
+### Book quotes checked
+
+* twoinone: 「打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
+  (`docs/rulebook/cards.json` id `Sumimi:Sumimi是二人一体的`)
+* band 人气偶像组合: 「（1）若你在一回合内从其他玩家处获得过资金，你的回合结束时
+  为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶。（2）此卡上的每个奇迹
+  水晶可使你在向其他人收费时让金额额外提高100资金。」
+  (roster band row / `data/skill_simple.json` groups[9] Sumimi)
+* hina-01: 「经过CiRCLE时获得1个[火罐]」 (`skill:三角初华（Sumimi）:成为偶像`)
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features <set>`
+  for `band-sumimi,skills-personas` and `band-sumimi,skills-groups` — Finished,
+  no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed; includes
+  `wrapper_check`, `fnid_seat_args`, `conf_*`).
+
+No CBMC re-times completed this batch at doc-write time: central
+`tools/kani/central.sh --retry-nonsuccess` is still occupying a cbmc slot and
+`free -m` available hovered at the 12000 MB gate. Re-times completed this batch (`CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`,
+`tools/kani/run.sh --unit <u> --harness <h> --timeout 1800`):
+
+* `sumimi::twoinone_01b_fire_iff` **SUCCESSFUL 457 s** (1/1 cover)
+* `sumimi::twoinone_01b_user1_fire_iff` **SUCCESSFUL 542 s** (1/1 cover)
+* `sumimi::twoinone_01b_mutant_is_detected` **SUCCESSFUL 396 s**
+* `sumimi::hina_01_pass_circle_iff` **SUCCESSFUL 605 s** (4/4 covers)
+
+Still needs re-time (central-pass cbmc holds the box): `hina_01_user1_pass_circle_iff`,
+`band_02_rent_bonus_iff` + `_user1_` + `band_02_rent_bonus_mutant_is_detected`.
+
+First twoinone re-time (pre-pin) confirmed **TIMEOUT 1800 s** even after the
+postcard facades — the `is_hina` mux was the remaining cliff. A cover-pair
+variant of the pin was **VACUOUS** (1 of 2 covers unreachable); one cover site
+per harness is required.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening. Production bodies untouched. Allowed Kani-only surface:
+`rules/kani/**` + `cfg(kani)` wrappers in `rules/card-sdk/src/ctx.rs`
+(`field_instances` / `find_card` facades, same pattern as `cards_in`).

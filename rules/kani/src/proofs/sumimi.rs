@@ -557,10 +557,12 @@ fn two_in_one_world(user: i32, is_hina: bool) {
     });
 }
 
-/// Shared iff at a **concrete** user seat.
-fn twoinone_01b_fire_iff_at(user: i32) {
+/// Shared iff at a **concrete** user seat and **concrete** swap direction.
+/// `is_hina` is setup isolation (soyoreturn pick / rainday die class): the two
+/// seat harnesses pin opposite directions so the pair covers both halves of
+/// 「替换为另一名角色」 without a symbolic `if` mux over two CJK intern paths.
+fn twoinone_01b_fire_iff_at(user: i32, is_hina: bool) {
     debug_assert!(user == 0 || user == 1);
-    let is_hina: bool = kani::any();
     two_in_one_world(user, is_hina);
 
     let to = spec::sumimi::twoinone_fire_target(is_hina);
@@ -573,8 +575,13 @@ fn twoinone_01b_fire_iff_at(user: i32) {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    kani::cover!(is_hina, "from 三角初华（Sumimi） → 纯田真奈 fire 1");
-    kani::cover!(!is_hina, "from 纯田真奈 → 三角初华（Sumimi） fire 2");
+    // Exactly one cover (the pinned direction is live in this harness; the
+    // sibling seat harness covers the other). Never leave a second cover
+    // site — an unreachable cover is VACUOUS.
+    kani::cover!(
+        to == spec::sumimi::twoinone_fire_target(is_hina),
+        "other character's 初始火罐数 is the swap target"
+    );
 
     crate::kassert!(
         spec::sumimi::twoinone_fire_effects_ok(effects, user, fire_key, to),
@@ -587,25 +594,25 @@ fn twoinone_01b_fire_iff_at(user: i32) {
     }
 }
 
-/// Iff at seat 0.
+/// Iff at seat 0, from 三角初华（Sumimi） → 纯田真奈 (fire 1).
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn twoinone_01b_fire_iff() {
-    twoinone_01b_fire_iff_at(0);
+    twoinone_01b_fire_iff_at(0, true);
 }
 
-/// Same iff at seat 1.
+/// Same iff at seat 1, from 纯田真奈 → 三角初华（Sumimi） (fire 2).
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn twoinone_01b_user1_fire_iff() {
-    twoinone_01b_fire_iff_at(1);
+    twoinone_01b_fire_iff_at(1, false);
 }
 
-/// Mutant: fire is not set to 初始+1.
+/// Mutant: fire is not set to 初始+1. Pinned direction (same isolation).
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn twoinone_01b_mutant_is_detected() {
-    let is_hina: bool = kani::any();
+    let is_hina = true;
     two_in_one_world(0, is_hina);
     let user = 0i32;
     let to = spec::sumimi::twoinone_fire_target(is_hina);
@@ -615,12 +622,14 @@ pub fn twoinone_01b_mutant_is_detected() {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     let mut saw_wrong = false;
-    for e in effects {
-        if let Effect::SetState { player: p, key, n } = e {
+    let mut i = 0usize;
+    while i < log_n {
+        if let Effect::SetState { player: p, key, n } = &logbuf[i] {
             if *p == user && *key == fire_key && *n == wrong {
                 saw_wrong = true;
             }
         }
+        i += 1;
     }
     crate::kassert!(!saw_wrong, "mutant: fire is not set to 初始+1");
 }
