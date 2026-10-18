@@ -45,7 +45,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-欢迎-03 | 「[反击] 当有其他玩家切换状态时…」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-花火-01 | 「放置于场上并放置2个奇迹水晶」 | PROVEN | `sparkler_places_two_crystals_iff`, `sparkler_crystal_count_mutant_is_detected` | see run table | — | — |
 | C-MUJICA-花火-02 | 「回合结束后自动移除一个…并…额外回合」 | BLOCKED-HOST / OPEN | `sparkler_burn` (partial) | — | `give_extra_turn` is a silent stub (no Effect); crystal removal is recordable | OPEN-花火额外回合 |
-| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body stun) / PROTOCOL (discard motion + tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun via `give_stun(2)` and `set_dest(Graveyard)` (no `UnplaceCard` Effect). Engine leaves 1 after the turn-end layer tick (FAILS in contracts). | OPEN-花火眩晕掉层 |
+| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body stun + dest) / PROTOCOL (discard motion + tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun via `give_stun(2)` and `set_dest(Graveyard)`. Spec dest encoding fixed in triage3 batch 15 (`Dest::Graveyard = 0`, not 1). Engine leaves 1 after the turn-end layer tick (FAILS in contracts). | OPEN-花火眩晕掉层 |
 | C-MUJICA-祥移动-01 | 「强制一名玩家…移动3格并[触发结算]」 | PROTOCOL-LEVEL | — | — | `card_move` stub; walk not simulated | OPEN-触发结算 |
 | C-MUJICA-祥移动-02 | 「（可在掷骰前…代替主要移动）」 | PROTOCOL-LEVEL | — | — | `main_moved` | — |
 | C-MUJICA-祥移动-03 | 「支付价格减半」 | PROTOCOL-LEVEL | — | — | settle chain; `plan::set_pay_factor` stub | OPEN-取整 |
@@ -96,7 +96,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | C-MUJICA-团技能-00 | 「初始处于状态1」 | PROVEN | `band_starts_in_state1` | see run table | — | — |
-| C-MUJICA-团技能-01 | 「1.5倍（只对自己结算…不变）」 | FAILS (one-sided app) / PROVEN (amount rewrite) | `band_state2_pay_is_150_only_on_self`, `band_state2_bend_hook_rewrites_amount`, `band_state2_bend_mutant_is_detected` | see run table | **MORE**: engine moves 1.5x on **both** sides (contract finding). Hook rewrites one `pay_amount`; the host's `pay_to` applies it symmetrically. Book: other party unchanged. | OPEN-取整 (odd amounts) |
+| C-MUJICA-团技能-01 | 「1.5倍（只对自己结算…不变）」 | FAILS (one-sided app) / PROVEN (amount rewrite, needs re-time) | `band_state2_pay_is_150_only_on_self`, `band_state2_bend_hook_rewrites_amount`, `band_state2_bend_mutant_is_detected` | see run table | **MORE**: engine moves 1.5x on **both** sides (contract finding). Hook is the ABI v78 pure Filter (returns the fold). Central FAILED `outside_subset` against the older `bend` that still `state::set(ORIG)`; the pure body + subset match on this tree (batch 15). | OPEN-取整 (odd amounts) |
 | C-MUJICA-团技能-02 | 「第三回合开始时…奇迹水晶」 | PROTOCOL-LEVEL | — | — | three-turn counter | — |
 | C-MUJICA-团技能-03 | 「消耗一个奇迹水晶…金额减半」 | PROVEN (arith) | `band_halve_pay_amount` | see run table | optional interrupt is PROTOCOL | OPEN-取整 |
 | C-MUJICA-团技能-04 | 「补充至上限…失去1火罐…退出状态2」 | PROTOCOL-LEVEL | — | — | multi-turn pots | — |
