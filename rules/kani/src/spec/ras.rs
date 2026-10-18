@@ -86,43 +86,48 @@ pub fn riot_cycle_log_ok(
     holder: i32,
 ) -> bool {
     let mut i = 0usize;
-    // 1. all discards, player order
-    for p in 0..n_players {
-        let p = p as usize;
-        if out[p] {
-            continue;
-        }
-        for k in 0..hand_ns[p] {
-            match effects.get(i) {
-                Some(Effect::DiscardFromHand { player, card }) => {
-                    if *player != p as i32 || *card != hands[p][k] {
-                        return false;
+    // 1. all discards, player order. Bounded whiles (`0..hand_ns[p]` is a
+    // symbolic usize bound — class A).
+    let mut p = 0usize;
+    let np = n_players.max(0) as usize;
+    while p < np && p < out.len() {
+        if !out[p] {
+            let mut k = 0usize;
+            while k < 2 {
+                if k < hand_ns[p] {
+                    match effects.get(i) {
+                        Some(Effect::DiscardFromHand { player, card }) => {
+                            if *player != p as i32 || *card != hands[p][k] {
+                                return false;
+                            }
+                        }
+                        _ => return false,
                     }
+                    i += 1;
                 }
-                _ => return false,
+                k += 1;
             }
-            i += 1;
         }
+        p += 1;
     }
     // 2. all draws, player order
-    for p in 0..n_players {
-        let p = p as usize;
-        if out[p] {
-            continue;
-        }
-        let n = riot_draw_count(hand_ns[p] as i32, p as i32 == holder);
-        if n <= 0 {
-            continue;
-        }
-        match effects.get(i) {
-            Some(Effect::Draw { player, n: dn }) => {
-                if *player != p as i32 || *dn != n {
-                    return false;
+    p = 0;
+    while p < np && p < out.len() {
+        if !out[p] {
+            let n = riot_draw_count(hand_ns[p] as i32, p as i32 == holder);
+            if n > 0 {
+                match effects.get(i) {
+                    Some(Effect::Draw { player, n: dn }) => {
+                        if *player != p as i32 || *dn != n {
+                            return false;
+                        }
+                    }
+                    _ => return false,
                 }
+                i += 1;
             }
-            _ => return false,
         }
-        i += 1;
+        p += 1;
     }
     i == effects.len()
 }

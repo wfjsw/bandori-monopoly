@@ -35,10 +35,13 @@ band-mujica = ["dep:card-mujica"]
 # kani-bump (TUNING §11): static bump GlobalAlloc so unmodified bodies' Vec /
 # String grow/drop is array arithmetic (kills RawVec OOM paths). Opt-in per
 # unit that needs it; validated on known-green proofs before the unit flips.
-band-mygo = ["dep:card-mygo", "card-sdk/kani-bump"]
+# Forwarding is via this named feature (`card-sdk/kani-bump` alone does not
+# show up in `cargo tree -e features` on this workspace).
+kani-bump = ["card-sdk/kani-bump"]
+band-mygo = ["dep:card-mygo", "kani-bump"]
 band-pp = ["dep:card-pp"]
 band-ppp = ["dep:card-ppp"]
-band-ras = ["dep:card-ras", "card-sdk/kani-bump"]
+band-ras = ["dep:card-ras", "kani-bump"]
 band-roselia = ["dep:card-roselia"]
 band-sumimi = ["dep:card-sumimi"]
 skills-groups = ["dep:skill-groups"]
@@ -47,7 +50,7 @@ tiles = ["dep:rules-tiles", "dep:rules-tile-marks"]
 events = ["dep:rules-events"]
 
 [dependencies]
-card-sdk = { workspace = true, features = ["guest"] }
+card-sdk = { workspace = true, features = ["guest", "kani-bump"] }
 ruleset-core = { path = "../ruleset-core" }
 # Unmodified card / skill / event bodies under proof. Optional per unit
 # (see [features]) so a single-unit kani build links only that unit's crates.

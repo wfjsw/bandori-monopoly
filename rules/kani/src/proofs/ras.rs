@@ -96,8 +96,15 @@ fn riot_world() -> ([usize; MAX_PLAYERS], [[u8; 4]; MAX_PLAYERS]) {
             w.hand_resonance[p] = h;
             w.hand[p] = false;
             hand_ns[p] = h as usize;
-            for k in 0..h as usize {
-                hands[p][k] = 1;
+            // Bounded while: `for k in 0..h as usize` is an unbounded trip
+            // count when `h` is a symbolic i32 (negative casts to a huge
+            // usize) — CBMC `Not unwinding … iteration 32` at this site.
+            let mut k = 0usize;
+            while k < 2 {
+                if (k as i32) < h {
+                    hands[p][k] = 1;
+                }
+                k += 1;
             }
         }
         w.symbolic_answers = true;
@@ -304,24 +311,29 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
     let n = pre.n_players;
 
     // Rebuild the expected log with the mutant draw count (no extra).
+    // Bounded whiles: `0..hand_ns[p]` is a symbolic usize bound (class A).
     let mut i = 0usize;
     let mut ok = true;
-    for p in 0..n {
-        let p = p as usize;
-        if pre.out[p] {
-            continue;
-        }
-        for k in 0..hand_ns[p] {
-            match effects.get(i) {
-                Some(Effect::DiscardFromHand { player, card }) => {
-                    if *player != p as i32 || *card != hands[p][k] {
-                        ok = false;
+    let mut p = 0usize;
+    while p < n as usize {
+        if !pre.out[p] {
+            let mut k = 0usize;
+            while k < 2 {
+                if k < hand_ns[p] {
+                    match effects.get(i) {
+                        Some(Effect::DiscardFromHand { player, card }) => {
+                            if *player != p as i32 || *card != hands[p][k] {
+                                ok = false;
+                            }
+                        }
+                        _ => ok = false,
                     }
+                    i += 1;
                 }
-                _ => ok = false,
+                k += 1;
             }
-            i += 1;
         }
+        p += 1;
     }
     for p in 0..n {
         let p = p as usize;
