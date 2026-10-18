@@ -56,7 +56,7 @@ fn intern_count(pile: &[u16; world::MAX_CARDS], n: u8, name: &str) -> i32 {
 
 /// IFF: when the user can cover 1500, the body pays exactly 1500 and draws 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn recruit_01_iff() {
     let mut w = symbolic_play_world();
@@ -95,7 +95,7 @@ pub fn recruit_01_iff() {
 
 /// MUTANT companion: the off-by-one spend does NOT match the card.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn recruit_01_mutant_is_detected() {
     let mut w = symbolic_play_world();
@@ -118,7 +118,7 @@ pub fn recruit_01_mutant_is_detected() {
 
 /// IFF: dest Banished, deck holds one more PERFECT, money +2000, log is the gain.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn great_01_02_03_iff() {
     let mut w = symbolic_play_world();
@@ -167,7 +167,7 @@ pub fn great_01_02_03_iff() {
 
 /// MUTANT companion: the +2500 reference does not match the card.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn great_01_mutant_is_detected() {
     let mut w = symbolic_play_world();
@@ -188,7 +188,7 @@ pub fn great_01_mutant_is_detected() {
 
 /// IFF: dest Banished, discard holds one more FEVER!, money +3000.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn perfect_01_02_03_iff() {
     let mut w = symbolic_play_world();
@@ -237,7 +237,7 @@ pub fn perfect_01_02_03_iff() {
 
 /// MUTANT companion: the +2500 reference does not match the card.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn perfect_01_mutant_is_detected() {
     let mut w = symbolic_play_world();
@@ -257,7 +257,7 @@ pub fn perfect_01_mutant_is_detected() {
 
 /// IFF: PlaceCard on the user's field, nothing else.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fever_01_iff() {
     let mut w = symbolic_play_world();
@@ -296,7 +296,7 @@ pub fn fever_01_iff() {
 
 /// MUTANT companion: dest Graveyard must not match.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fever_01_mutant_is_detected() {
     let mut w = symbolic_play_world();
@@ -353,7 +353,7 @@ fn fever_guard_admits(w: &World, player: i32, placed: bool) -> bool {
 /// IFF: when the card is placed and the turn-start is the owner's, dest becomes
 /// Graveyard and the effect log is empty (set_dest is unlogged).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fever_04_turn_start_iff() {
     let w = fever_turn_start_world(true, true);
@@ -389,7 +389,7 @@ pub fn fever_04_turn_start_iff() {
 /// NO-OP: (a) the guard rejects when the card is not placed (host would not
 /// call the body); (b) a turn start that is not the owner's is a body no-op.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fever_04_wrong_turn_noop() {
     let w = fever_turn_start_world(true, false);
@@ -415,7 +415,7 @@ pub fn fever_04_wrong_turn_noop() {
 
 /// Guard-reject path: not placed ⇒ host does not call the body.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fever_04_not_placed_guard_rejects() {
     let w = fever_turn_start_world(false, true);
@@ -426,7 +426,7 @@ pub fn fever_04_not_placed_guard_rejects() {
 
 /// MUTANT companion: dest Banished must not match.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fever_04_mutant_is_detected() {
     let w = fever_turn_start_world(true, true);
@@ -449,7 +449,7 @@ pub fn fever_04_mutant_is_detected() {
 
 /// Pinned reading: `X = ceil_to_10(2000 / n)`, with the 3-player case 670.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn budokan_x_formula() {
     let n: i32 = kani::any();
@@ -475,7 +475,7 @@ pub fn budokan_x_formula() {
 
 /// MUTANT companion: floor-to-10 disagrees on n=3 (660 vs 670).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn budokan_x_mutant_is_detected() {
     let n: i32 = 3;
@@ -492,7 +492,7 @@ pub fn budokan_x_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn harvest_steps_bound() {
     let s: i32 = kani::any();
@@ -507,7 +507,7 @@ pub fn harvest_steps_bound() {
 
 /// MUTANT companion: the 1..=7 set is distinguishable.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn harvest_steps_mutant_is_detected() {
     crate::kassert!(
@@ -523,7 +523,7 @@ pub fn harvest_steps_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn tsugu_thresholds() {
     let s: i32 = kani::any();
@@ -549,7 +549,7 @@ pub fn tsugu_thresholds() {
 
 /// MUTANT companion: exclusive 22 disagrees at 22.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn tsugu_ge22_mutant_is_detected() {
     crate::kassert!(
@@ -564,7 +564,7 @@ pub fn tsugu_ge22_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn party_x_and_payout() {
     let others: i32 = kani::any();
@@ -584,7 +584,7 @@ pub fn party_x_and_payout() {
 
 /// MUTANT companion: exclusive 35 disagrees at 35.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn party_payout_mutant_is_detected() {
     crate::kassert!(
@@ -599,7 +599,7 @@ pub fn party_payout_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn rain_x_range() {
     // 2d2 sum: the host's roll_dice is symbolic; pin the printed range.
@@ -631,7 +631,7 @@ pub fn rain_x_range() {
 /// Quiet-frame half of C-GEN-encore-01. Does NOT assert `trig_negate`
 /// (BLOCKED-HOST, see module notes).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn encore_01_leaf_quiet_frame() {
     let mut w = symbolic_play_world();
@@ -663,7 +663,7 @@ pub fn encore_01_leaf_quiet_frame() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn clearcp_settle_amount() {
     let settler: i32 = kani::any();
@@ -706,7 +706,7 @@ pub fn clearcp_settle_amount() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn parking_house_delta_bound() {
     let d: i32 = kani::any();
@@ -719,7 +719,7 @@ pub fn parking_house_delta_bound() {
 
 /// MUTANT companion: the +2 set is distinguishable.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn parking_house_delta_mutant_is_detected() {
     crate::kassert!(

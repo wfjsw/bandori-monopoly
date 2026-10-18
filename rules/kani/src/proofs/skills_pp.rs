@@ -208,7 +208,7 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
     );
 }
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn aya_with_01_five_fans_iff() {
     aya_with_01_five_fans_iff_at(0);
@@ -216,7 +216,7 @@ pub fn aya_with_01_five_fans_iff() {
 
 /// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn aya_with_01_five_fans_user1_iff() {
     aya_with_01_five_fans_iff_at(1);
@@ -225,7 +225,7 @@ pub fn aya_with_01_five_fans_user1_iff() {
 
 /// MUTANT: +4 fans.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn aya_with_01_mutant_is_detected() {
     let me = 0i32;
@@ -284,7 +284,7 @@ fn aya_with_02_pay_discount_iff_at(user: i32) {
     );
 }
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_with_02_pay_discount_iff() {
     aya_with_02_pay_discount_iff_at(0);
@@ -292,7 +292,7 @@ pub fn aya_with_02_pay_discount_iff() {
 
 /// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_with_02_pay_discount_user1_iff() {
     aya_with_02_pay_discount_iff_at(1);
@@ -301,7 +301,7 @@ pub fn aya_with_02_pay_discount_user1_iff() {
 
 /// MUTANT: discount Y*99.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_with_02_mutant_is_detected() {
     let me = 0i32;
@@ -342,7 +342,7 @@ pub fn aya_with_02_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn band_idol_02_overflow_formula() {
     let x: i32 = kani::any();
@@ -377,7 +377,7 @@ pub fn band_idol_02_overflow_formula() {
 /// Non-PP `flip_all_pp` half: effect X = 1 per PP seat. When that seat holds
 /// 0 face-downs and the card has room, clause （2） grants 1 overflow crystal.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn skill2_all_pp_overflow_formula() {
     let down: i32 = kani::any();
@@ -406,7 +406,7 @@ pub fn skill2_all_pp_overflow_formula() {
 /// writes; `arm_raise` dispatches to `on_fans_flip_kani` with
 /// `trigger::value() == X` while `fans::down` is still the pre-flip count.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_idol_02_on_fans_overflow_iff() {
     let me = 0i32;
@@ -479,7 +479,7 @@ fn band_idol_04_tick_iff_at(user: i32) {
     );
 }
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_idol_04_tick_iff() {
     band_idol_04_tick_iff_at(0);
@@ -487,7 +487,7 @@ pub fn band_idol_04_tick_iff() {
 
 /// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_idol_04_tick_user1_iff() {
     band_idol_04_tick_iff_at(1);
@@ -500,7 +500,7 @@ pub fn band_idol_04_tick_user1_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn hina_lottery_02_borrow_map() {
     let roll: i32 = kani::any();
@@ -520,7 +520,7 @@ pub fn hina_lottery_02_borrow_map() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn maya_dawn_02_watch_formula() {
     let y: i32 = kani::any();
@@ -541,7 +541,7 @@ pub fn maya_dawn_02_watch_formula() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn eve_unify_02_extra_dice_formula() {
     let y: i32 = kani::any();
@@ -560,7 +560,7 @@ pub fn eve_unify_02_extra_dice_formula() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn chisato_frank_02_formula() {
     let pre: i32 = kani::any();
@@ -628,7 +628,7 @@ fn band_idol_01_start_grant_iff_at(user: i32) {
     }
 }
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_idol_01_start_grant_iff() {
     band_idol_01_start_grant_iff_at(0);
@@ -636,7 +636,7 @@ pub fn band_idol_01_start_grant_iff() {
 
 /// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_idol_01_start_grant_user1_iff() {
     band_idol_01_start_grant_iff_at(1);
@@ -649,7 +649,7 @@ pub fn band_idol_01_start_grant_user1_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_idol_03_no_reward_formula() {
     let empty: [Effect; 0] = [];
@@ -700,14 +700,14 @@ fn first_accident_02_iff_at(me: i32) {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn first_accident_02_blocks_pp_skill_2_iff() {
     first_accident_02_iff_at(0);
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn first_accident_02_blocks_pp_skill_2_user1_iff() {
     first_accident_02_iff_at(1);

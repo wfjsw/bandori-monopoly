@@ -208,7 +208,7 @@ fn popipa_01_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn popipa_01_iff() {
     popipa_01_iff_at(0);
@@ -217,7 +217,7 @@ pub fn popipa_01_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn popipa_01_user1_iff() {
     popipa_01_iff_at(1);
@@ -286,7 +286,7 @@ fn pipopa_01_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pipopa_01_iff() {
     pipopa_01_iff_at(0);
@@ -295,7 +295,7 @@ pub fn pipopa_01_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn pipopa_01_user1_iff() {
     pipopa_01_iff_at(1);
@@ -386,7 +386,7 @@ fn signpost_02_lose_1000_at_end_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn signpost_02_lose_1000_at_end_iff() {
     signpost_02_lose_1000_at_end_iff_at(0);
@@ -395,7 +395,7 @@ pub fn signpost_02_lose_1000_at_end_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn signpost_02_lose_1000_at_end_user1_iff() {
     signpost_02_lose_1000_at_end_iff_at(1);
@@ -466,7 +466,7 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn bang_dream_01_crystal_iff() {
     bang_dream_01_crystal_iff_at(0);
@@ -475,7 +475,7 @@ pub fn bang_dream_01_crystal_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn bang_dream_01_crystal_user1_iff() {
     bang_dream_01_crystal_iff_at(1);
@@ -585,7 +585,7 @@ fn bang_dream_02_teleport_owned_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn bang_dream_02_teleport_owned_iff() {
     bang_dream_02_teleport_owned_iff_at(0);
@@ -594,7 +594,7 @@ pub fn bang_dream_02_teleport_owned_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn bang_dream_02_teleport_owned_user1_iff() {
     bang_dream_02_teleport_owned_iff_at(1);
@@ -693,7 +693,7 @@ fn popipapapipopa_c1_crystal_on_pass_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn popipapapipopa_c1_crystal_on_pass_iff() {
     popipapapipopa_c1_crystal_on_pass_iff_at(0);
@@ -702,7 +702,7 @@ pub fn popipapapipopa_c1_crystal_on_pass_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn popipapapipopa_c1_crystal_on_pass_user1_iff() {
     popipapapipopa_c1_crystal_on_pass_iff_at(1);
@@ -820,7 +820,7 @@ fn popipapapipopa_c2_pay_reduce_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
 pub fn popipapapipopa_c2_pay_reduce_iff() {
     popipapapipopa_c2_pay_reduce_iff_at(0);
@@ -829,7 +829,7 @@ pub fn popipapapipopa_c2_pay_reduce_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
 pub fn popipapapipopa_c2_pay_reduce_user1_iff() {
     popipapapipopa_c2_pay_reduce_iff_at(1);
@@ -885,7 +885,7 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
 pub fn door_01_sequence_const() {
     crate::kassert!(
@@ -974,7 +974,7 @@ fn auction_off_01_at(user: i32, match_id: bool) {
 
 /// Blocked: trig_card != ID ⇒ no-op.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn auction_off_01_blocked_noop() {
     auction_off_01_at(0, false);
@@ -982,7 +982,7 @@ pub fn auction_off_01_blocked_noop() {
 
 /// Unblocked: trig_card == ID ⇒ place card + charge_max +1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn auction_off_01_unblocked_grants() {
     auction_off_01_at(0, true);
@@ -1028,7 +1028,7 @@ fn star_beat_01_layer_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
 pub fn star_beat_01_layer_iff() {
     star_beat_01_layer_iff_at(0);
@@ -1037,7 +1037,7 @@ pub fn star_beat_01_layer_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
 pub fn star_beat_01_layer_user1_iff() {
     star_beat_01_layer_iff_at(1);
@@ -1106,7 +1106,7 @@ fn wait_aoki_01_place_on_field_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn wait_aoki_01_place_on_field_iff() {
     wait_aoki_01_place_on_field_iff_at(0);
@@ -1115,7 +1115,7 @@ pub fn wait_aoki_01_place_on_field_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn wait_aoki_01_place_on_field_user1_iff() {
     wait_aoki_01_place_on_field_iff_at(1);
@@ -1197,7 +1197,7 @@ fn random_star_01_place_and_deck_bottom_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn random_star_01_place_and_deck_bottom_iff() {
     random_star_01_place_and_deck_bottom_iff_at(0);
@@ -1206,7 +1206,7 @@ pub fn random_star_01_place_and_deck_bottom_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn random_star_01_place_and_deck_bottom_user1_iff() {
     random_star_01_place_and_deck_bottom_iff_at(1);
@@ -1294,7 +1294,7 @@ fn star_beat_03_stickers_iff_at(user: i32) {
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
 pub fn star_beat_03_stickers_iff() {
     star_beat_03_stickers_iff_at(0);
@@ -1303,7 +1303,7 @@ pub fn star_beat_03_stickers_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
 pub fn star_beat_03_stickers_user1_iff() {
     star_beat_03_stickers_iff_at(1);
@@ -1345,7 +1345,7 @@ pub fn star_beat_03_mutant_one_sticker() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn returns_c4_blocked_residual_noop() {
     let user = 0i32;
@@ -1394,7 +1394,7 @@ pub fn returns_c4_blocked_residual_noop() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn maze_01_distance_predicate() {
     let pos: i32 = kani::any();
@@ -1423,7 +1423,7 @@ pub fn maze_01_distance_predicate() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn name_sky_01_blocked_tile_named() {
     let user = 0i32;
@@ -1475,7 +1475,7 @@ pub fn name_sky_01_mutant_hill() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn everyone_01_blocked_tile_named() {
     let user = 0i32;

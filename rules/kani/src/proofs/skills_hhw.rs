@@ -99,7 +99,7 @@ fn effects_of() -> ([Effect; 24], usize) {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kokoro_01_opening_1000_iff() {
     let owner: i32 = 0;
@@ -163,7 +163,7 @@ pub fn kokoro_01_mutant_500() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kokoro_01_mutant_is_detected() {
     let owner: i32 = 0;
@@ -185,7 +185,7 @@ pub fn kokoro_01_mutant_is_detected() {
 /// No-op: the latch is already 1 (「开局时」 already paid) — the host would
 /// not call the body. Cover the reject side of the single-source guard.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kokoro_01_noop_when_latch_set() {
     let owner: i32 = 0;
@@ -209,7 +209,7 @@ pub fn kokoro_01_noop_when_latch_set() {
 pub const CIRCLE: i32 = 0;
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kokoro_02_circle_pass_1500_iff() {
     let owner: i32 = 0;
@@ -249,7 +249,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
 
 /// No-op: passing a non-CiRCLE tile must not fire the extra.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kokoro_02_noop_non_circle() {
     let owner: i32 = 0;
@@ -285,7 +285,7 @@ pub fn kokoro_02_mutant_2000() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kokoro_02_mutant_is_detected() {
     let owner: i32 = 0;
@@ -313,7 +313,7 @@ pub fn kokoro_02_mutant_is_detected() {
 pub const TSUZUMI_GROUP: i32 = 28;
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn misaki_skill_01_pass_fire_iff() {
     let owner: i32 = 0;
@@ -359,7 +359,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
 
 /// No-op: a non-弦卷集团 pass does not admit the grant.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn misaki_skill_01_noop_other_tile() {
     let owner: i32 = 0;
@@ -374,7 +374,7 @@ pub fn misaki_skill_01_noop_other_tile() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn misaki_skill_01_mutant_is_detected() {
     let owner: i32 = 0;
@@ -399,7 +399,7 @@ pub fn misaki_skill_01_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kaoru_01_pot_arm_iff() {
     let owner: i32 = 0;
@@ -444,7 +444,7 @@ pub fn kaoru_01_pot_arm_iff() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn kaoru_01_mutant_is_detected() {
     let owner: i32 = 0;
@@ -471,7 +471,7 @@ pub fn kaoru_01_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_01_declined_is_noop() {
     let owner: i32 = 0;
@@ -504,7 +504,7 @@ pub fn band_01_declined_is_noop() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_01_accepted_doubles_iff() {
     let owner: i32 = 0;
@@ -560,7 +560,7 @@ pub fn band_01_accepted_doubles_iff() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn band_01_mutant_is_detected() {
     let owner: i32 = 0;
@@ -585,7 +585,7 @@ pub fn band_01_mutant_is_detected() {
 
 /// Cover helper so the unit always has at least one trivially-fresh cover.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn skills_hhw_smoke_cover() {
     let x: bool = kani::any();

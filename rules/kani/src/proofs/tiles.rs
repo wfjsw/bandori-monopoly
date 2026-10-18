@@ -78,7 +78,7 @@ fn effects() -> ([Effect; world::MAX_LOG], usize) {
 
 /// IFF: settling 江户川乐器店 draws exactly one hand card for the settler.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(48)]
 pub fn edogawa_settle_draw_one_iff() {
     let player = any_seat();
@@ -156,7 +156,7 @@ pub fn edogawa_settle_mutant_wrong_player() {
 
 /// IFF: settling CiRCLE draws exactly one hand card for the settler.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(48)]
 pub fn circle_settle_draw_one_iff() {
     let player = any_seat();
@@ -236,7 +236,7 @@ pub fn circle_settle_mutant_wrong_player() {
 
 /// IFF (observable half): settling the cafe / 流星堂 draws exactly one hand card.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(48)]
 pub fn event_settle_draw_one_iff() {
     let player = any_seat();
@@ -312,7 +312,7 @@ pub fn event_settle_mutant_wrong_player() {
 
 /// G-MONEY-10 half-charge rounding: 「向上取整10」.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn agent_half_charge_rounds_up_to_ten() {
     let full: i32 = kani::any();
@@ -336,7 +336,7 @@ pub fn agent_half_charge_rounds_up_to_ten() {
 
 /// G-MONEY-07 / 11: force-buy is exactly twice the buy total.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn force_buy_is_double_buy_total() {
     let price: i32 = kani::any();
@@ -352,7 +352,7 @@ pub fn force_buy_is_double_buy_total() {
 
 /// G-SETTLE-08: level cap is `rent.len() - 1`; empty table ⇒ 0 (RiNG).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn level_cap_is_rent_len_minus_one() {
     let n: usize = kani::any();
@@ -374,7 +374,7 @@ pub fn level_cap_is_rent_len_minus_one() {
 
 /// G-SETTLE-06: unowned leg is the buy of price+houses.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn property_leg_unowned_is_buy() {
     let player: i32 = kani::any();
@@ -395,7 +395,7 @@ pub fn property_leg_unowned_is_buy() {
 
 /// G-SETTLE-13: the all-owned-by-other gate.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(12)]
 pub fn agent_all_owned_gate() {
     let player: i32 = kani::any();

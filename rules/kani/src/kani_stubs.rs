@@ -103,13 +103,32 @@ pub fn capacity_overflow_stub() -> ! {
     }
 }
 
-/// RawVec central error reporter.
-pub fn handle_error_stub(_e: *const u8) -> ! {
+/// RawVec central error reporter. Real body dispatches to
+/// `capacity_overflow` / `handle_alloc_error` (both stubbed above); this
+/// catches the dispatcher itself so CBMC never walks its `match`.
+pub fn handle_error_stub(_e: std::collections::TryReserveError) -> ! {
     kani::assert(false, "kani_stubs: raw_vec handle_error");
     loop {
         kani::assume(false);
     }
 }
+
+/// `panic_fmt`: drop the fmt/memchr of the panic message, keep a loud fail.
+///
+/// **Not** for `#[kani::should_panic]` mutants — those need a real `panic!`
+/// event. Use [`LIB_COST_NOFMT`] on non-mutant harnesses only.
+pub fn panic_fmt_stub(_fmt: core::fmt::Arguments<'_>) -> ! {
+    kani::assert(false, "kani_stubs: panic_fmt");
+    loop {
+        kani::assume(false);
+    }
+}
+
+/// `PadAdapter` is left unstubbed (its `Write` impl is the only public
+/// handle and stubbing `write_str` would recurse through `write_char`).
+/// The panic_fmt stub below is the cut that matters for panic-message
+/// assembly; a live `format!("key:{p}")` keeps real `Display` so key bytes
+/// match production.
 
 kani::stub_set!(pub LIB_COST,
     stub(core::slice::memchr::memchr, crate::kani_stubs::memchr_stub),
@@ -120,4 +139,21 @@ kani::stub_set!(pub LIB_COST,
     stub(core::slice::index::slice_index_fail, crate::kani_stubs::slice_index_fail_stub),
     stub(std::alloc::handle_alloc_error, crate::kani_stubs::handle_alloc_error_stub),
     stub(alloc::raw_vec::capacity_overflow, crate::kani_stubs::capacity_overflow_stub),
+    stub(alloc::raw_vec::handle_error, crate::kani_stubs::handle_error_stub),
+);
+
+/// Same as [`LIB_COST`] plus `panic_fmt` (drops fmt/memchr of panic messages).
+/// **Do not** attach to `#[kani::should_panic]` mutants (they need a real
+/// `panic!` event). Non-mutant iff/no-op harnesses should use this set.
+/// Inlined (not nested) so every path is absolute — `use_stub_set` resolves
+/// names in the *harness* module.
+kani::stub_set!(pub LIB_COST_NOFMT,
+    stub(core::slice::memchr::memchr, crate::kani_stubs::memchr_stub),
+    stub(core::slice::memchr::memchr_naive, crate::kani_stubs::memchr_stub),
+    stub(core::slice::memchr::memchr_aligned, crate::kani_stubs::memchr_stub),
+    stub(core::slice::index::slice_index_fail, crate::kani_stubs::slice_index_fail_stub),
+    stub(std::alloc::handle_alloc_error, crate::kani_stubs::handle_alloc_error_stub),
+    stub(alloc::raw_vec::capacity_overflow, crate::kani_stubs::capacity_overflow_stub),
+    stub(alloc::raw_vec::handle_error, crate::kani_stubs::handle_error_stub),
+    stub(core::panicking::panic_fmt, crate::kani_stubs::panic_fmt_stub),
 );

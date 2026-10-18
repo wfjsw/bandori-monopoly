@@ -149,7 +149,7 @@ fn band_02_rent_bonus_iff_at(owner: i32) {
 
 /// Iff at owner seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_02_rent_bonus_iff() {
     band_02_rent_bonus_iff_at(0);
@@ -157,7 +157,7 @@ pub fn band_02_rent_bonus_iff() {
 
 /// Same iff at owner seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_02_user1_rent_bonus_iff() {
     band_02_rent_bonus_iff_at(1);
@@ -165,7 +165,7 @@ pub fn band_02_user1_rent_bonus_iff() {
 
 /// Mutant companion: +100 total is not what the card does.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_02_rent_bonus_mutant_is_detected() {
     let owner = 0i32;
@@ -269,7 +269,7 @@ fn band_01_clear_iff_at(owner: i32) {
 
 /// Clear-half iff at owner seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_01_clear_iff() {
     band_01_clear_iff_at(0);
@@ -277,7 +277,7 @@ pub fn band_01_clear_iff() {
 
 /// Same iff at owner seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_01_user1_clear_iff() {
     band_01_clear_iff_at(1);
@@ -285,7 +285,7 @@ pub fn band_01_user1_clear_iff() {
 
 /// Mutant companion: clear removes one crystal, not all.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn band_01_clear_mutant_is_detected() {
     let owner = 0i32;
@@ -315,7 +315,7 @@ pub fn band_01_clear_mutant_is_detected() {
 /// The accept path is BLOCKED-HOST (`rent_of` for the open 「原本收费」).
 /// Pure-formula (no body call).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn mana_02_decline_is_empty() {
     // Determined part of the offer: a refusal leaves the world untouched.
@@ -339,7 +339,7 @@ pub fn mana_02_decline_is_empty() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_03_exclusive_gate_predicate() {
     let user_is_owner: bool = kani::any();

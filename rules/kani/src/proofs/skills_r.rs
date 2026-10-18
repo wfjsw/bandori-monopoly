@@ -98,14 +98,14 @@ fn sayo_fire_pass_iff_at(user: i32) {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn sayo_fire_pass_iff() {
     sayo_fire_pass_iff_at(0);
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn sayo_fire_user1_pass_iff() {
     sayo_fire_pass_iff_at(1);
@@ -113,7 +113,7 @@ pub fn sayo_fire_user1_pass_iff() {
 
 /// MUTANT companion (concrete user=0).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn sayo_fire_mutant_is_detected() {
     let user = 0i32;
@@ -157,14 +157,14 @@ fn rinko_fire_pass_iff_at(user: i32) {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn rinko_fire_pass_iff() {
     rinko_fire_pass_iff_at(0);
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn rinko_fire_user1_pass_iff() {
     rinko_fire_pass_iff_at(1);
@@ -172,7 +172,7 @@ pub fn rinko_fire_user1_pass_iff() {
 
 /// MUTANT companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn rinko_fire_mutant_is_detected() {
     let user = 0i32;
@@ -211,14 +211,14 @@ fn lisa_fire_pass_iff_at(user: i32) {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn lisa_fire_pass_iff() {
     lisa_fire_pass_iff_at(0);
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn lisa_fire_user1_pass_iff() {
     lisa_fire_pass_iff_at(1);
@@ -226,7 +226,7 @@ pub fn lisa_fire_user1_pass_iff() {
 
 /// MUTANT companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn lisa_fire_mutant_is_detected() {
     let user = 0i32;

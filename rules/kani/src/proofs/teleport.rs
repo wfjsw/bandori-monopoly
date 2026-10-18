@@ -34,7 +34,7 @@ fn symbolic_play_world() -> World {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(80)]
 pub fn tae_sound_teleport_and_fire_iff() {
     let w = symbolic_play_world();

@@ -38,7 +38,7 @@ fn call(op: Op, a: Args) -> i64 {
 /// Fixed tile (购物中心 = engine index 1) so CBMC explores only the house
 /// axis; `conf_model` pins the multi-tile grid.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(12)]
 pub fn rent_of_property_table() {
     install_empty();
@@ -60,7 +60,7 @@ pub fn rent_of_property_table() {
 /// RiNG rent quotes the tile's base `price` (the rolled figure is a pay-time
 /// fact; `WorldOps::rent_of` returns the table value).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn rent_of_ring_is_price() {
     install_empty();
@@ -76,7 +76,7 @@ pub fn rent_of_ring_is_price() {
 // ---------------------------------------------------------------------------
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(12)]
 pub fn tile_at_set_tile_at_roundtrip() {
     install_empty();
@@ -113,7 +113,7 @@ pub fn tile_at_set_tile_at_roundtrip() {
 
 /// No-move sentinels (hostfns `map_or` defaults).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn trig_move_sentinels() {
     install_empty();
@@ -134,7 +134,7 @@ pub fn trig_move_sentinels() {
 
 /// Payload getters return the stored `MoveSnap`.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn trig_move_payload_reads() {
     install_empty();
@@ -176,7 +176,7 @@ pub fn trig_move_payload_reads() {
 // ---------------------------------------------------------------------------
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn trig_buy_payload_reads() {
     install_empty();
@@ -217,7 +217,7 @@ pub fn trig_buy_payload_reads() {
 // ---------------------------------------------------------------------------
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn trig_roll_source_reads() {
     install_empty();

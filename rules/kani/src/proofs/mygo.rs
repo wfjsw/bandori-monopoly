@@ -183,7 +183,7 @@ fn rinpuu_01_give_stay_iff_at(user: i32) {
 
 /// Iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn rinpuu_01_give_stay_iff() {
     rinpuu_01_give_stay_iff_at(0);
@@ -191,7 +191,7 @@ pub fn rinpuu_01_give_stay_iff() {
 
 /// Iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn rinpuu_01_user1_give_stay_iff() {
     rinpuu_01_give_stay_iff_at(1);
@@ -199,7 +199,7 @@ pub fn rinpuu_01_user1_give_stay_iff() {
 
 /// Mutant companion: a two-layer spec must be distinguishable from the card.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn rinpuu_01_mutant_is_detected() {
     let user = 0i32;
@@ -284,7 +284,7 @@ fn journey_01_place_four_crystals_iff_at(user: i32) {
 
 /// Iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn journey_01_place_four_crystals_iff() {
     journey_01_place_four_crystals_iff_at(0);
@@ -292,7 +292,7 @@ pub fn journey_01_place_four_crystals_iff() {
 
 /// Iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn journey_01_user1_place_four_crystals_iff() {
     journey_01_place_four_crystals_iff_at(1);
@@ -300,7 +300,7 @@ pub fn journey_01_user1_place_four_crystals_iff() {
 
 /// Mutant companion: a two-PlaceCard spec must not match.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn journey_01_mutant_is_detected() {
     let user = 0i32;
@@ -391,7 +391,7 @@ fn haneoka_thresholds_iff_at(user: i32) {
 
 /// Thresholds iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn haneoka_thresholds_iff() {
     haneoka_thresholds_iff_at(0);
@@ -399,7 +399,7 @@ pub fn haneoka_thresholds_iff() {
 
 /// Thresholds iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn haneoka_user1_thresholds_iff() {
     haneoka_thresholds_iff_at(1);
@@ -407,7 +407,7 @@ pub fn haneoka_user1_thresholds_iff() {
 
 /// Mutant: the ineffective band must not match a one-effect spec.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn haneoka_05_mutant_is_detected() {
     let user = 0i32;
@@ -485,7 +485,7 @@ fn rainday_01_place_five_crystals_iff_at(user: i32) {
 
 /// Placement iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn rainday_01_place_five_crystals_iff() {
     rainday_01_place_five_crystals_iff_at(0);
@@ -493,7 +493,7 @@ pub fn rainday_01_place_five_crystals_iff() {
 
 /// Placement iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn rainday_01_user1_place_five_crystals_iff() {
     rainday_01_place_five_crystals_iff_at(1);
@@ -501,7 +501,7 @@ pub fn rainday_01_user1_place_five_crystals_iff() {
 
 /// Mutant: 4 crystals must not match.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn rainday_01_mutant_is_detected() {
     let user = 0i32;
@@ -631,7 +631,7 @@ fn hitoshizuku_money_iff_at(user: i32) {
 
 /// Book-spec iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hitoshizuku_money_iff() {
     hitoshizuku_money_iff_at(0);
@@ -639,7 +639,7 @@ pub fn hitoshizuku_money_iff() {
 
 /// Book-spec iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hitoshizuku_user1_money_iff() {
     hitoshizuku_money_iff_at(1);
@@ -674,7 +674,7 @@ fn hitoshizuku_body_global_pay_observed_at(user: i32) {
 
 /// Global-kinds mutant is not what the body does (seat 0).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hitoshizuku_body_global_pay_observed() {
     hitoshizuku_body_global_pay_observed_at(0);
@@ -682,7 +682,7 @@ pub fn hitoshizuku_body_global_pay_observed() {
 
 /// Global-kinds mutant is not what the body does (seat 1).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hitoshizuku_user1_body_global_pay_observed() {
     hitoshizuku_body_global_pay_observed_at(1);
@@ -713,7 +713,7 @@ fn hitoshizuku_no_clear_is_noop_at(user: i32) {
 
 /// No-clear limb at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn hitoshizuku_no_clear_is_noop() {
     hitoshizuku_no_clear_is_noop_at(0);
@@ -773,7 +773,7 @@ fn tomori_card_02_empty_hand_iff_at(user: i32) {
 
 /// Empty-hand iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn tomori_card_02_empty_hand_iff() {
     tomori_card_02_empty_hand_iff_at(0);
@@ -781,7 +781,7 @@ pub fn tomori_card_02_empty_hand_iff() {
 
 /// Empty-hand iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn tomori_card_02_user1_empty_hand_iff() {
     tomori_card_02_empty_hand_iff_at(1);
@@ -789,7 +789,7 @@ pub fn tomori_card_02_user1_empty_hand_iff() {
 
 /// Mutant: 1 stay layer must not match.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn tomori_card_02_mutant_is_detected() {
     let user = 0i32;

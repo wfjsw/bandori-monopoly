@@ -235,7 +235,7 @@ fn black_bday_low_iff_at(user: i32) {
 
 /// Low-bracket iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn black_bday_low_pays_800_iff() {
     black_bday_low_iff_at(0);
@@ -243,7 +243,7 @@ pub fn black_bday_low_pays_800_iff() {
 
 /// Low-bracket iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn black_bday_low_user1_pays_800_iff() {
     black_bday_low_iff_at(1);
@@ -277,7 +277,7 @@ fn black_bday_high_iff_at(user: i32) {
 
 /// High-bracket iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn black_bday_high_pays_400_iff() {
     black_bday_high_iff_at(0);
@@ -285,7 +285,7 @@ pub fn black_bday_high_pays_400_iff() {
 
 /// High-bracket iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn black_bday_high_user1_pays_400_iff() {
     black_bday_high_iff_at(1);
@@ -293,7 +293,7 @@ pub fn black_bday_high_user1_pays_400_iff() {
 
 /// MUTANT: the low-bracket reference wants 801. The card does 800.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn black_bday_low_mutant_is_detected() {
     let user = 0i32;
@@ -345,7 +345,7 @@ pub fn black_bday_low_mutant_panics() {
 
 /// Pure stay-layer arithmetic (the book's 「变为」 reading: ≤3 is 2, not 1+2).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn heart_rain_stay_layers_iff() {
     let roll: i32 = kani::any();
@@ -364,7 +364,7 @@ pub fn heart_rain_stay_layers_iff() {
 
 /// MUTANT: ≤3 stacks 3 layers.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn heart_rain_stay_layers_mutant_is_detected() {
     let roll: i32 = kani::any();
@@ -416,7 +416,7 @@ fn heart_rain_fallback_iff_at(user: i32) {
 
 /// Fallback iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn heart_rain_fallback_stun_and_money_iff() {
     heart_rain_fallback_iff_at(0);
@@ -424,7 +424,7 @@ pub fn heart_rain_fallback_stun_and_money_iff() {
 
 /// Fallback iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn heart_rain_fallback_user1_stun_and_money_iff() {
     heart_rain_fallback_iff_at(1);
@@ -477,7 +477,7 @@ fn heart_rain_in_window_iff_at(user: i32) {
 
 /// In-window iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn heart_rain_in_window_roll_stay_iff() {
     heart_rain_in_window_iff_at(0);
@@ -485,7 +485,7 @@ pub fn heart_rain_in_window_roll_stay_iff() {
 
 /// In-window iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn heart_rain_in_window_user1_roll_stay_iff() {
     heart_rain_in_window_iff_at(1);
@@ -524,7 +524,7 @@ fn dice_cast_place_iff_at(user: i32) {
 
 /// Dice-cast place iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn dice_cast_places_on_own_field_iff() {
     dice_cast_place_iff_at(0);
@@ -532,7 +532,7 @@ pub fn dice_cast_places_on_own_field_iff() {
 
 /// Dice-cast place iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn dice_cast_user1_places_on_own_field_iff() {
     dice_cast_place_iff_at(1);
@@ -540,7 +540,7 @@ pub fn dice_cast_user1_places_on_own_field_iff() {
 
 /// MUTANT: demands a GainMoney as well — the card must not match.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn dice_cast_mutant_extra_money_is_detected() {
     let user = 0i32;
@@ -586,7 +586,7 @@ fn sparkler_place_iff_at(user: i32) {
 
 /// Sparkler place iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn sparkler_places_two_crystals_iff() {
     sparkler_place_iff_at(0);
@@ -594,7 +594,7 @@ pub fn sparkler_places_two_crystals_iff() {
 
 /// Sparkler place iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn sparkler_user1_places_two_crystals_iff() {
     sparkler_place_iff_at(1);
@@ -602,7 +602,7 @@ pub fn sparkler_user1_places_two_crystals_iff() {
 
 /// MUTANT: demands 3 crystals.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn sparkler_crystal_count_mutant_is_detected() {
     let user = 0i32;
@@ -649,7 +649,7 @@ fn sparkler_last_crystal_iff_at(user: i32) {
 
 /// Last-crystal iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn sparkler_last_crystal_stun_two_iff() {
     sparkler_last_crystal_iff_at(0);
@@ -657,7 +657,7 @@ pub fn sparkler_last_crystal_stun_two_iff() {
 
 /// Last-crystal iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn sparkler_last_crystal_user1_stun_two_iff() {
     sparkler_last_crystal_iff_at(1);
@@ -665,7 +665,7 @@ pub fn sparkler_last_crystal_user1_stun_two_iff() {
 
 /// MUTANT: last crystal grants 1 stun, not 2.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn sparkler_last_crystal_mutant_is_detected() {
     let user = 0i32;
@@ -733,7 +733,7 @@ fn doll_garden_pay_iff_at(user: i32) {
 
 /// Doll-garden pay iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn doll_garden_pay_amount_iff() {
     doll_garden_pay_iff_at(0);
@@ -741,7 +741,7 @@ pub fn doll_garden_pay_amount_iff() {
 
 /// Doll-garden pay iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn doll_garden_user1_pay_amount_iff() {
     doll_garden_pay_iff_at(1);
@@ -749,7 +749,7 @@ pub fn doll_garden_user1_pay_amount_iff() {
 
 /// MUTANT: X*20 + 10.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn doll_garden_pay_amount_mutant_is_detected() {
     let user = 0i32;
@@ -786,7 +786,7 @@ pub fn doll_garden_pay_amount_mutant_is_detected() {
 
 /// Pure toggle: 1↔2 when 状态2 exists; otherwise no-op.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn welcome_toggle_arithmetic_iff() {
     let cur: i32 = kani::any();
@@ -808,7 +808,7 @@ pub fn welcome_toggle_arithmetic_iff() {
 
 /// MUTANT: toggle always flips even without 状态2 (the known engine gap).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn welcome_no_state2_mutant_is_detected() {
     crate::kassert!(
@@ -851,7 +851,7 @@ fn nyamu_place_iff_at(user: i32) {
 
 /// Nyamu place iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn nyamu_places_on_field_iff() {
     nyamu_place_iff_at(0);
@@ -859,7 +859,7 @@ pub fn nyamu_places_on_field_iff() {
 
 /// Nyamu place iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn nyamu_user1_places_on_field_iff() {
     nyamu_place_iff_at(1);
@@ -896,7 +896,7 @@ fn umiri_place_iff_at(user: i32) {
 
 /// Umiri place iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn umiri_places_on_next_actors_field_iff() {
     umiri_place_iff_at(0);
@@ -904,7 +904,7 @@ pub fn umiri_places_on_next_actors_field_iff() {
 
 /// Umiri place iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn umiri_user1_places_on_next_actors_field_iff() {
     umiri_place_iff_at(1);
@@ -938,7 +938,7 @@ fn mortis_inert_iff_at(user: i32) {
 
 /// Mortis inert iff at seat 0.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn mortis_nothing_to_copy_is_inert() {
     mortis_inert_iff_at(0);
@@ -946,7 +946,7 @@ pub fn mortis_nothing_to_copy_is_inert() {
 
 /// Mortis inert iff at seat 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn mortis_user1_nothing_to_copy_is_inert() {
     mortis_inert_iff_at(1);
@@ -961,7 +961,7 @@ pub fn mortis_user1_nothing_to_copy_is_inert() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn saki_move_dest_is_three_tiles() {
     let from: i32 = kani::any();
@@ -985,7 +985,7 @@ pub fn saki_move_dest_is_three_tiles() {
 
 /// MUTANT: 4-tile walk.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn saki_move_dest_mutant_is_detected() {
     let from: i32 = kani::any();
@@ -1005,7 +1005,7 @@ pub fn saki_move_dest_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn saki_move_halve_pay_amount() {
     let amount: i32 = kani::any();

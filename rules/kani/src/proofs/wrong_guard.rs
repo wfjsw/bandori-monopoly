@@ -96,7 +96,7 @@ pub fn wrong_guard_too_loose_is_caught() {
 
 /// The real guard satisfies the iff — non-vacuous companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(6)]
 pub fn real_guard_matches_clause_iff() {
     let actor: i64 = kani::any();
@@ -119,7 +119,7 @@ pub fn real_guard_matches_clause_iff() {
 /// wrong guard is **distinguishable** from the clause — reachable disagreement.
 /// If this FAILS, the mutant is equivalent (vacuous iff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(6)]
 pub fn wrong_guard_disagreement_is_reachable() {
     let actor: i64 = kani::any();

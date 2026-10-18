@@ -208,7 +208,7 @@ fn resolve_play_iff_at(user: i32) {
 
 /// C-R-觉悟-01 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn resolve_play_iff() {
     resolve_play_iff_at(0);
@@ -217,7 +217,7 @@ pub fn resolve_play_iff() {
 /// Same iff at seat 1 — two harnesses cover every seat
 /// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn resolve_play_user1_iff() {
     resolve_play_iff_at(1);
@@ -225,7 +225,7 @@ pub fn resolve_play_user1_iff() {
 
 /// MUTANT companion: the off-by-one / wrong-amount spec must NOT match.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn resolve_play_mutant_is_detected() {
     let user = 0i32;
@@ -303,7 +303,7 @@ fn cookie_pay_iff_at(user: i32) {
 
 /// C-R-曲奇时间-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn cookie_pay_iff() {
     cookie_pay_iff_at(0);
@@ -311,7 +311,7 @@ pub fn cookie_pay_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自己弃牌堆」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn cookie_pay_user1_iff() {
     cookie_pay_iff_at(1);
@@ -319,7 +319,7 @@ pub fn cookie_pay_user1_iff() {
 
 /// MUTANT companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn cookie_pay_mutant_is_detected() {
     let user = 0i32;
@@ -382,7 +382,7 @@ fn sprechchor_pay_iff_at(user: i32) {
 
 /// C-R-Sprechchor-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn sprechchor_pay_iff() {
     sprechchor_pay_iff_at(0);
@@ -390,7 +390,7 @@ pub fn sprechchor_pay_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自己」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn sprechchor_pay_user1_iff() {
     sprechchor_pay_iff_at(1);
@@ -398,7 +398,7 @@ pub fn sprechchor_pay_user1_iff() {
 
 /// MUTANT companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn sprechchor_pay_mutant_is_detected() {
     let user = 0i32;
@@ -459,7 +459,7 @@ fn ako_dark_offhand_iff_at(user: i32) {
 
 /// C-R-黑暗大魔姬亚子-02/03 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn ako_dark_offhand_iff() {
     ako_dark_offhand_iff_at(0);
@@ -467,7 +467,7 @@ pub fn ako_dark_offhand_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自己」; target is the other seat).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn ako_dark_offhand_user1_iff() {
     ako_dark_offhand_iff_at(1);
@@ -475,7 +475,7 @@ pub fn ako_dark_offhand_user1_iff() {
 
 /// MUTANT companion: not a 2-stun spec.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn ako_dark_mutant_is_detected() {
     let user = 0i32;
@@ -536,7 +536,7 @@ fn fire_bird_place_iff_at(user: i32) {
 
 /// C-R-Fire bird-01 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn fire_bird_place_iff() {
     fire_bird_place_iff_at(0);
@@ -544,7 +544,7 @@ pub fn fire_bird_place_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自己场地」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn fire_bird_place_user1_iff() {
     fire_bird_place_iff_at(1);
@@ -552,7 +552,7 @@ pub fn fire_bird_place_user1_iff() {
 
 /// MUTANT companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn fire_bird_place_mutant_is_detected() {
     let user = 0i32;
@@ -607,7 +607,7 @@ fn fire_bird_burn_iff_at(user: i32) {
 
 /// C-R-Fire bird-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fire_bird_burn_iff() {
     fire_bird_burn_iff_at(0);
@@ -615,7 +615,7 @@ pub fn fire_bird_burn_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自己」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fire_bird_burn_user1_iff() {
     fire_bird_burn_iff_at(1);
@@ -623,7 +623,7 @@ pub fn fire_bird_burn_user1_iff() {
 
 /// MUTANT companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn fire_bird_burn_mutant_is_detected() {
     let user = 0i32;
@@ -675,7 +675,7 @@ fn nfo_face1_iff_at(user: i32) {
 
 /// C-R-NFO-03 (face-1 slice) iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn nfo_face1_iff() {
     nfo_face1_iff_at(0);
@@ -683,7 +683,7 @@ pub fn nfo_face1_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自己」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn nfo_face1_user1_iff() {
     nfo_face1_iff_at(1);
@@ -691,7 +691,7 @@ pub fn nfo_face1_user1_iff() {
 
 /// MUTANT companion for face 1.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn nfo_face1_mutant_is_detected() {
     let user = 0i32;
@@ -734,7 +734,7 @@ fn nfo_stay_iff_at(user: i32) {
 
 /// C-R-NFO-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn nfo_stay_iff() {
     nfo_stay_iff_at(0);
@@ -742,7 +742,7 @@ pub fn nfo_stay_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自己」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn nfo_stay_user1_iff() {
     nfo_stay_iff_at(1);
@@ -750,7 +750,7 @@ pub fn nfo_stay_user1_iff() {
 
 /// MUTANT companion for the stay layer.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn nfo_stay_mutant_is_detected() {
     let user = 0i32;
@@ -801,7 +801,7 @@ fn student_council_add_resolve_iff_at(user: i32) {
 
 /// C-R-学生会的检查-02 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn student_council_add_resolve_iff() {
     student_council_add_resolve_iff_at(0);
@@ -809,7 +809,7 @@ pub fn student_council_add_resolve_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「抽牌堆」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn student_council_add_resolve_user1_iff() {
     student_council_add_resolve_iff_at(1);
@@ -817,7 +817,7 @@ pub fn student_council_add_resolve_user1_iff() {
 
 /// MUTANT companion: the deck must not grow by 2.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn student_council_add_resolve_mutant_is_detected() {
     let user = 0i32;
@@ -858,7 +858,7 @@ fn ringing_bloom_place_iff_at(user: i32) {
 
 /// C-R-Ringing Bloom-01 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn ringing_bloom_place_iff() {
     ringing_bloom_place_iff_at(0);
@@ -866,7 +866,7 @@ pub fn ringing_bloom_place_iff() {
 
 /// Same iff at seat 1 (seat-symmetric 「自身场上」).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn ringing_bloom_place_user1_iff() {
     ringing_bloom_place_iff_at(1);
@@ -874,7 +874,7 @@ pub fn ringing_bloom_place_user1_iff() {
 
 /// MUTANT companion.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn ringing_bloom_place_mutant_is_detected() {
     let user = 0i32;

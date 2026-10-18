@@ -502,7 +502,7 @@ fn same_dream_01_iff_at(user: i32) {
 
 /// C-PP-same-dream-01/02/03 iff at seat 0 (`n_players = 2`).
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn same_dream_01_band_plus_3_iff() {
     same_dream_01_iff_at(0);
@@ -511,7 +511,7 @@ pub fn same_dream_01_band_plus_3_iff() {
 /// Same iff at seat 1 — with `n_players = 2` the two harnesses cover every
 /// seat. Seat-symmetric clause (「自己的」); a symbolic `user` is a BMC cliff.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn same_dream_01_user1_band_plus_3_iff() {
     same_dream_01_iff_at(1);
@@ -519,7 +519,7 @@ pub fn same_dream_01_user1_band_plus_3_iff() {
 
 /// MUTANT companion: money formula `up * 101` disagrees with the card.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn same_dream_02_money_mutant_is_detected() {
     // Money leg is per-user; seat-count independent → sparse 2-seat world.
@@ -554,7 +554,7 @@ pub fn same_dream_02_money_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn title_idol_01_band_plus_2_iff() {
     // Step 1 is the user's band pool only — seat-count independent.
@@ -577,7 +577,7 @@ pub fn title_idol_01_band_plus_2_iff() {
 
 /// MUTANT: +3 from step 1 disagrees.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn title_idol_01_mutant_is_detected() {
     symbolic_play_world();
@@ -601,7 +601,7 @@ pub fn title_idol_01_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn seeyou_01_gate_iff() {
     symbolic_play_world();
@@ -644,7 +644,7 @@ pub fn seeyou_01_gate_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn seeyou_03_flip_iff() {
     symbolic_play_world();
@@ -674,7 +674,7 @@ pub fn seeyou_03_flip_iff() {
 
 /// MUTANT: flip every reverse regardless of `owned`.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn seeyou_03_mutant_is_detected() {
     symbolic_play_world();
@@ -710,7 +710,7 @@ pub fn seeyou_03_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn together_01_x_formula_iff() {
     symbolic_play_world();
@@ -758,7 +758,7 @@ pub fn together_01_x_formula_iff() {
 
 /// MUTANT: wrong bonus `+1` instead of ceil-half the gap.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn together_01_mutant_is_detected() {
     symbolic_play_world();
@@ -790,7 +790,7 @@ pub fn together_01_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn guide_01_band_and_crystals_iff() {
     symbolic_play_world();
@@ -824,7 +824,7 @@ pub fn guide_01_band_and_crystals_iff() {
 
 /// MUTANT: round-up division.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn guide_01_mutant_is_detected() {
     symbolic_play_world();
@@ -850,7 +850,7 @@ pub fn guide_01_mutant_is_detected() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn eve_bushido_01_gain_iff() {
     symbolic_play_world();
@@ -893,7 +893,7 @@ pub fn eve_bushido_01_gain_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn no_expect_02_place_deck_draw_iff() {
     symbolic_play_world();
@@ -921,7 +921,7 @@ pub fn no_expect_02_place_deck_draw_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn first_accident_01_place_deck_draw_iff() {
     symbolic_play_world();
@@ -949,7 +949,7 @@ pub fn first_accident_01_place_deck_draw_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn maya_inf_02_crystal_formula() {
     // Pure formula obligations (the hook body is a second harness below).
@@ -977,7 +977,7 @@ pub fn maya_inf_02_crystal_formula() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn dream_ahead_03_formula() {
     let fans: i32 = kani::any();
@@ -1003,7 +1003,7 @@ pub fn dream_ahead_03_formula() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn eve_bushido_05_payment_formula() {
     let a: i32 = kani::any();
@@ -1030,7 +1030,7 @@ pub fn eve_bushido_05_payment_formula() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn shine_again_01_formula() {
     let price: i32 = kani::any();
@@ -1050,7 +1050,7 @@ pub fn shine_again_01_formula() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn eve_bushido_04_crystal_per_draw_iff() {
     symbolic_play_world();
@@ -1085,7 +1085,7 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
 
 /// NO-OP: trigger value <= 0 means the body is not activated.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn eve_bushido_04_noop_when_zero_draw() {
     symbolic_play_world();
@@ -1120,7 +1120,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn guide_04_turn_end_crystal_iff() {
     symbolic_play_world();
@@ -1162,7 +1162,7 @@ pub fn guide_04_turn_end_crystal_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn dream_ahead_01_crystal_per_draw_iff() {
     symbolic_play_world();
@@ -1207,7 +1207,7 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn shine_again_00_immune_iff() {
     symbolic_play_world();
@@ -1227,7 +1227,7 @@ pub fn shine_again_00_immune_iff() {
 }
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn no_expect_01_immune_iff() {
     symbolic_play_world();
@@ -1245,7 +1245,7 @@ pub fn no_expect_01_immune_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn jennifer_01_place_other_iff() {
     symbolic_play_world();
@@ -1276,7 +1276,7 @@ pub fn jennifer_01_place_other_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn ranger_01_02_steps_by_count_iff() {
     symbolic_play_world();
@@ -1334,7 +1334,7 @@ pub fn ranger_01_02_steps_by_count_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn flower_01_place_on_tile_iff() {
     symbolic_play_world();
@@ -1376,7 +1376,7 @@ pub fn flower_01_place_on_tile_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn chisato_mask_01_total_iff() {
     symbolic_play_world();
@@ -1423,7 +1423,7 @@ pub fn chisato_mask_01_total_iff() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn shine_again_01_rescue_iff() {
     symbolic_play_world();

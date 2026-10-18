@@ -54,7 +54,7 @@ fn symbolic_play_world() -> World {
 /// explores. Unrolling keeps the same "every offered index satisfies the
 /// spec" property — the conjunction of the two concrete cases.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn aya_haruka_01_prompt_all_picks_iff() {
     for pick in [0i32, 1] {
@@ -105,7 +105,7 @@ pub fn aya_haruka_01_prompt_all_picks_iff() {
 
 /// Empty discard: place still applies; the add-to-hand half has no target.
 #[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn aya_haruka_01_empty_discard() {
     let mut w = symbolic_play_world();
