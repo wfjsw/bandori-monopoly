@@ -182,7 +182,7 @@ fn gen_cond_irs() {
 fn gen_body_dispatch() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let rules_dir = manifest.parent().unwrap().to_path_buf();
-    for d in ["cards", "skills", "tiles", "events", "tile_marks"] {
+    for d in ["cards", "skills", "tiles", "events", "markers"] {
         println!("cargo:rerun-if-changed={}", rules_dir.join(d).display());
     }
     println!(
@@ -209,7 +209,7 @@ fn gen_body_dispatch() {
         ("skill_groups", "skills-groups"),
         ("skill_personas", "skills-personas"),
         ("rules_tiles", "tiles"),
-        ("rules_tile_marks", "tiles"),
+        ("rules_markers", "tiles"),
         ("rules_events", "events"),
     ];
     let enabled: Vec<&str> = ALL_BANDS
@@ -521,7 +521,7 @@ fn parse_band_start(invoke: &str) -> Vec<usize> {
 /// Rust crate name → source dir under `rules/`.
 fn crate_dir(rules_dir: &PathBuf, crate_name: &str) -> PathBuf {
     match crate_name {
-        "rules_tile_marks" => rules_dir.join("tile_marks"),
+        "rules_markers" => rules_dir.join("markers"),
         "rules_tiles" => rules_dir.join("tiles"),
         "rules_events" => rules_dir.join("events"),
         "skill_groups" => rules_dir.join("skills/skill-groups"),

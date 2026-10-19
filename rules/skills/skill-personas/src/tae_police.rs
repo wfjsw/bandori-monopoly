@@ -48,7 +48,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
 
 /// 「初始2，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 2, 4);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

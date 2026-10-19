@@ -96,7 +96,7 @@ pub struct TriggerMove {
     pub kind: card_sdk::abi::MoveKind,
     /// Does the move settle where it lands?
     pub resolve: bool,
-    /// Per-card counters on the move (a [charge pots] roll is card-owned state).
+    /// Per-card counters on the move (card-owned state, e.g. a marker-funded roll).
     pub tags: Vec<(String, i32)>,
     /// Was this the turn's main move?
     pub main: bool,
@@ -941,16 +941,25 @@ pub trait CardWorld: Clone + 'static {
     fn add_group_skill(&mut self, _player_id: i32, _id: &str, _extra: bool) -> i32 {
         -1
     }
-    /// Charge pots held. Sugar over the keyed state.
+    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
+    /// frozen webui key `charge`.
     fn charge(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::CHARGE)
     }
-    /// The mandated charge-pot cap -- the `max` of the `charge` item, which a
-    /// persona skill writes. The engine does not impose it.
+    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
+    /// `max` of the frozen webui key `charge`.
     fn charge_max(&self, player_id: i32) -> i32 {
         self.state_max(player_id, game_core::state::key::CHARGE)
     }
+    /// Wire name `charge`; policy lives in `rules_status::fire`. Dumb add.
     fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
+    /// Dumb add of `n` to a named counter; returns how many landed. The name is
+    /// data. Cap / partial-gain policy lives in the rules-layer kernel.
+    /// Defaults to the wire-key verb; override for a generic path.
+    fn gain_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
+        let _ = name;
+        self.gain_charge(player_id, n, why)
+    }
     fn give_stay(&mut self, player_id: i32, n: i32);
     fn give_stun(&mut self, player_id: i32, n: i32);
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32);
@@ -970,8 +979,15 @@ pub trait CardWorld: Clone + 'static {
     /// May this player still take the main move? 0 = available, 1 = not your
     /// turn, 2 = already moved, 3 = cannot move this turn.
     fn cant_move(&self, player_id: i32) -> i32;
-    /// Spend `n` [charge pots]; 1 when the player had enough (logged).
+    /// Wire name `charge`; policy lives in `rules_status::fire`.
     fn spend_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
+    /// Spend `n` of a named counter; 1 when the player had enough. The name is
+    /// data; the spent-raise carries the name. Defaults to the wire-key verb;
+    /// override for a generic path.
+    fn spend_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
+        let _ = name;
+        self.spend_charge(player_id, n, why)
+    }
     /// `stay` layers. Sugar over the keyed state.
     fn stay_of(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::STAY)
@@ -1067,7 +1083,14 @@ pub trait CardWorld: Clone + 'static {
     fn turn_main_steps(&self) -> i32 {
         0
     }
-    /// Adjust `player_id`'s [charge pots] cap; returns the new cap.
+    /// Move a named counter's cap; returns the new cap. Dumb storage fold
+    /// (pulls the value under the new ceiling). The name is data.
+    /// Defaults to the wire-key verb; override for a generic path.
+    fn add_marker_max(&mut self, player: i32, name: &str, n: i32) -> i32 {
+        let _ = name;
+        self.add_charge_max(player, n)
+    }
+    /// Wire name `charge`; policy lives in `rules_status::fire`.
     fn add_charge_max(&mut self, _player: i32, _n: i32) -> i32 {
         0
     }

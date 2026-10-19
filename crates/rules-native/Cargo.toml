@@ -34,7 +34,7 @@ skill-groups = { path = "../../rules/skills/skill-groups" }
 skill-personas = { path = "../../rules/skills/skill-personas" }
 personas = { path = "../../rules/personas" }
 rules-tiles = { path = "../../rules/tiles" }
-rules-tile-marks = { path = "../../rules/tile_marks" }
+rules-markers = { path = "../../rules/markers" }
 rules-status = { path = "../../rules/status" }
 rules-events = { path = "../../rules/events" }
 

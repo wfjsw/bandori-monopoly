@@ -634,9 +634,11 @@ impl Table {
             }
             p.state_set(key::EXILE_TO, -1);
             p.state_set(key::CHARGE, 0);
-            // Fans live in the state dict (`ppFansUp` / `ppFansDown`).
+            // Fans live in the state dict (`ppFansUp` / `ppFansDown`), owned
+            // by the `mark:pp_fans` host. Clear the once-flag too.
             p.state_set("ppFansUp", 0);
             p.state_set("ppFansDown", 0);
+            p.state_set("mark.pp_fans.initial", 0);
             p.tokens.retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
         for f in w.st.board_field.iter_mut() {

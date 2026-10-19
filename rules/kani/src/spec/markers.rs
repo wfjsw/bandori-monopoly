@@ -1,11 +1,11 @@
-//! Unit `tile_marks`: reference specs FROM the clause docs only.
+//! Unit `markers`: reference specs FROM the clause docs only.
 //!
 //! Sources:
 //! * `data/rules.txt` 125 「标志物解释」: 「· CP点：放置于路面上的指示物」
 //! * `docs/rulebook/cards.json` id `通用:该清CP了` [手] / （1） settle clause:
 //!   「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，
 //!    [获得]800资金。」
-//! * the user ruling recorded in `rules/tile_marks/src/cp.rs` (2026-10-07):
+//! * the user ruling recorded in `rules/markers/src/cp.rs` (2026-10-07):
 //!   tile [CP点] vs on-card [CP点]; the 800 goes to the settling player.
 //!
 //! Never derived from engine behaviour.

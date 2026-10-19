@@ -20,7 +20,7 @@
 //! card. Gaps in the text are `TODO(规则书)`, never silently dropped.
 //!
 //! Board-wide **tile marks** (`mark:*`, e.g. the [CP点] owner `mark:cp`) are
-//! a sibling category, not a tile kind: see `rules/tile_marks` (one crate,
+//! a sibling category, not a tile kind: see `rules/markers` (one crate,
 //! one `CardDef` per mark category, bound once on the board owner).
 
 #![cfg_attr(target_arch = "wasm32", no_std)]

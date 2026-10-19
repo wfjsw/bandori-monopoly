@@ -867,7 +867,7 @@ Integer **body-id** match with **DIRECT** calls (task candidate #1):
 
 1. `tools/kani/add_kani_wrappers.py` — append `#[cfg(kani)] pub fn
    NAME_kani(player_id) -> card_sdk::Asked { NAME(player_id) }` after
-   every `On::*` body in `rules/{cards,skills,events,tiles,tile_marks}`
+   every `On::*` body in `rules/{cards,skills,events,tiles,markers}`
    (248 files). Production `cfg(not(kani))` does not see these.
 2. `rules/kani/build.rs` `gen_body_dispatch` — parse each `On::*`
    constructor's last argument (the body ident) and emit

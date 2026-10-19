@@ -6,17 +6,17 @@ status):
 | kind | ids | what they are |
 |---|---|---|
 | **状态 / conditions** | `status:stay`, `status:stun`, `status:exile`, `status:unstoppable` | 「处于该状态时…」 gates + ticks. The real status hosts. |
-| **指示物 / counters** | 火罐 (`rules/status/src/fire.rs`) | 「技能指示物」 -- a capped resource over the generic `charge` + `HostRequest::Marker` machinery. Kin of CP点 / 奇迹水晶. No gates, no tick. |
+| **指示物 / counters** | 火罐 (`rules/status/src/fire.rs` kernel, `fire_decl.rs` registry) | 「技能指示物」 -- instance-owned counters over generic `charge` + `HostRequest::Marker`; see `docs/MARKERS.md`. Kin of CP点 / 奇迹水晶. No gates, no tick. |
 | **companions** | `status:no_hand` | `noHand` card-text slot (turn-flow 2→1→0 dance), not a glossary status. |
 
 Each 状态 marker (and the cheap companions for symmetry) becomes its own
 **standing pseudo card** -- `status:stay`, `status:stun`, `status:exile`,
 `status:unstoppable`, `status:no_hand` -- following the `mark:cp` precedent
-(`rules/tile_marks/src/{lib,cp}.rs`, `docs/TILES.md`). `status:fire` is a
-placeholder with no entries. The engine keeps only **generic** turn-flow
-verbs and player gates; it stops naming stay / stun / exile / fire. Cards
-call one canonical API in `rules/status`, not the `card-sdk`
-`ctx::{give_stay, gain_fire, ...}` surface.
+(`rules/markers/src/{lib,cp,pp_fans}.rs`, `docs/TILES.md`, `docs/MARKERS.md`).
+`status:fire` is a placeholder with no entries. The engine keeps only
+**generic** turn-flow verbs and player gates; it stops naming stay / stun /
+exile / fire. Cards call one canonical API in `rules/status`, not the
+`card-sdk` `ctx::{give_stay, gain_fire, ...}` surface.
 
 Motivation (user request 2026-10-11): *"Canonicalize and standardize these
 APIs. Consider making each marker that has special meaning its own rule host
@@ -117,7 +117,7 @@ for symmetry. Its TurnStart/TurnEnd 2→1→0 dance now lives on the host
 
 ## 2. Precedent: `mark:cp`
 
-`rules/tile_marks/src/cp.rs` is the model:
+`rules/markers/src/cp.rs` is the model:
 
 | piece | `mark:cp` | `status:*` |
 |---|---|---|
@@ -191,7 +191,7 @@ the seam; the wire projection is a view concern.
 ### 3.2 New crate `rules/status`
 
 Workspace member (add to `rules/Cargo.toml` `members`), wired into
-`rules/cards/card-all` like `rules_tile_marks`, concatenated by
+`rules/cards/card-all` like `rules_markers`, concatenated by
 `tools/rules-aggregate.mjs`. Layout:
 
 ```

@@ -68,7 +68,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
 
 /// （3）「获得一个火罐（上限1）」 -- no 「初始N」, so initial is 0 and the cap is 1.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 0, 1);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

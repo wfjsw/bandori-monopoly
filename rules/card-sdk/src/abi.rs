@@ -829,8 +829,9 @@ pub mod state_key {
     /// layer tick does not peel [除外]; the granting effect ends it. A layered
     /// grant (「获得N层[除外]」) leaves this 0 and still ticks.
     pub const EXILE_HOLD: &str = "exileHold";
-    /// Fire pots held. Its `max` is the mandated cap, written by the character
-    /// skill -- and that is the one number to show.
+    /// Wire key constant (webui contract); the engine never branches on it --
+    /// rules-layer kernel owns the counter. Its `max` is the owner-declared cap
+    /// written through the rules layer.
     pub const CHARGE: &str = "charge";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
@@ -1168,7 +1169,9 @@ pub mod prop {
 pub mod roll_source {
     /// Unattributed (the engine's own move roll, or a roll with no named source).
     pub const NONE: i32 = 0;
-    /// A [火罐]-funded roll (「使用火罐进行掷骰」).
+    /// Wire code for a marker-funded roll (the `charge` name is one caller;
+    /// rules-layer names the clause). Frozen; the engine never branches on the
+    /// game name.
     pub const CHARGE: i32 = 1;
     /// A hand/field card's own roll (`ctx::roll_ask` from a card body).
     pub const CARD: i32 = 2;
@@ -2340,9 +2343,9 @@ impl TriggerKind {
                 | Self::PaySplitMul
                 | Self::PaySplitAt
                 | Self::DiceRollPlan
-                // ChargePaying (78) is NOT a filter: its 「可」 opt-in prompts,
-                // and Filter bodies cannot. It stays on On::Action (see
-                // docs/CARDS.md).
+                // Marker spend-substitution (id 78, name is payload) is NOT a
+                // filter: its 「可」 opt-in prompts, and Filter bodies cannot.
+                // It stays on On::Action (see docs/CARDS.md).
                 | Self::BuyAdd
                 | Self::BuyMul
                 | Self::BuySet

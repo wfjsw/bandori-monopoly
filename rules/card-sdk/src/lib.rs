@@ -563,7 +563,8 @@ pub enum On {
     /// (false = cancel the payment), and the decision gates (AbnormalGuard /
     /// ImmuneAll / Untargetable / Redirect / BuyGate / ActGate / PayGate /
     /// MoveGate / ExclusiveUse / PlayGate -- true = allowed).
-    /// ChargePaying is **not** here: its 「可」 opt-in prompts, so it stays
+    /// The generic marker spend-substitution window (`ChargePaying`, id 78;
+    /// name is payload) is **not** here: its 「可」 opt-in prompts, so it stays
     /// `On::Action`. A PaySplitChoose that *also* rewrites the amount is split
     /// into [`On::Filter`] (amount) plus this variant (cancel).
     FilterFlag(
@@ -899,7 +900,7 @@ mod tests {
             TriggerKind::SettleBody,
             TriggerKind::CounterChanged,
             TriggerKind::DrewBefore,
-            TriggerKind(78), // ChargePaying -- prompts, stays Action
+            TriggerKind(78), // marker spend-substitution (name is payload); prompts, stays Action
         ] {
             assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
         }

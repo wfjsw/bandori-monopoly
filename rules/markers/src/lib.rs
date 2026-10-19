@@ -1,16 +1,18 @@
-//! **Tile-mark rules** -- the `mark:*` category: what a neutral board mark is
-//! and what it does when someone interacts with it.
+//! **Marker rules** -- the `mark:*` category: kind-owned marker hosts (one
+//! [`CardDef`] per mark category), not just the marks that sit on tiles.
 //!
 //! Standardized the same way card, skill, tile and event rules are: one
 //! [`CardDef`] per mark category, bound **once** at match start to the
 //! **neutral board owner** (no single tile, `tile = -1`; [`docs/TILES.md`]).
-//! A mark owner is not a tile *kind* rule: it governs the marks that sit on
-//! many tiles, and its hooks hear every trigger of that kind wherever the
+//! A mark owner is not a tile *kind* rule: it governs the marks of that kind
+//! wherever they live (cp is tile-bound, `pp_fans` is holder-bound), and its
+//! hooks hear every trigger of that kind wherever the
 //! trigger points (`game_core::data::mark_rule_ids` -> `bind_tiles`).
 //!
 //! | id | file | rulebook |
 //! |---|---|---|
 //! | `mark:cp` | `cp.rs` | `data/rules.txt` 125 (「CP点：放置于路面上的指示物」) + 通用:该清CP了 |
+//! | `mark:pp_fans` | `pp_fans.rs` | Pastel✽Palettes band sheet （1） + glossary 「P✽P粉丝」 |
 //!
 //! Every body quotes the passage it implements and cites it per line, like a
 //! card. Gaps in the text are `TODO(规则书)`, never silently dropped.
@@ -49,9 +51,11 @@
 extern crate alloc;
 
 pub mod cp;
+pub mod pp_fans;
 pub use cp::MARK_CP;
+pub use pp_fans::MARK_PP_FANS;
 
-/// Every tile-mark rule, in registration order. The shipped module
+/// Every mark-host rule, in registration order. The shipped module
 /// (`card-all`) concatenates these tables with the card, skill, tile and event
 /// ones.
-pub static CARDS: &[card_sdk::CardDef] = &[MARK_CP];
+pub static CARDS: &[card_sdk::CardDef] = &[MARK_CP, MARK_PP_FANS];

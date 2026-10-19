@@ -10,9 +10,9 @@
 //! 「状态1 / 状态2」 is the axis the Ave Mujica band skill owns.
 //!
 //! 状态1's 「每6回合不打出任何手牌」 is a six-turn silence on hand plays,
-//! tracked as a counter a play resets. 状态2's 「覆盖于自己角色卡上」 is the
-//! character swap two_in_one already does -- unplace the old skill, place the
-//! new -- plus the new character's initial fire.
+//! tracked as a counter a play resets. 状态2's 「并获得其初始火罐」 is a
+//! registry overlay of the borrowed face's row (`fire::overlay` / `end_overlay`),
+//! keyed on the last-player-to-play latch.
 
 use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
@@ -20,6 +20,13 @@ use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns since the last hand play. A play resets it.
 const QUIET: &str = "skill.mutsumiActor.quiet";
+
+/// 「上一位打出过手牌的玩家」 -- latched from `CardPlayed` so 状态2's overlay
+/// can borrow that face's 「初始火罐」. -1 = nobody yet.
+const LAST_PLAY: &str = "skill.mutsumiActor.lastPlay";
+
+/// Whose face is currently overlaid (「并获得其初始火罐」), or -1.
+const OVERLAID: &str = "skill.mutsumiActor.overlaid";
 
 pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
     "skill:若叶睦:天生的演员",
@@ -52,16 +59,45 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("mutsumi_actor_enter")),
         )? {
             state::set(player_id, state_key::SKILL_STATE, 2);
+            enter_state2(player_id);
             ctx::log(player_id, &Msg::new(key!("mutsumi_actor_two")));
         }
     }
     Ok(())
 }
 
-/// 「不打出任何手牌」 -- a play resets the silence.
+/// 「不打出任何手牌」 -- a play resets the silence. Also latches
+/// 「上一位打出过手牌的玩家」 for 状态2's fire overlay.
 fn on_play(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, QUIET, 0);
+    let actor = ctx::trigger::player_id();
+    if actor >= 0 {
+        state::set(player_id, LAST_PLAY, actor);
+    }
     Ok(())
+}
+
+/// 状态2 entry: overlay the borrowed face's 「初始火罐」 (MARKERS.md §7 --
+/// `fire::overlay` force-writes the borrowed row). The character-cover pile
+/// stays open (see the TODO below); the fire half of 「并获得其初始火罐」 is
+/// the registry row of the latched player's character skill.
+fn enter_state2(player_id: i32) {
+    let last = state::get(player_id, LAST_PLAY);
+    if last < 0 {
+        return;
+    }
+    if let Some(skill) = ctx::persona_skill(last) {
+        rules_status::fire::overlay(player_id, &skill);
+        state::set(player_id, OVERLAID, last);
+    }
+}
+
+/// 「直至退出状态2」 -- re-declare her own face (no fire pots of her own).
+fn exit_state2(player_id: i32) {
+    if state::get(player_id, OVERLAID) >= 0 {
+        rules_status::fire::end_overlay(player_id);
+        state::set(player_id, OVERLAID, -1);
+    }
 }
 
 /// 「若回合结束时你的手牌小于等于1，退出状态2」, and the silence counting up.
@@ -69,6 +105,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
         if ctx::hand_size(player_id) <= 1 {
             state::set(player_id, state_key::SKILL_STATE, 1);
+            exit_state2(player_id);
             ctx::log(player_id, &Msg::new(key!("mutsumi_actor_left")));
         }
         return Ok(());
@@ -78,13 +115,13 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 // 状态2's 「从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其覆盖于自己角色卡上
-// 并获得其初始火罐」 is the character swap: unplace the old skill rule, place the
-// new one, write the new character's initial fire. Two_in_one already does the
-// same shape for a fixed pair; here the pair is 「上一位打出过手牌的玩家」, which
-// needs a last-player-to-play latch the engine does not carry.
-// TODO(规则书)[judgement]: 状态2's character swap -- the clause under-specifies --
-//   「上一位打出过手牌的玩家」 needs a last-player-to-play latch the engine does
-//   not carry, and 「角色卡堆」 is a pile the vocabulary has no read for.
+// 并获得其初始火罐」 -- the fire half (「并获得其初始火罐」) is implemented above
+// as a registry overlay (`fire::overlay` / `end_overlay`), keyed on the
+// last-player-to-play latch. The character-cover pile (「从角色卡堆拿取」) is
+// still open.
+// TODO(规则书)[judgement]: 状态2's character cover -- 「角色卡堆」 is a pile the
+//   vocabulary has no read for. Two_in_one's fixed-pair swap (`set_persona` +
+//   unplace/place) is the shape; here the pair is 「上一位打出过手牌的玩家」.
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -50,7 +50,7 @@ fn partner(player_id: i32) -> bool {
 
 /// 「初始1，上限2」 + （3）「初始获得"Space"」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 1, 2);
+    crate::fire_pot(player_id);
     let t = ctx::tile_named("Space");
     if t >= 0 && ctx::tile_owner(t) < 0 {
         ctx::set_owner(t, player_id);

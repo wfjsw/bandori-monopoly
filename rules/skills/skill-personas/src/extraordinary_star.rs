@@ -50,7 +50,7 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
 /// 「初始0，上限1」 -- this skill states the fire-pot cap. It is a *consumer*
 /// deciding the bound; the engine only holds it.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 0, 1);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

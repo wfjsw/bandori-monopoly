@@ -1757,12 +1757,20 @@ dependencies = [
  "rules-cond",
  "rules-cond-ir",
  "rules-events",
- "rules-tile-marks",
+ "rules-markers",
  "rules-tiles",
  "ruleset-core",
  "serde",
  "skill-groups",
  "skill-personas",
+]
+
+[[package]]
+name = "rules-markers"
+version = "0.1.0"
+dependencies = [
+ "card-sdk",
+ "ruleset-core",
 ]
 
 [[package]]
@@ -1787,8 +1795,8 @@ dependencies = [
  "personas",
  "postcard",
  "rules-events",
+ "rules-markers",
  "rules-status",
- "rules-tile-marks",
  "rules-tiles",
  "ruleset-core",
  "serde_json",
@@ -1809,14 +1817,6 @@ dependencies = [
 
 [[package]]
 name = "rules-status"
-version = "0.1.0"
-dependencies = [
- "card-sdk",
- "ruleset-core",
-]
-
-[[package]]
-name = "rules-tile-marks"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
@@ -2068,6 +2068,7 @@ name = "skill-groups"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-markers",
  "rules-status",
  "ruleset-core",
 ]

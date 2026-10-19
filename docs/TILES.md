@@ -102,12 +102,12 @@ shape as `rules/cards/card-*` and `rules/skills/*`:
 
 The crate is a **rule crate**, not a card crate: its ids are `tile:*`, not
 roster card ids. `tools/rules-aggregate.mjs` gains `rules/tiles` as a
-scan root (alongside `rules/cards`, `rules/skills`, `rules/tile_marks` and
+scan root (alongside `rules/cards`, `rules/skills`, `rules/markers` and
 `rules/events`) so `card-all` links it; `tools/build-ruleset.mjs` needs no
 change.
 
 Board-wide **tile marks** (`mark:*`) are a sibling category in their own crate,
-`rules/tile_marks` (see 「Board marks」 below): not a tile kind, one `CardDef`
+`rules/markers` (see 「Board marks」 below): not a tile kind, one `CardDef`
 per mark category, bound once on the board owner.
 
 Each body quotes the passage above and cites it per line, exactly like a card
@@ -116,11 +116,11 @@ tools/rulebook/check.py` is extended to require the quote on `rules/tiles/*`
 the way it does on `rules/cards/*` -- the passage lives in the file header
 since `docs/rulebook/cards.json` has no `tile:*` ids.
 
-### Board marks: `mark:cp` (`rules/tile_marks`)
+### Board marks: `mark:cp` (`rules/markers`)
 
 `mark:*` is a second shape of board-owned rule: a **mark owner** rather than a
-tile-kind rule, living in its own crate `rules/tile_marks` (package
-`rules-tile-marks`, one `.rs` per mark category). There is one instance per
+tile-kind rule, living in its own crate `rules/markers` (package
+`rules-markers`, one `.rs` per mark category). There is one instance per
 mark category on the neutral board owner, governing **no single tile**
 (`tile = -1`), placed at match start next to the `tile:*` ones (`bind_tiles`,
 `game_core::data::mark_rule_ids`). Like an event instance, it hears every
@@ -176,7 +176,7 @@ owner, and attaches the mark to the standing `mark:cp` instance (SAVE_VERSION
 counter `mark::CP_FIELD_TOK` is gone: the card's own `FieldCard::cp` replaces
 it (ABI v38).
 
-**The settle clause's reading** (recorded; see `rules/tile_marks/src/cp.rs` for the
+**The settle clause's reading** (recorded; see `rules/markers/src/cp.rs` for the
 long form). 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个
 [CP点]，[获得]800资金」: any player's [结算] on a tile carrying a [CP点] removes
 the tile's mark **and** one on-card [CP点] of the 该清CP了 card the mark is
@@ -623,7 +623,7 @@ than the only path. Phase 3 landed the following (2026-10-06):
   (`scale_settle_payment`), not `pay_rent`, so the scale covers the payment as
   card effects shape it (a rent-region expansion, a forced stop-and-pay).
 * **`tools/rulebook/check.py`** now checks `rules/tiles/*` and
-  `rules/tile_marks/*` against
+  `rules/markers/*` against
   `data/rules.txt` the way it checks `rules/cards/*` against the roster fixture.
 
 Concretely still short:

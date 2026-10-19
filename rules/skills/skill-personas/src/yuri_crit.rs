@@ -50,8 +50,9 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「X初始为0」 -- restated so a fresh match starts from zero.
+/// This skill prints no fire pots: it never touches `charge` (MARKERS.md §6
+/// purge -- yuri_crit stops writing CHARGE entirely; its own X key stays).
 fn declare(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::CHARGE, 0, 0);
     state::set(player_id, X, 0);
     Ok(())
 }

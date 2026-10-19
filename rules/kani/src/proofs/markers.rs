@@ -1,4 +1,4 @@
-//! Unit `tile_marks`: clause proofs.
+//! Unit `markers`: clause proofs.
 //!
 //! ## Classification gate (see `docs/rulebook/spec/kani/tiles.md`)
 //!
@@ -21,14 +21,14 @@
 //!   cannot see the target tile, the count, or the provenance card.
 
 use crate::invoke;
-use crate::spec::tile_marks as spec;
+use crate::spec::markers as spec;
 use crate::world::{self, Effect, Mark, World, MAX_PLAYERS};
 
 
 /// Call the unmodified `on_land` body of `mark:cp` via its `CardDef` (no
 /// registry scan — see `proofs::tiles::call_settle`).
 fn call_mark_cp_land(player: i32) {
-    let def = rules_tile_marks::MARK_CP;
+    let def = rules_markers::MARK_CP;
     for on in def.on.iter() {
         if let card_sdk::On::Action(_, _, _, _, f) = on {
             invoke::unwrap_done(f(player));
@@ -78,7 +78,7 @@ fn symbolic_cp_world(settler: i32, tile: i32) -> World {
 /// The shipped `mark:cp` SettleBody guard (`lands_on_cp`), invoked through the
 /// registry so we evaluate the real predicate, not a restated one.
 fn mark_cp_guard(player: i32) -> bool {
-    let card = rules_tile_marks::MARK_CP;
+    let card = rules_markers::MARK_CP;
     for on in card.on.iter() {
         if let card_sdk::On::Action(_, _, _, Some(g), _) = on {
             return g(player);
@@ -256,7 +256,7 @@ pub fn mark_cp_land_tile_cp_visible_to_count_marks() {
 // ===========================================================================
 // mark:cp on_place — BLOCKED-HOST (`msg_tile` / `msg_a` / `msg_sender_uid`)
 //
-// Specs are in `spec/tile_marks.rs`. No harness: the message payload ops are
+// Specs are in `spec/markers.rs`. No harness: the message payload ops are
 // protocol stubs that return 0, so `place_ok` always sees `(tile=0, count=0)`
 // and rejects — proving anything about placement would be vacuous or would
 // require faking the payload. Flip on when the host models the message ops.

@@ -204,9 +204,10 @@ pub struct Run {
     draw_log: Vec<(i32, String)>,
     /// Players whose deck this run shuffled -- `reshuffled` once it commits.
     reshuffle_log: Vec<i32>,
-    /// Charge spent during the run, raised as kind 73 once the run commits
-    /// (same shape as `paid_log`).
-    charge_spent_log: Vec<(i32, i32)>,
+    /// Named markers spent during the run, `(player_id, n, name)` -- raised as
+    /// kind 73 (`fireSpent`, wire-stable) once the run commits. The name is
+    /// payload; `charge` is one caller.
+    marker_spent_log: Vec<(i32, i32, String)>,
     /// Houses added during the run, raised as kind 75 once it commits.
     house_log: Vec<(i32, i32, i32)>,
     /// Named-counter writes this run made, `(owner, card, name, change)` -- the
@@ -536,9 +537,9 @@ impl Run {
         }
         let mk = match key {
             card_sdk::abi::state_key::HAND_LIMIT => "log.outcome.hand_limit",
-            // Charge-count changes narrate through `gain_charge` / `spend_charge`;
-            // a raw `state::set` on the key is the declare-cap initial write
-            // and stays silent.
+            // Named-marker count changes narrate through `gain_marker` /
+            // `spend_marker`; a raw `state::set` on the key is the declare-cap
+            // initial write and stays silent.
             card_sdk::abi::state_key::STAY
             | card_sdk::abi::state_key::STUN
             | card_sdk::abi::state_key::STUN_START
@@ -602,7 +603,7 @@ impl Run {
 
     /// Record a named counter write on the instance at `uid` so the commit point can
     /// raise `counterChanged` (wire event name; the same shape as
-    /// `charge_spent_log` / `house_log`). `was` and `now` bracket the write;
+    /// `marker_spent_log` / `house_log`). `was` and `now` bracket the write;
     /// only the delta rides the trigger, so a write that lands on the same
     /// count still raises -- a card placed with no named counters has to hear
     /// about its own count. A write to an instance that is not on a field
@@ -1616,29 +1617,30 @@ impl CardWorld for Run {
             .add_group_skill(&self.data, player_id, id, extra, props)
     }
     fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
-        let got = self.world.gain_charge(player_id, n, why.clone());
+        self.gain_marker(player_id, game_core::state::key::CHARGE, n, why)
+    }
+    fn gain_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
+        let got = self.world.gain_marker(player_id, name, n);
+        // Minimal world event-log line (wire kind is the marker name). The
+        // 效果适用 narration / cap policy is the rules-layer kernel's
+        // (`rules_status::fire`); this is only the engine's fact of the write.
         if got != 0 {
-            let s = self.world.st.players.get(player_id.max(0) as usize);
-            let cap = s.map(|p| p.charge_max()).unwrap_or(0);
-            let charge_val = s.map(|p| p.charge()).unwrap_or(0);
-            let msg = Msg::new("log.gain_charge")
-                .player_id("who", player_id)
-                .i("n", got as i64)
-                .msg("why", why)
-                .i("charge", charge_val as i64)
-                .i("max", cap as i64);
-            self.post_log_value("charge", player_id, msg, "", got);
+            let msg = Msg::new("log.gain_charge").player_id("who", player_id).i("n", got as i64);
+            self.post_log_value(name, player_id, msg, "", got);
         } else if n > 0 {
-            // 「不能超过持有上限」: the effect applied and the cap refused it.
+            // 「不能超过持有上限」: the effect applied and the storage bound
+            // refused it. Narrate so a non-kernel caller sees why nothing landed
+            // (the kernel logs its own `log.gain_charge_capped` when it refuses
+            // before the write).
             if let Some(p) = self.world.st.players.get(player_id.max(0) as usize) {
-                let (cap, charge_val) = (p.charge_max(), p.charge());
-                if cap > 0 && charge_val >= cap && !p.out() {
+                let (cap, have) = (p.state_max(name), p.state_get(name));
+                if cap > 0 && have >= cap && !p.out() {
                     let msg = Msg::new("log.gain_charge_capped")
                         .player_id("who", player_id)
                         .msg("why", why)
-                        .i("charge", charge_val as i64)
+                        .i("charge", have as i64)
                         .i("max", cap as i64);
-                    self.post_log_value("charge", player_id, msg, "", 0);
+                    self.post_log_value(name, player_id, msg, "", 0);
                 }
             }
         }
@@ -2032,25 +2034,28 @@ impl CardWorld for Run {
         0
     }
     fn spend_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
-        // Spend pots first; logs the spend with its reason (the caller's
-        // message is the log line, like `gain`/`pay`).
+        self.spend_marker(player_id, game_core::state::key::CHARGE, n, why)
+    }
+    fn spend_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
+        // Spend from the named counter; logs the spend with its reason (the
+        // caller's message is the log line, like `gain`/`pay`).
         if n <= 0 {
             return 1;
         }
         let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
             return 0;
         };
-        // A consumer of the pots: all-or-nothing, and it logs the spend. It does
-        // not consult any cap -- spending is not the capped direction.
-        if s.charge() < n {
+        // A consumer of the counter: all-or-nothing, and it logs the spend. It
+        // does not consult any cap -- spending is not the capped direction.
+        if s.state_get(name) < n {
             return 0;
         }
-        s.state_add(game_core::state::key::CHARGE, -n);
-        self.post_log_value("charge", player_id, why.clone(), "", -n);
+        s.state_add(name, -n);
+        self.post_log_value(name, player_id, why.clone(), "", -n);
         if self.live.is_none() {
-            self.world.log("charge", player_id, why).value = -n;
+            self.world.log(name, player_id, why).value = -n;
         }
-        self.charge_spent_log.push((player_id, n));
+        self.marker_spent_log.push((player_id, n, name.to_string()));
         1
     }
     fn turn_player(&self) -> i32 {
@@ -2204,7 +2209,10 @@ impl CardWorld for Run {
         self.world.turn.main_steps
     }
     fn add_charge_max(&mut self, player_id: i32, n: i32) -> i32 {
-        self.world.add_charge_max(player_id, n)
+        self.add_marker_max(player_id, game_core::state::key::CHARGE, n)
+    }
+    fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
+        self.world.add_marker_max(player_id, name, n)
     }
     fn enter_card(&mut self, id: &str) -> (String, i32, Option<i32>, i32) {
         let card = std::mem::replace(&mut self.current_card, id.to_string());
@@ -2991,7 +2999,7 @@ impl<M: CardModules> RulesBridge<M> {
                 discard_log: vec![],
                 draw_log: vec![],
                 reshuffle_log: vec![],
-                charge_spent_log: vec![],
+                marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 exile_log: vec![],
@@ -3194,7 +3202,7 @@ impl<M: CardModules> RulesBridge<M> {
                         discard_log: vec![],
                         draw_log: vec![],
                         reshuffle_log: vec![],
-                        charge_spent_log: vec![],
+                        marker_spent_log: vec![],
                         house_log: vec![],
                         counter_log: vec![],
                         exile_log: vec![],
@@ -4307,8 +4315,8 @@ impl<M: CardModules> RulesBridge<M> {
             Some("house")
         } else if !after.exile_log.is_empty() {
             Some("exile")
-        } else if !after.charge_spent_log.is_empty() {
-            Some("charge-spend")
+        } else if !after.marker_spent_log.is_empty() {
+            Some("marker-spend")
         } else if after.logged > 0 {
             Some("log line")
         } else {
@@ -4418,7 +4426,7 @@ impl<M: CardModules> RulesBridge<M> {
                     && after.house_log.is_empty()
                     && after.exile_log.is_empty()
                     && after.state_log.is_empty()
-                    && after.charge_spent_log.is_empty();
+                    && after.marker_spent_log.is_empty();
                 if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
                     cx.drop_events(&[header]);
                     after.world.recent = cx.world().recent.clone();
@@ -4515,8 +4523,13 @@ impl<M: CardModules> RulesBridge<M> {
                     t.cards = vec![id];
                 })?;
             }
-            for (player_id, n) in after.charge_spent_log {
-                self.raise_core(cx, "73", player_id, |t| t.value = n)?;
+            // kind 73 (`fireSpent`, wire-stable; `TODO(ABI)` rename to
+            // `MarkerSpent` when card bodies can follow). Name is payload.
+            for (player_id, n, name) in after.marker_spent_log {
+                self.raise_core(cx, "73", player_id, |t| {
+                    t.value = n;
+                    t.name = Some(name.clone());
+                })?;
             }
             for (player_id, tile, nth) in after.house_log {
                 self.raise_core(cx, "75", player_id, |t| {
@@ -6212,7 +6225,7 @@ impl<M: CardModules> RulesBridge<M> {
             discard_log: vec![],
             draw_log: vec![],
             reshuffle_log: vec![],
-            charge_spent_log: vec![],
+            marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
@@ -6438,7 +6451,7 @@ impl<M: CardModules> RulesBridge<M> {
                 discard_log: vec![],
                 draw_log: vec![],
                 reshuffle_log: vec![],
-                charge_spent_log: vec![],
+                marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 exile_log: vec![],
@@ -6600,7 +6613,7 @@ impl<M: CardModules> RulesBridge<M> {
                     > 0
             });
         if shared_move {
-            // Payment order: dedicated card, charge pots, then back.
+            // Payment order: dedicated card, marker pool, then back.
             options.sort_by_key(|(_, _, uid)| *uid >= 0);
         }
         // Labels "打出「...」" + "不打"; the hint is the first CounteractHint or
@@ -8622,7 +8635,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             discard_log: vec![],
             draw_log: vec![],
             reshuffle_log: vec![],
-            charge_spent_log: vec![],
+            marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
@@ -8714,7 +8727,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             discard_log: vec![],
             draw_log: vec![],
             reshuffle_log: vec![],
-            charge_spent_log: vec![],
+            marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],

@@ -38,7 +38,7 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
 
 /// 「初始2，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 2, 2);
+    crate::fire_pot(player_id);
     Ok(())
 }
 
@@ -114,13 +114,16 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「若你这样做，此次传送不触发任何结算」
     plan::set_resolve(false);
     // 「使与你在同一个格子上的另一个角色获得一个可超过上限的临时火罐」
+    // The temp pot is the kernel's second declared counter (`fire::temp`),
+    // not a free key (MARKERS.md §7).
     let who = here[0];
-    state::add(who, "tempFire", 1);
-    state::set_max(who, "tempFire", i32::MAX);
+    rules_status::fire::temp::grant(who, 1);
     // TODO(规则书)[judgement]: （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
     //   需要支付你600资金」 -- the clause under-specifies -- the spend path has to
     //   know a pot's *provenance* to charge the provider, and 「被冲榜类效果被动
     //   消耗无需支付」 carves out a class of spends the engine does not tag.
+    //   (The counter is real and spendable via `fire::spend` temp-first; the
+    //   600-cost and two-turn expiry stay open.)
     ctx::log(
         player_id,
         &Msg::new(key!("lisa_goddess_temp")).player_id("who", who),

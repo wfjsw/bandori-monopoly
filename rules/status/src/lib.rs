@@ -20,7 +20,7 @@
 //! | `status:no_hand` | `no_hand.rs` | `noHand` companion (card text) |
 //! | (placeholder) | `fire.rs` | 126 「火罐」 -- resource API, not a status |
 //!
-//! The `mark:cp` precedent (`rules/tile_marks/src/cp.rs`, `docs/TILES.md`):
+//! The `mark:cp` precedent (`rules/markers/src/cp.rs`, `docs/TILES.md`):
 //! cards never special-case a status. They call this crate's canonical API
 //! (`status::stay::add`, `status::fire::spend`, …) or message the host. The
 //! engine keeps only generic primitives (keyed state, turn-flow verbs, player
@@ -52,6 +52,7 @@ extern crate alloc;
 
 pub mod exile;
 pub mod fire;
+pub mod fire_decl;
 pub mod no_hand;
 pub mod stay;
 pub mod stun;

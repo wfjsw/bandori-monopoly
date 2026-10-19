@@ -300,7 +300,7 @@ unit_features() {
     crychic) echo "band-crychic" ;;
     sumimi) echo "band-sumimi,skills-personas" ;;
     events) echo "events" ;;
-    tiles|tile_marks) echo "tiles" ;;
+    tiles|markers) echo "tiles" ;;
     skills_pp) echo "band-pp,skills-personas,skills-groups" ;;
     skills_ppp) echo "band-ppp,skills-personas,skills-groups" ;;
     skills_r) echo "band-roselia,skills-personas,skills-groups" ;;

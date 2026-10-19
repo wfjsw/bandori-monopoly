@@ -78,7 +78,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 0, 5);
+    crate::fire_pot(player_id);
     Ok(())
 }
 
