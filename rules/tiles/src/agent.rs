@@ -6,10 +6,9 @@
 //! and 「专有名词」:
 //! > · [地产商]：标记为地产商的格子，每种颜色拥有一个地产商格子。
 //!
-//! The body is the 「若…则…否则…」 branch itself. The engine keeps a built-in
-//! copy (`Play::agent_landing`, `land_at_built_in`'s `"agent"` arm) for
-//! `StubRules` and for a tile with no rule instance bound -- the same shape
-//! `tile:property` / `tile:ring` use (`docs/TILES.md`).
+//! The body is the 「若…则…否则…」 branch itself. There is no engine-side
+//! agent landing: `land_at_built_in` only handles buyable deeds and then logs
+//! a generic landing for unbound non-deeds (`docs/TILES.md`).
 //!
 //! 同色 is the board's `group` widened by the tile-prop colour overrides
 //! (`prop::ANY_COLOR` 「该格获得所有颜色」 / `prop::colorFor:<p>`), via

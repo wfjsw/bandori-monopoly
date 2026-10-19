@@ -394,8 +394,6 @@ pub mod key {
     pub const REDEEMED: &str = "redeemed";
     /// This player has mortgaged a deed this turn (「本回合进行过抵押操作」).
     pub const MORTGAGED: &str = "mortgaged";
-    /// A card has closed building for this turn (「本回合无法加盖房屋」).
-    pub const NO_BUILD: &str = "noBuild";
     /// This turn's walk is armed against abnormal movement (「本次移动不受异常
     /// 移动效果影响」). The walk clamp skips while this is > 0; the turn-start
     /// move-gate skip is a different question and is not cancelled.
@@ -541,7 +539,7 @@ fn default_flags(key: &str) -> u8 {
     use state_flag::ENGINE_OWNED;
     match key {
         key::HAND_LIMIT | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT
-        | key::REDEEMED | key::MORTGAGED | key::NO_BUILD | key::ABNORMAL_HIT | key::MOVE_EXEMPT
+        | key::REDEEMED | key::MORTGAGED | key::ABNORMAL_HIT | key::MOVE_EXEMPT
         | key::NO_COUNTERACT_TURN => ENGINE_OWNED,
         _ => 0,
     }

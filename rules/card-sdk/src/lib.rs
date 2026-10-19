@@ -248,6 +248,7 @@ impl CardDef {
         }
     }
 
+
     /// Name this card's entries after their rulebook clauses -- 「（1）」,
     /// 「（2）」, … -- as `(entry index, label)` pairs. The 「效果适用」 line
     /// shows the label of the entry that ran; unlabelled entries remain bare.

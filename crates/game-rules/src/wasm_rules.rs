@@ -1597,7 +1597,7 @@ impl CardWorld for Run {
         let got = self.world.gain_marker(player_id, name, n);
         // Minimal world event-log line (wire kind is the marker name). The
         // 效果适用 narration / cap policy is the rules-layer kernel's
-        // (`rules_status::fire`); this is only the engine's fact of the write.
+        // (`bandori_std::fire`); this is only the engine's fact of the write.
         if got != 0 {
             let msg = Msg::new("log.gain_charge").player_id("who", player_id).i("n", got as i64);
             self.post_log_value(name, player_id, msg, "", got);
@@ -8097,6 +8097,51 @@ impl<M: CardModules> RulesBridge<M> {
             }
         }
     }
+
+    /// Shared instance-walk skeleton for the four deed ops. Empty-instances
+    /// path is `standalone`; otherwise one `Trigger` is built, each bound
+    /// instance is driven in order (`call(card_idx)`), cancelled links stop
+    /// the walk, and `ok(before, after)` over `snap` decides success.
+    fn drive_tile_op<T: Copy>(
+        &self,
+        cx: &mut Cx,
+        player_id: usize,
+        tile: usize,
+        reason: i32,
+        standalone: impl FnOnce(&mut Cx, usize, usize) -> Flow<bool>,
+        call: impl Fn(i32) -> Call,
+        prepare: impl FnOnce(&mut Trigger, &game_core::state::MatchState),
+        snap: impl Fn(&game_core::state::MatchState) -> T,
+        ok: impl FnOnce(T, T) -> bool,
+    ) -> Flow<bool> {
+        let instances = cx.world().tile_rule_instances(tile as i32);
+        if instances.is_empty() {
+            return standalone(cx, player_id, tile);
+        }
+        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        let before = snap(cx.state());
+        let mut trigger = Trigger {
+            kind: TriggerKind::None,
+            player_id: player_id as i32,
+            target: owner,
+            tile: tile as i32,
+            value: reason,
+            step: cx.state().step,
+            ..Trigger::default()
+        };
+        prepare(&mut trigger, cx.state());
+        for (uid, id) in instances {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            self.drive(cx, call(idx), &id, uid, &mut trigger)?;
+            if trigger.is_cancelled() {
+                break;
+            }
+        }
+        let after = snap(cx.state());
+        Ok(ok(before, after))
+    }
 }
 
 impl<M: CardModules> CardRules for RulesBridge<M> {
@@ -8304,107 +8349,42 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         tile: usize,
         reason: i32,
     ) -> Flow<bool> {
-        let instances = cx.world().tile_rule_instances(tile as i32);
-        if instances.is_empty() {
-            return cx.mortgage(player_id, tile, None);
-        }
-        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
-        let before = cx
-            .state()
-            .mortgaged
-            .get(tile)
-            .copied()
-            .unwrap_or(false);
-        let mut trigger = Trigger {
-            kind: TriggerKind::None,
-            player_id: player_id as i32,
-            target: owner,
-            tile: tile as i32,
-            value: reason,
-            step: cx.state().step,
-            ..Trigger::default()
-        };
-        for (uid, id) in instances {
-            let Some(idx) = self.ruleset.card(&id) else {
-                continue;
-            };
-            self.drive(
-                cx,
-                Call::Mortgage {
-                    card: idx,
-                    player_id: player_id as i32,
-                    tile: tile as i32,
-                    reason,
-                },
-                &id,
-                uid,
-                &mut trigger,
-            )?;
-            if trigger.is_cancelled() {
-                break;
-            }
-        }
-        let after = cx
-            .state()
-            .mortgaged
-            .get(tile)
-            .copied()
-            .unwrap_or(false);
-        Ok(!before && after)
+        self.drive_tile_op(
+            cx,
+            player_id,
+            tile,
+            reason,
+            game_core::engine::purchase::standalone_mortgage,
+            |card| Call::Mortgage {
+                card,
+                player_id: player_id as i32,
+                tile: tile as i32,
+                reason,
+            },
+            |_, _| {},
+            |st| st.mortgaged.get(tile).copied().unwrap_or(false),
+            |before, after| !before && after,
+        )
     }
 
     /// [`game_core::engine::CardRules::deed_redeem`] -- run the tile rule's
     /// `On::Redeem` body. Falls back to the engine's standing redeem.
     fn deed_redeem(&self, cx: &mut Cx, player_id: usize, tile: usize) -> Flow<bool> {
-        let instances = cx.world().tile_rule_instances(tile as i32);
-        if instances.is_empty() {
-            if cx.why_not_redeem(player_id, tile as i32, false).is_some() {
-                return Ok(false);
-            }
-            cx.redeem(player_id, tile);
-            return Ok(true);
-        }
-        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
-        let before = cx
-            .state()
-            .mortgaged
-            .get(tile)
-            .copied()
-            .unwrap_or(true);
-        let mut trigger = Trigger {
-            kind: TriggerKind::None,
-            player_id: player_id as i32,
-            target: owner,
-            tile: tile as i32,
-            step: cx.state().step,
-            ..Trigger::default()
-        };
-        for (uid, id) in instances {
-            let Some(idx) = self.ruleset.card(&id) else {
-                continue;
-            };
-            self.drive(
-                cx,
-                Call::Redeem {
-                    card: idx,
-                    player_id: player_id as i32,
-                    tile: tile as i32,
-                },
-                &id,
-                uid,
-                &mut trigger,
-            )?;
-            if trigger.is_cancelled() {
-                break;
-            }
-        }
-        let after = cx
-            .state()
-            .mortgaged
-            .get(tile)
-            .copied()
-            .unwrap_or(true);
-        Ok(before && !after)
+        self.drive_tile_op(
+            cx,
+            player_id,
+            tile,
+            0,
+            game_core::engine::purchase::standalone_redeem,
+            |card| Call::Redeem {
+                card,
+                player_id: player_id as i32,
+                tile: tile as i32,
+            },
+            |_, _| {},
+            |st| st.mortgaged.get(tile).copied().unwrap_or(true),
+            |before, after| before && !after,
+        )
     }
 
     /// [`game_core::engine::CardRules::deed_buy`] -- run the tile rule's
@@ -8418,104 +8398,54 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         kind: game_core::engine::purchase::BuyKind,
         reason: i32,
     ) -> Flow<bool> {
-        let instances = cx.world().tile_rule_instances(tile as i32);
-        if instances.is_empty() {
-            return cx.buy(player_id, tile, kind);
-        }
-        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
-        let before = owner;
-        let mut trigger = Trigger {
-            kind: TriggerKind::None,
-            player_id: player_id as i32,
-            target: owner,
-            tile: tile as i32,
-            value: reason,
-            step: cx.state().step,
-            ..Trigger::default()
-        };
-        trigger.buy = Some(crate::world::TriggerBuy {
-            kind: card_sdk::abi::BuyKind::from_i32(kind.as_i32())
-                .unwrap_or(card_sdk::abi::BuyKind::Land),
-            seller: game_core::engine::rules::Payee::from_i32(-1),
-            price: 0,
-            deal_owner: Some(player_id as i32),
-            deal_houses: cx.state().houses.get(tile).copied().unwrap_or(0),
-            deal_mortgaged: false,
-        });
-        for (uid, id) in instances {
-            let Some(idx) = self.ruleset.card(&id) else {
-                continue;
-            };
-            self.drive(
-                cx,
-                Call::Buy {
-                    card: idx,
-                    player_id: player_id as i32,
-                    tile: tile as i32,
-                    kind: kind.as_i32(),
-                    reason,
-                },
-                &id,
-                uid,
-                &mut trigger,
-            )?;
-            if trigger.is_cancelled() {
-                break;
-            }
-        }
-        let after = cx.state().owners.get(tile).copied().unwrap_or(-1);
-        Ok(before != after && after == player_id as i32)
+        self.drive_tile_op(
+            cx,
+            player_id,
+            tile,
+            reason,
+            |cx, p, t| game_core::engine::purchase::standalone_buy(cx, p, t, kind),
+            |card| Call::Buy {
+                card,
+                player_id: player_id as i32,
+                tile: tile as i32,
+                kind: kind.as_i32(),
+                reason,
+            },
+            |trigger, st| {
+                trigger.buy = Some(crate::world::TriggerBuy {
+                    kind: card_sdk::abi::BuyKind::from_i32(kind.as_i32())
+                        .unwrap_or(card_sdk::abi::BuyKind::Land),
+                    seller: game_core::engine::rules::Payee::from_i32(-1),
+                    price: 0,
+                    deal_owner: Some(player_id as i32),
+                    deal_houses: st.houses.get(tile).copied().unwrap_or(0),
+                    deal_mortgaged: false,
+                });
+            },
+            |st| st.owners.get(tile).copied().unwrap_or(-1),
+            |before, after| before != after && after == player_id as i32,
+        )
     }
 
     /// [`game_core::engine::CardRules::deed_build`] -- run the tile rule's
     /// `On::Build` body. Falls back to the engine's standing build.
     fn deed_build(&self, cx: &mut Cx, player_id: usize, tile: usize) -> Flow<bool> {
-        let instances = cx.world().tile_rule_instances(tile as i32);
-        if instances.is_empty() {
-            return cx.build(player_id, tile);
-        }
-        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
-        let before = cx
-            .state()
-            .houses
-            .get(tile)
-            .copied()
-            .unwrap_or(0);
-        let mut trigger = Trigger {
-            kind: TriggerKind::None,
-            player_id: player_id as i32,
-            target: owner,
-            tile: tile as i32,
-            step: cx.state().step,
-            ..Trigger::default()
-        };
-        for (uid, id) in instances {
-            let Some(idx) = self.ruleset.card(&id) else {
-                continue;
-            };
-            self.drive(
-                cx,
-                Call::Build {
-                    card: idx,
-                    player_id: player_id as i32,
-                    tile: tile as i32,
-                    reason: 0,
-                },
-                &id,
-                uid,
-                &mut trigger,
-            )?;
-            if trigger.is_cancelled() {
-                break;
-            }
-        }
-        let after = cx
-            .state()
-            .houses
-            .get(tile)
-            .copied()
-            .unwrap_or(0);
-        Ok(after > before)
+        self.drive_tile_op(
+            cx,
+            player_id,
+            tile,
+            0,
+            game_core::engine::purchase::standalone_build,
+            |card| Call::Build {
+                card,
+                player_id: player_id as i32,
+                tile: tile as i32,
+                reason: 0,
+            },
+            |_, _| {},
+            |st| st.houses.get(tile).copied().unwrap_or(0),
+            |before, after| after > before,
+        )
     }
 
     fn cant_play(&self, cx: &Cx, player_id: usize, card: &str) -> Option<Msg> {
@@ -8726,34 +8656,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 }
             })
             .collect()
-    }
-
-    /// The mortgage payout. The tile rule's deed economics
-    /// (`rules/tiles/src/deed.rs`, mirrored in `bandori-std`) is the
-    /// authority; this is the same plain rulebook formula the default uses
-    /// (「抵押后[获得]地契购买价格50%的资金」).
-    fn deed_mortgage_value(&self, data: &GameData, tile: i32) -> i32 {
-        let price = data
-            .tiles
-            .get(tile.max(0) as usize)
-            .map(|t| t.price)
-            .unwrap_or(0);
-        // Keep in lockstep with `rules/tiles/src/deed.rs` /
-        // `bandori_std::mortgage_value`.
-        price / 2
-    }
-
-    /// The redeem charge. Same split as [`Self::deed_mortgage_value`]
-    /// (「赎回后[消耗]地契购买价格60%的资金」).
-    fn deed_redeem_cost(&self, data: &GameData, tile: i32) -> i32 {
-        let price = data
-            .tiles
-            .get(tile.max(0) as usize)
-            .map(|t| t.price)
-            .unwrap_or(0);
-        // Keep in lockstep with `rules/tiles/src/deed.rs` /
-        // `bandori_std::redeem_cost`.
-        (price * 3 + 2) / 5
     }
 
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {

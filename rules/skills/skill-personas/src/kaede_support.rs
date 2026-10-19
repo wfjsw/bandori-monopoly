@@ -80,7 +80,9 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[0, 3]);
+    .silent(&[0, 3])
+    // 「（初始0，上限4）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 4)]);
 
 /// Residual guard for [`split_rent`]: the tile is one of 状态2's named deeds.
 /// The SPLIT marker is keyed on the tile (a dynamic state key), so it is not
@@ -218,7 +220,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST, n);
     if n >= 2 {
         state::set(player_id, REST, 0);
-        rules_status::fire::gain(player_id, 1, &Msg::new(key!("kaede_support_gain_charge")))?;
+        bandori_std::fire::gain(player_id, 1, &Msg::new(key!("kaede_support_gain_charge")))?;
     }
     if state::get(player_id, state_key::CHARGE) < state::max(player_id, state_key::CHARGE) {
         return Ok(());
@@ -265,7 +267,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
     if x <= 0 {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, x, &Msg::new(key!("kaede_support_spend")))? {
+    if !bandori_std::fire::spend(player_id, x, &Msg::new(key!("kaede_support_spend")))? {
         return Ok(());
     }
     for _ in 0..x {

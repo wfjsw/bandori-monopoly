@@ -2,7 +2,8 @@
 //!
 //! | pin | where |
 //! |---|---|
-//! | registry consistency (no body literals; two_in_one matches the registry) | here |
+//! | fire numbers live on the skill `CardDef` (no body literals) | here |
+//! | two_in_one swap matches the two faces' `CardDef` numbers | here |
 //! | I2 「在任意时刻」 value <= max | here |
 //! | kernel actuals (two_donuts overflow shape) | here |
 //! | fans once-flag + multiplicity | here |
@@ -19,23 +20,29 @@ fn fans(t: &Table, who: usize) -> (i32, i32) {
 }
 
 // =====================================================================
-// registry consistency
+// fire declaration lives on the skill CardDef
 // =====================================================================
 
-/// MARKERS.md §7: the face parenthetical's one source of truth is the
-/// registry. Skill bodies call `fire_pot(player)` -- they must not carry
-/// literals. Raw CHARGE / tempFire writes are kernel-only.
+/// MARKERS.md §7: the face parenthetical's numbers live on that face's
+/// `CardDef` (`.props(&[(fire::FIRE_INITIAL, N), (fire::FIRE_CAP, M)])`). Skill
+/// bodies call `fire_pot(player)` -- they must not carry literals. Raw
+/// CHARGE / tempFire writes are kernel-only.
 #[test]
-fn registry_has_no_body_literals() {
+fn fire_numbers_are_on_the_skill_def() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../skills/skill-personas/src");
     let mut offenders = Vec::new();
+    let mut declared = 0usize;
     for entry in std::fs::read_dir(&dir).expect("skill-personas/src") {
         let path = entry.expect("dirent").path();
         if path.extension().and_then(|e| e.to_str()) != Some("rs") {
             continue;
         }
         let src = std::fs::read_to_string(&path).expect("read skill body");
+        // A face that prints 「（初始N，上限M）」 declares it on its CardDef.
+        if src.contains(".fire_pots(") || src.contains("FIRE_INITIAL") {
+            declared += 1;
+        }
         for (i, line) in src.lines().enumerate() {
             // `fire_pot(player_id, N, M)` -- the old literal form.
             if line.contains("fire_pot(player_id") {
@@ -61,12 +68,18 @@ fn registry_has_no_body_literals() {
         "stray fire literals / raw CHARGE / tempFire writes in skill bodies:\n{}",
         offenders.join("\n")
     );
+    // The 35 faces that print the parenthetical each own their numbers.
+    assert!(
+        declared >= 35,
+        "fire-pot faces must declare fire::FIRE_INITIAL/FIRE_CAP on their CardDef; found {declared}"
+    );
 }
 
-/// two_in_one's swap writes the other face's 「初始火罐数」 from the registry
-/// (hina 2/2 ↔ mana 1/2). Each play is one copy; give one per direction.
+/// two_in_one's swap writes the other face's 「初始火罐数」 from that face's
+/// `CardDef` (hina 2/2 ↔ mana 1/2). Each play is one copy; give one per
+/// direction.
 #[test]
-fn registry_rows_match_the_two_in_one_pair() {
+fn two_in_one_matches_the_pair_defs() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "三角初华（Sumimi）");
     t.set_fire(0, 0, 2);

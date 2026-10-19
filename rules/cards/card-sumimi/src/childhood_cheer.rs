@@ -81,7 +81,7 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
 fn after_move(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并在移动后获得一个火罐」 -- 行动阶段 13, after [重叠] and
     // before any settle. Fires for a 「不触发结算」 move too.
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

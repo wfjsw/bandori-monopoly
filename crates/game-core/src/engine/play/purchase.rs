@@ -14,6 +14,7 @@
 //!   mortgage; `FORCE_STAYS_MORTGAGED` (「获得的地契仍为抵押状态」) keeps it.
 
 use super::super::world::World;
+use super::super::{Cx, Flow};
 use crate::data::GameData;
 use crate::state::MatchState;
 
@@ -131,21 +132,64 @@ pub fn build_cost(data: &GameData, t: usize) -> i32 {
     data.tiles.get(t).map(|tile| tile.house.max(0)).unwrap_or(0)
 }
 
-/// The mortgage payout: half the land price. **Single source** for
-/// `Cx::mortgage_value` and `World::mortgage_value`.
+/// The mortgage payout: half the land price. Engine-side copy of the rulebook
+/// figure (「抵押后[获得]地契购买价格50%的资金」), pinned equal to
+/// `bandori_std::mortgage_value` by `game-rules`'s `deed_math` test.
 pub fn mortgage_value(data: &GameData, t: usize) -> i32 {
     data.tiles.get(t).map(|tile| tile.price / 2).unwrap_or(0)
 }
 
 /// The deed's redeem price: 60% of the land price (`DoRedeem`'s charge).
 /// Integer form of `round_ties_even(price * 0.6)` -- the product of an integer
-/// price and 0.6 never lands on `.5`. **Single source** for the StubRules
-/// default; the authority is `rules/tiles/src/deed.rs`.
+/// price and 0.6 never lands on `.5`. Engine-side copy of the rulebook figure,
+/// pinned equal to `bandori_std::redeem_cost` by `game-rules`'s `deed_math`
+/// test.
 pub fn redeem_cost(data: &GameData, t: usize) -> i32 {
     data.tiles
         .get(t)
         .map(|tile| (tile.price * 3 + 2) / 5)
         .unwrap_or(0)
+}
+
+/// 「向上取整10」 on a half charge: `ceil(full / 2 / 10) * 10`. Integer
+/// ceil-div (toward +inf), matching `bandori_std::half_ceil10`; pinned equal
+/// by `game-rules`'s `deed_math` test.
+pub fn half_ceil10(full: i32) -> i32 {
+    let q = full.div_euclid(20);
+    let ceil = if full.rem_euclid(20) == 0 { q } else { q + 1 };
+    ceil * 10
+}
+
+/// Standing mortgage (`StubRules` / empty tile-rule instance). Shared by
+/// [`crate::engine::CardRules::deed_mortgage`]'s default and `WasmRules`'s
+/// empty-instance path.
+pub fn standalone_mortgage(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> {
+    cx.mortgage(player, tile, None)
+}
+
+/// Standing redeem (`StubRules` / empty tile-rule instance). Shared by
+/// [`crate::engine::CardRules::deed_redeem`]'s default and `WasmRules`'s
+/// empty-instance path.
+pub fn standalone_redeem(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> {
+    if cx.why_not_redeem(player, tile as i32, false).is_some() {
+        return Ok(false);
+    }
+    cx.redeem(player, tile);
+    Ok(true)
+}
+
+/// Standing buy (`StubRules` / empty tile-rule instance). Shared by
+/// [`crate::engine::CardRules::deed_buy`]'s default and `WasmRules`'s
+/// empty-instance path.
+pub fn standalone_buy(cx: &mut Cx, player: usize, tile: usize, kind: BuyKind) -> Flow<bool> {
+    cx.buy(player, tile, kind)
+}
+
+/// Standing build (`StubRules` / empty tile-rule instance). Shared by
+/// [`crate::engine::CardRules::deed_build`]'s default and `WasmRules`'s
+/// empty-instance path.
+pub fn standalone_build(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> {
+    cx.build(player, tile)
 }
 
 /// The property rent-table entry at the **counted** house count

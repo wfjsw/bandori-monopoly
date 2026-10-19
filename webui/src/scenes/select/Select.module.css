@@ -5,13 +5,13 @@
    way an absolute `left` anchor does. Vertical stays in design px: the stage
    is always the design's 900 tall (Stage.tsx), so tops never need to reflow.
    Sizes below are design units, i.e. 1:1 with docs/ui-ref/04-select-pick.png. */
-.body { position: absolute; left: calc(59px + var(--safe-left, 0px)); right: calc(34px + var(--safe-right, 0px)); top: calc(137px + var(--safe-top, 0px)); height: 763px; display: flex; gap: 92px; }
+.body { position: absolute; left: 59px; right: 34px; top: 137px; height: 763px; display: flex; gap: 92px; }
 .left { position: relative; flex: 0 0 549px; }
 .right { position: relative; flex: 1 1 auto; min-width: 0; }
 
 .steps { position: absolute; right: 37px; top: 20px; width: 466px; height: 60px; border-radius: 30px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 12px; }
 /* The 托管 pill, just left of the steps pill (steps: right 37 + width 466). */
-.autoSlot { right: calc(515px + var(--safe-right, 0px)); top: calc(22px + var(--safe-top, 0px)); }
+.autoSlot { right: 515px; top: 22px; }
 .steps > i { font-style: normal; color: var(--faint); font-size: 12px; }
 .mode { height: 2.25em; line-height: 2.25em; padding: 0 1.375em; border-radius: 1.125em; color: #fff; font-weight: 700; font-size: 16px; background: var(--blue); margin-right: 10px; }
 .casual { background: var(--teal); }
@@ -20,7 +20,7 @@
 .stepDone { background: var(--pink-pale); color: var(--pink-light); }
 .stepOn { background: var(--pink); color: #fff; }
 .skip { opacity: 0.6; }
-.quick { position: absolute; left: calc(560px + var(--safe-left, 0px)); top: calc(40px + var(--safe-top, 0px)); z-index: var(--z-chrome); }
+.quick { position: absolute; left: 560px; top: 40px; z-index: var(--z-chrome); }
 
 .band { position: absolute; left: 3px; top: 8px; z-index: 2; }
 /* The figure is centred on the model canvas, so the stand box's centre is the

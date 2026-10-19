@@ -16,11 +16,8 @@
 .body {
   position: absolute;
   top: var(--replay-bar-top, 0px);
-  /* The side columns ride the stage's left / right edges -- the ones the
-     landscape cutout sits on -- so the body insets past it by `--safe-*` on
-     top of its own chrome inset. The centre column absorbs the difference. */
-  left: calc(var(--board-inset-x) + var(--safe-left, 0px));
-  right: calc(var(--board-inset-x) + var(--safe-right, 0px));
+  left: var(--board-inset-x);
+  right: var(--board-inset-x);
   bottom: 0;
   display: flex;
   justify-content: space-between;

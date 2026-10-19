@@ -43,7 +43,9 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0])
+    // 「（初始2，上限2）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// Residual guard for 「经过该格」 with a pot on it -- `count_marks` stays here
 /// (not yet in the condition vocabulary).
@@ -59,7 +61,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得1个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("uika_idol_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("uika_idol_gain")))?;
     Ok(())
 }
 
@@ -104,7 +106,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     let Some(&tile) = pool.get(pick) else {
         return Ok(());
     };
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("uika_idol_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("uika_idol_spend")))? {
         return Ok(());
     }
     // One pot per placement, its own row (`place_mark_new`).

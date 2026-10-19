@@ -60,12 +60,14 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
         ),
     ],
 )
-.props(&[
-    (prop::COUNTERACT_FROM_FIELD, 1),
-    (prop::COUNTERACT_GROUP, 1),
-    (prop::COUNTERACT_CHARGE_COST, 6),
-])
-.silent(&[1]);
+    // 「（初始10，上限10）」
+    .props(&[
+        (bandori_std::fire::FIRE_INITIAL, 10), (bandori_std::fire::FIRE_CAP, 10),
+        (prop::COUNTERACT_FROM_FIELD, 1),
+        (prop::COUNTERACT_GROUP, 1),
+        (prop::COUNTERACT_CHARGE_COST, 6),
+    ])
+    .silent(&[1]);
 
 /// 「初始10，上限10」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -95,7 +97,7 @@ fn circle_gain() -> i32 {
 
 /// （1）「每次[经过]CiRCLE时获得2个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(
+    bandori_std::fire::gain(
         player_id,
         circle_gain(),
         &Msg::new(key!("sayo_thorns_gain")),
@@ -108,7 +110,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次被别的玩家[经过]时获得1个[火罐]」 -- someone passed *this* player.
 fn on_passed(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("sayo_thorns_passed")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("sayo_thorns_passed")))?;
     Ok(())
 }
 
@@ -128,7 +130,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     if !matches!(n, 1 | 2) {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 6, &Msg::new(key!("sayo_thorns_spend")))? {
+    if !bandori_std::fire::spend(player_id, 6, &Msg::new(key!("sayo_thorns_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, ctx::turn_key());

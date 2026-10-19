@@ -217,8 +217,12 @@ impl NativeRulesHandle {
             for card in module.iter() {
                 h.update(card.id.as_bytes());
                 h.update(0u8.to_le_bytes());
-                let mut props: Vec<_> = card.props.iter().collect();
-                props.sort_by(|a, b| a.0.cmp(b.0));
+                let mut props: Vec<(String, i32)> = card
+                    .props
+                    .iter()
+                    .map(|(k, v)| ((*k).to_string(), *v))
+                    .collect();
+                props.sort_by(|a, b| a.0.cmp(&b.0));
                 for (k, v) in props {
                     h.update(k.as_bytes());
                     h.update(v.to_le_bytes());

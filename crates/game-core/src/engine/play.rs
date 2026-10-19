@@ -61,6 +61,10 @@ pub const MAX_SETTLE_DEPTH: u32 = 64;
 /// `payCombined*` hook rewrote (`pay_total`). Non-positive figures are returned
 /// unchanged -- a negative is reversed into a child payment and must not be
 /// CeilTo'd toward +inf first.
+///
+/// Distinct from [`purchase::half_ceil10`] (half-rent 「向上取整10」) and from
+/// the kani `round10` twins: those take a half already taken; this one is the
+/// end-of-calc money round and is positive-only.
 fn ceil10_money(x: i32) -> i32 {
     if x <= 0 {
         return x;
@@ -2265,7 +2269,7 @@ impl Cx<'_> {
         let mut half_only = None;
         if half {
             let full = amount;
-            amount = ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10;
+            amount = purchase::half_ceil10(full);
             half_part = Some(
                 Msg::new("log.part.rent_half")
                     .n("full", full)
@@ -2585,18 +2589,18 @@ impl Cx<'_> {
         purchase::build_cost(self.data, t)
     }
 
-    /// The mortgage payout. The tile rule's deed economics
-    /// (`rules/tiles/src/deed.rs`, via [`CardRules::deed_mortgage_value`]) is
-    /// the authority; [`purchase::mortgage_value`] is the StubRules default.
+    /// The mortgage payout ([`purchase::mortgage_value`], the engine-side copy
+    /// of the rulebook figure). A retuned figure lives on the tile rule
+    /// instance's props (`docs/TILES.md`), not on a `CardRules` hook.
     pub(crate) fn mortgage_value(&self, t: usize) -> i32 {
-        self.rules().deed_mortgage_value(self.data, t as i32)
+        purchase::mortgage_value(self.data, t)
     }
 
-    /// The redeem charge. The tile rule's deed economics
-    /// (`rules/tiles/src/deed.rs`, via [`CardRules::deed_redeem_cost`]) is
-    /// the authority; [`purchase::redeem_cost`] is the StubRules default.
+    /// The redeem charge ([`purchase::redeem_cost`], the engine-side copy of
+    /// the rulebook figure). A retuned figure lives on the tile rule
+    /// instance's props (`docs/TILES.md`), not on a `CardRules` hook.
     pub(crate) fn redeem_cost(&self, t: usize) -> i32 {
-        self.rules().deed_redeem_cost(self.data, t as i32)
+        purchase::redeem_cost(self.data, t)
     }
 
     /// Deeds a player could mortgage (not the flat deed, not already mortgaged).

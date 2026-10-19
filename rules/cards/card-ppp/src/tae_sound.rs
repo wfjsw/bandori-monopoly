@@ -23,7 +23,7 @@ fn tae_sound(player_id: i32) -> card_sdk::Asked {
     if shop >= 0 {
         ctx::teleport_to(player_id, shop);
     }
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("tae_sound_why")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tae_sound_why")))?;
     Ok(())
 }
 

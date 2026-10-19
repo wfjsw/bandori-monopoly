@@ -6,14 +6,8 @@
 //!
 //! Bankruptcy money is unit 7 (`G-BANKRUPT`) and is not duplicated here.
 
+use bandori_std::half_ceil10;
 use rules_spec::{data, forall, frame, tile, Table};
-
-/// 「向上取整10」 on a half charge: `ceil(full / 2 / 10) * 10`.
-/// (Same formula as `rules_spec::global::money::half_ceil10`; kept local so
-/// the scenario does not depend on that module's public surface.)
-fn half_ceil10(full: i32) -> i32 {
-    ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10
-}
 
 /// Decline every open prompt (buy / build / mortgage offers, counteracts).
 fn drain(t: &mut Table) {

@@ -39,7 +39,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         // 「不能超过上限」 -- `gain_charge` already caps at the player's own max.
-        let room = (rules_status::fire::max(p) - rules_status::fire::get(p)).max(0);
+        let room = (bandori_std::fire::max(p) - bandori_std::fire::get(p)).max(0);
         let afford = (ctx::money_of(p) / 1000).max(0);
         let cap = room.min(afford);
         if cap <= 0 {
@@ -57,7 +57,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         // 「补充X个火罐」
-        rules_status::fire::gain(p, x, &Msg::new("log.event.bear_cookie_fill"))?;
+        bandori_std::fire::gain(p, x, &Msg::new("log.event.bear_cookie_fill"))?;
         // 「并支付X次1000资金」 -- X lots of 1000, i.e. X*1000.
         ctx::pay(p, x * 1000, &Msg::new("log.event.bear_cookie_pay"))?;
         ctx::log(
