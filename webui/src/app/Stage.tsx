@@ -12,10 +12,8 @@ import { clearForced, isForced, subscribeForced, usePortraitPhone } from "./rota
 import { STAGE_H, STAGE_W } from "../styles/layout";
 import { type Insets, type StageBox, stageBox, windowBox } from "./stageBox";
 import { setStageRotated, setStageScale } from "./stageScale";
-import { ViewportDiag } from "./ViewportDiag";
+import { VDIAG, ViewportDiag } from "./ViewportDiag";
 import s from "./Stage.module.css";
-
-const VDIAG = new URLSearchParams(location.search).has("vdiag");
 
 export { STAGE_H, STAGE_W };
 
