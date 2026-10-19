@@ -511,7 +511,10 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
             // The wire key is `charge` (`bandori_std::fire::KEY`), not `fire`.
             let is_fire = k == "charge";
             if is_status && v.value < 0 {
-                return Err(format!("negative state {k}={} on P{i}", v.value));
+                return Err(format!(
+                    "negative state {k}={} on P{i} flags={:#x} expires={:?} min={} max={} raw={:?}",
+                    v.value, v.flags, v.expires, v.min, v.max, v
+                ));
             }
             if is_fire {
                 if v.value < 0 {
