@@ -106,10 +106,10 @@ fn cheats_update_views_and_survive_save_restore() {
     assert_eq!(st.players[human].money, 50_000);
     assert_eq!(st.players[bot].pos, 10);
     let cap = st.players[human].state_max("charge");
-    assert_eq!(
-        st.players[human].state_get("charge"),
-        if cap > 0 { 1_000.min(cap) } else { 1_000 }
-    );
+    // Dumb storage: the engine stores the advertised cap for display and
+    // does not police it. A cheat is a raw write.
+    assert_eq!(st.players[human].state_get("charge"), 1_000);
+    assert_eq!(cap, 5);
     assert!(m.take_changed());
     let restored = Match::restore(data(), Arc::new(StubRules), &m.save()).unwrap();
     assert_eq!(restored.save(), m.save());

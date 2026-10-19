@@ -839,7 +839,20 @@ impl<'a> Cx<'a> {
                 if wrote.value >= base_v {
                     continue;
                 }
-                self.w.st.players[i].state.insert(k.clone(), wrote);
+                // Route through `state_set` so the writer-declared
+                // `NEVER_NEGATIVE` floor applies -- a raw `insert` would drop
+                // it and the restore path can reconstruct a negative. The
+                // copy carries the item's flags/expiry; install them first so
+                // the enforcer sees the right declaration. Record the
+                // post-floor value so restore compares against what actually
+                // landed.
+                let mut wrote = wrote;
+                {
+                    let p = &mut self.w.st.players[i];
+                    p.state_set_flags(&k, wrote.flags);
+                    p.state_set_expires(&k, wrote.expires);
+                    wrote.value = p.state_set(&k, wrote.value);
+                }
                 o.state.push((i, k, base, wrote));
             }
         }
@@ -877,7 +890,12 @@ impl<'a> Cx<'a> {
                     if let Some(p) = self.w.st.players.get_mut(i) {
                         match base_v {
                             Some(v) => {
-                                p.state.insert(k, v);
+                                // Same floor as any other write: `state_set`
+                                // honours `NEVER_NEGATIVE`. `v` carries the
+                                // item's flags/expiry -- install them first.
+                                p.state_set_flags(&k, v.flags);
+                                p.state_set_expires(&k, v.expires);
+                                p.state_set(&k, v.value);
                             }
                             None => {
                                 p.state.remove(&k);
@@ -885,10 +903,16 @@ impl<'a> Cx<'a> {
                         }
                     }
                 } else if let Some(p) = self.w.st.players.get_mut(i) {
-                    // The routine changed it too: keep only its delta.
+                    // The routine changed it too: keep only its delta. The
+                    // reconstruction `base + (now - wrote)` can land negative
+                    // -- route it through `state_set` so the writer-declared
+                    // `NEVER_NEGATIVE` floor applies (raw `insert` was the
+                    // `stay=-1` leak).
                     let mut v = now;
                     v.value = base_v.map(|b| b.value).unwrap_or(0) + (now.value - wrote_v.value);
-                    p.state.insert(k, v);
+                    p.state_set_flags(&k, v.flags);
+                    p.state_set_expires(&k, v.expires);
+                    p.state_set(&k, v.value);
                 }
             }
         }

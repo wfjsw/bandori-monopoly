@@ -57,8 +57,8 @@ fn negative_status_leak() {
 }
 
 /// A character skill gained fire past its declared cap (「初始N，上限M」).
-/// The engine now enforces `StateVar.max` on every write, and `fire_pot`
-/// no longer wipes a cap raise (`PPP:[衍生]拍卖撤下来了`'s +1 survives).
+/// The card implementation (`bandori_std::fire`) polices the cap; the engine
+/// stores the advertised `max` but does not clamp to it.
 #[test]
 fn fire_over_cap() {
     let seed = 0xF022_F022_F022_F022u64

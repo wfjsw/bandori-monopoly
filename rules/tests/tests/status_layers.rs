@@ -205,22 +205,23 @@ fn exile_closes_all_but_presence_is_inverted() {
 // =====================================================================
 
 /// rulebook 126: 「your charge-pot count cannot exceed the cap」 -- gain is partial.
+/// The kernel (`bandori_std::fire`) polices this; the engine is a dumb store.
 #[test]
 fn charge_gain_is_partial_under_the_cap() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 1, 2);
-    let got = t.m.world_mut().gain_marker(0, "charge", 5);
+    let got = t.gain_fire(0, 5);
     let have = t.charge(0);
     assert!(have <= 2, "capped at 2, have {have} (gain reported {got})");
     assert_eq!(have, 2, "partial gain fills to the cap");
 }
 
-/// A cap change pulls the value down under the new ceiling.
+/// A cap change pulls the value down under the new ceiling (kernel pull-under).
 #[test]
 fn charge_cap_drop_pulls_value_down() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 5, 5);
-    t.m.world_mut().add_marker_max(0, "charge", -3);
+    t.adjust_fire_cap(0, -3);
     assert!(t.charge(0) <= 2, "value pulled under the new cap of 2");
 }
 

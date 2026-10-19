@@ -508,7 +508,8 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
     for (i, p) in t.m.world().st.players.iter().enumerate() {
         for (k, v) in &p.state {
             let is_status = k == "stay" || k == "stun" || k == "exile";
-            let is_fire = k == "fire";
+            // The wire key is `charge` (`bandori_std::fire::KEY`), not `fire`.
+            let is_fire = k == "charge";
             if is_status && v.value < 0 {
                 return Err(format!("negative state {k}={} on P{i}", v.value));
             }

@@ -740,6 +740,38 @@ impl Table {
         p.state_set_bounds(bandori_std::state_key::CHARGE, min, max);
     }
 
+    /// Drive the fire kernel's gain policy (`bandori_std::fire::gain_clamped`,
+    /// what `fire::gain` calls before its `markerGain` window). The engine is
+    /// a dumb add -- the card implementation polices 「不能超过持有上限」.
+    /// Returns how many landed.
+    pub fn gain_fire(&mut self, who: usize, n: i32) -> i32 {
+        let p = &mut self.m.world_mut().st.players[who];
+        let have = p.state_get(bandori_std::state_key::CHARGE);
+        let cap = p.state_max(bandori_std::state_key::CHARGE);
+        let want = bandori_std::fire::gain_clamped(have, cap, n);
+        if want > 0 {
+            p.state_add(bandori_std::state_key::CHARGE, want);
+        }
+        want
+    }
+
+    /// Drive the fire kernel's cap-change policy (`pull_under_cap`, what
+    /// `fire::adjust_cap` calls after the host verb moves the ceiling).
+    /// Returns the new cap.
+    pub fn adjust_fire_cap(&mut self, who: usize, n: i32) -> i32 {
+        let cap = self
+            .m
+            .world_mut()
+            .add_marker_max(who as i32, bandori_std::state_key::CHARGE, n);
+        let p = &mut self.m.world_mut().st.players[who];
+        let have = p.state_get(bandori_std::state_key::CHARGE);
+        let want = bandori_std::fire::pull_under_cap(have, cap);
+        if have != want {
+            p.state_set(bandori_std::state_key::CHARGE, want);
+        }
+        cap
+    }
+
     /// Load dice: the next dice rolled anywhere (engine or card) show these
     /// faces in order, each clamped to its die.
     pub fn dice(&mut self, faces: &[i32]) {
