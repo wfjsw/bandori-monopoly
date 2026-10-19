@@ -16,13 +16,16 @@ import { useAutoplay, useMatchView, useTick, useWakeLock } from "../../core/hook
 import { hasProfile, profileJson, updateProfile } from "../../core/store";
 import type { CardData, Command, MatchPlayer, MatchView, PersonaData } from "../../core/types";
 import { endSession, type GameSession } from "../../game/session";
+import { useCardTap } from "../../hooks/doubleTap";
 import { AutoBanner, AutoToggle, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
-import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, showCard, type CardAction, type CardKind } from "../../ui/Card";
+import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, type CardKind } from "../../ui/Card";
+import { cardStandClass, CardPreview, stickCard, useStandingPreviewOn, useStickyCard } from "../../ui/CardPreview";
 import { Avatar, BandMark, NamePlate } from "../../ui/Character";
 import { Chips } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
 import { Live2DStand } from "../../ui/Live2DStand";
+import { ask } from "../../ui/Modal";
 import { toast } from "../../ui/Toast";
 import { TopBar } from "../../ui/TopBar";
 import { fmtMsg } from "../../i18n/msg";
@@ -50,6 +53,8 @@ export function DeckAdjust({ sess }: { sess: GameSession }) {
   useTick(500); // the deck-window countdown moves with the seconds
   const auto = useAutoplay(sess); // 托管
   useWakeLock(true); // a match is on from the ban / pick phase
+  // The right-hand standing card panel replaces the floating hover popups here.
+  useStandingPreviewOn();
 
   const me = view?.state.players[view.playerId];
   const c = me?.persona ? D.persona(me.persona) : undefined;
@@ -98,7 +103,8 @@ function Adjust({ sess, view, at, auto, me, c }: {
     return !err;
   };
 
-  const leave = () => {
+  const leave = async () => {
+    if (!(await ask(tr("select.leaveTitle"), tr("select.leaveAsk"), tr("select.leave")))) return;
     endSession();
     navigate(sess.kind === "solo" ? { name: "menu" } : { name: "lobby" });
   };
@@ -143,16 +149,10 @@ function Adjust({ sess, view, at, auto, me, c }: {
     toast(tr("deck.filled", { n: next.length - buffer.length }));
   }
 
-  function detail(id: string): void {
-    const card = D.card(id)!;
-    const has = buffer.includes(id);
-    const acts: CardAction[] = card.derived
-      ? [{ label: tr("deck.cannotAdd"), enabled: false }]
-      : has
-        ? [{ label: tr("deck.remove"), enabled: !locked, run: () => toggle(id) }]
-        : [{ label: full ? tr("deck.full") : tr("deck.add"), enabled: !full && !locked, run: () => toggle(id) }];
-    showCard(id, acts);
-  }
+  // Whole-face add / remove: PC single click, touch double tap (first tap only
+  // previews). `toggle` already guards 托管 (`locked`); preview never mutates.
+  const cardTap = useCardTap({ onPreview: stickCard, onToggle: toggle });
+  const card = useStickyCard();
 
   async function confirm(): Promise<void> {
     if (!canConfirm) return;
@@ -264,7 +264,7 @@ function Adjust({ sess, view, at, auto, me, c }: {
             </div>
             <div className={s.stripCards}>
               {Array.from({ length: SIZE }, (_, k) => (buffer[k]
-                ? <InspectCard key={k} id={buffer[k]} size="strip" onClick={() => toggle(buffer[k])} title={tr("deck.remove")} />
+                ? <InspectCard key={k} id={buffer[k]} size="strip" onClick={cardTap(buffer[k])} title={tr("deck.remove")} />
                 : <EmptySlot key={k} star={sceneImg("star5")} />))}
             </div>
             <div className={s.hint}>{tr("deckPick.hint")}</div>
@@ -278,18 +278,19 @@ function Adjust({ sess, view, at, auto, me, c }: {
                 count={(l) => pool.filter((x) => matches(x, FILTERS.find((f) => filterLabel(f) === l) ?? "all")).length}
                 onPick={(l) => setFilter(FILTERS.find((f) => filterLabel(f) === l) ?? "all")}
               />
-              <small>{tr("deck.poolHint")}</small>
+              <small>{tr("deckPick.poolHint")}</small>
             </div>
             <div className={s.grid}>
               {pool.filter((x) => matches(x, filter)).map((x) => {
                 const on = buffer.includes(x.id);
                 return (
-                  <InspectCard key={x.id} id={x.id} size="pool" on={on} onClick={() => detail(x.id)} title={cardTitle(x.id)}>
+                  <InspectCard key={x.id} id={x.id} size="pool" on={on} onClick={cardTap(x.id)} title={cardTitle(x.id)}>
                     <KindChip kind={cardKind(x)} className={s.kind} />
+                    {/* State affordance only -- the whole face is the toggle. */}
                     {!x.derived && (
-                      <button type="button" className={cx(s.toggle, on && s.toggleOn)} disabled={locked} onClick={(e) => { e.stopPropagation(); toggle(x.id); }}>
+                      <span className={cx(s.toggle, on && s.toggleOn)} aria-hidden>
                         <Icon name={on ? "check" : "add"} />
-                      </button>
+                      </span>
                     )}
                   </InspectCard>
                 );
@@ -301,6 +302,18 @@ function Adjust({ sess, view, at, auto, me, c }: {
             {ready
               ? <div className={s.done}>{tr("select.deckDone")}</div>
               : <Btn kind="pink" className={s.go} disabled={!canConfirm} onClick={() => void confirm()}>{tr("common.confirm")}</Btn>}
+          </div>
+        </div>
+
+        {/* Standing card preview (the board's CardStand): the one detail this
+            screen shows, fed by hover / tap. No floating InspectPreviewHost. */}
+        <div className={s.standCol} aria-live="polite">
+          <div className={s.standFrame}>
+            {card ? (
+              <CardPreview id={card.id} note={card.note} pills={card.pills} className={cardStandClass} scrollable />
+            ) : (
+              <div className={s.standEmpty}>{tr("prompt.cardHover")}</div>
+            )}
           </div>
         </div>
       </div>
