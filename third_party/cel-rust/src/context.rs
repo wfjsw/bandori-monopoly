@@ -140,28 +140,31 @@ impl<'p, 'v> Context<'p, 'v> {
     /// then the parent scopes. The result borrows from the context where it
     /// can and is bounded by `'v` where the resolver or a bound value
     /// borrows data.
+    ///
+    /// The walk is a plain loop (not iterator adapters): one ident lookup on
+    /// the hook/counteract path used to burn a dozen combinator frames, which
+    /// a 512 KiB settle-chain thread (STACK-01) cannot spare.
     pub fn get_variable<'b, S>(&'b self, name: S) -> Option<CowVal<'b, 'v>>
     where
         S: AsRef<str>,
     {
         let name = name.as_ref();
-        self.scopes().find_map(|scope| scope.own_variable(name))
+        let mut scope = Some(self);
+        while let Some(s) = scope {
+            if let Some(v) = s.own_variable(name) {
+                return Some(v);
+            }
+            scope = s.parent_scope();
+        }
+        None
     }
 
-    /// This scope, then its parents, innermost first.
-    fn scopes<'b>(&'b self) -> impl Iterator<Item = &'b Context<'p, 'v>> {
-        std::iter::successors(Some(self), |scope| match scope {
+    /// This scope's parent, if any.
+    fn parent_scope(&self) -> Option<&Context<'p, 'v>> {
+        match self {
             Context::Child { parent, .. } => Some(*parent),
             Context::Root { .. } => None,
-        })
-    }
-
-    /// The scopes `name` may be resolved in: an absolute name, one with a
-    /// leading dot, skips the inner ones.
-    fn scopes_for<'b>(&'b self, name: &str) -> impl Iterator<Item = &'b Context<'p, 'v>> {
-        let absolute = name.starts_with('.');
-        self.scopes()
-            .filter(move |scope| !absolute || matches!(scope, Context::Root { .. }))
+        }
     }
 
     /// A variable of this scope alone.
@@ -206,8 +209,17 @@ impl<'p, 'v> Context<'p, 'v> {
     /// container candidate in turn, most specific first. An absolute name
     /// skips the inner scopes.
     pub(crate) fn resolve_ident(&self, name: &str) -> Option<CowVal<'_, 'v>> {
-        self.scopes_for(name)
-            .find_map(|scope| scope.resolve_own(name, true))
+        let absolute = name.starts_with('.');
+        let mut scope = Some(self);
+        while let Some(s) = scope {
+            if !absolute || matches!(s, Context::Root { .. }) {
+                if let Some(v) = s.resolve_own(name, true) {
+                    return Some(v);
+                }
+            }
+            scope = s.parent_scope();
+        }
+        None
     }
 
     /// Resolves the qualified name `a.b.c`, given as its segments, to a value
@@ -223,16 +235,21 @@ impl<'p, 'v> Context<'p, 'v> {
         segments: &'s [&'b str],
     ) -> Result<(CowVal<'b, 'v>, &'s [&'b str]), ExecutionError> {
         let name = segments.join(".");
-        for scope in self.scopes_for(&name) {
-            let mut len = name.len();
-            for prefix in (1..=segments.len()).rev() {
-                let whole = prefix == segments.len();
-                if let Some(value) = scope.resolve_own(&name[..len], whole) {
-                    return Ok((value, &segments[prefix..]));
+        let absolute = name.starts_with('.');
+        let mut scope = Some(self);
+        while let Some(s) = scope {
+            if !absolute || matches!(s, Context::Root { .. }) {
+                let mut len = name.len();
+                for prefix in (1..=segments.len()).rev() {
+                    let whole = prefix == segments.len();
+                    if let Some(value) = s.resolve_own(&name[..len], whole) {
+                        return Ok((value, &segments[prefix..]));
+                    }
+                    // drop the last segment and its dot
+                    len = len.saturating_sub(segments[prefix - 1].len() + 1);
                 }
-                // drop the last segment and its dot
-                len = len.saturating_sub(segments[prefix - 1].len() + 1);
             }
+            scope = s.parent_scope();
         }
         Err(ExecutionError::UndeclaredReference(Arc::new(
             segments[0].to_owned(),
@@ -243,24 +260,36 @@ impl<'p, 'v> Context<'p, 'v> {
     /// else, in the root scope, the type, if `may_be_type`.
     fn resolve_own(&self, name: &str, may_be_type: bool) -> Option<CowVal<'_, 'v>> {
         let env = self.env();
-        env.container().candidates(name).find_map(|candidate| {
-            self.own_variable(&candidate).or_else(|| {
-                if !may_be_type || !matches!(self, Context::Root { .. }) {
-                    return None;
+        let is_root = matches!(self, Context::Root { .. });
+        let mut hit = None;
+        env.container().walk_candidates(name, |candidate| {
+            if let Some(v) = self.own_variable(candidate) {
+                hit = Some(v);
+                return true;
+            }
+            if may_be_type && is_root {
+                if let Some(t) = env.types().find_type(candidate) {
+                    hit = Some(CowVal::owned(CelType::from(t)));
+                    return true;
                 }
-                let t = env.types().find_type(&candidate)?;
-                Some(CowVal::owned(CelType::from(t)))
-            })
-        })
+            }
+            false
+        });
+        hit
     }
 
     /// The struct type `name` names under the container.
     pub(crate) fn find_struct(&self, name: &str) -> Option<&dyn crate::StructType> {
         let types = self.env().types();
-        self.env()
-            .container()
-            .candidates(name)
-            .find_map(|candidate| types.find_struct(&candidate))
+        let mut hit = None;
+        self.env().container().walk_candidates(name, |candidate| {
+            if let Some(s) = types.find_struct(candidate) {
+                hit = Some(s);
+                return true;
+            }
+            false
+        });
+        hit
     }
 
     fn has_function(&self, name: &str) -> bool {
@@ -272,13 +301,21 @@ impl<'p, 'v> Context<'p, 'v> {
     /// reports itself undeclared. The plain name, the only candidate without
     /// a container, is not checked here: the call does that.
     pub(crate) fn resolve_function<'n>(&self, name: &'n str) -> Cow<'n, str> {
-        let mut candidates = self.env().container().candidates(name).peekable();
-        while let Some(candidate) = candidates.next() {
-            if candidates.peek().is_none() || self.has_function(&candidate) {
-                return candidate;
+        // The last candidate is the bare name (a leading-dot spelling drops
+        // the dot) and is the fallback -- the call reports it undeclared.
+        let bare = name.strip_prefix('.').unwrap_or(name);
+        let mut hit: Option<String> = None;
+        self.env().container().walk_candidates(name, |candidate| {
+            if self.has_function(candidate) {
+                hit = Some(candidate.to_owned());
+                return true;
             }
+            false
+        });
+        match hit {
+            Some(s) => Cow::Owned(s),
+            None => Cow::Borrowed(bare),
         }
-        Cow::Borrowed(name)
     }
 
     /// The name of the function a call on `target` names when `target` spells a
@@ -294,18 +331,27 @@ impl<'p, 'v> Context<'p, 'v> {
     ) -> Option<String> {
         let container = self.env().container();
         let root = target.expr.qualified_name_root()?;
-        if !container
-            .candidates(root)
-            .any(|c| self.has_function_namespace(c.split('.').next().unwrap_or_default()))
-        {
+        let mut any_ns = false;
+        container.walk_candidates(root, |c| {
+            if self.has_function_namespace(c.split('.').next().unwrap_or_default()) {
+                any_ns = true;
+                return true;
+            }
+            false
+        });
+        if !any_ns {
             return None;
         }
         let segments = target.expr.qualified_name_segments()?;
         let name = format!("{}.{func_name}", segments.join("."));
-        let found = container
-            .candidates(&name)
-            .find(|candidate| self.has_function(candidate))
-            .map(Cow::into_owned);
+        let mut found = None;
+        container.walk_candidates(&name, |candidate| {
+            if self.has_function(candidate) {
+                found = Some(candidate.to_owned());
+                return true;
+            }
+            false
+        });
         found
     }
 

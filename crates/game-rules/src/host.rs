@@ -1360,9 +1360,21 @@ impl Ruleset {
                 | Call::Mortgage { .. } | Call::Redeem { .. }
                 | Call::Buy { .. } | Call::Build { .. }
         ) {
-            let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
+            let pre = self
+                .inner
+                .pre
+                .get(card as usize)
+                .and_then(|r| r.get(entry as usize))
+                .and_then(|p| p.as_ref());
+            let scope = if pre.is_some() {
+                Some(crate::cond_pre::window_scope_owned(
+                    crate::cond_pre::fill_window(world),
+                ))
+            } else {
+                None
+            };
             let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
-            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {
+            if !self.entry_admitted(world, card, entry, player_id, scope.as_ref(), &cand, answers)? {
                 return Ok(Outcome::Done(world.clone()));
             }
         }
@@ -1392,7 +1404,7 @@ impl Ruleset {
         card: i32,
         entry: i32,
         player_id: i32,
-        scope: &rules_cond::WindowScope,
+        scope: Option<&rules_cond::WindowScope>,
         cand: &crate::cond_pre::CandidateCtx,
         answers: &[i32],
     ) -> Result<bool, RuleError> {
@@ -1403,10 +1415,10 @@ impl Ruleset {
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
         let admitted = if self.guard_is_none(card, entry) {
-            crate::cond_pre::admits_pre(pre, Some(scope), cand)
+            crate::cond_pre::admits_pre(pre, scope, cand)
         } else {
             let mut store_for_guard = self.store(world.clone(), answers)?;
-            let asked: Result<bool, ()> = crate::cond_pre::admits(pre, Some(scope), cand, || {
+            let asked: Result<bool, ()> = crate::cond_pre::admits(pre, scope, cand, || {
                 match crate::inline::with_no_inline(|| {
                     call_card(
                         &self.inner,
@@ -1458,7 +1470,10 @@ impl Ruleset {
         if entries.is_empty() {
             return Ok(None);
         }
-        let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
+        // Built only if some entry actually declares a condition: the window
+        // snapshot + CEL root are large, and an unconditioned hook must not
+        // pay for them (STACK-01's small-thread settle chain has no room).
+        let mut scope: Option<rules_cond::WindowScope> = None;
         // `card.placed` must answer for the **running instance** (the guest's
         // `ctx::is_placed()`): a game-start hook also runs for the same id
         // while it sits in a pile / hand (`uid = -1`).
@@ -1475,7 +1490,26 @@ impl Ruleset {
             // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
             // flashes).
-            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {
+            let pre = self
+                .inner
+                .pre
+                .get(card as usize)
+                .and_then(|r| r.get(entry as usize))
+                .and_then(|p| p.as_ref());
+            if pre.is_some() && scope.is_none() {
+                scope = Some(crate::cond_pre::window_scope_owned(
+                    crate::cond_pre::fill_window(world),
+                ));
+            }
+            if !self.entry_admitted(
+                world,
+                card,
+                entry,
+                player_id,
+                scope.as_ref(),
+                &cand,
+                answers,
+            )? {
                 continue;
             }
             announced = true;
