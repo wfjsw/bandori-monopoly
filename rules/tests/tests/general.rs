@@ -663,7 +663,7 @@ fn cp_card_is_graveyarded_when_its_on_card_cp_reaches_zero() {
 // on-card count, so spending a card's **tile** marks alone does not leave the
 // field while it still carries on-card [CP点].
 #[test]
-fn cp_card_stays_when_only_its_tile_marks_run_out() {
+fn cp_card_stays_when_only_its_markers_run_out() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "通用:该清CP了").unwrap();
     t.answer_tile(0, 5).unwrap();

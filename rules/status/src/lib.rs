@@ -12,7 +12,7 @@
 //! | `status:unstoppable` | `unstoppable.rs` | 51 「[不可阻挡]」 |
 //! | `status:no_hand` | `no_hand.rs` | `noHand` companion (card text) |
 //!
-//! The `mark:cp` precedent (`rules/tile_marks/src/cp.rs`, `docs/TILES.md`):
+//! The `mark:cp` precedent (`rules/markers/src/cp.rs`, `docs/TILES.md`):
 //! cards never special-case a status. They call this crate's canonical API
 //! (`status::stay::add`, `status::fire::spend`, …) or message the host. The
 //! engine keeps only generic primitives (keyed state, turn-flow verbs, player

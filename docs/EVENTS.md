@@ -31,7 +31,7 @@ through `StubRules::event` (「还没有移植」) and went straight to the disc
 ## The crate: `rules/events`
 
 One crate, one `.rs` per event, one `CardDef` each -- the same authoring shape
-as `rules/cards/card-*`, `rules/skills/*`, `rules/tiles` and `rules/tile_marks`:
+as `rules/cards/card-*`, `rules/skills/*`, `rules/tiles` and `rules/markers`:
 
 | id | file | kind | sheet |
 |---|---|---|---|
@@ -67,13 +67,13 @@ as `rules/cards/card-*`, `rules/skills/*`, `rules/tiles` and `rules/tile_marks`:
 The crate is a **rule crate**, not a card crate: its ids are `event:*`, not
 roster card ids. `tools/rules-aggregate.mjs` scans `rules/events` as one
 of its roots (alongside `rules/cards`, `rules/skills`, `rules/tiles` and
-`rules/tile_marks`) so `card-all` links it; `tools/build-ruleset.mjs` runs that
+`rules/markers`) so `card-all` links it; `tools/build-ruleset.mjs` runs that
 aggregate first.
 
 Each body quotes the event text from its `CardMeta` beside the rule and cites
 it per line, exactly like a card (`docs/CARDS.md` → 「Every line cites the rule
 book」). `python tools/rulebook/check.py` requires the quote on `rules/events/*`
-the way it does on `rules/cards/*`, `rules/tiles/*` and `rules/tile_marks/*` --
+the way it does on `rules/cards/*`, `rules/tiles/*` and `rules/markers/*` --
 the passage is the event's `CardMeta::text`, since `docs/rulebook/cards.json`
 has no `event:*` ids.
 
@@ -220,7 +220,7 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
 | events category | ok (285 rules) | green (incl. 7 new `tests/events.rs`) | green, intentional ignores only | 28 events, 0 problems | ABI v37; sim on StubRules **261.6 ms/game** (budget ≤ 323), shell event counts identical to baseline (rent 19,612 / build 4,641 / buy 2,908 / forcebuy 415 / circle money 5,915 / agent half rent 4,221) |
 
 `cargo test -p game-rules --no-fail-fast` was green apart from three
-`cp_*` tests in `general.rs` and one `rules/tile_marks/src/cp.rs` quote problem
+`cp_*` tests in `general.rs` and one `rules/markers/src/cp.rs` quote problem
 in `check.py` -- both the concurrent [CP点] tile-mark batch, not this migration.
 
 Events with no dedicated test are listed in [TEST-FINDINGS.md](rulebook/TEST-FINDINGS.md)

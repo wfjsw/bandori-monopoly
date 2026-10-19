@@ -448,7 +448,7 @@ only.
     in 前往哈比内尔王国旅游 / 飞鸟山之战 / 修复公告 / 一切不会结束) that were
     **not** copied over; repo text is grammatical and semantically identical.
 * User rulings 2026-10-07 (通用:该清CP了 / the [CP点] mark owner; see
-  `rules/tile_marks/src/cp.rs` and `rules/cards/card-general/src/clear_cp.rs`):
+  `rules/markers/src/cp.rs` and `rules/cards/card-general/src/clear_cp.rs`):
   * **[CP点] is its own tile-mark category, never owned by a player.**
     `TileMark.category = "cp"`, `TileMark.owner = -1`; provenance is
     `TileMark.src` (the placing card instance) and `TileMark.card`. The
@@ -495,7 +495,7 @@ only.
     outlive the card; without a live `src` card holding on-card [CP点] the
     settle clause is inert on them.
     Tests: `general::cp_card_is_graveyarded_when_its_on_card_cp_reaches_zero`,
-    `general::cp_card_stays_when_only_its_tile_marks_run_out`.
+    `general::cp_card_stays_when_only_its_markers_run_out`.
   * **It cannot be played while its [特] effect is still pending.** 「Pending」
     is read as **the [特] is still live on the field**: the card is the [特]'s
     carrier, and (per the graveyard ruling) it leaves exactly when its

@@ -159,7 +159,7 @@ try {
     "Cargo.toml", "Cargo.lock",
     "crates/bot-core", "crates/bot-glue", "crates/game-core", "crates/game-rules",
     "crates/rules-native", "rules/cards", "rules/skills", "rules/tiles",
-    "rules/tile_marks", "rules/status", "rules/events", "rules/personas",
+    "rules/markers", "rules/status", "rules/events", "rules/personas",
     "rules/card-sdk",
     "tools/build-bot-glue.mjs",
   );

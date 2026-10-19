@@ -47,7 +47,7 @@ card_sdk::ruleset!(
     skill_groups::CARDS,
     skill_personas::CARDS,
     rules_tiles::CARDS,
-    rules_tile_marks::CARDS,
+    rules_markers::CARDS,
     rules_status::CARDS,
     rules_events::CARDS
 ; roster: &ROSTER

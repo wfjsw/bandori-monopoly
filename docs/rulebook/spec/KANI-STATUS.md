@@ -53,7 +53,7 @@ breakdowns; the notes column keeps the unit's own split).
 | `r` | 2 | 16 | 0 | 34 | 6 | 6 | 0 | — |
 | `ras` | 1 | 4 leaf | 0 (+1 CANDIDATE `chuchu-skill-02`) | 35 | 11 | 9 | 2 | 62 |
 | `sumimi` | 3 formula | 12 | 2 | 14 | 5 | 6–8 | 0 | ~35 |
-| `tiles` + `tile_marks` | 8–14 | 2 observable-half | 0 (2 expected once unblocked) | 6 | 8 | 5 refs | 0 | — |
+| `tiles` + `markers` | 8–14 | 2 observable-half | 0 (2 expected once unblocked) | 6 | 8 | 5 refs | 0 | — |
 
 **Totals (approximate, unit tables as printed):** FAILS ≈ **23** clause rows
 (+ several CANDIDATE / expected-once-unblocked); PROTOCOL-LEVEL ≈ **246**;
@@ -96,7 +96,7 @@ Partial, still growing (`events` mid-run). Counts from `results.json` /
 | `money_shave` | 0 | 0 | 3+ | 0 | 0 | 5 | still TIMEOUT (solver-bound); state cut + poorest/not-poorest split added; Vec::extend_with 31 remains |
 | `teleport` | 2 | 0 | 0 | 0 | 0 | 2 | fix confirmed on current master: iff SUCCESSFUL 625 s + mutant 465 s |
 | `verify-fix1` | 2 | 0 | 0 | 0 | 0 | 2 | supersedes `teleport/`: `tae_sound_teleport_and_fire_iff` SUCCESSFUL + mutant |
-| `tile_marks` | 6 | 0 | 0 | 0 | 0 | 6 | — |
+| `markers` | 6 | 0 | 0 | 0 | 0 | 6 | — |
 | `tiles` | 14 | 0 | 0 | 0 | 0 | 14 | — |
 | `wrong_guard` | 5 | 0 | 0 | 0 | 0 | 5 | — |
 

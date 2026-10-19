@@ -69,8 +69,9 @@ A marker is `⟨kind, owner, units@locations, policy⟩`.
   * **Instance-owned** -- the creating card/skill instance. On-card units die
     with the instance.
   * **Kind-owned** -- one standing host pseudo-card per kind (the `mark:cp`
-    precedent, `rules/tile_marks/src/cp.rs`). Bound units live until an effect
-    removes them; the host owns the protocol.
+    precedent, `rules/markers/src/cp.rs`). Bound units live until an effect
+    removes them; the host owns the protocol. The kind-owned host family lives
+    in `rules/markers` (one crate, one `CardDef` per `mark:*` category).
 * **units** live in locations: on-card pool / tile / holder
   (`ctx::{place_mark, add_held, move_units}` -- existing ABI).
 * **policy** (cap clamp, partial gain, overflow conversions, 效果适用 logs) is
@@ -163,7 +164,7 @@ declared counter** of the same instance (`fire.temp`), not a free key.
 
 ### P✽P粉丝 -- kind-owned host
 
-Owner: a standing `mark:pp_fans` pseudo-card (`rules/tile_marks` pattern) that
+Owner: a standing `mark:pp_fans` pseudo-card (`rules/markers` pattern) that
 owns `fansUp`/`fansDown` per holder, the flip protocol (pre-raise), and the
 once-per-match initial grant (「多张…乐队卡时此效果不重复发动」).
 

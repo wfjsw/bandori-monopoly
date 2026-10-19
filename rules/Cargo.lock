@@ -36,8 +36,8 @@ dependencies = [
  "card-sumimi",
  "personas",
  "rules-events",
+ "rules-markers",
  "rules-status",
- "rules-tile-marks",
  "rules-tiles",
  "ruleset-core",
  "skill-groups",
@@ -232,7 +232,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rules-status"
+name = "rules-markers"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
@@ -240,7 +240,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rules-tile-marks"
+name = "rules-status"
 version = "0.1.0"
 dependencies = [
  "card-sdk",

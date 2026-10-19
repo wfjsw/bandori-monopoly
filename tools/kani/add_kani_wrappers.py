@@ -154,6 +154,6 @@ if __name__ == "__main__":
         Path("rules/skills"),
         Path("rules/events"),
         Path("rules/tiles"),
-        Path("rules/tile_marks"),
+        Path("rules/markers"),
     ]
     sys.exit(run(roots))

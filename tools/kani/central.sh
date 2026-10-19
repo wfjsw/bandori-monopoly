@@ -66,7 +66,7 @@ preflight() {
       crychic) feat="band-crychic" ;;
       sumimi) feat="band-sumimi,skills-personas" ;;
       events) feat="events" ;;
-      tiles|tile_marks) feat="tiles" ;;
+      tiles|markers) feat="tiles" ;;
       skills_pp) feat="band-pp,skills-personas,skills-groups" ;;
       skills_ppp) feat="band-ppp,skills-personas,skills-groups" ;;
       skills_r) feat="band-roselia,skills-personas,skills-groups" ;;

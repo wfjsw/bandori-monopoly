@@ -1,11 +1,12 @@
-//! **Tile-mark rules** -- the `mark:*` category: what a neutral board mark is
-//! and what it does when someone interacts with it.
+//! **Marker rules** -- the `mark:*` category: kind-owned marker hosts (one
+//! [`CardDef`] per mark category), not just the marks that sit on tiles.
 //!
 //! Standardized the same way card, skill, tile and event rules are: one
 //! [`CardDef`] per mark category, bound **once** at match start to the
 //! **neutral board owner** (no single tile, `tile = -1`; [`docs/TILES.md`]).
-//! A mark owner is not a tile *kind* rule: it governs the marks that sit on
-//! many tiles, and its hooks hear every trigger of that kind wherever the
+//! A mark owner is not a tile *kind* rule: it governs the marks of that kind
+//! wherever they live (cp is tile-bound, `pp_fans` is holder-bound), and its
+//! hooks hear every trigger of that kind wherever the
 //! trigger points (`game_core::data::mark_rule_ids` -> `bind_tiles`).
 //!
 //! | id | file | rulebook |

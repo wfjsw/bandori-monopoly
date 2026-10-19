@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Check that every card in rules/cards/, every tile in rules/tiles/, every
-tile mark in rules/tile_marks/ and every event in rules/events/ cites its rule
+tile mark in rules/markers/ and every event in rules/events/ cites its rule
 book passage.
 
 The rule book (docs/rulebook/cards-sheet.csv -> cards.json via extract.py) is the
@@ -9,7 +9,7 @@ sentents they implement (`// 规则书: …`). A card the sheet omits must say s
 cite the C# class it was translated from instead.
 
 Tile rules (rules/tiles/src/*.rs) and tile-mark rules
-(rules/tile_marks/src/*.rs) have no ids in the roster, so their quotes live in
+(rules/markers/src/*.rs) have no ids in the roster, so their quotes live in
 the file header and must appear in `data/rules.txt` -- the authoritative
 rulebook text (「基础[结算]规则」 + 「专有名词」) -- verbatim (whitespace aside).
 Each file must also carry at least one `// 规则书: …` citation line.
@@ -103,7 +103,7 @@ def main() -> int:
     tiles = 0
     rules_n = norm(RULES)
     tile_srcs = sorted(ROOT.glob("rules/tiles/src/*.rs")) + sorted(
-        ROOT.glob("rules/tile_marks/src/*.rs")
+        ROOT.glob("rules/markers/src/*.rs")
     )
     for src in tile_srcs:
         if src.name == "lib.rs":

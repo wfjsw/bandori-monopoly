@@ -22,7 +22,7 @@ the new names:
 - `rules/skills/skill-bands/` → `rules/skills/skill-groups/`
 
 New crates the earlier drafts never listed: `rules/ruleset-core`, `rules/status`,
-`rules/personas`, `rules/tile_marks`, `rules/cond-ir`, `rules/spec`, `rules/kani`.
+`rules/personas`, `rules/markers`, `rules/cond-ir`, `rules/spec`, `rules/kani`.
 
 Ignored-test run: `node tools/build-ruleset.mjs` (no `CARGO_TARGET_DIR`) then
 `cargo test -p ruleset-tests -- --ignored` and

@@ -4,7 +4,7 @@ Each rulebook status marker ([停留] / [晕眩] / [除外] / 火罐, and the ch
 companions [不可阻挡] / 「无手牌」) becomes its own **standing pseudo card** --
 `status:stay`, `status:stun`, `status:exile`, `status:fire`, `status:unstoppable`,
 `status:no_hand` -- following the `mark:cp` precedent
-(`rules/tile_marks/src/{lib,cp}.rs`, `docs/TILES.md`). The engine keeps only
+(`rules/markers/src/{lib,cp}.rs`, `docs/TILES.md`). The engine keeps only
 **generic** turn-flow verbs and player gates; it stops naming stay / stun /
 exile / fire. Cards call one canonical API in `rules/status`, not the
 `card-sdk` `ctx::{give_stay, gain_fire, ...}` surface.
@@ -103,7 +103,7 @@ for symmetry (its TurnStart/TurnEnd 2→1→0 dance lives in `play.rs` today).
 
 ## 2. Precedent: `mark:cp`
 
-`rules/tile_marks/src/cp.rs` is the model:
+`rules/markers/src/cp.rs` is the model:
 
 | piece | `mark:cp` | `status:*` |
 |---|---|---|
@@ -177,7 +177,7 @@ the seam; the wire projection is a view concern.
 ### 3.2 New crate `rules/status`
 
 Workspace member (add to `rules/Cargo.toml` `members`), wired into
-`rules/cards/card-all` like `rules_tile_marks`, concatenated by
+`rules/cards/card-all` like `rules_markers`, concatenated by
 `tools/rules-aggregate.mjs`. Layout:
 
 ```

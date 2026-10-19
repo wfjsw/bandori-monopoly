@@ -29,7 +29,7 @@ pub mod skills_crychic;
 pub mod skills_sumimi;
 pub mod skills_general;
 pub mod tiles;
-pub mod tile_marks;
+pub mod markers;
 pub mod skills_bands;
 pub mod skills_characters;
 
