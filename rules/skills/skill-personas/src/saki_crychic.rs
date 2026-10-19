@@ -15,14 +15,14 @@
 //! moment is `settleBefore` -- the settle has not run yet.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // （2）/（3）「主要移动结束时，[触发结算]前若在你的前后5格内」 -- the
         // move-main fact is the condition; the within-5 geometry is residual
         // (`dist` is not in the condition vocabulary).

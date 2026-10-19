@@ -23,7 +23,7 @@
 //! （3） is a standing modifier to （1） that lights up once anyone is out.
 
 use card_sdk::abi::{prop, ChainKind, ActionKind};
-use ruleset_core::ctx::{self, plan, state, trigger};
+use bandori_std::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const USED: &str = "skill.sayoThorns.used";
@@ -38,7 +38,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
             None,
             declare_cap,
         ),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].

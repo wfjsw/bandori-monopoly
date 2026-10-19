@@ -11,7 +11,7 @@
 //! and the ordinal lookup that restores the canonical data-file order. Game
 //! vocabulary (`band`, `owner`, `PersonaDef`, `GroupDef`) lives in the game
 //! crates; this game's card-row keys are the `fields` map entries named in
-//! `ruleset_core::meta_key`.
+//! `bandori_std::meta_key`.
 
 // String/Vec come from `alloc` on guest builds and from std on the host.
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
@@ -56,7 +56,7 @@ pub struct CardMeta {
     /// `display.json`, not emitted on [`MetaRow`].
     pub cell: &'static str,
     /// Game-specific string slots, `(key, value)`. This game's card-row keys
-    /// are `band` and `owner` (`ruleset_core::meta_key`). Missing key = empty.
+    /// are `band` and `owner` (`bandori_std::meta_key`). Missing key = empty.
     pub fields: &'static [(&'static str, &'static str)],
 }
 

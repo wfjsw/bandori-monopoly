@@ -28,7 +28,7 @@
 //! text (`回合階段&註釋` `C44` blocks the money half; `团技能` `D13` forces the
 //! card half).
 use card_sdk::abi::{prop, text_slot, ActionKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词). Matches `game_core::engine::world::CIRCLE_MONEY`.
@@ -192,7 +192,7 @@ pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
     // `value == 0` and correctly does not fire there. Raised on both paths
     // rather than only the choice, so a reward rewrite applies however the
     // option was arrived at.
-    if ctx::raise(mover, ruleset_core::kind::PassRewardAffected, pick)? {
+    if ctx::raise(mover, bandori_std::kind::PassRewardAffected, pick)? {
         if pick == REWARD_CARD {
             ctx::log(
                 mover,

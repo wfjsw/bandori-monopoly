@@ -8,7 +8,7 @@
 //! [异常移动效果] aimed at the user.
 
 use card_sdk::abi::{AbKind, ChainKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ENCORE: CardDef = CardDef::new(

@@ -23,7 +23,7 @@
 //! provenance. See the TODO below.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_GODDESS: CardDef = CardDef::new(
@@ -31,7 +31,7 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
     ],
 )
     .silent(&[1]);
@@ -50,7 +50,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「你可以消耗一个火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 1 {

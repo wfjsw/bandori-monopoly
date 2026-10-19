@@ -10,14 +10,14 @@ use alloc::vec::Vec;
 
 use alloc::string::String;
 use card_sdk::abi::{prop, state_key};
-use ruleset_core::ctx::{self, trigger, CardPile};
+use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
         On::Play("", "", None, l12),
-        On::Action(&[ruleset_core::kind::FireSpent], "", "", Some(fire_spent_guard), fire_spent),
+        On::Action(&[bandori_std::kind::FireSpent], "", "", Some(fire_spent_guard), fire_spent),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()

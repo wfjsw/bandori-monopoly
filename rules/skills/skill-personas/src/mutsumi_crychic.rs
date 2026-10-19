@@ -16,7 +16,7 @@
 //! carves a class of crystal gains the engine does not tag.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The named other player, or -1.
@@ -29,7 +29,7 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, at_start),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         On::Action(&[ActionKind::DiceRollAfter], "", "", Some(other), latch),
     ],
 )
@@ -85,7 +85,7 @@ fn latch(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「你的移动阶段开始时，可消耗1火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 1 {

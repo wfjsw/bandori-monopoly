@@ -11,7 +11,7 @@ game-core = { path = "../game-core" }
 # the dev-dependency below so it can compare against `WasmRules`.
 game-rules = { path = "../game-rules", default-features = false, features = ["native-rules"] }
 card-sdk = { workspace = true, features = ["guest", "native-rules"] }
-ruleset-core = { path = "../../rules/ruleset-core" }
+bandori-std = { path = "../../rules/bandori-std" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = { workspace = true }
 # Ruleset binding: the shipped ruleset as an rlib (same crates the wasm module

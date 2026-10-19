@@ -21,7 +21,7 @@
 //! when they hold a mark -- the plan's route filter.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「[怪盗标记]」 -- a held counter on the marked player
@@ -105,7 +105,7 @@ fn settle(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「主要阶段可消耗7火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 7 {

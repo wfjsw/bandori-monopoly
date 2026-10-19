@@ -7,7 +7,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 
 /// Every seat in turn order, skipping players already out of the game.
 pub fn all_players() -> Vec<i32> {

@@ -12,14 +12,14 @@
 //! `Teleport`; the trigger carries which one in `abnormal_kind()`.
 
 use card_sdk::abi::{AbKind, ActionKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐」 --
         // the offer exists only for those two abnormal kinds and with two
         // pots to spend. Kind is a residual (`AbKind` match); fire is CEL.
@@ -50,7 +50,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 fn stay_or_teleport(_player_id: i32) -> bool {
     matches!(
         trigger::abnormal_kind(),
-        Some(AbKind::Stay | AbKind::Teleport)
+        Some(bandori_std::kind::abnormal::Stay | bandori_std::kind::abnormal::Teleport)
     )
 }
 

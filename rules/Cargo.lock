@@ -3,6 +3,14 @@
 version = 4
 
 [[package]]
+name = "bandori-std"
+version = "0.1.0"
+dependencies = [
+ "card-sdk",
+ "postcard",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12,15 +20,16 @@ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 name = "card-ag"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-all"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-ag",
  "card-crychic",
  "card-general",
@@ -39,7 +48,6 @@ dependencies = [
  "rules-markers",
  "rules-status",
  "rules-tiles",
- "ruleset-core",
  "skill-groups",
  "skill-personas",
 ]
@@ -48,63 +56,63 @@ dependencies = [
 name = "card-crychic"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-general"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-hhw"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-morfonica"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-mujica"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-mygo"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-pp"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
  "skill-groups",
 ]
 
@@ -112,27 +120,27 @@ dependencies = [
 name = "card-ppp"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-ras"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "card-roselia"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
@@ -148,9 +156,9 @@ dependencies = [
 name = "card-sumimi"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
@@ -178,17 +186,17 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 name = "fixture-test-cards"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "personas"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
- "ruleset-core",
 ]
 
 [[package]]
@@ -225,43 +233,35 @@ dependencies = [
 name = "rules-events"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
  "rules-tiles",
- "ruleset-core",
 ]
 
 [[package]]
 name = "rules-markers"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
- "ruleset-core",
 ]
 
 [[package]]
 name = "rules-status"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
- "ruleset-core",
 ]
 
 [[package]]
 name = "rules-tiles"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
-]
-
-[[package]]
-name = "ruleset-core"
-version = "0.1.0"
-dependencies = [
- "card-sdk",
- "postcard",
 ]
 
 [[package]]
@@ -298,19 +298,19 @@ dependencies = [
 name = "skill-groups"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-markers",
  "rules-status",
- "ruleset-core",
 ]
 
 [[package]]
 name = "skill-personas"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "card-sdk",
  "rules-status",
- "ruleset-core",
  "skill-groups",
 ]
 

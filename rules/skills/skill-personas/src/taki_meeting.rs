@@ -13,7 +13,7 @@
 //! keyed state is for.
 
 use card_sdk::abi::{counter, state_key, AbKind, ActionKind};
-use ruleset_core::ctx::{self, state, trigger};
+use bandori_std::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Latch for 「每回合限一次」.
@@ -45,7 +45,7 @@ fn reset(player_id: i32) -> card_sdk::Asked {
 /// layer the effect actually landed. The `abnormal` outcome hook fires for
 /// every landing, self-applied included (「场上每有玩家」 is anyone).
 fn on_abnormal(player_id: i32) -> card_sdk::Asked {
-    if trigger::abnormal_kind() != Some(AbKind::Stay) {
+    if trigger::abnormal_kind() != Some(bandori_std::kind::abnormal::Stay) {
         return Ok(());
     }
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("taki_meeting_gain")))?;
@@ -54,7 +54,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「运营阶段可消耗1个[火罐]」 plus 「每回合限一次」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, USED) != 0 {

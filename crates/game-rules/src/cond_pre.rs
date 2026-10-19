@@ -216,7 +216,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         if self.owner_seat >= 0 { self.src.money(self.owner_seat) as i64 } else { 0 }
     }
     fn owner_charge(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.charge(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 { self.src.state_get(self.owner_seat, "charge") as i64 } else { 0 }
     }
     fn owner_group_pool(&self, name: &str) -> i64 {
         if self.owner_seat >= 0 { self.src.group_pool(self.owner_seat, name) as i64 } else { 0 }
@@ -231,10 +231,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         if self.owner_seat >= 0 { self.src.player_out(self.owner_seat) as i64 } else { 0 }
     }
     fn owner_stay(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.stay_of(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 { self.src.state_get(self.owner_seat, "stay") as i64 } else { 0 }
     }
     fn owner_stun(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.stun_of(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 { self.src.state_get(self.owner_seat, "stun") as i64 } else { 0 }
     }
     fn owner_exile(&self) -> i64 {
         if self.owner_seat >= 0 {
@@ -306,7 +306,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.src.money(seat as i32) as i64
     }
     fn charge(&self, seat: i64) -> i64 {
-        self.src.charge(seat as i32) as i64
+        self.src.state_get(seat as i32, "charge") as i64
     }
     fn group_pool(&self, seat: i64, name: &str) -> i64 {
         self.src.group_pool(seat as i32, name) as i64
@@ -321,10 +321,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.src.player_out(seat as i32) as i64
     }
     fn stay(&self, seat: i64) -> i64 {
-        self.src.stay_of(seat as i32) as i64
+        self.src.state_get(seat as i32, "stay") as i64
     }
     fn stun(&self, seat: i64) -> i64 {
-        self.src.stun_of(seat as i32) as i64
+        self.src.state_get(seat as i32, "stun") as i64
     }
     fn exile(&self, seat: i64) -> i64 {
         self.src.state_get(seat as i32, game_core::state::key::EXILE) as i64
@@ -655,7 +655,6 @@ pub trait SnapSrc {
     }
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
-    fn charge(&self, player_id: i32) -> i32;
     fn group_pool(&self, player_id: i32, name: &str) -> i32;
     fn group_pool_total(&self, player_id: i32) -> i32 {
         let _ = player_id;
@@ -667,8 +666,6 @@ pub trait SnapSrc {
     fn hand_size(&self, player_id: i32) -> i32;
     fn player_pos(&self, player_id: i32) -> i32;
     fn player_out(&self, player_id: i32) -> i32;
-    fn stay_of(&self, player_id: i32) -> i32;
-    fn stun_of(&self, player_id: i32) -> i32;
     fn state_get(&self, player_id: i32, key: &str) -> i32;
     /// The seat's player-state `(key, value)` pairs (`MatchPlayer.state`),
     /// for the baked `state(p, 'key')` table. Live worlds walk the real map;
@@ -779,10 +776,7 @@ impl<W: CardWorld> SnapSrc for W {
     fn money(&self, player_id: i32) -> i32 {
         CardWorld::money(self, player_id)
     }
-    #[inline]
-    fn charge(&self, player_id: i32) -> i32 {
-        CardWorld::charge(self, player_id)
-    }
+
     #[inline]
     fn group_pool(&self, player_id: i32, name: &str) -> i32 {
         CardWorld::group_pool(self, player_id, name)
@@ -802,14 +796,7 @@ impl<W: CardWorld> SnapSrc for W {
     fn player_out(&self, player_id: i32) -> i32 {
         CardWorld::player_out(self, player_id)
     }
-    #[inline]
-    fn stay_of(&self, player_id: i32) -> i32 {
-        CardWorld::stay_of(self, player_id)
-    }
-    #[inline]
-    fn stun_of(&self, player_id: i32) -> i32 {
-        CardWorld::stun_of(self, player_id)
-    }
+
     #[inline]
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
         CardWorld::state_get(self, player_id, key)
@@ -1241,13 +1228,13 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
-            charge: world.charge(p) as i64,
+            charge: world.state_get(p, "charge") as i64,
             group_pool: world.group_pool_total(p) as i64,
             hand: world.hand_size(p) as i64,
             pos: world.player_pos(p) as i64,
             out: world.player_out(p) as i64,
-            stay: world.stay_of(p) as i64,
-            stun: world.stun_of(p) as i64,
+            stay: world.state_get(p, "stay") as i64,
+            stun: world.state_get(p, "stun") as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
             state: world
@@ -1360,13 +1347,13 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
-            charge: world.charge(p) as i64,
+            charge: world.state_get(p, "charge") as i64,
             group_pool: world.group_pool_total(p) as i64,
             hand: world.hand_size(p) as i64,
             pos: world.player_pos(p) as i64,
             out: world.player_out(p) as i64,
-            stay: world.stay_of(p) as i64,
-            stun: world.stun_of(p) as i64,
+            stay: world.state_get(p, "stay") as i64,
+            stun: world.state_get(p, "stun") as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
             state: world
@@ -1503,14 +1490,14 @@ pub fn fill_candidate<S: SnapSrc>(
     let mut cand = CandidateCtx {
         owner: owner as i64,
         owner_money: world.money(p) as i64,
-        owner_charge: world.charge(p) as i64,
+        owner_charge: world.state_get(p, "charge") as i64,
         // The ruleset's named-counter key for the group pool.
         owner_group_pool: world.group_pool(p, "crystals") as i64,
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
         owner_out: world.player_out(p) as i64,
-        owner_stay: world.stay_of(p) as i64,
-        owner_stun: world.stun_of(p) as i64,
+        owner_stay: world.state_get(p, "stay") as i64,
+        owner_stun: world.state_get(p, "stun") as i64,
         owner_exile: world.state_get(p, game_core::state::key::EXILE) as i64,
         owner_no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
         owner_persona: id_of(&world.persona_name(p).unwrap_or_default()),

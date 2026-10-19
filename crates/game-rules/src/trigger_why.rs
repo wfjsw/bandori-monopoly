@@ -158,7 +158,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .player_id("who", who)
             .player_id("target", target)
             .i("value", value),
-        TriggerKind::Exile => Msg::new("log.why.exile")
+        TriggerKind(21) /* exile */ => Msg::new("log.why.exile")
             .player_id("who", who)
             .player_id("target", target),
         TriggerKind::BeforeOut

@@ -16,7 +16,7 @@
 //! expiry -- which is what the keyed state's `expires` is for.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 

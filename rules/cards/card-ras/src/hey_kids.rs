@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const HEY_KIDS: CardDef = CardDef::new(

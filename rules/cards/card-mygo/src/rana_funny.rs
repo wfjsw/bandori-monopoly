@@ -8,7 +8,7 @@
 //! grow a miracle crystal on it, and at 5+ the next foreign passer is trapped.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANA_FUNNY: CardDef = CardDef::new(
@@ -108,7 +108,7 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     // effect; it passes the C# `H.WithCard(User, H.AbnormalGate(a))` gate so
     // [反击] cards (安可) get their window. `ctx::gate` returns false when the
     // effect is guarded, the mover is immune, or they are [不可阻挡].
-    if !ctx::gate(who, card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(who, bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     // 规则书: 「由此卡效果导致[触发结算]时需支付资金减半」 -- `set_stop_at` is

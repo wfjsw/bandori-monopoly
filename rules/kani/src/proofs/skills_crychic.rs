@@ -93,7 +93,7 @@ mod tomori_spend {
     /// state_add(STAY, -1), log.
     crate::host_subset!(tomori_spend_dispatch {
         raise => arm_raise,
-        spend_charge => arm_spend_charge,
+        spend_marker => arm_spend_marker,
         state_add | inc_slot => arm_state_add,
         log | effect => arm_log,
     });

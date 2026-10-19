@@ -16,7 +16,7 @@
 //!   `trigger::set_move_roll` between the two totals.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「你以外玩家中上一次进行的移动掷骰结果」.
@@ -31,7 +31,7 @@ pub const TAKI_CRYCHIC: CardDef = CardDef::new(
     &[
         On::Action(&[ActionKind::TurnStartBefore], "actor == owner && slot('skill.takiCrychic.armed') == 0", "", None, at_turn_start),
         On::Action(&[ActionKind::DiceRollAfter], "", "", None, on_roll),
-        On::Action(&[ruleset_core::kind::SkillUsed], card_sdk::pre::MINE, "", None, on_skill_used),
+        On::Action(&[bandori_std::kind::SkillUsed], card_sdk::pre::MINE, "", None, on_skill_used),
     ],
 )
     .silent(&[0, 2]);

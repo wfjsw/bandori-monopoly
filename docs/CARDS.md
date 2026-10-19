@@ -26,7 +26,7 @@ world copy the host runs against.
 
 ```rust
 // rules/cards/card-roselia/src/press.rs
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// C# `CardPress` -- 压: gain 1,000.
@@ -162,7 +162,7 @@ const *and* a `ChainKind` value. From the current codebase:
 `SettleBody`, plus the rule-defined `PassRewardAffected` (26) and `SkillUsed`
 (74). `Effect` (72) is the canonical example. No Filter kind is a ChainKind.
 
-**Rule-defined kinds** live in `rules/ruleset-core/src/kind.rs` and join the
+**Rule-defined kinds** live in `rules/bandori-std/src/kind.rs` and join the
 Action side today:
 
 ```rust
@@ -235,11 +235,11 @@ rule — the only Action that may reshape a roll. Prefer the pure
 `DiceRollValue` filter when no prompt is needed; use the Action half only
 when the rulebook puts a 「可」 offer on the reshape.
 
-`ChargePaying` (ruleset-core kind 78) is **not** a filter kind: its 「可」
+`ChargePaying` (bandori-std kind 78) is **not** a filter kind: its 「可」
 opt-in prompts and Filter bodies cannot. It stays on `On::Action`.
 
 Everything else is `On::Action` (turn/pass/draw/settle/buy/build/counter/…
-event points, including the custom ruleset-core kinds `PassRewardAffected` /
+event points, including the custom bandori-std kinds `PassRewardAffected` /
 `FireSpent` / `SkillUsed` / `HouseAdded`).
 
 **Kind/variant agreement is a ruleset-build error:** a Filter* may only list
@@ -523,18 +523,18 @@ commit `7c3d115`).
 * **Cards** -- `CardDef::meta(&CardMeta::new()...)` on the card's `CardDef`
   (`rules/cards/card-*/src/*.rs`). Carries `name` / `rawName` / `text` /
   `tags` / `derived` / `cell`, plus a generic `fields` map for the game slots
-  `group` and `owner` (`ruleset_core::roster::meta_key`). Multi-line CJK text is
+  `group` and `owner` (`bandori_std::roster::meta_key`). Multi-line CJK text is
   a raw string literal -- byte-exact newlines, full-width punctuation and
   trailing spaces round-trip untouched.
-* **Characters** -- `ruleset_core::roster::PersonaDef` beside each character
+* **Characters** -- `bandori_std::roster::PersonaDef` beside each character
   skill (`rules/personas/src/*.rs`), collected in that crate's
   `roster_table::PERSONAS`.
-* **Bands** -- `ruleset_core::roster::GroupDef` beside each band skill
+* **Bands** -- `bandori_std::roster::GroupDef` beside each band skill
   (`rules/skills/skill-groups/src/*.rs`), collected in `roster_table::GROUPS`.
 
 `card-sdk` stays vocabulary-free: `CardMeta` is the generic card-row shape and
 `MetaRow` / `MetaDoc` the wire form. `PersonaDef` / `GroupDef` name this
-game's concepts and live in `ruleset-core` / the skill crates.
+game's concepts and live in `bandori-std` / the skill crates.
 
 ### Display columns leave `ruleset_metadata` (ABI v86)
 
@@ -564,7 +564,7 @@ time, never per run). Host: `Ruleset::metadata()` / `::roster()`, then
 
 The Rust crates register cards alphabetically inside each band, while
 `GameData` iterates the roster in its own order (deck pools, presets).
-A shared generated table (`rules/ruleset-core/src/roster_order.rs`) maps
+A shared generated table (`rules/bandori-std/src/roster_order.rs`) maps
 id → ordinal; the export sorts by `(kind, ordinal)` so the rebuilt vectors
 equal the roster order exactly.
 
@@ -616,12 +616,12 @@ Tools that need JSON rows use `tools/roster.py` against a dump written by
 `data/{cards,characters,bands}.json` either. The other `data/*.json` files
 (tiles / events / schools / voice / home / board / match_rules) stay JSON.
 
-## The vocabulary (`card_sdk::ctx` vs `ruleset_core::ctx`)
+## The vocabulary (`card_sdk::ctx` vs `bandori_std::ctx`)
 
 **Split (ABI v56).** `card-sdk` is only generalized card-runtime mechanisms
 plus the guest ABI wire codes. This ruleset's names (火罐 / 奇迹水晶 / CiRCLE /
-RiNG / Live House / band skills / rent-buy verbs) live in `ruleset-core`.
-Card bodies import `use ruleset_core::ctx` (a facade that re-exports the
+RiNG / Live House / band skills / rent-buy verbs) live in `bandori-std`.
+Card bodies import `use bandori_std::ctx` (a facade that re-exports the
 generic surface and the game sugar).
 
 Generic tile queries (host ABI v56):
@@ -632,7 +632,7 @@ Generic tile queries (host ABI v56):
   class; per-player overrides are class-membership props (`class:` /
   `classFor:<p>:`) plus the existing `anyColor` / `colorFor:<p>`
 
-Game sugar in `ruleset_core::ctx` (kept readable for card code):
+Game sugar in `bandori_std::ctx` (kept readable for card code):
 `is_ring(t) = tile_is(t, "ring")`, `is_circle` / `is_agent` likewise;
 `is_buyable` / `is_shop` / `is_live_house` / `is_live_house_for` / `is_color`
 are `tile_in` classes.
@@ -905,7 +905,7 @@ player marker strip like tokens.
 
 `fans::flip_up(seat, x)` is the one flip helper for 「将X个反面…变正」. It
 raises the **ruleset-defined** Action kind `FansFlip`
-(`ruleset_core::kind`, wire 107, `trigger::value()` = the effect's intended
+(`bandori_std::kind`, wire 107, `trigger::value()` = the effect's intended
 X) **before** the dict writes, so a listener still sees the pre-flip
 face-down count. A cancelled / aborted raise (`Ok(false)` / `Err`) leaves
 both counters untouched. `flip_down` does not raise (clause （2） is only

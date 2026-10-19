@@ -15,7 +15,7 @@
 //! `ctx::card_move`); the turn-end body is scheduled with `at_turn_end`.
 //! The [特] discard hook banishes the accident when this card enters a discard.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::abi::ActionKind;
 use skill_groups::fans;

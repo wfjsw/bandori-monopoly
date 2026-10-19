@@ -10,7 +10,7 @@
 //! the Live House one -- not one this skill recoloured.
 
 use card_sdk::abi::{ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{CardDef, On};
 
 const DONE: &str = "skill.roselia.first";
@@ -117,8 +117,8 @@ fn sync_colour(player_id: i32) {
 }
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"Roselia"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"Roselia"#)
     .short_name(r#"R"#)
     .color(r#"#3344AA"#)
     .skill(r#"对音乐的纯粹"#)

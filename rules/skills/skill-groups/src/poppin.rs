@@ -13,7 +13,7 @@
 //! crystal. （3） is the hill's ownership shared across the band.
 
 use card_sdk::abi::{counter, state_key, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Poppin' Party:星之鼓动";
@@ -211,7 +211,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
 /// **and** its own 「使用2个星星贴纸」, or a borrowed copy with exactly 2 stickers
 /// passes the gate, burns the tax, and then skips the effect.
 fn available(player_id: i32, tax: i32) -> [bool; 2] {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return [false, false];
     }
     [
@@ -222,7 +222,7 @@ fn available(player_id: i32, tax: i32) -> [bool; 2] {
 
 /// Combined gate: admit whenever either press effect is available.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
@@ -338,8 +338,8 @@ fn cash(player_id: i32) -> card_sdk::Asked {
 // and an ordinary buy.
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"Poppin' Party"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"Poppin' Party"#)
     .short_name(r#"PPP"#)
     .color(r#"#FF3377"#)
     .skill(r#"星之鼓动"#)

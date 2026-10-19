@@ -10,7 +10,7 @@
 //! also banks a crystal.
 
 use card_sdk::abi::{ActionKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const WANT_HUMAN: CardDef = CardDef::new(

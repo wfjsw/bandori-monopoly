@@ -9,7 +9,7 @@
 //!
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SOYO_BACK: CardDef = CardDef::new(

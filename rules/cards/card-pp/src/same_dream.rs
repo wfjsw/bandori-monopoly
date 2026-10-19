@@ -11,7 +11,7 @@
 //! then flip every face-down fan back up. Fan moves go through the band-skill
 //! `fans::flip_up` (state dict + `FansFlip` raise).
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 

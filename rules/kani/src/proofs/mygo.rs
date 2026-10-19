@@ -26,7 +26,7 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 /// `MyGO:轮符雨` play — +1 [停留] + schedule turn-end settle + narration.
 /// `before_turn_end` is `Op::schedule_turn_end` (a plan stub).
 crate::host_subset!(rinne_rain_dispatch {
-    give_stay => arm_give_stay,
+    apply_abnormal => arm_apply_abnormal,
     schedule_turn_end => arm_stub_zero,
     log | effect => arm_log,
 });
@@ -69,7 +69,7 @@ crate::host_subset!(that_day_rain_dispatch {
     player_count => arm_player_count,
     player_out => arm_player_out,
     player_pos => arm_player_pos,
-    give_stay => arm_give_stay,
+    apply_abnormal => arm_apply_abnormal,
     log | effect => arm_log,
 });
 
@@ -97,8 +97,8 @@ fn hitoshizuku_dispatch(
             world::with_world(|w| w.stun[a0 as usize]) as i64
         }
         Op::slot => host::arm_slot(a),
-        Op::give_stay => host::arm_give_stay(a),
-        Op::give_stun => host::arm_give_stun(a),
+        Op::give_stay => host::arm_apply_abnormal(a),
+        Op::give_stun => host::arm_apply_abnormal(a),
         Op::state_get => host::arm_state_get(a),
         Op::state_set => host::arm_state_set(a),
         Op::pay_to => host::arm_pay_to(a),
@@ -111,7 +111,7 @@ fn hitoshizuku_dispatch(
 /// `MyGO:（灯）不再迷茫` play — 2 locked [停留] + place + discard hand + X+1
 /// crystals. Isolation: empty hand (the `cards_in` String loop is a no-op).
 crate::host_subset!(tomori_no_longer_dispatch {
-    give_stay => arm_give_stay,
+    apply_abnormal => arm_apply_abnormal,
     state_add | inc_slot => arm_state_add,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,

@@ -11,7 +11,7 @@
 //! 「奇迹水晶」.
 
 use card_sdk::abi::counter;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play("", "", None, title_idol)])

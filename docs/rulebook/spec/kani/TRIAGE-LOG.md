@@ -674,7 +674,7 @@ Scope: `rules/kani/src/{proofs,spec}/*.rs` + docs only.
 
 Assert `E-chart-rush-01: all fire pots spent` fails. Root cause chain:
 
-1. Body: `fire::spend(p, lost, …)` → `ruleset_core::spend_fire`.
+1. Body: `fire::spend(p, lost, …)` → `bandori_std::spend_fire`.
 2. `spend_fire` opens the `FirePaying` link first:
    `if !ctx::raise(…, FirePaying, n)? { return Ok(true); }`
    (`raise` = true when the link **settled**, false when **cancelled**).

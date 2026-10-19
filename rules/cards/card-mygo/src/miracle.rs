@@ -12,7 +12,7 @@
 //! collect the "last three digits" purse of the crystal-closest rival.
 
 use card_sdk::abi::{counter, ActionKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MIRACLE: CardDef = CardDef::new(

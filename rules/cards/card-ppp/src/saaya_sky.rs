@@ -10,7 +10,7 @@
 //! park on 山吹面包房; after the user passes it, +1 fire and the card hops to 3d20.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";

@@ -190,7 +190,7 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::BuildAfter,
         TriggerKind::Mortgage,
         TriggerKind::CounterChanged,
-        TriggerKind::Exile,
+        TriggerKind(21) /* exile */,
         TriggerKind::Abnormal,
         TriggerKind::Effect,
         TriggerKind::Card,

@@ -17,7 +17,7 @@
 //! deck's top card at each of this player's turn starts.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state, trigger, CardPile};
+use bandori_std::ctx::{self, state, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「每获得一层停留，眩晕，你获得1500资金」.
@@ -164,7 +164,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     // = the causer. 「受到…影响」 names the recipient.
     if !matches!(
         trigger::abnormal_kind(),
-        Some(card_sdk::abi::AbKind::Stay | card_sdk::abi::AbKind::Stun | card_sdk::abi::AbKind::Exile)
+        Some(bandori_std::kind::abnormal::Stay | bandori_std::kind::abnormal::Stun | bandori_std::kind::abnormal::Exile)
     ) {
         return Ok(());
     }

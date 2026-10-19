@@ -20,7 +20,7 @@
 //! and is not implemented.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The 「角色标记」 namespace every consumer agrees on (NNM's `角色标记:*` too).
@@ -47,14 +47,14 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
         // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
         On::Action(
-            &[ruleset_core::kind::SkillUsed],
+            &[bandori_std::kind::SkillUsed],
             "actor != owner && trigger_card != 0 && charge(owner) >= 1", "",
             Some(on_skill_applies),
             on_skill,
@@ -152,7 +152,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 
 /// （3） 「你可以使用手中的角色标记，视为使用该角色的技能」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if ctx::tok_names(player_id, MARK_PREFIX).is_empty() {

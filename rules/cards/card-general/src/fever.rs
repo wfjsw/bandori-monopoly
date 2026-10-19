@@ -12,7 +12,7 @@
 //!
 
 use card_sdk::abi::{ActionKind, FilterKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "通用:[衍生]FEVER!";

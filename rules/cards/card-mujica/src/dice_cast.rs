@@ -8,7 +8,7 @@
 
 use card_sdk::abi::state_key;
 use card_sdk::abi::{ChainKind, ActionKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Once-per-turn placement latch. `cast` is reached from both `play` and the

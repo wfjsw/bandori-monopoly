@@ -140,8 +140,8 @@ fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8>
     }
 }
 
-/// Raw ABI helpers for the game sugar crate (`ruleset-core`). Card bodies use
-/// the typed [`super`] wrappers; `ruleset-core` implements this ruleset's
+/// Raw ABI helpers for the game sugar crate (`bandori-std`). Card bodies use
+/// the typed [`super`] wrappers; `bandori-std` implements this ruleset's
 /// readable names on top of these plus the generic [`tile_is`] family.
 pub mod raw {
     pub use super::sys;
@@ -333,7 +333,7 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
 
 /// Does the tile's **data kind** equal `kind` (the `TileKind` wire spelling:
 /// `"ring"`, `"circle"`, `"agent"`, `"property"`, …)? Generic host query —
-/// game sugar (`is_deed` / `is_start` / …) lives in `ruleset-core`.
+/// game sugar (`is_deed` / `is_start` / …) lives in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_is(tile: i32, kind: &str) -> bool {
     let (p, l) = s(kind);
@@ -342,7 +342,7 @@ pub fn tile_is(tile: i32, kind: &str) -> bool {
 
 /// Generic tile field read (`"group"` / `"area"` / `"tier"` / `"price"` /
 /// `"house"` / `"rent"` / `"index"`). See ABI v56. Game named-tile helpers
-/// live in `ruleset-core`.
+/// live in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_attr(tile: i32, attr: &str) -> i32 {
     let (p, l) = s(attr);
@@ -351,7 +351,7 @@ pub fn tile_attr(tile: i32, attr: &str) -> i32 {
 
 /// Is `tile` in the ruleset **class** `class` for `player_id` (`"buyable"` /
 /// `"shop"` / `"livehouse"` / `"color:<g>"`)? Per-player overrides are generic
-/// class-membership props. Game sugar lives in `ruleset-core`.
+/// class-membership props. Game sugar lives in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_in(player_id: i32, tile: i32, class: &str) -> bool {
     let (p, l) = s(class);
@@ -1510,7 +1510,7 @@ pub fn add_tok(player_id: i32, name: &str, by: i32, max: i32) -> Result<i32, Pro
 /// Which keys mean what, and what their caps are, belongs to whoever uses them:
 /// a character skill that mandates a fire-pot cap writes [`Self::max`] on
 /// [`state_key::CHARGE`], and the card that gains pots is free to honour it (the
-/// `fire` / `gain_charge` helpers do) or ignore it. There is no engine-side
+/// `fire` / marker helpers do) or ignore it. There is no engine-side
 /// `match key`, and a raw [`Self::set`] / [`Self::add`] is never clamped.
 pub mod state {
     use super::{s, sys};
@@ -1635,7 +1635,7 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 }
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
-/// (e.g. `ruleset_core::kind::PassRewardAffected`); `value` is the trigger's `value`.
+/// (e.g. `bandori_std::kind::PassRewardAffected`); `value` is the trigger's `value`.
 /// Returns true when the link settled (nobody cancelled it). A hook that
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result<bool, Prompt> {
@@ -1643,30 +1643,34 @@ pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result
     asked(unsafe { sys::raise(player_id, kind.as_i32(), value) }).map(|v| v != 0)
 }
 
-// ---------------------------------------------------------- status hosts
-// These are the `rules/status` hosts' **engine services**, not the
-// card-facing API. Cards call `rules_status::{stay,stun,exile,fire}::*`
-// (`docs/STATUS-HOSTS.md`). `give_*` keep their names because they open the
-// abnormal [反击] window (`abnormal_gate`) -- a generic `apply_abnormal`
-// would replace them; until then this is the one place game vocabulary sits
-// in card-sdk (the 火罐 verbs live in `ruleset-core`), marked hidden so it is not the documented surface.
-// TODO(ABI): genericize to `apply_abnormal` + `marker::gain_capped` /
-// `marker::spend` and delete these (HOST-09/10 style dead-surface removal).
+// ---------------------------------------------------------- generic status verbs
+// Engine services the `rules/status` hosts (and `bandori-std::status`) drive.
+// Cards call `bandori_std::status::{stay,stun,exile}` /
+// `rules_status::{stay,stun,exile,fire}::*` (`docs/STATUS-HOSTS.md`).
+// No game vocabulary here: `apply_abnormal` is one kind-parameterized verb.
 
-#[doc(hidden)]
-pub fn give_stay(player_id: i32, n: i32) {
-    unsafe { sys::give_stay(player_id, n) }
+/// Apply `n` layers of the abnormal `kind` (the `AbKind` wire id) to
+/// `player_id`, returning the player to `to` afterwards.
+///
+/// `n < 0` (removal) always applies. `n > 0` opens the abnormal [反击]
+/// window; a cancelled window writes nothing. On success the layers land at
+/// the state key named by `kind.as_str()` and the post-commit raise fires.
+/// `to` is the kind-specific payload (`-1` = none) -- carried for the exile
+/// return destination; other kinds ignore it.
+pub fn apply_abnormal(player_id: i32, kind: AbKind, n: i32, to: i32) {
+    unsafe { sys::apply_abnormal(player_id, kind.as_i32(), n, to) }
 }
 
-#[doc(hidden)]
-pub fn give_stun(player_id: i32, n: i32) {
-    unsafe { sys::give_stun(player_id, n) }
+/// Set this turn's main-move latch. `locked != 0` skips the move; `0`
+/// releases it. The stay host's turn-flow clause (exile is **not** part of
+/// the latch -- closeout-2 ruling).
+pub fn skip_main_move(player_id: i32, locked: bool) {
+    unsafe { sys::skip_main_move(player_id, locked as i32) }
 }
 
-/// Give `[除外]` layers to the player, returning them after.
-#[doc(hidden)]
-pub fn give_exile(player_id: i32, n: i32, to: i32) {
-    unsafe { sys::give_exile(player_id, n, to) }
+/// [`skip_main_move`] with `locked = false`.
+pub fn clear_move_skip(player_id: i32) {
+    unsafe { sys::clear_move_skip(player_id) }
 }
 
 /// Give the player an extra turn.
@@ -1721,22 +1725,31 @@ pub fn card_move(player_id: i32) -> bool {
     unsafe { sys::card_move(player_id) != 0 }
 }
 
-/// `[停留]` layers on the player.
-#[doc(hidden)]
-pub fn stay_of(player_id: i32) -> i32 {
-    unsafe { sys::stay_of(player_id) }
+// ------------------------------------------------------------- named markers
+// Name-as-data. Readers are `state::get` / `state::max` with the marker's
+// wire key; writers open the generic `markerGain` / `markerSpend` windows.
+
+/// Dumb add of `n` to the named counter; returns how many landed. Opens
+/// `markerGain` first. `max == 0` means "no declaration" and refuses.
+pub fn gain_marker(player_id: i32, name: &str, n: i32, why: &Msg) -> Result<i32, Prompt> {
+    let (np, nl) = s(name);
+    let (p, l) = mj(why);
+    asked(unsafe { sys::gain_marker(player_id, np, nl, n, p, l) })
 }
 
-/// `[晕眩]` layers on the player.
-#[doc(hidden)]
-pub fn stun_of(player_id: i32) -> i32 {
-    unsafe { sys::stun_of(player_id) }
+/// Spend `n` of the named counter; 1 when the player had enough. Opens
+/// `markerSpend` first (a cancelled window spends nothing).
+pub fn spend_marker(player_id: i32, name: &str, n: i32, why: &Msg) -> Result<i32, Prompt> {
+    let (np, nl) = s(name);
+    let (p, l) = mj(why);
+    asked(unsafe { sys::spend_marker(player_id, np, nl, n, p, l) })
 }
 
-/// `[除外]` layers on the player (mirrors [`stun_of`]).
-#[doc(hidden)]
-pub fn exile_of(player_id: i32) -> i32 {
-    unsafe { sys::exile_of(player_id) }
+/// Raise (or lower) the named counter's cap; returns the new cap. Pulls the
+/// value under the new ceiling.
+pub fn add_marker_max(player_id: i32, name: &str, n: i32) -> i32 {
+    let (np, nl) = s(name);
+    unsafe { sys::add_marker_max(player_id, np, nl, n) }
 }
 
 /// Whose turn it is (-1 when none).
@@ -2934,7 +2947,7 @@ pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
 /// when a field card guarded it, the player is immune, or they are
 /// `unstoppable`. Call this **before** applying the effect, and skip on `false`.
 pub fn gate(player_id: i32, kind: crate::abi::AbKind) -> bool {
-    unsafe { sys::gate(player_id, kind as i32) != 0 }
+    unsafe { sys::gate(player_id, kind.as_i32()) != 0 }
 }
 
 /// A full [触发结算] of `tile` for this player. The player does

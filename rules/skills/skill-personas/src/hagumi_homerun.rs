@@ -24,7 +24,7 @@
 //! the only sites that can raise the count (marker ownership).
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind, MarkFilter};
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「可乐饼」 parked on a tile.
@@ -193,7 +193,7 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
 
 /// 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the skill button's gate.
 fn can_cash(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if ctx::tok(player_id, HELD) < 4 {

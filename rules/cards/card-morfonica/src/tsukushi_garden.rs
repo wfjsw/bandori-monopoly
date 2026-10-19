@@ -5,7 +5,7 @@
 //!
 //! 1d6 to pick a player and move to the tile in front of them.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(

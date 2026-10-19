@@ -18,7 +18,7 @@
 //! and a forced stop bought with a pot when someone passes you.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「首次经过CiRCLE不获得经过奖励」.
@@ -50,7 +50,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // settle, for every completed move including a 「不触发结算」 one.
         On::Action(
             &[ActionKind::MoveAfter],
-            ruleset_core::guards::OWN_DEED, "",
+            bandori_std::guards::OWN_DEED, "",
             None,
             on_move_end,
         ),
@@ -154,7 +154,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("kokoro_practice_spend")))? {
         return Ok(());
     }
-    if !ctx::gate(ctx::trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(ctx::trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     ctx::plan::set_stop_at(ctx::player_pos(player_id));

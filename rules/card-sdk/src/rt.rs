@@ -478,7 +478,7 @@ fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue
 ///
 /// ```ignore
 /// card_sdk::ruleset!(CARDS; roster: &RosterSources {
-///     card_ordinals: ruleset_core::roster_order::CARDS,
+///     card_ordinals: bandori_std::roster_order::CARDS,
 ///     lists: &[...],
 /// });
 /// ```

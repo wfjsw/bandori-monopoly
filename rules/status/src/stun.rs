@@ -28,7 +28,8 @@
 //! A stunned player's whole turn is skipped (`play.rs`: log `log.stunned_skip`,
 //! `end_turn`) -- the engine reads the act / move gates, not `stunned()`.
 
-use card_sdk::abi::{AbKind, ActionKind, FilterKind};
+use bandori_std::kind::abnormal;
+use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
 use card_sdk::{CardDef, On};
 
@@ -64,7 +65,7 @@ fn refuse(_owner: i32, _v: i32) -> bool {
 }
 
 fn stun_landed(_owner: i32) -> bool {
-    trigger::abnormal_kind() == Some(AbKind::Stun)
+    trigger::abnormal_kind() == Some(abnormal::Stun)
 }
 
 fn on_stun_landed(_owner: i32) -> card_sdk::Asked {
@@ -73,73 +74,13 @@ fn on_stun_landed(_owner: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// [晕眩]'s contribution to the generic move gate.
-pub fn blocks_move(stun: i32) -> bool {
-    stun > 0
-}
-
-/// 「无法使用[主动]技能和手卡的[手]效果」 -- act gate.
-pub fn blocks_act(stun: i32) -> bool {
-    stun > 0
-}
-
-/// 「无法收付款」 -- pay gate (and the payee filter).
-pub fn blocks_pay(stun: i32) -> bool {
-    stun > 0
-}
-
-/// [晕眩] does not close the on-board gate (the piece still stands on a tile).
-pub fn blocks_on_board(_stun: i32) -> bool {
-    false
-}
 // ------------------------------------------------------------- canonical API
+// Verb bodies live in `bandori_std::status::stun`; re-exported here so
+// `rules_status::stun::…` call sites keep working.
 
-/// Add `n` [晕眩] layers (floors at 0). Wear-off `Tick::TurnEnd`, declared
-/// here. [不可阻挡] 「晕眩效果也不会获得新的层数」: a positive grant while
-/// `unstoppable > 0` is refused before the engine service, so no abnormal
-/// [反击] window opens (STA-01). Negative `n` always runs (strip layers).
-pub fn add(player_id: i32, n: i32) {
-    if n > 0 && crate::unstoppable::refuses_layers(crate::unstoppable::get(player_id)) {
-        return;
-    }
-    card_sdk::ctx::give_stun(player_id, n);
-    if n != 0 {
-        card_sdk::ctx::state::set_expires(player_id, KEY, card_sdk::ctx::state::TURN_END);
-    }
-}
-
-/// Add `n` `stunStart` layers -- the ones that only start counting next turn
-/// (`Tick::TurnStart`). Same [不可阻挡] refusal as [`add`]. No abnormal
-/// window today (raw state write; the engine service opens one only for
-/// `stun`).
-pub fn add_start(player_id: i32, n: i32) {
-    if n > 0 && crate::unstoppable::refuses_layers(crate::unstoppable::get(player_id)) {
-        return;
-    }
-    if n == 0 {
-        return;
-    }
-    card_sdk::ctx::state::add(player_id, KEY_START, n);
-    card_sdk::ctx::state::set_expires(player_id, KEY_START, card_sdk::ctx::state::TURN_START);
-}
-
-/// [晕眩] layers (`stun` + `stunStart`, what the view shows as 眩晕).
-pub fn get(player_id: i32) -> i32 {
-    card_sdk::ctx::stun_of(player_id)
-}
-
-/// Drop every [晕眩] layer (both counters).
-pub fn clear(player_id: i32) {
-    use card_sdk::ctx;
-    let n = ctx::state::get(player_id, KEY);
-    if n > 0 {
-        ctx::state::add(player_id, KEY, -n);
-    }
-    let s = ctx::state::get(player_id, KEY_START);
-    if s > 0 {
-        ctx::state::add(player_id, KEY_START, -s);
-    }
-}
+pub use bandori_std::status::stun::{
+    add, add_start, blocks_act, blocks_move, blocks_on_board, blocks_pay, clear, get,
+};
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 

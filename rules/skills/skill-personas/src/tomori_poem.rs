@@ -27,7 +27,7 @@
 //! that settle, which is what `PaySplitMul` is.
 
 use card_sdk::abi::{ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state, trigger};
+use bandori_std::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Settle this player owes at their own next turn end, from （2）.
@@ -40,7 +40,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_DEED, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_DEED, "", None, on_pass),
         // （2）/（3） applicability: a landing within five tiles of the other
         // party. `actor == owner` is （3） (own landing near someone else);
         // `actor != owner` is （2） (someone else's landing near us). Both arms

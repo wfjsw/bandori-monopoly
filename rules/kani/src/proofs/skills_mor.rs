@@ -453,7 +453,7 @@ mod pass_fire {
     /// Unmodified `on_pass` (touko / nanami) reaches: gain_charge.
     /// Shared: both bodies are the same one-liner (`charge::gain(p, 1, …)`).
     crate::host_subset!(pass_gain_charge_dispatch {
-        gain_charge => arm_gain_charge,
+        gain_marker => arm_gain_marker,
         log | effect => arm_log,
     });
 
@@ -504,7 +504,7 @@ mod pass_fire {
             w.charge_max[user as usize] = charge_max_pin;
         });
 
-        let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
+        let gid = crate::guard_id!(bandori_std::guards::OWN_START);
         let admitted = {
             let ctx = fill_pass_circle(user);
             crate::guard!(gid, &ctx)
@@ -618,7 +618,7 @@ mod pass_fire {
         // Force the residual: owner, but tile is not a CiRCLE (kind 0).
         let mut t = kani::any();
         kani::assume(t >= 0 && t < 60 && crate::board::TILES[t as usize].kind != 0);
-        let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
+        let gid = crate::guard_id!(bandori_std::guards::OWN_START);
         world::with_world_mut(|w| {
             w.trig_player = 0;
             w.trig_tile = t;

@@ -19,7 +19,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(

@@ -83,8 +83,8 @@ pub const CARDS: &[CardDef] = &[
 /// caller derives from this, and effects that spend the same token budget it
 /// on top of their own cost.
 pub fn copy_sticker_cost(player_id: i32) -> i32 {
-    let borrow = ruleset_core::ctx::tok(player_id, "returns.borrow_uid");
-    if borrow != 0 && ruleset_core::ctx::self_uid() == borrow {
+    let borrow = bandori_std::ctx::tok(player_id, "returns.borrow_uid");
+    if borrow != 0 && bandori_std::ctx::self_uid() == borrow {
         1
     } else {
         0
@@ -98,7 +98,7 @@ pub fn copy_sticker_cost(player_id: i32) -> i32 {
 /// (`card-sdk`), not a refusal — the refusal belongs on the press's `cant_play`.
 pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
     let cost = copy_sticker_cost(player_id);
-    if cost > 0 && ruleset_core::ctx::tok(player_id, "星星贴纸") < cost {
+    if cost > 0 && bandori_std::ctx::tok(player_id, "星星贴纸") < cost {
         Some(card_sdk::Msg::new(card_sdk::key!("skill_band_no_sticker")))
     } else {
         None
@@ -110,7 +110,7 @@ pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
 pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
     let cost = copy_sticker_cost(player_id);
     if cost > 0 {
-        ruleset_core::ctx::add_tok(player_id, "星星贴纸", -cost, i32::MAX)?;
+        bandori_std::ctx::add_tok(player_id, "星星贴纸", -cost, i32::MAX)?;
     }
     Ok(())
 }

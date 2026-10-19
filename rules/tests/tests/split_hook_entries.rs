@@ -8,7 +8,7 @@
 mod common;
 
 use common::*;
-use ruleset_core::kind as rk;
+use bandori_std::kind as rk;
 
 /// Manifest shape of the three split cards: one Filter + one Action half,
 /// same body, same pre, and no later entry-index drift beyond the known shift.
@@ -177,7 +177,7 @@ fn j11_action_half_decays_on_turn_end() {
     );
 }
 
-/// Custom ruleset-core kind ids stay Action (non-filter) so `On::Action` may
+/// Custom bandori-std kind ids stay Action (non-filter) so `On::Action` may
 /// list them. `ChargePaying` is NOT a filter (its 「可」 opt-in prompts).
 #[test]
 fn custom_kind_filter_classification() {

@@ -378,7 +378,7 @@ pub mod src {
     /// PP:[丸山彩]憧憬的前方 `On::Filter(PaySplitAdd)`.
     pub const AYA_PAY_ADD: &str = "actor == owner && value > 0";
     /// A function-carrying guard (`is_start`).
-    pub const IS_CIRCLE: &str = ruleset_core::guards::OWN_START;
+    pub const IS_CIRCLE: &str = bandori_std::guards::OWN_START;
     /// A chain/kind-carrying guard (`effect.has(Pay)`).
     pub const CHAIN_PAY: &str =
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";

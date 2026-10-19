@@ -3,7 +3,7 @@
 //! 事件文本（`CardMeta` beside the rule body, id `A！A！O！`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 use card_sdk::abi::ActionKind;
 

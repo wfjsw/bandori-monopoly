@@ -14,7 +14,7 @@
 //! a countdown, both of which the keyed state holds.
 
 use card_sdk::abi::{state_key, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The paired player, or -1.
@@ -29,10 +29,10 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, at_start),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         On::Action(&[ActionKind::DiceRollAfter], "", "", Some(paired), on_roll),
         On::Filter(&[FilterKind::PaySplitChoose], "", Some(paired), on_pay),
-        On::Action(&[ruleset_core::kind::HouseAdded], "", "", Some(partner), on_built),
+        On::Action(&[bandori_std::kind::HouseAdded], "", "", Some(partner), on_built),
     ],
 );
 
@@ -70,7 +70,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「你的主要阶段中可消耗1火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 1 {
@@ -105,7 +105,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, PARTNER, who);
     state::set(player_id, LEFT, 2);
     state::set(player_id, SPELL, 1);
-    state::set_expires(player_id, SPELL, ruleset_core::ctx::state::TURN_END);
+    state::set_expires(player_id, SPELL, bandori_std::ctx::state::TURN_END);
     ctx::log(
         player_id,
         &Msg::new(key!("tukushi_try_paired")).player_id("who", who),

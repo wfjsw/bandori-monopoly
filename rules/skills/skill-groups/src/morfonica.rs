@@ -9,7 +9,7 @@
 //! taken -- a counter this skill owns, not the board's.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「选择[获得]资金次数」 -- how many times the money option has been taken.
@@ -29,7 +29,7 @@ pub const MORFONICA: CardDef = CardDef::new(
         // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
         // half of the CiRCLE pick.
         On::Action(
-            &[ruleset_core::kind::PassRewardAffected],
+            &[bandori_std::kind::PassRewardAffected],
             "actor == owner && value == 0", "",
             None,
             on_circle,
@@ -73,8 +73,8 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
 // the money half only, so the draw option is left alone.
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"Morfonica"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"Morfonica"#)
     .short_name(r#"Mor"#)
     .color(r#"#33AAFF"#)
     .skill(r#"振翅高飞的练习曲"#)
