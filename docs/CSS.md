@@ -128,6 +128,7 @@ not set them is unchanged.
 | `--replay-bar-h` | `ReplayBar` (ResizeObserver on the bar) | measured transport height, `0` when hidden |
 | `--replay-bar-bottom` | `ReplayBar` | height while the transport is docked at the **bottom**, else `0` |
 | `--replay-bar-top` | `ReplayBar` | board-body top inset while the transport is docked at the **top**, else `0` |
+| `--safe-top` / `-right` / `-bottom` / `-left` | `Stage` (`stageBox`) | hardware sitting on that stage edge (safe-area inset + the landscape top touch dead zone), in design px |
 
 Bottom-edge chrome (hand dock / peek / skill stack / sheet strip, the left
 column's actions and player list, the log) adds `--replay-bar-bottom` to its
@@ -136,6 +137,32 @@ column's actions and player list, the log) adds `--replay-bar-bottom` to its
 is then `--topbar-h` + the bar's height, and Board `.body` takes it as its
 `top`, dropping the whole board (field row, zoom control, card preview, …)
 below the strip in one move. Floating transport: both are `0`, no offset.
+
+### Safe area: what respects it and what does not
+
+The stage is laid out against the **large** viewport (`100lvw` / `100lvh`), not
+the visual one: the visual viewport is shorter in portrait (Safari's address
+bar, and the iOS PWA's status-bar strip) than in landscape, so sizing to it
+made forced rotation lay out on a different canvas than a real turn of the
+phone and left the cutout band drawing nothing. The large viewport is the
+whole screen in both orientations, so `rotate(90deg)` and turning the phone
+for real produce the same stage box. `index.html` claims the home-screen shell
+with `apple-mobile-web-app-status-bar-style=black-translucent` so the PWA is
+fullscreen in portrait too; Stage paints a screen-space `.statusScrim` over
+the top inset to keep the white status-bar glyphs readable.
+
+The stage's edges are the real screen edges on both axes: the game runs edge
+to edge, and insetting the box for the cutout left the retractable strips (the
+field row, the hand) hanging short of the border. What clears the hardware is
+the **controls**, padding by `--safe-*` (the safe-area inset on that stage edge
+plus the landscape top touch dead zone, already mapped through the forced
+rotation and divided by the fit scale). So the split is: **retractable /
+edge-docked strips do not respect the safe area** (they must connect to the
+real boundary); **controls do**. Today that is `TopBar` (the whole bar shifts
+in on every edge), Board `.body` (the side columns clear the cutout), the left
+column's actions row and the prompt sheet's window body (`padding-bottom`) --
+the sheet's *surface* still runs to the screen edge. A new edge-anchored
+control follows the controls, not the strips.
 
 ## (b) Shared primitives — `ui/primitives.module.css`
 

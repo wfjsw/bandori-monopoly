@@ -275,7 +275,9 @@
 }
 /* The sheet's window: content-sized (up to the centre column), capped height
    with the body scrolling, and the slide / retract transforms. Kept last so it
-   wins over `.window`'s fixed widths and `pop`. */
+   wins over `.window`'s fixed widths and `pop`. The window itself still runs to
+   the screen's bottom edge; only its contents lift clear of the home indicator
+   (`--safe-bottom`). */
 .sheetWin {
   width: fit-content;
   min-width: 480px;
@@ -283,6 +285,7 @@
   max-height: 640px;
   animation: sheetIn 0.22s var(--ease-sheet);
   transition: transform 0.22s var(--ease-sheet);
+  padding-bottom: var(--safe-bottom, 0px);
 }
 .sheetWin.retracted {
   transform: translateY(calc(100% - var(--sheet-strip)));
