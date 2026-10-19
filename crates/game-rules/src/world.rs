@@ -579,6 +579,11 @@ pub trait CardWorld: Clone + 'static {
     fn mark_rule_instances(&self) -> Vec<(i32, String)> {
         Vec::new()
     }
+    /// Standing board-owned status hosts (`status:*`), as `(uid, id)`. Same
+    /// shape as [`Self::mark_rule_instances`]; collected last among field hooks.
+    fn status_rule_instances(&self) -> Vec<(i32, String)> {
+        Vec::new()
+    }
     /// The named counter on the instance at `uid`.
     fn pool_at(&self, uid: i32, name: &str) -> i32 {
         self.counter_at(uid, name)

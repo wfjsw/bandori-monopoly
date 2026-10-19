@@ -224,3 +224,75 @@ fn stun_payee_is_refused() {
     let g = t.m.world().st.players[2].status_gates();
     assert!(!g.pay, "stunned payee has the pay gate closed");
 }
+
+// =====================================================================
+// noHand 2 -> 1 -> 0 (`status:no_hand` host hooks; was inline in `play.rs`)
+// =====================================================================
+
+/// The host's turn-start fold: `noHand == 2` drops to `1` at the owner's
+/// `TurnStart` (the 「this turn only」 half is spent). Identical to the old
+/// inline dance.
+#[test]
+fn no_hand_folds_at_turn_start() {
+    let mut t = Table::vanilla(2);
+    t.set_state(0, "noHand", 2);
+    // End P0 (2 survives -- only 1 clears at turn end), then P1, so P0's
+    // next turn start runs the fold.
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.m.world_mut().st.skip_move = true;
+    t.end(1).unwrap();
+    drain(&mut t);
+    // P0's turn has started: 2 -> 1.
+    assert_eq!(t.m.world().st.players[0].state_get("noHand"), 1, "2 folds to 1 at turn start");
+}
+
+/// The host's turn-end clear: `noHand == 1` drops to `0` at the owner's
+/// `TurnEnd`. Identical to the old inline dance.
+#[test]
+fn no_hand_clears_at_turn_end() {
+    let mut t = Table::vanilla(2);
+    t.set_state(0, "noHand", 1);
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.m.world().st.players[0].state_get("noHand"), 0, "1 clears to 0 at turn end");
+}
+
+/// `noHand == 2` is *not* cleared at turn end (only `1 -> 0` runs); it
+/// survives to fold at the next turn start. Matches the old dance.
+#[test]
+fn no_hand_two_survives_turn_end() {
+    let mut t = Table::vanilla(2);
+    t.set_state(0, "noHand", 2);
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.m.world().st.players[0].state_get("noHand"),
+        2,
+        "2 is not the clear target; it waits for the next turn start"
+    );
+}
+
+// =====================================================================
+// STA-01 (stun half): [不可阻挡] 「晕眩效果也不会获得新的层数」
+// =====================================================================
+
+/// A positive stun grant while [不可阻挡] is up is refused by the host verb
+/// (`status::stun::add`), so no layer lands. Existing layers still tick off.
+#[test]
+fn unstoppable_refuses_new_stun_layers() {
+    let mut t = Table::vanilla(2);
+    t.set_state(0, "unstoppable", 1);
+    // Play a card whose body calls `rules_status::stun::add` at turn end
+    // (Crychic:初演大成功 「回合结束后获得一层眩晕」).
+    t.give_play(0, "CRYCHIC:初演大成功").unwrap();
+    drain(&mut t);
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    drain(&mut t);
+    let stun = t.state(0, "stun") + t.state(0, "stunStart");
+    assert_eq!(stun, 0, "[不可阻挡] 「晕眩效果也不会获得新的层数」 (STA-01)");
+}

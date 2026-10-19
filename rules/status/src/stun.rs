@@ -10,12 +10,20 @@
 //! * **「无法使用[主动]技能和手卡的[手]效果」** -- generic **act gate**.
 //! * **「无法收付款」** -- generic **pay gate** (also the payee filter in
 //!   `play.rs` 「stunned payee」: a [晕眩]d player cannot be paid).
-//! * **「重复受到该效果时可叠加」** -- layer add.
-//! * **「玩家的每回合结束时移除一层」** -- `Tick::TurnEnd` on the item.
+//! * **「重复受到该效果时可叠加」** -- layer add. (Unlike [除外], stacking is
+//!   legal; do not copy exile's refuse-on-restack.)
+//! * **「玩家的每回合结束时移除一层」** -- wear-off is the item's own
+//!   `Tick::TurnEnd`, **declared by this host's grant verb**
+//!   (`ctx::state::set_expires`). `default_expiry` in `game-core` is the
+//!   safety net for raw writes; `tick_state` is key-agnostic.
 //! * **`stunStart`** -- the layer that only starts counting next turn
-//!   (`Tick::TurnStart`). `default_expiry` stamps it; `tick_state(TurnStart)`
-//!   folds it into `stun`. The view shows `stun + stunStart` as 眩晕
-//!   (`webui/src/scenes/board/Players.tsx`).
+//!   (`Tick::TurnStart`), declared the same way by [`add_start`].
+//!   `tick_state(TurnStart)` folds it into `stun`. The view shows
+//!   `stun + stunStart` as 眩晕 (`webui/src/scenes/board/Players.tsx`).
+//! * **[不可阻挡] 「晕眩效果也不会获得新的层数」** (rules.txt 51, STA-01) --
+//!   [`add`] / [`add_start`] refuse while `unstoppable > 0`, *before* the
+//!   engine service (so no abnormal [反击] window opens for a refused grant).
+//!   Existing layers still wear off (「在适当时机依旧掉层」).
 //!
 //! A stunned player's whole turn is skipped (`play.rs`: log `log.stunned_skip`,
 //! `end_turn`) -- the engine reads the act / move gates, not `stunned()`.
@@ -86,9 +94,33 @@ pub fn blocks_on_board(_stun: i32) -> bool {
 }
 // ------------------------------------------------------------- canonical API
 
-/// Add `n` [晕眩] layers (floors at 0). Wear-off `Tick::TurnEnd`.
+/// Add `n` [晕眩] layers (floors at 0). Wear-off `Tick::TurnEnd`, declared
+/// here. [不可阻挡] 「晕眩效果也不会获得新的层数」: a positive grant while
+/// `unstoppable > 0` is refused before the engine service, so no abnormal
+/// [反击] window opens (STA-01). Negative `n` always runs (strip layers).
 pub fn add(player_id: i32, n: i32) {
+    if n > 0 && crate::unstoppable::refuses_layers(crate::unstoppable::get(player_id)) {
+        return;
+    }
     card_sdk::ctx::give_stun(player_id, n);
+    if n != 0 {
+        card_sdk::ctx::state::set_expires(player_id, KEY, card_sdk::ctx::state::TURN_END);
+    }
+}
+
+/// Add `n` `stunStart` layers -- the ones that only start counting next turn
+/// (`Tick::TurnStart`). Same [不可阻挡] refusal as [`add`]. No abnormal
+/// window today (raw state write; the engine service opens one only for
+/// `stun`).
+pub fn add_start(player_id: i32, n: i32) {
+    if n > 0 && crate::unstoppable::refuses_layers(crate::unstoppable::get(player_id)) {
+        return;
+    }
+    if n == 0 {
+        return;
+    }
+    card_sdk::ctx::state::add(player_id, KEY_START, n);
+    card_sdk::ctx::state::set_expires(player_id, KEY_START, card_sdk::ctx::state::TURN_START);
 }
 
 /// [晕眩] layers (`stun` + `stunStart`, what the view shows as 眩晕).

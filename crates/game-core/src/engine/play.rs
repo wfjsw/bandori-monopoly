@@ -562,11 +562,9 @@ impl Cx<'_> {
         }
         let s = &mut self.w.st.players[i];
         // Timed counters due now -- the item says so, not the engine naming
-        // `stunStart`.
+        // `stunStart`. The `noHand` 2->1 fold is `status:no_hand`'s `TurnStart`
+        // hook (`rules/status/src/no_hand.rs`), not an inline dance here.
         s.tick_state(Tick::TurnStart);
-        if s.no_hand() == 2 {
-            s.state_set(key::NO_HAND, 1);
-        }
         // Snapshot the turn's starting squares and statuses (`turn_snap` /
         // `turn_start_pos`): 「在场地地块开始回合时」 is about the starting
         // square, and 「回到起始地点并取消所有受到的效果」 restores from here.
@@ -677,11 +675,9 @@ impl Cx<'_> {
         {
             let s = &mut self.w.st.players[i];
             // Timed counters due now (stay/stun wear off here). The
-            // item carries its own expiry, so this names no keys.
+            // item carries its own expiry, so this names no keys. The `noHand`
+            // 1->0 clear is `status:no_hand`'s `TurnEnd` hook, not inline.
             s.tick_state(Tick::TurnEnd);
-            if s.no_hand() == 1 {
-                s.state_set(key::NO_HAND, 0);
-            }
         }
         // 「并在回合结束时额外进行一次[触发结算]」 is no longer an engine
         // counter: it is a scheduled turn-end rule op (`On::AtEnd`, whose body
