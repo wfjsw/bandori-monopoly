@@ -42,7 +42,11 @@ pub const KEY: &str = "unstoppable";
 
 /// Add `n` [不可阻挡] layers.
 pub fn add(player_id: i32, n: i32) {
+    if n == 0 {
+        return;
+    }
     card_sdk::ctx::state::add(player_id, KEY, n);
+    bandori_std::status::declare_companion(player_id, KEY);
 }
 
 pub fn get(player_id: i32) -> i32 {

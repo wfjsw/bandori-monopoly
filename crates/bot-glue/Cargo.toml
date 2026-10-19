@@ -3,7 +3,7 @@ name = "bot-glue"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Browser worker bundle for the advanced (ISMCTS) bot (docs/BOT.md B6): bot-core + game-core + game-rules exposed to a Web Worker. Default `native-rules` links the card ruleset as rlibs (the monolith -- no wasmi sandbox, no /assets/rules/*.wasm fetch). One seat's view in, a proposed answer out. The main page glue (web-glue) stays unchanged."
+description = "Browser worker bundle for the advanced (ISMCTS) bot (docs/BOT.md B6): bot-core + game-core + game-rules exposed to a Web Worker. Default `native-rules` links the card ruleset as rlibs (the monolith -- no wasmi sandbox, no /assets/rules/*.wasm fetch). One seat's view in, a proposed answer out. The main page glue (web-glue) remains unchanged."
 
 [lib]
 crate-type = ["cdylib", "rlib"]

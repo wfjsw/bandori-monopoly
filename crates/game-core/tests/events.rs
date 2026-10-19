@@ -18,7 +18,7 @@ use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
 
-/// A rules stand-in with exactly one event rule: `event:EVT1` stays in play
+/// A rules stand-in with exactly one event rule: `event:EVT1` remains in play
 /// (「将此卡放置于场地中央」) and every other event falls through the built-in
 /// fallback.
 struct OneEvent;
@@ -57,7 +57,7 @@ fn new_match(rules: Arc<dyn CardRules>) -> Match {
 
 // 规则书（data/rules.txt 97–99）: 「抽取的事件卡不进入手卡并向所有玩家公开，
 // 效果立刻生效。事件结算后进入事件弃卡区。」 -- a one-shot event is filed away
-// and does not stay on the active list.
+// and does not remain on the active list.
 #[test]
 fn stub_rules_draw_files_the_event_away() {
     let mut m = new_match(Arc::new(StubRules));

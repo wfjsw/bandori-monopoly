@@ -1,14 +1,14 @@
 //! Black-box tests for counteraction windows at **bot** seats (`can_counteract_now`).
 //!
-//! The rulebook's eligibility is out / exile (plus `CannotPlay`: stunned,
-//! no-hand). "Is a bot" is not a rulebook reason, so every mentality is offered
+//! The rulebook's eligibility is out / off-board (plus `CannotPlay`: gated).
+//! "Is a bot" is not a rulebook reason, so every mentality is offered
 //! exactly like a human and answers through the engine's AI fill
 //! (`Cx::fill_ai`): standard by its `CounterParams` propensity (default
 //! `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰, user ruling 2026-10-08 --
 //! "bots must be able to counteract"), chaos by `CHAOS_COUNTER_CHANCE`. An
 //! Advanced seat is held (`ai` off) for an external driver -- the offer is an
 //! ordinary prompt and the engine's deadline answers it with the fallback (the
-//! skip), so a window never stalls. Out / exiled seats still never see an
+//! skip), so a window never stalls. Out / off-board seats still never see an
 //! offer.
 //!
 //! Chain semantics (ruling 2026-10-07) are unchanged for humans -- see
@@ -138,7 +138,7 @@ fn vanilla_seed(n: usize, seed: u64) -> Table {
 // Bot seats are offered and answered
 // =====================================================================
 
-// A previous "out / AI / exiled players never open a window" rule dropped
+// A previous "out / AI / off-board players never open a window" rule dropped
 // the AI half: a bot is a player, so the window opens and the seat answers
 // through `fill_ai`.
 //
@@ -301,7 +301,7 @@ fn an_advanced_seat_gets_the_offer_and_the_fallback_answers_it() {
     // Casual deadline: the prompt's 12 s + `REMOTE_GRACE` (1.5 s), then the
     // fallback -- the skip -- is applied.
     t.tick_until("the fallback answers", |t| t.prompt().is_none());
-    // The skip: the probe stayed in hand, nothing declared, X settled.
+    // The skip: the probe remained in hand, nothing declared, X settled.
     assert_eq!(who_of(&t, "probe_fired"), Vec::<i64>::new(), "no declaration");
     assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X settled");
     let hand = &t.m.world().hidden[1].hand;
@@ -315,39 +315,16 @@ fn an_advanced_seat_gets_the_offer_and_the_fallback_answers_it() {
 // Rulebook exclusions
 // =====================================================================
 
-// Out / exile are the book's only eligibility cuts (plus `CannotPlay`).
+// Out / off-board are the book's only eligibility cuts (plus `CannotPlay`).
 // They are skipped per visit whatever the seat is driven by -- a bot seat
-// included. "Is a bot" is not a reason; these two are.
+// included. "Is a bot" is not a reason; these two are. The off-board half
+// lives in `rules/tests/tests/chain_eligibility.rs` (it names a ruleset key).
 //
 // Seat layout: `TEST:aimer` names `others().first()` = seat 1, so the dead
 // seat sits at 2 and the live counter at 1 -- the effect link is raised
 // against a live player and the window opens normally.
 #[test]
-fn out_and_exiled_seats_never_get_an_offer() {
-    // Exiled bot holds an eligible counter and is never asked.
-    let mut t = Table::vanilla(3);
-    t.make_bot(2, BotMentality::Standard);
-    t.set_state(2, "exile", 1);
-    t.give(0, &["TEST:aimer"]);
-    t.give(1, &["TEST:probe"]);
-    t.give(2, &["TEST:probe"]);
-    t.play(0, "TEST:aimer").unwrap();
-    let mut asked_ever = Vec::new();
-    while t.prompt().is_some() {
-        let a = t.asked();
-        assert!(
-            !a.contains(&2),
-            "the exiled seat was offered: {:?} {}",
-            a,
-            t.dump_prompt()
-        );
-        asked_ever.extend(a);
-        t.decline();
-    }
-    assert!(!asked_ever.is_empty(), "the window never opened at all");
-    assert_eq!(who_of(&t, "probe_fired"), Vec::<i64>::new(), "nobody declared");
-    assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X named its live target");
-
+fn out_seats_never_get_an_offer() {
     // Out (bankrupt) human: same cut.
     let mut t = Table::vanilla(3);
     t.give(0, &["TEST:aimer"]);

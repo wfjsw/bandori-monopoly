@@ -85,9 +85,9 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     // the teleport, so a refused gain negates the whole card (「视为此卡未生效」,
     // CH-07 minimal -- the card is spent, no place / no designate / no later
     // teleport). C-Q26-adjacent ruling recorded by `g23_unstoppable_refuses_the_exile_cost`.
-    let before = ctx::state::get(player_id, card_sdk::abi::state_key::EXILE);
+    let before = ctx::state::get(player_id, bandori_std::state_key::EXILE);
     rules_status::exile::send(player_id, 2, tile);
-    if ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) <= before {
+    if ctx::state::get(player_id, bandori_std::state_key::EXILE) <= before {
         ctx::log(
             player_id,
             &Msg::new(key!("no_road_refused")).card("card", "MyGO:无路矢"),
@@ -96,7 +96,7 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`. The
     // engine's exile tick reads this slot and consumes the turn's main move.
-    ctx::set_slot(player_id, card_sdk::abi::state_key::EXILE_MAIN, 1);
+    ctx::set_slot(player_id, bandori_std::state_key::EXILE_MAIN, 1);
     // 规则书: 「在[除外]层数归0后[传送]至该格子」 -- the log names both the
     // destination and the redirect below.
     ctx::log(
@@ -137,7 +137,7 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
 /// this player's own tile rent. `turn_snap` is the turn-start snapshot and is
 /// stale for a layer granted mid-turn (docs/GUARDS.md §4.2).
 fn redirect_applies(player_id: i32) -> bool {
-    ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) > 0
+    ctx::state::get(player_id, bandori_std::state_key::EXILE) > 0
 }
 
 /// 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#

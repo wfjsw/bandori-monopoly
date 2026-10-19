@@ -2812,3 +2812,16 @@ against master `1cd71939` (157 `TODO(规则书)`, 11 RULING ignores, ABI v85).*
   `bandori_std::kind::Exile`. Shared stay/stun/exile verbs live in
   `bandori_std::status`. ABI_VERSION 87 -> 88. Still open: `fireSpent` ->
   `MarkerSpent` rename (separate ticket).
+
+## status-vocab-zero — opaque status keys (closed)
+- **status**: **fixed** (2026-10-19) — the engine no longer names stay/stun/
+  exile/noHand/unstoppable/playableStunned. Layer keys are opaque strings;
+  gates are asked of the ruleset (`gate_open` + `OnBoard`/`Targetable`);
+  wear-off and flooring are declared by the writer (`set_expires` /
+  `set_flags`); post-commit raises take a caller-supplied wire name
+  (`raise_after`). Names live in `rules/bandori-std` + `rules/status` + the
+  CEL vocabulary in `rules/cond`. `AbKind::as_str` name table, `status_gates`
+  / `StatusGates`, `MatchPlayer::{stay,stun,exile,…}`, `default_expiry`, and
+  the `state::key` status constants are deleted. ABI_VERSION 88 -> 89.
+  `apply_abnormal` is split (`gate` + `state_add` + `raise_after`).
+  Still open: `fireSpent` -> `MarkerSpent` rename (separate ticket).

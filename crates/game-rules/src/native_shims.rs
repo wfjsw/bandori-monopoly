@@ -254,6 +254,10 @@ pub trait HostOps {
     fn op_add_marker_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_apply_abnormal` (player, kind, n, to)
     fn op_apply_abnormal(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_state_set_flags` (player, key_p, key_l, flags)
+    fn op_state_set_flags(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_raise_after` (player, name_p, name_l, value)
+    fn op_raise_after(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_skip_main_move` (player, locked)
     fn op_skip_main_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_clear_move_skip` (player)
@@ -1038,6 +1042,16 @@ impl<C: crate::host::HostCtx> HostOps for C {
         crate::hostfns::apply_abnormal(self, a[0], a[1], a[2], a[3])?;
         Ok(0)
     }
+    fn op_state_set_flags(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        let key = crate::hostfns::guest_str(self, a[1], a[2])?;
+        crate::hostfns::state_set_flags(self, a[0], &key, a[3] as u8)?;
+        Ok(0)
+    }
+    fn op_raise_after(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        let name = crate::hostfns::guest_str(self, a[1], a[2])?;
+        crate::hostfns::raise_after(self, a[0], &name, a[3])?;
+        Ok(0)
+    }
     fn op_skip_main_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::skip_main_move(self, a[0], a[1])?;
         Ok(0)
@@ -1725,7 +1739,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
 
 thread_local! {
     /// The run currently executing, boxed so its address is stable: a nested
-    /// `play_card` swaps in its own host and the outer reference stays valid.
+    /// `play_card` swaps in its own host and the outer reference remains valid.
     static HOST: std::cell::RefCell<Option<Box<dyn HostOps>>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -2673,6 +2687,22 @@ pub unsafe extern "C-unwind" fn ruleset_add_marker_max(
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_state_set_flags(player_id: i32, kp: i32, kn: i32, flags: i32) {
+    with_host(|h| match h.op_state_set_flags([player_id, kp, kn, flags, 0, 0]) {
+        Ok(_) => 0,
+        Err(e) => abort_host(e),
+    });
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_raise_after(player_id: i32, np: i32, nl: i32, value: i32) {
+    with_host(|h| match h.op_raise_after([player_id, np, nl, value, 0, 0]) {
+        Ok(_) => 0,
+        Err(e) => abort_host(e),
+    });
 }
 
 #[no_mangle]

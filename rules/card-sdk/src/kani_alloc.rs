@@ -8,7 +8,7 @@
 //!
 //! This is a static arena: `alloc` is a cursor bump, `dealloc` is a no-op,
 //! `realloc` grows in place when the block is the most recent one. The guest
-//! wasm bump in [`crate::rt`] is unchanged (production dist hashes stay
+//! wasm bump in [`crate::rt`] is unchanged (production dist hashes remain
 //! byte-identical); this module is `cfg(kani)` only.
 //!
 //! Exhaustion is a **loud** `kani::assert` (never a silent null into

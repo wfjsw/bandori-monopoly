@@ -22,7 +22,7 @@
 //! view -- the exact frame the page renders for that seat (`MatchState` + own
 //! hand + own sorted draw + `view_extra`). Never a `World`, a match seed, or
 //! another seat's hand / deck order / `aiAnswer`. The reply is a proposed
-//! `NetMessage`; the engine (solo glue / server) stays authoritative and
+//! `NetMessage`; the engine (solo glue / server) remains authoritative and
 //! applies it through the ordinary `act` path.
 //!
 //! Surface (JSON strings across the boundary, the same shapes the server's
@@ -161,7 +161,7 @@ struct Cache {
     trees: HashMap<i32, Ismcts>,
     /// Last public turn `(round, turn)` each seat ran a speculative
     /// (predicted) search for -- one searching ponder per seat per turn
-    /// (`docs/BOT.md` §3.5), so the idle probes stay cheap no-ops.
+    /// (`docs/BOT.md` §3.5), so the idle probes remain cheap no-ops.
     speculative_at: HashMap<i32, (i32, i32)>,
 }
 

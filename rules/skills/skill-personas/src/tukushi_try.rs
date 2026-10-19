@@ -13,7 +13,7 @@
 //! kickback. The pairing is a value (「你与一名其他玩家」) and the two rolls are
 //! a countdown, both of which the keyed state holds.
 
-use card_sdk::abi::{state_key, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

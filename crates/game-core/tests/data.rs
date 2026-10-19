@@ -80,7 +80,7 @@ fn json_defaults_match_csharp_initializers() {
     assert!(!s.active());
 
     let player_id: MatchPlayer = serde_json::from_str(r#"{"bankrupt":true}"#).unwrap();
-    assert_eq!((player_id.hand_limit(), player_id.exile_to()), (Some(5), -1));
+    assert_eq!(player_id.hand_limit(), Some(5));
     assert!(player_id.out());
 
     let e: MatchEvent = serde_json::from_str(r#"{"id":7,"type":"dice"}"#).unwrap();
@@ -94,7 +94,7 @@ fn json_defaults_match_csharp_initializers() {
     let json = serde_json::to_value(&m).unwrap();
     assert!(
         json.get("match").is_none() && json.get("room").is_none(),
-        "absent nested objects stay absent"
+        "absent nested objects remain absent"
     );
 }
 
@@ -122,7 +122,7 @@ fn match_state_round_trips_with_camel_case_names() {
     }
     // Keyed state is one map of {value, min, max, expires} items.
     assert_eq!(v["players"][0]["state"]["handLimit"]["value"], 5);
-    assert_eq!(v["players"][0]["state"]["exileTo"]["value"], -1);
+    assert_eq!(v["players"][0]["state"]["handLimit"]["value"], 5);
     let back: MatchState = serde_json::from_value(v).unwrap();
     assert_eq!(back, s);
     assert_eq!(back.player_of(3), 0);

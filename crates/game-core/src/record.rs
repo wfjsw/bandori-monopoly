@@ -157,7 +157,7 @@ pub const BUNDLE_ID_VERSION: &str = "bdre-bundle-v1";
 ///
 /// `data_sha256` is empty on every record this build writes (see
 /// [`EngineStamp::data_sha256`]); the recipe still hashes that empty string so
-/// the field slot stays in the id.
+/// the field slot remains in the id.
 ///
 /// ```text
 /// sha256_hex("bdre-bundle-v1\n"
@@ -200,7 +200,7 @@ fn hex(bytes: &[u8]) -> String {
 
 impl EngineStamp {
     /// What game-core knows on its own: the two format versions. The fields
-    /// game-core cannot see stay empty ("unknown") and [`compat`] skips them;
+    /// game-core cannot see remain empty ("unknown") and [`compat`] skips them;
     /// callers that know the full stamp (web-glue, the rules worker) should
     /// pass it to [`Replayer::new_with_stamp`] instead.
     pub fn current() -> Self {
@@ -718,7 +718,7 @@ pub fn encode_record_zst(file: &RecordFile) -> Vec<u8> {
 ///   same JSON: 5.4x, better than levels 3 and 9. The server seals and
 ///   serves the bytes where the ratio shows up in Redis and in the download.
 ///
-/// Decode stays on `ruzstd` everywhere (see [`expand_record`]): one decoder
+/// Decode remains on `ruzstd` everywhere (see [`expand_record`]): one decoder
 /// reads both encoders' frames, and an old recording plays in either build.
 pub fn zst_encode(bytes: &[u8]) -> Vec<u8> {
     #[cfg(target_arch = "wasm32")]

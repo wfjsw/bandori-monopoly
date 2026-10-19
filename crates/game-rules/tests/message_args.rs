@@ -22,9 +22,8 @@ fn is_internal_key(s: &str) -> bool {
     if matches!(s, "bonus" | "points" | "pointsField" | "skillBlock") {
         return true;
     }
-    // Lower-camel engine state / prop keys (handLimit, startHand, skillState,
-    // unstoppable, noHand, stunStart, exileTo, ...). Rulebook terms are
-    // Chinese or bracketed (stay); card-declared counters are display names.
+    // Lower-camel engine state / prop keys (handLimit, startHand, skillState, …).
+    // Rulebook terms are Chinese or bracketed; card-declared counters are display names.
     if s.chars().next().is_some_and(|c| c.is_ascii_lowercase())
         && s.chars().any(|c| c.is_ascii_uppercase())
         && s.chars().all(|c| c.is_ascii_alphanumeric())
@@ -236,7 +235,6 @@ fn name_helpers_never_text_a_known_key() {
         counter_name("bonus"),
         counter_name("points"),
         state_key_name("handLimit"),
-        state_key_name("stay"),
         state_key_name("skillState"),
         mark_kind_name("mark:points"),
         mark_kind_name("skillBlock"),
@@ -247,5 +245,7 @@ fn name_helpers_never_text_a_known_key() {
     // Known keys resolve to their own i18n names (wire keys, kept verbatim).
     assert_eq!(counter_name("bonus").key(), "log.counter.bonus");
     assert_eq!(state_key_name("handLimit").key(), "log.state.hand_limit");
+    // Generic fallback quotes the key as data (`log.state.other`).
+    assert_eq!(state_key_name("someKey").key(), "log.state.other");
     assert_eq!(mark_kind_name("mark:points").key(), "mark:points");
 }

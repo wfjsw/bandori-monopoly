@@ -1,7 +1,7 @@
 use chrono::Duration;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::persona::complete::char;
+use nom::character::complete::char;
 use nom::combinator::{map, opt};
 use nom::multi::many1;
 use nom::number::complete::double;

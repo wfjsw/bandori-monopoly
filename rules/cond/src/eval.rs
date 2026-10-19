@@ -21,14 +21,27 @@ use crate::kinds;
 use crate::view::CondView;
 use crate::vocab::{self, Fx, Name, Scope, Table, VOCAB};
 
+/// Shared empty [`CandidateCtx`] for the window-half binds. A `default()` on
+/// the caller's frame is ~240 B per probe; STACK-01's 512 KiB thread adds
+/// those up along a deep settle chain.
+fn empty_cand() -> &'static CandidateCtx {
+    use std::sync::LazyLock;
+    static EMPTY: LazyLock<CandidateCtx> = LazyLock::new(CandidateCtx::default);
+    &EMPTY
+}
+
 /// A window's reusable CEL root context. Build once per `declare_one` /
 /// `run_hook` window; then [`Cond::eval`] (or [`Cond::eval_with_scope`]) for
 /// each candidate.
 pub struct WindowScope {
-    root: Context<'static, 'static>,
+    /// Heap-boxed: a `Context` plus the window snapshot is several KiB, and a
+    /// scope is built per gate/condition probe. Keeping it off the caller's
+    /// frame is what lets a deep settle chain (STACK-01) stay inside a small
+    /// thread stack.
+    root: Box<Context<'static, 'static>>,
     /// The window snapshot, kept so the function tables can be baked on
-    /// demand (see [`Self::bind_window_tables`]).
-    win: WindowCtx,
+    /// demand (see [`Self::bind_window_tables`]). Heap-boxed with `root`.
+    win: Box<WindowCtx>,
     /// Window-side function tables already baked for this window, by the
     /// function's flat name: `(hidden variable, table)`.
     tables: std::sync::Mutex<HashMap<String, Option<(&'static str, Value)>>>,
@@ -44,19 +57,20 @@ impl WindowScope {
 
     /// [`Self::new`] taking the snapshot by value (no copy).
     pub fn from_owned(win: WindowCtx) -> Self {
-        let win_ref = &win;
+        let win = Box::new(win);
         let mut root = Context::with_env(shared_env());
         // The eager snapshot is the reference `CondView`; the host's live
         // view (`game-rules`'s `LiveSnap`) can fill the same tables directly.
-        let empty_cand = CandidateCtx::default();
-        let view = crate::SnapshotView {
-            win: win_ref,
-            cand: &empty_cand,
-        };
-        bind_window(&mut root, &view);
+        {
+            let view = crate::SnapshotView {
+                win: &win,
+                cand: empty_cand(),
+            };
+            bind_window(&mut root, &view);
+        }
         install_functions(&mut root);
         WindowScope {
-            root,
+            root: Box::new(root),
             win,
             tables: Default::default(),
         }
@@ -78,10 +92,9 @@ impl WindowScope {
                         if !matches!(n.scope, Scope::Func { cand: false, .. }) {
                             return None;
                         }
-                        let empty_cand = CandidateCtx::default();
                         let view = crate::SnapshotView {
                             win: &self.win,
-                            cand: &empty_cand,
+                            cand: empty_cand(),
                         };
                         vocab::fn_table(n, &view).map(|(var, t)| (var, table_value(&t)))
                     })
@@ -108,10 +121,10 @@ impl WindowScope {
         let mut child = self.root.new_inner_scope();
         // Candidate overlay through the same `CondView` contract. The window
         // half of the view is not needed here (those names are already bound
-        // on the root); a default window keeps `SnapshotView` total.
-        let empty_win = WindowCtx::default();
+        // on the root); borrow this scope's already-boxed snapshot so the
+        // probe does not materialise a 400-odd-byte `WindowCtx` on the frame.
         let view = crate::SnapshotView {
-            win: &empty_win,
+            win: &self.win,
             cand,
         };
         bind_candidate(&mut child, cond, &view);

@@ -1,4 +1,4 @@
-//! The archived reference records (`archive/engine/refs/`) must stay readable
+//! The archived reference records (`archive/engine/refs/`) must remain readable
 //! and keep their replay contract (`docs/REPLAY.md` §9, `docs/FAIRNESS.md`
 //! "old records").
 //!

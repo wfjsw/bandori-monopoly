@@ -14,7 +14,7 @@
 //! registry overlay of the borrowed face's row (`fire::overlay` / `end_overlay`),
 //! keyed on the last-player-to-play latch.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

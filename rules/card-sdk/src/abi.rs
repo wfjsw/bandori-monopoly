@@ -83,7 +83,7 @@ use alloc::{string::String, vec::Vec};
 ///      `placed_tile(player_id, id)`, `play_doubled()` and
 ///      `trig_cards` (the drawn cards on a `drew` trigger).
 /// v26: the targeting pipeline -- `target(player_id, tile, single)` pauses the
-///      run with a `Target` host request (`target` / `target_tile`): exile,
+///      run with a `Target` host request (`target` / `target_tile`): the off-board kind,
 ///      the `immuneAll` / `untargetable` / `redirect` guard hooks (new kinds),
 ///      the `targeted_count` counter, then the `targeted` hooks
 ///      and the `target` [反击] window. `immuneAll` also gates card-driven
@@ -129,7 +129,7 @@ use alloc::{string::String, vec::Vec};
 ///      by `CardDef::props`, replacing the engine's rulebook-prose matching
 ///      (「手卡上限数量减1」 / 「可在眩晕时打出」). The keys the engine reads are
 ///      named constants in [`prop`] (mirrored in `game_core::state::prop`):
-///      `handLimitDelta` and `playableStunned`. The host keeps them on `CardInfo`, the
+///      `handLimitDelta` and the hand-play exemption. The host keeps them on `CardInfo`, the
 ///      engine queries `CardRules::card_prop(card, key)` (default 0) and
 ///      stamps the whole map onto the `FieldCard` at placement.
 /// v31: tile rule instances (`docs/TILES.md`) -- `OnKind::Settle` (a rule's
@@ -155,7 +155,7 @@ use alloc::{string::String, vec::Vec};
 ///      `ctx::roll_ask` / `ctx::do_move_roll_ask`.
 /// v34: `prop::RENT_HOUSES` (virtual rent-house-count, 「房屋数视为…」 -- gone
 ///      with a placed card) and `ctx::rent_houses_of` (the counted value the
-///      rent lookup reads). `ctx::houses_of` stays real.
+///      rent lookup reads). `ctx::houses_of` remains real.
 /// v35: the skill / band-skill / follow surface.
 ///      (a) `invoke_skill(player_id, id)` -- run a skill rule's press entry
 ///      (`On::Play`) for a player, nested like `play_card`. This is 「立即执行
@@ -194,7 +194,7 @@ use alloc::{string::String, vec::Vec};
 ///      and active list. An event's `CardDef` id is `event:<id>` and it is
 ///      bound on the neutral board owner (`BOARD_OWNER`) with `tile = -1` for
 ///      as long as it is active, the same shape as a `tile:*` instance.
-/// v38: the two [CP点] kinds (user ruling 2026-10-07). **Tile marks** stay the
+/// v38: the two [CP点] kinds (user ruling 2026-10-07). **Tile marks** remain the
 ///      `mark:cp` owner's (`ctx::place_cp` / `count_cp` / `count_cp_from` /
 ///      `clear_cp`, plus `ctx::cp_src_at` for the mark's provenance lookup).
 ///      **On-card** [CP点] is `FieldCard::cp` -- 「自己[场上]N个[CP点]」, the CP
@@ -215,7 +215,7 @@ use alloc::{string::String, vec::Vec};
 ///      [`prop::FORCE_STAYS_MORTGAGED`], [`prop::ANY_COLOR`] and the
 ///      `colorFor:` prefix. `ctx::buy_quotes` / `ctx::buy` / `ctx::acquire` /
 ///      `ctx::agent_offer` / `ctx::linger`. The retired props
-///      `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` stay for one ABI (P5
+///      `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` remain for one ABI (P5
 ///      deletes them and the lingering-turn flags together). SAVE_VERSION 3 → 4
 ///      (the lingering-instance field enters the save).
 /// v41: the **removals**. `ctx::set_buy_discount` / `ctx::set_free_buy` /
@@ -247,7 +247,7 @@ use alloc::{string::String, vec::Vec};
 ///      including a 「不触发结算」 one (only the settle stages are skipped);
 ///      「移动后」/「主要移动结束时」/「移动终点」 clauses land here. The
 ///      roll-specific `rollPlan` / `moveRoll` and the teleport-specific
-///      `teleport` / `teleported` stay where they are; `moveResolved` stays the
+///      `teleport` / `teleported` remain where they are; `moveResolved` remains the
 ///      final terminal after any settle. SAVE_VERSION unchanged.
 /// v45: guard **condition** per guarded entry (docs/GUARDS.md G0). `On::Play` /
 ///      `On::Counteract` / `On::Hook` gain a trailing `pre: &'static str`
@@ -290,12 +290,12 @@ use alloc::{string::String, vec::Vec};
 ///      returns whether the link settled. `gain_typed` -- a bank print through
 ///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
 ///      `typ` and a replacement log line (`Pay::text`). `prop_at` /
-///      `set_prop_at` (one declared property of a field instance), exile layers
-///      (`[除外]` layers, mirroring stun layers), `ai_agent_choice` (the AI's
+///      `set_prop_at` (one declared property of a field instance), layer counters
+///      (`[除外]` layers, mirroring the other layer counters), `ai_agent_choice` (the AI's
 ///      preferred index among agent-offer tiles), `trigger::move_from`
 ///      (`t.Move.From`, the 移动起点). `ctx::agent_landing` and
 ///      `ctx::settle_circle_reward` are **removed** -- the tile bodies carry
-///      the logic (`land_at_built_in` / `Play::circle_reward` stay the
+///      the logic (`land_at_built_in` / `Play::circle_reward` remain the
 ///      `StubRules` fallback). SAVE_VERSION unchanged (no save field).
 /// v51: **named counters + bound units + cross-card messages** (user ruling
 ///      2026-10-10). Every tile mark and player token is a unit of some card
@@ -348,7 +348,7 @@ use alloc::{string::String, vec::Vec};
 /// v55: `ManifestOn::flash` -- a declarative, per-entry [`Flash`] policy beside
 ///      the header mode: `Auto` (host classifies by scope, owner-self-only =>
 ///      no flash), `Always` (the rule says this entry always flashes, e.g. a
-///      self-only effect the player must notice), `Never` (log entry stays,
+///      self-only effect the player must notice), `Never` (log entry remains,
 ///      no flash/pulse). Authored via `CardDef::flash`. The header modes of
 ///      v54 are unchanged; `CardDef::presentation` is the one lookup that
 ///      folds header + flash into [`EntryPresentation`].
@@ -377,7 +377,7 @@ use alloc::{string::String, vec::Vec};
 ///      as generic class-membership props (`class:` / `classFor:<p>:`) plus the
 ///      existing `anyColor` / `colorFor:<p>` colour props. Game sugar
 ///      (`is_deed(t) = tile_is(t, "ring")`, …) lives in `bandori-std`.
-///      `tile_group` / `tile_price` stay as generic field sugar.
+///      `tile_group` / `tile_price` remain as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
 /// v65: **import-module rename** -- the wasm import module and every guest
 ///      export / native `link_name` drop the game prefix: module `"bandori"` →
@@ -531,10 +531,10 @@ use alloc::{string::String, vec::Vec};
 ///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
 ///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
 ///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
-///      direct money move (hooks + logging stay in that mechanism).
+///      direct money move (hooks + logging remain in that mechanism).
 /// v74: **Action / Filter split** (WordPress `do_action` / `apply_filters`).
 ///      `On::Hook` is removed (no alias). `OnKind::Hook = 3` is renamed
-///      `OnKind::Action` and **keeps id 3** (old compiled modules stay
+///      `OnKind::Action` and **keeps id 3** (old compiled modules remain
 ///      loadable). New `OnKind::Filter = 11` (11, not 9 -- 9/10 are the v73
 ///      deed kinds) carries the modifier-pipeline / value-shaping kinds
 ///      (`TriggerKind::is_filter`). A Filter may only list filter kinds and an
@@ -546,7 +546,7 @@ use alloc::{string::String, vec::Vec};
 ///      `On::FilterValue` is `fn(player_id, FilterValue) -> FilterValue`.
 ///      Bodies may not prompt or emit mutating ctx effects; the host folds the
 ///      return. New filter kind `TriggerKind::DiceRollValue = 102` is raised
-///      immediately before `DiceRollAfter` for roll reshaping (DiceRollAfter stays a
+///      immediately before `DiceRollAfter` for roll reshaping (DiceRollAfter remains a
 ///      pure Action event). SAVE_VERSION unchanged.
 /// v76: **DiceRollPlan / AtEnd fold**. `On::RollPlan` is
 ///      `On::FilterValue(&[TriggerKind::DiceRollPlan], …)`; `On::AtEnd` is
@@ -586,7 +586,7 @@ use alloc::{string::String, vec::Vec};
 ///      `ctx::pay_build` through the money pipeline, `ctx::assign_deed`,
 ///      `ctx::log`). `buyGate` is a `FilterFlag`, `buyAssign` a `FilterValue`
 ///      (deal owner/houses/mortgaged); `buyBefore` / `bought` / `buyAfter` /
-///      `buildBefore` / `houseAdded` / `buildAfter` stay Actions. Force-buy
+///      `buildBefore` / `houseAdded` / `buildAfter` remain Actions. Force-buy
 ///      money remains a direct transfer outside effects (规则书 其他规则 6).
 ///      Ids 12/13, not 4/5/6 (retired) or 11 (`Filter`). Renumbered once past
 ///      the v79 DiceRoll* rename (the buy/build branch also claimed v79).
@@ -629,8 +629,8 @@ use alloc::{string::String, vec::Vec};
 ///      `PayGate(96)` / `ChargePaying(78)`, host fns (`ctx::pay_*`, `pay_buy`,
 ///      `pay_build`, `pay_leg`, `split_pay`, `set_pay_amount`,
 ///      `set_pay_target`), and CEL variables (`pay_is_rent`, `pay_*`).
-///      Filter/Action classification unchanged: Combined*/Split* filters stay
-///      filters; the two *Before prompts stay Actions.
+///      Filter/Action classification unchanged: Combined*/Split* filters remain
+///      filters; the two *Before prompts remain Actions.
 ///      SAVE_VERSION unchanged.
 /// v83: **`FlipEffect` / `FlipAfter` retired; PP fans in the per-player state
 ///      dict**. Ids 94 (`flipEffect`) and 104 (`flipAfter`) are **retired --
@@ -643,19 +643,18 @@ use alloc::{string::String, vec::Vec};
 ///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
 ///      SAVE_VERSION unchanged.
 /// v84: **Dead trigger kinds retired**. Ids 16 (`stop`), 17 (`teleport`),
-///      19 (`stun`), 20 (`stay`), 22 (`forced`) are **retired -- never
+///      19 / 20 / 22 (the first three abnormal kinds) are **retired -- never
 ///      reuse**. None of them is raised by the engine and none has a live
 ///      listener. Not retired (still live at v84): `skillTeleport` (18),
-///      `exile` (21), `teleported` (66), `MoveKind::Teleport`, and the
-///      `AbKind` status vocabulary. The CEL names `Stop` / `TeleportTrigger`
-///      / `Stun` / `Stay` / `Forced` leave the kind table (`Teleport` stays
-///      as `MoveKind`). SAVE_VERSION unchanged.
+///      the ruleset-declared id 21, `teleported` (66), `MoveKind::Teleport`, and
+///      the `AbKind` wire ids. The CEL names for the retired kinds leave the
+///      kind table (`Teleport` remains as `MoveKind`). SAVE_VERSION unchanged.
 /// v85: **`SkillTeleport` retired; `move.by_skill` source tag**. Wire id 18
 ///      (`skillTeleport`) is **retired -- never reuse**. The only listener
 ///      (R:必然的联系（莉莎）) rides `MoveAfter` + cond
 ///      `move.kind == Teleport && move.by_skill` instead. `MoveCtx.by_skill`
 ///      is a generic "shaped or started by a `skill:` rule" tag (cond
-///      `move.by_skill`); serde skip-if-false so saves stay stable.
+///      `move.by_skill`); serde skip-if-false so saves remain stable.
 ///      `HostRequest::Teleport` now runs through `card_teleport` /
 ///      `teleport_as(resolve=false)` so it raises the move tail like every
 ///      other movement path. SAVE_VERSION unchanged.
@@ -663,20 +662,20 @@ use alloc::{string::String, vec::Vec};
 ///      `HookKind` / `GateKind` aliases are retired (no alias remains). `On::Action`
 ///      takes `&'static [ActionKind]`, `On::Filter*` takes `&'static [FilterKind]`,
 ///      so a wrong-side kind const is a rustc error rather than a ruleset-build
-///      failure. `TriggerKind` stays the single declaration source of truth
+///      failure. `TriggerKind` remains the single declaration source of truth
 ///      (all consts, `as_str`/`from_str`, `is_filter`); the typed sets mirror it
 ///      exactly. `ChainKind` remains the [`TriggerKind`] alias for
 ///      `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
-///      same name tables, no id renumbering. Source-only: ABI_VERSION stays 85.
+///      same name tables, no id renumbering. Source-only: ABI_VERSION remains 85.
 /// v86: **display columns leave `ruleset_metadata`**. Printed text / display
-///      strings stay authored on [`crate::meta::CardMeta`] /
+///      strings remain authored on [`crate::meta::CardMeta`] /
 ///      `bandori_std::roster::{PersonaDef, GroupDef}` (the builder calls are
 ///      unchanged) but no longer ride the runtime metadata blob. Dropped
 ///      MetaRow keys: card `text` / `rawName` / `cell`; persona `display` /
 ///      `text` / `color` / `variantTag` / `art` / `costume` / `cnId`; group
 ///      `text` / `shortName` / `color` / `logo`. They are serialized at build
 ///      time into `webui/src/generated/display.json` by
-///      `tools/export-display.mjs` (`docs/DISPLAY.md`). Keys that stay:
+///      `tools/export-display.mjs` (`docs/DISPLAY.md`). Keys that remain:
 ///      card `name` / `group` / `owner` / `derived` / `tags`; persona `name` /
 ///      `group` / `skill` / `exclusiveCards` / `preset` / `variantOf`; group
 ///      `name` / `skill` / `sharesExclusives`. Postcard field order of
@@ -687,14 +686,23 @@ use alloc::{string::String, vec::Vec};
 ///      flag and no abnormal window), `log_as` (typed log line). Additive
 ///      imports; SAVE_VERSION unchanged.
 /// v88: **generic status / marker verbs**. The three named host grants
-///      collapse to `apply_abnormal(p, kind, n, to)`;
-///      the stay move-latch becomes `skip_main_move` / `clear_move_skip`;
+///      collapse to one kind-parameterized verb;
+///      the turn-flow move-latch becomes `skip_main_move` / `clear_move_skip`;
 ///      charge-named marker imports become the generic `marker_*` family
 ///      (`gain_marker` / `spend_marker` / `add_marker_max`). `AbKind` is an
 ///      opaque newtype (wire codec only); the game names live in
-///      `bandori-std`. `ActionKind`/`TriggerKind` lose the `Exile` named
-///      consts (wire id 21 stays). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 88;
+///      `bandori-std`. `ActionKind`/`TriggerKind` lose the ruleset-named
+///      consts (wire id 21 remains an opaque custom id). SAVE_VERSION unchanged.
+/// v89: **status vocabulary leaves the SDK**. The kind-parameterized verb is
+///      gone (rules compose `gate` + `state::*` + `raise_after`); state-key /
+///      prop constants that named game statuses are deleted; `AbKind::as_str`
+///      loses its name table (wire codec is `from_i32` / `as_i32` only).
+///      `TriggerKind` id 21 serializes as decimal `"21"` (ruleset-declared).
+///      New decision gates `OnBoardGate` (108) / `TargetableGate` (109).
+///      `CardDef::gate_msgs` / `CardDef::exemption_prop` carry gate-refusal
+///      i18n keys and the exempting prop key as data. `state::set_flags` +
+///      `ctx::raise_after` are additive. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 89;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -738,7 +746,7 @@ pub enum Flash {
     Auto = 0,
     /// This entry always flashes, even when the effect is owner-self-only.
     Always = 1,
-    /// Log entry stays; no flash / pulse, even when the effect is cross-player.
+    /// Log entry remains; no flash / pulse, even when the effect is cross-player.
     Never = 2,
 }
 
@@ -813,43 +821,18 @@ pub mod export {
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the
-/// status gates). Content is free to invent more -- a state key is just a
-/// string. Mirrors `game_core::state::key`.
+/// capability gates). Content is free to invent more -- a state key is just a
+/// string. Mirrors `game_core::state::key`. Game-status key names live in
+/// `bandori-std`, not here.
 pub mod state_key {
-    /// `[停留]` -- layers that wear off at end of turn.
-    pub const STAY: &str = "stay";
     /// Latch set when an [异常移动效果] lands, cleared when the player's next
     /// [主要移动] completes. Longer-lived than the per-turn abnormal counter.
     pub const ABNORMAL_HIT: &str = "abnormalHit";
-    /// `[晕眩]` -- layers that wear off at end of turn.
-    pub const STUN: &str = "stun";
-    /// `[晕眩]` applied this turn, which only starts counting next turn.
-    pub const STUN_START: &str = "stunStart";
-    /// `[移除]` -- turns spent off the board.
-    pub const EXILE: &str = "exile";
-    /// Tile the exile returns to, or -1 for none.
-    pub const EXILE_TO: &str = "exileTo";
-    /// 「在[除外]层数归0后[传送]至该格子，视为当回合的主要移动」 -- the exile
-    /// expiry teleport is that turn's main move (MyGO:无路矢). Read and consumed
-    /// by the engine's exile tick.
-    pub const EXILE_MAIN: &str = "exileMain";
-    /// Duration grant (「获得[除外]直至X」) marker: while set, the turn-start
-    /// layer tick does not peel [除外]; the granting effect ends it. A layered
-    /// grant (「获得N层[除外]」) leaves this 0 and still ticks.
-    pub const EXILE_HOLD: &str = "exileHold";
-    /// Wire key constant (webui contract); the engine never branches on it --
-    /// rules-layer kernel owns the counter. Its `max` is the owner-declared cap
-    /// written through the rules layer.
-    pub const CHARGE: &str = "charge";
-    /// Layers of "may hold no hand cards".
-    pub const NO_HAND: &str = "noHand";
     /// Turn key of a live 「无法从手牌中使用[反击]」 lock (骰子已经掷下). When it
     /// equals `turn_key()`, every *other* seat is locked out of hand
     /// counteractions. Field counteractions (`counteractFromField`) are a
     /// separate path and are not gated here -- the clause names 「从手牌中」.
     pub const NO_COUNTERACT_TURN: &str = "noCounteractTurn";
-    /// Layers of "cannot be stopped".
-    pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit.
     pub const HAND_LIMIT: &str = "handLimit";
     /// The [`HAND_LIMIT`] value meaning 「手牌数没有上限」 (no limit). The
@@ -1021,10 +1004,6 @@ pub mod prop {
     /// gone with the card. `-1` cuts the owner's hand limit; a positive value
     /// lifts it; `0` (the default) does nothing.
     pub const HAND_LIMIT_DELTA: &str = "handLimitDelta";
-    /// 「可在眩晕时打出」: `1` = the card skips the
-    /// stun gate when played from hand. The exile and no-hand gates have no
-    /// such exception in the pool. Default `0` (blocked by stun).
-    pub const PLAYABLE_STUNNED: &str = "playableStunned";
     /// Bot-only **estimated execution cost** (user ruling 2026-10-07): what
     /// activating this card is expected to cost the player, in 资金. Read
     /// **only** by bots / autopilot as a reserve check -- never by legality.
@@ -1062,7 +1041,7 @@ pub mod prop {
     /// * `ctx::set_tile_prop` on the tile's rule instance -- a tile-scoped
     ///   override. The source arms and disarms it.
     /// The rent lookup (`pay_rent` / `rent_of` / `ctx::rent_houses_of`) reads
-    /// it; `ctx::houses_of` stays real.
+    /// it; `ctx::houses_of` remains real.
     pub const RENT_HOUSES: &str = "rentHouses";
 
     // ---------------------------------------------------------- tile data
@@ -1340,13 +1319,12 @@ impl BuyKind {
 }
 
 /// An abnormal effect kind id (wire `i32`), carried on `abnormalGuard` /
-/// `abnormal` triggers and on the `apply_abnormal` verb.
+/// `abnormal` triggers.
 ///
 /// Opaque newtype over the wire id, the same shape as [`ActionKind`] /
 /// [`FilterKind`]: this module is the **wire codec only** (`from_i32` /
-/// `as_i32` / `as_str`; the strings `"stay"`/`"stun"`/`"exile"`/`"teleport"`/
-/// `"forced"`/`"stop"`/`"reverse"` are frozen webui wire). The game names of
-/// the kinds live in `bandori-std::abnormal`, not here.
+/// `as_i32`). The game names of the kinds and their frozen webui wire
+/// strings live in `bandori-std::abnormal`, not here.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 #[repr(transparent)]
@@ -1360,20 +1338,6 @@ impl AbKind {
 
     pub fn as_i32(self) -> i32 {
         self.0
-    }
-
-    /// The frozen webui wire string for this abnormal kind.
-    pub fn as_str(self) -> &'static str {
-        match self.0 {
-            1 => "stay",
-            2 => "stun",
-            3 => "exile",
-            4 => "teleport",
-            5 => "forced",
-            6 => "stop",
-            7 => "reverse",
-            _ => "",
-        }
     }
 }
 
@@ -1403,7 +1367,7 @@ impl CardPile {
 }
 
 /// `passRewardAffected`'s `Trigger.value` -- which half of the CiRCLE reward was
-/// taken. `0` is 「[获得]资金」, `1` is the card. The stunned path forces the
+/// taken. `0` is 「[获得]资金」, `1` is the card. The no-act path forces the
 /// card, so a money-only clause cannot fire there.
 ///
 /// **Must match the engine's `CIRCLE_REWARD_MONEY` / `CIRCLE_REWARD_CARD` in
@@ -1471,7 +1435,7 @@ impl ActionKind {
     pub const DiceRollResult: Self = Self(TriggerKind::DiceRollResult.as_i32());
 
     /// Action / Counteraction window. A turn begins (行动阶段 2 回合开始时), after
-    /// the exile/stun status ticks. Payload: tile = the player's position.
+    /// the layer-count ticks. Payload: tile = the player's position.
     /// A listener may emit effects; a counteraction may answer the opening.
     pub const TurnStart: Self = Self(TriggerKind::TurnStart.as_i32());
 
@@ -1544,7 +1508,7 @@ impl ActionKind {
     pub const Target: Self = Self(TriggerKind::Target.as_i32());
 
     // Wire id 21 is the 「获得[除外]」 post-commit raise. The rule-facing name
-    // is `bandori_std::kind::Exile` (`ActionKind(21)`); this module carries no
+    // is the ruleset-declared kind for wire 21 (`ActionKind(21)` / decimal wire); this module carries no
     // game-named kind const.
 
     /// Action / Counteraction window. A player toggled skill state (the 1↔2
@@ -1979,7 +1943,7 @@ impl FilterKind {
     pub const TurnBaseTime: Self = Self(TriggerKind::TurnBaseTime.as_i32());
 
     /// Filter. May the player play a hand card right now? Distinct from ActGate,
-    /// which also gates active skills and is what skips a stunned or exiled
+    /// which also gates active skills and is what skips a no-act
     /// turn at the start phase. A standing hand-size lock blocks plays without
     /// cancelling the rest of the turn. Payload: the acting seat. Body true =
     /// allowed, false = denied; the host folds the answers into one decision.
@@ -1990,6 +1954,16 @@ impl FilterKind {
     /// face; the host folds it into the roll. Pure: prefer this over the
     /// DiceRollAfter exception unless a prompt is required.
     pub const DiceRollValue: Self = Self(TriggerKind::DiceRollValue.as_i32());
+
+    /// Filter. May the named seat be treated as on the board right now?
+    /// Evaluated natively like ActGate. Payload: the seat. Body true = allowed,
+    /// false = denied; the host folds the answers into one decision.
+    pub const OnBoardGate: Self = Self(TriggerKind::OnBoardGate.as_i32());
+
+    /// Filter. May this effect name the seat as a target? Evaluated natively
+    /// like ActGate. Payload: the seat. Body true = allowed, false = denied;
+    /// the host folds the answers into one decision.
+    pub const TargetableGate: Self = Self(TriggerKind::TargetableGate.as_i32());
 
     /// The wire value, shared with [`TriggerKind`] / [`ChainKind`].
     pub const fn as_i32(self) -> i32 { self.0 }
@@ -2083,9 +2057,10 @@ impl TriggerKind {
 
     // Wire id 20 retired; never reuse.
 
-    // Wire id 21 is `exile` (the 「获得[除外]」 post-commit raise). The
-    // rule-facing name is `bandori_std::kind::Exile` (`TriggerKind(21)` / the
-    // wire string `"exile"`); this module carries no game-named kind const.
+    // Wire id 21 is a ruleset-declared kind (the 「获得[除外]」 post-commit
+    // raise). The rule-facing name lives in `bandori_std::kind`
+    // (`TriggerKind(21)` / wire string `"21"`); this module carries no
+    // game-named kind const.
 
     // Wire id 22 retired; never reuse.
 
@@ -2324,6 +2299,12 @@ impl TriggerKind {
     /// `payCombinedAddBefore`
     pub const PayCombinedAddBefore: Self = Self(106);
 
+    /// `onBoardGate`
+    pub const OnBoardGate: Self = Self(108);
+
+    /// `targetableGate`
+    pub const TargetableGate: Self = Self(109);
+
     /// The wire value, shared with every kind view.
     pub const fn as_i32(self) -> i32 {
         self.0
@@ -2348,7 +2329,7 @@ impl TriggerKind {
                 | Self::DiceRollPlan
                 // Marker spend-substitution (id 78, name is payload) is NOT a
                 // filter: its 「可」 opt-in prompts, and Filter bodies cannot.
-                // It stays on On::Action (see docs/CARDS.md).
+                // It remains on On::Action (see docs/CARDS.md).
                 | Self::BuyAdd
                 | Self::BuyMul
                 | Self::BuySet
@@ -2369,6 +2350,8 @@ impl TriggerKind {
                 | Self::MoveGate
                 | Self::ExclusiveUse
                 | Self::PlayGate
+                | Self::OnBoardGate
+                | Self::TargetableGate
         )
     }
 
@@ -2401,10 +2384,10 @@ impl TriggerKind {
             // 16 was "stop" -- retired in v84, never reuse.
             // 17 was "teleport" -- retired in v84, never reuse.
             // 18 was "skillTeleport" -- retired in v85, never reuse.
-            // 19 was "stun" -- retired in v84, never reuse.
-            // 20 was "stay" -- retired in v84, never reuse.
-            21 => "exile",
-            // 22 was "forced" -- retired in v84, never reuse.
+            // 19 was the second abnormal kind -- retired in v84, never reuse.
+            // 20 was the first abnormal kind -- retired in v84, never reuse.
+            21 => "21", // ruleset-declared custom id
+            // 22 was the third abnormal kind -- retired in v84, never reuse.
             23 => "state",
             24 => "counteracted",
             25 => "drawOut",
@@ -2484,6 +2467,8 @@ impl TriggerKind {
             // 104 was "flipAfter" -- retired in v83, never reuse.
             105 => "paySplitChooseBefore",
             106 => "payCombinedAddBefore",
+            108 => "onBoardGate",
+            109 => "targetableGate",
             26 => "26",  // ruleset-declared custom id
             73 => "73",  // ruleset-declared custom id
             74 => "74",  // ruleset-declared custom id
@@ -2519,10 +2504,10 @@ impl TriggerKind {
             // "stop" retired in v84 (id 16 never reuse).
             // "teleport" retired in v84 (id 17 never reuse).
             // "skillTeleport" retired in v85 (id 18 never reuse).
-            // "stun" retired in v84 (id 19 never reuse).
-            // "stay" retired in v84 (id 20 never reuse).
-            "exile" => Self(21),
-            // "forced" retired in v84 (id 22 never reuse).
+            // second abnormal kind retired in v84 (id 19 never reuse).
+            // first abnormal kind retired in v84 (id 20 never reuse).
+            // id 21 is ruleset-declared; the digit path above accepts "21".
+            // third abnormal kind retired in v84 (id 22 never reuse).
             "state" => Self(23),
             "counteracted" => Self(24),
             "drawOut" => Self(25),
@@ -2602,6 +2587,8 @@ impl TriggerKind {
             // "flipAfter" retired in v83 (id 104 never reuse).
             "paySplitChooseBefore" => Self(105),
             "payCombinedAddBefore" => Self(106),
+            "onBoardGate" => Self(108),
+            "targetableGate" => Self(109),
             _ => Self::None,
         }
     }
@@ -2634,7 +2621,7 @@ const fn list_has(list: &[i32], v: i32) -> bool {
 }
 
 /// Generic gate codes (see [`FilterKind`] docs).
-const GATE_CODES: &[i32] = &[68, 69, 70, 71, 79, 95, 96, 97, 98];
+const GATE_CODES: &[i32] = &[68, 69, 70, 71, 79, 95, 96, 97, 98, 108, 109];
 /// Generic chain-link codes (see [`ChainKind`] docs).
 const CHAIN_CODES: &[i32] = &[
     1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24,
@@ -2707,6 +2694,20 @@ pub struct ManifestEntry {
     /// id's `tile:` suffix. Trailing field.
     #[serde(default)]
     pub governs: Vec<String>,
+    /// Refusal message keys for the capability gates this rule closes
+    /// (`CardDef::gate_msgs`, v89): `(gate kind i32, i18n key)`. Play path
+    /// (`cannot_play`). Trailing field.
+    #[serde(default)]
+    pub gate_msgs: Vec<(i32, String)>,
+    /// Card prop key that exempts a play from this rule's act gate
+    /// (`CardDef::exemption_prop`, v89). Empty = none. Trailing field.
+    #[serde(default)]
+    pub exemption_prop: String,
+    /// Turn-skip message keys (`CardDef::gate_skip_msgs`, v89):
+    /// `(gate kind i32, i18n key)` -- the two skip keys.
+    /// Trailing field.
+    #[serde(default)]
+    pub gate_skip_msgs: Vec<(i32, String)>,
 }
 
 /// One per-entry **tile text** declaration (`CardDef::texts`, v59): the
@@ -2834,7 +2835,7 @@ pub enum OnKind {
     /// card-driven `ctx::buy`, agent branch, acquire / auction / card kinds).
     /// The body owns eligibility, the quote, and the order of steps; the
     /// engine keeps the money pipeline and deed write as `ctx` primitives.
-    /// Force-buy stays a direct transfer outside effects (规则书 其他规则 6).
+    /// Force-buy remains a direct transfer outside effects (规则书 其他规则 6).
     Buy = 12,
     /// v80: a rule's **build body** (`On::Build(pre, guard, body)`) -- what
     /// runs when a house is built on the deed this rule instance governs.
@@ -2900,7 +2901,7 @@ pub struct FilterValue {
     /// Host-supplied recorded roll (v78). The host pre-rolls dice into the
     /// recorded RNG stream and exposes the face here, so a Filter body that
     /// would have called `ctx::roll` (kaoru_thief's 1d2 direction, heat_head's
-    /// 1d6 cut) stays pure and replay-deterministic. `UNCHANGED` = no
+    /// 1d6 cut) remains pure and replay-deterministic. `UNCHANGED` = no
     /// recorded roll for this raise.
     pub recorded_roll: i32,
     /// `plan::set_tag` key as an intern id (v78; 0 = none). Write-back calls
@@ -2941,7 +2942,7 @@ mod tests {
     /// (`move.kind == Teleport && move.by_skill`).
     #[test]
     fn skill_teleport_id_18_is_retired_forever() {
-        assert_eq!(TriggerKind(18).as_str(), "", "id 18 must stay unnamed");
+        assert_eq!(TriggerKind(18).as_str(), "", "id 18 must remain unnamed");
         assert_eq!(
             TriggerKind::from_str("skillTeleport"),
             TriggerKind::None,

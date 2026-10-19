@@ -14,7 +14,7 @@
 //! 取整百）」 -- half the tile's rent, divided by how many players are being
 //! charged, rounded **up to a hundred**.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

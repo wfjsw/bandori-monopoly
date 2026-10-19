@@ -292,7 +292,7 @@ pub fn default_deal(
     player: usize,
     kind: BuyKind,
     price: i32,
-    force_stays_mortgaged: bool,
+    force_keeps_mortgage: bool,
 ) -> Deal {
     let seller = match kind {
         BuyKind::Force | BuyKind::Acquire => st.owners.get(t).copied().unwrap_or(-1),
@@ -300,7 +300,7 @@ pub fn default_deal(
     };
     let houses = st.houses.get(t).copied().unwrap_or(0);
     let mortgaged_after = match kind {
-        BuyKind::Force => force_stays_mortgaged,
+        BuyKind::Force => force_keeps_mortgage,
         _ => false,
     };
     Deal {
@@ -356,7 +356,7 @@ pub fn tile_quotes(
     let n = data.tiles.len().max(st.owners.len());
     let mut out: Vec<Option<TileQuote>> = vec![None; n];
     // Batch the bank-sold Land quotes (seller is always the bank). Force
-    // quotes name a per-tile seller, so they stay one-by-one.
+    // quotes name a per-tile seller, so they remain one-by-one.
     let mut land: Vec<usize> = Vec::new();
     for t in 0..n {
         let Some(tile) = data.tiles.get(t) else {

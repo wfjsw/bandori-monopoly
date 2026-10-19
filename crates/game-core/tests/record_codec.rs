@@ -321,7 +321,7 @@ fn report_sizes(label: &str, file: &game_core::record::RecordFile) {
         ratio(gz.len()),
     );
     assert!(shipped.len() < json.len() / 3, "{label}: zstd well under a third of the JSON");
-    // The browser encoder must stay in the reference's league -- that is the
+    // The browser encoder must remain in the reference's league -- that is the
     // whole point of swapping `ruzstd` out for `structured-zstd` -- and must
     // clearly beat the gzip it replaced.
     assert!(

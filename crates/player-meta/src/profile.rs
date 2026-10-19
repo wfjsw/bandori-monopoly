@@ -218,7 +218,7 @@ impl PlayerProfile {
         }
         if self.save_version < 4 {
             // v3 and earlier saved three fixed slots per persona and no deck
-            // names. The slot numbers become the stable deck ids; `name` stays
+            // names. The slot numbers become the stable deck ids; `name` remains
             // empty ("auto", displayed as 「卡组 n」/"Deck n" from the id), so
             // slot n reads exactly as it used to. Sort per persona by slot so
             // the old 1,2,3 order is the display order.

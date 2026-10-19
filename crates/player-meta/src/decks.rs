@@ -52,7 +52,7 @@ pub fn slot_complete(data: &GameData, p: &PlayerProfile, c: &PersonaData, id: i3
 }
 
 /// Save cards into an existing custom deck. An empty list clears the deck -- it
-/// stays, with its name; [`delete`] removes it. Returns whether the profile
+/// remains, with its name; [`delete`] removes it. Returns whether the profile
 /// changed.
 pub fn save<S: AsRef<str>>(
     data: &GameData,

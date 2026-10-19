@@ -319,7 +319,7 @@ async fn a_member_streaming_on_b_is_not_reaped_by_a() {
     let _guest_stream = guest.stream(&id).await;
 
     // Well past the presence timeout: A's ticker has been reaping the whole
-    // time. The guest's stream key is refreshed by B's pump, so they stay.
+    // time. The guest's stream key is refreshed by B's pump, so they remain.
     tokio::time::sleep(Duration::from_millis(1500)).await;
 
     let (s, st) = host.get(&format!("/api/rooms/{id}/state")).await;

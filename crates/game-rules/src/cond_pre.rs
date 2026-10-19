@@ -230,26 +230,6 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn owner_out(&self) -> i64 {
         if self.owner_seat >= 0 { self.src.player_out(self.owner_seat) as i64 } else { 0 }
     }
-    fn owner_stay(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.state_get(self.owner_seat, "stay") as i64 } else { 0 }
-    }
-    fn owner_stun(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.state_get(self.owner_seat, "stun") as i64 } else { 0 }
-    }
-    fn owner_exile(&self) -> i64 {
-        if self.owner_seat >= 0 {
-            self.src.state_get(self.owner_seat, game_core::state::key::EXILE) as i64
-        } else {
-            0
-        }
-    }
-    fn owner_no_hand(&self) -> i64 {
-        if self.owner_seat >= 0 {
-            self.src.state_get(self.owner_seat, game_core::state::key::NO_HAND) as i64
-        } else {
-            0
-        }
-    }
     fn owner_persona(&self) -> i64 {
         if self.owner_seat < 0 {
             return 0;
@@ -319,18 +299,6 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     }
     fn out(&self, seat: i64) -> i64 {
         self.src.player_out(seat as i32) as i64
-    }
-    fn stay(&self, seat: i64) -> i64 {
-        self.src.state_get(seat as i32, "stay") as i64
-    }
-    fn stun(&self, seat: i64) -> i64 {
-        self.src.state_get(seat as i32, "stun") as i64
-    }
-    fn exile(&self, seat: i64) -> i64 {
-        self.src.state_get(seat as i32, game_core::state::key::EXILE) as i64
-    }
-    fn no_hand(&self, seat: i64) -> i64 {
-        self.src.state_get(seat as i32, game_core::state::key::NO_HAND) as i64
     }
     fn state(&self, seat: i64, key: &str) -> i64 {
         self.src.state_get(seat as i32, key) as i64
@@ -481,14 +449,13 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         d.min(n - d)
     }
     fn players_on(&self, tile: i64, except: i64) -> i64 {
-        // `ctx::players_on` counts present (`!out && exile == 0`) standers.
+        // `ctx::players_on` counts present standers.
         let count = self.src.tile_count() as i64; // unused; seats drive the scan
         let _ = count;
         (0..self.src.player_count() as i64)
             .filter(|&s| {
                 s != except
                     && self.out(s) == 0
-                    && self.exile(s) == 0
                     && self.pos(s) == tile
             })
             .count() as i64
@@ -802,21 +769,15 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::state_get(self, player_id, key)
     }
     fn state_entries(&self, player_id: i32) -> Vec<(String, i32)> {
-        // No map to walk on a bare `CardWorld` -- probe the well-known status
-        // keys via `state_get` and omit zeros. A test world that never sets
-        // state answers empty; `state(p, k)` still answers 0 for anything
-        // missing. Live worlds override this with the real `MatchPlayer.state`.
+        // Prefer the whole map; fall back to probing the engine knobs and
+        // anything the guest named via `state_get`.
+        let pairs = CardWorld::state_pairs(self, player_id);
+        if !pairs.is_empty() {
+            return pairs.into_iter().filter(|(_, v)| *v != 0).collect();
+        }
         const KNOWN: &[&str] = &[
-            game_core::state::key::STAY,
-            game_core::state::key::STUN,
-            game_core::state::key::STUN_START,
-            game_core::state::key::EXILE,
-            game_core::state::key::EXILE_TO,
-            game_core::state::key::EXILE_MAIN,
-            game_core::state::key::CHARGE,
-            game_core::state::key::NO_HAND,
-            game_core::state::key::UNSTOPPABLE,
             game_core::state::key::HAND_LIMIT,
+            game_core::state::key::START_HAND,
         ];
         KNOWN
             .iter()
@@ -1173,7 +1134,7 @@ pub fn admits<E, F: FnOnce() -> Result<bool, E>>(
 /// [`admits`] for the `On::Play` gate shape (`Ok(None)` = playable,
 /// `Ok(Some(why))` = blocked). A rejecting condition **is** a block -- the
 /// entry is part of the decision -- and the gate is skipped. `blocked`
-/// supplies the reason the caller shows (so the UI/i18n stays in the caller's
+/// supplies the reason the caller shows (so the UI/i18n remains in the caller's
 /// hands).
 #[inline]
 pub fn admits_gate<T, E, F: FnOnce() -> Result<Option<T>, E>>(
@@ -1226,27 +1187,28 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     }
 
     let players: Vec<PlayerSnap> = (0..world.player_count())
-        .map(|p| PlayerSnap {
-            money: world.money(p) as i64,
-            charge: world.state_get(p, "charge") as i64,
-            group_pool: world.group_pool_total(p) as i64,
-            hand: world.hand_size(p) as i64,
-            pos: world.player_pos(p) as i64,
-            out: world.player_out(p) as i64,
-            stay: world.state_get(p, "stay") as i64,
-            stun: world.state_get(p, "stun") as i64,
-            exile: world.state_get(p, game_core::state::key::EXILE) as i64,
-            no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-            state: world
-                .state_entries(p)
-                .into_iter()
-                .map(|(k, v)| (k, v as i64))
-                .collect(),
-            persona: id_of(&world.persona_name(p).unwrap_or_default()),
-            group: id_of(&world.group_name(p).unwrap_or_default()),
-            tiles: world.owned_count(p) as i64,
-            gains: world.gains_this_turn(p) as i64,
-            targeted: world.targeted_count(p) as i64,
+        .map(|p| {
+            let mut snap = PlayerSnap {
+                money: world.money(p) as i64,
+                charge: world.state_get(p, "charge") as i64,
+                group_pool: world.group_pool_total(p) as i64,
+                hand: world.hand_size(p) as i64,
+                pos: world.player_pos(p) as i64,
+                out: world.player_out(p) as i64,
+                state: world
+                    .state_entries(p)
+                    .into_iter()
+                    .map(|(k, v)| (k, v as i64))
+                    .collect(),
+                persona: id_of(&world.persona_name(p).unwrap_or_default()),
+                group: id_of(&world.group_name(p).unwrap_or_default()),
+                tiles: world.owned_count(p) as i64,
+                gains: world.gains_this_turn(p) as i64,
+                targeted: world.targeted_count(p) as i64,
+                ..PlayerSnap::default()
+            };
+            rules_cond::fill_named_layers(&mut snap);
+            snap
         })
         .collect();
 
@@ -1345,27 +1307,28 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         fill_tile_generic(world, tile, &mut tile_kinds, &mut tile_attrs, &mut tile_classes);
     }
     let players: Vec<PlayerSnap> = (0..world.player_count())
-        .map(|p| PlayerSnap {
-            money: world.money(p) as i64,
-            charge: world.state_get(p, "charge") as i64,
-            group_pool: world.group_pool_total(p) as i64,
-            hand: world.hand_size(p) as i64,
-            pos: world.player_pos(p) as i64,
-            out: world.player_out(p) as i64,
-            stay: world.state_get(p, "stay") as i64,
-            stun: world.state_get(p, "stun") as i64,
-            exile: world.state_get(p, game_core::state::key::EXILE) as i64,
-            no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-            state: world
-                .state_entries(p)
-                .into_iter()
-                .map(|(k, v)| (k, v as i64))
-                .collect(),
-            persona: id_of(&world.persona_name(p).unwrap_or_default()),
-            group: id_of(&world.group_name(p).unwrap_or_default()),
-            tiles: world.owned_count(p) as i64,
-            gains: world.gains_this_turn(p) as i64,
-            targeted: world.targeted_count(p) as i64,
+        .map(|p| {
+            let mut snap = PlayerSnap {
+                money: world.money(p) as i64,
+                charge: world.state_get(p, "charge") as i64,
+                group_pool: world.group_pool_total(p) as i64,
+                hand: world.hand_size(p) as i64,
+                pos: world.player_pos(p) as i64,
+                out: world.player_out(p) as i64,
+                state: world
+                    .state_entries(p)
+                    .into_iter()
+                    .map(|(k, v)| (k, v as i64))
+                    .collect(),
+                persona: id_of(&world.persona_name(p).unwrap_or_default()),
+                group: id_of(&world.group_name(p).unwrap_or_default()),
+                tiles: world.owned_count(p) as i64,
+                gains: world.gains_this_turn(p) as i64,
+                targeted: world.targeted_count(p) as i64,
+                ..PlayerSnap::default()
+            };
+            rules_cond::fill_named_layers(&mut snap);
+            snap
         })
         .collect();
     WindowCtx {
@@ -1456,7 +1419,7 @@ fn class_names() -> Vec<String> {
 
 /// Every board name -> id, so `tile_named('the game车站')` / `tile_named('the start square')`
 /// resolve to the same id the guest's `ctx::tile_named` returns. Unknown names
-/// stay out of the map; the CEL `tile_named` answers `-1` for those (matching
+/// remain out of the map; the CEL `tile_named` answers `-1` for those (matching
 /// the guest), never tile 0.
 pub fn collect_tile_ids<S: SnapSrc>(world: &S) -> std::collections::BTreeMap<String, i64> {
     let mut tile_ids = std::collections::BTreeMap::new();
@@ -1496,10 +1459,6 @@ pub fn fill_candidate<S: SnapSrc>(
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
         owner_out: world.player_out(p) as i64,
-        owner_stay: world.state_get(p, "stay") as i64,
-        owner_stun: world.state_get(p, "stun") as i64,
-        owner_exile: world.state_get(p, game_core::state::key::EXILE) as i64,
-        owner_no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
         owner_persona: id_of(&world.persona_name(p).unwrap_or_default()),
         owner_group: id_of(&world.group_name(p).unwrap_or_default()),
         owner_tiles: world.owned_count(p) as i64,
@@ -1532,6 +1491,7 @@ pub fn fill_candidate<S: SnapSrc>(
             })
             .collect(),
         blocked_groups: Vec::new(),
+        ..CandidateCtx::default()
     };
     fill_candidate_extras(world, owner, &mut cand, true);
     cand

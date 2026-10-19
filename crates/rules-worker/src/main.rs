@@ -41,7 +41,7 @@ fn main() {
         }
         let out = match serde_json::from_str::<Value>(&line) {
             Ok(req) => handle(&ctx, req),
-            // A bad request is answered, not fatal: the process stays up and
+            // A bad request is answered, not fatal: the process remains up and
             // keeps serving the pool.
             Err(e) => serde_json::json!({"ok": false, "error": format!("bad request json: {e}")}),
         };

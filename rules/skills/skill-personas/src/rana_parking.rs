@@ -21,7 +21,7 @@
 //! Kids / Parking Space), not a pre-settle write. Both used to be done at
 //! `settleBefore`.
 
-use card_sdk::abi::{state_key, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 

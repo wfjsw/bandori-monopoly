@@ -20,7 +20,7 @@
 //! （3） 「获得一层在你的下回合开始前移除的[除外]」 is `give_exile` with
 //! `expires: TurnStart`.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

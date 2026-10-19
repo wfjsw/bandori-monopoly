@@ -12,7 +12,7 @@
 //!
 //! * `noHand == 2` at turn start folds to `1` (「this turn only」 half spent);
 //! * `noHand == 1` at turn end clears to `0`;
-//! * `noHand > 0` lifts the hand limit to [`card_sdk::abi::state_key::NO_HAND_LIMIT`].
+//! * `noHand > 0` closes the **play** gate (「不可使用手牌」, `err.play_no_hand`).
 //!
 //! ## Placement (ordering -- `docs/STATUS-HOSTS.md` §4)
 //!
@@ -32,13 +32,12 @@
 //! Both bodies act on `trigger::player_id()` (the turn seat), not the board
 //! owner (`BOARD_OWNER`).
 
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
 use card_sdk::{CardDef, On};
 
 /// The board-owned `noHand` rule. One instance on `BOARD_OWNER`, tile = -1`.
-/// Registered in [`crate::CARDS`]; `bind_tiles` places it. No gates -- 无手牌
-/// is a companion slot, not a status marker.
+/// Registered in [`crate::CARDS`]; `bind_tiles` places it.
 pub const STATUS_NO_HAND: CardDef = CardDef::new(
     "status:no_hand",
     &[
@@ -47,9 +46,20 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnStart], "", "", None, on_turn_start),
         // Turn-end clear (1 -> 0). `TurnEnd` is hook-only.
         On::Action(&[ActionKind::TurnEnd], "", "", None, on_turn_end),
+        // 「不可使用手牌」 -- the play gate, **CEL-only**. No turn-skip: the
+        // turn still runs; only hand-card plays are refused.
+        On::FilterFlag(&[FilterKind::PlayGate], NO_HAND_HELD, None, refuse),
     ],
 )
-    .board_role("status");
+    .board_role("status")
+    .gate_msgs(&[(FilterKind::PlayGate.as_i32(), "err.play_no_hand")]);
+
+/// The condition under which `noHand` closes the play gate.
+pub const NO_HAND_HELD: &str = "state(actor,'noHand') > 0";
+
+fn refuse(_owner: i32, _v: i32) -> bool {
+    false // deny
+}
 
 /// Turn-start fold (2 -> 1). Returns the new value.
 pub fn tick_start(v: i32) -> i32 {
@@ -84,6 +94,7 @@ fn on_turn_start(_owner: i32) -> card_sdk::Asked {
     let folded = tick_start(v);
     if folded != v {
         card_sdk::ctx::state::set(who, KEY, folded);
+        bandori_std::status::declare_companion(who, KEY);
     }
     Ok(())
 }
@@ -98,6 +109,7 @@ fn on_turn_end(_owner: i32) -> card_sdk::Asked {
     let cleared = tick_end(v);
     if cleared != v {
         card_sdk::ctx::state::set(who, KEY, cleared);
+        bandori_std::status::declare_companion(who, KEY);
     }
     Ok(())
 }
@@ -108,7 +120,11 @@ fn on_turn_end(_owner: i32) -> card_sdk::Asked {
 pub const KEY: &str = "noHand";
 
 pub fn add(player_id: i32, n: i32) {
+    if n == 0 {
+        return;
+    }
     card_sdk::ctx::state::add(player_id, KEY, n);
+    bandori_std::status::declare_companion(player_id, KEY);
 }
 
 pub fn get(player_id: i32) -> i32 {

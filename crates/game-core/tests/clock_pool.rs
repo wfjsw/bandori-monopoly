@@ -468,7 +468,7 @@ fn a_dedicated_window_prompt_does_not_drain_pools() {
 
 #[test]
 fn ban_pick_deck_honour_the_settings() {
-    // Two humans so nothing auto-acts and the windows stay readable.
+    // Two humans so nothing auto-acts and the windows remain readable.
     let members = [member(1, false), member(2, false)];
     let clock = ClockSettings {
         ban_seconds: 3.0,

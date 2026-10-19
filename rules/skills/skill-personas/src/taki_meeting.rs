@@ -12,7 +12,7 @@
 //! on the band or the player. 「每回合限一次」 is a latch, which is what the
 //! keyed state is for.
 
-use card_sdk::abi::{counter, state_key, AbKind, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{counter, AbKind, ActionKind};
 use bandori_std::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 

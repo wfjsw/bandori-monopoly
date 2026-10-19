@@ -13,7 +13,7 @@
 //! 格子」 is the floor: a shave that empties the face sends the mover to the
 //! next buyable tile instead.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

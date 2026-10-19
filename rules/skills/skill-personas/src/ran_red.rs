@@ -14,7 +14,7 @@
 //! built. 「选择本次移动向后」 is the plan's reverse; 「[经过]CiRCLE时不获得
 //! CiRCLE奖励」 is the plan's no-circle-reward flag.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

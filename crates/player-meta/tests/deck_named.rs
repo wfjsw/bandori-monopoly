@@ -52,7 +52,7 @@ fn create_duplicate_rename_delete_and_reorder() {
     assert!(!decks::move_by(&mut p, c, 5, 1), "already at the bottom");
     assert!(!decks::move_by(&mut p, c, 5, 0), "zero delta");
 
-    // Delete: the chosen default falls back to the preset; ids stay put.
+    // Delete: the chosen default falls back to the preset; ids remain put.
     assert!(decks::choose(&mut p, c, 6));
     assert!(decks::delete(&mut p, c, 6));
     assert_eq!(decks::chosen_slot(&d, &p, c), 0);
@@ -154,7 +154,7 @@ fn old_slot_profile_migrates_to_named_decks() {
 }
 
 #[test]
-fn profile_json_carries_deck_names_and_stays_compatible() {
+fn profile_json_carries_deck_names_and_remains_compatible() {
     let d = data();
     let c = d.persona("Alpha").unwrap();
     let mut p = PlayerProfile::default();

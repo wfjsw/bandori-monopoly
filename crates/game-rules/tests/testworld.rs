@@ -11,6 +11,9 @@ pub use game_rules::{
     TriggerKind,
 };
 
+/// Stub key for the per-seat off-board flag (opaque; not game vocabulary).
+pub const K_OFF_BOARD: &str = "k1";
+
 pub fn dist(dir: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../dist")
@@ -60,8 +63,8 @@ pub struct TestWorld {
     pub owners: Vec<i32>,
     /// Per-seat out flag. Empty -> nobody is out.
     pub out: Vec<bool>,
-    /// Per-seat exile flag. Empty -> nobody is exiled.
-    pub exile: Vec<bool>,
+    /// Per-seat off-board flag (stub key `k1`). Empty -> nobody is off-board.
+    pub off_board: Vec<bool>,
     /// Per-seat money-ins this turn (`gains_this_turn`).
     pub gains: Vec<i32>,
     /// Per-seat hostile targetings this turn (`targeted_count`).
@@ -84,7 +87,7 @@ impl TestWorld {
             pos: vec![],
             owners: vec![],
             out: vec![],
-            exile: vec![],
+            off_board: vec![],
             gains: vec![],
             targeted: vec![],
             fixed_roll: None,
@@ -110,9 +113,9 @@ impl CardWorld for TestWorld {
         game_core::state::StateVar::default()
     }
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
-        if key == game_core::state::key::EXILE {
+        if key == K_OFF_BOARD {
             return self
-                .exile
+                .off_board
                 .get(player_id.max(0) as usize)
                 .copied()
                 .unwrap_or(false) as i32;
@@ -134,6 +137,7 @@ impl CardWorld for TestWorld {
     fn state_add(&mut self, _: i32, _: &str, delta: i32) -> i32 {
         delta
     }
+    fn state_set_flags(&mut self, _: i32, _: &str, _: u8) {}
     fn state_set_bounds(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn state_set_expires(&mut self, _: i32, _: &str, _: Option<game_core::state::Tick>) {}
     fn tick_state(&mut self, _: i32, _: game_core::state::Tick) -> Vec<(String, i32)> {

@@ -25,7 +25,7 @@ fn world(_size: i32, pos: &[i32], owners: &[i32]) -> TestWorld {
     w.pos = pos.to_vec();
     w.owners = owners.to_vec();
     w.out = vec![false; pos.len()];
-    w.exile = vec![false; pos.len()];
+    w.off_board = vec![false; pos.len()];
     w.money = vec![10_000; pos.len()];
     w
 }
@@ -110,14 +110,14 @@ fn dist_matches_ctx() {
     }
 }
 
-/// Reference `ctx::players_on(tile, except).len()` -- present (`!out &&
-/// exile == 0`) standers.
+/// Reference `ctx::players_on(tile, except).len()` -- present standers
+/// (`!out && off-board == 0`).
 fn ref_players_on(w: &TestWorld, tile: i32, except: i32) -> i32 {
     (0..w.pos.len() as i32)
         .filter(|&s| {
             s != except
                 && w.player_out(s) == 0
-                && w.state_get(s, game_core::state::key::EXILE) == 0
+                && w.state_get(s, K_OFF_BOARD) == 0
                 && w.player_pos(s) == tile
         })
         .count() as i32

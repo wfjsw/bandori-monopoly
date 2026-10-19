@@ -3,18 +3,78 @@
 //! The `status:*` host cards in `rules/status` own the standing hooks, ticks
 //! and policy clauses (规则书 quotes live there). The **grant / read / clear
 //! verbs** are shared by the hosts plus cards and events, so they live here
-//! over the generic engine services (`apply_abnormal`, `state::*`,
-//! `skip_main_move` / `clear_move_skip`, `end_turn_now`, `teleport_as`,
-//! `log_as`). `rules/status` re-exports these so `rules_status::exile::…`
-//! call sites keep working.
+//! over the generic engine services (`ctx::gate` + `state::*` +
+//! `raise_after` / `log_as`, `skip_main_move` / `clear_move_skip`,
+//! `end_turn_now`, `teleport_as`). `rules/status` re-exports these so
+//! `rules_status::exile::…` call sites keep working.
 //!
-//! Behaviour is a relocation of the verbs that used to sit in
-//! `rules/status/src/{exile,stay,stun}.rs` -- no policy change.
+//! ## Vocabulary ownership
+//!
+//! The engine keeps no named mirror of stay / stun / exile. The frozen wire
+//! spellings live in [`crate::state_key`] (storage keys) and in the
+//! `raise_after` / `log_as` arguments below (event names and i18n keys).
+//!
+//! ## Grant shape (the split verb)
+//!
+//! `apply_abnormal` is gone from the guest surface. One positive layer is:
+//!
+//! 1. `ctx::gate(p, AbKind)` -- the abnormal [反击] window. `false` = cancelled;
+//!    write nothing.
+//! 2. `state::add` / `state::set` -- the opaque layer write.
+//! 3. `state::set_flags(p, key, NEVER_NEGATIVE | ENGINE_OWNED)` -- the writer
+//!    declares flooring and ownership (the engine's `default_flags` no longer
+//!    names these keys).
+//! 4. `state::set_expires(p, key, Tick)` -- wear-off is item-carried.
+//! 5. `ctx::raise_after(p, "stay"|"stun"|"exile", 1)` -- post-commit raise with
+//!    the frozen event name as data.
+//! 6. `ctx::log_as` with `log.outcome.stay` / `stun` / `exile`.
+//!
+//! A clear is `state::add` negative only: no gate, no raise, no outcome line.
 
 use card_sdk::ctx::{self, state};
+use card_sdk::Msg;
 
 use crate::kind::abnormal;
+use crate::state_flag;
 use crate::state_key;
+
+/// `state::set_flags` bits every layer counter declares on write.
+const LAYER_FLAGS: u32 = state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED;
+
+/// Post-commit raise name for a [停留] grant (frozen event wire).
+pub const RAISE_STAY: &str = "stay";
+/// Post-commit raise name for a [晕眩] grant (frozen event wire).
+pub const RAISE_STUN: &str = "stun";
+/// Post-commit raise name for an [除外] grant (frozen event wire).
+pub const RAISE_EXILE: &str = "exile";
+
+/// `log_as` the frozen grant outcome. `who` is the source (trigger actor),
+/// `target` the player who gained the layer.
+fn log_grant(who: i32, target: i32, key: &str) {
+    // `log.outcome.stay` / `stun` speak `{{who}}` + `{{target}}`; `exile`
+    // speaks `{{target}}` only (and the host names the target as `player_id`).
+    let msg = match key {
+        RAISE_EXILE => Msg::new("log.outcome.exile").player_id("target", target),
+        RAISE_STAY => Msg::new("log.outcome.stay")
+            .player_id("who", who)
+            .player_id("target", target),
+        _ => Msg::new("log.outcome.stun")
+            .player_id("who", who)
+            .player_id("target", target),
+    };
+    ctx::log_as(who, "text", &msg);
+}
+
+/// The current trigger's actor (`t.Seat`), or `target` when this grant runs
+/// outside a trigger (tick / engine path).
+fn source_of(target: i32) -> i32 {
+    let who = ctx::trigger::player_id();
+    if who >= 0 {
+        who
+    } else {
+        target
+    }
+}
 
 // --------------------------------------------------------------- [停留]
 
@@ -34,9 +94,21 @@ pub mod stay {
     /// un-skips it. **exile is not part of this latch** (closeout-2 ruling):
     /// it grants [无法移动] (glossary 13) but not 「跳过主要移动阶段」.
     pub fn add(player_id: i32, n: i32) {
-        ctx::apply_abnormal(player_id, abnormal::Stay, n, -1);
-        if n != 0 {
-            state::set_expires(player_id, state_key::STAY, state::TURN_END);
+        if n > 0 {
+            // Abnormal [反击] window. A cancelled window writes no layer.
+            if !ctx::gate(player_id, abnormal::Stay) {
+                return;
+            }
+        }
+        if n == 0 {
+            return;
+        }
+        state::add(player_id, state_key::STAY, n);
+        state::set_flags(player_id, state_key::STAY, LAYER_FLAGS);
+        state::set_expires(player_id, state_key::STAY, state::TURN_END);
+        if n > 0 {
+            ctx::raise_after(player_id, RAISE_STAY, 1);
+            log_grant(source_of(player_id), player_id, RAISE_STAY);
         }
         // 「stay：处于该状态时[无法移动]」 and step 7 「停留效果发动：跳过主要
         // 移动阶段」 -- the skip is a *consequence* of the state. 「[不可阻挡]」:
@@ -103,22 +175,32 @@ pub mod stun {
 
     /// Add `n` [晕眩] layers (floors at 0). Wear-off `Tick::TurnEnd`, declared
     /// here. [不可阻挡] 「晕眩效果也不会获得新的层数」: a positive grant while
-    /// `unstoppable > 0` is refused before the engine service, so no abnormal
-    /// [反击] window opens (STA-01). Negative `n` always runs (strip layers).
+    /// `unstoppable > 0` is refused before the [反击] window, so no abnormal
+    /// window opens (STA-01). Negative `n` always runs (strip layers).
     pub fn add(player_id: i32, n: i32) {
         if n > 0 && crate::status::unstoppable_refuses(player_id) {
             return;
         }
-        ctx::apply_abnormal(player_id, abnormal::Stun, n, -1);
-        if n != 0 {
-            state::set_expires(player_id, state_key::STUN, state::TURN_END);
+        if n > 0 {
+            if !ctx::gate(player_id, abnormal::Stun) {
+                return;
+            }
+        }
+        if n == 0 {
+            return;
+        }
+        state::add(player_id, state_key::STUN, n);
+        state::set_flags(player_id, state_key::STUN, LAYER_FLAGS);
+        state::set_expires(player_id, state_key::STUN, state::TURN_END);
+        if n > 0 {
+            ctx::raise_after(player_id, RAISE_STUN, 1);
+            log_grant(source_of(player_id), player_id, RAISE_STUN);
         }
     }
 
     /// Add `n` `stunStart` layers -- the ones that only start counting next turn
     /// (`Tick::TurnStart`). Same [不可阻挡] refusal as [`add`]. No abnormal
-    /// window today (raw state write; the engine service opens one only for
-    /// `stun`).
+    /// window (raw state write; the pending layer is not yet a [晕眩] grant).
     pub fn add_start(player_id: i32, n: i32) {
         if n > 0 && crate::status::unstoppable_refuses(player_id) {
             return;
@@ -127,12 +209,15 @@ pub mod stun {
             return;
         }
         state::add(player_id, state_key::STUN_START, n);
+        state::set_flags(player_id, state_key::STUN_START, LAYER_FLAGS);
         state::set_expires(player_id, state_key::STUN_START, state::TURN_START);
     }
 
-    /// [晕眩]'s contribution to the generic move gate.
-    pub fn blocks_move(stun: i32) -> bool {
-        stun > 0
+    /// [晕眩]'s contribution to the generic move gate. [不可阻挡] cancels the
+    /// walk clamp for the move it arms (白金燐子 (2) 「本次移动不受异常移动
+    /// 效果影响」) -- same shape as stay's `blocks_move`.
+    pub fn blocks_move(stun: i32, unstoppable: i32) -> bool {
+        stun > 0 && unstoppable <= 0
     }
 
     /// 「无法使用[主动]技能和手卡的[手]效果」 -- act gate.
@@ -189,15 +274,26 @@ pub mod exile {
         if crate::status::unstoppable_refuses(player_id) {
             return false;
         }
+        if !ctx::gate(player_id, abnormal::Exile) {
+            return false;
+        }
         let before = get(player_id);
-        // Engine service: the abnormal [反击] window + the layer write. `to` is
-        // unused there (markers are this host's job).
-        ctx::apply_abnormal(player_id, abnormal::Exile, n_layers, -1);
+        state::add(player_id, state_key::EXILE, n_layers);
+        state::set_flags(player_id, state_key::EXILE, LAYER_FLAGS);
+        state::set_expires(player_id, state_key::EXILE, state::TURN_START);
         if get(player_id) <= before {
-            return false; // cancelled by counteraction
+            return false; // cancelled / no-op write
         }
         state::set(player_id, state_key::EXILE_TO, to);
+        state::set_flags(player_id, state_key::EXILE_TO, state_flag::ENGINE_OWNED);
         state::set(player_id, state_key::EXILE_HOLD, if hold { 1 } else { 0 });
+        state::set_flags(
+            player_id,
+            state_key::EXILE_HOLD,
+            LAYER_FLAGS,
+        );
+        ctx::raise_after(player_id, RAISE_EXILE, 1);
+        log_grant(source_of(player_id), player_id, RAISE_EXILE);
         true
     }
 
@@ -212,6 +308,7 @@ pub mod exile {
         if n < 0 {
             let left = (get(player_id) + n).max(0);
             state::set(player_id, state_key::EXILE, left);
+            state::set_flags(player_id, state_key::EXILE, LAYER_FLAGS);
             if left == 0 {
                 clear_markers(player_id);
             }
@@ -245,8 +342,19 @@ pub mod exile {
     /// count (the tick-out path already has `exile == 0`).
     fn clear_markers(player_id: i32) {
         state::set(player_id, state_key::EXILE_TO, -1);
+        state::set_flags(player_id, state_key::EXILE_TO, state_flag::ENGINE_OWNED);
         state::set(player_id, state_key::EXILE_MAIN, 0);
+        state::set_flags(
+            player_id,
+            state_key::EXILE_MAIN,
+            LAYER_FLAGS,
+        );
         state::set(player_id, state_key::EXILE_HOLD, 0);
+        state::set_flags(
+            player_id,
+            state_key::EXILE_HOLD,
+            LAYER_FLAGS,
+        );
     }
 
     /// [除外]'s contribution to the generic move gate.
@@ -280,4 +388,10 @@ pub mod exile {
 /// 「无视」s the gate, not the grant).
 pub(crate) fn unstoppable_refuses(player_id: i32) -> bool {
     state::get(player_id, state_key::UNSTOPPABLE) > 0
+}
+
+/// Declare flooring + engine-ownership on a companion counter write
+/// (`unstoppable` / `noHand` / `exileMain` / `exileHold`).
+pub fn declare_companion(player_id: i32, key: &str) {
+    state::set_flags(player_id, key, LAYER_FLAGS);
 }

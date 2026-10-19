@@ -158,9 +158,6 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .player_id("who", who)
             .player_id("target", target)
             .i("value", value),
-        TriggerKind(21) /* exile */ => Msg::new("log.why.exile")
-            .player_id("who", who)
-            .player_id("target", target),
         TriggerKind::BeforeOut
         | TriggerKind::Bankrupt
         | TriggerKind::BankruptBefore
@@ -247,22 +244,12 @@ fn kind_name(kind: &str) -> Msg {
     Msg::new("log.kind.wire").text("name", kind)
 }
 
-/// A rulebook-visible state key, as its display phrase. Scratch keys never
-/// reach here (`outcome_state` filters them out).
+/// A keyed state item's display phrase. The engine has no key→phrase table:
+/// the raw key is quoted as data (`log.state.other`) and the client maps it.
+/// Scratch keys never reach here (`outcome_state` filters them out).
 pub fn state_key_name(key: &str) -> Msg {
     match key {
         card_sdk::abi::state_key::HAND_LIMIT => Msg::new("log.state.hand_limit"),
-        card_sdk::abi::state_key::CHARGE => Msg::new("log.state.charge"),
-        card_sdk::abi::state_key::STAY => Msg::new("log.state.stay"),
-        card_sdk::abi::state_key::STUN | card_sdk::abi::state_key::STUN_START => {
-            Msg::new("log.state.stun")
-        }
-        card_sdk::abi::state_key::EXILE
-        | card_sdk::abi::state_key::EXILE_TO
-        | card_sdk::abi::state_key::EXILE_MAIN
-        | card_sdk::abi::state_key::EXILE_HOLD => Msg::new("log.state.exile"),
-        card_sdk::abi::state_key::NO_HAND => Msg::new("log.state.no_hand"),
-        card_sdk::abi::state_key::UNSTOPPABLE => Msg::new("log.state.unstoppable"),
         card_sdk::abi::state_key::START_HAND => Msg::new("log.state.start_hand"),
         card_sdk::abi::state_key::SKILL_STATE => Msg::new("log.state.skill_state"),
         other => Msg::new("log.state.other").text("name", other),

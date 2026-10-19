@@ -1,9 +1,9 @@
 //! Roster fixture gate (ABI v63, `docs/CARDS.md` 「Card metadata」).
 //!
 //! `crates/game-core/tests/fixtures/roster.json` is a **tiny synthetic**
-//! fixture (neutral persona/group names) so engine tests stay game-agnostic.
+//! fixture (neutral persona/group names) so engine tests remain game-agnostic.
 //! The live ruleset roster is `rules-native::roster()` and belongs with the
-//! shipped cards; this gate only pins that the synthetic fixture stays
+//! shipped cards; this gate only pins that the synthetic fixture remains
 //! parseable and loadable.
 //!
 //! The historical byte-equal dump check against the live roster lived here
@@ -38,7 +38,7 @@ fn fixture_parses_as_a_tiny_synthetic_roster() {
     // Tiny on purpose: engine tests must not need the shipped roster.
     assert!(
         fixture.personas.len() <= 16,
-        "synthetic roster stays tiny ({} personas)",
+        "synthetic roster remains tiny ({} personas)",
         fixture.personas.len()
     );
 }

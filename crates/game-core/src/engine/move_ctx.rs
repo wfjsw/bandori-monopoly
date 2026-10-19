@@ -91,7 +91,7 @@ pub struct MoveCtx {
     pub forced: bool,
     /// The move was shaped or started by a rule whose card id starts with
     /// `skill:` (generic source tag; cond reads `move.by_skill`). Skipped when
-    /// false so saves stay byte-identical to the pre-v85 shape.
+    /// false so saves remain byte-identical to the pre-v85 shape.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub by_skill: bool,
     /// Why the move happened (a card / effect), shown in parentheses on the
@@ -167,7 +167,7 @@ pub struct MoveCtx {
     /// This settle was initiated by a card (`card_settle_at`), not by the
     /// player's own move landing. The engine sets it on the nested move
     /// `card_settle_move` builds; it is **never** a plan write (`plan::set_*`)
-    /// and the plan's own flag stays default `false` so a later move cannot
+    /// and the plan's own flag remains default `false` so a later move cannot
     /// inherit it. Readable from a hook as
     /// `card_sdk::ctx::trigger::is_settle_redirect()`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -276,7 +276,7 @@ impl MoveCtx {
     /// Fix the walk length, so the move walks exactly `n` steps and does not
     /// roll (a non-negative `steps` suppresses the roll; the walk then reads
     /// `steps` instead of `roll`). The sign of the current roll is kept so a
-    /// reverse move stays reverse.
+    /// reverse move remains reverse.
     pub fn set_steps(&mut self, n: i32) {
         let n = n.max(0);
         self.steps = n;
@@ -365,7 +365,7 @@ mod tests {
             ..Default::default()
         };
         m.set_steps(4);
-        assert_eq!(m.roll, -4, "a reverse roll stays negative");
+        assert_eq!(m.roll, -4, "a reverse roll remains negative");
         m.roll = 6;
         m.set_steps(0);
         assert_eq!(m.roll, 0);

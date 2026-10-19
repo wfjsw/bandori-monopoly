@@ -527,6 +527,10 @@ pub fn state_add(player_id: i32, ptr: i32, len: i32, delta: i32) -> i32 {
     kani_host::call_i32(Op::state_add, [player_id, ptr, len, delta, 0, 0])
 }
 
+pub fn state_set_flags(player_id: i32, ptr: i32, len: i32, flags: i32) {
+    let _ = kani_host::call_i32(Op::state_set_flags, [player_id, ptr, len, flags, 0, 0]);
+}
+
 pub fn slot(player_id: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::slot, [player_id, ptr, len, 0, 0, 0])
 }
@@ -587,8 +591,8 @@ pub fn add_marker_max(player_id: i32, name_p: i32, name_l: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::add_marker_max, [player_id, name_p, name_l, n, 0, 0])
 }
 
-pub fn apply_abnormal(player_id: i32, kind: i32, n: i32, to: i32) {
-    kani_host::call_unit(Op::apply_abnormal, [player_id, kind, n, to, 0, 0]);
+pub fn raise_after(player_id: i32, name_p: i32, name_l: i32, value: i32) {
+    kani_host::call_unit(Op::raise_after, [player_id, name_p, name_l, value, 0, 0]);
 }
 
 pub fn skip_main_move(player_id: i32, locked: i32) {

@@ -75,7 +75,7 @@ impl<'de> Deserialize<'de> for TileKind {
     }
 }
 
-/// One tile of the board, as the data file names it. `name` **stays**: the
+/// One tile of the board, as the data file names it. `name` **remains**: the
 /// engine resolves tiles by name (`ctx::tile_named`, `engine/ops.rs`).
 /// Display chrome (`shortName`, `color`, `note`) is client-side.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -109,7 +109,7 @@ impl TileData {
 
 /// One card row of the roster (was `cards.json`; now ruleset metadata).
 /// Display-only copy (`rawName`, `cell`) lives in `display.json`. `text` is
-/// dual-role and stays here: the ruleset queries it at runtime
+/// dual-role and remains here: the ruleset queries it at runtime
 /// (`card_text_mentions`, 「效果包含…」), so it is a rule input as well as the
 /// printed body the client shows.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -149,7 +149,7 @@ impl CardData {
 
 /// One playable persona of the roster (was `personas.json`). Display-only copy
 /// (`display`, `color`, `variantTag`, `art`, `costume`, `cnId`) lives in
-/// `display.json`. `text` is dual-role and stays here: `card_text_mentions`
+/// `display.json`. `text` is dual-role and remains here: `card_text_mentions`
 /// searches it over `skill:<persona>:<skill>` (「技能中含有…」).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -167,7 +167,7 @@ pub struct PersonaData {
 }
 
 /// One group of the roster (was `groups.json`). Display-only copy (`shortName`,
-/// `color`, `logo`) lives in `display.json`. `text` is dual-role and stays
+/// `color`, `logo`) lives in `display.json`. `text` is dual-role and remains
 /// here: `card_text_mentions` searches it over `skill:<group>:<skill>`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -184,7 +184,7 @@ pub struct GroupData {
 
 /// The roster half of [`GameData`] -- cards / personas / groups / events --
 /// handed over by the ruleset host (ABI v63 `ruleset_metadata`, converted in
-/// `game-rules`). `game-core` stays free of the card crates; this is the plain
+/// `game-rules`). `game-core` remains free of the card crates; this is the plain
 /// struct of vectors it already iterates in roster order (the Rust ordinal
 /// table).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -249,7 +249,7 @@ impl Roster {
 
 /// One event card of the roster (was `events.json`; now ruleset metadata).
 /// `name` and `text` are game content (the rulebook body and what the card is
-/// called) and stay on the engine's view of the table -- the spec harness
+/// called) and remain on the engine's view of the table -- the spec harness
 /// classifies 「将此卡…」 discard overrides by reading `text`. `cell` (the sheet
 /// column the row was lifted from) is authoring chrome and lives in
 /// `display.json` for the client only.
@@ -427,7 +427,7 @@ impl GameData {
             }
         }
         // Optional, outside `BOOT_FILES` (so records do not move with it): a
-        // missing file is an empty book and bots stay on the preset decks.
+        // missing file is an empty book and bots remain on the preset decks.
         if let Ok(text) = read(DECK_BOOK_FILE) {
             d.deck_book = DeckBook::parse_or_empty(&text);
         }

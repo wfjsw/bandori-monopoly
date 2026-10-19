@@ -92,7 +92,7 @@ struct Opts {
     fixed_iters: u64,
     /// Time management: stop before the budget when the best root action
     /// cannot be overtaken (`docs/BOT.md` §3.4). Off by default so the
-    /// harness's published cells stay comparable to the C1 record.
+    /// harness's published cells remain comparable to the C1 record.
     early_stop: bool,
     /// Speculate on the seat's next own decision between its turns
     /// (`docs/BOT.md` §3.5). Off by default.

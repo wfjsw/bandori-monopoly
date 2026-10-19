@@ -967,7 +967,7 @@ fn round_trip_1000_seeds() {
 /// so the middle variant -- a bare [`Match`] with the same `save()` + FNV at
 /// every turn boundary and no recorder at all -- is what the overhead is
 /// measured against. The wrapper itself is a run-length increment per tick
-/// and must stay under 2% of that. The design-mandated checkpoint work as a
+/// and must remain under 2% of that. The design-mandated checkpoint work as a
 /// share of a bare game is reported separately (see
 /// [`checkpoint_cost_breakdown`]); it is the design's cost, not the wrapper's.
 #[test]

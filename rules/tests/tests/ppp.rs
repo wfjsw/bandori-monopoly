@@ -373,9 +373,20 @@ fn returns_grants_sticker_after_general_card() {
 fn returns_turn_start_ask_survives_stun_skip() {
     let mut t = Table::new(&["户山香澄", "美竹兰"]);
     assert!(t.on_field(0, "PPP:Returns"), "field {:?}", t.field_ids(0));
-    // Raw writer, no expiry named -- exactly what `Table::set_state` does.
-    t.set_state(0, "stun", 1);
-    t.set_state(1, "stun", 1);
+    // Layer write with the wear-off the grant verb declares (a bare
+    // `set_state` would leave the layer forever -- the engine no longer
+    // guesses expiry from the key).
+    for who in [0, 1] {
+        let p = who as i32;
+        let w = t.m.world_mut();
+        w.apply_layer(p, bandori_std::state_key::STUN, 1);
+        w.state_set_flags(p, bandori_std::state_key::STUN, 1 | 2);
+        w.state_set_expires(
+            p,
+            bandori_std::state_key::STUN,
+            Some(game_core::state::Tick::TurnEnd),
+        );
+    }
     t.begin_turn(0);
     // The turn-start borrow ask is open (the turn does begin, even if 晕眩
     // then skips the rest of it). Answer it; the storm was one prompt per

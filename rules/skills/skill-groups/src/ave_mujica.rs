@@ -17,7 +17,7 @@
 //! figure is untouched. That is a per-party bend, which `PaySplitMul` carries as the
 //! amount seen from one side.
 
-use card_sdk::abi::{counter, state_key, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{counter, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

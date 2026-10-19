@@ -73,7 +73,7 @@ fn always_flashes_a_self_only_entry() {
     );
 }
 
-/// `Flash::Never` suppresses a cross-player pay's flash; the log entry stays.
+/// `Flash::Never` suppresses a cross-player pay's flash; the log entry remains.
 #[test]
 fn never_suppresses_a_cross_player_one() {
     let mut t = Table::vanilla(2);

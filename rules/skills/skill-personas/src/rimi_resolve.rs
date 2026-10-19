@@ -14,7 +14,7 @@
 //! maximum absolute `dist` from where the player stands; 「并[结算]」 is the
 //! teleport resolving, and 「可选择盖房」 is the build offer that follows.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

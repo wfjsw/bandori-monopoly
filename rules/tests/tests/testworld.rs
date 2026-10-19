@@ -110,7 +110,7 @@ impl CardWorld for TestWorld {
         game_core::state::StateVar::default()
     }
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
-        if key == game_core::state::key::EXILE {
+        if key == bandori_std::state_key::EXILE {
             return self
                 .exile
                 .get(player_id.max(0) as usize)
@@ -136,6 +136,7 @@ impl CardWorld for TestWorld {
     }
     fn state_set_bounds(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn state_set_expires(&mut self, _: i32, _: &str, _: Option<game_core::state::Tick>) {}
+    fn state_set_flags(&mut self, _: i32, _: &str, _: u8) {}
     fn tick_state(&mut self, _: i32, _: game_core::state::Tick) -> Vec<(String, i32)> {
         Vec::new()
     }

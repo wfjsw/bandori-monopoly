@@ -2,7 +2,7 @@
 //!
 //! A rules host (`game-rules`) runs card modules against a copy of the world and
 //! calls these; they are pure state moves and log lines, so a module's replay
-//! stays deterministic. Anything that needs a player decision is *not* here --
+//! remains deterministic. Anything that needs a player decision is *not* here --
 //! those go through `Cx::ask`, which halts and replays like any engine routine.
 
 use std::collections::BTreeMap;
@@ -396,6 +396,21 @@ impl World {
 
     pub fn state_get(&self, player_id: i32, key: &str) -> i32 {
         self.state_var(player_id, key).value
+    }
+
+    /// Every `(key, value)` on this seat. Opaque names; the engine does not
+    /// interpret them.
+    pub fn state_pairs(&self, player_id: i32) -> Vec<(String, i32)> {
+        self.player_id(player_id)
+            .map(|s| s.state.iter().map(|(k, v)| (k.clone(), v.value)).collect())
+            .unwrap_or_default()
+    }
+
+    /// Declare the generic [`crate::state::state_flag`] bits for a key.
+    pub fn state_set_flags(&mut self, player_id: i32, key: &str, flags: u8) {
+        if let Some(s) = self.player_mut(player_id) {
+            s.state_set_flags(key, flags);
+        }
     }
 
     pub fn state_min(&self, player_id: i32, key: &str) -> i32 {
@@ -1035,7 +1050,7 @@ impl World {
         if self.st.houses.get(tile as usize).copied().unwrap_or(0) as usize >= t.rent.len() - 1 {
             return Some(Msg::new("err.build_full"));
         }
-        // The payer's own gate (stun/exile 「无法收付款」) is the caller's
+        // The payer's own gate (the pay-gate layers 「无法收付款」) is the caller's
         // `Gate::Pay` question: a World has no ruleset to ask.
         if s.out() {
             return Some(Msg::new("err.cannot_spend"));
@@ -1246,7 +1261,7 @@ impl World {
     /// The board-wide **status hosts** (`status:*`, [`crate::data::status_rule_ids`])
     /// -- one instance each on the neutral board owner, governing no single
     /// tile. Like [`Self::mark_rule_instances`], these hear every trigger their
-    /// rule declares wherever it points (the `noHand` fold / clear runs on the
+    /// rule declares wherever it points (the hand-gate fold / clear runs on the
     /// turn-flow triggers, the [除外] tick on `turnStartBefore`). Collected
     /// **last** among the field hooks, after tile / event / mark, so sibling
     /// hooks still see pre-tick state.
@@ -1593,7 +1608,7 @@ impl World {
     ///
     /// This is `ctx::event_expire` -- the 「放入事件弃牌」 / 「永久移除」 half of an
     /// event's expiry clause. A one-shot event never gets here: `draw_event`
-    /// files it away itself when the rule reports it does not stay.
+    /// files it away itself when the rule reports it does not remain.
     pub fn expire_event(&mut self, id: &str, removed: bool) {
         let rid = crate::data::event_rule_id(id);
         if let Some(i) = self
@@ -1955,7 +1970,7 @@ impl World {
     /// Destroy every counter unit owned by the instance at `uid` -- tile marks
     /// and player-held tokens alike. Called when the instance leaves the field
     /// (discard, unplace, player leave / bankrupt, event expire). The standing
-    /// the tile-mark owner pseudo card is never destroyed, so its units stay.
+    /// the tile-mark owner pseudo card is never destroyed, so its units remain.
     pub fn destroy_instance_units(&mut self, uid: i32) {
         if uid < 0 {
             return;
@@ -2156,59 +2171,28 @@ impl World {
             .unwrap_or(-1)
     }
 
-    // ------------------------------------------------------ status effects
+    // ------------------------------------------------------ generic layer writes
 
-    /// Layered abnormal status on a player (the wire kind id: 1 = stay,
-    /// 2 = stun, 3 = exile; see `AbKind`). One dumb layer write over the
-    /// keyed state, clamped at 0 because that is the status rule, not because
-    /// the engine enforces bounds -- [`Self::state_add`] would not.
+    /// One opaque layer write over the keyed state. The caller supplies the
+    /// storage key; the engine never maps a kind id to a key name. Clamped at
+    /// 0 only when the item declared [`crate::state::state_flag::NEVER_NEGATIVE`].
     ///
-    /// The verb is the `status:*` hosts' grant API (`docs/STATUS-HOSTS.md`,
-    /// `rules/status`) kept as a **generic engine service**: abnormal [反击]
-    /// window (`hostfns`) + layer write. Wear-off is declared by the host
-    /// verbs (`ctx::state::set_expires`); `default_expiry` stamps it on any
-    /// raw write as the safety net. The stay move-latch does **not** ride
-    /// here -- that is turn-flow ([`Self::skip_main_move`]), driven by
-    /// `status:stay`. Unstoppable refusal (STA-01) is the host's policy,
-    /// checked before this service is called.
-    ///
-    /// `to` is the kind-specific payload (`-1` = none) -- carried for the
-    /// exile return destination; the engine layer write ignores it (markers
-    /// are the host's job). Kept so the ABI shape is one verb.
-    pub fn apply_abnormal(&mut self, player_id: i32, kind: i32, n: i32, _to: i32) {
-        let key = match kind {
-            1 => key::STAY,
-            2 => key::STUN,
-            3 => key::EXILE,
-            _ => return,
-        };
+    /// The [反击] window is the separate generic `gate(p, kind_id)` verb.
+    /// Wear-off is declared by the writer (`state_set_expires`).
+    pub fn apply_layer(&mut self, player_id: i32, key: &str, n: i32) {
         if let Some(s) = self.player_mut(player_id) {
-            let v = (s.state_get(key) + n).max(0);
-            s.state_set(key, v);
+            s.state_add(key, n);
         }
     }
 
-    /// Is the status gate open for this player? Asks the ruleset (the
-    /// `status:*` pseudo cards' CEL conditions); a ruleset with no opinion
-    /// falls back to the engine-side mirror [`crate::state::MatchPlayer::status_gates`].
+    /// Is the capability gate open for this player? Asks the ruleset (its
+    /// CEL-only gate conditions). A ruleset with no opinion answers open --
+    /// the engine keeps no named mirror.
     pub fn gate_open(&self, rules: &dyn super::CardRules, gate: super::Gate, player: usize) -> bool {
         if let Some(open) = rules.gate_open(self, gate, player) {
             return open;
         }
-        let Some(p) = self.st.players.get(player) else {
-            return true;
-        };
-        let g = p.status_gates();
-        match gate {
-            super::Gate::Act => g.act,
-            super::Gate::Pay => g.pay,
-            super::Gate::Move => g.r#move,
-            // [`Self::exclusive_use`] owns this question (it needs the card).
-            super::Gate::Exclusive => true,
-            // Play-only lock is a ruleset opinion; the engine-side mirror has
-            // no standing play block.
-            super::Gate::Play => true,
-        }
+        true
     }
 
     /// Is the exclusive-use gate open for this player and card? The engine's
@@ -2226,10 +2210,10 @@ impl World {
     }
 
     /// Set this turn's main-move latch for `player_id`. `locked != 0` skips
-    /// the move; `0` releases it. A generic turn-flow verb -- the `status:stay`
-    /// host's count-changed clause (rules.txt 48) drives it. **exile is not
-    /// part of this latch**: it grants [无法移动] (glossary 13) but not
-    /// 「跳过主要移动阶段」 (closeout-2 ruling). A mid-turn exile
+    /// the move; `0` releases it. A generic turn-flow verb -- the timed-layer
+    /// host's count-changed clause (rules.txt 48) drives it. **The off-board
+    /// layer is not part of this latch**: it grants [无法移动] (glossary 13) but not
+    /// 「跳过主要移动阶段」 (closeout-2 ruling). A mid-turn off-board entry
     /// (MyGO:无路矢) still owes the roll. Only the turn player's latch moves.
     pub fn skip_main_move(&mut self, player_id: i32, locked: i32) {
         if self.st.turn == player_id {

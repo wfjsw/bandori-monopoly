@@ -80,20 +80,33 @@ fn settle_on(t: &mut Table, who: usize, tile: usize) {
     t.roll(who).unwrap();
 }
 
-/// `apply_abnormal` sets the `Tick::TurnEnd` expiry the engine ticks;
-/// a bare `set_state` does not, and the layer would never wear off.
+/// Layer write over the generic `apply_layer`, with the wear-off expiry and
+/// NEVER_NEGATIVE flag the grant verbs declare (a bare `set_state` would leave
+/// the layer forever).
 fn add_stay(t: &mut Table, who: usize, n: i32) {
-    t.m.world_mut().apply_abnormal(who as i32, 1, n, -1);
+    let p = who as i32;
+    let w = t.m.world_mut();
+    w.apply_layer(p, bandori_std::state_key::STAY, n);
+    w.state_set_flags(p, bandori_std::state_key::STAY, 1 | 2);
+    w.state_set_expires(p, bandori_std::state_key::STAY, Some(game_core::state::Tick::TurnEnd));
 }
 
 fn add_stun(t: &mut Table, who: usize, n: i32) {
-    t.m.world_mut().apply_abnormal(who as i32, 2, n, -1);
+    let p = who as i32;
+    let w = t.m.world_mut();
+    w.apply_layer(p, bandori_std::state_key::STUN, n);
+    w.state_set_flags(p, bandori_std::state_key::STUN, 1 | 2);
+    w.state_set_expires(p, bandori_std::state_key::STUN, Some(game_core::state::Tick::TurnEnd));
 }
 
 fn add_exile(t: &mut Table, who: usize, n: i32, to: usize) {
     // Engine service writes only the layer; the return tile is the
     // `status:exile` host's marker (see `bandori_std::status::exile::send`).
-    t.m.world_mut().apply_abnormal(who as i32, 3, n, -1);
+    let p = who as i32;
+    let w = t.m.world_mut();
+    w.apply_layer(p, bandori_std::state_key::EXILE, n);
+    w.state_set_flags(p, bandori_std::state_key::EXILE, 1 | 2);
+    w.state_set_expires(p, bandori_std::state_key::EXILE, Some(game_core::state::Tick::TurnStart));
     if n > 0 {
         t.set_state(who, "exileTo", to as i32);
         t.set_state(who, "exileHold", 0);

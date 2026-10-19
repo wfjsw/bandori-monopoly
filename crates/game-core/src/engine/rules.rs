@@ -11,7 +11,7 @@ use crate::msg::Msg;
 
 /// Where a played card goes afterwards.
 ///
-/// The fates: Graveyard (discard pile, 弃卡区), Hand, Field (stays in play,
+/// The fates: Graveyard (discard pile, 弃卡区), Hand, Field (remains in play,
 /// 场上), Banished (「banish」, out of the game).
 /// Planned: the draw-pile fates `DeckTop` / `DeckBottom` / `DeckRandom` (put
 /// the card on top of / on the bottom of / shuffle it into the draw pile; the
@@ -23,7 +23,7 @@ pub enum Dest {
     Graveyard,
     /// Back to the hand (手牌).
     Hand,
-    /// Stays in play (场上) -- a persistent effect.
+    /// Remains in play (场上) -- a persistent effect.
     Field,
     /// 「banish」 -- out of the game entirely.
     Banished,
@@ -166,7 +166,7 @@ pub struct TriggerBuy {
 }
 
 impl TriggerBuy {
-    /// A buy payload with no deal rewrite yet (`deal_owner` stays `None`, so
+    /// A buy payload with no deal rewrite yet (`deal_owner` remains `None`, so
     /// the commit keeps its default owner).
     pub fn new(
         kind: super::play::purchase::BuyKind,
@@ -260,7 +260,7 @@ pub enum Negation {
 /// not at settlement: this is the stable thing a counteraction listens to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Effect {
-    /// What it does -- the raise site's kind name (`"pay"`, `"target"`, `"stay"`, ...).
+    /// What it does -- the raise site's kind name (`"pay"`, `"target"`, and friends).
     pub kind: &'static str,
     /// The seat it is aimed at (-1 for none).
     pub target: i32,
@@ -435,7 +435,7 @@ impl Trigger {
 /// Raise a counteraction trigger: build a [`Trigger`], apply the optional field
 /// overrides, and run it through `Cx::raise` (which stamps `step` centrally and
 /// delegates to the card rules). Every raise site should go through this so the
-/// shape of a trigger stays uniform.
+/// shape of a trigger remains uniform.
 ///
 /// `@m <move>` copies the move context onto the trigger from a `Move`
 /// ([`Trigger::with_move`]); `@b <buy>` / `@p <pay>` install the purchase /
@@ -534,14 +534,31 @@ pub trait CardRules: Send + Sync {
         true
     }
 
-    /// A status gate (`docs/STATUS-HOSTS.md`): `Some(true)` = open. The
-    /// ruleset answers from the standing `status:*` rules' CEL-only
-    /// `On::Gate` conditions, natively and purely. `None` (the default) means
-    /// "no ruleset opinion": the engine falls back to
-    /// [`crate::state::MatchPlayer::status_gates`], the same clauses in Rust
-    /// (what `StubRules` runs; pinned equal by `tests/status_gate_drift.rs`).
+    /// A capability gate (`docs/STATUS-HOSTS.md`): `Some(true)` = open. The
+    /// ruleset answers from its standing CEL-only `On::Gate` conditions,
+    /// natively and purely. `None` (the default) means "no ruleset opinion":
+    /// the engine answers open. There is no named engine-side mirror.
     fn gate_open(&self, _w: &super::World, _gate: Gate, _player: usize) -> Option<bool> {
         None
+    }
+
+    /// The i18n key for "this capability is closed" -- built by the ruleset
+    /// (its gate-declaring rule supplies the key as data). The engine never
+    /// names a status.
+    fn gate_refusal_msg(&self, _gate: Gate, _player: usize) -> Msg {
+        Msg::new("status.move_blocked")
+    }
+
+    /// The i18n key for the turn-skip log when this gate is closed at turn
+    /// start. Also ruleset-supplied data (`gate_skip_msgs`).
+    fn gate_skip_msg(&self, gate: Gate, player: usize) -> Msg {
+        self.gate_refusal_msg(gate, player)
+    }
+
+    /// May this card be played despite a closed act gate? The ruleset answers
+    /// from a card prop whose name it owns (`exemption_prop`).
+    fn card_act_exemption(&self, _card: &str) -> bool {
+        false
     }
 
     /// An [`Gate::Exclusive`] question (`docs/GUARDS.md`): `Some(true)` = the
@@ -652,7 +669,7 @@ pub trait CardRules: Send + Sync {
     /// The effect. Returns where the card goes afterwards.
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest>;
 
-    /// Resolve a drawn event card. Returns `true` if the event stays in play
+    /// Resolve a drawn event card. Returns `true` if the event remains in play
     /// (otherwise it is discarded).
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool>;
 
@@ -792,7 +809,9 @@ pub trait CardRules: Send + Sync {
     }
 }
 
-/// Which status gate a [`CardRules::gate_open`] question is about.
+/// Which capability gate a [`CardRules::gate_open`] question is about.
+/// Generic turn/board concepts -- the ruleset decides which opaque state
+/// keys close which gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gate {
     /// [主动] skills and 手卡的hand效果.
@@ -801,11 +820,15 @@ pub enum Gate {
     Pay,
     /// This turn's main move.
     Move,
+    /// The piece is present on a board square (may be landed on / walked to).
+    OnBoard,
+    /// The piece may be named as a designation / target.
+    Targetable,
     /// May this exclusive card be played? Context rides along as an
     /// [`ExclusiveAsk`] on [`CardRules::exclusive_use`].
     Exclusive,
     /// May a hand card be played right now? Play-only (unlike [`Self::Act`],
-    /// which also gates [主动] skills and skips a stunned turn).
+    /// which also gates [主动] skills).
     Play,
 }
 
@@ -828,7 +851,7 @@ pub struct StubRules;
 
 impl CardRules for StubRules {
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
-        // No module body runs and no effect activates -- a stub play stays
+        // No module body runs and no effect activates -- a stub play remains
         // silent apart from the "not ported" note. (`WasmRules` announces its
         // bodies at `drive_inner_body`; the sim's counts therefore see no new
         // event kinds.)

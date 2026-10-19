@@ -15,7 +15,7 @@
 //! move at turn start」) and the engine reads; see the TODO below for the piece
 //! that is not expressible yet.
 
-use card_sdk::abi::{state_key, FilterValue, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

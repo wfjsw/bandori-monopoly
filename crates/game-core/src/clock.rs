@@ -107,7 +107,7 @@ impl ClockSettings {
     }
 
     /// True when every field equals [`Default`] -- used so the fairness canon
-    /// string stays byte-identical to pre-settings records when a match runs
+    /// string remains byte-identical to pre-settings records when a match runs
     /// on defaults (`fair::CanonSettings::canon`).
     pub fn is_default(&self) -> bool {
         *self == Self::default()
