@@ -36,7 +36,9 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
         On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
     ],
-).silent(&[1]);
+).silent(&[1])
+    // 「（初始1，上限1）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")
@@ -85,7 +87,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     } else {
         back
     };
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("tomoe_ramen_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomoe_ramen_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);
@@ -96,7 +98,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let before = ctx::dist(here, shop);
     let after = ctx::dist(toward, shop);
     if after > before {
-        rules_status::fire::gain(player_id, 1, &Msg::new(key!("tomoe_ramen_refund")))?;
+        bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tomoe_ramen_refund")))?;
     }
     ctx::log(
         player_id,

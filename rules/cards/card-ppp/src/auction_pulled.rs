@@ -47,7 +47,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("auction_pulled_note")));
             // 规则书[持续]: 「此卡拥有者火罐上限加1」 -- C# `FireMaxDelta() => 1`.
-            rules_status::fire::add_max(player_id, 1);
+            bandori_std::fire::add_max(player_id, 1);
             ctx::log(
                 player_id,
                 &Msg::new(key!("auction_pulled_placed")).player_id("who", player_id),

@@ -37,7 +37,9 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         On::Counteract(&[ChainKind::Card, bandori_std::kind::SkillUsed.as_trigger()], "", "", Some(can_negate), negate),
     ],
 )
-    .props(&[
+    // 「（初始2，上限4）」
+        .props(&[
+        (bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 4),
         (prop::COUNTERACT_FROM_FIELD, 1),
         // One cancel per activation: the skill stays in play, so without a
         // group reservation the ring would re-offer it after the declaration
@@ -93,7 +95,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     let n = ctx::count_marks(t, &MarkFilter::any().kind(RABBIT));
     ctx::remove_marks(t, &MarkFilter::any().kind(RABBIT));
-    rules_status::fire::gain(player_id, n, &Msg::new(key!("tae_police_gain")))?;
+    bandori_std::fire::gain(player_id, n, &Msg::new(key!("tae_police_gain")))?;
     Ok(())
 }
 
@@ -115,7 +117,7 @@ fn can_negate(player_id: i32) -> bool {
 /// The [反击] window's play-vs-skip *is* the 「你可以使用」 choice; declaring
 /// the counteraction spends the 4 [火罐] and voids the effect. No extra confirm.
 fn negate(player_id: i32) -> card_sdk::Asked {
-    if !rules_status::fire::spend(player_id, 4, &Msg::new(key!("tae_police_spend")))? {
+    if !bandori_std::fire::spend(player_id, 4, &Msg::new(key!("tae_police_spend")))? {
         return Ok(());
     }
     trigger::set_cancelled();

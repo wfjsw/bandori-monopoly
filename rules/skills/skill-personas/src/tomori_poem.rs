@@ -60,7 +60,9 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
         On::Action(&[ActionKind::MoveResolved], "", "", None, clear_acted),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0])
+    // 「（初始4，上限4）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 4), (bandori_std::fire::FIRE_CAP, 4)]);
 
 /// 「在此技能影响下的支付价格变为原本的一半」 -- only the payments of the
 /// player this skill moved.
@@ -76,7 +78,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]任意RiNG时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("tomori_poem_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tomori_poem_gain")))?;
     Ok(())
 }
 
@@ -161,7 +163,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, cost, &Msg::new(key!("tomori_poem_spend")))? {
+    if !bandori_std::fire::spend(player_id, cost, &Msg::new(key!("tomori_poem_spend")))? {
         return Ok(());
     }
     // `teleport_to` runs the [传送] abnormal gate itself (`HostRequest::Teleport`).

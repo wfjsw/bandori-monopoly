@@ -35,7 +35,9 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         On::Action(&[ActionKind::PaySplitChooseBefore], card_sdk::pre::MINE, "", Some(pay_cut_applies), on_pay),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0])
+    // 「（初始3，上限5）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 3), (bandori_std::fire::FIRE_CAP, 5)]);
 
 fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() != player_id
@@ -79,7 +81,7 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::add_tok(player_id, MARK, 1, 1)?;
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_gain")))?;
     if !ctx::player_out(payer) {
         ctx::gain(payer, 200, &Msg::new(key!("saaya_sky_payee")))?;
     }
@@ -140,7 +142,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if rules_status::fire::spend(player_id, 5, &Msg::new(key!("saaya_sky_spend")))? {
+    if bandori_std::fire::spend(player_id, 5, &Msg::new(key!("saaya_sky_spend")))? {
         ctx::trigger::set_pay_amount((amount - 5000).max(0));
     }
     Ok(())

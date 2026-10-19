@@ -42,7 +42,9 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
         On::Action(&[ActionKind::Settle], "actor == owner && slot('skill.soyoClear.armed') != 0", "", None, on_settle),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0])
+    // 「（初始1，上限1）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -57,7 +59,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("soyo_clear_denied")));
         return Ok(());
     }
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("soyo_clear_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("soyo_clear_gain")))?;
     Ok(())
 }
 
@@ -70,7 +72,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if rules_status::fire::spend(player_id, 1, &Msg::new(key!("soyo_clear_spend")))? {
+    if bandori_std::fire::spend(player_id, 1, &Msg::new(key!("soyo_clear_spend")))? {
         state::set(player_id, ARMED, 1);
     }
     Ok(())

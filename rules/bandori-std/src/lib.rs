@@ -47,6 +47,9 @@ pub mod kind;
 pub mod guards;
 /// Shared status verbs (stay / stun / exile) over the generic engine services.
 pub mod status;
+/// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
+/// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
+pub mod fire;
 
 /// State-map keys that name this ruleset's pots / statuses. Frozen webui wire.
 ///
@@ -214,7 +217,7 @@ pub fn decay() -> Result<i32, Prompt> {
 
 // ------------------------------------------------------------- 火罐
 // Readable sugar over the generic `marker_*` / `state_*` family. The wire
-// key is `state_key::CHARGE`; the policy kernel is `rules_status::fire`.
+// key is `state_key::CHARGE`; the policy kernel is [`crate::fire`].
 
 pub fn charge(player_id: i32) -> i32 {
     card_sdk::ctx::state::get(player_id, state_key::CHARGE)

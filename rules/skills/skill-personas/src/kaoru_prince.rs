@@ -57,11 +57,13 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
 )
 .labels(&[(0, "（2）"), (2, "（1）"), (3, "（1）")])
 .silent(&[1])
-.quiet_when_empty(&[2, 3]);
+.quiet_when_empty(&[2, 3])
+    // 「（上限7）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 7)]);
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
-/// Declaration goes through the registry (`skill:濑田薰:梦幻的王子殿下`,
-/// cap 7 / initial 0) so the face parenthetical has one source of truth.
+/// The numbers ride this face's own `CardDef` (`.props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 7)])` above) so
+/// the parenthetical has one source of truth.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id);
     Ok(())
@@ -99,7 +101,7 @@ fn settle(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("kaoru_prince_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("kaoru_prince_gain")))?;
     Ok(())
 }
 
@@ -148,7 +150,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = near.get(pick) else {
         return Ok(());
     };
-    if !rules_status::fire::spend(player_id, 7, &Msg::new(key!("kaoru_prince_spend")))? {
+    if !bandori_std::fire::spend(player_id, 7, &Msg::new(key!("kaoru_prince_spend")))? {
         return Ok(());
     }
     // 「在…玩家场上放置3个[怪盗标记]」 -- three units on that player's field

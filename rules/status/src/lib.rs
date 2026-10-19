@@ -8,8 +8,10 @@
 //! | kind | ids | what they are |
 //! |---|---|---|
 //! | **状态 / conditions** | `status:stay`, `status:stun`, `status:exile`, `status:unstoppable` | 「处于该状态时…」 gates + ticks. The real status hosts. |
-//! | **指示物 / counters** | `fire.rs` (no status-shaped machinery) | 火罐 「技能指示物」 -- a capped resource over the generic `charge` / `Marker` machinery. Kin of CP点 / 奇迹水晶. |
 //! | **companions** | `status:no_hand` | `noHand` card-text slot (turn-flow 2→1→0 dance), not a glossary status. |
+//!
+//! 火罐 「技能指示物」 is **not** a status -- its kernel lives in
+//! `bandori_std::fire` (same taxonomy as CP点 / 奇迹水晶).
 //!
 //! | id | file | rulebook (`data/rules.txt`) |
 //! |---|---|---|
@@ -18,13 +20,12 @@
 //! | `status:exile` | `exile.rs` | 50 「[除外]」 |
 //! | `status:unstoppable` | `unstoppable.rs` | 51 「[不可阻挡]」 |
 //! | `status:no_hand` | `no_hand.rs` | `noHand` companion (card text) |
-//! | (placeholder) | `fire.rs` | 126 「火罐」 -- resource API, not a status |
 //!
 //! The `mark:cp` precedent (`rules/markers/src/cp.rs`, `docs/TILES.md`):
 //! cards never special-case a status. They call this crate's canonical API
-//! (`status::stay::add`, `status::fire::spend`, …) or message the host. The
+//! (`status::stay::add`, …) or message the host. The
 //! engine keeps only generic primitives (keyed state, turn-flow verbs, player
-//! gates) and **no named mirror** of stay / stun / exile / fire -- the frozen
+//! gates) and **no named mirror** of stay / stun / exile -- the frozen
 //! spellings live in `bandori_std::state_key` / `bandori_std::status` (raise
 //! names, i18n keys) and ride the manifest as data (`gate_msgs` /
 //! `gate_skip_msgs` / `exemption_prop`).
@@ -32,11 +33,12 @@
 //! ## Storage (recorded in `docs/STATUS-HOSTS.md` §3.1)
 //!
 //! The named state keys `stay` / `stun` / `stunStart` / `exile` / `exileTo` /
-//! `exileMain` / `charge` / `noHand` / `unstoppable` remain the player-bound
+//! `exileMain` / `noHand` / `unstoppable` remain the player-bound
 //! counters **and** the frozen webui wire (`MatchPlayer.state`). Each host is
 //! the creating rule of its key(s): it owns wear-off, clamping, gates and
 //! clauses. Wear-off is item-carried (`ctx::state::set_expires`,
-//! `Tick::TurnEnd` / `Tick::TurnStart`).
+//! `Tick::TurnEnd` / `Tick::TurnStart`). (`charge` / `tempFire` are
+//! `bandori_std::fire`'s, not a status host's.)
 //!
 //! ## Gates
 //!
@@ -54,15 +56,12 @@
 extern crate alloc;
 
 pub mod exile;
-pub mod fire;
-pub mod fire_decl;
 pub mod no_hand;
 pub mod stay;
 pub mod stun;
 pub mod unstoppable;
 
 pub use exile::STATUS_EXILE;
-pub use fire::STATUS_FIRE;
 pub use no_hand::STATUS_NO_HAND;
 pub use stay::STATUS_STAY;
 pub use stun::STATUS_STUN;
@@ -75,7 +74,6 @@ pub static CARDS: &[card_sdk::CardDef] = &[
     STATUS_STAY,
     STATUS_STUN,
     STATUS_EXILE,
-    STATUS_FIRE,
     STATUS_UNSTOPPABLE,
     STATUS_NO_HAND,
 ];
@@ -88,7 +86,7 @@ pub static CARDS: &[card_sdk::CardDef] = &[
 // status::stay::add(p, n);  status::stay::get(p);  status::stay::clear(p);
 // status::stun::add(p, n);  status::stun::get(p);  status::stun::clear(p);
 // status::exile::send(p, n, to);  status::exile::get(p);  status::exile::clear(p);
-// status::fire::{get, max, gain, spend, add_max};
+// bandori_std::fire::{get, max, gain, spend, add_max};
 // ```
 //
 // Thin wrappers over the generic `ctx::state` surface and the still-shipped

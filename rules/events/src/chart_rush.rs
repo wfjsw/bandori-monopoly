@@ -25,9 +25,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let mut faces: Vec<(i32, i32)> = Vec::new();
     for &p in &players {
         // 「所有人失去所有[火罐]」
-        let lost = rules_status::fire::get(p);
+        let lost = bandori_std::fire::get(p);
         if lost > 0 {
-            rules_status::fire::spend(p, lost, &Msg::new("log.event.chart_lose"))?;
+            bandori_std::fire::spend(p, lost, &Msg::new("log.event.chart_lose"))?;
         }
         // 「并且投掷Xd20，X为失去的指示物数量加一」
         let face = roll(p, lost + 1, 20);

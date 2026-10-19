@@ -67,7 +67,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_PASSED, 0);
     // 规则书（2）: 「获得1个[火罐]」 -- C# `H.GainFire(User, 1, CardName)`.
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_fire")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_fire")))?;
     // 规则书（2）: 「投掷3d20」 -- C# `H.Roll(User, 3, 20, CardName)`.
     let num = ctx::roll(player_id, 3, 20);
     // 规则书（2）: 「将此卡放置在投掷结果的格子上」 -- C# `Tile = (num - 1) %

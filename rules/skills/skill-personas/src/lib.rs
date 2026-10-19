@@ -6,11 +6,11 @@
 //! has to scroll past them and a skill author never edits a card.
 //!
 //! The rule text lives in the roster character row (`skill` is the name, `text` /
-//! `simple` the wording); what is here is the behavior. A skill that mandates a
-//! fire-pot cap is the whole reason the keyed state carries bounds -- it
-//! declares them through the registry (`fire_pot(player)` →
-//! `rules_status::fire::declare_own`, which reads `fire_decl::FIRE_DECLS`) and
-//! every card reads them back with `rules_status::fire::{get, max}`. The
+//! `simple` the wording); what is here is the behavior. A skill that prints
+//! 「（初始N，上限M）」 owns those numbers on its own [`CardDef`] (`.props(&[(fire::FIRE_INITIAL, N), (fire::FIRE_CAP, M)])`
+//! / `bandori_std::fire::fire_pots`), and `fire_pot(player)` →
+//! `bandori_std::fire::declare_own` reads them back through `ctx::card_prop`.
+//! Every card reads the pots with `bandori_std::fire::{get, max}`. The
 //! engine holds the number and enforces nothing; see `game_core::state::StateVar`.
 //!
 //! # Hooks: use the two that exist
@@ -50,9 +50,10 @@ extern crate alloc;
 
 use card_sdk::CardDef;
 
-/// 「初始N，上限M」 -- declare this seat's fire pots from the registry
-/// ([`rules_status::fire::FIRE_DECLS`]), which is the face parenthetical's one
-/// source of truth. Bodies call `fire_pot(player)`; they do not carry literals.
+/// 「初始N，上限M」 -- declare this seat's fire pots from **this skill's own**
+/// `CardDef` props (`bandori_std::fire::{FIRE_INITIAL, FIRE_CAP}`, written by
+/// the two `fire::` props). Bodies call `fire_pot(player)`; they do not carry
+/// literals.
 ///
 /// Hook this from both `TurnStartBefore` (so the cap holds from the first turn
 /// even when the skill is placed mid-game) and `DeckAtGameStart` (where
@@ -62,9 +63,9 @@ use card_sdk::CardDef;
 /// The cap is written **only when unset** (0), so a later `adjust_cap`
 /// (「火罐上限加1」, e.g. `PPP:[衍生]拍卖撤下来了`) survives the per-turn
 /// re-hook. A character swap (`Sumimi:两个都想要`) re-declares from the new
-/// face's row and is unaffected.
+/// face's `CardDef` props and is unaffected.
 pub fn fire_pot(player_id: i32) {
-    rules_status::fire::declare_own(player_id);
+    bandori_std::fire::declare_own(player_id);
 }
 
 pub mod anon_restart;

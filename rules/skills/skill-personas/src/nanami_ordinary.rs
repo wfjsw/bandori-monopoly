@@ -63,7 +63,9 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     ],
 )
     .silent(&[1])
-    .quiet_when_empty(&[4]);
+    .quiet_when_empty(&[4])
+    // 「（初始2，上限2）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// Residual guard for [`on_skill`]: the CD and the 「每种角色标记上限1」 cap.
 /// Pure reads -- the same instant as the body (`run_hook` runs both on one
@@ -98,7 +100,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("nanami_ordinary_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("nanami_ordinary_gain")))?;
     Ok(())
 }
 
@@ -122,7 +124,7 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("nanami_ordinary_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("nanami_ordinary_spend")))? {
         return Ok(());
     }
     ctx::add_tok(player_id, &mark_name(&id), 1, i32::MAX)?;

@@ -28,7 +28,9 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, reset),
     ],
 )
-    .silent(&[1, 3]);
+    .silent(&[1, 3])
+    // 「（初始0，上限5）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 5)]);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -48,7 +50,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     if trigger::abnormal_kind() != Some(bandori_std::kind::abnormal::Stay) {
         return Ok(());
     }
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("taki_meeting_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("taki_meeting_gain")))?;
     Ok(())
 }
 
@@ -88,7 +90,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&(uid, ref card)) = field.get(pick) else {
         return Ok(());
     };
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("taki_meeting_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("taki_meeting_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);

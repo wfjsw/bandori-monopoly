@@ -30,7 +30,9 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, reset),
     ],
 )
-    .silent(&[1, 3]);
+    .silent(&[1, 3])
+    // 「（初始1，上限1）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -45,7 +47,7 @@ fn reset(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("kiritani_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("kiritani_gain")))?;
     Ok(())
 }
 
@@ -102,7 +104,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("kiritani_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("kiritani_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);

@@ -149,10 +149,12 @@ Retired -- every game name (purge inventory; status as of 2026-10-19):
 ### 火罐 -- instance-owned by the character skill
 
 Owner: the seat's active character-skill instance (the face printing
-「（初始N，上限M）」; textually the character card's 初始火罐). Declaration is
-structured (`fire::declare(initial, cap)` in the skill body == the face
-parenthetical); the registry is what `Sumimi:Sumimi是二人一体的` and
-`skill:若叶睦:天生的演员` read instead of hardcoded tables.
+「（初始N，上限M）」; textually the character card's 初始火罐). The numbers
+live on that face's own `CardDef` (`.fire_pots(N, M)` → props `fireInitial` /
+`fireCap`, keys in `bandori_std::fire`); `fire::declare_own` reads them back
+through `ctx::card_prop`. Cross-face reads (`Sumimi:Sumimi是二人一体的`,
+`skill:若叶睦:天生的演员`) take the named skill id and read that skill's
+`CardDef` the same way.
 
 Guests, all through the kernel: hand cards (`Sumimi:一人两个甜甜圈`,
 `Sumimi:儿时玩伴的鼓励`, `PPP:（沙绫）`, `PPP:（多惠）`, `AG:无论是何种颜色的
@@ -233,14 +235,14 @@ the second, clause （2） is per band instance.
 1. This doc; exceptions filed as BACKLOG tickets (nyamu's undefined
    「失去2个火罐」 benefit stays `TODO(规则书)`; lisa's temp-pot 600-cost /
    two-turn expiry stays `TODO(规则书)[judgement]`).
-2. **Fire**: declaration registry (`rules/status/src/fire_decl.rs`, keyed by
-   skill id, quoting the face) + kernel (`rules/status/src/fire.rs`:
-   `declare`/`redeclare`/`overlay`/`end_overlay`, `gain`/`spend`/`adjust_cap`
-   with actuals, `temp` as a second declared counter, `regime::{fill_to_cap,
-   drain, burn_all}`) behind the existing `rules_status::fire` /
-   `bandori_std` names. `fire_pot(player)` looks up the registry (no body
-   literals). Guests routed: two_in_one (registry re-declare, hardcoded pairs
-   deleted), mutsumi_actor (fire overlay via the last-play latch; character
+2. **Fire**: kernel in `rules/bandori-std/src/fire.rs` (`declare`/`redeclare`/
+   `overlay`/`end_overlay`, `gain`/`spend`/`adjust_cap` with actuals, `temp`
+   as a second declared counter, `regime::{fill_to_cap, drain, burn_all}`).
+   The face's 「（初始N，上限M）」 lives on its own `CardDef` (`.fire_pots(N, M)`
+   → props `fireInitial`/`fireCap`); `fire_pot(player)` →
+   `declare_own` reads them through `ctx::card_prop` (no body literals, no
+   central table). Guests routed: two_in_one (`CardDef` re-declare), mutsumi_actor
+   (fire overlay via the last-play latch; character
    cover still `TODO(规则书)[judgement]`), ave_mujica (regime verbs),
    kaoru_prince / uika_imprisoned (declare), yuri_crit (stops touching
    CHARGE), lisa_goddess (`fire::temp::grant`).
@@ -251,12 +253,13 @@ the second, clause （2） is per band instance.
    pastel.rs's "lowest seat" dedupe; flip pre-raise preserved; `pastel.rs`
    clause （1） is a caller, clause （2） stays the per-instance listener.
 4. **Purge** §6's inventory from `crates/` and `card-sdk` (see the §6 table).
-5. Enforcement: the `registry_has_no_body_literals` pin (source grep for
+5. Enforcement: the `fire_decl_is_on_the_skill_def` pin (source grep for
    stray `fire_pot(player, N, M)` / raw CHARGE / `tempFire` writes in
-   skill bodies). Kani iff proofs not yet added (BACKLOG).
+   skill bodies, and that each parenthetical face carries `.fire_pots`).
+   Kani iff proofs not yet added (BACKLOG).
 
 Relation to the parallel branches: `twodonuts-exile` (exile into
 `rules/status`) and `status-hosts-rest` (stay/stun/noHand) are the conditions
 family; this branch owns the quantities family end to end
-(`rules/status/src/fire.rs`, `bandori-std` charge, fans). Merge order:
+(`bandori-std` fire kernel + charge, fans). Merge order:
 conditions first, then this.

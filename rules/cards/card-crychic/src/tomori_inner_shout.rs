@@ -125,7 +125,7 @@ fn pull(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("tomori_inner_shout_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomori_inner_shout_spend")))? {
         return Ok(());
     }
     // `H.ForceTeleport(other, tile, resolve: false)` -- a plain position write,

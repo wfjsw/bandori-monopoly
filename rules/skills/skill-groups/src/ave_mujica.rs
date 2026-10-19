@@ -95,10 +95,10 @@ fn on_state(player_id: i32) -> card_sdk::Asked {
     }
     // 「若你的技能拥有火罐，进入状态2时将火罐补充至上限」 -- a named regime
     // guest over the owner's pool (`fire::regime`), never a raw write.
-    if rules_status::fire::max(player_id) <= 0 {
+    if bandori_std::fire::max(player_id) <= 0 {
         return Ok(());
     }
-    let got = rules_status::fire::regime::fill_to_cap(
+    let got = bandori_std::fire::regime::fill_to_cap(
         player_id,
         &Msg::new(key!("ave_mujica_refill")),
     )?;
@@ -229,15 +229,15 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「每回合结束时失去1火罐」 -- only when the character skill grants pots.
-    if rules_status::fire::max(player_id) <= 0 {
+    if bandori_std::fire::max(player_id) <= 0 {
         return Ok(());
     }
-    rules_status::fire::regime::drain(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
+    bandori_std::fire::regime::drain(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
     // 「回合结束后若火罐为0则退出状态2；退出状态2时，失去所有剩余火罐」
-    if rules_status::fire::regime::count(player_id) == 0 {
+    if bandori_std::fire::regime::count(player_id) == 0 {
         state::set(player_id, state_key::SKILL_STATE, 1);
         state::set(player_id, IN_TWO, 0);
-        rules_status::fire::regime::burn_all(player_id, &Msg::new(key!("ave_mujica_exit")))?;
+        bandori_std::fire::regime::burn_all(player_id, &Msg::new(key!("ave_mujica_exit")))?;
         ctx::log(player_id, &Msg::new(key!("ave_mujica_left")));
     }
     Ok(())

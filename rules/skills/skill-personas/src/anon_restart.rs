@@ -31,7 +31,9 @@ pub const ANON_RESTART: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0])
+    // 「（初始2，上限3）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 3)]);
 
 /// 「初始2，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -41,7 +43,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("anon_restart_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("anon_restart_gain")))?;
     Ok(())
 }
 
@@ -65,7 +67,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 2, &Msg::new(key!("anon_restart_spend")))? {
+    if !bandori_std::fire::spend(player_id, 2, &Msg::new(key!("anon_restart_spend")))? {
         return Ok(());
     }
     ctx::draw(player_id, 1)?;

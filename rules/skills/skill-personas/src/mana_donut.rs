@@ -65,7 +65,10 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // No `TurnEnd` clear: the two `TurnEnd` layers tick off at the owner's
         // own wear-offs (before the `TurnEnd` hook fires).
     ],
-).silent(&[0, 1]);
+)
+    // 「（初始1，上限2）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 2)])
+    .silent(&[0, 1]);
 
 /// The TurnStartBefore re-declare only does something when the cap is still
 /// unset (a mid-game placement of the skill). `state::max` is not in the CEL
@@ -86,7 +89,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     // （1）「每次[经过]CiRCLE时获得1个[火罐]」
     if t == ctx::tile_named("CiRCLE") {
-        rules_status::fire::gain(player_id, 1, &Msg::new(key!("mana_donut_gain")))?;
+        bandori_std::fire::gain(player_id, 1, &Msg::new(key!("mana_donut_gain")))?;
         return Ok(());
     }
     // （2）「经过"购物中心"，…时，在触发结算前可选择消耗一个火罐并向对应格子
@@ -102,7 +105,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("mana_donut_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("mana_donut_spend")))? {
         return Ok(());
     }
     // 「可向抵押格子正常支付其原本收费，若为无主格子则为消耗对应收费资金」 --

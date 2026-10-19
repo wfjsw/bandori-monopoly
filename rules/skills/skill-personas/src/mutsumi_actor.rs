@@ -10,9 +10,9 @@
 //! 「状态1 / 状态2」 is the axis the Ave Mujica band skill owns.
 //!
 //! 状态1's 「每6回合不打出任何手牌」 is a six-turn silence on hand plays,
-//! tracked as a counter a play resets. 状态2's 「并获得其初始火罐」 is a
-//! registry overlay of the borrowed face's row (`fire::overlay` / `end_overlay`),
-//! keyed on the last-player-to-play latch.
+//! tracked as a counter a play resets. 状态2's 「并获得其初始火罐」 is an
+//! overlay of the borrowed face's `CardDef` numbers (`fire::overlay` /
+//! `end_overlay`), keyed on the last-player-to-play latch.
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
@@ -78,16 +78,16 @@ fn on_play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态2 entry: overlay the borrowed face's 「初始火罐」 (MARKERS.md §7 --
-/// `fire::overlay` force-writes the borrowed row). The character-cover pile
-/// stays open (see the TODO below); the fire half of 「并获得其初始火罐」 is
-/// the registry row of the latched player's character skill.
+/// `fire::overlay` force-writes the borrowed `CardDef` numbers). The
+/// character-cover pile stays open (see the TODO below); the fire half of
+/// 「并获得其初始火罐」 is the latched player's own skill `CardDef`.
 fn enter_state2(player_id: i32) {
     let last = state::get(player_id, LAST_PLAY);
     if last < 0 {
         return;
     }
     if let Some(skill) = ctx::persona_skill(last) {
-        rules_status::fire::overlay(player_id, &skill);
+        bandori_std::fire::overlay(player_id, &skill);
         state::set(player_id, OVERLAID, last);
     }
 }
@@ -95,7 +95,7 @@ fn enter_state2(player_id: i32) {
 /// 「直至退出状态2」 -- re-declare her own face (no fire pots of her own).
 fn exit_state2(player_id: i32) {
     if state::get(player_id, OVERLAID) >= 0 {
-        rules_status::fire::end_overlay(player_id);
+        bandori_std::fire::end_overlay(player_id);
         state::set(player_id, OVERLAID, -1);
     }
 }
@@ -116,7 +116,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 
 // 状态2's 「从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其覆盖于自己角色卡上
 // 并获得其初始火罐」 -- the fire half (「并获得其初始火罐」) is implemented above
-// as a registry overlay (`fire::overlay` / `end_overlay`), keyed on the
+// as a `CardDef` overlay (`fire::overlay` / `end_overlay`), keyed on the
 // last-player-to-play latch. The character-cover pile (「从角色卡堆拿取」) is
 // still open.
 // TODO(规则书)[judgement]: 状态2's character cover -- 「角色卡堆」 is a pile the

@@ -45,7 +45,9 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
 .silent(&[1])
 // （1） gains a [火罐] -- owner-self-only, but the rulebook describes it
 // happening and the player should see the clause fire. `Always` beats Auto.
-.flash(&[(2, Flash::Always)]);
+.flash(&[(2, Flash::Always)])
+    // 「（初始0，上限1）」
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 1)]);
 
 /// 「初始0，上限1」 -- this skill states the fire-pot cap. It is a *consumer*
 /// deciding the bound; the engine only holds it.
@@ -64,7 +66,7 @@ fn on_settle_applies(player_id: i32) -> bool {
 /// is the trigger's tile; the clause says *another* player, so this player's own
 /// landing does not pay out ([`on_settle_applies`]).
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("extraordinary_star.gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("extraordinary_star.gain")))?;
     Ok(())
 }
 
@@ -86,7 +88,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 /// is all-or-nothing; the destination is a choice among the tiles this player
 /// owns; 「可选择盖房」 is the move being allowed to build where it lands.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("extraordinary_star.spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("extraordinary_star.spend")))? {
         return Ok(());
     }
     let owned = ctx::owned_tiles(player_id);

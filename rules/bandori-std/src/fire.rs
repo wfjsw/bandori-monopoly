@@ -5,11 +5,12 @@
 //! > · 火罐：技能指示物，在任意时刻，您持有的火罐数量不能超过持有上限
 //!
 //! MARKERS.md §3 / §7: 火罐 is **instance-owned** by the character skill that
-//! prints 「（初始N，上限M）」. Declaration is structured ([`declare`] /
-//! [`declare_from`]); guests (hand cards, events, the Ave Mujica regime) write
-//! only through this kernel, which applies the owner's policy and returns
-//! **actuals** so caller clauses keep their own text (`Sumimi:一人两个甜甜圈`
-//! converts the pots that did not fit into 500资金).
+//! prints 「（初始N，上限M）」. That face owns the numbers: it declares them on
+//! its own [`CardDef`] as the [`FIRE_INITIAL`] / [`FIRE_CAP`] props.
+//! Guests (hand cards, events, the Ave Mujica regime) write only through this
+//! kernel, which applies the owner's policy and returns **actuals** so caller
+//! clauses keep their own text (`Sumimi:一人两个甜甜圈` converts the pots that
+//! did not fit into 500资金).
 //!
 //! ## Clause-by-clause
 //!
@@ -31,17 +32,32 @@
 //! marker. The cap is the only bound.
 
 use card_sdk::abi::TriggerKind;
-use card_sdk::{CardDef, Msg, Prompt};
-use bandori_std::ctx::{self, state};
+use card_sdk::{Msg, Prompt};
+use crate::ctx::{self, state};
 
-pub use crate::fire_decl::{decl_of, FireDecl, FIRE_DECLS};
+// ------------------------------------------------------------- declaration keys
 
-/// The board-owned 火罐 rule. One instance on `BOARD_OWNER`, `tile = -1`.
-/// No hooks of its own yet: the verbs below are the kernel, and the
-/// `markerSpend` / `fireSpent` windows are generic engine points. A future
-/// 「获得[火罐]时」 clause would hang off `markerGain`.
-pub const STATUS_FIRE: CardDef = CardDef::new("status:fire", &[])
-    .board_role("status");
+/// 「（初始N，上限M）」 -- the face's initial pot count, as a `CardDef` prop.
+/// Read back with `ctx::card_prop(skill, FIRE_INITIAL)`.
+pub const FIRE_INITIAL: &str = "fireInitial";
+
+/// 「（初始N，上限M）」 -- the face's held cap, as a `CardDef` prop.
+/// Read back with `ctx::card_prop(skill, FIRE_CAP)`.
+pub const FIRE_CAP: &str = "fireCap";
+
+// The numbers live on the skill that prints them (MARKERS.md §7: the face
+// printing the numbers owns the pool), declared on its own `CardDef` as the
+// two props above -- no central table, no engine field:
+//
+// ```
+// pub const ANON_RESTART: CardDef = CardDef::new("skill:千早爱音:重新开始", &[…])
+//     // 「（初始2，上限3）」
+//     .props(&[(fire::FIRE_INITIAL, 2), (fire::FIRE_CAP, 3)]);
+// ```
+//
+// Cap-only faces (「（上限7）」) pass `initial = 0`. [`declare_own`] /
+// [`declare_from`] / [`overlay`] read them back through `ctx::card_prop`. A
+// skill with no [`FIRE_INITIAL`] / [`FIRE_CAP`] props owns no pots (cap 0).
 
 // ------------------------------------------------------------- storage keys
 
@@ -74,12 +90,12 @@ pub fn pull_under_cap(have: i32, cap: i32) -> i32 {
 
 /// 火罐 held (the capped pool; does not include [`temp`]).
 pub fn get(player_id: i32) -> i32 {
-    bandori_std::ctx::charge(player_id)
+    crate::ctx::charge(player_id)
 }
 
 /// The declared cap (0 = none declared).
 pub fn max(player_id: i32) -> i32 {
-    bandori_std::ctx::charge_max(player_id)
+    crate::ctx::charge_max(player_id)
 }
 
 /// Total pots the seat can spend: the pool plus any live temp pots
@@ -89,6 +105,15 @@ pub fn total(player_id: i32) -> i32 {
 }
 
 // ------------------------------------------------------------- declaration
+
+/// The face's 「（初始N，上限M）」 off its `CardDef` props. Both default to 0
+/// when the face declares no [`FIRE_INITIAL`] / [`FIRE_CAP`] props (owns no pots).
+fn face_bounds(skill: &str) -> (i32, i32) {
+    (
+        ctx::card_prop(skill, FIRE_INITIAL),
+        ctx::card_prop(skill, FIRE_CAP),
+    )
+}
 
 /// Write the face's 「（初始N，上限M）」.
 ///
@@ -122,8 +147,8 @@ pub fn redeclare(player_id: i32, initial: i32, cap: i32) -> i32 {
     want
 }
 
-/// Declare this seat's own character-skill row from the registry
-/// (`fire_pot`'s lookup). No-op when the face prints no fire pots.
+/// Declare this seat's own character-skill numbers from its `CardDef` props
+/// (`ctx::card_prop`). No-op when the face prints no fire pots.
 pub fn declare_own(player_id: i32) -> bool {
     let Some(skill) = ctx::persona_skill(player_id) else {
         return false;
@@ -131,41 +156,35 @@ pub fn declare_own(player_id: i32) -> bool {
     declare_from(player_id, &skill)
 }
 
-/// Declare from a named face's registry row (swap / overlay).
-/// Returns whether a row existed.
+/// Declare from a named face's `CardDef` props (swap / overlay).
+/// Returns whether the face declares any fire pots.
 pub fn declare_from(player_id: i32, skill: &str) -> bool {
-    match decl_of(skill) {
-        Some(d) => {
-            declare(player_id, d.initial, d.cap);
-            true
-        }
-        None => false,
+    let (initial, cap) = face_bounds(skill);
+    if cap <= 0 && initial <= 0 {
+        return false;
     }
+    declare(player_id, initial, cap);
+    true
 }
 
-/// Force-write a named face's registry row (swap 「替换为…及其初始火罐数」).
+/// Force-write a named face's `CardDef` props (swap 「替换为…及其初始火罐数」).
 pub fn redeclare_from(player_id: i32, skill: &str) -> i32 {
-    match decl_of(skill) {
-        Some(d) => redeclare(player_id, d.initial, d.cap),
-        None => redeclare(player_id, 0, 0),
-    }
+    let (initial, cap) = face_bounds(skill);
+    redeclare(player_id, initial, cap)
 }
 
-/// Overlay a borrowed face's row (mutsumi 「获得其初始火罐」): force-write the
-/// borrowed 初始/上限. On 状态2 exit call [`end_overlay`].
+/// Overlay a borrowed face's numbers (mutsumi 「获得其初始火罐」): force-write
+/// the borrowed 初始/上限. On 状态2 exit call [`end_overlay`].
 pub fn overlay(player_id: i32, skill: &str) -> i32 {
-    match decl_of(skill) {
-        Some(d) => redeclare(player_id, d.initial, d.cap),
-        // No fire on the borrowed face: the overlay is an empty pool.
-        None => redeclare(player_id, 0, 0),
-    }
+    // No fire on the borrowed face: the overlay is an empty pool.
+    redeclare_from(player_id, skill)
 }
 
 /// End an overlay and re-declare the seat's own face (MARKERS.md §7: her face
 /// text is the ground fact). A face that prints no fire pots gets cap 0.
 pub fn end_overlay(player_id: i32) -> i32 {
-    match ctx::persona_skill(player_id).as_deref().and_then(decl_of) {
-        Some(d) => redeclare(player_id, d.initial, d.cap),
+    match ctx::persona_skill(player_id) {
+        Some(skill) => redeclare_from(player_id, &skill),
         None => redeclare(player_id, 0, 0),
     }
 }
@@ -190,7 +209,7 @@ pub fn gain(
     // requested `n` (today's window payload), then applies the storage
     // bounds and returns the actual. `max == 0` (no declaration) refuses in
     // the host verb (an undeclared resource cannot be gained).
-    bandori_std::ctx::gain_charge(player_id, n, why)
+    crate::ctx::gain_charge(player_id, n, why)
 }
 
 /// Spend `n` pots. `ChargePaying` runs first (spend substitution 「以代替此次
@@ -221,7 +240,7 @@ pub fn spend(
     if from_pool > 0 {
         // Opens ChargePaying + markerSpend for `from_pool`, then writes.
         // A substitution cancels the write and counts as paid.
-        return bandori_std::ctx::spend_charge(player_id, from_pool, why);
+        return crate::ctx::spend_charge(player_id, from_pool, why);
     }
     Ok(true)
 }
@@ -229,7 +248,7 @@ pub fn spend(
 /// Move the cap by `n`; pulls the value down under the new ceiling (I2).
 /// Returns the new cap.
 pub fn adjust_cap(player_id: i32, n: i32) -> i32 {
-    bandori_std::ctx::add_charge_max(player_id, n)
+    crate::ctx::add_charge_max(player_id, n)
 }
 
 /// Backwards-compatible alias of [`adjust_cap`] (the old `add_max` name).
@@ -267,7 +286,7 @@ pub mod regime {
         if take <= 0 {
             return Ok(0);
         }
-        if !bandori_std::ctx::spend_charge(player_id, take, why)? {
+        if !crate::ctx::spend_charge(player_id, take, why)? {
             return Ok(0);
         }
         Ok(take)
@@ -349,4 +368,3 @@ pub mod temp {
         Ok(true)
     }
 }
-

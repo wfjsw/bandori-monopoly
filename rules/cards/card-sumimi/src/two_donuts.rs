@@ -168,7 +168,7 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
         if ctx::player_out(who) {
             continue;
         }
-        let got = rules_status::fire::gain(who, 2, &Msg::new(key!("two_donuts_fire")))?;
+        let got = bandori_std::fire::gain(who, 2, &Msg::new(key!("two_donuts_fire")))?;
         let missed = 2 - got;
         if missed > 0 {
             ctx::gain(

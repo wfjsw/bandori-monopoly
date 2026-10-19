@@ -67,7 +67,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if ctx::slot(player_id, SLOT_COUNT) < 1 {
         return Some(Msg::new(key!("layer_keep_no_die")));
     }
-    if rules_status::fire::get(player_id) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("layer_keep_no_fire")));
     }
     None
@@ -161,7 +161,7 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     let Some(&die) = vals.get(pick) else {
         return Ok(());
     };
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("layer_keep_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("layer_keep_spend")))? {
         return Ok(());
     }
     // 「删去该骰点」 -- compact the slot list.

@@ -43,18 +43,19 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// The two the clause names. Fire pots come from the declaration registry
-/// (`rules_status::fire::FIRE_DECLS`) -- no hardcoded 初始/上限 pairs here.
+/// The two the clause names. Fire pots come from the **new face's** `CardDef`
+/// props (`bandori_std::fire::FIRE_INITIAL` / `FIRE_CAP`) -- no hardcoded
+/// 初始/上限 pairs here.
 const A: (&str, &str) = ("三角初华（Sumimi）", "skill:三角初华（Sumimi）:成为偶像");
 const B: (&str, &str) = ("纯田真奈", "skill:纯田真奈:甜甜圈爱好者");
 
 /// C# `CardTwoInOne.Swap` -- flip 三角初华（Sumimi） <-> 纯田真奈, re-declare
-/// fire from the new face's row.
+/// fire from the new face's `CardDef`.
 fn swap(player_id: i32) {
     // 规则书（1）: 「将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」 --
     // `H.ReplaceSkill` is the old skill rule coming off the field and the new
-    // one going on, and 「初始火罐数」 is the new face's registry row being
-    // written (swap **re-declares**; never carry-over -- MARKERS.md §4.6).
+    // one going on, and 「初始火罐数」 is the new face's `CardDef` declaration
+    // being written (swap **re-declares**; never carry-over -- MARKERS.md §4.6).
     let (from, to) = if ctx::persona_is(player_id, A.0) {
         (A, B)
     } else {
@@ -68,8 +69,8 @@ fn swap(player_id: i32) {
         ctx::unplace_at(uid);
     }
     ctx::place_card(player_id, to.1, &Msg::new(key!("two_in_one_note")));
-    // Re-declare the new face's 「初始火罐数」 from the registry.
-    rules_status::fire::redeclare_from(player_id, to.1);
+    // Re-declare the new face's 「初始火罐数」 from its `CardDef` props.
+    bandori_std::fire::redeclare_from(player_id, to.1);
     ctx::log(
         player_id,
         &Msg::new(key!("two_in_one_swap"))
