@@ -12,7 +12,10 @@ import { clearForced, isForced, subscribeForced, usePortraitPhone } from "./rota
 import { STAGE_H, STAGE_W } from "../styles/layout";
 import { type Insets, type StageBox, stageBox, windowBox } from "./stageBox";
 import { setStageRotated, setStageScale } from "./stageScale";
+import { ViewportDiag } from "./ViewportDiag";
 import s from "./Stage.module.css";
+
+const VDIAG = new URLSearchParams(location.search).has("vdiag");
 
 export { STAGE_H, STAGE_W };
 
@@ -71,6 +74,20 @@ function largeViewport(): { vw: number; vh: number } {
 let layoutProbe: HTMLElement | null = null;
 
 /**
+ * The screen's long side where the page draws from the physical top to the
+ * physical bottom -- iPhone WebKit (Safari, and every iOS browser, which all
+ * run it): the fixed box starts under the island and Safari paints the page
+ * behind its bottom toolbar. Elsewhere 0: Android's fixed box already ends at
+ * the screen bottom, and its top sits below the URL bar, so the screen's long
+ * side would push the stage off the bottom. iOS reports `screen` in portrait
+ * terms in every orientation; the max is taken anyway.
+ */
+function screenLong(): number {
+  if (!/iPhone|iPod/.test(navigator.userAgent)) return 0;
+  return Math.max(window.screen.width, window.screen.height);
+}
+
+/**
  * The device's safe-area insets on all four sides, read off a probe element.
  * `env(safe-area-inset-*)` is only available to CSS, so a hidden fixed div
  * with the values in its padding forces a sync layout that reports them.
@@ -127,9 +144,8 @@ function useSafeInsets(): Insets {
 }
 
 function useStage(tall: boolean): StageBox {
-  // Size against the whole screen (see `largeViewport` / `windowBox`): the
-  // same rectangle in both orientations, so forced rotation and a real turn
-  // of the phone agree and the stage never letterboxes into blank bars.
+  // Size against the fixed box (see `largeViewport` / `windowBox`); forced
+  // rotation on an iPhone stretches past it to the screen bottom (`stageBox`).
   // While a text field is focused the on-screen keyboard can still shrink the
   // layout on some browsers; hold the height from before it came up.
   const open = useRef<{ vw: number; vh: number } | null>(null);
@@ -167,6 +183,7 @@ function useStage(tall: boolean): StageBox {
   const box = stageBox({
     vw: win.vw,
     vh: win.vh,
+    screenLong: screenLong(),
     inset,
     rotated,
     tall,
@@ -266,7 +283,7 @@ function Backdrop({ src, snap }: { src: string; snap: boolean }) {
 
 export function Stage({ children, transitioning }: { children: ReactNode; transitioning: boolean }) {
   const tall = useStageFillValue();
-  const { scale, w, h, safe, compact, rotated } = useStage(tall);
+  const { scale, w, h, safe, cx: centerX, cy: centerY, compact, rotated } = useStage(tall);
   setStageRotated(rotated);
   setStageScale(scale);
   useEffect(() => {
@@ -290,9 +307,12 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
   return (
     <>
       <Backdrop src={src} snap={transitioning} />
+      {VDIAG && <ViewportDiag />}
       <div
         className={s.placer}
         style={{
+          left: centerX,
+          top: centerY,
           width: w * scale,
           height: (tall ? h : STAGE_H) * scale,
           transform: `translate(-50%, -50%)${rotated ? " rotate(90deg)" : ""}`,

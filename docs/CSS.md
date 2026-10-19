@@ -149,13 +149,27 @@ on one side and leaves a blank border on the other. What is outside the layout
 viewport is the browser's chrome, not ours to fill; when the chrome hides, the
 layout viewport grows and the stage grows with it.
 
-Because that chrome is not symmetric across the turn (an address bar shrinks
-portrait and not landscape), forced rotation and a real turn of the phone can
-still see different layout viewports in Safari. The stable full-screen case is
-the home-screen PWA: `index.html` claims the shell with
+One exception: **forced rotation on an iPhone** (`stageBox` `screenLong`). Held
+upright, the fixed box runs from the screen top (under the island) but stops
+above Safari's bottom toolbar / the home-indicator strip, and Safari paints
+that strip with the bare page colour. There the stage takes the screen's full
+long side *and* is anchored at the box's top (`cx` / `cy` place the placer's
+centre; they are the box's middle everywhere else), so it spans the physical
+screen island to home indicator. Both halves matter: a screen-sized stage left
+centred in the box overflowed past the island and still left the strip. The
+stretch past the box counts as hardware for the controls on that stage edge
+(`--safe-right` under the turn), and the backdrop plate runs past the box on
+every side so no bare page colour shows behind the stage's gaps. Android is
+left on the box -- its fixed box already ends at the screen bottom.
+
+`index.html` claims the home-screen shell with
 `apple-mobile-web-app-status-bar-style=black-translucent`, which puts the
 webview on the whole device in both orientations (re-add the icon after that
 meta changes -- iOS freezes web-app metas at add time).
+
+`?vdiag=1` overlays a live readout of every viewport (screen, inner, visual,
+the fixed box, `lvh` / `svh`, safe-area insets, the placer's box) for checking
+this geometry on a real handset, which no simulator reproduces.
 
 The stage's edges are the real screen edges on both axes: the game runs edge
 to edge, and insetting the box for the cutout left the retractable strips (the
