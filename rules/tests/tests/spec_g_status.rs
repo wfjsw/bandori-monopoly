@@ -521,6 +521,74 @@ fn exile_expiry_teleports_to_named_tile() {
     .expect("G-STATUS-08 frame");
 }
 
+/// Duration grant (「获得[除外]直至X」, G-STATUS-07 ruling 2026-10-18): a held
+/// exile does **not** peel at the owner's turn start. The turn is still
+/// auto-skipped.
+#[test]
+fn exile_held_grant_does_not_peel_at_turn_start() {
+    let mut t = Table::vanilla(3);
+    t.set_state(1, "exile", 1);
+    t.set_state(1, "exileTo", -1);
+    t.set_state(1, "exileHold", 1);
+    with_clauses(&mut t);
+    let pre = t.snapshot_world();
+    finish_turn(&mut t, 0);
+    let post = t.snapshot_world();
+    assert_eq!(
+        t.state(1, "exile"),
+        1,
+        "G-STATUS-07: held grant keeps its layer over the owner's turn start"
+    );
+    assert_eq!(
+        t.state(1, "exileHold"),
+        1,
+        "G-STATUS-07: hold marker stays until the until-clause clears it"
+    );
+    verify_exile_turn_start(&pre, &post, &[], 1).expect("held grant: no peel");
+    // The turn still auto-skips (duration grant skips the turn, no countdown).
+    assert!(
+        t.state(1, "exile") > 0 && t.turn() != 1 || t.state(1, "exile") == 1,
+        "held grant still holds the seat out of play"
+    );
+}
+
+/// A held grant that is cleared (the `until` clause) before the next turn
+/// start is gone -- no peel, no return teleport from the tick.
+#[test]
+fn exile_held_grant_clear_on_until_leaves_no_layers() {
+    let mut t = Table::vanilla(3);
+    t.set_state(1, "exile", 1);
+    t.set_state(1, "exileHold", 1);
+    with_clauses(&mut t);
+    // The granting effect's `until` clause: `clear`.
+    t.set_state(1, "exile", 0);
+    t.set_state(1, "exileHold", 0);
+    t.set_state(1, "exileTo", -1);
+    finish_turn(&mut t, 0);
+    assert_eq!(t.state(1, "exile"), 0, "cleared hold leaves no layers");
+    assert_eq!(t.state(1, "exileHold"), 0, "cleared hold leaves no marker");
+}
+
+/// The hold verifier itself is two-sided: a peeled held grant is a mutant.
+#[test]
+fn exile_held_grant_verifier_rejects_peel() {
+    let mut pre = empty_worlds(2).0;
+    set_layer(&mut pre, 1, "exile", 1);
+    set_layer(&mut pre, 1, "exileHold", 1);
+    let mut post = pre.clone();
+    set_layer(&mut post, 1, "exile", 0); // peeled -- WRONG for a hold
+    set_layer(&mut post, 1, "exileHold", 1);
+    let events = vec![turn_start_event(1)];
+    assert!(
+        verify_exile_turn_start(&pre, &post, &events, 1).is_err(),
+        "G-STATUS-07: reject a peel of a held grant"
+    );
+    // Compliant: hold keeps the layer.
+    let mut keep = pre.clone();
+    set_layer(&mut keep, 1, "exile", 1);
+    verify_exile_turn_start(&pre, &keep, &events, 1).expect("held grant keeps its layer");
+}
+
 /// Mutants on [除外] turn-start decay + no re-acquire.
 #[test]
 fn exile_decay_verifier_rejects_mutants() {

@@ -1,10 +1,19 @@
 # Status markers as rule hosts
 
-Each rulebook status marker ([停留] / [晕眩] / [除外] / 火罐, and the cheap
-companions [不可阻挡] / 「无手牌」) becomes its own **standing pseudo card** --
-`status:stay`, `status:stun`, `status:exile`, `status:fire`, `status:unstoppable`,
-`status:no_hand` -- following the `mark:cp` precedent
-(`rules/markers/src/{lib,cp}.rs`, `docs/TILES.md`). The engine keeps only
+Taxonomy (rulebook 「标志物解释」, 2026-10-18 correction: 火罐 is NOT a
+status):
+
+| kind | ids | what they are |
+|---|---|---|
+| **状态 / conditions** | `status:stay`, `status:stun`, `status:exile`, `status:unstoppable` | 「处于该状态时…」 gates + ticks. The real status hosts. |
+| **指示物 / counters** | 火罐 (`rules/status/src/fire.rs` kernel, `fire_decl.rs` registry) | 「技能指示物」 -- instance-owned counters over generic `charge` + `HostRequest::Marker`; see `docs/MARKERS.md`. Kin of CP点 / 奇迹水晶. No gates, no tick. |
+| **companions** | `status:no_hand` | `noHand` card-text slot (turn-flow 2→1→0 dance), not a glossary status. |
+
+Each 状态 marker (and the cheap companions for symmetry) becomes its own
+**standing pseudo card** -- `status:stay`, `status:stun`, `status:exile`,
+`status:unstoppable`, `status:no_hand` -- following the `mark:cp` precedent
+(`rules/markers/src/{lib,cp,pp_fans}.rs`, `docs/TILES.md`, `docs/MARKERS.md`).
+`status:fire` is a placeholder with no entries. The engine keeps only
 **generic** turn-flow verbs and player gates; it stops naming stay / stun /
 exile / fire. Cards call one canonical API in `rules/status`, not the
 `card-sdk` `ctx::{give_stay, gain_fire, ...}` surface.
@@ -70,17 +79,21 @@ A **generic move gate**, not a marker of its own. Stay / stun / exile all
   engine read of `exile() > 0` in skill / continuous-effect gates moves to the
   on-board / act gates.
 
-### 火罐 (`data/rules.txt` 126)
+### 火罐 (`data/rules.txt` 126) -- 指示物, NOT a status
 
 > 火罐：技能指示物，在任意时刻，您持有的火罐数量不能超过持有上限
 
+* **「技能指示物」** -- a capped skill counter, kin of CP点 / 奇迹水晶.
+  Unlike 停留/晕眩/除外/不可阻挡 it has no 「处于该状态时…」 clauses: no
+  gates, no tick. The generic engine name is `charge` (value + `max` =
+  cap) + the generic `HostRequest::Marker` spend window.
 * counter + cap (`StateVar.max` today, written by the character skill);
 * gain is partial («at most up to the cap») and logged
-  (`log.gain_fire`, 效果适用-style: which effect, why, outcome);
+  (`log.gain_charge`, 效果适用-style: which effect, why, outcome);
 * spend opens the `markerSpend` [反击] window **before** the pots move
   (user ruling 2026-10-07); a cancelled window spends nothing;
 * a cap change pulls the value down under the new ceiling
-  (`add_fire_max`).
+  (`add_charge_max`).
 
 ### [不可阻挡] (`data/rules.txt` 51)
 
@@ -93,11 +106,12 @@ Cheap host: a boolean-ish counter that (a) suppresses the move gate for stay,
 TODO(规则书): the "choose whether [传送]/[强制移动]/[强制停下] apply" clause
 is a separate prompt surface -- not in this batch.
 
-### 「无手牌」 (`noHand`)
+### 「无手牌」 (`noHand`) -- companion, not a status
 
 Not a named glossary marker; it is the continuous 「手牌数没有上限」 /
 「may hold no hand cards」 companion already keyed as `noHand`. Kept as a host
-for symmetry (its TurnStart/TurnEnd 2→1→0 dance lives in `play.rs` today).
+for symmetry. Its TurnStart/TurnEnd 2→1→0 dance now lives on the host
+(`status:no_hand` hooks), not in `play.rs`. No gates.
 
 ---
 
@@ -273,7 +287,14 @@ in time for `turn_start`'s stun / stay checks. So:
 `ctx::turn`):
 
 * `skip_main_move(p)` -- set the move gate for this turn (today `skip_move`);
-* `end_turn_now(p)` -- the stunned / exiled auto-skip path;
+* `end_turn_now(p)` -- the stunned / exiled auto-skip path (a transient
+  latch on `World::end_turn_request`; `turn_start` honors it after the
+  `turnStartBefore` / `turnStart` raises with the auto-skip pacing);
+* `teleport_as(p, tile, resolve, as_main)` -- the engine's `Cx::teleport_as`
+  with `why = None` and **no** abnormal window (`HostRequest::TeleportAs`);
+  `as_main` sets `turn.main_moved` and marks the move as the [主要移动];
+* `log_as(p, kind, msg)` -- a typed log line (`"status"` for host skip / over
+  lines; cards keep `ctx::log` → `"text"`).
 * `extra_turn(p)` -- push `extra_turns` (engine order, not a marker).
 
 **Ordering is frozen.** Today (`play.rs` `turn_start` / `end_turn`):
@@ -303,20 +324,34 @@ stun / stay checks run after it.
 
 ### 3.5 What leaves the engine
 
-| today | tomorrow |
-|---|---|
-| `ops.rs` `give_stay` (incl. the un-skip latch) | `status:stay` host + generic `skip_main_move` |
-| `ops.rs` `give_stun` | `status:stun` host |
-| `ops.rs` `give_exile` | `status:exile` host |
-| `ops.rs` `gain_fire` / `add_fire_max` | `status:fire` host |
-| `wasm_rules` `spend_fire` + `markerSpend` | `status:fire` host (window stays generic `HostRequest::Marker`) |
-| `wasm_rules` `can_pay` / `cant_move` | generic gates + `status::can_act` / `move_blocked` |
-| `play.rs` exile tick / return teleport | generic turn-start tick + `status:exile` hook / engine verb `teleport_as` |
-| `play.rs` stun skip / stay skip | gates (hosts maintain); engine reads gates |
-| `state.rs` `is_status_key` / `default_expiry` | stay: expiry stays item-carried (`Tick::TurnEnd` etc.); clamping floor-at-0 moves to the host verbs (or stays as the generic `state_set` floor -- see §6) |
-| `key::{STAY,STUN,...}` constants | **kept** (wire + host vocabulary); the engine just stops *branching* on them |
+| today | tomorrow | this batch (2026-10-18, `status-hosts-rest` + `twodonuts-exile`) |
+|---|---|---|
+| `ops.rs` `give_stay` (incl. the un-skip latch) | `status:stay` host + generic `skip_main_move` | **done**: wear-off declared by `stay::add` (`set_expires`); `give_stay` is a dumb service (abnormal window + layer write + the turn's move latch). `stay_unlatch` stays the documented interim home of the count-changed un-skip. |
+| `ops.rs` `give_stun` | `status:stun` host | **done**: wear-off declared by `stun::add` / `add_start`; STA-01 stun half (refuse under [不可阻挡]) lives in the host verbs. `give_stun` is a dumb service. |
+| `ops.rs` `give_exile` | `status:exile` host | **done**: dumb layer write; policy in `status:exile::grant` / `hold` / `clear` / the turn-start tick. |
+| `ops.rs` `gain_fire` / `add_fire_max` | resource API (`rules_status::fire`) over generic `charge` | **out of scope here** -- the `markers` branch owns 火罐/charge end-to-end (see `docs/MARKERS.md`). |
+| `wasm_rules` `spend_fire` + `markerSpend` | resource API (window stays generic `HostRequest::Marker`) | `markers` branch |
+| `wasm_rules` `can_pay` / `cant_move` | generic gates + `status::can_act` / `move_blocked` | already gate-based (ABI 58+) |
+| `play.rs` exile tick / return teleport | generic turn-start tick + `status:exile` hook / engine verb `teleport_as` | **done**: `status:exile` `TurnStartBefore` hook + generic `end_turn_now` / `teleport_as` / `log_as` |
+| `play.rs` stun skip / stay skip | gates (hosts maintain); engine reads gates | already gate-based; leave the flow alone |
+| `play.rs` `noHand` 2→1→0 dance | `status:no_hand` `TurnStart` / `TurnEnd` hooks | **done**: dance deleted from `play.rs`; host hooks own the clause |
+| `state.rs` `is_status_key` / `default_expiry` | stay: expiry stays item-carried (`Tick::TurnEnd` etc.); hosts declare it via `set_expires`; `default_expiry` remains the safety net for raw writes | **done** for stay / stun / stunStart |
+| `key::{STAY,STUN,...}` constants | **kept** (wire + host vocabulary); the engine just stops *branching* on them | unchanged. `key::EXILE_HOLD` is host-owned (`rules/status/src/exile.rs::KEY_HOLD`) |
 
 `give_extra_turn` / `extra_turns` stays engine-side (turn order).
+
+**Still engine-side, and why:**
+
+* `give_stay` / `give_stun` / `give_exile` -- the abnormal [反击] window
+  (`hostfns::abnormal_gate`) + layer write. `TODO(ABI)` `apply_abnormal`.
+* `stay_unlatch` + `give_stay`'s move latch -- the `skip_move` turn latch is
+  turn-flow, not status policy. No `CounterChanged` hook on the state key
+  yet, so the count-changed clause cannot live entirely on the host.
+* `gain_charge` / `spend_charge` / `add_charge_max` + `HostRequest::Marker` --
+  the `markers` worktree's charge/Marker layer (out of scope here).
+* `MatchPlayer::status_gates` -- the engine-side mirror of the CEL gate
+  conditions, kept for `StubRules` (`tests/status_gate_drift.rs` pins them
+  equal).
 
 ### 3.6 cond vocabulary (`rules/cond`, `game-rules/cond_pre.rs`)
 
@@ -345,6 +380,19 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
   game-named imports (HOST-09/10 dead-surface removal) and bump
   `ABI_VERSION` 53 -> 54.
 * `give_extra_turn` stays an engine verb (turn order, not a marker).
+* **`status:*` hook collection (done).** `bind_tiles` already placed the hosts
+  on `BOARD_OWNER` (`tile = -1`), but `collect_hook_jobs` / the inline
+  `counteract` walk only collected `tile:*` / `event:*` / `mark:*` / lingering
+  instances -- so `status:exile`'s `On::Action` bodies never dispatched. Both
+  collection sites now walk `status_rule_instances()` **last** among the field
+  hooks (after tile / event / mark, before lingering), the same shape as
+  `mark_rule_instances`.
+* **Generic verbs (done, ABI 87).** `end_turn_now` / `teleport_as` / `log_as`
+  are wired `ctx` -> `sys` -> `hostfns` -> `World` trait (plus the kani Op
+  enum and native shims). `end_turn_now` is a transient `World::end_turn_request`
+  latch (serde-skip, not in the save blob). `teleport_as` is
+  `HostRequest::TeleportAs` (no abnormal window) -> `Cx::teleport_as`.
+  `log_as` posts the given event kind.
 * `SAVE_VERSION` bumps only if the serialized `MatchState` shape changes.
   Keeping `MatchPlayer.state` as storage means **no save bump** in the
   default plan. Gates are derived (not stored) -- no shape change.
@@ -373,19 +421,30 @@ is additive.
 |---|---|---|---|
 | turn begins | `next_turn` | same | `TurnBegan`, `log.turn` / `log.turn_extra` |
 | before status tick | `turnStartBefore` | same | `turnStartBefore` |
-| exile layer tick | `play.rs` names `exile` | `status:exile` wear-off via generic tick + hook | `log.exiled_skip` / `log.exile_over` |
-| exile return teleport | `play.rs` + `exileMain` | `status:exile` hook + engine `teleport_as` | walk / teleport triggers |
+| exile layer tick | **done**: `status:exile` hook (collected last among field hooks) | same | `log.exiled_skip` / `log.exiled_skip_hold` / `log.exile_over` |
+| exile return teleport | **done**: `status:exile` hook + `teleport_as` | same | walk / teleport triggers |
+| generic end-turn latch | `play.rs` names `exile` | **done**: `end_turn_now` latch after the raise | -- |
 | `stunStart` -> `stun` | `tick_state(TurnStart)` | same (item expiry) | -- |
-| `noHand` 2->1 | `play.rs` | `status:no_hand` hook | -- |
+| `noHand` 2->1 | `play.rs` (after `tick_state`, before snapshot) | `status:no_hand` `TurnStart` hook (after snapshot) | -- |
 | snapshot | `turn_snap` | same (reads the keys) | -- |
-| `turnStart` | same | same | `turnStart` |
+| `turnStart` | same | same (+ latch check after) | `turnStart` |
 | stun auto-skip | `play.rs` names `stunned()` | engine reads `act`/`move` gate | `log.stunned_skip` |
 | stay skip | `play.rs` names `stay()` | engine reads `move` gate (host sets it) | `log.stay_skip` |
 | ops / move / settle | engine | same, gates consulted | -- |
 | `turnEndBefore` | same | same | `turnEndBefore` |
 | stay/stun layer tick | `tick_state(TurnEnd)` | same (item expiry) | -- |
-| `noHand` 1->0 | `play.rs` | `status:no_hand` hook | -- |
+| `noHand` 1->0 | `play.rs` (after `tick_state`) | `status:no_hand` `TurnEnd` hook (same slot) | -- |
 | `turnEnd` / `turnEndAfter` / `endTurnAfter` | same | same | those |
+
+**noHand placement note (this batch).** There is no hook exactly between
+`tick_state` and `turn_snap` where the inline dance sat. The host therefore
+hooks `TurnStart` (fold) / `TurnEnd` (clear). `TurnStartBefore` was rejected
+for the fold: it runs *before* the exile tick, so an exile-skipped turn
+(`log.exiled_skip` -> `end_turn` without reaching `turnStart`) would consume
+the fold and the clear would wipe the key mid-skip. `TurnStart` is not
+reached on that path, matching the old dance exactly. `noHand` is not in
+`turn_snap`, so the fold's shift from "before snapshot" to "after snapshot"
+is unobservable. `TurnEnd` is hook-only (no counteraction window).
 
 ---
 

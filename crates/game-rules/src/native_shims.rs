@@ -260,6 +260,12 @@ pub trait HostOps {
     fn op_give_exile(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_give_extra_turn`
     fn op_give_extra_turn(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_end_turn_now`
+    fn op_end_turn_now(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_teleport_as`
+    fn op_teleport_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_log_as`
+    fn op_log_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_can_pay`
     fn op_can_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_cant_move`
@@ -1049,6 +1055,18 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_give_extra_turn(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::give_extra_turn(self, a[0])?;
+        Ok(0)
+    }
+    fn op_end_turn_now(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::end_turn_now(self, a[0])?;
+        Ok(0)
+    }
+    fn op_teleport_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::teleport_as(self, a[0], a[1], a[2], a[3])?;
+        Ok(0)
+    }
+    fn op_log_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::log_as(self, a[0], a[1], a[2], a[3], a[4])?;
         Ok(0)
     }
     fn op_can_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -2687,6 +2705,41 @@ pub unsafe extern "C-unwind" fn ruleset_give_exile(player_id: i32, n: i32, to: i
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_give_extra_turn(player_id: i32) {
     with_host(|h| match h.op_give_extra_turn([player_id, 0, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_end_turn_now(player_id: i32) {
+    with_host(|h| match h.op_end_turn_now([player_id, 0, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_teleport_as(
+    player_id: i32,
+    tile: i32,
+    resolve: i32,
+    as_main: i32,
+) {
+    with_host(|h| match h.op_teleport_as([player_id, tile, resolve, as_main, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_log_as(
+    player_id: i32,
+    kind_ptr: i32,
+    kind_len: i32,
+    msg_ptr: i32,
+    msg_len: i32,
+) {
+    with_host(|h| match h.op_log_as([player_id, kind_ptr, kind_len, msg_ptr, msg_len, 0]) {
         Ok(_) => {},
         Err(e) => abort_host(e),
     })

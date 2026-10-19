@@ -682,7 +682,11 @@ use alloc::{string::String, vec::Vec};
 ///      `name` / `skill` / `sharesExclusives`. Postcard field order of
 ///      [`crate::meta::MetaRow`] is unchanged (dropped columns are empty /
 ///      absent map pairs). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 86;
+/// v87: **generic turn-flow / logging verbs** for status hosts: `end_turn_now`
+///      (auto-skip latch), `teleport_as` (move-tail teleport with the `main`
+///      flag and no abnormal window), `log_as` (typed log line). Additive
+///      imports; SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 87;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -821,6 +825,10 @@ pub mod state_key {
     /// expiry teleport is that turn's main move (MyGO:无路矢). Read and consumed
     /// by the engine's exile tick.
     pub const EXILE_MAIN: &str = "exileMain";
+    /// Duration grant (「获得[除外]直至X」) marker: while set, the turn-start
+    /// layer tick does not peel [除外]; the granting effect ends it. A layered
+    /// grant (「获得N层[除外]」) leaves this 0 and still ticks.
+    pub const EXILE_HOLD: &str = "exileHold";
     /// Wire key constant (webui contract); the engine never branches on it --
     /// rules-layer kernel owns the counter. Its `max` is the owner-declared cap
     /// written through the rules layer.

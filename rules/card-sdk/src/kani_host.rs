@@ -347,6 +347,9 @@ pub enum Op {
     trig_settle_redirect = 325,
     // A rent-shaped 「收费」 at milli_scale of the tile's ordinary-settle rent.
     charge_rent = 326,
+    end_turn_now = 327,
+    teleport_as = 328,
+    log_as = 329,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

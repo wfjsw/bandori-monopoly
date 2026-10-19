@@ -672,6 +672,12 @@ pub struct World {
     /// When set, `log` does not push an event (the caller posts write-through).
     #[serde(skip)]
     pub skip_log: bool,
+    /// Generic "end this turn" latch. A guest `end_turn_now(player)` sets it;
+    /// `turn_start` honors it after the `turnStartBefore` / `turnStart` raises
+    /// (log nothing, `wait(1.0)`, `end_turn`) -- the auto-skip pacing every
+    /// status host uses. Transient: never serialized (save byte-stability).
+    #[serde(skip)]
+    pub end_turn_request: Option<i32>,
     /// Stub event returned when [`Self::skip_log`] is set.
     #[serde(skip)]
     pub stub: MatchEvent,
@@ -750,6 +756,7 @@ impl World {
             event_discard: vec![],
             event_removed: vec![],
             next_turn_pending: false,
+            end_turn_request: None,
             leftovers: VecDeque::new(),
             rule_param_bonus: Default::default(),
             rule_params: Default::default(),

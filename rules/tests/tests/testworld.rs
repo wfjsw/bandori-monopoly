@@ -309,6 +309,9 @@ impl CardWorld for TestWorld {
     fn give_stun(&mut self, _: i32, _: i32) {}
     fn give_exile(&mut self, _: i32, _: i32, _: i32) {}
     fn give_extra_turn(&mut self, _: i32) {}
+    fn end_turn_now(&mut self, _: i32) {}
+    fn teleport_as(&mut self, _: i32, _: i32, _: i32, _: i32) {}
+    fn log_as(&mut self, _: i32, _: &str, _: Msg) {}
     fn trigger(&self) -> Trigger {
         self.trigger.clone()
     }

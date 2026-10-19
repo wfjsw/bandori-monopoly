@@ -87,6 +87,17 @@ fn exile(step_pre: bool, step: &Step<'_>, i: usize) -> i32 {
     p.map(|p| p.state_get(key::EXILE)).unwrap_or(0)
 }
 
+/// Duration-grant marker (`exileHold`) of player `i`. While set, the
+/// turn-start layer tick does not peel (G-STATUS-07 ruling 2026-10-18).
+fn exile_hold(step_pre: bool, step: &Step<'_>, i: usize) -> i32 {
+    let p = if step_pre {
+        step.pre.st.players.get(i)
+    } else {
+        step.post.st.players.get(i)
+    };
+    p.map(|p| p.state_get("exileHold")).unwrap_or(0)
+}
+
 fn stay_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
     let p = if pre {
         step.pre.st.players.get(i)
@@ -572,6 +583,8 @@ pub fn g_flow_06(step: &Step<'_>) -> Result<(), String> {
 /// * **Rulings & OPEN:** The tick is 「回合开始前」 -- before the turn's own
 ///   开始阶段 effects. If the layer was the last one, the return [传送]
 ///   (「状态结束后在玩家回合开始时要[传送]到的格子」) is unit 4 / G-STATUS.
+///   A **held** duration grant (「获得[除外]直至X」, `exileHold != 0`) is
+///   continuous and does not peel (G-STATUS-07 ruling 2026-10-18).
 /// * **Executable:** [`g_flow_07`].
 const G_FLOW_07: Clause = Clause::new(
     "G-FLOW-07",
@@ -595,6 +608,16 @@ pub fn g_flow_07(step: &Step<'_>) -> Result<(), String> {
     for i in seats {
         let before = exile(true, step, i);
         if before <= 0 {
+            continue;
+        }
+        // Duration grant: no layer countdown (G-STATUS-07 ruling 2026-10-18).
+        if exile_hold(true, step, i) != 0 || exile_hold(false, step, i) != 0 {
+            let after = exile(false, step, i);
+            if after != before {
+                return Err(format!(
+                    "回合开始前 of player {i}: held [除外] {before} -> {after}, duration grant does not peel"
+                ));
+            }
             continue;
         }
         let after = exile(false, step, i);
