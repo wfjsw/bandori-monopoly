@@ -3131,15 +3131,17 @@ impl Cx<'_> {
             return Ok(Paid::default());
         }
         if p.kind != PayKind::ForceBuy {
-            // The payer is gated by `can_pay` (the status hosts' pay gate -- the
-            // act/pay/move gates all close it). The payee is gated by that same
-            // pay gate up front
-            // (rulebook 49: 「无法收付款」 -- a gated seat cannot *receive* either).
-            // The off-board layer is **not** blocked here: 「[除外]期间本应获得的格子收入由
-            // 此前指定的那名玩家获得」 (MyGO:无路矢) reroutes the payee from a
-            // `paySplitAdd` hook, which runs below. The unredirected off-board payee is
-            // refused at transfer time instead (see the final-payee gate).
-            let gated_payee = p.to.filter(|&t| !self.w.gate_open(self.rules, super::Gate::Pay, t));
+            // The payer is gated by `can_pay` (the ruleset's pay gate).
+            // A payee who is on the board but pay-gated cannot *receive*
+            // (rulebook 49). An off-board payee is **not** blocked here:
+            // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」
+            // (MyGO:无路矢) reroutes the payee from a `paySplitAdd` hook, which
+            // runs below. The unredirected off-board payee is refused at
+            // transfer time instead (see the final-payee gate).
+            let gated_payee = p.to.filter(|&t| {
+                self.w.gate_open(self.rules, super::Gate::OnBoard, t)
+                    && !self.w.gate_open(self.rules, super::Gate::Pay, t)
+            });
             if let Some(x) = p.from.filter(|&f| !self.can_pay(f)).or(gated_payee) {
                 let text = Msg::new(if p.from.is_some() {
                     "log.blocked_pay"

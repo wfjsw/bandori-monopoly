@@ -203,15 +203,18 @@ pub fn arrange(seed: u64) -> (Table, Vec<String>) {
     }
 
     // ---- statuses, crystals, fire, fans ----------------------------------
+    // Layer writes declare their own floor + wear-off (the engine does not
+    // guess either from the key name).
     for who in 0..n {
-        if rng.chance(20) {
-            t.set_state(who, "stay", rng.range(1, 2));
-        }
-        if rng.chance(12) {
-            t.set_state(who, "stun", rng.range(1, 2));
-        }
-        if rng.chance(8) {
-            t.set_state(who, "exile", rng.range(1, 2));
+        for (key, chance) in [("stay", 20), ("stun", 12), ("exile", 8)] {
+            if rng.chance(chance) {
+                t.set_state(who, key, rng.range(1, 2));
+                let w = t.m.world_mut();
+                w.state_set_flags(who as i32, key, 1 | 2);
+                if !key.starts_with("exile") {
+                    w.state_set_expires(who as i32, key, Some(game_core::state::Tick::TurnEnd));
+                }
+            }
         }
         if rng.chance(25) {
             // Never arrange a fire above its cap -- that would be our bug, not
