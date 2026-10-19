@@ -82,7 +82,7 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
 )
     .silent(&[0, 3])
     // 「（初始0，上限4）」
-    .fire_pots(0, 4);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 4)]);
 
 /// Residual guard for [`split_rent`]: the tile is one of 状态2's named deeds.
 /// The SPLIT marker is keyed on the tile (a dynamic state key), so it is not

@@ -6,7 +6,7 @@
 //!
 //! MARKERS.md §3 / §7: 火罐 is **instance-owned** by the character skill that
 //! prints 「（初始N，上限M）」. That face owns the numbers: it declares them on
-//! its own [`CardDef`] via [`fire_pots`] (props [`FIRE_INITIAL`] / [`FIRE_CAP`]).
+//! its own [`CardDef`] as the [`FIRE_INITIAL`] / [`FIRE_CAP`] props.
 //! Guests (hand cards, events, the Ave Mujica regime) write only through this
 //! kernel, which applies the owner's policy and returns **actuals** so caller
 //! clauses keep their own text (`Sumimi:一人两个甜甜圈` converts the pots that
@@ -32,30 +32,32 @@
 //! marker. The cap is the only bound.
 
 use card_sdk::abi::TriggerKind;
-use card_sdk::{CardDef, Msg, Prompt};
+use card_sdk::{Msg, Prompt};
 use crate::ctx::{self, state};
 
 // ------------------------------------------------------------- declaration keys
 
-/// 「（初始N，上限M）」 -- the face's initial pot count, as a `CardDef` prop
-/// (see [`fire_pots`]). Read back with `ctx::card_prop(skill, FIRE_INITIAL)`.
+/// 「（初始N，上限M）」 -- the face's initial pot count, as a `CardDef` prop.
+/// Read back with `ctx::card_prop(skill, FIRE_INITIAL)`.
 pub const FIRE_INITIAL: &str = "fireInitial";
 
-/// 「（初始N，上限M）」 -- the face's held cap, as a `CardDef` prop (see
-/// [`fire_pots`]). Read back with `ctx::card_prop(skill, FIRE_CAP)`.
+/// 「（初始N，上限M）」 -- the face's held cap, as a `CardDef` prop.
+/// Read back with `ctx::card_prop(skill, FIRE_CAP)`.
 pub const FIRE_CAP: &str = "fireCap";
 
-/// Apply a face's declaration onto its `CardDef` -- `fire_pots(def, 2, 3)`
-/// for 「（初始2，上限3）」 (the fluent form is `def.fire_pots(2, 3)`).
-/// Cap-only faces (「（上限7）」) pass `initial = 0`.
-///
-/// The numbers live on the skill that prints them (MARKERS.md §7: the face
-/// printing the numbers owns the pool). [`declare_own`] / [`declare_from`] /
-/// [`overlay`] read them back through `ctx::card_prop`. A skill with no
-/// [`FIRE_INITIAL`] / [`FIRE_CAP`] props owns no pots (cap 0).
-pub const fn fire_pots(def: CardDef, initial: i32, cap: i32) -> CardDef {
-    def.fire_pots(initial, cap)
-}
+// The numbers live on the skill that prints them (MARKERS.md §7: the face
+// printing the numbers owns the pool), declared on its own `CardDef` as the
+// two props above -- no central table, no engine field:
+//
+// ```
+// pub const ANON_RESTART: CardDef = CardDef::new("skill:千早爱音:重新开始", &[…])
+//     // 「（初始2，上限3）」
+//     .props(&[(fire::FIRE_INITIAL, 2), (fire::FIRE_CAP, 3)]);
+// ```
+//
+// Cap-only faces (「（上限7）」) pass `initial = 0`. [`declare_own`] /
+// [`declare_from`] / [`overlay`] read them back through `ctx::card_prop`. A
+// skill with no [`FIRE_INITIAL`] / [`FIRE_CAP`] props owns no pots (cap 0).
 
 // ------------------------------------------------------------- storage keys
 
@@ -105,7 +107,7 @@ pub fn total(player_id: i32) -> i32 {
 // ------------------------------------------------------------- declaration
 
 /// The face's 「（初始N，上限M）」 off its `CardDef` props. Both default to 0
-/// when the face carries no [`fire_pots`] (owns no pots).
+/// when the face declares no [`FIRE_INITIAL`] / [`FIRE_CAP`] props (owns no pots).
 fn face_bounds(skill: &str) -> (i32, i32) {
     (
         ctx::card_prop(skill, FIRE_INITIAL),

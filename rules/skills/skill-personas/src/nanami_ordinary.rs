@@ -65,7 +65,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     .silent(&[1])
     .quiet_when_empty(&[4])
     // 「（初始2，上限2）」
-    .fire_pots(2, 2);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// Residual guard for [`on_skill`]: the CD and the 「每种角色标记上限1」 cap.
 /// Pure reads -- the same instant as the body (`run_hook` runs both on one

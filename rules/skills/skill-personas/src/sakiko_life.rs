@@ -55,7 +55,7 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
 )
     .silent(&[0])
     // 「（初始0，上限3）」
-    .fire_pots(0, 3);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 3)]);
 
 /// The `Abnormal` hook's guard: this player is the *recipient* of the effect
 /// (`trigger::target()`), still in 状态1.

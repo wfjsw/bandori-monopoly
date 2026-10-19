@@ -38,8 +38,8 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     ],
 )
     // 「（初始2，上限4）」
-    .fire_pots(2, 4)
-    .props(&[
+        .props(&[
+        (bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 4),
         (prop::COUNTERACT_FROM_FIELD, 1),
         // One cancel per activation: the skill stays in play, so without a
         // group reservation the ring would re-offer it after the declaration

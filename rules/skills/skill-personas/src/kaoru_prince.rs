@@ -59,10 +59,10 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
 .silent(&[1])
 .quiet_when_empty(&[2, 3])
     // 「（上限7）」
-    .fire_pots(0, 7);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 7)]);
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
-/// The numbers ride this face's own `CardDef` (`.fire_pots(0, 7)` above) so
+/// The numbers ride this face's own `CardDef` (`.props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 7)])` above) so
 /// the parenthetical has one source of truth.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id);

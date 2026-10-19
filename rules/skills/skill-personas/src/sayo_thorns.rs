@@ -61,8 +61,8 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
     ],
 )
     // 「（初始10，上限10）」
-    .fire_pots(10, 10)
     .props(&[
+        (bandori_std::fire::FIRE_INITIAL, 10), (bandori_std::fire::FIRE_CAP, 10),
         (prop::COUNTERACT_FROM_FIELD, 1),
         (prop::COUNTERACT_GROUP, 1),
         (prop::COUNTERACT_CHARGE_COST, 6),

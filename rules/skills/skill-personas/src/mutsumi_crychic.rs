@@ -35,7 +35,7 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
 )
     .silent(&[3])
     // 「（初始1，上限1）」
-    .fire_pots(1, 1);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
 fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() == state::get(player_id, OTHER)

@@ -45,7 +45,7 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
 )
     .silent(&[0])
     // 「（初始2，上限2）」
-    .fire_pots(2, 2);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// Residual guard for 「经过该格」 with a pot on it -- `count_marks` stays here
 /// (not yet in the condition vocabulary).

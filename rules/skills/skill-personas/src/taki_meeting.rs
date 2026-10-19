@@ -30,7 +30,7 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
 )
     .silent(&[1, 3])
     // 「（初始0，上限5）」
-    .fire_pots(0, 5);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 5)]);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

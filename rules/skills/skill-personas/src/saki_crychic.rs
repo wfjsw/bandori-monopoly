@@ -46,7 +46,7 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
 )
     .silent(&[0])
     // 「（初始1，上限2）」
-    .fire_pots(1, 2);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// Residual guard for 「若在你的前后5格内」 -- `dist` stays here (not yet in
 /// the condition vocabulary). `move.main && tile.id >= 0` is the pre.

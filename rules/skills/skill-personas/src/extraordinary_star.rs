@@ -47,7 +47,7 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
 // happening and the player should see the clause fire. `Always` beats Auto.
 .flash(&[(2, Flash::Always)])
     // 「（初始0，上限1）」
-    .fire_pots(0, 1);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 1)]);
 
 /// 「初始0，上限1」 -- this skill states the fire-pot cap. It is a *consumer*
 /// deciding the bound; the engine only holds it.

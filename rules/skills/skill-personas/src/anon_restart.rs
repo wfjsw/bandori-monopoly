@@ -33,7 +33,7 @@ pub const ANON_RESTART: CardDef = CardDef::new(
 )
     .silent(&[0])
     // 「（初始2，上限3）」
-    .fire_pots(2, 3);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 3)]);
 
 /// 「初始2，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

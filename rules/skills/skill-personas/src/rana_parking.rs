@@ -64,7 +64,7 @@ pub const RANA_PARKING: CardDef = CardDef::new(
     .labels(&[(2, "（1）"), (3, "（2）"), (4, "（2）"), (5, "（2）"), (6, "（3）")])
     .silent(&[1])
     // 「（初始3，上限3）」
-    .fire_pots(3, 3);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 3), (bandori_std::fire::FIRE_CAP, 3)]);
 
 fn any(_player_id: i32) -> bool {
     true

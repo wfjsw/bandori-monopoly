@@ -36,7 +36,7 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
 )
     .silent(&[1])
     // 「（初始2，上限2）」
-    .fire_pots(2, 2);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// 「初始2，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

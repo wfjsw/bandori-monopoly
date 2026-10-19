@@ -35,7 +35,7 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
 )
     .silent(&[1, 2])
     // 「（初始1，上限3）」
-    .fire_pots(1, 3);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 3)]);
 
 /// 「初始1，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

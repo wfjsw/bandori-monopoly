@@ -7,7 +7,7 @@
 //!
 //! The rule text lives in the roster character row (`skill` is the name, `text` /
 //! `simple` the wording); what is here is the behavior. A skill that prints
-//! 「（初始N，上限M）」 owns those numbers on its own [`CardDef`] (`.fire_pots(N, M)`
+//! 「（初始N，上限M）」 owns those numbers on its own [`CardDef`] (`.props(&[(fire::FIRE_INITIAL, N), (fire::FIRE_CAP, M)])`
 //! / `bandori_std::fire::fire_pots`), and `fire_pot(player)` →
 //! `bandori_std::fire::declare_own` reads them back through `ctx::card_prop`.
 //! Every card reads the pots with `bandori_std::fire::{get, max}`. The
@@ -52,7 +52,7 @@ use card_sdk::CardDef;
 
 /// 「初始N，上限M」 -- declare this seat's fire pots from **this skill's own**
 /// `CardDef` props (`bandori_std::fire::{FIRE_INITIAL, FIRE_CAP}`, written by
-/// `.fire_pots(N, M)`). Bodies call `fire_pot(player)`; they do not carry
+/// the two `fire::` props). Bodies call `fire_pot(player)`; they do not carry
 /// literals.
 ///
 /// Hook this from both `TurnStartBefore` (so the cap holds from the first turn

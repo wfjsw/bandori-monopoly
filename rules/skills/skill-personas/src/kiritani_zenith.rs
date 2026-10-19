@@ -32,7 +32,7 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
 )
     .silent(&[1, 3])
     // 「（初始1，上限1）」
-    .fire_pots(1, 1);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

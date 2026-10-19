@@ -67,7 +67,7 @@ pub const MANA_DONUT: CardDef = CardDef::new(
     ],
 )
     // 「（初始1，上限2）」
-    .fire_pots(1, 2)
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 2)])
     .silent(&[0, 1]);
 
 /// The TurnStartBefore re-declare only does something when the cap is still

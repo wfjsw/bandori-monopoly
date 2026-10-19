@@ -141,12 +141,6 @@ impl NativeRulesHandle {
                     .iter()
                     .map(|(k, v)| (k.to_string(), *v))
                     .collect();
-                // Face's 「（初始N，上限M）」 (`CardDef::fire_pots`) -- same
-                // two prop keys the wasm manifest export folds in.
-                if let Some((initial, cap)) = card.fire_bounds {
-                    props.insert("fireInitial".into(), initial);
-                    props.insert("fireCap".into(), cap);
-                }
                 // Deterministic iteration like the manifest's sorted wire form.
                 let _ = &mut props;
                 // Compile every condition once (docs/GUARDS.md §4.3), from the
@@ -228,11 +222,6 @@ impl NativeRulesHandle {
                     .iter()
                     .map(|(k, v)| ((*k).to_string(), *v))
                     .collect();
-                if let Some((initial, cap)) = card.fire_bounds {
-                    // Same two keys the wasm manifest export folds in.
-                    props.push(("fireInitial".into(), initial));
-                    props.push(("fireCap".into(), cap));
-                }
                 props.sort_by(|a, b| a.0.cmp(&b.0));
                 for (k, v) in props {
                     h.update(k.as_bytes());

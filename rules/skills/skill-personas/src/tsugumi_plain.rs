@@ -38,7 +38,7 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
 )
     .silent(&[1])
     // 「（初始1，上限1）」
-    .fire_pots(1, 1);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")

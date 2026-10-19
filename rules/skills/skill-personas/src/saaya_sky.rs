@@ -37,7 +37,7 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
 )
     .silent(&[0])
     // 「（初始3，上限5）」
-    .fire_pots(3, 5);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 3), (bandori_std::fire::FIRE_CAP, 5)]);
 
 fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() != player_id

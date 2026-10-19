@@ -24,7 +24,7 @@ fn fans(t: &Table, who: usize) -> (i32, i32) {
 // =====================================================================
 
 /// MARKERS.md §7: the face parenthetical's numbers live on that face's
-/// `CardDef` (`.fire_pots(N, M)` / `bandori_std::fire::fire_pots`). Skill
+/// `CardDef` (`.props(&[(fire::FIRE_INITIAL, N), (fire::FIRE_CAP, M)])`). Skill
 /// bodies call `fire_pot(player)` -- they must not carry literals. Raw
 /// CHARGE / tempFire writes are kernel-only.
 #[test]
@@ -71,7 +71,7 @@ fn fire_numbers_are_on_the_skill_def() {
     // The 35 faces that print the parenthetical each own their numbers.
     assert!(
         declared >= 35,
-        "fire-pot faces must declare `.fire_pots` on their CardDef; found {declared}"
+        "fire-pot faces must declare fire::FIRE_INITIAL/FIRE_CAP on their CardDef; found {declared}"
     );
 }
 

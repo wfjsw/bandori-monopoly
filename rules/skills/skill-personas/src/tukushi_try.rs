@@ -36,7 +36,7 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
     ],
 )
     // 「（初始1，上限2）」
-    .fire_pots(1, 2);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// Either half of the pair is under the spell.
 fn paired(player_id: i32) -> bool {

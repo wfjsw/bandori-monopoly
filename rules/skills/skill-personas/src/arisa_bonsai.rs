@@ -36,7 +36,7 @@ pub const ARISA_BONSAI: CardDef = CardDef::new(
 )
     .silent(&[0])
     // 「（初始0，上限2）」
-    .fire_pots(0, 2);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

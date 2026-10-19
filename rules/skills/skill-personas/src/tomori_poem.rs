@@ -62,7 +62,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
 )
     .silent(&[0])
     // 「（初始4，上限4）」
-    .fire_pots(4, 4);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 4), (bandori_std::fire::FIRE_CAP, 4)]);
 
 /// 「在此技能影响下的支付价格变为原本的一半」 -- only the payments of the
 /// player this skill moved.

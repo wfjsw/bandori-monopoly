@@ -85,7 +85,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
 )
     .silent(&[2, 3])
     // 「（火罐上限3）」
-    .fire_pots(0, 3);
+    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 3)]);
 
 /// Residual guard for [`at_turn_start`]: 状态2 (the cap write must run) or
 /// the memory latch is clear (the 状态2 offer). Dynamic key.
@@ -98,7 +98,7 @@ fn state2_or_clean(player_id: i32) -> bool {
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
         // 「（火罐上限3）」 -- the 状态2 cap comes from this face's own `CardDef`
-        // (`skill:三角初华:Imprisoned XII` `.fire_pots(0, 3)`).
+        // (`skill:三角初华:Imprisoned XII` `.props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 3)])`).
         crate::fire_pot(player_id);
         // 「获得[不可阻挡]」
         state::set(player_id, state_key::UNSTOPPABLE, 1);

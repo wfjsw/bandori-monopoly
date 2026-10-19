@@ -72,12 +72,6 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     .iter()
                     .map(|(k, v)| (String::from(*k), *v))
                     .collect();
-                // Face's 「（初始N，上限M）」 (`CardDef::fire_pots`) rides the
-                // same prop map under the ruleset's key names.
-                if let Some((initial, cap)) = c.fire_bounds {
-                    p.push((String::from("fireInitial"), initial));
-                    p.push((String::from("fireCap"), cap));
-                }
                 p.sort_by(|a, b| a.0.cmp(&b.0));
                 p
             },
