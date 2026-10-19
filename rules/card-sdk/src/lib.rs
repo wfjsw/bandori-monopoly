@@ -202,6 +202,12 @@ pub struct CardDef {
     /// `(gate kind i32, i18n key)`. Default `&[]` (fall back to
     /// [`Self::gate_msgs`]). Trailing field -- postcard is not self-describing.
     pub gate_skip_msgs: &'static [(i32, &'static str)],
+    /// Face's 「（初始N，上限M）」 fire-pot declaration, `(initial, cap)`.
+    /// `None` = the face prints no fire-pot parenthetical. Rides the manifest
+    /// as props `fireInitial` / `fireCap` (`bandori_std::fire::{FIRE_INITIAL,
+    /// FIRE_CAP}`); `CardDef::fire_pots`. Folded at export so this and
+    /// [`Self::props`] compose.
+    pub fire_bounds: Option<(i32, i32)>,
     /// Card prop key that exempts a play from this rule's act gate (empty =
     /// none). The name is ruleset vocabulary; the engine reads it as data.
     pub exemption_prop: &'static str,
@@ -223,6 +229,7 @@ impl CardDef {
             governs: &[],
             gate_msgs: &[],
             gate_skip_msgs: &[],
+            fire_bounds: None,
             exemption_prop: "",
         }
     }
@@ -244,6 +251,32 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
+            exemption_prop: self.exemption_prop,
+        }
+    }
+
+    /// This face's 「（初始N，上限M）」 declaration. Exported as the two static
+    /// props `"fireInitial"` / `"fireCap"` (the ruleset re-exports the keys as
+    /// `bandori_std::fire::{FIRE_INITIAL, FIRE_CAP}`; the free function
+    /// `bandori_std::fire::fire_pots` is the same sugar). Composes with
+    /// [`Self::props`]. Cap-only faces (「（上限7）」) pass `initial = 0`.
+    pub const fn fire_pots(self, initial: i32, cap: i32) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: Some((initial, cap)),
             exemption_prop: self.exemption_prop,
         }
     }
@@ -266,6 +299,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -300,6 +334,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -325,6 +360,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -357,6 +393,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -423,6 +460,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -457,6 +495,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -483,6 +522,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -511,6 +551,7 @@ impl CardDef {
             governs: kinds,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -533,6 +574,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -555,6 +597,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: self.exemption_prop,
         }
     }
@@ -576,6 +619,7 @@ impl CardDef {
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
+            fire_bounds: self.fire_bounds,
             exemption_prop: key,
         }
     }

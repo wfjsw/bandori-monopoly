@@ -53,7 +53,9 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         On::Action(&[ActionKind::Abnormal], "target == owner", "", Some(im_hit), on_abnormal),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0])
+    // 「（初始0，上限3）」
+    .fire_pots(0, 3);
 
 /// The `Abnormal` hook's guard: this player is the *recipient* of the effect
 /// (`trigger::target()`), still in 状态1.
@@ -168,7 +170,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     ) {
         return Ok(());
     }
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("sakiko_life_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("sakiko_life_gain")))?;
     Ok(())
 }
 

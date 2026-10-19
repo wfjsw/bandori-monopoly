@@ -6,16 +6,19 @@ status):
 | kind | ids | what they are |
 |---|---|---|
 | **状态 / conditions** | `status:stay`, `status:stun`, `status:exile`, `status:unstoppable` | 「处于该状态时…」 gates + ticks. The real status hosts. |
-| **指示物 / counters** | 火罐 (`rules/status/src/fire.rs` kernel, `fire_decl.rs` registry) | 「技能指示物」 -- instance-owned counters over generic `charge` + `HostRequest::Marker`; see `docs/MARKERS.md`. Kin of CP点 / 奇迹水晶. No gates, no tick. |
 | **companions** | `status:no_hand` | `noHand` card-text slot (turn-flow 2→1→0 dance), not a glossary status. |
+
+火罐 is **not** a status -- it is 「技能指示物」. Its kernel and the face's
+「（初始N，上限M）」 declaration live in `bandori_std::fire` (the numbers ride
+the skill's own `CardDef` as `fireInitial`/`fireCap`). See `docs/MARKERS.md`.
 
 Each 状态 marker (and the cheap companions for symmetry) becomes its own
 **standing pseudo card** -- `status:stay`, `status:stun`, `status:exile`,
 `status:unstoppable`, `status:no_hand` -- following the `mark:cp` precedent
 (`rules/markers/src/{lib,cp,pp_fans}.rs`, `docs/TILES.md`, `docs/MARKERS.md`).
-`status:fire` is a placeholder with no entries. The engine keeps only
+The engine keeps only
 **generic** turn-flow verbs and player gates; it stops naming stay / stun /
-exile / fire. Cards call one canonical API in `rules/status`, not the
+exile. Cards call one canonical API in `rules/status`, not the
 `card-sdk` `ctx::{give_stay, gain_fire, ...}` surface.
 
 Motivation (user request 2026-10-11): *"Canonicalize and standardize these
@@ -184,9 +187,9 @@ the seam; the wire projection is a view concern.
 | `status:stay` | `stay` | -- |
 | `status:stun` | `stun`, `stunStart` | -- |
 | `status:exile` | `exile`, `exileTo` | `exileMain` |
-| `status:fire` | `fire` (value + `max` = cap) | -- |
 | `status:unstoppable` | `unstoppable` | -- |
 | `status:no_hand` | `noHand` | -- |
+| *(not a status)* `bandori_std::fire` | `charge` (value + `max` = cap) | `tempFire` |
 
 ### 3.2 New crate `rules/status`
 
@@ -201,10 +204,12 @@ rules/status/
   src/stay.rs     # STATUS_STAY: CardDef
   src/stun.rs
   src/exile.rs
-  src/fire.rs
   src/unstoppable.rs
   src/no_hand.rs
 ```
+
+火罐 is **not** in this crate -- `rules/bandori-std/src/fire.rs` owns the
+kernel and the per-face `CardDef` declaration.
 
 Each host is a `CardDef` (`card_sdk::CardDef`) with `On::Action` /
 `On::Message` entries quoting its passage. Bound once via a new

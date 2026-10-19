@@ -74,7 +74,9 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[0, 3]);
+    .silent(&[0, 3])
+    // 「（初始0，上限5）」
+    .fire_pots(0, 5);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -88,7 +90,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// post-gain X.
 fn on_pay_declare(player_id: i32) -> card_sdk::Asked {
     // 「你立即获得1火罐」 first, so X counts it.
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
     let x = state::get(player_id, state_key::CHARGE);
     // Latch the post-gain X. The latch is what the pure `PaySplitAdd` filter reads;
     // it also lets that filter fire for this very payment when the gain just

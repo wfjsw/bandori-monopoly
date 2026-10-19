@@ -29,7 +29,9 @@ pub const RAN_RED: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
         On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
     ],
-).silent(&[1]);
+).silent(&[1])
+    // 「（初始1，上限1）」
+    .fire_pots(1, 1);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")
@@ -60,7 +62,7 @@ pub fn rest_tick(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     Ok(())
 }
 
@@ -77,7 +79,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「选择本次移动向后，并且向后移动[经过]CiRCLE时不获得CiRCLE奖励」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("ran_red_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("ran_red_spend")))? {
         return Ok(());
     }
     // A press of any Afterglow (2) resets the band's rest counter.

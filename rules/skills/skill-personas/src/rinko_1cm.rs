@@ -31,6 +31,8 @@ pub const RINKO_1CM: CardDef = CardDef::new(
 )
     // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate
     // (`bandori_std::prop::PLAYABLE_STUNNED`, the same waiver 壱雫空 carries).
+    // 「（初始3，上限3）」
+    .fire_pots(3, 3)
     .props(&[(bandori_std::prop::PLAYABLE_STUNNED, 1)])
     .silent(&[1]);
 
@@ -42,7 +44,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得三个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 3, &Msg::new(key!("rinko_1cm_gain")))?;
+    bandori_std::fire::gain(player_id, 3, &Msg::new(key!("rinko_1cm_gain")))?;
     Ok(())
 }
 
@@ -72,7 +74,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         1,
         have,
     )?;
-    if x < 1 || !rules_status::fire::spend(player_id, x, &Msg::new(key!("rinko_1cm_spend")))? {
+    if x < 1 || !bandori_std::fire::spend(player_id, x, &Msg::new(key!("rinko_1cm_spend")))? {
         return Ok(());
     }
     // 「固定为X*6」 -- the face is pinned, not rolled.

@@ -34,7 +34,9 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
         On::Filter(&[FilterKind::PaySplitChoose], "", Some(paired), on_pay),
         On::Action(&[bandori_std::kind::HouseAdded], "", "", Some(partner), on_built),
     ],
-);
+)
+    // 「（初始1，上限2）」
+    .fire_pots(1, 2);
 
 /// Either half of the pair is under the spell.
 fn paired(player_id: i32) -> bool {
@@ -64,7 +66,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("tukushi_try_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tukushi_try_gain")))?;
     Ok(())
 }
 
@@ -99,7 +101,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = others.get(pick) else {
         return Ok(());
     };
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("tukushi_try_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tukushi_try_spend")))? {
         return Ok(());
     }
     state::set(player_id, PARTNER, who);

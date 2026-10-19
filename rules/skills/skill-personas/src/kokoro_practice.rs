@@ -64,7 +64,9 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[4]);
+    .silent(&[4])
+    // 「（初始0，上限1）」
+    .fire_pots(0, 1);
 
 /// （3）「获得一个火罐（上限1）」 -- no 「初始N」, so initial is 0 and the cap is 1.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -127,7 +129,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !is_deed(t) {
         let have = state::get(player_id, state_key::CHARGE);
         if have > 0 {
-            rules_status::fire::spend(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
+            bandori_std::fire::spend(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
         }
     }
     Ok(())
@@ -151,7 +153,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("kokoro_practice_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("kokoro_practice_spend")))? {
         return Ok(());
     }
     if !ctx::gate(ctx::trigger::player_id(), bandori_std::kind::abnormal::Stop) {
@@ -167,7 +169,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 /// and before any settle, for every completed move -- a 「不触发结算」 move
 /// grants the pot too. `actor == owner && is_deed(tile.id)` is the pre.
 fn on_move_end(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
     Ok(())
 }
 

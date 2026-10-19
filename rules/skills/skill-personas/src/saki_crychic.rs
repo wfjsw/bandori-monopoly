@@ -44,7 +44,9 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0])
+    // 「（初始1，上限2）」
+    .fire_pots(1, 2);
 
 /// Residual guard for 「若在你的前后5格内」 -- `dist` stays here (not yet in
 /// the condition vocabulary). `move.main && tile.id >= 0` is the pre.
@@ -62,7 +64,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("saki_crychic_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saki_crychic_gain")))?;
     Ok(())
 }
 
@@ -85,7 +87,7 @@ fn before_settle_self(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("saki_crychic_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("saki_crychic_spend")))? {
         return Ok(());
     }
     nudge(player_id, at);

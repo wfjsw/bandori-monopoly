@@ -33,7 +33,9 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
         On::Action(&[ActionKind::DiceRollAfter], "", "", Some(other), latch),
     ],
 )
-    .silent(&[3]);
+    .silent(&[3])
+    // 「（初始1，上限1）」
+    .fire_pots(1, 1);
 
 fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() == state::get(player_id, OTHER)
@@ -72,7 +74,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("mutsumi_crychic_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("mutsumi_crychic_gain")))?;
     Ok(())
 }
 
@@ -103,7 +105,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if face < 0 {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
         return Ok(());
     }
     ctx::set_fixed_roll(face);

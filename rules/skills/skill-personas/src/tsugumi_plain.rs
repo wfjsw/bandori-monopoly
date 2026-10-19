@@ -36,7 +36,9 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
         On::Action(&[ActionKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", "", None, on_plan_after),
     ],
 )
-    .silent(&[1]);
+    .silent(&[1])
+    // 「（初始1，上限1）」
+    .fire_pots(1, 1);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")
@@ -89,7 +91,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「使本次移动反向」 + arm the deferred half.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("tsugumi_plain_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tsugumi_plain_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

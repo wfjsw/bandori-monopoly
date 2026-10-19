@@ -33,7 +33,9 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.rimiResolve.passed') != 0", "", None, at_turn_end),
     ],
 )
-    .silent(&[1, 2]);
+    .silent(&[1, 2])
+    // 「（初始1，上限3）」
+    .fire_pots(1, 3);
 
 /// 「初始1，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -61,7 +63,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// （1）「后在回合结束时获得1个[火罐]」.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, PASSED, 0);
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("rimi_resolve_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("rimi_resolve_gain")))?;
     Ok(())
 }
 
@@ -110,7 +112,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&to) = far.get(pick) else {
         return Ok(());
     };
-    if !rules_status::fire::spend(player_id, 3, &Msg::new(key!("rimi_resolve_spend")))? {
+    if !bandori_std::fire::spend(player_id, 3, &Msg::new(key!("rimi_resolve_spend")))? {
         return Ok(());
     }
     // 「[传送]…并[结算]」 -- a teleport that settles.

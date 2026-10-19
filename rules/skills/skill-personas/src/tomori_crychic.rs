@@ -28,7 +28,9 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Action(&[ActionKind::AtEnd], "owner.pos >= 0", "", None, settle_now),
     ],
 )
-    .silent(&[1]);
+    .silent(&[1])
+    // 「（初始1，上限1）」
+    .fire_pots(1, 1);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -38,7 +40,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("tomori_crychic_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tomori_crychic_gain")))?;
     Ok(())
 }
 
@@ -75,7 +77,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「消耗1火罐清除自身一层[停留]」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
         return Ok(());
     }
     ctx::state::add(player_id, state_key::STAY, -1);

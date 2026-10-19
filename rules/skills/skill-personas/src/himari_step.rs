@@ -22,7 +22,9 @@ pub const HIMARI_STEP: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
         On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
     ],
-).silent(&[1]);
+).silent(&[1])
+    // 「（初始1，上限1）」
+    .fire_pots(1, 1);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")
@@ -60,7 +62,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             Msg::new(key!("himari_step_even")),
         ],
     )?;
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("himari_step_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("himari_step_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

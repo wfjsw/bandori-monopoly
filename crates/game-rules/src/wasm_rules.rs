@@ -1597,7 +1597,7 @@ impl CardWorld for Run {
         let got = self.world.gain_marker(player_id, name, n);
         // Minimal world event-log line (wire kind is the marker name). The
         // 效果适用 narration / cap policy is the rules-layer kernel's
-        // (`rules_status::fire`); this is only the engine's fact of the write.
+        // (`bandori_std::fire`); this is only the engine's fact of the write.
         if got != 0 {
             let msg = Msg::new("log.gain_charge").player_id("who", player_id).i("n", got as i64);
             self.post_log_value(name, player_id, msg, "", got);

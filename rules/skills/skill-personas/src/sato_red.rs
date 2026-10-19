@@ -31,7 +31,9 @@ pub const SATO_RED: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[1]);
+    .silent(&[1])
+    // 「（初始0，上限2）」
+    .fire_pots(0, 2);
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -42,7 +44,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// （1）「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]」. The two named
 /// tiles are the pre.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("sato_red_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("sato_red_gain")))?;
     Ok(())
 }
 
@@ -70,7 +72,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         1,
         have,
     )?;
-    if x < 1 || !rules_status::fire::spend(player_id, x, &Msg::new(key!("sato_red_spend")))? {
+    if x < 1 || !bandori_std::fire::spend(player_id, x, &Msg::new(key!("sato_red_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(x, 10, "与燃烧的红色一起驰骋");

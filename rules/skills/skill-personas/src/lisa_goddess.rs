@@ -34,7 +34,9 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
         On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
     ],
 )
-    .silent(&[1]);
+    .silent(&[1])
+    // 「（初始2，上限2）」
+    .fire_pots(2, 2);
 
 /// 「初始2，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -44,7 +46,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得1个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("lisa_goddess_gain")))?;
+    bandori_std::fire::gain(player_id, 1, &Msg::new(key!("lisa_goddess_gain")))?;
     Ok(())
 }
 
@@ -79,7 +81,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
@@ -108,7 +110,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
         return Ok(());
     }
     // 「若你这样做，此次传送不触发任何结算」
@@ -117,7 +119,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // The temp pot is the kernel's second declared counter (`fire::temp`),
     // not a free key (MARKERS.md §7).
     let who = here[0];
-    rules_status::fire::temp::grant(who, 1);
+    bandori_std::fire::temp::grant(who, 1);
     // TODO(规则书)[judgement]: （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
     //   需要支付你600资金」 -- the clause under-specifies -- the spend path has to
     //   know a pot's *provenance* to charge the provider, and 「被冲榜类效果被动
