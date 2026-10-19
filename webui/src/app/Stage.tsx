@@ -10,7 +10,7 @@ import { cx } from "../core/cx";
 import { useEventListener } from "../hooks/dom";
 import { clearForced, isForced, subscribeForced, usePortraitPhone } from "./rotation";
 import { STAGE_H, STAGE_W } from "../styles/layout";
-import { type Insets, type StageBox, stageBox } from "./stageBox";
+import { type Insets, type StageBox, stageBox, windowBox } from "./stageBox";
 import { setStageRotated, setStageScale } from "./stageScale";
 import s from "./Stage.module.css";
 
@@ -46,13 +46,10 @@ function forcedCompact(): boolean | null {
 }
 
 /**
- * The *large* viewport: the window with the browser chrome hidden, which under
- * `viewport-fit=cover` is the whole screen including the strip the cutout sits
- * in. Not the visual viewport -- that one is shorter in portrait (Safari's
- * address bar, and the iOS PWA's status-bar strip) than in landscape, so sizing
- * to it laid forced rotation out on a different canvas than a real turn of the
- * phone and left the notch band empty there. Read off a `100lvw` / `100lvh`
- * probe; those units are the large viewport by definition.
+ * The window to lay the stage out on -- see `windowBox` in `stageBox.ts` for
+ * why this is the device screen on a handset and not the layout / visual
+ * viewport. The `100lvw` / `100lvh` probe is one of the candidates: those
+ * units are the large viewport (browser chrome hidden) by definition.
  */
 function largeViewport(): { vw: number; vh: number } {
   let el = lvProbe;
@@ -63,7 +60,23 @@ function largeViewport(): { vw: number; vh: number } {
     lvProbe = el;
   }
   const r = el.getBoundingClientRect();
-  return r.width > 0 && r.height > 0 ? { vw: r.width, vh: r.height } : { vw: window.innerWidth, vh: window.innerHeight };
+  // The drawing area: `html, body { position: fixed; inset: 0 }` is exactly
+  // the layout viewport, which `viewport-fit=cover` extends to the screen
+  // edges. Measured here rather than off `innerHeight`, which a browser's
+  // chrome can shrink without the drawing area moving.
+  const layout = document.body.getBoundingClientRect();
+  return windowBox({
+    screenW: window.screen.width,
+    screenH: window.screen.height,
+    innerW: window.innerWidth,
+    innerH: window.innerHeight,
+    layoutW: layout.width,
+    layoutH: layout.height,
+    probeW: r.width,
+    probeH: r.height,
+    portrait: window.matchMedia("(orientation: portrait)").matches,
+    coarse: window.matchMedia("(pointer: coarse)").matches,
+  });
 }
 let lvProbe: HTMLElement | null = null;
 
@@ -124,8 +137,9 @@ function useSafeInsets(): Insets {
 }
 
 function useStage(tall: boolean): StageBox {
-  // Size against the large viewport (see `largeViewport`): the full screen in
-  // both orientations, so forced rotation and a real turn of the phone agree.
+  // Size against the whole screen (see `largeViewport` / `windowBox`): the
+  // same rectangle in both orientations, so forced rotation and a real turn
+  // of the phone agree and the stage never letterboxes into blank bars.
   // While a text field is focused the on-screen keyboard can still shrink the
   // layout on some browsers; hold the height from before it came up.
   const open = useRef<{ vw: number; vh: number } | null>(null);

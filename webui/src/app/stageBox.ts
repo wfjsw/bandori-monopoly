@@ -19,8 +19,60 @@ export interface Insets {
   left: number;
 }
 
+export interface Box {
+  vw: number;
+  vh: number;
+}
+
+/**
+ * The window the stage lays out on.
+ *
+ * A handset's `window.screen` is the whole device in CSS px and swaps with
+ * orientation -- the one measurement that is the same rectangle in portrait
+ * and in landscape. The layout and visual viewports are both short of it in
+ * portrait (Safari's address bar, the iOS PWA's status-bar strip) and full in
+ * landscape. Sizing to those left the stage short on the long axis: under
+ * forced rotation that axis is the phone's height, so the leftover strip sat
+ * under the cutout at the top (invisible behind the island) and showed as a
+ * blank bar at the **bottom** of the phone, with the app not filling the
+ * screen width.
+ *
+ * `screen` only counts on a handset-sized coarse device -- a desktop window on
+ * a touch monitor must not be blown up to the monitor. Everywhere else the
+ * window itself is the right answer. Either way take the largest candidate: a
+ * short stage letterboxes, and letterbox is the bug.
+ */
+export function windowBox(input: {
+  /** `window.screen`, CSS px. */
+  screenW: number;
+  screenH: number;
+  /** `window.innerWidth` / `innerHeight`. */
+  innerW: number;
+  innerH: number;
+  /** The `position: fixed; inset: 0` body's box -- the real drawing area. */
+  layoutW: number;
+  layoutH: number;
+  /** `100lvw` / `100lvh` probe, or 0 where unavailable. */
+  probeW: number;
+  probeH: number;
+  /** `orientation: portrait`. */
+  portrait: boolean;
+  /** `pointer: coarse`. */
+  coarse: boolean;
+}): Box {
+  const candidates: Box[] = [{ vw: input.innerW, vh: input.innerH }];
+  if (input.layoutW > 0 && input.layoutH > 0) candidates.push({ vw: input.layoutW, vh: input.layoutH });
+  if (input.probeW > 0 && input.probeH > 0) candidates.push({ vw: input.probeW, vh: input.probeH });
+  const lo = Math.min(input.screenW, input.screenH);
+  const hi = Math.max(input.screenW, input.screenH);
+  if (input.coarse && lo > 0 && lo <= 600) {
+    candidates.push(input.portrait ? { vw: lo, vh: hi } : { vw: hi, vh: lo });
+  }
+  return candidates.reduce((a, b) => ({ vw: Math.max(a.vw, b.vw), vh: Math.max(a.vh, b.vh) }));
+}
+
 export interface StageBoxInput {
-  /** The window's size in CSS px (the large viewport -- see `Stage`). */
+  /** The window's size in CSS px (see `windowBox`). */
   vw: number;
   vh: number;
   /** Device safe-area insets in CSS px (already probed). */
