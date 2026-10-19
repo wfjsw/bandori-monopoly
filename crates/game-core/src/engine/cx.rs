@@ -897,9 +897,8 @@ impl<'a> Cx<'a> {
                         match base_v {
                             Some(v) => {
                                 // Same floor as any other write: `state_set`
-                                // honours `NEVER_NEGATIVE`. `v` carries the
-                                // item's flags/expiry -- install them first,
-                                // but never let a bare default erase them.
+                                // honours `NEVER_NEGATIVE`. Install the
+                                // pre-overlay item's declaration first.
                                 if v.flags != 0 {
                                     p.state_set_flags(&k, v.flags);
                                 }
@@ -921,12 +920,21 @@ impl<'a> Cx<'a> {
                     // `stay=-1` leak).
                     let mut v = now;
                     v.value = base_v.map(|b| b.value).unwrap_or(0) + (now.value - wrote_v.value);
-                    // `now` may be a bare default (key absent) -- do not let
-                    // its zero flags erase the floor before `state_set`.
-                    if v.flags != 0 {
-                        p.state_set_flags(&k, v.flags);
+                    // `now` may be a bare default (the routine removed the
+                    // key). Rebuild the declaration from the pre-overlay item
+                    // so `state_set` still applies `NEVER_NEGATIVE` -- without
+                    // it the reconstruction `base - wrote` can land at -1 (the
+                    // fuzz's `stay=-1`).
+                    let flags = if v.flags != 0 {
+                        v.flags
+                    } else {
+                        base_v.map(|b| b.flags).unwrap_or(0)
+                    };
+                    let expires = v.expires.or_else(|| base_v.and_then(|b| b.expires));
+                    if flags != 0 {
+                        p.state_set_flags(&k, flags);
                     }
-                    if let Some(exp) = v.expires {
+                    if let Some(exp) = expires {
                         p.state_set_expires(&k, Some(exp));
                     }
                     p.state_set(&k, v.value);
