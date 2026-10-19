@@ -44,7 +44,7 @@ use crate::deck;
 pub const DECK_BOOK_VERSION: u32 = 1;
 
 /// The policy a book may be tuned for -- the standard bot / 托管 deck pick,
-/// `BotMentality::Standard.as_str()`. Chaos stays `deck::random` and never
+/// `BotMentality::Standard.as_str()`. Chaos remains `deck::random` and never
 /// reads the book.
 pub const POLICY_STANDARD: &str = "standard";
 
@@ -257,7 +257,7 @@ fn first_valid<'e>(
 
 /// The deck a standard bot (or the browser 托管) submits for this public table:
 /// [`DeckBook::lookup`], else the designer's [`deck::preset`]. Pure -- no RNG.
-/// Chaos never calls this; it stays `deck::random`.
+/// Chaos never calls this; it remains `deck::random`.
 pub fn suggest(
     data: &GameData,
     me: &PersonaData,

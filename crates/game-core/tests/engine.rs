@@ -196,7 +196,7 @@ fn solo_preset_personas_skip_the_pick_phase() {
     assert_ne!(m.save(), other.save(), "the seed still decides the seating");
 }
 
-/// Without presets the pick phase stays: solo's test harness (and old saves)
+/// Without presets the pick phase remains: solo's test harness (and old saves)
 /// still drive it, and `quick_start` still skips it.
 #[test]
 fn solo_without_presets_still_picks() {

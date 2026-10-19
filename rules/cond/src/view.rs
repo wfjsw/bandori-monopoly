@@ -86,10 +86,18 @@ pub trait CondView {
     fn owner_hand(&self) -> i64;
     fn owner_pos(&self) -> i64;
     fn owner_out(&self) -> i64;
-    fn owner_stay(&self) -> i64;
-    fn owner_stun(&self) -> i64;
-    fn owner_exile(&self) -> i64;
-    fn owner_no_hand(&self) -> i64;
+    fn owner_stay(&self) -> i64 {
+        self.state(self.owner(), "stay")
+    }
+    fn owner_stun(&self) -> i64 {
+        self.state(self.owner(), "stun")
+    }
+    fn owner_exile(&self) -> i64 {
+        self.state(self.owner(), "exile")
+    }
+    fn owner_no_hand(&self) -> i64 {
+        self.state(self.owner(), "noHand")
+    }
     fn owner_persona(&self) -> i64;
     fn owner_group(&self) -> i64;
     fn owner_tiles(&self) -> i64;
@@ -118,10 +126,22 @@ pub trait CondView {
     fn hand(&self, seat: i64) -> i64;
     fn pos(&self, seat: i64) -> i64;
     fn out(&self, seat: i64) -> i64;
-    fn stay(&self, seat: i64) -> i64;
-    fn stun(&self, seat: i64) -> i64;
-    fn exile(&self, seat: i64) -> i64;
-    fn no_hand(&self, seat: i64) -> i64;
+    fn stay(&self, seat: i64) -> i64 {
+        self.state(seat, "stay")
+    }
+    fn stun(&self, seat: i64) -> i64 {
+        self.state(seat, "stun")
+    }
+    fn exile(&self, seat: i64) -> i64 {
+        self.state(seat, "exile")
+    }
+    fn no_hand(&self, seat: i64) -> i64 {
+        self.state(seat, "noHand")
+    }
+    /// In the game and standing on a board square (`!out && !exiled`).
+    fn present(&self, seat: i64) -> bool {
+        self.out(seat) == 0 && self.exile(seat) == 0
+    }
     /// The seat's player-state value for `key` (`state(p, 'key')` /
     /// `MatchPlayer.state`). Missing = 0.
     fn state(&self, seat: i64, key: &str) -> i64;

@@ -69,18 +69,27 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         ),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
-        // TODO(规则书): 「不能被[指定]」 and the on-board clause are still
-        // engine-side (`MatchPlayer::status_gates`), pending Untargetable /
-        // on-board gate kinds.
         On::FilterFlag(
             &[FilterKind::ActGate, FilterKind::PayGate, FilterKind::MoveGate],
             EXILED,
             None,
             refuse,
         ),
+        // 「玩家棋子不失为存在于任何格子上」 + 「不能被[指定]」 -- the on-board
+        // and targetable gates, **CEL-only**, same shape as the three above.
+        On::FilterFlag(
+            &[FilterKind::OnBoardGate, FilterKind::TargetableGate],
+            EXILED,
+            None,
+            refuse,
+        ),
     ],
 )
-    .board_role("status");
+    .board_role("status")
+    // Play refusal when the piece is off board (`cannot_play` checks OnBoard
+    // first). The turn is auto-skipped by `on_turn_start_before`'s own
+    // `log.exiled_skip` / `log.exiled_skip_hold` lines, not by `gate_refusal_msg`.
+    .gate_msgs(&[(FilterKind::OnBoardGate.as_i32(), "err.play_exiled")]);
 
 /// The condition under which [除外] closes the act, pay and move gates.
 pub const EXILED: &str = "state(actor,'exile') > 0";

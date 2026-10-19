@@ -15,7 +15,7 @@
 //! `trigger::set_cancelled`. 「使用角色/团技能的[主]效果或使用手牌的[手]效果」
 //! is the `card` chain for a hand play and `skillUsed` for a skill press.
 
-use card_sdk::abi::{prop, state_key, ChainKind, ActionKind, MarkFilter};
+use bandori_std::state_key; use card_sdk::abi::{prop, ChainKind, ActionKind, MarkFilter};
 use bandori_std::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 

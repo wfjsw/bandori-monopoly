@@ -290,7 +290,7 @@ fn cand_key(cards: &[String]) -> Vec<String> {
 /// * **drop:i** -- remove preset card *i* and refill from the pool with *i*
 ///   excluded (a plain `deck::fill` would just put *i* back).
 /// * **add:j** -- add pool card *j* not in the preset, cutting the preset's
-///   last card in pool order to stay at 10.
+///   last card in pool order to remain at 10.
 fn candidates(data: &GameData, c: &PersonaData) -> Vec<Cand> {
     let pool: Vec<String> = deck::pool(data, c).into_iter().map(|k| k.id.clone()).collect();
     let preset = deck::preset(data, c);
@@ -620,7 +620,7 @@ fn play_one_seed(
     chars.extend(opps);
     // All seats start non-bot so nothing auto-submits a deck; each is handed
     // its list explicitly, then `member_left` hands it to the engine (the same
-    // path a disconnected human takes). Mentality stays Standard.
+    // path a disconnected human takes). Mentality remains Standard.
     let members: Vec<RoomMember> = chars
         .iter()
         .enumerate()

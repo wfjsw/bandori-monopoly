@@ -1817,6 +1817,7 @@ dependencies = [
 name = "rules-spec"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "game-core",
  "game-rules",
  "serde_json",

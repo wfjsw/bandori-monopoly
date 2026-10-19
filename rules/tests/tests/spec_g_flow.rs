@@ -622,13 +622,13 @@ fn turn_phases_and_immediate_next_turn() {
 fn turn_start_removes_one_exile_layer() {
     let mut t = Table::vanilla(3);
     t.observe(CLAUSES);
-    t.set_state(1, key::EXILE, 2);
+    t.set_state(1, bandori_std::state_key::EXILE, 2);
     // [停留] on P0 skips its main move (sets skip_move at turn start), so
     // `end` is legal and P1's turn begins.
-    t.set_state(0, key::STAY, 1);
+    t.set_state(0, bandori_std::state_key::STAY, 1);
     t.begin_turn(0);
     t.end(0).expect("end with [停留]");
-    assert_eq!(t.state(1, key::EXILE), 1, "[除外] 2 -> 1 at 回合开始前");
+    assert_eq!(t.state(1, bandori_std::state_key::EXILE), 1, "[除外] 2 -> 1 at 回合开始前");
     let keys = t.recent_keys(30);
     assert!(
         keys.iter().any(|k| k == "log.exiled_skip"),
@@ -640,11 +640,11 @@ fn turn_start_removes_one_exile_layer() {
 fn turn_start_last_exile_layer_clears() {
     let mut t = Table::vanilla(3);
     t.observe(CLAUSES);
-    t.set_state(1, key::EXILE, 1);
-    t.set_state(0, key::STAY, 1);
+    t.set_state(1, bandori_std::state_key::EXILE, 1);
+    t.set_state(0, bandori_std::state_key::STAY, 1);
     t.begin_turn(0);
     t.end(0).expect("end");
-    assert_eq!(t.state(1, key::EXILE), 0, "[除外] 1 -> 0 at 回合开始前");
+    assert_eq!(t.state(1, bandori_std::state_key::EXILE), 0, "[除外] 1 -> 0 at 回合开始前");
 }
 
 /// G-FLOW-08 -- 结束阶段 removes one [晕眩] / [停留] layer.
@@ -655,20 +655,20 @@ fn turn_end_removes_one_stay_and_stun_layer() {
     let mut t = Table::vanilla(3);
     t.observe(CLAUSES);
     // Arm *before* the turn boundary so G-FLOW-08 sees the end-of-turn tick.
-    t.set_state(0, key::STAY, 2);
-    t.set_state(0, key::STUN, 2);
+    t.set_state(0, bandori_std::state_key::STAY, 2);
+    t.set_state(0, bandori_std::state_key::STUN, 2);
     // A stunned player's turn auto-skips to end and decays there. Drive it
     // through an observed act (`end` of the previous seat, or `begin_turn`
     // then an observed no-op is unavailable -- use `end` of P0 after stay).
     // P0 is stunned: its own turn start skips to end. Get there via P2 ending.
-    t.set_state(2, key::STAY, 1);
+    t.set_state(2, bandori_std::state_key::STAY, 1);
     t.begin_turn(2);
     t.observe(CLAUSES);
     t.end(2).expect("end P2");
     // P0's turn began and (being stunned) auto-skipped to its end, decaying
     // one of each. The window above is P2's end -> P0's skip -> P1's turn.
-    assert_eq!(t.state(0, key::STUN), 1, "[晕眩] 2 -> 1 at turn end");
-    assert_eq!(t.state(0, key::STAY), 1, "[停留] 2 -> 1 at turn end");
+    assert_eq!(t.state(0, bandori_std::state_key::STUN), 1, "[晕眩] 2 -> 1 at turn end");
+    assert_eq!(t.state(0, bandori_std::state_key::STAY), 1, "[停留] 2 -> 1 at turn end");
 }
 
 /// G-FLOW-09 -- 晕眩 skips 运营 and the main move.
@@ -678,7 +678,7 @@ fn turn_end_removes_one_stay_and_stun_layer() {
 fn stun_skips_ops_and_main_move() {
     let mut t = Table::vanilla(3);
     t.observe(CLAUSES);
-    t.set_state(0, key::STUN, 1);
+    t.set_state(0, bandori_std::state_key::STUN, 1);
     let mark = t.mark();
     t.begin_turn(0);
     let keys = t.keys_since(mark);
@@ -699,7 +699,7 @@ fn stun_skips_ops_and_main_move() {
 fn stay_skips_main_move_but_not_ops() {
     let mut t = Table::vanilla(3);
     t.observe(CLAUSES);
-    t.set_state(0, key::STAY, 1);
+    t.set_state(0, bandori_std::state_key::STAY, 1);
     t.begin_turn(0);
     assert_eq!(t.step(), stage::OPS, "[停留] does not skip 运营");
     assert!(t.st().skip_move, "skip_move latch for [停留]");

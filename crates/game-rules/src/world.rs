@@ -390,9 +390,10 @@ pub trait CardWorld: Clone + 'static {
     fn set_build_discount(&mut self, _n: i32, _layers: i32) {}
     /// 「加盖房屋时半价」 -- 100 = full, 50 = half, 0 = free.
     fn set_build_cost_pct(&mut self, _pct: i32) {}
-    /// The four status values a turn-end undo restores.
-    fn turn_snap(&self, _player_id: i32) -> (i32, i32, i32, i32) {
-        (-1, 0, 0, 0)
+    /// The turn-start snapshot: starting square plus the whole keyed state
+    /// map. The guest picks which keys to restore.
+    fn turn_snap(&self, _player_id: i32) -> (i32, std::collections::BTreeMap<String, i32>) {
+        (-1, Default::default())
     }
     /// Colour group (`TileData::group`; -1 for no tile).
     fn tile_group(&self, tile: i32) -> i32;
@@ -813,6 +814,14 @@ pub trait CardWorld: Clone + 'static {
     /// this, not the other way round.
     fn state_var(&self, player_id: i32, key: &str) -> game_core::state::StateVar;
     fn state_get(&self, player_id: i32, key: &str) -> i32;
+    /// Every `(key, value)` on this seat. Used to build a gate window without
+    /// naming keys.
+    fn state_pairs(&self, _player_id: i32) -> Vec<(String, i32)> {
+        Vec::new()
+    }
+    /// Declare the generic state-flag bits for a key (see
+    /// [`game_core::state::state_flag`]).
+    fn state_set_flags(&mut self, player_id: i32, key: &str, flags: u8);
     /// The bound a consumer may enforce. 0 when none has been mandated.
     fn state_min(&self, player_id: i32, key: &str) -> i32;
     fn state_max(&self, player_id: i32, key: &str) -> i32;
@@ -944,13 +953,14 @@ pub trait CardWorld: Clone + 'static {
     /// Dumb add of `n` to a named counter; returns how many landed. The name is
     /// data. Cap / partial-gain policy lives in the rules-layer kernel.
     fn gain_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32;
-    /// Layered abnormal status write (wire kind id: 1 = stay, 2 = stun,
-    /// 3 = exile). The name is data; `to` is the kind-specific payload
-    /// (`-1` = none, carried for the exile return destination).
+    /// Legacy layered write (kind id → key). Prefer the split form:
+    /// `gate` + `state_add` + [`Self::raise_after`].
     fn apply_abnormal(&mut self, player_id: i32, kind: i32, n: i32, to: i32);
+    /// Queue a post-commit raise whose wire event name is caller-supplied
+    /// data (the ruleset owns the vocabulary).
+    fn raise_after(&mut self, _player_id: i32, _name: &str, _value: i32) {}
     /// Set this turn's main-move latch (`locked != 0` skips; `0` releases).
-    /// Turn-flow, not status policy -- `status:stay` drives it. exile is not
-    /// part of the latch (closeout-2 ruling).
+    /// Turn-flow, not status policy -- the move-gate host drives it.
     fn skip_main_move(&mut self, player_id: i32, locked: i32);
     /// [`Self::skip_main_move`] with `locked = 0`.
     fn clear_move_skip(&mut self, player_id: i32) {
@@ -967,7 +977,7 @@ pub trait CardWorld: Clone + 'static {
     /// Like [`Self::log`], but the event carries `kind` (e.g. `"status"`)
     /// instead of the default `"text"`.
     fn log_as(&mut self, player_id: i32, kind: &str, msg: Msg);
-    /// May this player act at all? Not out, not stunned, not exiled.
+    /// May this player act at all? Not out, with the act and on-board gates open.
     fn can_pay(&self, player_id: i32) -> i32;
     /// May this player still take the main move? 0 = available, 1 = not your
     /// turn, 2 = already moved, 3 = cannot move this turn.

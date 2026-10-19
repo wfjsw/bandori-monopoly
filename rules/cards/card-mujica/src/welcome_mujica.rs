@@ -9,7 +9,7 @@
 //!
 //! toggle one player's skill state; as [反击], re-toggle everyone who switched.
 
-use card_sdk::abi::state_key;
+use bandori_std::state_key;
 use card_sdk::abi::ChainKind;
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};

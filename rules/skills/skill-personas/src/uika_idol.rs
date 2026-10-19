@@ -10,7 +10,7 @@
 //! pay is `X*30` where X is how many steps were left *after* passing it. The
 //! mark is spent when it pays out.
 
-use card_sdk::abi::{state_key, ActionKind, MarkFilter};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind, MarkFilter};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

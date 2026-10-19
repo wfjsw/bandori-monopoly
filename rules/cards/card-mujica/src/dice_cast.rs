@@ -6,7 +6,7 @@
 //!
 //! that places itself and locks other players out of hand [反击]s this turn.
 
-use card_sdk::abi::state_key;
+use bandori_std::state_key;
 use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};

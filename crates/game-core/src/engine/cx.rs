@@ -36,7 +36,7 @@ pub enum HaltKind {
     /// this call returns. The caller's continuation is on
     /// [`Cx::work_stack`](super::work::WorkItem); the outermost
     /// [`Cx::drain_work`] pump runs the nested work then the resume.
-    /// STACK-01: this is how the settle cycle stays on the heap, not the Rust stack.
+    /// STACK-01: this is how the settle cycle remains on the heap, not the Rust stack.
     Suspended,
 }
 
@@ -78,7 +78,7 @@ pub struct Ask {
     /// (ordinary prompts under the post-settings clock) or runs on its own
     /// fixed window (`view.time_left`, e.g. the bankruptcy leftover auction --
     /// see [`crate::clock::ClockSettings::bankrupt_auction_time`]). Serde
-    /// default `true` so an `Ask` written before this field stays ordinary.
+    /// default `true` so an `Ask` written before this field remains ordinary.
     #[serde(default = "default_use_pool")]
     pub use_pool: bool,
 }
@@ -359,7 +359,7 @@ pub fn heuristic_answer_with(
 
 /// One-shot the auction's bid loop: each seat still in raises the minimum once
 /// (the standard bot's `min + 100` middle of its `+0..=+200` nudge) while that
-/// stays under its ceiling, and passes otherwise. The last bidder wins at the
+/// remains under its ceiling, and passes otherwise. The last bidder wins at the
 /// bid it made -- the shape `auction_tile` reads (`r.a.bidder` / `r.a.bid`).
 fn heuristic_auction(
     ask: &Ask,
@@ -431,7 +431,7 @@ pub struct Cx<'a> {
     pub(crate) move_start: i32,
     /// How deep the move pipeline (`walk_inner` / `teleport_as`) is nested.
     /// A `passTile` (or other) hook that calls `ctx::teleport_to` re-enters
-    /// `card_teleport`; at depth > 0 that stays a bare position write (no
+    /// `card_teleport`; at depth > 0 that remains a bare position write (no
     /// second move tail) so the hook cannot recurse. Transient (not serialized).
     pub(crate) move_depth: u32,
     /// Guest state writes overlaid on the live world for a host routine's
@@ -544,7 +544,7 @@ impl PlayMemo {
 /// the top of the body.
 ///
 /// This is the merged view for 「…时」 a status the guest just cleared (e.g.
-/// 壱雫空 zeroing stun and then paying) must be visible to `can_pay` without
+/// 壱雫空 zeroing a layer and then paying) must be visible to `can_pay` without
 /// the clear landing twice -- the body replays from the top, so a *persisted*
 /// clear would be re-applied on top of itself and an additive write would
 /// double-count. Only decreases cross; see [`Cx::overlay_guest_state`].
@@ -807,16 +807,16 @@ impl<'a> Cx<'a> {
     ///
     /// Called at the `NeedHost` boundary: the routine (`pay` / `gain` / `move` /
     /// ...) runs against the live world, so a status the guest just **cleared**
-    /// (e.g. 壱雫空 zeroing stun and then paying) has to be visible to
+    /// (e.g. 壱雫空 zeroing a layer and then paying) has to be visible to
     /// `can_pay` -- without being *persisted*, because the body replays from
     /// the top and would re-apply the write (double-counting an additive one).
     /// [`Self::restore_guests_to`] drops it again, keeping only the routine's
     /// own effects; the replay then re-applies the guest writes.
     ///
     /// Only **decreases** cross (「清除」). A status the body itself just
-    /// *applied* (心の雨's fallback the stun grant then `gain 1000`) must not gate
+    /// *applied* (心の雨's fallback the layer grant then `gain 1000`) must not gate
     /// its own follow-on money -- 「无法收付款」 blocking a card's own gain to a
-    /// player it just stunned is an open ruling, and the pre-overlay behaviour
+    /// player it just gated is an open ruling, and the pre-overlay behaviour
     /// stands until it is decided. Money is not overlaid at all: a `gain_fixed`
     /// is re-applied on the replay and the pipeline's own moves are routine
     /// effects, not guest writes.
@@ -1269,24 +1269,23 @@ impl<'a> Cx<'a> {
         !s.out() && self.w.gate_open(self.rules, super::Gate::Pay, i)
     }
 
-    /// `Blocked(i)` -- why a player can't move money.
-    pub(crate) fn blocked(&self, i: usize) -> &'static str {
-        let s = &self.w.st.players[i];
-        // The status hosts' clause: exile names the stronger refusal.
-        if !s.status_gates().on_board {
-            "status.exiled"
+    /// `Blocked(i)` -- why a player can't move money. The message is the
+    /// ruleset's (its gate-refusal key for whichever capability is closed).
+    pub(crate) fn blocked(&self, i: usize) -> crate::msg::Msg {
+        if !self.w.gate_open(self.rules, super::Gate::OnBoard, i) {
+            self.rules.gate_refusal_msg(super::Gate::OnBoard, i)
         } else {
-            "status.stunned"
+            self.rules.gate_refusal_msg(super::Gate::Pay, i)
         }
     }
 
     /// Players starting at `from`, wrapping, that are in the game and on board
-    /// (the status hosts' on-board gate).
+    /// (the ruleset's on-board gate).
     pub fn present_from(&self, from: usize) -> Vec<usize> {
         let n = self.w.player_count();
         (0..n)
             .map(|k| (from + k) % n)
-            .filter(|&i| !self.out(i) && self.w.st.players[i].status_gates().on_board)
+            .filter(|&i| !self.out(i) && self.w.gate_open(self.rules, super::Gate::OnBoard, i))
             .collect()
     }
 }

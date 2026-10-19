@@ -10,7 +10,7 @@ import { cx } from "../core/cx";
 import { useEventListener } from "../hooks/dom";
 import { clearForced, isForced, subscribeForced, usePortraitPhone } from "./rotation";
 import { STAGE_H, STAGE_W } from "../styles/layout";
-import { type StageBox, stageBox } from "./stageBox";
+import { type Insets, type StageBox, stageBox } from "./stageBox";
 import { setStageRotated, setStageScale } from "./stageScale";
 import s from "./Stage.module.css";
 
@@ -45,13 +45,89 @@ function forcedCompact(): boolean | null {
   return q === null ? null : q !== "0";
 }
 
+/**
+ * The *large* viewport: the window with the browser chrome hidden, which under
+ * `viewport-fit=cover` is the whole screen including the strip the cutout sits
+ * in. Not the visual viewport -- that one is shorter in portrait (Safari's
+ * address bar, and the iOS PWA's status-bar strip) than in landscape, so sizing
+ * to it laid forced rotation out on a different canvas than a real turn of the
+ * phone and left the notch band empty there. Read off a `100lvw` / `100lvh`
+ * probe; those units are the large viewport by definition.
+ */
+function largeViewport(): { vw: number; vh: number } {
+  let el = lvProbe;
+  if (!el) {
+    el = document.createElement("div");
+    el.style.cssText = "position:fixed;top:0;left:0;width:100lvw;height:100lvh;visibility:hidden;pointer-events:none";
+    document.body.appendChild(el);
+    lvProbe = el;
+  }
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 ? { vw: r.width, vh: r.height } : { vw: window.innerWidth, vh: window.innerHeight };
+}
+let lvProbe: HTMLElement | null = null;
+
+/**
+ * The device's safe-area insets on all four sides, read off a probe element.
+ * `env(safe-area-inset-*)` is only available to CSS, so a hidden fixed div
+ * with the values in its padding forces a sync layout that reports them.
+ * The values can resolve late on a PWA cold start and go stale across a
+ * rotation, so re-probe on the events below rather than trusting one read.
+ */
+function useSafeInsets(): Insets {
+  const read = (): Insets => {
+    const probe = document.createElement("div");
+    probe.style.cssText =
+      "position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const r = {
+      top: parseFloat(cs.paddingTop) || 0,
+      right: parseFloat(cs.paddingRight) || 0,
+      bottom: parseFloat(cs.paddingBottom) || 0,
+      left: parseFloat(cs.paddingLeft) || 0,
+    };
+    probe.remove();
+    return r;
+  };
+  const [v, set] = useState<Insets>(read);
+  useEffect(() => {
+    // Functional update so the comparison never closes over a stale value.
+    const probe = () => {
+      const n = read();
+      set((prev) => (prev.top === n.top && prev.right === n.right && prev.bottom === n.bottom && prev.left === n.left ? prev : n));
+    };
+    // iOS reports stale geometry through intermediate resize events while
+    // turning, and iOS 17+ takes 500ms+ to settle; sample past both.
+    const orientation = () => {
+      window.setTimeout(probe, 300);
+      window.setTimeout(probe, 800);
+    };
+    // `env()` can resolve late on a PWA cold start without ever firing resize.
+    const cold = [100, 500, 1000].map((ms) => window.setTimeout(probe, ms));
+    const visible = () => {
+      if (document.visibilityState === "visible") probe();
+    };
+    window.addEventListener("resize", probe);
+    window.addEventListener("orientationchange", orientation);
+    window.addEventListener("pageshow", probe);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("resize", probe);
+      window.removeEventListener("orientationchange", orientation);
+      window.removeEventListener("pageshow", probe);
+      document.removeEventListener("visibilitychange", visible);
+      cold.forEach((id) => clearTimeout(id));
+    };
+  }, []);
+  return v;
+}
+
 function useStage(tall: boolean): StageBox {
-  // Size against the *visual* viewport where there is one: on a phone the
-  // layout viewport (innerWidth / innerHeight) and what is on screen differ
-  // while the address bar or keyboard is showing.
-  // While a text field is focused the on-screen keyboard shrinks the visual
-  // viewport; rescaling the stage to the sliver left would shrink everything,
-  // so hold the height from before the keyboard came up (width unchanged).
+  // Size against the large viewport (see `largeViewport`): the full screen in
+  // both orientations, so forced rotation and a real turn of the phone agree.
+  // While a text field is focused the on-screen keyboard can still shrink the
+  // layout on some browsers; hold the height from before it came up.
   const open = useRef<{ vw: number; vh: number } | null>(null);
   const measure = () => {
     const vv = window.visualViewport;
@@ -59,7 +135,7 @@ function useStage(tall: boolean): StageBox {
     // then the magnified sliver, and sizing the stage to it blanks the page.
     // Hold the unzoomed size until the zoom is back at 1.
     if (vv && Math.abs(vv.scale - 1) > 0.01 && open.current) return open.current;
-    const cur = { vw: vv?.width ?? window.innerWidth, vh: vv?.height ?? window.innerHeight };
+    const cur = largeViewport();
     const a = document.activeElement;
     const editing = a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement;
     const prev = open.current;
@@ -72,6 +148,10 @@ function useStage(tall: boolean): StageBox {
   useEventListener(() => window.visualViewport, "resize", () => set(measure()));
   useEventListener(() => window.visualViewport, "scroll", () => set(measure()));
   useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
+  // Keep the controls clear of the notch / home indicator. The insets just
+  // trade sides under `rotate(90deg)` (see `stageBox`), so forced rotation
+  // protects the same stage edge a real turn does.
+  const inset = useSafeInsets();
   // A phone held upright, once the user asked for it: lay the stage out on the swapped (landscape) window
   // and turn it a quarter clockwise.
   const forced = useSyncExternalStore(subscribeForced, isForced);
@@ -83,6 +163,7 @@ function useStage(tall: boolean): StageBox {
   const box = stageBox({
     vw: win.vw,
     vh: win.vh,
+    inset,
     rotated,
     tall,
     coarse: window.matchMedia("(pointer: coarse)").matches,
@@ -181,7 +262,7 @@ function Backdrop({ src, snap }: { src: string; snap: boolean }) {
 
 export function Stage({ children, transitioning }: { children: ReactNode; transitioning: boolean }) {
   const tall = useStageFillValue();
-  const { scale, w, h, compact, rotated } = useStage(tall);
+  const { scale, w, h, safe, compact, rotated } = useStage(tall);
   setStageRotated(rotated);
   setStageScale(scale);
   useEffect(() => {
@@ -197,9 +278,15 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
   // `zoom`. `zoom` scales used length values, so the engine rasterizes glyphs
   // at the final device size instead of texture-scaling a design-sized layer
   // (the source of the softness).
+  //
+  // `--safe-*`: hardware on each stage edge, in design px (see `stageBox`).
+  // The stage's edges ARE the real screen edges, so a retractable strip
+  // anchored there runs to the border on purpose; controls pad by these
+  // instead of sitting under the notch / home indicator.
   return (
     <>
       <Backdrop src={src} snap={transitioning} />
+      <div className={s.statusScrim} aria-hidden />
       <div
         className={s.placer}
         style={{
@@ -208,7 +295,19 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
           transform: `translate(-50%, -50%)${rotated ? " rotate(90deg)" : ""}`,
         }}
       >
-        <div className={s.stage} data-stage style={{ width: w, height: tall ? h : STAGE_H, zoom: scale }}>
+        <div
+          className={s.stage}
+          data-stage
+          style={{
+            width: w,
+            height: tall ? h : STAGE_H,
+            zoom: scale,
+            ["--safe-top" as string]: `${safe.top}px`,
+            ["--safe-right" as string]: `${safe.right}px`,
+            ["--safe-bottom" as string]: `${safe.bottom}px`,
+            ["--safe-left" as string]: `${safe.left}px`,
+          }}
+        >
           {children}
         </div>
       </div>

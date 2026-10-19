@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use alloc::string::String;
-use card_sdk::abi::{prop, state_key};
+use bandori_std::state_key; use card_sdk::abi::prop;
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 

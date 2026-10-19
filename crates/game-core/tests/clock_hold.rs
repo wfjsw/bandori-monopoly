@@ -97,7 +97,7 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     assert!(st.clock_paused, "a human turn arms the hold");
     // Default settings refill bonus to 10 at turn start and drain **bonus
     // first**, so pin the combined pool (`time_left`) rather than raw
-    // `base_time` -- base stays at 15 until the bonus is gone.
+    // `base_time` -- base remains at 15 until the bonus is gone.
     assert!(
         st.bonus_time > 0.0,
         "turn start refills bonus (got {})",

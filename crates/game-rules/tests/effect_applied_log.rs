@@ -190,7 +190,6 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::BuildAfter,
         TriggerKind::Mortgage,
         TriggerKind::CounterChanged,
-        TriggerKind(21) /* exile */,
         TriggerKind::Abnormal,
         TriggerKind::Effect,
         TriggerKind::Card,
@@ -207,9 +206,10 @@ fn every_listened_trigger_kind_has_a_real_why() {
         );
         assert!(!why.key().is_empty(), "{k:?} why must not be blank");
     }
-    // Ruleset-declared custom ids (26/73/74/75/78) carry no engine-named why
-    // phrase -- they fall through to the generic fallback by design.
-    for k in [26, 73, 74, 75, 78] {
+    // Ruleset-declared custom ids (21 / 26 / 73 / 74 / 75 / 78) carry no
+    // engine-named why phrase -- they fall through to the generic fallback by
+    // design. The ruleset supplies its own Msg when it raises them.
+    for k in [21, 26, 73, 74, 75, 78] {
         let t = Trigger::new(TriggerKind(k), 0);
         let why = trigger_reason(&t);
         assert_eq!(why.key(), "log.why.generic", "custom id {k} uses generic why");

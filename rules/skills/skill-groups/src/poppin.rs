@@ -12,7 +12,7 @@
 //! 「星星贴纸」 is a player counter; 「为此卡添加1个[奇迹水晶]」 is a band-card
 //! crystal. （3） is the hill's ownership shared across the band.
 
-use card_sdk::abi::{counter, state_key, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{counter, ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

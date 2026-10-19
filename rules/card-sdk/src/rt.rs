@@ -90,6 +90,17 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .collect(),
             board_role: String::from(c.board_role),
             governs: c.governs.iter().map(|k| String::from(*k)).collect(),
+            gate_msgs: c
+                .gate_msgs
+                .iter()
+                .map(|(g, k)| (*g, String::from(*k)))
+                .collect(),
+            exemption_prop: String::from(c.exemption_prop),
+            gate_skip_msgs: c
+                .gate_skip_msgs
+                .iter()
+                .map(|(g, k)| (*g, String::from(*k)))
+                .collect(),
         })
         .collect();
     leak(postcard::to_allocvec(&entries).unwrap_or_default())
@@ -176,7 +187,7 @@ pub fn on(
 ) -> i64 {
     // Call boundary: every guest buffer this entry hands the host is interned
     // in a **per-call native frame**. Nested `call_entry`s push their own frame
-    // so the parent's out-buffers stay valid after the child returns (the old
+    // so the parent's out-buffers remain valid after the child returns (the old
     // flat `clear()` emptied `buy_quotes` mid-call). The `Frame` guard pops on
     // exit or unwind (`C-unwind` runs `Drop`).
     #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
@@ -601,7 +612,7 @@ const PAGE: usize = 64 * 1024;
 
 /// Bump cursor: the absolute address of the next free byte. `0` means "not
 /// started yet" -- the first allocation latches [`__heap_base`]. Nothing in
-/// the guest reads this for control flow, so it stays deterministic.
+/// the guest reads this for control flow, so it remains deterministic.
 #[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 static mut CURSOR: usize = 0;
 

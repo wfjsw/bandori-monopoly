@@ -109,10 +109,11 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「直到下个你的回合开始时，你无法被异常移动」 -- `unstoppable` is
     // exactly that gate, and `expires: TurnStart` is the 「直到下个你的回合
     // 开始时」 half (it wears off at the top of the next turn).
-    ctx::state::add(player_id, card_sdk::abi::state_key::UNSTOPPABLE, 1);
+    ctx::state::add(player_id, bandori_std::state_key::UNSTOPPABLE, 1);
+    bandori_std::status::declare_companion(player_id, bandori_std::state_key::UNSTOPPABLE);
     ctx::state::set_expires(
         player_id,
-        card_sdk::abi::state_key::UNSTOPPABLE,
+        bandori_std::state_key::UNSTOPPABLE,
         card_sdk::ctx::state::TURN_START,
     );
     ctx::log(

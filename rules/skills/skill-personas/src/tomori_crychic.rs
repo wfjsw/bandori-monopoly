@@ -12,7 +12,7 @@
 //! （3） has two halves on one condition: a [停留] now, and a settle at turn end.
 //! The settle is the `settleAtEnd` counter the engine already honours.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

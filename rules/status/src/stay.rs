@@ -55,7 +55,11 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         On::FilterFlag(&[FilterKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
     ],
 )
-    .board_role("status");
+    .board_role("status")
+    // Turn-skip line for the move gate (`play.rs` closed-move skip). Stay
+    // closes no play path, so the play table is empty and the skip table
+    // carries the frozen key.
+    .gate_skip_msgs(&[(FilterKind::MoveGate.as_i32(), "log.stay_skip")]);
 
 /// The state key this host owns (frozen webui wire).
 pub const KEY: &str = "stay";

@@ -49,6 +49,10 @@ pub mod guards;
 pub mod status;
 
 /// State-map keys that name this ruleset's pots / statuses. Frozen webui wire.
+///
+/// Engine-generic keys (hand limit, skill scratch, turn latches) are
+/// re-exported from `card_sdk::abi::state_key` so a card body needs one
+/// import (`use bandori_std::state_key`).
 pub mod state_key {
     /// Fire pots held (火罐).
     pub const CHARGE: &str = "charge";
@@ -70,6 +74,28 @@ pub mod state_key {
     pub const NO_HAND: &str = "noHand";
     /// Layers of "cannot be stopped".
     pub const UNSTOPPABLE: &str = "unstoppable";
+
+    // Engine-generic keys (no game vocabulary): one import for card bodies.
+    pub use card_sdk::abi::state_key::{
+        ABNORMAL_HIT, HAND_LIMIT, NO_COUNTERACT_TURN, NO_HAND_LIMIT, SKILL_STATE, START_HAND,
+    };
+}
+
+/// Generic [`state_flag`] bits this ruleset's writers declare (copied from
+/// `game_core::state::state_flag` so the guest never names engine internals).
+/// The engine stores the `u32` opaquely; these are the meanings it enforces.
+pub mod state_flag {
+    /// Status-like counter: `state::add` floors at 0 (「清除」).
+    pub const NEVER_NEGATIVE: u32 = 1;
+    /// Engine-owned key (turn rules / status gates), not a card's scratch.
+    pub const ENGINE_OWNED: u32 = 2;
+}
+
+/// Card static-prop keys this ruleset owns (frozen engine queries as data).
+pub mod prop {
+    /// 「（此卡可在眩晕时打出）」 -- `1` = a play of this card skips the act
+    /// gate (`CardDef::exemption_prop` names this key to the engine).
+    pub const PLAYABLE_STUNNED: &str = "playableStunned";
 }
 
 /// Generic `card_sdk::ctx` plus this ruleset's sugar. Replace
@@ -84,8 +110,20 @@ pub mod ctx {
         charge, charge_max, gain_charge, in_group, invoke_skill, is_agent, is_buyable, is_start,
         is_color, is_venue, is_live_house_for, is_deed, is_shop, offer_build, offer_buy,
         offer_force_buy, pay_rent, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked,
-        spend_charge,
+        spend_charge, turn_snap,
     };
+}
+
+/// Turn-start snapshot of the three layer counters 「回到起始地点并取消所有
+/// 受到的效果」 restores: `(pos, stay, stun, exile)`. Wrapper over the generic
+/// keyed `card_sdk::ctx::turn_snap` with this ruleset's key names.
+pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
+    card_sdk::ctx::turn_snap(
+        player_id,
+        state_key::STAY,
+        state_key::STUN,
+        state_key::EXILE,
+    )
 }
 
 // ------------------------------------------------------------- tile kinds

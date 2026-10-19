@@ -23,7 +23,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{state_key, Flash, ActionKind, MoveKind};
+use bandori_std::state_key; use card_sdk::abi::{Flash, ActionKind, MoveKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

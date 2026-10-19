@@ -27,7 +27,7 @@ pub type Error = wasmi::Error;
 /// this is the trap raised by the imports whose guest wrappers still read a
 /// plain `bool`/`Option` -- `gate`, `target`, `card_move`, the buy/build
 /// routines. Those have nowhere to carry a sentinel without it reading as
-/// `true`/`Some(..)`, and a trap cannot be swallowed, so it stays correct there
+/// `true`/`Some(..)`, and a trap cannot be swallowed, so it remains correct there
 /// until their wrappers are `Result`-shaped too.
 pub fn need_input() -> Error {
     wasmi::Error::i32_exit(card_sdk::abi::EXIT_NEED_INPUT)

@@ -5,7 +5,7 @@
 //! (`MatchState` + own hand + own sorted draw composition + `view_extra` +
 //! the open prompt) -- never a `World`, a match seed, or another seat's
 //! hidden information (`docs/BOT.md` §1). The reply is a proposed
-//! [`NetMessage`]; the server stays authoritative and applies it through the
+//! [`NetMessage`]; the server remains authoritative and applies it through the
 //! ordinary `act` path. Timeout / crash / no service = the server answers
 //! with the engine's own heuristic, so a match never stalls.
 //!

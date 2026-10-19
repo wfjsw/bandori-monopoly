@@ -431,7 +431,12 @@ fn g_settle_12_force_buy_ignores_modifiers_and_pays_a_stunned_owner() {
     t.own(1, &[land]);
     t.set_mortgaged(land, true);
     t.m.world_mut().turn.plan.pay_factor = 0.0; // would zero any scaled payment
-    t.m.world_mut().apply_abnormal(1, 2, 1, -1); // owner cannot normally receive
+    {
+        let w = t.m.world_mut();
+        w.apply_layer(1, bandori_std::state_key::STUN, 1);
+        w.state_set_flags(1, bandori_std::state_key::STUN, 1 | 2);
+        w.state_set_expires(1, bandori_std::state_key::STUN, Some(game_core::state::Tick::TurnEnd));
+    } // owner cannot normally receive
     t.set_money(0, 10_000);
     t.set_money(1, 10_000);
     settle_on(&mut t, 0, land);

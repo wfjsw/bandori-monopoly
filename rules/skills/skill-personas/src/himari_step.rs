@@ -9,7 +9,7 @@
 //! （2） 「仅在单/双数格上进行」 is the move plan's parity filter: the walk
 //! lands only on odd- or even-numbered tiles. `plan::set_parity` is that field.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

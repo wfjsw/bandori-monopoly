@@ -28,10 +28,23 @@ fn with_clauses(t: &mut Table) {
     t.observe(CLAUSES);
 }
 
+/// Declare a layer counter the way the grant verbs do: floor at 0, and
+/// wear off at the tick the book names (规则书 「每回合结束时移除一层」).
+fn arm_layer(t: &mut Table, who: usize, key: &str, layers: i32) {
+    t.set_state(who, key, layers);
+    let p = who as i32;
+    let w = t.m.world_mut();
+    w.state_set_flags(p, key, 1 | 2);
+    // The off-board layer is ticked by its host hook, not by an expiry stamp.
+    if !key.starts_with("exile") {
+        w.state_set_expires(p, key, Some(game_core::state::Tick::TurnEnd));
+    }
+}
+
 /// Put `key` on `who` and re-run their turn start so the skip latch matches a
 /// status already in force when the [主要移动] opens (book: 「处于该状态时」).
 fn arm_status_before_turn(t: &mut Table, who: usize, key: &str, layers: i32) {
-    t.set_state(who, key, layers);
+    arm_layer(t, who, key, layers);
     t.begin_turn(who);
 }
 
@@ -177,9 +190,9 @@ fn status_layers_never_negative() {
     let mut t = Table::vanilla(3);
     with_clauses(&mut t);
     for who in 0..3 {
-        t.set_state(who, "stay", 1);
-        t.set_state(who, "stun", 1);
-        t.set_state(who, "exile", 1);
+        arm_layer(&mut t, who, "stay", 1);
+        arm_layer(&mut t, who, "stun", 1);
+        arm_layer(&mut t, who, "exile", 1);
     }
     t.begin_turn(0);
     finish_turn(&mut t, 0);
@@ -240,7 +253,7 @@ fn stay_stacks_and_decays_one() {
     let mut t = Table::vanilla(3);
     with_clauses(&mut t);
     arm_status_before_turn(&mut t, 0, "stay", 1);
-    t.set_state(0, "stay", 2);
+    arm_layer(&mut t, 0, "stay", 2);
     assert_eq!(t.state(0, "stay"), 2, "G-STATUS-03: layers stack");
     finish_turn(&mut t, 0);
     assert_eq!(t.state(0, "stay"), 1, "G-STATUS-03: one layer off, one left");
@@ -332,7 +345,7 @@ fn stun_decays_one_layer_and_skips_turn() {
     for pre_layers in [1, 2] {
         let mut t = Table::vanilla(3);
         with_clauses(&mut t);
-        t.set_state(1, "stun", pre_layers);
+        arm_layer(&mut t, 1, "stun", pre_layers);
         let pre = t.snapshot_world();
         finish_turn(&mut t, 0);
         let post = t.snapshot_world();
@@ -403,7 +416,7 @@ fn stun_decay_verifier_rejects_mutants() {
 fn stun_forbids_hand_play() {
     let mut t = Table::vanilla(3);
     t.give(0, &["通用:GREAT"]);
-    t.set_state(0, "stun", 1);
+    arm_layer(&mut t, 0, "stun", 1);
     with_clauses(&mut t);
     let r = t.play(0, "通用:GREAT");
     assert!(
@@ -478,7 +491,7 @@ fn exile_decays_one_layer_before_turn_start() {
     for pre_layers in [1, 2, 3] {
         let mut t = Table::vanilla(3);
         with_clauses(&mut t);
-        t.set_state(1, "exile", pre_layers);
+        arm_layer(&mut t, 1, "exile", pre_layers);
         t.set_state(1, "exileTo", -1);
         let pre = t.snapshot_world();
         finish_turn(&mut t, 0);
@@ -500,7 +513,7 @@ fn exile_decays_one_layer_before_turn_start() {
 fn exile_expiry_teleports_to_named_tile() {
     let mut t = Table::vanilla(3);
     let dest = rules_spec::tile("银河拉面馆");
-    t.set_state(1, "exile", 1);
+    arm_layer(&mut t, 1, "exile", 1);
     t.set_state(1, "exileTo", dest as i32);
     with_clauses(&mut t);
     let pre = t.snapshot_world();
@@ -527,7 +540,7 @@ fn exile_expiry_teleports_to_named_tile() {
 #[test]
 fn exile_held_grant_does_not_peel_at_turn_start() {
     let mut t = Table::vanilla(3);
-    t.set_state(1, "exile", 1);
+    arm_layer(&mut t, 1, "exile", 1);
     t.set_state(1, "exileTo", -1);
     t.set_state(1, "exileHold", 1);
     with_clauses(&mut t);
@@ -557,11 +570,11 @@ fn exile_held_grant_does_not_peel_at_turn_start() {
 #[test]
 fn exile_held_grant_clear_on_until_leaves_no_layers() {
     let mut t = Table::vanilla(3);
-    t.set_state(1, "exile", 1);
+    arm_layer(&mut t, 1, "exile", 1);
     t.set_state(1, "exileHold", 1);
     with_clauses(&mut t);
     // The granting effect's `until` clause: `clear`.
-    t.set_state(1, "exile", 0);
+    arm_layer(&mut t, 1, "exile", 0);
     t.set_state(1, "exileHold", 0);
     t.set_state(1, "exileTo", -1);
     finish_turn(&mut t, 0);
@@ -661,7 +674,7 @@ fn exile_return_verifier_rejects_mutants() {
 #[test]
 fn exile_skips_remaining_turns() {
     let mut t = Table::vanilla(3);
-    t.set_state(1, "exile", 2);
+    arm_layer(&mut t, 1, "exile", 2);
     t.set_state(1, "exileTo", -1);
     with_clauses(&mut t);
     finish_turn(&mut t, 0);
@@ -674,7 +687,7 @@ fn exile_skips_remaining_turns() {
 fn exile_forbids_hand_play() {
     let mut t = Table::vanilla(3);
     t.give(0, &["通用:GREAT"]);
-    t.set_state(0, "exile", 1);
+    arm_layer(&mut t, 0, "exile", 1);
     t.set_state(0, "exileTo", -1);
     with_clauses(&mut t);
     let r = t.play(0, "通用:GREAT");
@@ -692,7 +705,7 @@ fn exile_forbids_hand_play() {
 #[test]
 fn stay_skips_main_move() {
     let mut t = Table::vanilla(3);
-    t.set_state(1, "stay", 1);
+    arm_layer(&mut t, 1, "stay", 1);
     with_clauses(&mut t);
     finish_turn(&mut t, 0);
     assert_eq!(t.turn(), 1, "stay skips the move, not the whole turn");
@@ -749,7 +762,7 @@ fn cannot_move_roll_verifier_rejects_mutants() {
 #[test]
 fn unstoppable_ignores_stay() {
     let mut t = Table::vanilla(3);
-    t.set_state(1, "stay", 1);
+    arm_layer(&mut t, 1, "stay", 1);
     t.set_state(1, "unstoppable", 1);
     t.dice(&[5, 5, 5, 5]);
     with_clauses(&mut t);
@@ -825,7 +838,7 @@ fn exile_owner_cannot_receive_rent() {
     t.set_money(0, 50_000);
     t.set_money(1, 0);
     with_clauses(&mut t);
-    t.set_state(1, "exile", 1);
+    arm_layer(&mut t, 1, "exile", 1);
     t.set_state(1, "exileTo", -1);
     t.set_pos(0, tile.saturating_sub(1).max(0));
     t.dice(&[1, 1, 1, 1]);
@@ -857,7 +870,7 @@ fn stun_owner_cannot_receive_rent() {
     t.set_money(0, 50_000);
     t.set_money(1, 0);
     with_clauses(&mut t);
-    t.set_state(1, "stun", 1);
+    arm_layer(&mut t, 1, "stun", 1);
     t.set_pos(0, tile.saturating_sub(1).max(0));
     t.dice(&[1, 1, 1, 1]);
     t.begin_turn(0);
@@ -880,7 +893,7 @@ fn stun_in_force_at_roll_does_not_walk() {
     t.dice(&[5, 5, 5, 5]);
     with_clauses(&mut t);
     let before = t.pos(0);
-    t.set_state(0, "stun", 1);
+    arm_layer(&mut t, 0, "stun", 1);
     let r = t.roll(0);
     if r.is_ok() {
         assert_eq!(

@@ -18,7 +18,7 @@
 //! 消耗减半」 also scopes to the owner's own spending: the pay bend is
 //! `actor == owner`.
 
-use card_sdk::abi::{state_key, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

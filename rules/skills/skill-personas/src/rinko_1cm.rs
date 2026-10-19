@@ -17,7 +17,7 @@
 //! `cannot_play`) refuses every action while stunned; `prop::PLAYABLE_STUNNED`
 //! is the documented exception (the same waiver 壱雫空 carries).
 
-use card_sdk::abi::{prop, state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -29,8 +29,9 @@ pub const RINKO_1CM: CardDef = CardDef::new(
         On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
     ],
 )
-    // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate.
-    .props(&[(prop::PLAYABLE_STUNNED, 1)])
+    // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate
+    // (`bandori_std::prop::PLAYABLE_STUNNED`, the same waiver 壱雫空 carries).
+    .props(&[(bandori_std::prop::PLAYABLE_STUNNED, 1)])
     .silent(&[1]);
 
 /// 「初始3，上限3」.
@@ -76,9 +77,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     }
     // 「固定为X*6」 -- the face is pinned, not rolled.
     ctx::set_fixed_roll(x * 6);
-    // 「本次移动不受异常移动效果影响」 -- `unstoppable` is exactly that gate.
+    // 「本次移动不受异常移动效果影响」 -- the companion layer closes the
+    // stay half of the move gate, and the generic walk-exempt flag cancels
+    // the immobile clamp for this walk.
     state::add(player_id, state_key::UNSTOPPABLE, 1);
+    bandori_std::status::declare_companion(player_id, state_key::UNSTOPPABLE);
     state::set_expires(player_id, state_key::UNSTOPPABLE, ctx::state::TURN_END);
+    state::set(player_id, "moveExempt", 1);
+    state::set_expires(player_id, "moveExempt", ctx::state::TURN_END);
     ctx::log(
         player_id,
         &Msg::new(key!("rinko_1cm_fixed")).i("n", (x * 6) as i64),

@@ -5,7 +5,7 @@
 //! module blocks on a prompt it raises that prompt as an engine `Ask`. The engine
 //! halts the routine, collects the answer, and re-runs it -- which re-runs the
 //! module too, rebuilding the answer list line by line as the prompts come up
-//! again. Dice, events and prompts stay deterministic because the world copy
+//! again. Dice, events and prompts remain deterministic because the world copy
 //! carries the RNG (see the replay note in `host.rs`).
 //!
 //! ```text
@@ -217,9 +217,10 @@ pub struct Run {
     /// instance's own `counter(name)`. One log for every named counter
     /// (ruleset counter keys and any card-declared name).
     counter_log: Vec<(i32, String, String, i32)>,
-    /// Players this run granted exile layers to -- the engine raises `exile`
-    /// for each once the run commits (「任意玩家获得exile…时」 handlers).
+    /// Players this run granted off-board layers to -- the engine raises the caller-supplied name
+    /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
     abnormal_log: Vec<(i32, i32)>,
+    named_raise_log: Vec<(i32, String, i32)>,
     /// Skill-state 1↔2 toggles this run made, `(who, from, to)` -- the engine
     /// raises `state` for each once the run commits (Mujica:欢迎来到ave
     /// mujica的世界 clause (2)). The initial 0→1 / 0→2 write is not a toggle.
@@ -364,7 +365,7 @@ impl Run {
     /// Once-per-flash (v55): the header IS the activation's flash event. A
     /// prompt's routine re-run must not post it a second time -- the identity
     /// lives in `SharedFlash` across `World::clone`, and the re-run adopts the
-    /// live event tail so the first pass's header stays. Reuse it as the
+    /// live event tail so the first pass's header remains. Reuse it as the
     /// parent for the re-run's body lines.
     fn flush_header(&mut self) -> i32 {
         let hkey = self.flash_key("__hdr__");
@@ -527,41 +528,11 @@ impl Run {
         self.post_log("text", who, msg, "");
     }
 
-    /// Outcome line for a rulebook-visible state-key write (hand limit, charge
-    /// pot, stay / stun / exile & friends). Scratch keys (`skill.*` latches,
-    /// slots, counters the player never sees as a clause ficycle) stay silent.
-    /// A write that lands on the same value is not an effect and logs nothing.
-    fn outcome_state(&mut self, who: i32, key: &str, was: i32, now: i32) {
-        if was == now || self.silent_body {
-            return;
-        }
-        let mk = match key {
-            card_sdk::abi::state_key::HAND_LIMIT => "log.outcome.hand_limit",
-            // Named-marker count changes narrate through `gain_marker` /
-            // `spend_marker`; a raw `state::set` on the key is the declare-cap
-            // initial write and stays silent.
-            card_sdk::abi::state_key::STAY
-            | card_sdk::abi::state_key::STUN
-            | card_sdk::abi::state_key::STUN_START
-            | card_sdk::abi::state_key::EXILE
-            | card_sdk::abi::state_key::EXILE_TO
-            | card_sdk::abi::state_key::EXILE_MAIN
-            | card_sdk::abi::state_key::NO_HAND
-            | card_sdk::abi::state_key::UNSTOPPABLE
-            | card_sdk::abi::state_key::START_HAND
-            | card_sdk::abi::state_key::SKILL_STATE => "log.outcome.state",
-            // Scratch: `skill.*` latches, slots, and anything else the
-            // rulebook does not word as a clause ficycle.
-            _ => return,
-        };
-        self.outcome(
-            who,
-            Msg::new(mk)
-                .player_id("who", who)
-                .msg("key", crate::trigger_why::state_key_name(key))
-                .i("value", now as i64)
-                .i("from", was as i64),
-        );
+    /// Outcome line for a state-key write. The engine has no key->phrase map
+    /// and no auto-narration: messages are built by the ruleset (`log_as` /
+    /// `ctx::log` with its own i18n key). A raw `state_set` is silent.
+    fn outcome_state(&mut self, _who: i32, _key: &str, _was: i32, _now: i32) {
+        // Intentionally empty. See `docs/STATUS-HOSTS.md`.
     }
 
     /// Record a real skill-state 1↔2 toggle so the commit point can raise
@@ -1542,6 +1513,12 @@ impl CardWorld for Run {
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
         self.world.state_get(player_id, key)
     }
+    fn state_pairs(&self, player_id: i32) -> Vec<(String, i32)> {
+        self.world.state_pairs(player_id)
+    }
+    fn state_set_flags(&mut self, player_id: i32, key: &str, flags: u8) {
+        self.world.state_set_flags(player_id, key, flags);
+    }
     fn state_min(&self, player_id: i32, key: &str) -> i32 {
         self.world.state_min(player_id, key)
     }
@@ -1643,34 +1620,13 @@ impl CardWorld for Run {
         }
         got
     }
-    fn apply_abnormal(&mut self, player_id: i32, kind: i32, n: i32, to: i32) {
-        if n > 0 {
-            // 「该效果生效时无法重复获得该效果」 (exile) -- a refused
-            // re-acquisition is not a grant: no post-commit raise and no
-            // `outcome.*` line.
-            let already = kind == 3
-                && self.world.state_get(player_id, game_core::state::key::EXILE) > 0;
-            if !already {
-                // 「任意玩家获得[除外]…时」 and the stay / stun landing lines
-                // ride the same post-commit log; the raise fires for every
-                // kind (`kind.as_str()`), and only exile has listeners today.
-                self.abnormal_log.push((player_id, kind));
-                let key = match kind {
-                    1 => "stay",
-                    2 => "stun",
-                    3 => "exile",
-                    _ => "abnormal",
-                };
-                let who = self.trigger.player_id;
-                self.outcome(
-                    who,
-                    Msg::new(format!("log.outcome.{key}"))
-                        .player_id("who", who)
-                        .player_id("target", player_id),
-                );
-            }
-        }
-        self.world.apply_abnormal(player_id, kind, n, to);
+    fn apply_abnormal(&mut self, _player_id: i32, _kind: i32, _n: i32, _to: i32) {
+        // Split verb: `ctx::gate` + `state::add` + `raise_after` with a
+        // caller-supplied name. Kept only so old guests link; new guests use
+        // the split form.
+    }
+    fn raise_after(&mut self, player_id: i32, name: &str, value: i32) {
+        self.named_raise_log.push((player_id, name.to_string(), value));
     }
     fn skip_main_move(&mut self, player_id: i32, locked: i32) {
         self.world.skip_main_move(player_id, locked);
@@ -1746,13 +1702,13 @@ impl CardWorld for Run {
     fn set_build_cost_pct(&mut self, pct: i32) {
         self.world.turn.build_cost_pct = pct.clamp(0, 100);
     }
-    fn turn_snap(&self, player_id: i32) -> (i32, i32, i32, i32) {
+    fn turn_snap(&self, player_id: i32) -> (i32, std::collections::BTreeMap<String, i32>) {
         self.world
             .turn
             .turn_snap
             .get(player_id.max(0) as usize)
-            .map(|s| (s.pos, s.stay, s.stun, s.exile))
-            .unwrap_or((-1, 0, 0, 0))
+            .map(|s| (s.pos, s.state.clone()))
+            .unwrap_or((-1, Default::default()))
     }
     fn tile_group(&self, tile: i32) -> i32 {
         self.data
@@ -2001,11 +1957,12 @@ impl CardWorld for Run {
 
     // status extensions -----------------------------------------------------
     fn can_pay(&self, player_id: i32) -> i32 {
-        // The status hosts' pay gate (not out, not stun, not exile).
+        // Fallback when the ruleset has no pay-gate opinion. The real check
+        // is `hostfns::pay_gate_open` (the ruleset's CEL).
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
             return 0;
         };
-        (!s.out() && s.status_gates().pay) as i32
+        (!s.out()) as i32
     }
     fn cant_move(&self, player_id: i32) -> i32 {
         // Why the main move is still unavailable (0 = free).
@@ -2418,13 +2375,14 @@ impl Run {
         }
     }
 
-    /// In the game and not exiled.
+    /// In the game. Off-board is the ruleset's OnBoard gate (the CEL
+    /// `players_on` also checks it).
     fn present(&self, s: i32) -> bool {
         self.world
             .st
             .players
             .get(s.max(0) as usize)
-            .is_some_and(|x| !x.out() && x.exile() == 0)
+            .is_some_and(|x| !x.out())
     }
 
     /// Present players standing on the tile, minus `except`.
@@ -2509,7 +2467,7 @@ struct DriveInline<M: CardModules> {
 
 impl<M: CardModules> DriveInline<M> {
     /// The type-erased world `HostCtx` hands back is always a [`Run`]:
-    /// `CardModules` pins it. (Both backends share `hostfns`, which stays
+    /// `CardModules` pins it. (Both backends share `hostfns`, which remains
     /// generic over `HostCtx::World`.)
     fn as_run<'r>(any: &'r mut dyn std::any::Any) -> &'r mut Run {
         any.downcast_mut::<Run>()
@@ -2984,6 +2942,7 @@ impl<M: CardModules> RulesBridge<M> {
                 house_log: vec![],
                 counter_log: vec![],
                 abnormal_log: vec![],
+                named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
@@ -3094,7 +3053,7 @@ impl<M: CardModules> RulesBridge<M> {
             };
             // `run_hook` cannot actually fail here (its `Err` arm above is
             // unreachable in practice); the double `Result` is so the closure
-            // stays a plain `FnOnce` over the borrows it needs.
+            // remains a plain `FnOnce` over the borrows it needs.
             let wrapped = match inline.as_mut() {
                 Some(h) => crate::inline::with_inline_host(h, guest),
                 None => guest(),
@@ -3187,6 +3146,7 @@ impl<M: CardModules> RulesBridge<M> {
                         house_log: vec![],
                         counter_log: vec![],
                         abnormal_log: vec![],
+                named_raise_log: vec![],
                         state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
@@ -3329,10 +3289,10 @@ impl<M: CardModules> RulesBridge<M> {
                     // The host routine runs against the **live** world and is
                     // not replayed, so the turn-ctx policy the card just set up
                     // (build/buy discounts, free buy, ...) has to cross now.
-                    // Progress counters stay on the copy: the replay redoes them.
+                    // Progress counters remain on the copy: the replay redoes them.
                     cx.adopt_turn_policy(&run.world);
                     // The guest's pending player state (a status clear, e.g.
-                    // 壱雫空 zeroing stun and then paying) is overlaid for the
+                    // 壱雫空 zeroing a layer and then paying) is overlaid for the
                     // routine's duration -- `can_pay` must see it -- and dropped
                     // at the next iteration's top, so the replay re-applies it
                     // rather than double-counting. See `Cx::overlay_guest_state`.
@@ -4116,7 +4076,7 @@ impl<M: CardModules> RulesBridge<M> {
             // 抵押）」 → 折现 + 破产, L76 the mortgage offer). It used to
             // settle as `must = false`, which silently underpaid and
             // could never eliminate anyone. Voluntary purchases
-            // (buy/build) keep their pre-gates and stay `must = false`.
+            // (buy/build) keep their pre-gates and remain `must = false`.
             p.must = true;
             // The card's `why` is a **reason** (「登上武道馆」), not a log
             // line: it names the cause and says nothing about who paid
@@ -4179,7 +4139,7 @@ impl<M: CardModules> RulesBridge<M> {
             return true;
         }
         if !after.abnormal_log.is_empty() {
-            // Exile is a status hit -- Other (it lands on a player).
+            // A layer write is a player hit -- Other (it lands on a player).
             return true;
         }
         // Draw / discard: own = SelfOnly (proposed); another player's = Other.
@@ -4257,17 +4217,15 @@ impl<M: CardModules> RulesBridge<M> {
                     "plan_steps" | "plan_stop" | "plan_teleport" | "plan_start"
                     | "plan_dice" | "plan_no_buy" | "plan_no_build" => return true,
                     "place" | "unplace" | "mark_add" | "mark_remove" | "mark_move" => return true,
-                    "stay" | "stun" | "exile" => {
-                        // Targeted at someone other than the owner.
+                    _ => {
+                        // Player-directed outcomes carry a `target`. Targeted at
+                        // someone other than the owner counts as Other.
                         if let Some(game_core::msg::Arg::PlayerId(t)) = e.msg.a.get("target") {
                             if *t != owner {
                                 return true;
                             }
-                        } else if e.player_id != owner {
-                            return true;
                         }
                     }
-                    _ => {}
                 }
             }
         }
@@ -4295,7 +4253,7 @@ impl<M: CardModules> RulesBridge<M> {
         } else if !after.house_log.is_empty() {
             Some("house")
         } else if !after.abnormal_log.is_empty() {
-            Some("exile")
+            Some("named-raise")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
         } else if after.logged > 0 {
@@ -4351,7 +4309,7 @@ impl<M: CardModules> RulesBridge<M> {
             // the live tail **and** the live counter is what keeps ids unique
             // across a drive -- the guest copy may have been detached at any
             // `DerefMut` (its own `skip_log` write included) and must never
-            // allocate an id of its own. The pending walk also stays on the
+            // allocate an id of its own. The pending walk also remains on the
             // live world -- swapping in a stale `WalkFlush` would re-publish
             // the approach from its origin after a mid-walk flash (the
             // walk-before-flash invariant).
@@ -4381,7 +4339,7 @@ impl<M: CardModules> RulesBridge<M> {
             // Complete **this** drive's header. A multi-entry drive that ran
             // one silent and one non-silent entry still has a header (from the
             // non-silent one) and must stamp it; a fully silent drive has no
-            // header of its own (`activation_id` stays -1) and must not
+            // header of its own (`activation_id` remains -1) and must not
             // complete the outer one.
             // Ruling 2a: the header this drive flushed (or -1 if nothing
             // visible was produced -- a declined optional prompt, a
@@ -4397,7 +4355,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // header entirely (no flash, no 「效果适用」, no
                 // 「（无事发生）」). A prompt already showed it to the client.
                 // A **requested flash** (`ctx::flash`) counts as visible -- the
-                // player was cued, so the header that names the clause stays.
+                // player was cued, so the header that names the clause remains.
                 let flash_requested = after.world.flash.lock().requested;
                 let body_empty = after.logged == 0
                     && after.paid_log.is_empty()
@@ -4537,22 +4495,24 @@ impl<M: CardModules> RulesBridge<M> {
             // field. The count watched is the on-card mark counter attached
             // to the card -- not the tile marks.
 
-            // Post-commit abnormal raise -- the wire event is named by the
-            // kind (`"stay"` / `"stun"` / `"exile"`). 「任意玩家获得[除外]…时」
+            // Post-commit named raise -- the wire event name is caller-supplied
+            // data (the ruleset owns the vocabulary). 「任意玩家获得[除外]…时」
             // (火种燃尽之后会怎么样呢？ 「移除所有此卡的复制品」) listens on
-            // `"exile"` rather than at each grant site, so a layer granted by
-            // *any* path still runs. Only exile has listeners today; raising
-            // all three names is the generic form and is a no-op for the rest.
-            for (player_id, kind) in after.abnormal_log {
-                let wire = card_sdk::abi::AbKind(kind).as_str();
+            // that name rather than at each grant site, so a layer granted by
+            // *any* path still runs.
+            for (player_id, name, value) in after.named_raise_log {
+                let wire: &'static str = Box::leak(name.into_boxed_str());
                 self.raise_core(cx, wire, player_id, |t| {
-                    t.value = 1;
+                    t.value = value;
                     t.by_card = by;
                 })?;
             }
+            for (player_id, kind) in after.abnormal_log {
+                let _ = (player_id, kind);
+            }
             // `state` -- 「当有其他玩家切换状态时」 (Mujica:欢迎来到ave
             // mujica的世界 (2)). Raised once per real skill-state 1↔2 toggle
-            // this run made, same post-commit shape as `exile`. The counter's
+            // this run made, same post-commit shape as a named raise. The counter's
             // own re-toggles must not chain further (`Cx::state_raise_depth`).
             for (who, _from, to) in after.state_log {
                 if cx.state_raise_depth > 0 {
@@ -4580,7 +4540,7 @@ impl<M: CardModules> RulesBridge<M> {
             // nothing left for it to move -- the hand card became this
             // instance, and the host just moved that.
             //
-            // `DEST_UNSET` is no opinion (a placed card stays put), and a
+            // `DEST_UNSET` is no opinion (a placed card remains put), and a
             // run that already unplaced itself has no instance to move.
             if after.current_uid >= 0 && dest >= 0 && dest != DEST_FIELD {
                 self.apply_dest(cx, after.current_uid, card_id, dest, after.dest_to)?;
@@ -4807,7 +4767,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // `tile = -1`. Collected last among the field hooks (after
                 // tile / event / mark) so a suppressing tile rule still gets
                 // its say first and sibling hooks see pre-tick state. The
-                // [除外] layer tick and `noHand`'s turn-flow fold / clear run
+                // the off-board layer tick and the no-hand turn-flow fold / clear run
                 // here.
                 if self
                     .ruleset
@@ -5194,19 +5154,19 @@ impl<M: CardModules> RulesBridge<M> {
         if s >= cx.state().players.len() || cx.world().out(s) {
             return Ok(false);
         }
-        // `unstoppable` (「不可阻挡」, glossary 14) -- three separate clauses:
+        // 「不可阻挡」 (glossary 14) -- three separate clauses:
         // 1. movement abnormals (teleport / forced / stop / reverse): a blanket
         //    bypass, the ones that put the player somewhere they did not
         //    choose. A self-caused move (`by == player_id`) is *chosen*, not
         //    「受到的」 (「可选择受到的teleport，[强制移动]，[强制停下]效果是否生效」),
         //    so [不可阻挡] does not refuse it -- a card's own `card_move`
         //    (里美's 「期间[不可阻挡]」) must still walk.
-        // 2. stun / exile: 「也不会获得新的层数」 / 「无法获得新的exile层数」 --
+        // 2. the stacked layer grants: 「也不会获得新的层数」 --
         //    the gain does not land at all (this gate answers `false`, so the
         //    layer is never written). Existing layers still decay (「在适当时机
         //    依旧掉层」).
-        // 3. stay: 「无视已存在的stay」 is a movement bypass (already in 1's
-        //    spirit via `stunned`/`stay` checks at move time), not a refusal of
+        // 3. the move-gate layer: 「无视已存在的[停留]」 is a movement bypass (already in 1's
+        //    spirit via the move-gate checks at move time), not a refusal of
         //    new layers -- but 「也不会获得新的层数」 names only 晕眩 and 除外.
         let movement = matches!(
             kind,
@@ -5215,13 +5175,9 @@ impl<M: CardModules> RulesBridge<M> {
                 | crate::AbKind(6)
                 | crate::AbKind(7)
         );
-        let unstoppable = cx.state().players[s].unstoppable() > 0;
-        if movement && by != player_id && unstoppable {
-            return Ok(false);
-        }
-        if matches!(kind, crate::AbKind(2) | crate::AbKind(3)) && unstoppable {
-            return Ok(false);
-        }
+        // The ruleset's grant verbs refuse while its 「不可阻挡」 clause holds
+        // (STA-01) -- checked before this window opens. The engine does not
+        // name that key.
         let on = |t: &mut CoreTrigger| {
             t.target = player_id;
             t.value = kind.as_i32();
@@ -5230,7 +5186,7 @@ impl<M: CardModules> RulesBridge<M> {
         // `Untargetable` at declaration, same as `target_player`: 「你只会被
         // 自己发动的效果指定」 (夏日合宿) also covers an area status grant that
         // lands on the player without a `ctx::target` pick (那天的雨's 「所有
-        // 玩家获得一层stay」). A self-caused grant (`by == player_id`) is the
+        // 玩家获得一层[停留]」). A self-caused grant (`by == player_id`) is the
         // owner's own effect and passes the gate's own condition.
         if self
             .raise_core(cx, "untargetable", player_id, |t| t.by_card = Some(by))?
@@ -5318,7 +5274,7 @@ impl<M: CardModules> RulesBridge<M> {
         if p == by {
             return Ok(p);
         }
-        if cx.state().players[s].exile() > 0 {
+        if !cx.world().gate_open(cx.rules(), game_core::engine::Gate::OnBoard, s) {
             return Ok(-1);
         }
         // ---- declaration ----------------------------------------------
@@ -5555,7 +5511,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// initial user (`chain_starter`: the player whose card caused the link; a
     /// board-driven link -- rent, buy, build, turn flow -- is a system / tile
     /// event and starts at the active turn player) and runs forward in turn
-    /// order from there. Out / exiled / stunned / no-hand players are
+    /// order from there. Out / gated / locked players are
     /// skipped (`can_counteract_now`) -- a bot seat is **not** skipped; it is
     /// offered and answers through `Cx::fill_ai` -- and a seat with no eligible card is skipped
     /// without a prompt, and `can_counteract` is re-evaluated before every
@@ -6214,6 +6170,7 @@ impl<M: CardModules> RulesBridge<M> {
             house_log: vec![],
             counter_log: vec![],
             abnormal_log: vec![],
+                named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
@@ -6440,6 +6397,7 @@ impl<M: CardModules> RulesBridge<M> {
                 house_log: vec![],
                 counter_log: vec![],
                 abnormal_log: vec![],
+                named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
@@ -6725,7 +6683,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     // amount, which must not read as a phantom move. `DiceRollAfter` is the
     // post-roll hook and does carry the face (「若移动掷骰出目为16及以上」).
     // A card-driven `roll` raise has no move payload (`mv: None`); its face
-    // stays on `value` and the writeback reads it from there.
+    // remains on `value` and the writeback reads it from there.
     let mv = t.mv.as_ref().map(|m| TriggerMove {
         kind: match m.kind {
             game_core::engine::MoveKind::Walk => card_sdk::abi::MoveKind::Walk,
@@ -7032,18 +6990,18 @@ fn counteract_slow_path() -> bool {
     *SLOW.get_or_init(|| std::env::var("BGD_COUNTERACT_SLOW").is_ok_and(|v| v == "1"))
 }
 
-/// May this seat declare a counteraction right now? Out / exiled players
+/// May this seat declare a counteraction right now? Out / off-board players
 /// cannot. (`CannotPlay` and a one-turn mute have no engine field yet.)
 fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     let Some(player_id) = cx.state().players.get(s) else {
         return false;
     };
-    // Rulebook eligibility only: out / exile cannot declare, and `CannotPlay`
-    // (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
+    // Rulebook eligibility only: out / off-board cannot declare, and `CannotPlay`
+    // (a closed act or play gate, Fx.CantPlayHand) blocks it too.
     // A bot is still a player, so the window opens for every mentality and
     // the seat answers through `Cx::fill_ai` (standard: `CounterParams`
     // propensity, default never; chaos: `CHAOS_COUNTER_CHANCE`) exactly like
-    // a human's offer. Out / exiled remain skipped.
+    // a human's offer. Out / off-board remain skipped.
     // `World::out` is `st.players[i].out()`, so the live state answers it --
     // no world copy (this runs on every visit of every cycle).
     //
@@ -7060,9 +7018,9 @@ fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     });
     !locked_out
         && !player_id.out()
-        && player_id.exile() == 0
-        && !player_id.stunned()
-        && player_id.no_hand() == 0
+        && cx.world().gate_open(cx.rules(), game_core::engine::Gate::OnBoard, s)
+        && cx.world().gate_open(cx.rules(), game_core::engine::Gate::Act, s)
+        && cx.world().gate_open(cx.rules(), game_core::engine::Gate::Play, s)
 }
 
 /// The player's private hand (order preserved).
@@ -7502,30 +7460,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         let o = self.owner();
         if o >= 0 { self.world.player_out(o as i32) as i64 } else { 0 }
     }
-    fn owner_stay(&self) -> i64 {
-        let o = self.owner();
-        if o >= 0 { self.world.state_get(o as i32, game_core::state::key::STAY) as i64 } else { 0 }
-    }
-    fn owner_stun(&self) -> i64 {
-        let o = self.owner();
-        if o >= 0 { self.world.state_get(o as i32, game_core::state::key::STUN) as i64 } else { 0 }
-    }
-    fn owner_exile(&self) -> i64 {
-        let o = self.owner();
-        if o >= 0 {
-            self.world.state_get(o as i32, game_core::state::key::EXILE) as i64
-        } else {
-            0
-        }
-    }
-    fn owner_no_hand(&self) -> i64 {
-        let o = self.owner();
-        if o >= 0 {
-            self.world.state_get(o as i32, game_core::state::key::NO_HAND) as i64
-        } else {
-            0
-        }
-    }
     fn owner_persona(&self) -> i64 {
         let o = self.owner();
         if o < 0 {
@@ -7626,20 +7560,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     }
     fn out(&self, seat: i64) -> i64 {
         self.world.player_out(seat as i32) as i64
-    }
-    fn stay(&self, seat: i64) -> i64 {
-        self.world.state_get(seat as i32, game_core::state::key::STAY) as i64
-    }
-    fn stun(&self, seat: i64) -> i64 {
-        self.world.state_get(seat as i32, game_core::state::key::STUN) as i64
-    }
-    fn exile(&self, seat: i64) -> i64 {
-        self.world
-            .state_get(seat as i32, game_core::state::key::EXILE) as i64
-    }
-    fn no_hand(&self, seat: i64) -> i64 {
-        self.world
-            .state_get(seat as i32, game_core::state::key::NO_HAND) as i64
     }
     fn state(&self, seat: i64, key: &str) -> i64 {
         self.world.state_get(seat as i32, key) as i64
@@ -7813,14 +7733,9 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         d.min(n - d)
     }
     fn players_on(&self, tile: i64, except: i64) -> i64 {
-        // Matches `players_on_list`: present (`!out && exile == 0`) standers.
+        // Matches `players_on_list`: present standers.
         (0..self.world.st.players.len() as i64)
-            .filter(|&s| {
-                s != except
-                    && self.out(s) == 0
-                    && self.exile(s) == 0
-                    && self.pos(s) == tile
-            })
+            .filter(|&s| s != except && self.present(s) && self.pos(s) == tile)
             .count() as i64
     }
     fn next_dist(&self, p: i64, dir: i64) -> i64 {
@@ -7987,7 +7902,7 @@ impl ProbeMemo {
 /// The key is kind-specific so the client can say **what** is being answered
 /// (「{{who}} 打出了「{{card}}」」 / 「{{who}} 将支付 {{n}} 给 {{to}}」 /
 /// 「{{who}} 将移动 {{n}} 格」) instead of a bare 「{{who}} 的触发」.
-/// `ask.counteract.detail` stays the fallback for the long tail of kinds -- and
+/// `ask.counteract.detail` remains the fallback for the long tail of kinds -- and
 /// for prompts already on the wire, so old replays keep rendecycle.
 fn describe_trigger(t: &Trigger) -> Msg {
     let effect_kind = t.effects.first().map(|e| e.kind).unwrap_or("");
@@ -8213,6 +8128,39 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         }
         let win = crate::gate::window_of_exclusive(w, &self.data, player, ask);
         Some(self.ruleset.gate_open(kind, &win))
+    }
+    fn gate_refusal_msg(&self, gate: game_core::engine::Gate, _player: usize) -> Msg {
+        let kind = crate::gate::kind_of(gate);
+        // The gate-declaring rule supplies the i18n key as data.
+        for c in self.ruleset.cards() {
+            if let Some((_, key)) = c.gate_msgs.iter().find(|(k, _)| *k == kind.as_i32()) {
+                return Msg::new(key);
+            }
+        }
+        Msg::new("status.move_blocked")
+    }
+    fn gate_skip_msg(&self, gate: game_core::engine::Gate, _player: usize) -> Msg {
+        let kind = crate::gate::kind_of(gate);
+        for c in self.ruleset.cards() {
+            if let Some((_, key)) = c.gate_skip_msgs.iter().find(|(k, _)| *k == kind.as_i32()) {
+                return Msg::new(key);
+            }
+        }
+        self.gate_refusal_msg(gate, _player)
+    }
+    fn card_act_exemption(&self, card: &str) -> bool {
+        // A status host may name a card prop that exempts a play from the act
+        // gate. The prop name is data from that host's `exemption_prop`.
+        let prop = self
+            .ruleset
+            .cards()
+            .iter()
+            .find(|c| !c.exemption_prop.is_empty())
+            .map(|c| c.exemption_prop.clone());
+        match prop {
+            Some(prop) => self.ruleset.card_prop(card, &prop) != 0,
+            None => false,
+        }
     }
     fn ruleset_sha256(&self) -> Option<&str> {
         self.ruleset.sha256()
@@ -8612,6 +8560,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             house_log: vec![],
             counter_log: vec![],
             abnormal_log: vec![],
+                named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
@@ -8704,6 +8653,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             house_log: vec![],
             counter_log: vec![],
             abnormal_log: vec![],
+                named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),

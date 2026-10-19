@@ -5,7 +5,7 @@
 //! resolves to the `ruleset_*` shim `rules-native` exports. Card code never
 //! calls these directly -- it goes through the typed `ctx::*` wrappers.
 
-// The link attribute is wasm-only; on other targets the imports stay
+// The link attribute is wasm-only; on other targets the imports remain
 // declared so the analyzer resolves `ctx::*` in card sources.
 // `C-unwind` on native so a host import can abort the run with a panic
 // that `rules-native`'s `catch_unwind` turns into "this card is out"
@@ -310,6 +310,8 @@ extern "C-unwind" {
     pub fn state_set(player_id: i32, ptr: i32, len: i32, field: i32, v: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_state_add")]
     pub fn state_add(player_id: i32, ptr: i32, len: i32, delta: i32) -> i32;
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_state_set_flags")]
+    pub fn state_set_flags(player_id: i32, ptr: i32, len: i32, flags: i32);
 
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_slot")]
     pub fn slot(player_id: i32, ptr: i32, len: i32) -> i32;
@@ -345,12 +347,10 @@ extern "C-unwind" {
     pub fn spend_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_add_marker_max")]
     pub fn add_marker_max(player_id: i32, name_p: i32, name_l: i32, n: i32) -> i32;
-    // v88: one generic abnormal verb (replaces the three named host
-    // grants). `kind` is the `AbKind` wire id; `to` is the kind-specific
-    // payload (-1 = none), carried for the exile return destination.
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_apply_abnormal")]
-    pub fn apply_abnormal(player_id: i32, kind: i32, n: i32, to: i32);
-    // v88: this turn's main-move latch (the stay skip; exile is not part of it).
+    // v89: post-commit raise with a caller-supplied wire name (opaque string).
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_raise_after")]
+    pub fn raise_after(player_id: i32, name_p: i32, name_l: i32, value: i32);
+    // v88: this turn's main-move latch (the turn-flow skip; not every layer host uses it).
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_skip_main_move")]
     pub fn skip_main_move(player_id: i32, locked: i32);
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_clear_move_skip")]

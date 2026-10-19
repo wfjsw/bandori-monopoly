@@ -75,7 +75,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
             return Some(Msg::new(key!("to_the_peak_stunned")));
         }
         if rules_status::stay::get(player_id) > 0
-            && bandori_std::ctx::state::get(player_id, card_sdk::abi::state_key::UNSTOPPABLE) <= 0
+            && bandori_std::ctx::state::get(player_id, bandori_std::state_key::UNSTOPPABLE) <= 0
         {
             // `H.Moving` lets a `[停留]` player through when 「不可阻挡」 is up.
             return Some(Msg::new(key!("to_the_peak_stuck")));

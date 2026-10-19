@@ -4,7 +4,7 @@
 //! loaded separately from the ruleset. The metadata is now authored in the same
 //! Rust that defines the rule (`CardDef::meta`, the skill crates' `GroupDef` /
 //! `PersonaDef`) and exported on request through `ruleset_metadata` -- never
-//! through [`crate::abi::ManifestEntry`], so the match path stays lean.
+//! through [`crate::abi::ManifestEntry`], so the match path remains lean.
 //!
 //! This module is the **generic** half: an authoring shape for one card row
 //! ([`CardMeta`]), a wire row ([`MetaRow`]) / whole-roster blob ([`MetaDoc`]),
@@ -120,7 +120,7 @@ impl CardMeta {
     /// Wire form, tagged `kind = "card"`. `text` is emitted: the ruleset
     /// queries it at runtime (`card_text_mentions`, 「效果包含…」), so it is a
     /// rule input as well as display. `raw_name` / `cell` are display-only and
-    /// stay on the def for `display.json` (`docs/DISPLAY.md`).
+    /// remain on the def for `display.json` (`docs/DISPLAY.md`).
     pub fn to_row(&self, id: &str, ordinal: i32) -> MetaRow {
         MetaRow {
             kind: "card".to_string(),
@@ -221,7 +221,7 @@ impl MetaDoc {
 }
 
 /// Convert a typed game def (`PersonaDef`, `GroupDef`, ...) into a wire row.
-/// Implemented by the game's skill crates; `card-sdk` stays vocabulary-free.
+/// Implemented by the game's skill crates; `card-sdk` remains vocabulary-free.
 pub trait ToMetaRow {
     fn to_meta_row(&self) -> MetaRow;
 }

@@ -84,7 +84,7 @@ fn exile(step_pre: bool, step: &Step<'_>, i: usize) -> i32 {
     } else {
         step.post.st.players.get(i)
     };
-    p.map(|p| p.state_get(key::EXILE)).unwrap_or(0)
+    p.map(|p| p.state_get(bandori_std::state_key::EXILE)).unwrap_or(0)
 }
 
 /// Duration-grant marker (`exileHold`) of player `i`. While set, the
@@ -104,7 +104,7 @@ fn stay_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
     } else {
         step.post.st.players.get(i)
     };
-    p.map(|p| p.state_get(key::STAY)).unwrap_or(0)
+    p.map(|p| p.state_get(bandori_std::state_key::STAY)).unwrap_or(0)
 }
 
 fn stun_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
@@ -113,7 +113,7 @@ fn stun_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
     } else {
         step.post.st.players.get(i)
     };
-    p.map(|p| p.state_get(key::STUN)).unwrap_or(0)
+    p.map(|p| p.state_get(bandori_std::state_key::STUN)).unwrap_or(0)
 }
 
 /// Card / skill activations in the window -- a hook may have layered a status

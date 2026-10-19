@@ -2,7 +2,7 @@
    list taking the slack, the action row pinned above the bottom margin. The
    old hard-coded 145px band under the TopBar was the reference's, not a
    reasonable gap on its own terms. */
-.body { position: absolute; left: 92px; right: 92px; top: 150px; bottom: 88px; display: flex; flex-direction: column; gap: 24px; }
+.body { position: absolute; left: calc(92px + var(--safe-left, 0px)); right: calc(92px + var(--safe-right, 0px)); top: calc(150px + var(--safe-top, 0px)); bottom: 88px; display: flex; flex-direction: column; gap: 24px; }
 .area { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .filters { display: flex; align-items: center; gap: 16px; margin-bottom: 26px; }
 .listLabel { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 22px 0 14px; border-radius: 19px; background: var(--pink); color: #fff; font-size: 17px; font-weight: 700; }

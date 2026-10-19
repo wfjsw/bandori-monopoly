@@ -1667,7 +1667,12 @@ fn embers_copies_are_removed_on_exile() {
     draw_event_quiet(&mut t, 0, "火种燃尽之后会怎么样呢？", &[]);
     assert!(!t.marks().is_empty(), "copies are down: {:?}", t.marks());
     // 「任意玩家获得[除外]…移除所有此卡的复制品」.
-    t.m.world_mut().apply_abnormal(1, 3, 1, -1);
+    {
+        let w = t.m.world_mut();
+        w.apply_layer(1, bandori_std::state_key::EXILE, 1);
+        w.state_set_flags(1, bandori_std::state_key::EXILE, 1 | 2);
+        w.state_set_expires(1, bandori_std::state_key::EXILE, Some(game_core::state::Tick::TurnStart));
+    }
     if !t.marks().is_empty() {
         until_turn(&mut t, 1);
     }

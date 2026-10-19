@@ -98,7 +98,7 @@ pub fn preset(data: &GameData, c: &PersonaData) -> Vec<String> {
 
 /// A random legal deck: `SIZE` cards drawn without replacement from [`pool`],
 /// then put back in pool order. The caller supplies the index picker (the
-/// match RNG -- never `thread_rng`, so a chaos bot stays replayable). Falls
+/// match RNG -- never `thread_rng`, so a chaos bot remains replayable). Falls
 /// short of [`SIZE`] only when the pool itself is smaller; the caller then
 /// falls back to [`preset`].
 pub fn random(

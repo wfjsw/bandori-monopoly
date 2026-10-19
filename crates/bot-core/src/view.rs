@@ -278,7 +278,7 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
     // a no-op -- which is exactly what the pre-C1 idle polls did. Mark every
     // hand card as a candidate instead: the search's own `MatchSim` recomputes
     // real `cant_play` on each fork and only branches on what the engine
-    // accepts. `est_cost` is a static card property and stays.
+    // accepts. `est_cost` is a static card property and remains.
     next.playable = vec![true; next.hand.len()];
     next.ai_answer = None;
     Some(next)

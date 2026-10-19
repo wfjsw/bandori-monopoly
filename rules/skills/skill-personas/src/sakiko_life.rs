@@ -16,7 +16,7 @@
 //! 「每回合开始时自动打出一张抽牌堆顶端的牌」 is a free `play_card` of the
 //! deck's top card at each of this player's turn starts.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 

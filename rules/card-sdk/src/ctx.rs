@@ -6,7 +6,7 @@
 //!
 //! Ops that would need a player decision do not exist here on purpose: `ask_*`
 //! blocks, the host publishes the question, and the run is replayed with the
-//! answer -- so a card reads like straight-line code while staying deterministic.
+//! answer -- so a card reads like straight-line code while remaining deterministic.
 
 #[cfg(target_arch = "wasm32")]
 use alloc::{string::String, vec::Vec};
@@ -220,7 +220,7 @@ pub fn effect(player_id: i32, msg: &Msg) {
 ///
 /// Once-per-flash: identified by `(drive, flash ordinal within the drive)`.
 /// A body re-run after a prompt must not flash the same ordinal again; the
-/// already-posted flash stays shown and is not dropped on halt.
+/// already-posted flash remains shown and is not dropped on halt.
 pub fn flash() {
     unsafe { sys::flash() }
 }
@@ -757,7 +757,7 @@ pub enum DeckPos {
 
 /// Put one specific card into the draw
 /// pile at a position. (`add_to_deck(player_id, card, shuffle)` is the older
-/// top/shuffle shape and stays.)
+/// top/shuffle shape and remains.)
 #[cfg_attr(kani, inline(always))]
 pub fn add_to_deck_at(player_id: i32, card: &str, pos: DeckPos) {
     let (p, l) = s(card);
@@ -904,7 +904,7 @@ pub fn shuffle_into_deck(player_id: i32, hand: bool, discard: bool) -> i32 {
 
 // ------------------------------------------------------------ field cards
 
-/// This card stays in play at the player.
+/// This card remains in play at the player.
 #[cfg_attr(kani, inline(always))]
 pub fn place_card(player_id: i32, card: &str, note: &Msg) -> i32 {
     crate::pure::refuse_if_filter("ctx::place_card");
@@ -966,7 +966,7 @@ pub fn unplace_self() -> i32 {
 /// Expire the active event `id` (`docs/EVENTS.md`): unbind its rule instance
 /// and file it away. `removed = true` is 「永久移除」; `false` is 「放入事件弃牌」.
 /// A one-shot event never calls this -- `draw_event` files it away itself when
-/// the body does not stay.
+/// the body does not remain.
 #[cfg_attr(kani, inline(always))]
 pub fn event_expire(id: &str, removed: bool) {
     let (p, l) = s(id);
@@ -1508,9 +1508,9 @@ pub fn add_tok(player_id: i32, name: &str, by: i32, max: i32) -> Result<i32, Pro
 /// and enforces **nothing**.
 ///
 /// Which keys mean what, and what their caps are, belongs to whoever uses them:
-/// a character skill that mandates a fire-pot cap writes [`Self::max`] on
-/// [`state_key::CHARGE`], and the card that gains pots is free to honour it (the
-/// `fire` / marker helpers do) or ignore it. There is no engine-side
+/// a character skill that mandates a marker cap writes [`Self::max`] on that
+/// marker's wire key, and the card that gains the marker is free to honour it
+/// (the marker helpers do) or ignore it. There is no engine-side
 /// `match key`, and a raw [`Self::set`] / [`Self::add`] is never clamped.
 pub mod state {
     use super::{s, sys};
@@ -1588,6 +1588,14 @@ pub mod state {
     pub fn set_expires(player_id: i32, key: &str, expires: i32) -> i32 {
         set_field(player_id, key, EXPIRES, expires)
     }
+
+    /// Write the item's free-form flag word. Rules-layer bit meanings live
+    /// outside this SDK; the host just stores the `u32`.
+    pub fn set_flags(player_id: i32, key: &str, flags: u32) {
+        crate::pure::refuse_if_filter("state::set_flags");
+        let (p, l) = s(key);
+        unsafe { sys::state_set_flags(player_id, p, l, flags as i32) }
+    }
 }
 
 // ------------------------------------------------------ per-player slots (V)
@@ -1645,25 +1653,21 @@ pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result
 
 // ---------------------------------------------------------- generic status verbs
 // Engine services the `rules/status` hosts (and `bandori-std::status`) drive.
-// Cards call `bandori_std::status::{stay,stun,exile}` /
-// `rules_status::{stay,stun,exile,fire}::*` (`docs/STATUS-HOSTS.md`).
-// No game vocabulary here: `apply_abnormal` is one kind-parameterized verb.
+// Cards call the ruleset status hosts (`bandori_std::status` /
+// `rules_status`, `docs/STATUS-HOSTS.md`) with opaque key names as data.
+// No game vocabulary here: compose `gate` + `state::*` + `raise_after`.
 
-/// Apply `n` layers of the abnormal `kind` (the `AbKind` wire id) to
-/// `player_id`, returning the player to `to` afterwards.
-///
-/// `n < 0` (removal) always applies. `n > 0` opens the abnormal [反击]
-/// window; a cancelled window writes nothing. On success the layers land at
-/// the state key named by `kind.as_str()` and the post-commit raise fires.
-/// `to` is the kind-specific payload (`-1` = none) -- carried for the exile
-/// return destination; other kinds ignore it.
-pub fn apply_abnormal(player_id: i32, kind: AbKind, n: i32, to: i32) {
-    unsafe { sys::apply_abnormal(player_id, kind.as_i32(), n, to) }
+/// Queue a post-commit raise with a caller-supplied wire name (opaque string).
+/// This is how a rule raises a ruleset-declared event after the current effect
+/// commits (e.g. the wire id 21 event). `value` is the trigger's payload.
+pub fn raise_after(player_id: i32, name: &str, value: i32) {
+    let (p, l) = s(name);
+    unsafe { sys::raise_after(player_id, p, l, value) }
 }
 
 /// Set this turn's main-move latch. `locked != 0` skips the move; `0`
-/// releases it. The stay host's turn-flow clause (exile is **not** part of
-/// the latch -- closeout-2 ruling).
+/// releases it. The turn-flow latch is **not** part of every layer-count
+/// host's clause -- closeout-2 ruling.
 pub fn skip_main_move(player_id: i32, locked: bool) {
     unsafe { sys::skip_main_move(player_id, locked as i32) }
 }
@@ -1699,7 +1703,7 @@ pub fn log_as(player_id: i32, kind: &str, msg: &Msg) {
     unsafe { sys::log_as(player_id, kp, kn, p, l) }
 }
 
-/// Can the player pay? Not out, not stunned, not exiled.
+/// Can the player pay? Not out and not under a no-act lock.
 #[doc(hidden)]
 pub fn can_pay(player_id: i32) -> bool {
     unsafe { sys::can_pay(player_id) != 0 }
@@ -1790,7 +1794,7 @@ pub enum Dest {
     Graveyard = 0,
     /// Back to the hand (手牌).
     Hand = 1,
-    /// Stays in play (场上) -- a persistent effect.
+    /// Remains in play (场上) -- a persistent effect.
     Field = 2,
     /// 「[移除]」 -- out of the game entirely.
     Banished = 3,
@@ -2384,7 +2388,7 @@ pub mod plan {
 }
 
 /// For a single-target card -- try to target `player_id`.
-/// `None` when the targeting failed (out, exiled, immune, untargetable, or the
+/// `None` when the targeting failed (out, off-board, immune, untargetable, or the
 /// `target` [反击] window cancelled it); otherwise the player actually targeted,
 /// which a field `redirect` hook may have changed.
 pub fn target(player_id: i32) -> Option<i32> {
@@ -2500,7 +2504,7 @@ pub fn set_play_doubled(n: i32) {
 pub fn n(k: i32, value: i32) -> i32 {
     if unsafe { sys::play_doubled() } == k {
         // One-shot: 「将…一个数字变为两倍」 doubles a single tagged number,
-        // then the flag is spent so a later `n` on the same play stays put.
+        // then the flag is spent so a later `n` on the same play remains put.
         unsafe { sys::set_play_doubled(-1) };
         value * 2
     } else {
@@ -2945,7 +2949,7 @@ pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
 /// Ask the engine whether an abnormal effect of
 /// `kind` (`[强制停下]`, `[传送]`, ...) may land on `player_id`. Returns `false`
 /// when a field card guarded it, the player is immune, or they are
-/// `unstoppable`. Call this **before** applying the effect, and skip on `false`.
+/// the cannot-be-stopped counter. Call this **before** applying the effect, and skip on `false`.
 pub fn gate(player_id: i32, kind: crate::abi::AbKind) -> bool {
     unsafe { sys::gate(player_id, kind.as_i32()) != 0 }
 }
@@ -3267,17 +3271,29 @@ pub fn turn_rolls() -> Vec<i32> {
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
-/// `(pos, stay, stun, exile)` when the turn started. The
-/// four things 「回到起始地点并取消所有受到的效果」 restores.
-pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
-    let (p, scratch) = out_buf(16);
+/// Turn-start snapshot: starting square + whole keyed state map.
+/// Host writes postcard of `(i32, BTreeMap<String, i32>)`.
+pub fn turn_snap_map(player_id: i32) -> (i32, alloc::collections::BTreeMap<String, i32>) {
+    let cap = 4096;
+    let (p, scratch) = out_buf(cap);
     let n = unsafe { sys::turn_snap(player_id, p) };
-    if n < 16 {
-        return (-1, 0, 0, 0);
+    if n <= 0 || n as usize > cap {
+        return (-1, alloc::collections::BTreeMap::new());
     }
     let buf = out_read(p, n, scratch);
-    let g = |i: usize| i32::from_le_bytes([buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]);
-    (g(0), g(4), g(8), g(12))
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or((-1, alloc::collections::BTreeMap::new()))
+}
+
+/// `(pos, v0, v1, v2)` for the caller's three keys (the caller names them) --
+/// the three layer counters 「回到起始地点并取消所有受到的效果」 restores.
+pub fn turn_snap(player_id: i32, k0: &str, k1: &str, k2: &str) -> (i32, i32, i32, i32) {
+    let (pos, map) = turn_snap_map(player_id);
+    (
+        pos,
+        map.get(k0).copied().unwrap_or(0),
+        map.get(k1).copied().unwrap_or(0),
+        map.get(k2).copied().unwrap_or(0),
+    )
 }
 
 /// Where the player stood when this turn started.

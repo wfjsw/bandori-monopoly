@@ -40,6 +40,8 @@ Destination: `card-sdk` (generic) | `rules/bandori-std` (new game crate) | `rule
 | 29d | `give_stay` / `give_stun` / `give_exile` / `stay_of` / `stun_of` / `exile_of` | game vocab | `bandori-std::status::{stay,stun,exile}` over `apply_abnormal` + `state_*` | ABI 88; engine holds only the generic verb |
 | 29e | `skip_move` latch / `stay_unlatch` | game vocab | `bandori-std::status::stay` over `skip_main_move` / `clear_move_skip` | ABI 88; exile is not part of the latch (closeout-2) |
 | 29f | `state_key::{STAY,STUN,STUN_START,EXILE,EXILE_TO,EXILE_MAIN,EXILE_HOLD,NO_HAND,UNSTOPPABLE}` names | game | `bandori-std::state_key` | wire strings unchanged |
+| 29g | `AbKind::as_str` name table / `status_gates` / `StatusGates` / `MatchPlayer::{stay,stun,exile,…}` / `default_expiry` | game vocab | deleted; gates via `gate_open`, wear-off via `set_expires`, names in `rules/` | ABI 89; engine sees only opaque strings |
+| 29h | `prop::PLAYABLE_STUNNED` / `apply_abnormal` kind→key match | game vocab | `bandori_std::prop::PLAYABLE_STUNNED`; `gate` + `state_add` + `raise_after` | ABI 89; post-commit raise name is caller-supplied |
 | 30 | `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` / `prop::ALL_COLORS` | game data keys | stay as wire strings; class membership via generic `tile_in` | brief: overrides become generic class marks/props |
 | 31 | CEL `is_circle` / `is_ring` / `is_live_house` / `is_buyable` | game vocab | removed (ABI v70) | conditions use `tile_is`/`tile_in` only; Rust sugar in `bandori-std` |
 | 32 | CEL `character_is` / `band_is` | game vocab | `rules/cond` + document | game vocab extension or boundary note |

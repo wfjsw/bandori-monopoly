@@ -19,7 +19,7 @@
 //! recipient holding the recorded figure. 「若为抽卡效果则记录2200」 is the
 //! text's own constant for a draw.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

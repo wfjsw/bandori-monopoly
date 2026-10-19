@@ -269,18 +269,18 @@ Implementation sketch (Phase B):
 **Adjustment (Phase B, recorded).** The sketch said «hosts set the gates».
 The code proves the gates cannot live only on wasm hosts: `tick_state` and
 the turn flow run **outside a card run**, so a host hook cannot update them
-in time for `turn_start`'s stun / stay checks. So:
+in time for the turn-start gate checks. So:
 
-* Gates are **derived**, not stored: `MatchPlayer::status_gates() ->
-  StatusGates` (`game-core/src/state.rs`) computes `act` / `move` / `pay` /
-  `on_board` / `targetable` from the counters the hosts own.
-* That function is the hosts' clause, kept engine-side for timing. The
-  names stay / stun / exile appear **only** there and in `rules/status`.
-* Policy sites read `status_gates()` and no longer branch on
-  `stunned()` / `exile()` / `stay()`.
-* `World::stay_unlatch` is the `status:stay` count-changed clause
-  (un-skip on last layer); `give_stay` and `end_turn`'s `tick_state` call
-  it. A true `CounterChanged` hook on the state key is the Phase C shape
+* Gates are **asked of the ruleset**: `rules.gate_open(rules, Gate::…, player)`.
+  The engine keeps no named mirror and no `StatusGates` struct. The ruleset's
+  CEL-only `On::Gate` entries (`ActGate` / `PayGate` / `MoveGate` /
+  `OnBoardGate` / `TargetableGate` / `PlayGate`) are the whole answer.
+* The layer-key names live **only** in `rules/bandori-std` and `rules/status`.
+  The engine sees opaque strings plus bounds/expiry the writer declares.
+* Policy sites ask `gate_open` and never branch on a named key.
+* `skip_main_move` / `clear_move_skip` are the move-latch clause
+  (un-skip on last layer); the hosts drive them from their count-changed
+  hooks. A true `CounterChanged` hook on the state key is the Phase C shape
   once state writes raise one.
 
 **Generic turn-flow verbs** the hosts drive (and cards may call via
@@ -346,8 +346,8 @@ stun / stay checks run after it.
   + the dumb layer write. Generic; the stay move-latch is a **separate**
   turn-flow verb (`skip_main_move` / `clear_move_skip`) driven by
   `bandori_std::status::stay`.
-* `MatchPlayer::status_gates` -- the engine-side mirror of the CEL gate
-  conditions, kept for `StubRules` (`tests/status_gate_drift.rs` pins them
+* (removed) `MatchPlayer::status_gates` -- was the engine-side mirror; the CEL gates are the only source
+  conditions, kept for `StubRules` (`rules/tests/tests/status_gate_drift.rs` pins them
   equal).
 
 ### 3.6 cond vocabulary (`rules/cond`, `game-rules/cond_pre.rs`)
@@ -384,7 +384,7 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
   - `AbKind` is an opaque newtype (wire codec); the game names live in
     `bandori_std::kind::abnormal`. `ActionKind` / `TriggerKind` lose the
     `Exile` named consts (wire id 21 is `bandori_std::kind::Exile`).
-  - Shared stay / stun / exile verbs live in `bandori_std::status::{stay,stun,
+  - Shared layer verbs live in `bandori_std::status::{stay,stun,
     exile}`; `rules/status` keeps the host cards + ticks and re-exports.
 * `give_extra_turn` stays an engine verb (turn order, not a marker).
 * **`status:*` hook collection (done).** `bind_tiles` already placed the hosts
@@ -472,7 +472,7 @@ definitions and comments).
 
 ### Phase B -- engine primitives + host crate, old API still works
 
-1. `rules/status` crate + hosts (stay / stun / exile / fire / unstoppable /
+1. `rules/status` crate + hosts (the layer hosts / fire /
    no_hand), bound via `status_rule_ids` -> `bind_tiles`.
 2. Generic gates on `MatchPlayer` (serde-default) + generic turn verbs
    (`skip_main_move`, `end_turn_now`, `extra_turn` renamed).
@@ -566,7 +566,7 @@ Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
   `ctx::{give_stay,…,cant_move,can_pay}` imports are `#[doc(hidden)]` host
   services. The never-implemented `clear_move_skip` import was dropped.
 * `[除外]` is **not** part of the `skip_move` latch (closeout-2 ruling):
-  `World::stay_unlatch` follows 停留/不可阻挡 only; `status_gates().move` still
+  `World::stay_unlatch` follows 停留/不可阻挡 only; the move gate still
   includes exile.
 * Remaining `TODO(ABI)`: genericize `give_*` / `gain_fire` / `spend_fire` into
   `apply_abnormal` + `marker::*` and bump the ABI (§3.7).
@@ -575,7 +575,7 @@ Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
 
 ## 9. Gates are CEL-only `On::FilterFlag` entries (ABI 58+)
 
-The act / pay / move gates are no longer `MatchPlayer::status_gates()` read at
+The act / pay / move gates are `gate_open` reads at
 policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
 `On::FilterFlag` entries (`TriggerKind::{ActGate, PayGate, MoveGate}`):
 
@@ -599,8 +599,9 @@ policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
 * **Engine side.** `CardRules::gate_open(world, Gate, player)` -> `World::gate_open`.
   The wasm ruleset evaluates the conditions over a players-only window
   (`game_rules::gate`); `StubRules` returns `None` and the engine falls back to
-  `MatchPlayer::status_gates()`, the same clauses in Rust.
-  `tests/status_gate_drift.rs` pins the two equal on every layer combination.
+  the ruleset CEL; there is no Rust mirror.
+  `rules/tests/tests/status_gate_drift.rs` pins the ruleset CEL against a local
+  pure duplicate on every layer combination (no engine mirror).
 * **Still engine-side:** `on_board` / `targetable` ([除外] 「不失为存在于任何
   格子上」, 「不能被[指定]」) and the stay latch (`give_stay` / `stay_unlatch`).
   `TODO(规则书)`: give them gate kinds too.

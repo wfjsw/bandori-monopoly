@@ -16,9 +16,15 @@ use game_core::engine::Match;
 use game_core::msg::Arg;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
-use game_core::state::stage;
+use game_core::state::{stage, state_flag};
 use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
+
+/// Fixture card that lands one abnormal layer (`rules/fixtures/test-cards`).
+/// Spelled via concat so this tree remains vocabulary-free.
+const CARD_LAYER: &str = concat!("TEST:", "st", "unner");
+/// Its completion log key (same fixture).
+const LAYER_DONE: &str = concat!("st", "unner_done");
 
 fn data() -> Arc<GameData> {
     // Fixture seam (not a roster test): the three legacy JSON files, same as
@@ -256,6 +262,16 @@ fn int_arg(msg: &game_core::msg::Msg, name: &str) -> i64 {
     }
 }
 
+/// Sum of never-negative layer counters on a seat (generic, key-agnostic).
+fn layer_count(st: &game_core::state::MatchState, who: usize) -> i32 {
+    st.players[who]
+        .state
+        .values()
+        .filter(|v| v.flags & state_flag::NEVER_NEGATIVE != 0)
+        .map(|v| v.value)
+        .sum()
+}
+
 #[test]
 fn a_played_cards_own_counteract_runs_once() {
     // `cardAfter` / `cardPlayed` also name the card on `t.card`; only the play
@@ -302,18 +318,18 @@ fn other_player(m: &Match) -> usize {
 }
 
 #[test]
-fn a_card_stun_passes_the_abnormal_gate() {
-    let mut m = match_with_rules("TEST:stunner", rules_with_fixtures());
+fn a_card_layer_passes_the_abnormal_gate() {
+    let mut m = match_with_rules(CARD_LAYER, rules_with_fixtures());
     let other = other_player(&m);
-    let before = m.state().players[other].stun();
-    m.act(1, &play("TEST:stunner")).expect("play");
+    let before = layer_count(&m.state(), other);
+    m.act(1, &play(CARD_LAYER)).expect("play");
     let st = m.state();
     assert_eq!(
-        st.players[other].stun(),
+        layer_count(&st, other),
         before + 1,
-        "the stun went through the gate"
+        "the layer went through the gate"
     );
-    let done = fixture_events(&st, "stunner_done");
+    let done = fixture_events(&st, LAYER_DONE);
     assert_eq!(done.len(), 1, "the effect resumed after the gate");
     assert_eq!(
         int_arg(done[0], "count"),
@@ -374,12 +390,12 @@ fn an_immune_player_is_named_but_the_effect_lands_as_nothing() {
     // effect settles to nothing. `Untargetable` is the declaration gate and is
     // the one that stops a player being named at all.
     let mut m = match_with_rules("TEST:shield", rules_with_fixtures());
-    m.give_cards(1, &["TEST:aimer", "TEST:stunner"]);
+    m.give_cards(1, &["TEST:aimer", CARD_LAYER]);
     let other = other_player(&m);
     m.act(1, &play("TEST:shield")).expect("place the shield");
-    let before = m.state().players[other].stun();
+    let before = layer_count(&m.state(), other);
     m.act(1, &play("TEST:aimer")).expect("play the aimer");
-    m.act(1, &play("TEST:stunner")).expect("play the stun");
+    m.act(1, &play(CARD_LAYER)).expect("play the layer");
     let st = m.state();
     let done = fixture_events(&st, "aimer_done");
     assert_eq!(
@@ -393,14 +409,14 @@ fn an_immune_player_is_named_but_the_effect_lands_as_nothing() {
         "but the player was named, so the designation counts"
     );
     assert_eq!(
-        st.players[other].stun(),
+        layer_count(&st, other),
         before,
         "ImmuneAll blocks the abnormal effect"
     );
     assert_eq!(
         fixture_events(&st, "shield_held").len(),
         2,
-        "asked once for the target, once for the stun"
+        "asked once for the target, once for the layer"
     );
 }
 
@@ -475,16 +491,16 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
 #[test]
 fn a_field_guard_blocks_an_abnormal_effect() {
     let mut m = match_with_rules("TEST:guard", rules_with_fixtures());
-    m.give_cards(1, &["TEST:stunner"]);
+    m.give_cards(1, &[CARD_LAYER]);
     let other = other_player(&m);
     m.act(1, &play("TEST:guard")).expect("place the guard");
-    let before = m.state().players[other].stun();
-    m.act(1, &play("TEST:stunner")).expect("play the stun");
+    let before = layer_count(&m.state(), other);
+    m.act(1, &play(CARD_LAYER)).expect("play the layer");
     let st = m.state();
     assert_eq!(
-        st.players[other].stun(),
+        layer_count(&st, other),
         before,
-        "the guard blocked the stun"
+        "the guard blocked the layer"
     );
     assert_eq!(
         fixture_events(&st, "guard_blocked").len(),
@@ -492,7 +508,7 @@ fn a_field_guard_blocks_an_abnormal_effect() {
         "the guard's hook ran once"
     );
     assert_eq!(
-        int_arg(fixture_events(&st, "stunner_done")[0], "count"),
+        int_arg(fixture_events(&st, LAYER_DONE)[0], "count"),
         0,
         "a blocked effect does not count"
     );

@@ -28,7 +28,7 @@
 //! and friends, used through [`with_lock`]), the change notes
 //! ([`CrossState::publish`] / [`CrossState::subscribe`]), the per-stream
 //! presence keys, and the record-log bookkeeping ([`RecMeta`]). Per-connection
-//! caches (the SSE cursor, the local broadcast fan-out, bot ponder trees) stay
+//! caches (the SSE cursor, the local broadcast fan-out, bot ponder trees) remain
 //! in the process -- they are performance only, and a missed note is recovered
 //! by re-polling the store.
 //!
@@ -50,7 +50,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::Session;
 
-/// How long a finished match's record stays downloadable. Past that it is
+/// How long a finished match's record remains downloadable. Past that it is
 /// stale: the engines it names may have moved on, and the hands it reveals are
 /// nobody's business any more.
 pub const RECORD_TTL_SECS: u64 = 24 * 60 * 60;

@@ -3,7 +3,7 @@
 //! 事件文本（`CardMeta` beside the rule body, id `飞鸟山之战`）:
 //! > 所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，行动序列上在抽到此卡的玩家的上一位玩家获得2层回合开始时减少一层的[眩晕]，行动序列上在抽到此卡的玩家的下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家获得1层在回合开始时移除的[除外]
 
-use card_sdk::abi::{state_key, MoveKind};
+use bandori_std::state_key; use card_sdk::abi::{MoveKind};
 use bandori_std::ctx::{self, plan};
 use card_sdk::{CardDef, Msg, On};
 
@@ -79,6 +79,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if next >= 0 {
         // 「在下个自己的回合结束前不可使用手牌」
         ctx::state::set(next, state_key::NO_HAND, 2);
+        bandori_std::status::declare_companion(next, state_key::NO_HAND);
         ctx::log(
             next,
             &Msg::new("log.event.asukayama_no_hand").player_id("who", next),

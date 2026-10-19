@@ -16,7 +16,7 @@
 //! -- which the direction check makes impossible on the approach side, so the
 //! pot refund fires on the wrap-around overshoot.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

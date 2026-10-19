@@ -581,7 +581,7 @@ pub fn tile_is<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32) -> Result<i32
 }
 
 /// `tile_attr(tile, attr_ptr, attr_len) -> i32` -- generic field read.
-/// Replaces the attr family of `tile_group` / `tile_price` (those stay as
+/// Replaces the attr family of `tile_group` / `tile_price` (those remain as
 /// sugar). `kind` / `color` strings are `tile_is` / future string attrs.
 pub fn tile_attr<C: HostCtx>(c: &mut C, tile: i32, ap: i32, al: i32) -> Result<i32, HostErr> {
     let attr = guest_str(c, ap, al)?;
@@ -685,13 +685,11 @@ pub fn turn_start_pos<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, Host
 }
 
 pub fn turn_snap<C: HostCtx>(c: &mut C, player_id: i32, buf: i32) -> Result<i32, HostErr> {
-            let (pos, stay, stun, exile) = c.st().wr().turn_snap(player_id);
-            let mut out = [0u8; 16];
-            for (i, v) in [pos, stay, stun, exile].into_iter().enumerate() {
-                out[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
-            }
-            c.write_guest( buf, &out)?;
-            Ok(16)
+    let snap = c.st().wr().turn_snap(player_id);
+    let bytes = postcard::to_allocvec(&snap).unwrap_or_default();
+    let n = bytes.len() as i32;
+    c.write_guest(buf, &bytes)?;
+    Ok(n)
 }
 
 pub fn tile_group<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
@@ -1142,7 +1140,7 @@ pub fn inc_slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, by: i32) 
             Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
-// `group_pool` / `add_group_pool` stay on the guest surface: a named pool on
+// `group_pool` / `add_group_pool` remain on the guest surface: a named pool on
 // the group-skill field instance (see `ops.rs` `group_skill_uid`).
 pub fn group_pool<C: HostCtx>(c: &mut C, player_id: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
     let name = guest_str(c, np, nl)?;
@@ -1390,11 +1388,8 @@ pub fn gain_marker<C: HostCtx>(
             Ok(c.st_mut().w().gain_marker(player_id, name, n, why))
 }
 
-/// One generic abnormal-layer verb (wire kind id: 1 = stay, 2 = stun,
-/// 3 = exile). `n < 0` (removal) always applies -- 「移除一层」 is not a
-/// grant. `n > 0` opens the abnormal [反击] window; a cancelled window
-/// writes nothing. `to` is the kind-specific payload (`-1` = none), carried
-/// for the exile return destination.
+/// Legacy layered write. New guests use the split form (`gate` + `state_add`
+/// + [`raise_after`]).
 pub fn apply_abnormal<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -1405,18 +1400,40 @@ pub fn apply_abnormal<C: HostCtx>(
     if n < 0 {
         c.st_mut().w().apply_abnormal(player_id, kind, n, to);
     } else if n > 0 {
-        let Some(k) = AbKind::from_i32(kind) else {
-            return Ok(());
-        };
-        if abnormal_gate(c, player_id, k)? {
-            c.st_mut().w().apply_abnormal(player_id, kind, n, to);
+        if let Some(k) = AbKind::from_i32(kind) {
+            if abnormal_gate(c, player_id, k)? {
+                c.st_mut().w().apply_abnormal(player_id, kind, n, to);
+            }
         }
     }
     Ok(())
 }
 
+/// Declare the generic state-flag bits for a key (see
+/// [`game_core::state::state_flag`]).
+pub fn state_set_flags<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    key: &str,
+    flags: u8,
+) -> Result<(), HostErr> {
+    c.st_mut().w().state_set_flags(player_id, key, flags);
+    Ok(())
+}
+
+/// Queue a post-commit raise whose wire event name is caller-supplied data.
+pub fn raise_after<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    name: &str,
+    value: i32,
+) -> Result<(), HostErr> {
+    c.st_mut().w().raise_after(player_id, name, value);
+    Ok(())
+}
+
 /// Set this turn's main-move latch (`locked != 0` skips; `0` releases).
-/// Generic turn-flow; `status:stay` drives it. exile is not part of the
+/// Generic turn-flow; the move-gate host drives it. Off-board is not part of the
 /// latch (closeout-2 ruling).
 pub fn skip_main_move<C: HostCtx>(c: &mut C, player_id: i32, locked: i32) -> Result<(), HostErr> {
     c.st_mut().w().skip_main_move(player_id, locked);

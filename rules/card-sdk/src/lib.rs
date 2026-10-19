@@ -128,7 +128,7 @@ pub mod rt;
 ///     .props(&[(prop::HAND_LIMIT_DELTA, -1)]);
 /// // 规则书: 「（此卡可在眩晕时打出）」
 /// pub const H: CardDef = CardDef::new("MyGO:壱雫空", &[...])
-///     .props(&[(prop::PLAYABLE_STUNNED, 1)]);
+///     .props(&[("handPlayExempt", 1)]); // a ruleset prop key, as data
 /// ```
 #[derive(Clone, Copy)]
 pub struct CardDef {
@@ -186,6 +186,25 @@ pub struct CardDef {
     /// [`Self::board_role`] is `"tile"`. Empty = derive the single kind from
     /// the id's `tile:` suffix. Multi-kind rules list every kind.
     pub governs: &'static [&'static str],
+    /// Refusal message keys for the capability gates this rule closes, used
+    /// when a **play** is refused (`cannot_play`): `(gate kind i32, i18n key)`.
+    /// Gate kind ids are `TriggerKind::{ActGate=95, PayGate=96, MoveGate=97,
+    /// PlayGate=101}` plus `OnBoardGate` / `TargetableGate`. Default `&[]`.
+    ///
+    /// The same gate can speak a different line when it **skips a turn**
+    /// (the skip log keys vs the play-refusal keys); that
+    /// spelling rides [`Self::gate_skip_msgs`] so both frozen keys remain on the
+    /// wire. Host `gate_refusal_msg` reads `gate_msgs` (play) and should read
+    /// `gate_skip_msgs` for the turn-skip log.
+    pub gate_msgs: &'static [(i32, &'static str)],
+    /// Turn-skip message keys for the capability gates this rule closes
+    /// (ActGate → its skip key, MoveGate → its skip key):
+    /// `(gate kind i32, i18n key)`. Default `&[]` (fall back to
+    /// [`Self::gate_msgs`]). Trailing field -- postcard is not self-describing.
+    pub gate_skip_msgs: &'static [(i32, &'static str)],
+    /// Card prop key that exempts a play from this rule's act gate (empty =
+    /// none). The name is ruleset vocabulary; the engine reads it as data.
+    pub exemption_prop: &'static str,
 }
 
 impl CardDef {
@@ -202,6 +221,9 @@ impl CardDef {
             meta: None,
             board_role: "",
             governs: &[],
+            gate_msgs: &[],
+            gate_skip_msgs: &[],
+            exemption_prop: "",
         }
     }
 
@@ -220,12 +242,15 @@ impl CardDef {
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
     /// Name this card's entries after their rulebook clauses -- 「（1）」,
     /// 「（2）」, … -- as `(entry index, label)` pairs. The 「效果适用」 line
-    /// shows the label of the entry that ran; unlabelled entries stay bare.
+    /// shows the label of the entry that ran; unlabelled entries remain bare.
     pub const fn labels(self, labels: &'static [(i32, &'static str)]) -> Self {
         Self {
             id: self.id,
@@ -239,6 +264,9 @@ impl CardDef {
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
@@ -270,6 +298,9 @@ impl CardDef {
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
@@ -292,6 +323,9 @@ impl CardDef {
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
@@ -299,7 +333,7 @@ impl CardDef {
     /// [`abi::Flash::Always`] flashes even an owner-self-only effect the
     /// player should notice; [`abi::Flash::Never`] keeps the log entry but
     /// suppresses the flash / pulse even for a cross-player one. Entries with
-    /// no override stay [`abi::Flash::Auto`] (host classifies by scope).
+    /// no override remain [`abi::Flash::Auto`] (host classifies by scope).
     /// Replaces any earlier `flash` call.
     ///
     /// ```ignore
@@ -321,6 +355,9 @@ impl CardDef {
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
@@ -384,6 +421,9 @@ impl CardDef {
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
@@ -415,6 +455,9 @@ impl CardDef {
             meta: Some(meta),
             board_role: self.board_role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
@@ -438,6 +481,9 @@ impl CardDef {
             meta: self.meta,
             board_role: role,
             governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
         }
     }
 
@@ -463,6 +509,74 @@ impl CardDef {
             meta: self.meta,
             board_role: self.board_role,
             governs: kinds,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
+        }
+    }
+
+    /// Refusal message keys for the capability gates this rule closes (play
+    /// path): `(gate kind i32, i18n key)`. Replaces any earlier `gate_msgs`
+    /// call. Turn-skip lines ride [`Self::gate_skip_msgs`].
+    pub const fn gate_msgs(self, msgs: &'static [(i32, &'static str)]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
+            gate_msgs: msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
+        }
+    }
+
+    /// Turn-skip message keys for the capability gates this rule closes:
+    /// `(gate kind i32, i18n key)`. Replaces any earlier `gate_skip_msgs`
+    /// call. Play refusals ride [`Self::gate_msgs`].
+    pub const fn gate_skip_msgs(self, msgs: &'static [(i32, &'static str)]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: msgs,
+            exemption_prop: self.exemption_prop,
+        }
+    }
+
+    /// Card prop key that exempts a play from this rule's act gate (empty =
+    /// none). Replaces any earlier `exemption_prop` call.
+    pub const fn exemption_prop(self, key: &'static str) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: key,
         }
     }
 
@@ -562,9 +676,10 @@ pub enum On {
     /// Kinds: PayCombinedCancel (false = drop the command), PaySplitChoose
     /// (false = cancel the payment), and the decision gates (AbnormalGuard /
     /// ImmuneAll / Untargetable / Redirect / BuyGate / ActGate / PayGate /
-    /// MoveGate / ExclusiveUse / PlayGate -- true = allowed).
+    /// MoveGate / ExclusiveUse / PlayGate / OnBoardGate / TargetableGate --
+    /// true = allowed).
     /// The generic marker spend-substitution window (`ChargePaying`, id 78;
-    /// name is payload) is **not** here: its 「可」 opt-in prompts, so it stays
+    /// name is payload) is **not** here: its 「可」 opt-in prompts, so it remains
     /// `On::Action`. A PaySplitChoose that *also* rewrites the amount is split
     /// into [`On::Filter`] (amount) plus this variant (cancel).
     FilterFlag(
@@ -586,7 +701,7 @@ pub enum On {
     /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
     /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
     /// `CardDef` per tile kind and this is their body; the engine keeps
-    /// rent / buy / build / draw-event as `ctx` primitives so it stays thin.
+    /// rent / buy / build / draw-event as `ctx` primitives so it remains thin.
     /// Runs inside the settle chain: a counteraction to the settle link, or a
     /// field hook that replaces the body, shapes whether and how it runs. Same
     /// shape as [`On::Action`]; the condition sees the settling tile / actor.
@@ -661,7 +776,7 @@ pub mod pre {
 
 impl On {
     /// Replace the entry's condition string (docs/GUARDS.md §4.3). A const
-    /// builder so a declaration can stay a one-liner:
+    /// builder so a declaration can remain a one-liner:
     ///
     /// ```ignore
     /// On::Counteract(&[ChainKind::DiceRollResult], "", r#"你将要失去或支付资金"#, Some(can_counteract), counteract).pre(pre::MINE)
@@ -884,6 +999,8 @@ mod tests {
             TriggerKind::MoveGate,
             TriggerKind::ExclusiveUse,
             TriggerKind::PlayGate,
+            TriggerKind::OnBoardGate,
+            TriggerKind::TargetableGate,
             TriggerKind::ImmuneAll,
             TriggerKind::Untargetable,
             TriggerKind::Redirect,
@@ -900,7 +1017,7 @@ mod tests {
             TriggerKind::SettleBody,
             TriggerKind::CounterChanged,
             TriggerKind::DrewBefore,
-            TriggerKind(78), // marker spend-substitution (name is payload); prompts, stays Action
+            TriggerKind(78), // marker spend-substitution (name is payload); prompts, remains Action
         ] {
             assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
         }
@@ -928,8 +1045,8 @@ mod tests {
             ("Event", ActionKind::Event),
             ("Abnormal", ActionKind::Abnormal),
             ("Target", ActionKind::Target),
-            // Wire id 21 (`exile`) is a ruleset-declared kind
-            // (`bandori_std::kind::Exile`); this table lists only the
+            // Wire id 21 is a ruleset-declared kind
+            // (`bandori_std::kind`); this table lists only the
             // engine-generic named consts.
             ("State", ActionKind::State),
             ("Counteracted", ActionKind::Counteracted),
@@ -1020,9 +1137,11 @@ mod tests {
             ("TurnBonusTime", FilterKind::TurnBonusTime),
             ("TurnBaseTime", FilterKind::TurnBaseTime),
             ("PlayGate", FilterKind::PlayGate),
+            ("OnBoardGate", FilterKind::OnBoardGate),
+            ("TargetableGate", FilterKind::TargetableGate),
             ("DiceRollValue", FilterKind::DiceRollValue),
         ];
-        assert_eq!(filter.len(), 25);
+        assert_eq!(filter.len(), 27);
         for (name, k) in filter {
             assert!(!k.as_trigger().as_str().is_empty(), "FilterKind::{name}");
             assert!(
@@ -1094,7 +1213,7 @@ mod tests {
         assert_eq!(TriggerKind::from_i32(104).as_str(), "");
         assert_eq!(TriggerKind::from_str("flipEffect"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("flipAfter"), TriggerKind::None);
-        // Stop=16 / Teleport=17 / Stun=19 / Stay=20 / Forced=22 retired in
+        // Ids 16 / 17 / 19 / 20 / 22 (retired abnormal / force kinds) retired in
         // v84 -- never reuse.
         assert_eq!(TriggerKind::from_i32(16).as_str(), "");
         assert_eq!(TriggerKind::from_i32(17).as_str(), "");
@@ -1103,8 +1222,8 @@ mod tests {
         assert_eq!(TriggerKind::from_i32(22).as_str(), "");
         assert_eq!(TriggerKind::from_str("stop"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
-        assert_eq!(TriggerKind::from_str("stun"), TriggerKind::None);
-        assert_eq!(TriggerKind::from_str("stay"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("retiredAb19"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("retiredAb20"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("forced"), TriggerKind::None);
         // Live neighbours still round-trip.
         assert_eq!(TriggerKind::from_str("drewBefore").as_str(), "drewBefore");

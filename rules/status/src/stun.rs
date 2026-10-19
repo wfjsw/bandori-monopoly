@@ -47,15 +47,23 @@ pub const STATUS_STUN: CardDef = CardDef::new(
         // rules.txt 49: 「处于该状态时[无法移动]，无法使用[主动]技能和手卡的[手]
         // 效果，无法收付款」 -- three gates, **CEL-only**. `stunned` counts the
         // pending `stunStart` layer too (it already holds the gate).
-        On::FilterFlag(
-            &[FilterKind::ActGate, FilterKind::PayGate, FilterKind::MoveGate],
-            STUNNED,
-            None,
-            refuse,
-        ),
+        // 「不可阻挡」 does **not** cancel this layer's move block (it only
+        // 「无视」s the stay half).
+        On::FilterFlag(&[FilterKind::ActGate, FilterKind::PayGate], STUNNED, None, refuse),
+        On::FilterFlag(&[FilterKind::MoveGate], STUNNED, None, refuse),
     ],
 )
-    .board_role("status");
+    .board_role("status")
+    // Play refusal (`cannot_play` → Act, unless the card carries
+    // `exemption_prop`) and the turn-skip line (`play.rs` closed-act skip)
+    // are **different frozen keys** on the same gate. `gate_msgs` is the play
+    // path; `gate_skip_msgs` is the skip path. Host `gate_refusal_msg` reads
+    // the play table; the turn-skip site should read the skip table.
+    .gate_msgs(&[(FilterKind::ActGate.as_i32(), "err.play_stunned")])
+    .gate_skip_msgs(&[(FilterKind::ActGate.as_i32(), "log.stunned_skip")])
+    // 「（此卡可在眩晕时打出）」 cards name this prop; the engine skips the
+    // act-gate check for them (`CardRules::card_act_exemption`).
+    .exemption_prop(bandori_std::prop::PLAYABLE_STUNNED);
 
 /// The condition under which [晕眩] closes the act, pay and move gates.
 pub const STUNNED: &str = "state(actor,'stun') + state(actor,'stunStart') > 0";

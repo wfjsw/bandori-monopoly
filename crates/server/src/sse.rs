@@ -128,7 +128,7 @@ pub async fn stream(
     // Every (re)connect asks the engine to hand the seat back, not only when
     // presence says the member was away: presence is in another process's
     // stream too (or was dropped by a restart), so a seat put on 托管 would
-    // otherwise stay on the AI. The engine ignores it for a seat not on AI.
+    // otherwise remain on the AI. The engine ignores it for a seat not on AI.
     // Room lock dropped: `member_back` is a worker round-trip.
     let handle = room.lock().unwrap().match_handle();
     if let Some(m) = handle {

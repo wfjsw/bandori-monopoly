@@ -11,7 +11,7 @@
 //! outside it. The extra dice are `add_extra_dice`, which rides along on the
 //! plan rather than replacing its base -- 「额外添加」, not 「变更为」.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

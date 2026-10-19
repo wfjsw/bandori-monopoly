@@ -2,7 +2,7 @@
 //! the native `rules-native` backend must produce identical `save()`
 //! checkpoints, event streams and final saves (`docs/BOT.md` §3.1 B1).
 //!
-//! The sandbox stays authoritative for real matches; this test is what keeps
+//! The sandbox remains authoritative for real matches; this test is what keeps
 //! the advisory native build honest. A failure here means the bot's
 //! simulations disagree with the match engine -- fix before trusting the bot.
 //!
@@ -123,7 +123,7 @@ fn assert_same(seed: u64, cap: i32, a: &Run, b: &Run) {
         assert_eq!(
             x, y,
             "seed {seed} cap {cap}: checkpoint {i} diverged.\n{}\n\
-             The native build is advisory: the sandbox stays authoritative.",
+             The native build is advisory: the sandbox remains authoritative.",
             byte_ctx(x, y)
         );
     }
@@ -136,7 +136,7 @@ fn assert_same(seed: u64, cap: i32, a: &Run, b: &Run) {
         if x != y {
             panic!(
                 "seed {seed} cap {cap}: event {i} diverged.\n  sandbox: {x:?}\n  native : {y:?}\n\
-                 The native build is advisory: the sandbox stays authoritative."
+                 The native build is advisory: the sandbox remains authoritative."
             );
         }
     }

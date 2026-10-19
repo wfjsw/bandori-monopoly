@@ -205,7 +205,7 @@ fn back_then_card_payment_uses_only_the_new_distance() {
 fn hand_play_restrictions_do_not_suppress_the_paid_skill() {
     let mut t = table();
     t.set_fire(0, 10, 10);
-    t.m.world_mut().st.players[0].state_set(game_core::state::key::NO_HAND, 1);
+    t.m.world_mut().st.players[0].state_set(bandori_std::state_key::NO_HAND, 1);
     roll(&mut t);
     distance(&mut t, 1);
     assert!(t.option(CARD).is_none());

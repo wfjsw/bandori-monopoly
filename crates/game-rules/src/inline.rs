@@ -30,7 +30,7 @@ use crate::world::CardWorld;
 /// wasm / native boundary.
 ///
 /// The run's world is type-erased (`&mut dyn Any`, always a [`crate::Run`] --
-/// `CardModules` pins it) so the trait stays object-safe while `hostfns` stays
+/// `CardModules` pins it) so the trait remains object-safe while `hostfns` remains
 /// generic over `HostCtx::World`.
 pub trait InlineHost {
     /// Answer a player prompt. `run` is the guest's world so far (its writes
@@ -137,7 +137,7 @@ fn with_run<C: HostCtx, T>(
 }
 
 /// Answer `p` inline. `Ok(Some(v))` = the guest continues with `v` (recorded
-/// on the run's answer log so a nested `play_card` cursor stays aligned);
+/// on the run's answer log so a nested `play_card` cursor remains aligned);
 /// `Ok(None)` = no inline host, or it declined -- the caller pauses as today.
 pub fn prompt_or_inline<C: HostCtx>(c: &mut C, p: Prompt) -> Result<Option<i32>, HostErr> {
     let Some(h) = top() else { return Ok(None) };

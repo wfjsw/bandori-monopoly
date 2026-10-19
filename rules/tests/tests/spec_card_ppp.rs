@@ -388,7 +388,7 @@ pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     let charge = |w: &game_core::engine::World| {
-        w.st.players.get(who).map(|p| (p.charge(), p.charge_max())).unwrap_or((0, 0))
+        w.st.players.get(who).map(|p| (p.state_get(bandori_std::state_key::CHARGE), p.state_max(bandori_std::state_key::CHARGE))).unwrap_or((0, 0))
     };
     let (pre_f, pre_max) = charge(step.pre);
     let (post_f, _) = charge(step.post);
@@ -1578,7 +1578,7 @@ fn auction_off_raises_fire_cap() {
         );
     }
     // [持续]「火罐上限加1」 over the vanilla baseline of 0.
-    let max1 = t.p(0).charge_max();
+    let max1 = t.p(0).state_max(bandori_std::state_key::CHARGE);
     if max1 != 1 {
         panic!(
             "fire max {max1}, expected 1 (C-PPP-auction-off-c1: 上限加1 over baseline 0)"
@@ -1975,9 +1975,9 @@ pub fn verify_better_sound(
             post.st.players[who].pos
         ));
     }
-    let dfire = post.st.players[who].charge() as i64 - pre.st.players[who].charge() as i64;
+    let dfire = post.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64 - pre.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64;
     // Cap may block; when room existed the delta is exactly 1.
-    let room = pre.st.players[who].charge() < pre.st.players[who].charge_max();
+    let room = pre.st.players[who].state_get(bandori_std::state_key::CHARGE) < pre.st.players[who].state_max(bandori_std::state_key::CHARGE);
     if room && dfire != 1 {
         return Err(format!("fire delta {dfire}, expected +1"));
     }

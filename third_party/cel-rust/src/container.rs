@@ -51,6 +51,31 @@ impl Container {
         .map(move |scope| Cow::Owned(format!("{scope}.{name}")))
         .chain(once(Cow::Borrowed(name)))
     }
+
+    /// [`Self::candidates`] as a plain walk. `f` returns `true` to stop.
+    /// Ident resolution on the hook/counteract path uses this instead of the
+    /// iterator adapters -- those frames are large and STACK-01's 512 KiB
+    /// thread cannot spare them.
+    pub(crate) fn walk_candidates(&self, name: &str, mut f: impl FnMut(&str) -> bool) {
+        let (scope, base) = match name.strip_prefix('.') {
+            Some(absolute) => ("", absolute),
+            None => (self.name.as_str(), name),
+        };
+        if !scope.is_empty() {
+            let mut s = scope;
+            loop {
+                let candidate = format!("{s}.{base}");
+                if f(&candidate) {
+                    return;
+                }
+                match s.rfind('.') {
+                    Some(i) => s = &s[..i],
+                    None => break,
+                }
+            }
+        }
+        let _ = f(base);
+    }
 }
 
 #[cfg(test)]
