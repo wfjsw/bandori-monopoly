@@ -1247,10 +1247,12 @@ impl World {
     }
 
     /// The board-wide **status hosts** (`status:*`, [`crate::data::status_rule_ids`])
-    /// -- one instance each on the neutral board owner. Same shape as
-    /// [`Self::mark_rule_instances`]: they govern no single tile, so they hear
-    /// every trigger their rule declares wherever it points. Collected **last**
-    /// among the field hooks so sibling hooks still see pre-tick state.
+    /// -- one instance each on the neutral board owner, governing no single
+    /// tile. Like [`Self::mark_rule_instances`], these hear every trigger their
+    /// rule declares wherever it points (the `noHand` fold / clear runs on the
+    /// turn-flow triggers, the [除外] tick on `turnStartBefore`). Collected
+    /// **last** among the field hooks, after tile / event / mark, so sibling
+    /// hooks still see pre-tick state.
     pub fn status_rule_instances(&self) -> Vec<(i32, String)> {
         self.st
             .board_field
@@ -2167,10 +2169,13 @@ impl World {
     /// not because the engine enforces bounds -- [`Self::state_add`] would not.
     ///
     /// The verbs are the `status:*` hosts' grant API (`docs/STATUS-HOSTS.md`,
-    /// `rules/status`). Phase B keeps them here so StubRules matches and the
-    /// old `ctx::give_stay` shim work; the un-latch is the `status:stay`
+    /// `rules/status`) kept as **dumb engine services**: abnormal [反击] window
+    /// (`hostfns`) + layer write + the turn's move latch. Wear-off is declared
+    /// by the host verbs (`ctx::state::set_expires`); `default_expiry` stamps
+    /// it on any raw write as the safety net. The un-latch is the `status:stay`
     /// host's count-changed clause ([`Self::stay_unlatch`]), not a side
-    /// effect the grant site invents.
+    /// effect the grant site invents. Unstoppable refusal (STA-01) is the
+    /// host's policy, checked before this service is called.
     pub fn give_stay(&mut self, player_id: i32, n: i32) {
         // 「stay：处于该状态时[无法移动]」 and step 7 「停留效果发动：跳过主要
         // 移动阶段」 -- the skip is a *consequence* of the state, not a separate
@@ -2190,7 +2195,8 @@ impl World {
         if let Some(s) = self.player_mut(player_id) {
             let v = (s.stay() + n).max(0);
             s.state_set(key::STAY, v);
-            s.state_set_expires(key::STAY, Some(Tick::TurnEnd));
+            // Wear-off: `default_expiry` stamps `Tick::TurnEnd` on a fresh
+            // item; the host verb also declares it (`set_expires`).
             let unstoppable = s.state_get(key::UNSTOPPABLE) > 0;
             skip = Some(v > 0 && !unstoppable);
         }
@@ -2241,7 +2247,10 @@ impl World {
     /// `status:stay` count-changed clause (rules.txt 48): when the last stay
     /// layer (or an [不可阻挡] grant) leaves the player free to walk, the turn's
     /// main-move latch is released. exile is deliberately not part of it (see
-    /// [`Self::give_stay`]).
+    /// [`Self::give_stay`]). Documented owner of the un-skip is
+    /// `rules/status/src/stay.rs` (`unlatch_skip_move`); this is the engine's
+    /// interim home so StubRules matches and `tick_state` behave the same
+    /// (no `CounterChanged` hook on the key yet -- `docs/STATUS-HOSTS.md` §3.4).
     pub fn stay_unlatch(&mut self, player_id: i32) {
         let free = self
             .player_id(player_id)
@@ -2251,11 +2260,14 @@ impl World {
         }
     }
 
+    /// Dumb layer write for [晕眩]. Wear-off is declared by `status:stun`'s
+    /// grant verb; `default_expiry` stamps `Tick::TurnEnd` on a fresh item.
+    /// The unstoppable refusal (STA-01) is the host's policy -- checked before
+    /// this service is reached.
     pub fn give_stun(&mut self, player_id: i32, n: i32) {
         if let Some(s) = self.player_mut(player_id) {
             let v = (s.stun() + n).max(0);
             s.state_set(key::STUN, v);
-            s.state_set_expires(key::STUN, Some(Tick::TurnEnd));
         }
     }
 

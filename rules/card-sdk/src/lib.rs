@@ -22,7 +22,12 @@
 //! * guards (`can_counteract`) run against a throwaway copy of the world, so they are
 //!   pure by construction even if they call a mutating function by mistake.
 
-#![cfg_attr(target_arch = "wasm32", no_std)]
+// Guest wasm modules (one card crate per `.wasm`) are `no_std`. The bot
+// monolith (`bot-glue` + `native-rules`) is a **std** cdylib that links the
+// card crates as rlibs -- it keeps std (and the host's allocator / panic
+// machinery), so the guest panic handler and bump `#[global_alloc]` must not
+// be compiled in. See `rt.rs` and the `native-rules` feature below.
+#![cfg_attr(all(target_arch = "wasm32", not(feature = "native-rules")), no_std)]
 
 // `ctx` is compiled whenever `guest` is on, not just on wasm32 -- and it uses
 // `alloc::` throughout -- so `alloc` has to come along on native too. (A native
@@ -61,9 +66,12 @@ pub mod kani_host;
 #[cfg(kani)]
 mod kani_alloc;
 
-/// Native-only: how guest buffers cross the ABI on a 64-bit build (wasm32 uses
-/// real 32-bit pointers; see the module docs).
-#[cfg(not(target_arch = "wasm32"))]
+/// Native / wasm32-linked ABI support: how guest buffers cross the boundary as
+/// 32-bit arena handles. Real wasm32 guest modules use real 32-bit pointers;
+/// native 64-bit builds **and** the wasm32-linked monolith (whose host is
+/// `rules-native`'s `NativeHost`, which always reads through this arena) use
+/// the frame stack. See the module docs.
+#[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
 pub mod native;
 
 pub use msg::Msg;

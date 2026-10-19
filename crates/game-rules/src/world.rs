@@ -580,7 +580,7 @@ pub trait CardWorld: Clone + 'static {
         Vec::new()
     }
     /// Standing board-owned status hosts (`status:*`), as `(uid, id)`. Same
-    /// shape as [`Self::mark_rule_instances`].
+    /// shape as [`Self::mark_rule_instances`]; collected last among field hooks.
     fn status_rule_instances(&self) -> Vec<(i32, String)> {
         Vec::new()
     }

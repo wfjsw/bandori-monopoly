@@ -1726,9 +1726,10 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **suggested batch**: crystal/marker accounting
 - **locations**: `rules/status/src/unstoppable.rs:14-15`
 - **rulebook**: glossary 14 「无法获得新的[除外]层数」/「也不会获得新的层数」.
-- **current**: **[除外] half done** (2026-10-18) -- `rules/status/src/exile.rs::grant`
-  refuses while `unstoppable > 0`. The [晕眩] half is still open (`give_stun`
-  does not refuse).
+- **current (2026-10-18)**: **done** -- both halves refuse in the host grant
+  verbs before the engine service (no abnormal window for a refused grant):
+  [晕眩] in `status::stun::add` / `add_start` (`status-hosts-rest`), [除外] in
+  `rules/status/src/exile.rs::grant` (`twodonuts-exile`).
 
 ## STA-02 — no prompt surface for 「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」
 - **kind**: ABI defect
@@ -1745,6 +1746,10 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **suggested batch**: skills: CiRCLE / sumimi
 - **locations**: `rules/status/src/no_hand.rs:6-7`
 - **rulebook**: 「手卡上限数量减1」 is card text; the 2→1→0 ladder is ours.
+- **current (2026-10-18, `status-hosts-rest`)**: the dance **moved** from the
+  inline `play.rs` steps into `status:no_hand`'s `TurnStart` / `TurnEnd`
+  hooks. The `TODO(规则书)` stays (the ladder is still our reading of card
+  text, not a glossary clause); the host now owns it.
 
 ## STA-04 — [除外] re-gain stacks despite 「该效果生效时无法重复获得该效果」
 - **kind**: implementation bug

@@ -967,7 +967,7 @@ impl CompiledPre {
     /// Host path: parse + lint + rewrite once (docs/GUARDS.md §4.3). Fail-closed:
     /// a parse / unknown-var / float error is a build error, never "treat as
     /// true" -- the clauses the condition carries are gone from the guard.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
     pub fn compile(src: &str) -> Result<Self, rules_cond::CondError> {
         let cond = rules_cond::compile(src)?;
         let blob = cond.to_bytes(false);

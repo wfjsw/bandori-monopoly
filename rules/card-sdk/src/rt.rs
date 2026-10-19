@@ -138,12 +138,15 @@ pub fn metadata(bands: &'static [&'static [CardDef]], sources: &RosterSources) -
 /// start of the next [`on`], which is long enough for the host to read the
 /// buffer it just asked for.
 fn leak(bytes: Vec<u8>) -> i64 {
-    #[cfg(target_arch = "wasm32")]
+    // Real pointers only for a pure wasm32 guest module. Native **and**
+    // the wasm32-linked monolith (`native-rules`) go through the arena:
+    // `NativeHost` always reads `card_sdk::native::read`.
+    #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
     {
         let b: &'static [u8] = Box::leak(bytes.into_boxed_slice());
         pack(b.as_ptr() as u32, b.len() as u32)
     }
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
     {
         let (h, l) = crate::native::intern(&bytes);
         pack(h as u32, l as u32)
@@ -176,7 +179,7 @@ pub fn on(
     // so the parent's out-buffers stay valid after the child returns (the old
     // flat `clear()` emptied `buy_quotes` mid-call). The `Frame` guard pops on
     // exit or unwind (`C-unwind` runs `Drop`).
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
     let _native_frame = crate::native::enter();
     let Some(o) = card(bands, idx).on.get(entry.max(0) as usize) else {
         panic!("bad entry {entry} on card {idx}")
@@ -493,45 +496,47 @@ macro_rules! ruleset {
         #[allow(dead_code)]
         static BAND_TABLE: &[&[$crate::CardDef]] = &[$($cards),+];
 
-        /// Native (non-wasm) mode: the table `rules-native` aggregates.
-        #[cfg(not(target_arch = "wasm32"))]
+        /// Linked-guest mode (native, or wasm32 + `native-rules`): the table
+        /// `rules-native` aggregates. No `#[no_mangle]` so every rule crate can
+        /// link into one binary.
+        #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
         pub static RULESET: &[&[$crate::CardDef]] = &[$($cards),+];
 
-        /// Native call entry -- same body as the wasm export, no `#[no_mangle]`
+        /// Linked call entry -- same body as the wasm export, no `#[no_mangle]`
         /// so every rule crate can link into one binary.
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
         pub fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
             $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
         }
 
-        /// Native manifest -- same body as the wasm export.
-        #[cfg(not(target_arch = "wasm32"))]
+        /// Linked manifest -- same body as the wasm export.
+        #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
         pub fn ruleset_manifest() -> i64 {
             $crate::rt::manifest(BAND_TABLE)
         }
 
-        /// Native roster metadata (ABI v63) -- same body as the wasm export.
-        #[cfg(not(target_arch = "wasm32"))]
+        /// Linked roster metadata (ABI v63) -- same body as the wasm export.
+        #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
         pub fn ruleset_metadata() -> i64 {
             $crate::rt::metadata(BAND_TABLE, $sources)
         }
 
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
         #[no_mangle]
         pub extern "C" fn ruleset_abi_version() -> i32 {
             $crate::abi::ABI_VERSION
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
         #[no_mangle]
         pub extern "C" fn ruleset_manifest() -> i64 {
             $crate::rt::manifest(BAND_TABLE)
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
         #[no_mangle]
         pub extern "C" fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
             $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
         #[no_mangle]
         pub extern "C" fn ruleset_metadata() -> i64 {
             $crate::rt::metadata(BAND_TABLE, $sources)
@@ -555,7 +560,7 @@ macro_rules! ruleset_card {
 /// Guest panic handler: trap. The host turns the trap into "this card is out",
 /// the same contract as a malformed message -- a card never gets to show a raw
 /// panic to players.
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 #[panic_handler]
 fn on_panic(_info: &core::panic::PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
@@ -573,10 +578,10 @@ fn on_panic(_info: &core::panic::PanicInfo) -> ! {
 /// memory and the ceiling is soft. The one concession to reuse is
 /// `realloc`: when the block being resized is the most recent allocation it is
 /// grown (or shrunk) in place, which is what `Vec`/`String` resizing wants.
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 struct Bump;
 
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 #[global_allocator]
 static ALLOC: Bump = Bump;
 
@@ -587,20 +592,20 @@ static ALLOC: Bump = Bump;
 /// stop a runaway effect, and the guest hitting its own ceiling first keeps
 /// the failure deterministic. Growth past this returns null and the run
 /// aborts into the panic handler, which traps and takes the card out cleanly.
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 const MAX_MEMORY: usize = 16 * 1024 * 1024;
 
 /// One wasm page of linear memory.
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 const PAGE: usize = 64 * 1024;
 
 /// Bump cursor: the absolute address of the next free byte. `0` means "not
 /// started yet" -- the first allocation latches [`__heap_base`]. Nothing in
 /// the guest reads this for control flow, so it stays deterministic.
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 static mut CURSOR: usize = 0;
 
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 extern "C" {
     /// Linker-provided (rust-lld): the first address past data, bss and the
     /// wasm shadow stack. The heap starts here; below it is not ours.
@@ -611,7 +616,7 @@ extern "C" {
 /// pages. Returns `false` if the host refused (its own per-instance limit) --
 /// `memory.grow` reports failure with `-1` instead of trapping, so we turn it
 /// into the allocator's null contract here.
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 fn ensure_mem(end: usize) -> bool {
     let have = core::arch::wasm32::memory_size::<0>() * PAGE;
     if end <= have {
@@ -626,7 +631,7 @@ fn ensure_mem(end: usize) -> bool {
     core::arch::wasm32::memory_grow::<0>(pages) != usize::MAX
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
 unsafe impl core::alloc::GlobalAlloc for Bump {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         let align = layout.align().max(1);

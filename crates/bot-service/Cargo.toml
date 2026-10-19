@@ -16,7 +16,10 @@ path = "src/main.rs"
 [dependencies]
 bot-core = { path = "../bot-core" }
 game-core = { path = "../game-core" }
-game-rules = { path = "../game-rules" }
+# Default-features off so the default `native-rules` build does not compile
+# wasmi/wasmtime. The sandboxed `WasmRules` path is
+# `--no-default-features --features sandbox`.
+game-rules = { path = "../game-rules", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
@@ -28,7 +31,8 @@ serde_json = { workspace = true }
 # match wrong. Native rules are compiled in, so the bot-service binary must be
 # built from the same commit as the deployed `dist/cards`.
 default = ["native-rules"]
-native-rules = ["dep:rules-native"]
+native-rules = ["dep:rules-native", "game-rules/native-rules"]
+sandbox = ["game-rules/sandbox"]
 
 [dependencies.rules-native]
 path = "../rules-native"

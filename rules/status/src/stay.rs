@@ -16,14 +16,16 @@
 //! * **「重复受到该效果时可叠加」** -- `status::stay::add` is a layer add
 //!   (`ctx::give_stay` today; the keyed state floors at 0).
 //! * **「玩家的每回合结束时移除一层」** -- wear-off is the item's own
-//!   `Tick::TurnEnd` (`default_expiry` stamps it on any write whose item has
-//!   no tick). `tick_state` does the decrement; this host names no tick.
+//!   `Tick::TurnEnd`, **declared by this host's grant verb**
+//!   (`ctx::state::set_expires`). `default_expiry` in `game-core` is the
+//!   safety net for raw writes; `tick_state` is key-agnostic.
 //! * **Un-latch** -- dropping the last layer (with no [除外] holding the move
 //!   either) un-skips the turn's main move. That is this host's
 //!   count-changed clause (memory: *state clauses belong on events*), not a
-//!   side effect of the grant site. Phase B: the engine verb
-//!   `give_stay` still calls the shared clause; the handler below is the
-//!   documented owner and runs on `Stay` when the engine raises it.
+//!   side effect of the grant site. The engine's `World::stay_unlatch` is the
+//!   documented interim home of that clause (no `CounterChanged` hook exists
+//!   yet -- `docs/STATUS-HOSTS.md` §3.4); `give_stay` runs the same latch on
+//!   every write. This host and `stay_unlatch` point at each other.
 //!
 //! [不可阻挡] (`data/rules.txt` 51) 「无视已存在的[停留]」 is a
 //! cross-host clause: the move gate stays clear while `unstoppable` > 0.
@@ -52,6 +54,9 @@ pub const STATUS_STAY: CardDef = CardDef::new(
     ],
 )
     .board_role("status");
+
+/// The state key this host owns (frozen webui wire).
+pub const KEY: &str = "stay";
 
 /// The condition under which [停留] closes the move gate. [停留] closes
 /// neither the act nor the pay gate.
@@ -109,12 +114,16 @@ pub fn blocks_pay(_stay: i32) -> bool {
 }
 // ------------------------------------------------------------- canonical API
 
-/// Add `n` [停留] layers (negative removes; floors at 0). Wear-off is the
-/// item's own `Tick::TurnEnd`. Un-latching the turn's move gate on the last
-/// layer is [`unlatch_skip_move`] / the engine's `stay_unlatch`, not this
-/// call site.
+/// Add `n` [停留] layers (negative removes; floors at 0). Wear-off
+/// `Tick::TurnEnd`, declared here. Un-latching the turn's move gate on the
+/// last layer is [`unlatch_skip_move`] / the engine's `stay_unlatch`, not this
+/// call site. [不可阻挡] does **not** refuse stay layers (it 「无视」s the
+/// gate, not the grant).
 pub fn add(player_id: i32, n: i32) {
     card_sdk::ctx::give_stay(player_id, n);
+    if n != 0 {
+        card_sdk::ctx::state::set_expires(player_id, KEY, card_sdk::ctx::state::TURN_END);
+    }
 }
 
 /// [停留] layers on the player.

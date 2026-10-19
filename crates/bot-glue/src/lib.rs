@@ -1,8 +1,22 @@
 //! Browser worker bundle for the advanced (ISMCTS) bot (`docs/BOT.md` B6).
 //!
-//! One wasm32 module: `game-core` + `game-rules` (the **wasmi** backend, same
-//! sandbox the page's `web-glue` runs) + `bot-core`. Loaded lazily into a Web
-//! Worker -- the main page's glue is untouched, so its size does not grow.
+//! One wasm32 module: `game-core` + `game-rules` + `bot-core`. Loaded lazily
+//! into a Web Worker -- the main page's glue is untouched, so its size does not
+//! grow.
+//!
+//! **Default (`native-rules`) is the monolith** (docs/BOT.md §3.6 follow-up):
+//! the card ruleset is **linked** as rlibs via `rules-native` -- no wasmi
+//! `Store`, no per-run instantiate, no fetch of `/assets/rules/*.wasm`. The
+//! host-import seam is the same `ruleset_*` symbols `rules-native` already
+//! ships natively; on wasm32 wasm-ld resolves them inside this one module.
+//! Must be built from the same commit as the deployed `dist/cards`. The
+//! bundled [`ruleset_sha256`] is compared to the page's `index.json` and the
+//! worker refuses to answer on mismatch.
+//!
+//! `--no-default-features --features sandbox` keeps the old wasmi sandbox path
+//! (fetch the card modules the page loads) for fallback and tests. Cargo cannot
+//! express "sandbox iff not `native-rules`", so the fallback names the feature
+//! explicitly; bare `--no-default-features` is a compile error.
 //!
 //! **Information boundary** (`docs/BOT.md` §1): the only input is one seat's
 //! view -- the exact frame the page renders for that seat (`MatchState` + own
@@ -17,6 +31,8 @@
 //! * `load_data` / `data_files` / `ruleset_add` / `ruleset_precompiled` /
 //!   `ruleset_build` -- the one ruleset load sequence
 //!   (`webui/src/core/rulesetLoad.ts` works against this glue unchanged).
+//!   With `native-rules` the ruleset_* calls are no-ops: the rules are
+//!   compiled in.
 //! * `decide(view_json, budget_ms, seed)` -> `{answer, iterations, elapsed_ms,
 //!   heuristic, reused, decisionKey, rootStats}`.
 //! * `ponder(view_json, budget_ms, seed)` -- speculative search, cached by
@@ -42,12 +58,28 @@ use bot_core::{
     action, heuristic_message_view, view_extras, Ismcts, MatchSim, SearchConfig, SearchOutcome,
     SeatView,
 };
+
+#[cfg(all(not(feature = "native-rules"), not(feature = "sandbox")))]
+compile_error!(
+    "bot-glue: enable `native-rules` (the default monolith) or `sandbox` \
+     (`--no-default-features --features sandbox` for the old wasmi path)"
+);
+
 use game_core::data::{GameData, Roster};
 use game_core::engine::{CardRules, StubRules};
 use game_core::net::NetMessage;
+#[cfg(all(not(feature = "native-rules"), feature = "sandbox"))]
 use game_rules::{Ruleset, WasmRules};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+/// Sandbox `Ruleset::sha256()` of the cards this monolith was built against
+/// (`index.json`'s `ruleset_sha256`). Empty when the build ran without a
+/// built ruleset -- the worker then refuses to answer.
+mod ruleset_identity {
+    include!(concat!(env!("OUT_DIR"), "/ruleset_identity.rs"));
+}
+use ruleset_identity::RULESET_SHA256;
 
 /// The browser bot worker is long-lived and the search allocates on every
 /// iteration. Same allocator choice as `web-glue` (see its note on talc 5.x).
@@ -66,10 +98,13 @@ const RESULT_TTL_MS: u64 = 60_000;
 
 thread_local! {
     static DATA: RefCell<Option<Arc<GameData>>> = const { RefCell::new(None) };
-    static RULES: RefCell<Option<Arc<WasmRules>>> = const { RefCell::new(None) };
+    static RULES: RefCell<Option<Arc<dyn CardRules>>> = const { RefCell::new(None) };
+    #[cfg(not(feature = "native-rules"))]
     static PENDING: RefCell<Option<game_rules::RulesetBuilder>> = const { RefCell::new(None) };
     /// Built ruleset, waiting for (or already bound to) the game tables.
     /// Either load order works: `load_data` before `ruleset_build` or after.
+    /// Monolith (`native-rules`): unused -- the rules are compiled in.
+    #[cfg(not(feature = "native-rules"))]
     static RULESET: RefCell<Option<Ruleset>> = const { RefCell::new(None) };
     /// The `BOOT_FILES` contents [`load_data`] was given, kept so a later
     /// `ruleset_build` can rebuild the tables with the ruleset's roster.
@@ -181,7 +216,7 @@ fn data() -> Result<Arc<GameData>, JsError> {
 fn rules() -> Result<Arc<dyn CardRules>, JsError> {
     let r = RULES.with(|r| r.borrow().clone());
     match r {
-        Some(r) => Ok(r as Arc<dyn CardRules>),
+        Some(r) => Ok(r),
         // Same contract as the match shell: no modules = StubRules (cards do
         // nothing). The search still runs; it is just weaker. `info` reports
         // `"stub"` so the caller can tell.
@@ -191,13 +226,39 @@ fn rules() -> Result<Arc<dyn CardRules>, JsError> {
 
 // ------------------------------------------------------------------ load
 
-/// Build the tables from the stored files + the stored ruleset's roster (or an
-/// empty roster when no ruleset is up yet), then bind `WasmRules` when a
-/// ruleset is present. Either load order works:
+/// Build the tables from the stored files + the ruleset roster, then bind the
+/// card rules.
+///
+/// Monolith (`native-rules`): the rules are compiled in (`rules-native`); the
+/// roster is [`rules_native::roster`], and [`ruleset_add`] / [`ruleset_build`]
+/// are no-ops so the worker's load sequence is unchanged.
+///
+/// Sandbox fallback: either load order works --
 ///
 /// * `ruleset_build` then `load_data` -- the tables take the ruleset's roster.
 /// * `load_data` then `ruleset_build` -- the tables are rebuilt here with the
 ///   roster the ruleset brings (ABI v63), so they are never stuck empty.
+#[cfg(feature = "native-rules")]
+fn assemble() -> Result<(), JsError> {
+    let files = FILES.with(|f| f.borrow().clone());
+    if files.is_empty() {
+        // `load_data` has not run yet; a lone `ruleset_build` just waits.
+        return Ok(());
+    }
+    let roster: Roster = rules_native::roster();
+    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()), roster)
+        .map_err(|e| JsError::new(&e))?;
+    let data = Arc::new(d);
+    // Build the linked rules once; a later `load_data` rebinds them to the new
+    // tables the same way the sandbox rebinds `WasmRules`.
+    let rules: Arc<dyn CardRules> = Arc::new(rules_native::native_rules(data.clone()));
+    RULES.with(|slot| *slot.borrow_mut() = Some(rules));
+    DATA.with(|slot| *slot.borrow_mut() = Some(data));
+    RULESET_SHA.with(|s| *s.borrow_mut() = RULESET_SHA256.to_string());
+    Ok(())
+}
+
+#[cfg(not(feature = "native-rules"))]
 fn assemble() -> Result<(), JsError> {
     let files = FILES.with(|f| f.borrow().clone());
     if files.is_empty() {
@@ -216,8 +277,8 @@ fn assemble() -> Result<(), JsError> {
     let data = Arc::new(d);
     let rules = RULESET
         .with(|r| r.borrow().clone())
-        .map(|set| WasmRules::new(set, data.clone()));
-    RULES.with(|slot| *slot.borrow_mut() = rules.map(Arc::new));
+        .map(|set| Arc::new(WasmRules::new(set, data.clone())) as Arc<dyn CardRules>);
+    RULES.with(|slot| *slot.borrow_mut() = rules);
     DATA.with(|slot| *slot.borrow_mut() = Some(data));
     Ok(())
 }
@@ -225,7 +286,8 @@ fn assemble() -> Result<(), JsError> {
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
 /// `BOOT_FILES`, plus the optional `deck_book.json`. Same shape as
 /// `web-glue::load_data`. The roster is **not** among them: it comes from the
-/// ruleset ([`ruleset_build`]), whichever order the two are called in.
+/// ruleset ([`ruleset_build`] / the linked table), whichever order the two are
+/// called in.
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
@@ -240,7 +302,9 @@ pub fn data_files() -> String {
 }
 
 /// Feed one card module (the bytes of `<sha>.wasm`); call `ruleset_build` after.
+/// Monolith: no-op -- the ruleset is compiled in.
 #[wasm_bindgen]
+#[cfg(not(feature = "native-rules"))]
 pub fn ruleset_add(bytes: &[u8]) -> Result<(), JsError> {
     PENDING.with(|p| {
         let mut p = p.borrow_mut();
@@ -250,9 +314,18 @@ pub fn ruleset_add(bytes: &[u8]) -> Result<(), JsError> {
     })
 }
 
+/// Monolith: no-op (the worker's load sequence is unchanged).
+#[wasm_bindgen]
+#[cfg(feature = "native-rules")]
+pub fn ruleset_add(_bytes: &[u8]) -> Result<(), JsError> {
+    Ok(())
+}
+
 /// Feed the precompiled-condition blob (`conds-<sha>.bin`, `docs/GUARDS.md`
 /// §8.2). Required whenever any loaded card declares a `pre`.
+/// Monolith: no-op -- conditions are compiled from the linked table.
 #[wasm_bindgen]
+#[cfg(not(feature = "native-rules"))]
 pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
     let conds = game_rules::PrecompiledConds::from_bytes(bytes)
         .map_err(|e| JsError::new(&e.to_string()))?;
@@ -266,9 +339,17 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
     })
 }
 
+/// Monolith: no-op (the worker's load sequence is unchanged).
+#[wasm_bindgen]
+#[cfg(feature = "native-rules")]
+pub fn ruleset_precompiled(_bytes: &[u8]) -> Result<(), JsError> {
+    Ok(())
+}
+
 /// Build the ruleset from the modules added so far. Returns the module count.
 /// Either load order works with [`load_data`] (see [`assemble`]).
 #[wasm_bindgen]
+#[cfg(not(feature = "native-rules"))]
 pub fn ruleset_build() -> Result<usize, JsError> {
     let built = PENDING
         .with(|p| p.borrow_mut().take())
@@ -280,6 +361,38 @@ pub fn ruleset_build() -> Result<usize, JsError> {
     RULESET_SHA.with(|s| *s.borrow_mut() = sha);
     assemble()?;
     Ok(n)
+}
+
+/// Monolith: the ruleset is compiled in. Returns `1` (one linked image) and
+/// binds the tables. The worker still calls this so its load sequence is
+/// byte-identical.
+#[wasm_bindgen]
+#[cfg(feature = "native-rules")]
+pub fn ruleset_build() -> Result<usize, JsError> {
+    RULESET_SHA.with(|s| *s.borrow_mut() = RULESET_SHA256.to_string());
+    assemble()?;
+    Ok(1)
+}
+
+/// Identity of the **linked** ruleset: the sandbox `Ruleset::sha256()` of the
+/// cards this monolith was built against (the same order-independent hash
+/// `game-rules` `host.rs` writes into `index.json` as `ruleset_sha256`).
+/// The worker compares this to the page's `index.json` and refuses to answer
+/// on mismatch. Empty when the build ran without a built ruleset.
+#[wasm_bindgen]
+pub fn ruleset_sha256() -> String {
+    if cfg!(feature = "native-rules") {
+        RULESET_SHA256.to_string()
+    } else {
+        RULESET_SHA.with(|s| s.borrow().clone())
+    }
+}
+
+/// `true` when the card rules are compiled into this module (the monolith).
+/// The worker skips fetching `/assets/rules/*.wasm` when this is `true`.
+#[wasm_bindgen]
+pub fn rules_linked() -> bool {
+    cfg!(feature = "native-rules")
 }
 
 // ------------------------------------------------------------------ config
@@ -369,9 +482,16 @@ pub fn seed_for_thread(seed: u32, thread: u32) -> u32 {
 pub fn info() -> String {
     let opts = OPTS.with(|o| o.borrow().clone());
     let sha = RULESET_SHA.with(|s| s.borrow().clone());
+    let sha = if cfg!(feature = "native-rules") && sha.is_empty() {
+        RULESET_SHA256.to_string()
+    } else {
+        sha
+    };
     json(&serde_json::json!({
         "service": "bot-glue",
-        "modules": if sha.is_empty() { "stub".to_string() } else { sha },
+        "linked": cfg!(feature = "native-rules"),
+        "modules": if sha.is_empty() { "stub".to_string() } else { sha.clone() },
+        "ruleset_sha256": sha,
         "bias_weight": opts.bias_weight,
         "eval_weight": opts.eval_weight,
         "implicit_minimax": opts.implicit_minimax,

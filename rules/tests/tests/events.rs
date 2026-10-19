@@ -698,6 +698,28 @@ fn asukayama_teleports_and_assigns_the_status_spread() {
     assert_eq!(t.state(3, "exile"), 1, "the rest: 1[除外]");
 }
 
+/// STA-01 (stun half): [不可阻挡] 「晕眩效果也不会获得新的层数」 -- the
+/// host verb `stun::add_start` refuses the 「获得2层回合开始时减少一层的
+/// [眩晕]」 while the target holds [不可阻挡].
+#[test]
+fn asukayama_stun_start_refused_under_unstoppable() {
+    let mut t = Table::vanilla(4);
+    // Drawer is P1; previous = P0 is the stunStart target.
+    t.set_pos(1, 5);
+    t.set_pos(2, 10);
+    t.set_pos(3, 20);
+    t.set_state(0, "unstoppable", 1);
+    draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
+    assert_eq!(
+        t.state(0, "stun") + t.state(0, "stunStart"),
+        0,
+        "[不可阻挡] 「晕眩效果也不会获得新的层数」"
+    );
+    // The rest of the spread still lands (only stun refuses).
+    assert!(t.state(2, "noHand") > 0, "next: no hand cards");
+    assert_eq!(t.state(3, "exile"), 1, "the rest: 1[除外]");
+}
+
 // The drawer is mid-main-move; the event's move is a forced side move.
 #[test]
 fn asukayama_drawer_moves_1d20_after_the_teleport() {

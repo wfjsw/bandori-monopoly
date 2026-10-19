@@ -231,6 +231,7 @@ dependencies = [
  "game-core",
  "game-rules",
  "js-sys",
+ "rules-native",
  "serde",
  "serde_json",
  "talc",

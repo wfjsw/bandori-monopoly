@@ -15,7 +15,7 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
-        r#"一次性向其他玩家支付5000以上资金"#,
+        r#"一次性向其他玩家支付至少5000资金"#,
         None,
         counteract,
     )],

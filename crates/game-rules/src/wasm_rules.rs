@@ -21,8 +21,10 @@ use game_core::engine::{Ask, CardRules, Cx, Dest, Flow, Halt, Trigger as CoreTri
 use game_core::msg::Msg;
 
 use crate::host::{
-    Call, CardModules, HookRun, HostRequest, Outcome, Prompt, PromptOption, RuleError, Ruleset,
+    Call, CardModules, HostRequest, Outcome, Prompt, PromptOption, RuleError,
 };
+#[cfg(feature = "sandbox")]
+use crate::host::Ruleset;
 use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
@@ -2470,8 +2472,10 @@ pub struct RulesBridge<M: CardModules> {
 type CardPropsTable = std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>;
 
 /// The sandboxed bridge: `CardRules` over wasmi/wasmtime card modules.
+#[cfg(feature = "sandbox")]
 pub type WasmRules = RulesBridge<Ruleset>;
 
+#[cfg(feature = "sandbox")]
 impl RulesBridge<Ruleset> {
     /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh)
     /// and bind the tables. `Ok(None)` when the directory or index is missing --
@@ -4800,9 +4804,13 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                 }
-                // **Status** hosts (`status:*`) are board-wide the same way.
-                // Collected **last** among the field hooks so sibling hooks
-                // still see pre-tick state (the exile layer tick runs here).
+                // **Status** hosts (`status:*`, `rules/status`) are board-wide
+                // the same way: one standing instance each on `BOARD_OWNER`,
+                // `tile = -1`. Collected last among the field hooks (after
+                // tile / event / mark) so a suppressing tile rule still gets
+                // its say first and sibling hooks see pre-tick state. The
+                // [除外] layer tick and `noHand`'s turn-flow fold / clear run
+                // here.
                 if self
                     .ruleset
                     .cards()
@@ -5002,7 +5010,7 @@ impl<M: CardModules> RulesBridge<M> {
             }
         }
         // **Status** hosts (`status:*`): board-wide, collected last among the
-        // field hooks (see the inline walk above).
+        // field hooks (see the inline walk above; `counteract_orig`'s mirror).
         if self
             .ruleset
             .cards()

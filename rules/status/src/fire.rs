@@ -1,4 +1,6 @@
-//! `status:fire` -- the 火罐 **owner**.
+//! 火罐 -- a capped **技能指示物**, *not* a status (see `docs/STATUS-HOSTS.md`
+//! taxonomy). Left as a thin named wrapper; the `markers` worktree owns the
+//! charge/Marker layer end-to-end.
 //!
 //! 规则书（`data/rules.txt` 126）:
 //! > · 火罐：技能指示物，在任意时刻，您持有的火罐数量不能超过持有上限
