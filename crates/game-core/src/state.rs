@@ -767,12 +767,7 @@ impl MatchPlayer {
     /// infers it from the key name.
     pub fn state_set_flags(&mut self, key: &str, flags: u8) {
         let e = self.state.entry(key.to_string()).or_default();
-        // Declarations are sticky: OR the bits in. A caller holding a default
-        // `StateVar` (flags == 0 -- e.g. an absent key read back as
-        // `unwrap_or_default()`) must not erase `NEVER_NEGATIVE`, or the floor
-        // silently disappears and the next write can land at -1 (the fuzz's
-        // `stay=-1` finding).
-        e.flags |= flags;
+        e.flags = flags;
     }
 
     /// Declare when this counter wears off (see [`Tick`]).
