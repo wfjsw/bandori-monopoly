@@ -286,7 +286,6 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
   return (
     <>
       <Backdrop src={src} snap={transitioning} />
-      <div className={s.statusScrim} aria-hidden />
       <div
         className={s.placer}
         style={{

@@ -148,8 +148,7 @@ phone and left the cutout band drawing nothing. The large viewport is the
 whole screen in both orientations, so `rotate(90deg)` and turning the phone
 for real produce the same stage box. `index.html` claims the home-screen shell
 with `apple-mobile-web-app-status-bar-style=black-translucent` so the PWA is
-fullscreen in portrait too; Stage paints a screen-space `.statusScrim` over
-the top inset to keep the white status-bar glyphs readable.
+fullscreen in portrait too.
 
 The stage's edges are the real screen edges on both axes: the game runs edge
 to edge, and insetting the box for the cutout left the retractable strips (the
