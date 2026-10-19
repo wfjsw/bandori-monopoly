@@ -528,45 +528,11 @@ impl Run {
         self.post_log("text", who, msg, "");
     }
 
-    /// Outcome line for a silent state-key write. Scratch keys (`skill.*`
-    /// latches, slots) remain silent. A write that lands on the same value is
-    /// not an effect and logs nothing. The `key` is opaque; the display name
-    /// is `log.state.other` with the raw key as text (webui maps it).
-    fn outcome_state(&mut self, who: i32, key: &str, was: i32, now: i32) {
-        if was == now || self.silent_body {
-            return;
-        }
-        if key == card_sdk::abi::state_key::HAND_LIMIT {
-            self.outcome(
-                who,
-                Msg::new("log.outcome.hand_limit")
-                    .player_id("who", who)
-                    .i("value", now as i64),
-            );
-            return;
-        }
-        if key.starts_with("skill.") || key == card_sdk::abi::state_key::SKILL_STATE {
-            // Skill scratch / skill-state toggle: narrate only when it is a
-            // real 1↔2 toggle (`note_state_toggle`).
-            return;
-        }
-        // Named-marker count changes narrate through `gain_marker` /
-        // `spend_marker`; a raw `state::set` on such a key is the declare-cap
-        // initial write and remains silent.
-        if key == "charge" {
-            return;
-        }
-        self.outcome(
-            who,
-            Msg::new("log.outcome.state")
-                .player_id("who", who)
-                .msg(
-                    "key",
-                    crate::trigger_why::state_key_name(key),
-                )
-                .i("value", now as i64)
-                .i("from", was as i64),
-        );
+    /// Outcome line for a state-key write. The engine has no key->phrase map
+    /// and no auto-narration: messages are built by the ruleset (`log_as` /
+    /// `ctx::log` with its own i18n key). A raw `state_set` is silent.
+    fn outcome_state(&mut self, _who: i32, _key: &str, _was: i32, _now: i32) {
+        // Intentionally empty. See `docs/STATUS-HOSTS.md`.
     }
 
     /// Record a real skill-state 1↔2 toggle so the commit point can raise
