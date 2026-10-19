@@ -17,6 +17,7 @@
 
 mod common;
 
+use bandori_std::half_ceil10;
 use common::*;
 
 /// Answer every open prompt with its decline. An auction prompt is *passed*
@@ -111,11 +112,6 @@ fn add_exile(t: &mut Table, who: usize, n: i32, to: usize) {
         t.set_state(who, "exileTo", to as i32);
         t.set_state(who, "exileHold", 0);
     }
-}
-
-/// 「向上取整10」 on a half charge: `ceil(full / 2 / 10) * 10`.
-fn half_ceil10(full: i32) -> i32 {
-    ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10
 }
 
 fn price(t: usize) -> i32 {

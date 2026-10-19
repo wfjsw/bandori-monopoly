@@ -552,7 +552,7 @@ Checked: `card_sdk::abi::ABI_VERSION = 78`,
 | **ABI → 31** | Phase 2 first step | `OnKind::Settle` (the settle body), `prop` keys for tile data, `ctx::settle_*` primitives, `place_card` on `BOARD_OWNER` |
 | **SAVE_VERSION → 3** | Phase 2 first step | `World::board_field` (tile rule instances) is part of the world; a v2 save has none and would restore a match with unbound tiles |
 | **ABI → 32** | Phase 3 (engine-fix batch) | `tile_prop` / `set_tile_prop` (write a rule instance's props by tile), `settle_circle_reward`, `ChainKind::SettleBody` (shares `TriggerKind::SettleBody`'s wire value), board-owned instances hearing field hooks. The `MoveCtx` plan is not part of the save, so SAVE_VERSION stays at 3. |
-| **ABI → 50** | agent/circle body migration (2026-10-10) | the tile bodies run the branch themselves. Added: `ask_tiles` (labels + prices + AI hint), `ai_agent_choice`, `raise` (guest-raised `passRewardAffected (kind 26)`), `gain_typed` (bank print with `typ` + `Pay::text`), `prop_at` / `set_prop_at`, `exile_of`, `trigger::move_from`. **Removed**: `agent_landing` / `settle_circle_reward` and their `HostRequest`s -- the engine keeps `Play::agent_landing` / `Play::circle_reward` as the `StubRules` built-in only. SAVE_VERSION unchanged. |
+| **ABI → 50** | agent/circle body migration (2026-10-10) | the tile bodies run the branch themselves. Added: `ask_tiles` (labels + prices + AI hint), `ai_agent_choice`, `raise` (guest-raised `passRewardAffected (kind 26)`), `gain_typed` (bank print with `typ` + `Pay::text`), `prop_at` / `set_prop_at`, `exile_of`, `trigger::move_from`. **Removed**: `agent_landing` / `settle_circle_reward` and their `HostRequest`s. The engine kept a `Play::agent_landing` / `Play::circle_reward` built-in fallback for a while; that fallback is gone too -- `land_at_built_in` only handles buyable deeds, and an unbound non-deed just logs a generic landing. SAVE_VERSION unchanged. |
 | **ABI → 78** | buy/build in tile rules (2026-10-16) | `OnKind::Buy` (12) / `OnKind::Build` (13): the tile body owns the perform sequence. Added: `ctx::pay_buy` / `ctx::pay_build` / `ctx::assign_deed`; `ctx::raise` dispatches on `TriggerKind::is_filter()` (BuyAssign deal packed in the answer log). `CardRules::deed_buy` / `deed_build`. Force-buy money stays a direct transfer. SAVE_VERSION unchanged. |
 
 ## Migration
@@ -580,8 +580,8 @@ report it.
 |---|---|---|---|
 | 1 | `tile:edogawa` | one `settle_draw` | **done** -- smallest body; proves bind + dispatch |
 | 2 | `tile:event` | `settle_draw` + `settle_event` | **done** -- added the `ctx::draw_event` primitive |
-| 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Action(&[ActionKind::PassTile])` -> `circle::settle_reward`, the body itself). The walk's `circle_reward` is the **built-in fallback** when no instance is bound |
-| 4 | `tile:agent` | the 「若…则…否则…」 branch | **done** -- the body is the branch (同色 set / all-owned half-rent / one buy-build offer). `Play::agent_landing` is the **built-in fallback** |
+| 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Action(&[ActionKind::PassTile])` -> `circle::settle_reward`, the body itself). No engine-side `circle_reward` remains: an unbound non-deed just logs a generic landing |
+| 4 | `tile:agent` | the 「若…则…否则…」 branch | **done** -- the body is the branch (同色 set / all-owned half-rent / one buy-build offer). No engine-side `Play::agent_landing` remains: an unbound non-deed just logs a generic landing |
 | 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `paySplitMul` stage (step 9) |
 | 6 | `tile:property` | the four-way branch | **done** -- `land_at`'s `match` is now the **built-in fallback** (`land_at_built_in`) for `StubRules` and unbound kinds, not the only path |
 | 7 | flags | card migrations | **done** -- `settleInstead` → `ActionKind::SettleBody`, `settleAtEnd` → `On::Action(&[AtEnd])`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
@@ -605,9 +605,8 @@ than the only path. Phase 3 landed the following (2026-10-06):
   The hook dispatch visits `board_field` (tile-filtered, and only for kinds a
   `tile:*` rule declares), so board-owned instances hear `passTile` and the
   other hooks they declare. Suppression is `prop::NO_REWARD`; `plan::no_circle_reward`
-  and `state::key::NO_CIRCLE_REWARD` are gone. The walk's `circle_reward` is
-  the **built-in fallback** when no rule instance is bound (`StubRules`), the
-  same shape as `settle_tile` -> `land_at_built_in`.
+  and `state::key::NO_CIRCLE_REWARD` are gone. No engine-side `circle_reward`
+  remains: an unbound non-deed just logs a generic landing (`land_at_built_in`).
 * **The settle body is its own [反击]-able chain link.** `ChainKind::SettleBody`
   shares `TriggerKind::SettleBody`'s wire value, and `is_hook_only` no longer
   lists it, so a hand card may [反击] the body. Cancelling `Settle` means 「the

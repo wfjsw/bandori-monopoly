@@ -38,11 +38,9 @@ pub const CLAUSES: &[Clause] = &[
 // helpers (local to this unit -- the generic kit stays game-free)
 // ---------------------------------------------------------------------------
 
-/// 「向上取整10」 on a half charge: `ceil(full / 2 / 10) * 10`.
-/// The book only says 「向上取整10」; this is the nearest reading of
-/// "round the half up to a multiple of 10".
+/// 「向上取整10」 on a half charge. Delegates to [`bandori_std::half_ceil10`].
 pub fn half_ceil10(full: i32) -> i32 {
-    ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10
+    bandori_std::half_ceil10(full)
 }
 
 /// Rent-table entry at the **standing** house count (the book's 「现等级」).

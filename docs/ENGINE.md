@@ -105,8 +105,8 @@ dispatch in `game-rules/src/wasm_rules.rs` visits `board_field` after the
 player fields (so a suppressing card can arm a prop before the tile reads it),
 tile-filtered for a tile-carrying trigger like `passTile`. That is how
 `tile:circle`'s **Pass entry** runs the [经过] CiRCLE reward
-(`circle::settle_reward`, the body itself), with the walk's `circle_reward` as
-the built-in fallback when no instance is bound.
+(`circle::settle_reward`, the body itself). There is no engine-side
+`circle_reward` fallback: an unbound non-deed just logs a generic landing.
 
 Two other kinds of board-owned instance sit beside the `tile:*` ones
 ([TILES.md](TILES.md)): **event** rules (`event:*`, `tile = -1`, bound while the
