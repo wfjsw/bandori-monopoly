@@ -1,7 +1,7 @@
 /* Deck: character + slot list on the left, deck strip + card pool on the right.
    The two columns are a flex row so the pool absorbs the stage's extra width
    instead of the gutter opening up. */
-.body { position: absolute; left: calc(37px + var(--safe-left, 0px)); right: calc(38px + var(--safe-right, 0px)); top: calc(125px + var(--safe-top, 0px)); height: 750px; display: flex; gap: 23px; }
+.body { position: absolute; left: 37px; right: 38px; top: 125px; height: 750px; display: flex; gap: 23px; }
 .left { position: relative; flex: 0 0 390px; }
 .right { position: relative; flex: 1 1 auto; min-width: 0; }
 

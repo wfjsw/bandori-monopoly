@@ -154,15 +154,19 @@ the top inset to keep the white status-bar glyphs readable.
 The stage's edges are the real screen edges on both axes: the game runs edge
 to edge, and insetting the box for the cutout left the retractable strips (the
 field row, the hand) hanging short of the border. What clears the hardware is
-the **controls**, padding by `--safe-*` (the safe-area inset on that stage edge
-plus the landscape top touch dead zone, already mapped through the forced
-rotation and divided by the fit scale). So the split is: **retractable /
-edge-docked strips do not respect the safe area** (they must connect to the
-real boundary); **controls do**. Today that is `TopBar` (the whole bar shifts
-in on every edge), Board `.body` (the side columns clear the cutout), the left
-column's actions row and the prompt sheet's window body (`padding-bottom`) --
-the sheet's *surface* still runs to the screen edge. A new edge-anchored
-control follows the controls, not the strips.
+the **tappable pieces**, padding by `--safe-*` (the safe-area inset on that
+stage edge plus the landscape top touch dead zone, already mapped through the
+forced rotation and divided by the fit scale) -- and *only* those. Shifting a
+whole scene or column instead (the first pass did) pushes every element away
+from the edge and leaves the cutout band as bare backdrop.
+
+So the split is: **surfaces run under the cutout** (panel backs, seat cards,
+art, the retractable strips -- any full-bleed shape a normal app would draw
+behind the status bar); **controls do not**. Today that is `TopBar`'s back /
+menu / crumb / status (the bar itself stays flush), the left column's actions
+row (`left` + `bottom`), and the prompt sheet's window body (`padding-bottom`;
+its *surface* still runs to the screen edge). A new edge-anchored control
+follows the controls; a new surface follows the surfaces.
 
 ## (b) Shared primitives — `ui/primitives.module.css`
 
