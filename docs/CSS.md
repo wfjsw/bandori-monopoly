@@ -140,14 +140,17 @@ below the strip in one move. Floating transport: both are `0`, no offset.
 
 ### Safe area: what respects it and what does not
 
-The stage is laid out against the **large** viewport (`100lvw` / `100lvh`), not
-the visual one: the visual viewport is shorter in portrait (Safari's address
-bar, and the iOS PWA's status-bar strip) than in landscape, so sizing to it
-made forced rotation lay out on a different canvas than a real turn of the
-phone and left the cutout band drawing nothing. The large viewport is the
-whole screen in both orientations, so `rotate(90deg)` and turning the phone
-for real produce the same stage box. `index.html` claims the home-screen shell
-with `apple-mobile-web-app-status-bar-style=black-translucent` so the PWA is
+The stage is laid out against the **device screen** on a handset (`windowBox`
+in `stageBox.ts`), not the layout or visual viewport: both of those are short
+of the screen in portrait (Safari's address bar, the iOS PWA's status-bar
+strip) and full in landscape, so sizing to them made forced rotation lay out
+on a different canvas than a real turn of the phone and letterboxed the stage
+into a blank bar at each end of the long axis. `window.screen` is the whole
+device in CSS px and swaps with orientation, so `rotate(90deg)` and turning
+the phone for real produce the same stage box; it only counts on a
+handset-sized coarse device (a desktop window on a touch monitor must not be
+blown up to the monitor). `index.html` claims the home-screen shell with
+`apple-mobile-web-app-status-bar-style=black-translucent` so the PWA is
 fullscreen in portrait too.
 
 The stage's edges are the real screen edges on both axes: the game runs edge
