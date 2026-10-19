@@ -192,18 +192,17 @@ pub fn gain(
     ruleset_core::ctx::gain_charge(player_id, n, why)
 }
 
-/// Spend `n` pots. `ChargePaying` runs first (spend substitution), then
-/// `markerSpend` opens **before** the pots move; a cancelled window spends
-/// nothing. After a successful spend the engine raises `fireSpent`.
+/// Spend `n` pots. `ChargePaying` runs first (spend substitution 「以代替此次
+/// 技能的火罐消耗」), then `markerSpend` opens **before** the pots move; a
+/// cancelled window spends nothing. After a successful spend the engine raises
+/// `fireSpent`.
 ///
 /// Spend draws [`temp`] pots first (§10(2): it is the over-cap allowance),
 /// then the pool. Returns whether the full cost was paid.
 ///
-/// Note: `ChargePaying` / `markerSpend` / `fireSpent` ride the pool spend
-/// verb. A temp-only spend moves the temp counter (and logs) without those
-/// windows; temp pots are rare (lisa's 「可超过上限的临时火罐」) and their
-/// 600-cost provenance is still `TODO(规则书)`.
-/// TODO(规则书): open `fireSpent` on a temp-only spend too (「每当你消耗火罐时」).
+/// The `ChargePaying` window rides the pool spend verb and opens **even when
+/// the pool is empty** (the substitution path). A pre-check on the pool would
+/// skip the window and break 「以代替此次技能的火罐消耗」.
 pub fn spend(
     player_id: i32,
     n: i32,
@@ -214,16 +213,14 @@ pub fn spend(
     }
     let from_temp = temp::get(player_id).min(n);
     let from_pool = n - from_temp;
-    if from_pool > 0 && get(player_id) < from_pool {
-        return Ok(false);
-    }
     // Temp first: the over-cap allowance is spent before the declared pool.
-    if from_temp > 0 && !temp::spend(player_id, from_temp, why)? {
-        return Ok(false);
+    if from_temp > 0 {
+        temp::spend(player_id, from_temp, why)?;
     }
-    if from_pool > 0 && !ruleset_core::ctx::spend_charge(player_id, from_pool, why)? {
-        // Should not happen (we checked the pool), but never half-pay.
-        return Ok(false);
+    if from_pool > 0 {
+        // Opens ChargePaying + markerSpend for `from_pool`, then writes.
+        // A substitution cancels the write and counts as paid.
+        return ruleset_core::ctx::spend_charge(player_id, from_pool, why);
     }
     Ok(true)
 }
