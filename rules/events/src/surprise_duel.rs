@@ -4,7 +4,7 @@
 //! > 将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{expire, keep};

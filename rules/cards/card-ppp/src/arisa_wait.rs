@@ -12,7 +12,7 @@
 //!
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PPP:（有咲）等等等一下";

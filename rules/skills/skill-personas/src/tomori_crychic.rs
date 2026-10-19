@@ -13,7 +13,7 @@
 //! The settle is the `settleAtEnd` counter the engine already honours.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
@@ -21,7 +21,7 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         On::Action(&[ActionKind::DiceRollAfter], card_sdk::pre::MINE, "", None, on_roll),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
@@ -61,7 +61,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「可消耗1火罐清除自身一层[停留]」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 1 {

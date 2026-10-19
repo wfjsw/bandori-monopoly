@@ -18,7 +18,7 @@
 //! attribute a payment's reduction to one skill. See the TODO.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The re-colour is armed for this turn's landing.
@@ -30,7 +30,7 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
     "skill:长崎素世:通透的颜色",
     &[
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // （2）「移动掷骰后可消耗一个火罐」 -- only with a pot to spend, and
         // only on a free roll.
         On::Action(

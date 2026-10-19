@@ -5,7 +5,7 @@
 //! >  在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目
 //!
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SPRECHCHOR: CardDef =

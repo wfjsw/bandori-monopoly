@@ -43,7 +43,7 @@
 //! path.
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -91,7 +91,7 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
 /// (derived plan state) stay here (not yet in the condition vocabulary).
 /// `actor == owner && slot('ppFansUp') >= 1` is the pre.
 fn roll_ok(player_id: i32) -> bool {
-    if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    if bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
     }
     ctx::fixed_roll().is_none()

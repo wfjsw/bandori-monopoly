@@ -2336,7 +2336,7 @@ pub fn arm_raise(a: Args) -> i64 {
     let mut settled = 1i64;
     #[cfg(all(kani, feature = "skills-groups"))]
     {
-        if kind == ruleset_core::kind::FANS_FLIP {
+        if kind == bandori_std::kind::FANS_FLIP {
             settled = arm_raise_fans_flip(player_id, value);
         }
     }

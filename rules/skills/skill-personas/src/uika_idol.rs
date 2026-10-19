@@ -11,7 +11,7 @@
 //! mark is spent when it pays out.
 
 use card_sdk::abi::{state_key, ActionKind, MarkFilter};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「火罐」 this skill parks on a tile.
@@ -21,7 +21,7 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
     "skill:三角初华（Sumimi）:成为偶像",
     &[
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 --
         // the offer exists only when such a tile exists. The colour-group
         // scan is residual (`is_color` / `tile_named`).

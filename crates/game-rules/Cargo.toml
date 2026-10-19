@@ -52,4 +52,4 @@ native-rules = ["card-sdk/native-rules", "rules-cond/compile"]
 
 [dev-dependencies]
 # Ruleset-defined counter names and kind ids for tests that arrange fixtures.
-ruleset-core = { path = "../../rules/ruleset-core" }
+bandori-std = { path = "../../rules/bandori-std" }

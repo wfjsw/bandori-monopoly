@@ -15,8 +15,8 @@
 //! (「视为你的主要移动」) are still held (see the TODOs below).
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{plan, trigger};
-use ruleset_core::ctx;
+use bandori_std::ctx::{plan, trigger};
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The passer this card is waiting for, or -1. A slot rather than a `GrabFx`

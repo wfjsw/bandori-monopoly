@@ -238,7 +238,7 @@ the second, clause （2） is per band instance.
    `declare`/`redeclare`/`overlay`/`end_overlay`, `gain`/`spend`/`adjust_cap`
    with actuals, `temp` as a second declared counter, `regime::{fill_to_cap,
    drain, burn_all}`) behind the existing `rules_status::fire` /
-   `ruleset_core` names. `fire_pot(player)` looks up the registry (no body
+   `bandori_std` names. `fire_pot(player)` looks up the registry (no body
    literals). Guests routed: two_in_one (registry re-declare, hardcoded pairs
    deleted), mutsumi_actor (fire overlay via the last-play latch; character
    cover still `TODO(规则书)[judgement]`), ave_mujica (regime verbs),
@@ -258,5 +258,5 @@ the second, clause （2） is per band instance.
 Relation to the parallel branches: `twodonuts-exile` (exile into
 `rules/status`) and `status-hosts-rest` (stay/stun/noHand) are the conditions
 family; this branch owns the quantities family end to end
-(`rules/status/src/fire.rs`, `ruleset-core` charge, fans). Merge order:
+(`rules/status/src/fire.rs`, `bandori-std` charge, fans). Merge order:
 conditions first, then this.

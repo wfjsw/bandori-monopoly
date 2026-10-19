@@ -6,7 +6,7 @@
 //!
 
 use card_sdk::abi::FilterValue; use card_sdk::abi::{ActionKind, FilterKind};
-use ruleset_core::ctx::{self};
+use bandori_std::ctx::{self};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EXIST: CardDef = CardDef::new(

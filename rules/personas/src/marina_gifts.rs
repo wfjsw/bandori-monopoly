@@ -1,4 +1,4 @@
-use ruleset_core::roster::PersonaDef;
+use bandori_std::roster::PersonaDef;
 
 /// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: PersonaDef =

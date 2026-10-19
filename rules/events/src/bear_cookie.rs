@@ -3,7 +3,7 @@
 //! 事件文本（`CardMeta` beside the rule body, id `发送熊饼表情`）:
 //! > 所有技能中含有火罐的玩家可选择补充X个火罐（不能超过上限），并支付X次1000资金。随后，将一张“[衍生]冲榜”背面朝上放置于事件牌堆顶部。
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;

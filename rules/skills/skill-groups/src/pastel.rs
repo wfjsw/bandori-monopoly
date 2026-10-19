@@ -9,12 +9,12 @@
 //!
 //! Fan markers live in the per-player state dict ([`crate::fans`]), owned by
 //! the standing `mark:pp_fans` host (MARKERS.md §7). Clause （2） is an
-//! `On::Action` listener on [`ruleset_core::kind::FansFlip`] (「…时」 state
+//! `On::Action` listener on [`bandori_std::kind::FansFlip`] (「…时」 state
 //! clause = event handler), filtered to its own owner seat (「你…受到」).
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
-use ruleset_core::kind;
+use bandori_std::ctx;
+use bandori_std::kind;
 use card_sdk::{key, CardDef, Msg, On};
 use crate::fans;
 
@@ -104,8 +104,8 @@ fn on_fans_flip(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"Pastel✽Palettes"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"Pastel✽Palettes"#)
     .short_name(r#"PP"#)
     .color(r#"#33DDAA"#)
     .skill(r#"与偶像一起"#)

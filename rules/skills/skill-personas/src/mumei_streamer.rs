@@ -18,7 +18,7 @@
 //! hooks.
 
 use card_sdk::abi::{state_key, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Cards this skill flipped, so it can flip them back on exit.

@@ -6,7 +6,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::state_key;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;

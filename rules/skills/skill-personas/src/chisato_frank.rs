@@ -12,7 +12,7 @@
 //! goes up rather than a payment going down, and the fan tail is identical.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -45,7 +45,7 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
 
 fn mine(player_id: i32) -> bool {
     // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 -- residual.
-    !ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes")
+    !bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes")
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得白鹭千圣的

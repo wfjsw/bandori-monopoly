@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 use card_sdk::abi::{ChainKind, ActionKind};
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LAYER_KEEP: CardDef = CardDef::new(

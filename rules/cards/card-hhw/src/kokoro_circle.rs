@@ -6,7 +6,7 @@
 //!
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（kkr）前往笑容集结的地方！";

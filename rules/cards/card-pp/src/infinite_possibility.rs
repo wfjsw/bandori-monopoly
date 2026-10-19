@@ -16,7 +16,7 @@
 //! out of a deck inspection; the crystal growth runs on the `Drew` hook.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(

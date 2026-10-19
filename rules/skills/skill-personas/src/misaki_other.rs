@@ -21,7 +21,7 @@
 //! `expires: TurnStart`.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const GROUP: &str = "skill.misakiOther.group";
@@ -77,7 +77,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 
 /// （3） 「你可以消耗1火罐」.
 fn can_use_exile(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 1 {

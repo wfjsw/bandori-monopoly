@@ -10,7 +10,7 @@
 //! the card stays in play; the 流星堂 stop is live on the `PassTile` hook.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANDOM_STAR: CardDef = CardDef::new(

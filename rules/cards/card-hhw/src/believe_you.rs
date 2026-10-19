@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 
-use ruleset_core::ctx::{self, CardPile, DeckPos};
+use bandori_std::ctx::{self, CardPile, DeckPos};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:因为我一直相信着你";

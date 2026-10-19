@@ -24,7 +24,7 @@
 //! 升级的格子地契获得」 is enforced by the pay pipeline's optional-funding arm
 //! (`Cx::offer_mortgage_funds`'s `exclude`), not by a flag here.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::abi::{prop, TriggerKind};
 use card_sdk::{CardDef, Msg, On};
 

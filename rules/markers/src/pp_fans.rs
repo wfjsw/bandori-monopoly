@@ -38,8 +38,8 @@
 //! count. A cancelled / aborted raise leaves the counters untouched.
 
 use card_sdk::{CardDef, Prompt};
-use ruleset_core::ctx;
-use ruleset_core::kind;
+use bandori_std::ctx;
+use bandori_std::kind;
 
 /// The board-owned P✽P粉丝 rule. One instance on `BOARD_OWNER`, `tile = -1`.
 /// No hooks of its own: the once-per-match deal is a creator call from the

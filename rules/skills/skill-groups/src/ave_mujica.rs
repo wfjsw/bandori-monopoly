@@ -18,7 +18,7 @@
 //! amount seen from one side.
 
 use card_sdk::abi::{counter, state_key, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns spent in 状态2. 「处于状态2的第三回合开始时」 reads this.
@@ -184,7 +184,7 @@ fn after_bend(player_id: i32) -> card_sdk::Asked {
 /// 「处于状态2时可消耗一个奇迹水晶使你的一次[支付]金额减半」 -- the press is the
 /// halve, so it rides the pay window rather than standing alone.
 fn can_halve(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
@@ -244,8 +244,8 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"Ave Mujica"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"Ave Mujica"#)
     .short_name(r#"Mujica"#)
     .color(r#"#881144"#)
     .skill(r#"假面之下的真实"#)

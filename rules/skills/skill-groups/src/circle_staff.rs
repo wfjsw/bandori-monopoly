@@ -9,7 +9,7 @@
 //! play's own numbers are already tagged for a doubling to target.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, CardPile};
+use bandori_std::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CIRCLE_STAFF: CardDef = CardDef::new(
@@ -88,8 +88,8 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
 //   cards do not tag, so the player can name a number the clause excludes.
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"CiRCLE"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"CiRCLE"#)
     .short_name(r#"CiRCLE"#)
     .color(r#"#E6004E"#)
     .skill(r#"后勤人员的努力"#)

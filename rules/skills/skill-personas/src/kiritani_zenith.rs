@@ -15,7 +15,7 @@
 //! charged, rounded **up to a hundred**.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Latch for 「一回合一次」.
@@ -26,7 +26,7 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, reset),
     ],
 )
@@ -51,7 +51,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「一回合一次」 + 「消耗一个火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, USED) != 0 {

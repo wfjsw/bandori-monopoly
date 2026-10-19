@@ -16,7 +16,7 @@
 //! per-source cooldown; the offer is now unbounded apart from the pot.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;
@@ -29,7 +29,7 @@ pub const MOCA_SELF: CardDef = CardDef::new(
         // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…」 -- the
         // offer exists only for another seat, with a pot to spend. Fire is CEL.
         On::Action(&[ActionKind::CardPlayed], "charge(owner) >= 1", "", Some(other_seat), on_card),
-        On::Action(&[ruleset_core::kind::SkillUsed], "charge(owner) >= 1", "", Some(other_seat), on_skill),
+        On::Action(&[bandori_std::kind::SkillUsed], "charge(owner) >= 1", "", Some(other_seat), on_skill),
     ],
 ).silent(&[0]);
 

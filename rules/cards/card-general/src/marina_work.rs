@@ -8,13 +8,13 @@
 //! (MatchHost.cs:2409-2429): [反击] let a CiRCLE [经过]/[结算] proceed normally.
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
     &[On::Counteract(
-        &[ruleset_core::kind::PassRewardAffected.as_trigger()],
+        &[bandori_std::kind::PassRewardAffected.as_trigger()],
         card_sdk::pre::MINE,
         r#"[使用者][经过]#1格子且#1格子受到其他效果影响"#,
         None,

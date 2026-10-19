@@ -8806,7 +8806,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     }
 
     /// The mortgage payout. The tile rule's deed economics
-    /// (`rules/tiles/src/deed.rs`, mirrored in `ruleset-core`) is the
+    /// (`rules/tiles/src/deed.rs`, mirrored in `bandori-std`) is the
     /// authority; this is the same plain rulebook formula the default uses
     /// (「抵押后[获得]地契购买价格50%的资金」).
     fn deed_mortgage_value(&self, data: &GameData, tile: i32) -> i32 {
@@ -8816,7 +8816,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             .map(|t| t.price)
             .unwrap_or(0);
         // Keep in lockstep with `rules/tiles/src/deed.rs` /
-        // `ruleset_core::mortgage_value`.
+        // `bandori_std::mortgage_value`.
         price / 2
     }
 
@@ -8829,7 +8829,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             .map(|t| t.price)
             .unwrap_or(0);
         // Keep in lockstep with `rules/tiles/src/deed.rs` /
-        // `ruleset_core::redeem_cost`.
+        // `bandori_std::redeem_cost`.
         (price * 3 + 2) / 5
     }
 

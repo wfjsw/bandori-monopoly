@@ -3,7 +3,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::meta::MetaRow;
-use ruleset_core::roster::GroupDef;
+use bandori_std::roster::GroupDef;
 
 pub use super::afterglow::BAND as AFTERGLOW;
 pub use super::ave_mujica::BAND as AVE_MUJICA;

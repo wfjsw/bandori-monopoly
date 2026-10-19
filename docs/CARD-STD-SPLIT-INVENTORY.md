@@ -2,7 +2,7 @@
 
 Source brief: `target/scratch/brief-card-std-split.md`.
 Dividing line: general card-runtime mechanism vs BanG Dream Monopoly / this ruleset's vocabulary.
-Destination: `card-sdk` (generic) | `rules/ruleset-core` (new game crate) | `rules/tiles` (tile rule bodies) | `rules/cond` (CEL) | stay + document.
+Destination: `card-sdk` (generic) | `rules/bandori-std` (new game crate) | `rules/tiles` (tile rule bodies) | `rules/cond` (CEL) | stay + document.
 
 | # | Item | Kind | Destination | Notes |
 |---|------|------|-------------|-------|
@@ -19,24 +19,24 @@ Destination: `card-sdk` (generic) | `rules/ruleset-core` (new game crate) | `rul
 | 11 | `ctx`/`sys` raw imports + guest ABI codes (`IMPORT_MODULE`, `ruleset_*` linker names) | generic | `card-sdk` | wire must stay host-decodable |
 | 12 | `is_placed` / `is_face_down_at` / `is_immune_at` | generic | `card-sdk` | card-instance state |
 | 13 | `tile_is` / `tile_attr` / `tile_in` (NEW) | generic | `card-sdk` | Host ABI part: kind / field / class |
-| 14 | `state_key::FIRE` name | game | `ruleset-core` | wire string `"fire"` value unchanged |
-| 15 | `counter::CRYSTALS` / `counter::CP` names | game | `ruleset-core` | wire strings `"crystals"` / `"cp"` unchanged |
-| 16 | `crystals` / `set_crystals` / `add_crystals` / `crystals_at` / `add_crystals_at` / `card_crystals` sugar | game | `ruleset-core` | sugar over named counters |
-| 17 | `gain_fire` / `spend_fire` / `fire` / `fire_max` / `add_fire_max` / `decay` | game | `ruleset-core` | 火罐 vocabulary |
-| 18 | `band_skills` / `band_skill` / `character_skill` / `add_band_skill` / `invoke_skill` / `band_crystals` / `add_band_crystals` | game | `ruleset-core` | band / character helpers |
-| 19 | `in_band` / `character_is` / `skill_blocked` | game | `ruleset-core` | |
-| 20 | `is_ring` / `is_circle` / `is_agent` sugar | game | `ruleset-core` | becomes `tile_is(t, "ring"\|"circle"\|"agent")` |
-| 21 | `is_shop` / `is_live_house` / `is_buyable` sugar | game | `ruleset-core` | becomes `tile_in(_, t, "shop"\|"livehouse"\|"buyable")` |
-| 22 | `is_live_house_for` / `is_color` sugar | game | `ruleset-core` | becomes `tile_in(p, t, …)` / class override |
-| 23 | `ring_multiplier` / `add_ring_bonus` | game | `ruleset-core` | RiNG rent convention |
-| 24 | `pay_rent` / `offer_buy` / `offer_force_buy` / `offer_build` / buy-kind conventions | game | `ruleset-core` | this ruleset's purchase verbs |
+| 14 | `state_key::FIRE` name | game | `bandori-std` | wire string `"fire"` value unchanged |
+| 15 | `counter::CRYSTALS` / `counter::CP` names | game | `bandori-std` | wire strings `"crystals"` / `"cp"` unchanged |
+| 16 | `crystals` / `set_crystals` / `add_crystals` / `crystals_at` / `add_crystals_at` / `card_crystals` sugar | game | `bandori-std` | sugar over named counters |
+| 17 | `gain_fire` / `spend_fire` / `fire` / `fire_max` / `add_fire_max` / `decay` | game | `bandori-std` | 火罐 vocabulary |
+| 18 | `band_skills` / `band_skill` / `character_skill` / `add_band_skill` / `invoke_skill` / `band_crystals` / `add_band_crystals` | game | `bandori-std` | band / character helpers |
+| 19 | `in_band` / `character_is` / `skill_blocked` | game | `bandori-std` | |
+| 20 | `is_ring` / `is_circle` / `is_agent` sugar | game | `bandori-std` | becomes `tile_is(t, "ring"\|"circle"\|"agent")` |
+| 21 | `is_shop` / `is_live_house` / `is_buyable` sugar | game | `bandori-std` | becomes `tile_in(_, t, "shop"\|"livehouse"\|"buyable")` |
+| 22 | `is_live_house_for` / `is_color` sugar | game | `bandori-std` | becomes `tile_in(p, t, …)` / class override |
+| 23 | `ring_multiplier` / `add_ring_bonus` | game | `bandori-std` | RiNG rent convention |
+| 24 | `pay_rent` / `offer_buy` / `offer_force_buy` / `offer_build` / buy-kind conventions | game | `bandori-std` | this ruleset's purchase verbs |
 | 25 | `pre::MINE` (`actor == owner`) | generic | `card-sdk` | card-ownership pre, not game vocab |
-| 26 | shared guards `crystals_changed_guard` (x11), `mine` (x7), `always` (x4), `any` (x3) | game | `ruleset-core` | dedupe into shared fns |
+| 26 | shared guards `crystals_changed_guard` (x11), `mine` (x7), `always` (x4), `any` (x3) | game | `bandori-std` | dedupe into shared fns |
 | 27 | `legacy_*` audit copies (~60) | game | deleted 2026-10-14 (ABI 61) | was NEGATION-AUDIT.md / GUARDS.md §5.1; do not port |
 | 28 | `ActionKind`/`TriggerKind`/`ChainKind`/`FilterKind` | generic | `card-sdk` | transparent i32 newtypes (ABI v70); only engine-generic named consts |
-| 29 | game-named kinds (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 / `HouseAdded` 75 / `ChargePaying` 78) | game-named wire | `ruleset-core::kind` | ruleset-declared opaque ids; decimal wire spelling |
+| 29 | game-named kinds (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 / `HouseAdded` 75 / `ChargePaying` 78) | game-named wire | `bandori-std::kind` | ruleset-declared opaque ids; decimal wire spelling |
 | 30 | `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` / `prop::ALL_COLORS` | game data keys | stay as wire strings; class membership via generic `tile_in` | brief: overrides become generic class marks/props |
-| 31 | CEL `is_circle` / `is_ring` / `is_live_house` / `is_buyable` | game vocab | removed (ABI v70) | conditions use `tile_is`/`tile_in` only; Rust sugar in `ruleset-core` |
+| 31 | CEL `is_circle` / `is_ring` / `is_live_house` / `is_buyable` | game vocab | removed (ABI v70) | conditions use `tile_is`/`tile_in` only; Rust sugar in `bandori-std` |
 | 32 | CEL `character_is` / `band_is` | game vocab | `rules/cond` + document | game vocab extension or boundary note |
 | 33 | CEL `owner.fire` / `owner.crystals` | game vocab | `rules/cond` + document | sugar over generic state/counter reads |
 | 34 | CEL `tile_is` / `tile_attr` / `tile_in` (NEW) | generic | `rules/cond` | three host views |

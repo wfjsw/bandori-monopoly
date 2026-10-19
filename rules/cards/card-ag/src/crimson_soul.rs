@@ -17,7 +17,7 @@
 //! place with N crystals; spend a crystal to cut a payment by 1,000.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "AG:绯红之魂";
@@ -45,7 +45,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
             None,
             pay_choose,
         ),
-        On::Action(&[ruleset_core::kind::SkillUsed], "", "", Some(skill_used_guard), skill_used),
+        On::Action(&[bandori_std::kind::SkillUsed], "", "", Some(skill_used_guard), skill_used),
         On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )

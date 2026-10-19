@@ -18,7 +18,7 @@
 //! is the documented exception (the same waiver 壱雫空 carries).
 
 use card_sdk::abi::{prop, state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RINKO_1CM: CardDef = CardDef::new(
@@ -26,7 +26,7 @@ pub const RINKO_1CM: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
     ],
 )
     // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate.
@@ -47,7 +47,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「你可以在移动掷骰前消耗X个[火罐]」 -- X is what the player holds.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 1 {

@@ -15,7 +15,7 @@
 //! keyed on the last-player-to-play latch.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns since the last hand play. A play resets it.

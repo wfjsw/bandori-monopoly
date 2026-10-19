@@ -140,8 +140,8 @@ fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8>
     }
 }
 
-/// Raw ABI helpers for the game sugar crate (`ruleset-core`). Card bodies use
-/// the typed [`super`] wrappers; `ruleset-core` implements this ruleset's
+/// Raw ABI helpers for the game sugar crate (`bandori-std`). Card bodies use
+/// the typed [`super`] wrappers; `bandori-std` implements this ruleset's
 /// readable names on top of these plus the generic [`tile_is`] family.
 pub mod raw {
     pub use super::sys;
@@ -333,7 +333,7 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
 
 /// Does the tile's **data kind** equal `kind` (the `TileKind` wire spelling:
 /// `"ring"`, `"circle"`, `"agent"`, `"property"`, …)? Generic host query —
-/// game sugar (`is_deed` / `is_start` / …) lives in `ruleset-core`.
+/// game sugar (`is_deed` / `is_start` / …) lives in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_is(tile: i32, kind: &str) -> bool {
     let (p, l) = s(kind);
@@ -342,7 +342,7 @@ pub fn tile_is(tile: i32, kind: &str) -> bool {
 
 /// Generic tile field read (`"group"` / `"area"` / `"tier"` / `"price"` /
 /// `"house"` / `"rent"` / `"index"`). See ABI v56. Game named-tile helpers
-/// live in `ruleset-core`.
+/// live in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_attr(tile: i32, attr: &str) -> i32 {
     let (p, l) = s(attr);
@@ -351,7 +351,7 @@ pub fn tile_attr(tile: i32, attr: &str) -> i32 {
 
 /// Is `tile` in the ruleset **class** `class` for `player_id` (`"buyable"` /
 /// `"shop"` / `"livehouse"` / `"color:<g>"`)? Per-player overrides are generic
-/// class-membership props. Game sugar lives in `ruleset-core`.
+/// class-membership props. Game sugar lives in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_in(player_id: i32, tile: i32, class: &str) -> bool {
     let (p, l) = s(class);
@@ -1635,7 +1635,7 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 }
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
-/// (e.g. `ruleset_core::kind::PassRewardAffected`); `value` is the trigger's `value`.
+/// (e.g. `bandori_std::kind::PassRewardAffected`); `value` is the trigger's `value`.
 /// Returns true when the link settled (nobody cancelled it). A hook that
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result<bool, Prompt> {
@@ -1649,7 +1649,7 @@ pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result
 // (`docs/STATUS-HOSTS.md`). `give_*` keep their names because they open the
 // abnormal [反击] window (`abnormal_gate`) -- a generic `apply_abnormal`
 // would replace them; until then this is the one place game vocabulary sits
-// in card-sdk (the 火罐 verbs live in `ruleset-core`), marked hidden so it is not the documented surface.
+// in card-sdk (the 火罐 verbs live in `bandori-std`), marked hidden so it is not the documented surface.
 // TODO(ABI): genericize to `apply_abnormal` + `marker::gain_capped` /
 // `marker::spend` and delete these (HOST-09/10 style dead-surface removal).
 

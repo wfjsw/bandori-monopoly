@@ -14,7 +14,7 @@
 //! player into a MyGO or Ave Mujica player. （3） is a crystal on a 4→5 crossing.
 
 use card_sdk::abi::{state_key, CardPile, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:CRYCHIC:美好的往日幻影";
@@ -31,7 +31,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
         On::Action(&[ActionKind::TurnEndBefore], card_sdk::pre::MINE, "", Some(decks_empty), at_turn_end),
         On::Filter(&[FilterKind::PaySplitChoose], "", Some(in_lock), lock_pay),
-        On::Action(&[ruleset_core::kind::PassRewardAffected], "", "", Some(in_lock), force_card),
+        On::Action(&[bandori_std::kind::PassRewardAffected], "", "", Some(in_lock), force_card),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
@@ -238,8 +238,8 @@ fn transform_now(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"CRYCHIC"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"CRYCHIC"#)
     .short_name(r#"CRYCHIC"#)
     .color(r#"#5AC7BE"#)
     .skill(r#"美好的往日幻影"#)

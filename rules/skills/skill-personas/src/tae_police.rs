@@ -16,7 +16,7 @@
 //! is the `card` chain for a hand play and `skillUsed` for a skill press.
 
 use card_sdk::abi::{prop, state_key, ChainKind, ActionKind, MarkFilter};
-use ruleset_core::ctx::{self, state, trigger};
+use bandori_std::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「[多惠兔子]」.
@@ -26,7 +26,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ruleset_core::kind::PassRewardAffected], card_sdk::pre::MINE, "", None, on_circle),
+        On::Action(&[bandori_std::kind::PassRewardAffected], card_sdk::pre::MINE, "", None, on_circle),
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
         // applicability (residual guard; `pre::MINE` already states the actor).
         On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, "", Some(on_pass_has_rabbits), on_pass),
@@ -34,7 +34,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         // [火罐]将其抵消」 -- a [反击] from the bound skill (always in play), so it
         // must be offered from the field (`COUNTERACT_FROM_FIELD`, the same shape
         // as 冰川纱夜（2）'s move-length counteraction).
-        On::Counteract(&[ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()], "", "", Some(can_negate), negate),
+        On::Counteract(&[ChainKind::Card, bandori_std::kind::SkillUsed.as_trigger()], "", "", Some(can_negate), negate),
     ],
 )
     .props(&[

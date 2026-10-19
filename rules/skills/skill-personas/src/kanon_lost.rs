@@ -16,7 +16,7 @@
 //! dice table being rewritten when it fires.
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns since the last CiRCLE reward. Cleared on the reward.
@@ -31,7 +31,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
         // dice, so there are not two faces to subtract.
         On::Action(&[ActionKind::DiceRollAfter], "actor == owner && plan.fixed_roll == null", "", None, on_roll),
-        On::Action(&[ruleset_core::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, on_circle),
+        On::Action(&[bandori_std::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, on_circle),
         On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, at_turn_end),
         // TODO(bug): possible engine issue — a `slot()` condition on a
         // FilterValue at DiceRollPlan did not observe a state write made

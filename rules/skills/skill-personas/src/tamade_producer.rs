@@ -12,7 +12,7 @@
 //! turn start; the free turn is announced when it is taken.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Did this player's own build commit last turn?
@@ -29,7 +29,7 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         // that arm dead (and skipped the builtThis reset), so the second build
         // paid full price.
         On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
-        On::Action(&[ruleset_core::kind::HouseAdded], card_sdk::pre::MINE, "", None, on_built),
+        On::Action(&[bandori_std::kind::HouseAdded], card_sdk::pre::MINE, "", None, on_built),
         On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, at_turn_end),
     ],
 )

@@ -11,7 +11,7 @@
 //! `HostRequest::Draw`). `pre::MINE` is the drawer (「你」).
 
 use card_sdk::abi::{ChainKind, ActionKind};
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(

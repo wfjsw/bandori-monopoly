@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 card-sdk = { path = "../../card-sdk", features = ["guest"] }
-ruleset-core = { path = "../../ruleset-core" }
+bandori-std = { path = "../../bandori-std" }
 personas = { path = "../../personas" }
 card-ag = { path = "../card-ag" }
 card-crychic = { path = "../card-crychic" }

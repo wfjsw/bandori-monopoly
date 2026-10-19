@@ -10,7 +10,7 @@
 //! total this card holds. （3） spends that total against a build.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Hello, Happy World!:传播笑容";
@@ -115,8 +115,8 @@ fn before_build(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"Hello, Happy World!"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"Hello, Happy World!"#)
     .short_name(r#"HHW"#)
     .color(r#"#FFDD00"#)
     .skill(r#"传播笑容"#)

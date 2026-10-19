@@ -376,7 +376,7 @@ use alloc::{string::String, vec::Vec};
 ///      (`buyable`/`shop`/`livehouse`/`color:<g>`), with per-player overrides
 ///      as generic class-membership props (`class:` / `classFor:<p>:`) plus the
 ///      existing `anyColor` / `colorFor:<p>` colour props. Game sugar
-///      (`is_deed(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
+///      (`is_deed(t) = tile_is(t, "ring")`, …) lives in `bandori-std`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
 /// v65: **import-module rename** -- the wasm import module and every guest
@@ -405,7 +405,7 @@ use alloc::{string::String, vec::Vec};
 ///      request -- **not** through `ManifestEntry` (the match path is
 ///      unchanged and unbloomed). Rows sort by `(kind, ordinal)` where the
 ///      ordinal comes from a shared generated table
-///      (`ruleset_core::roster_order`) so the rebuilt vectors equal the JSON
+///      (`bandori_std::roster_order`) so the rebuilt vectors equal the JSON
 ///      file order exactly even though the Rust crates register alphabetically.
 ///      Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load`
 ///      consumes the converted `Roster`. No host-function change; SAVE_VERSION
@@ -505,7 +505,7 @@ use alloc::{string::String, vec::Vec};
 ///      raise points are associated consts. Game-named kinds
 ///      (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 /
 ///      `HouseAdded` 75 / `ChargePaying` 78) leave the SDK and live as
-///      ruleset-declared opaque ids (`ruleset-core::kind`). Custom ids
+///      ruleset-declared opaque ids (`bandori-std::kind`). Custom ids
 ///      serialize as decimal (`"26"`); no legacy aliases (`circleAffected`,
 ///      `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
 ///      `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
@@ -638,7 +638,7 @@ use alloc::{string::String, vec::Vec};
 ///      `ppFansDown` (`skill_groups::fans`, docs/CARDS.md 「PP fans in the
 ///      per-player state dict」), owned by no card. Band clause （2） runs for
 ///      **every** down→up flip via the ruleset-defined Action kind `FansFlip`
-///      (wire 107, `ruleset_core::kind`; raised before the dict writes with
+///      (wire 107, `bandori_std::kind`; raised before the dict writes with
 ///      `value` = the effect's intended X). CEL reads the fans as
 ///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
 ///      SAVE_VERSION unchanged.
@@ -670,7 +670,7 @@ use alloc::{string::String, vec::Vec};
 ///      same name tables, no id renumbering. Source-only: ABI_VERSION stays 85.
 /// v86: **display columns leave `ruleset_metadata`**. Printed text / display
 ///      strings stay authored on [`crate::meta::CardMeta`] /
-///      `ruleset_core::roster::{PersonaDef, GroupDef}` (the builder calls are
+///      `bandori_std::roster::{PersonaDef, GroupDef}` (the builder calls are
 ///      unchanged) but no longer ride the runtime metadata blob. Dropped
 ///      MetaRow keys: card `text` / `rawName` / `cell`; persona `display` /
 ///      `text` / `color` / `variantTag` / `art` / `costume` / `cnId`; group
@@ -2640,7 +2640,7 @@ const CHAIN_CODES: &[i32] = &[
 ];
 /// Ruleset-declared custom ids that are also [反击] links (wire 26 / 73 / 74 /
 /// 75 / 78). The engine dispatches them by opaque id; the names live in
-/// `ruleset-core::kind`.
+/// `bandori-std::kind`.
 const CUSTOM_LINKS: &[i32] = &[26, 73, 74, 75, 78];
 
 /// Which vocabulary an event kind belongs to.

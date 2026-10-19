@@ -758,10 +758,10 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
         BUY_ADD => Some(T::BuyAdd),
         BUY_MUL => Some(T::BuyMul),
         BUY_SET => Some(T::BuySet),
-        HOUSE_ADDED => Some(ruleset_core::kind::HouseAdded.as_trigger()),
+        HOUSE_ADDED => Some(bandori_std::kind::HouseAdded.as_trigger()),
         COUNTER_CHANGED => Some(T::CounterChanged),
-        FIRE_SPENT => Some(ruleset_core::kind::FireSpent.as_trigger()),
-        FANS_FLIP => Some(ruleset_core::kind::FansFlip.as_trigger()),
+        FIRE_SPENT => Some(bandori_std::kind::FireSpent.as_trigger()),
+        FANS_FLIP => Some(bandori_std::kind::FansFlip.as_trigger()),
         TELEPORTED => Some(T::Teleported),
         TARGETED => Some(T::Targeted),
         PASS => Some(T::Pass),
@@ -774,13 +774,13 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
 
 fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
     use card_sdk::abi::TriggerKind as T;
-    if k.as_i32() == ruleset_core::kind::HOUSE_ADDED {
+    if k.as_i32() == bandori_std::kind::HOUSE_ADDED {
         return "HouseAdded";
     }
-    if k.as_i32() == ruleset_core::kind::FIRE_SPENT {
+    if k.as_i32() == bandori_std::kind::FIRE_SPENT {
         return "FireSpent";
     }
-    if k.as_i32() == ruleset_core::kind::FANS_FLIP {
+    if k.as_i32() == bandori_std::kind::FANS_FLIP {
         return "FansFlip";
     }
     match k {

@@ -7,7 +7,7 @@
 //! on passing 江户川乐器店: force yourself to stop there and settle.
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BEFORE_LIVE: CardDef = CardDef::new(

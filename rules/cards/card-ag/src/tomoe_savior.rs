@@ -6,7 +6,7 @@
 //! [反击] on a shop-street mortgage: buy it cheap, or double your own mortgage.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMOE_SAVIOR: CardDef = CardDef::new(

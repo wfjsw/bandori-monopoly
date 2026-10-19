@@ -16,7 +16,7 @@
 //! that is not expressible yet.
 
 use card_sdk::abi::{state_key, FilterValue, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;
@@ -78,7 +78,7 @@ fn on_plan_after(player_id: i32) -> card_sdk::Asked {
 }
 
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::CHARGE) < 1 {

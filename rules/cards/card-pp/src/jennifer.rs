@@ -15,7 +15,7 @@
 //! (stand-in for the C# per-card `Card.User`).
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 

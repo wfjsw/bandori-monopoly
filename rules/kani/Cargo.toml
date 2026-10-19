@@ -50,7 +50,7 @@ events = ["dep:rules-events", "kani-bump"]
 
 [dependencies]
 card-sdk = { workspace = true, features = ["guest"] }
-ruleset-core = { path = "../ruleset-core" }
+bandori-std = { path = "../bandori-std" }
 # Unmodified card / skill / event bodies under proof. Optional per unit
 # (see [features]) so a single-unit kani build links only that unit's crates.
 card-ag = { path = "../cards/card-ag", optional = true }

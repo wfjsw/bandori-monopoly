@@ -7,7 +7,7 @@
 //! [反击] on a pay, gain the tile's price tag.
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new(

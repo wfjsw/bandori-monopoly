@@ -3,7 +3,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::meta::MetaRow;
-use ruleset_core::roster::PersonaDef;
+use bandori_std::roster::PersonaDef;
 
 pub use super::akao_cool::CHARACTER as AKAO_COOL;
 pub use super::anon_restart::CHARACTER as ANON_RESTART;

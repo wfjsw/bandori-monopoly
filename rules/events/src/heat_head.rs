@@ -4,7 +4,7 @@
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{expire, keep, roll};

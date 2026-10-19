@@ -1,11 +1,13 @@
-//! BanG Dream Monopoly / this ruleset's vocabulary over `card-sdk`'s generic
-//! mechanisms.
+//! `bandori-std` -- BanG Dream Monopoly's rule-code standard library: this
+//! ruleset's vocabulary and sugar over `card-sdk`'s generic mechanisms.
 //!
 //! `card-sdk` holds only generalized card-runtime machinery (and the guest ABI
 //! wire codes the host must decode). Anything that names this game's concepts
-//! -- 火罐 / 奇迹水晶 / CP点 / CiRCLE / RiNG / Live House / band skills -- lives
-//! here as readable sugar. Card bodies `use ruleset_core::ctx` (a facade that
-//! re-exports the generic surface plus these names).
+//! -- 火罐 / 奇迹水晶 / CP点 / CiRCLE / RiNG / Live House / band skills / the
+//! status markers -- lives here as readable sugar. Card bodies
+//! `use bandori_std::ctx` (a facade that re-exports the generic surface plus
+//! these names). Shared game vocabulary used by more than one rule crate goes
+//! here, never in `crates/` or `card-sdk`.
 //!
 //! Host ABI v56: kind checks are `tile_is(t, "ring")`, field reads are
 //! `tile_attr`, class membership is `tile_in`. The `is_deed` / `is_start` /
@@ -51,7 +53,7 @@ pub mod state_key {
 }
 
 /// Generic `card_sdk::ctx` plus this ruleset's sugar. Replace
-/// `use card_sdk::ctx` with `use ruleset_core::ctx` in card bodies.
+/// `use card_sdk::ctx` with `use bandori_std::ctx` in card bodies.
 pub mod ctx {
     pub use card_sdk::ctx::*;
 

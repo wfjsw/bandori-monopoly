@@ -9,7 +9,7 @@
 //! `ctx::invoke_skill`.
 
 use alloc::vec::Vec;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The shared mark name. `skill:鳰原令王那:梦幻可爱♪女仆` (2) reads and spends

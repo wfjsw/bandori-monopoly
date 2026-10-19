@@ -26,7 +26,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{text_slot, BuyKind};
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 pub const AGENT: CardDef = CardDef::new("tile:agent", &[On::Settle("", None, settle)])

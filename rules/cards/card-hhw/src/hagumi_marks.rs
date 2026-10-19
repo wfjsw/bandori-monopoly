@@ -15,7 +15,7 @@
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
 use card_sdk::abi::{ChainKind, ActionKind, MarkFilter, MoveKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";

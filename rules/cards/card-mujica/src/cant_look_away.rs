@@ -7,7 +7,7 @@
 //! force-move the player who [反击]'d you this turn 1-4 tiles with settle.
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
@@ -23,7 +23,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // `skillUsed` kind (a counter to a counter is answered there), so both
         // selectors are declared.
         On::Counteract(
-            &[ChainKind::Counteracted, ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()],
+            &[ChainKind::Counteracted, ChainKind::Card, bandori_std::kind::SkillUsed.as_trigger()],
             "target == owner && actor != owner",
             r#"有玩家对你使用[反击]后"#,
             None,

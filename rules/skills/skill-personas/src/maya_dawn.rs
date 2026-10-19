@@ -19,7 +19,7 @@
 use alloc::string::String;
 
 use card_sdk::abi::{CardPile, ActionKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 

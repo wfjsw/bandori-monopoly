@@ -10,7 +10,7 @@
 //! gives them different boards' worth of extra text (the [经过] reward). If
 //! the two shops ever diverge, this body is the one to split further.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::abi::text_slot;
 use card_sdk::{CardDef, Msg, On};
 
