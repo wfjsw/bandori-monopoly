@@ -575,28 +575,28 @@ pub fn raise(player_id: i32, kind: i32, value: i32) -> i32 {
     kani_host::call_i32(Op::raise, [player_id, kind, value, 0, 0, 0])
 }
 
-pub fn charge(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::charge, [player_id, 0, 0, 0, 0, 0])
+pub fn gain_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32 {
+    kani_host::call_i32(Op::gain_marker, [player_id, name_p, name_l, n, why_p, why_l])
 }
 
-pub fn charge_max(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::charge_max, [player_id, 0, 0, 0, 0, 0])
+pub fn spend_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32 {
+    kani_host::call_i32(Op::spend_marker, [player_id, name_p, name_l, n, why_p, why_l])
 }
 
-pub fn gain_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::gain_charge, [player_id, n, ptr, len, 0, 0])
+pub fn add_marker_max(player_id: i32, name_p: i32, name_l: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::add_marker_max, [player_id, name_p, name_l, n, 0, 0])
 }
 
-pub fn give_stay(player_id: i32, n: i32) {
-    kani_host::call_unit(Op::give_stay, [player_id, n, 0, 0, 0, 0]);
+pub fn apply_abnormal(player_id: i32, kind: i32, n: i32, to: i32) {
+    kani_host::call_unit(Op::apply_abnormal, [player_id, kind, n, to, 0, 0]);
 }
 
-pub fn give_stun(player_id: i32, n: i32) {
-    kani_host::call_unit(Op::give_stun, [player_id, n, 0, 0, 0, 0]);
+pub fn skip_main_move(player_id: i32, locked: i32) {
+    kani_host::call_unit(Op::skip_main_move, [player_id, locked, 0, 0, 0, 0]);
 }
 
-pub fn give_exile(player_id: i32, n: i32, to: i32) {
-    kani_host::call_unit(Op::give_exile, [player_id, n, to, 0, 0, 0]);
+pub fn clear_move_skip(player_id: i32) {
+    kani_host::call_unit(Op::clear_move_skip, [player_id, 0, 0, 0, 0, 0]);
 }
 
 pub fn give_extra_turn(player_id: i32) {
@@ -621,22 +621,6 @@ pub fn can_pay(player_id: i32) -> i32 {
 
 pub fn cant_move(player_id: i32) -> i32 {
     kani_host::call_i32(Op::cant_move, [player_id, 0, 0, 0, 0, 0])
-}
-
-pub fn spend_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::spend_charge, [player_id, n, ptr, len, 0, 0])
-}
-
-pub fn stay_of(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::stay_of, [player_id, 0, 0, 0, 0, 0])
-}
-
-pub fn stun_of(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::stun_of, [player_id, 0, 0, 0, 0, 0])
-}
-
-pub fn exile_of(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::exile_of, [player_id, 0, 0, 0, 0, 0])
 }
 
 pub fn turn_player() -> i32 {
@@ -1093,10 +1077,6 @@ pub fn set_next_steps(player_id: i32, n: i32) {
 
 pub fn turn_main_steps() -> i32 {
     kani_host::call_i32(Op::turn_main_steps, [0, 0, 0, 0, 0, 0])
-}
-
-pub fn add_charge_max(player_id: i32, n: i32) -> i32 {
-    kani_host::call_i32(Op::add_charge_max, [player_id, n, 0, 0, 0, 0])
 }
 
 pub fn card_build(player_id: i32, tile: i32) -> i32 {

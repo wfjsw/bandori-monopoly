@@ -131,7 +131,7 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
     // C# `m.Stopped = true; m.Resolve = true` -- stop at the marked player's
     // tile and settle (`plan::set_stop_at` + `set_resolve`).
     // 规则书: 「[强制停下]」 -- behind `H.AbnormalGate`.
-    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     let tile = trigger::tile();

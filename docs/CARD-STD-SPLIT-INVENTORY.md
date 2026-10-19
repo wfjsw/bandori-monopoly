@@ -35,6 +35,11 @@ Destination: `card-sdk` (generic) | `rules/bandori-std` (new game crate) | `rule
 | 27 | `legacy_*` audit copies (~60) | game | deleted 2026-10-14 (ABI 61) | was NEGATION-AUDIT.md / GUARDS.md §5.1; do not port |
 | 28 | `ActionKind`/`TriggerKind`/`ChainKind`/`FilterKind` | generic | `card-sdk` | transparent i32 newtypes (ABI v70); only engine-generic named consts |
 | 29 | game-named kinds (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 / `HouseAdded` 75 / `ChargePaying` 78) | game-named wire | `bandori-std::kind` | ruleset-declared opaque ids; decimal wire spelling |
+| 29b | `ActionKind::Exile` / `TriggerKind::Exile` (wire 21) | game-named wire | `bandori-std::kind::Exile` | ABI 88; card-sdk carries no named Exile const |
+| 29c | `AbKind::{Stay,Stun,Exile,Teleport,Forced,Stop,Reverse}` enum variants | game vocab | `bandori-std::kind::abnormal` | ABI 88; `AbKind` is an opaque newtype (wire codec) in card-sdk |
+| 29d | `give_stay` / `give_stun` / `give_exile` / `stay_of` / `stun_of` / `exile_of` | game vocab | `bandori-std::status::{stay,stun,exile}` over `apply_abnormal` + `state_*` | ABI 88; engine holds only the generic verb |
+| 29e | `skip_move` latch / `stay_unlatch` | game vocab | `bandori-std::status::stay` over `skip_main_move` / `clear_move_skip` | ABI 88; exile is not part of the latch (closeout-2) |
+| 29f | `state_key::{STAY,STUN,STUN_START,EXILE,EXILE_TO,EXILE_MAIN,EXILE_HOLD,NO_HAND,UNSTOPPABLE}` names | game | `bandori-std::state_key` | wire strings unchanged |
 | 30 | `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` / `prop::ALL_COLORS` | game data keys | stay as wire strings; class membership via generic `tile_in` | brief: overrides become generic class marks/props |
 | 31 | CEL `is_circle` / `is_ring` / `is_live_house` / `is_buyable` | game vocab | removed (ABI v70) | conditions use `tile_is`/`tile_in` only; Rust sugar in `bandori-std` |
 | 32 | CEL `character_is` / `band_is` | game vocab | `rules/cond` + document | game vocab extension or boundary note |

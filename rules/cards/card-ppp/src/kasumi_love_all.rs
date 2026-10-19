@@ -75,7 +75,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // the mover is immune, or they are [不可阻挡] (「可选择受到的…[强制停下]…
     // 效果是否生效」).
     let mover = trigger::player_id();
-    if !ctx::gate(mover, card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(mover, bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     // C# `m.Stopped = true; m.Resolve = true; m.RentFactor *= 0.5`

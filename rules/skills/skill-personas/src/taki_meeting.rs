@@ -45,7 +45,7 @@ fn reset(player_id: i32) -> card_sdk::Asked {
 /// layer the effect actually landed. The `abnormal` outcome hook fires for
 /// every landing, self-applied included (「场上每有玩家」 is anyone).
 fn on_abnormal(player_id: i32) -> card_sdk::Asked {
-    if trigger::abnormal_kind() != Some(AbKind::Stay) {
+    if trigger::abnormal_kind() != Some(bandori_std::kind::abnormal::Stay) {
         return Ok(());
     }
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("taki_meeting_gain")))?;

@@ -36,7 +36,7 @@ pub const EMBERS: CardDef = CardDef::new(
         // hook. `settleBody` is the list; a field card that replaces the body
         // (`trigger::cancelled()`) skips this entry like every other.
         On::Action(&[ActionKind::SettleBody], "", "", Some(on_settle_applies), on_settle),
-        On::Action(&[ActionKind::Exile, ActionKind::Bankrupt, ActionKind::Abnormal], "", "", Some(on_out_applies), on_out),
+        On::Action(&[bandori_std::kind::Exile, ActionKind::Bankrupt, ActionKind::Abnormal], "", "", Some(on_out_applies), on_out),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -73,8 +73,8 @@ fn on_settle_applies(_player_id: i32) -> bool {
 /// (an `Abnormal` only counts when its kind is `Exile`).
 fn on_out_applies(_player_id: i32) -> bool {
     match trigger::kind() {
-        TriggerKind::Exile | TriggerKind::Bankrupt => true,
-        TriggerKind::Abnormal => trigger::abnormal_kind() == Some(AbKind::Exile),
+        TriggerKind(21) /* exile */ | TriggerKind::Bankrupt => true,
+        TriggerKind::Abnormal => trigger::abnormal_kind() == Some(bandori_std::kind::abnormal::Exile),
         _ => false,
     }
 }

@@ -767,7 +767,7 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
         PASS => Some(T::Pass),
         PASS_TILE => Some(T::PassTile),
         PASS_PLAYER => Some(T::PassPlayer),
-        EXILE => Some(T::Exile),
+        EXILE => Some(T(21)), /* exile */
         _ => None,
     }
 }
@@ -814,7 +814,7 @@ fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
         T::Pass => "Pass",
         T::PassTile => "PassTile",
         T::PassPlayer => "PassPlayer",
-        T::Exile => "Exile",
+        T(21) => "Exile", /* exile */
         _ => "",
     }
 }

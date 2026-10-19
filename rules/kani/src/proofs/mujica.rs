@@ -45,8 +45,8 @@ crate::host_subset!(heart_rain_dispatch {
     others_at => arm_others_at,
     tile_forward | dist => arm_dist,
     roll => arm_roll,
-    give_stay => arm_give_stay,
-    give_stun => arm_give_stun,
+    apply_abnormal => arm_apply_abnormal,
+    apply_abnormal => arm_apply_abnormal,
     gain | gain_typed | gain_fixed => arm_gain,
     log | effect => arm_log,
 });
@@ -84,7 +84,7 @@ crate::host_subset!(sparkler_play_dispatch {
 /// `Mujica:燃尽前的线香花火` `on_crystals_changed` — discard + 2 stun.
 crate::host_subset!(sparkler_changed_dispatch {
     set_dest => arm_set_dest,
-    give_stun => arm_give_stun,
+    apply_abnormal => arm_apply_abnormal,
     log | effect => arm_log,
 });
 

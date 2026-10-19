@@ -164,7 +164,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     // = the causer. 「受到…影响」 names the recipient.
     if !matches!(
         trigger::abnormal_kind(),
-        Some(card_sdk::abi::AbKind::Stay | card_sdk::abi::AbKind::Stun | card_sdk::abi::AbKind::Exile)
+        Some(bandori_std::kind::abnormal::Stay | bandori_std::kind::abnormal::Stun | bandori_std::kind::abnormal::Exile)
     ) {
         return Ok(());
     }

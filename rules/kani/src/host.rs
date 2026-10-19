@@ -799,16 +799,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::mark_src_at | Op::mark_instance_at | Op::mark_partner => -1,
 
         // ---- status ----
-                Op::charge => arm_fire(a),
-                Op::charge_max => arm_charge_max(a),
-                Op::gain_charge => arm_gain_charge(a),
-        Op::add_charge_max => {
+                Op::gain_marker => arm_gain_marker(a),
+                Op::spend_marker => arm_spend_marker(a),
+        Op::add_marker_max => {
             world::with_world_mut(|w| {
-                w.charge_max[player_idx(a0)] = w.charge_max[player_idx(a0)].saturating_add(a1);
+                w.charge_max[player_idx(a0)] = w.charge_max[player_idx(a0)].saturating_add(a3);
             });
             0
         }
-                Op::spend_charge => arm_spend_charge(a),
         // `ctx::n(k, v)` doubles when `play_doubled() == k`. Default is
         // **no doubling** (`-1` / `None` in the engine) — the old stub returned
         // 0, so `n(0, 600)` wrongly yielded 1200.
@@ -817,9 +815,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| w.play_doubled = a0);
             0
         }
-                Op::give_stay => arm_give_stay(a),
-                Op::give_stun => arm_give_stun(a),
-                Op::give_exile => arm_give_exile(a),
+                Op::apply_abnormal => arm_apply_abnormal(a),
+        // The stay move-latch is turn-flow; the kani world has no skip_move
+        // field (the model records the layer write only). Protocol-level.
+        Op::skip_main_move | Op::clear_move_skip => 0,
         Op::give_extra_turn => {
             // Recorded so the protocol can schedule it. Scheduling is
             // PROTOCOL-LEVEL (the turn engine owns the extra-turn queue).
@@ -848,9 +847,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::log_as => arm_log(a),
-                Op::stay_of => arm_stay_of(a),
-                Op::stun_of => arm_stun_of(a),
-                Op::exile_of => arm_exile_of(a),
         Op::cant_move => world::with_world(|w| {
             (w.stay[player_idx(a0)] > 0
                 || w.stun[player_idx(a0)] > 0
@@ -1610,7 +1606,7 @@ pub fn arm_draw(a: Args) -> i64 {
         }
 }
 
-pub fn arm_exile_of(a: Args) -> i64 {
+pub fn arm_exile_layers(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     world::with_world(|w| w.exile[player_idx(a0)]) as i64
 }
@@ -1669,7 +1665,7 @@ pub fn arm_fire(a: Args) -> i64 {
     world::with_world(|w| w.charge[player_idx(a0)]) as i64
 }
 
-pub fn arm_charge_max(a: Args) -> i64 {
+pub fn arm_marker_max(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     world::with_world(|w| w.charge_max[player_idx(a0)]) as i64
 }
@@ -1690,14 +1686,15 @@ pub fn arm_gain(a: Args) -> i64 {
     a1 as i64
 }
 
-pub fn arm_gain_charge(a: Args) -> i64 {
+pub fn arm_gain_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
-            // engine `gain_charge`: `got = n.clamp(0, (charge_max - fire).max(0))`;
+            // engine `gain_marker`: `got = n.clamp(0, (cap - have).max(0))`;
             // 0 when out / n<=0 / cap<=0. Returns the amount gained.
+            // Wire: (player, name_p, name_l, n, why_p, why_l).
             world::with_world_mut(|w| {
                 let p = player_idx(a0);
-                let n = a1;
+                let n = a3;
                 if n <= 0 || w.out[p] {
                     return 0;
                 }
@@ -1739,56 +1736,31 @@ pub fn arm_gate(a: Args) -> i64 {
     })
 }
 
-pub fn arm_give_exile(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-{
-            // `key::EXILE` layers + `key::EXILE_TO` target (decay is protocol).
-            world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.exile[a0 as usize] = (w.exile[a0 as usize] + a1).max(0);
-                    w.exile_to[a0 as usize] = a2;
-                }
-                w.push(Effect::GiveExile {
-                    player: a0,
-                    n: a1,
-                    to: a2,
-                });
-            });
-            0
+/// One generic abnormal-layer write. Wire: (player, kind, n, to).
+/// kind 1 = stay, 2 = stun, 3 = exile.
+pub fn arm_apply_abnormal(a: Args) -> i64 {
+    let [a0, kind, n, to, ..] = a;
+    world::with_world_mut(|w| {
+        if (a0 as usize) >= MAX_PLAYERS {
+            return;
         }
-}
-
-pub fn arm_give_stay(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-{
-            world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.stay[a0 as usize] = w.stay[a0 as usize].saturating_add(a1);
-                }
-                w.push(Effect::GiveStay {
-                    player: a0,
-                    n: a1,
-                });
-            });
-            0
+        match kind {
+            1 => {
+                w.stay[a0 as usize] = (w.stay[a0 as usize] + n).max(0);
+                w.push(Effect::GiveStay { player: a0, n });
+            }
+            2 => {
+                w.stun[a0 as usize] = (w.stun[a0 as usize] + n).max(0);
+                w.push(Effect::GiveStun { player: a0, n });
+            }
+            3 => {
+                w.exile[a0 as usize] = (w.exile[a0 as usize] + n).max(0);
+                w.push(Effect::GiveExile { player: a0, n, to });
+            }
+            _ => {}
         }
-}
-
-pub fn arm_give_stun(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-{
-            // Separate from [停留] (`key::STUN` vs `key::STAY` in the engine).
-            world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.stun[a0 as usize] = (w.stun[a0 as usize] + a1).max(0);
-                }
-                w.push(Effect::GiveStun {
-                    player: a0,
-                    n: a1,
-                });
-            });
-            0
-        }
+    });
+    0
 }
 
 pub fn arm_hand_count(a: Args) -> i64 {
@@ -2718,15 +2690,16 @@ pub fn arm_slot(a: Args) -> i64 {
         }
 }
 
-pub fn arm_spend_charge(a: Args) -> i64 {
+pub fn arm_spend_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
             let p = player_idx(a0);
+            let n = a3;
             world::with_world_mut(|w| {
-                if w.charge[p] >= a1 && a1 > 0 {
-                    w.charge[p] -= a1;
+                if w.charge[p] >= n && n > 0 {
+                    w.charge[p] -= n;
                     1
-                } else if a1 == 0 {
+                } else if n == 0 {
                     1
                 } else {
                     0
@@ -2799,12 +2772,12 @@ pub fn arm_state_set(a: Args) -> i64 {
         }
 }
 
-pub fn arm_stay_of(a: Args) -> i64 {
+pub fn arm_stay_layers(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     world::with_world(|w| w.stay[player_idx(a0)]) as i64
 }
 
-pub fn arm_stun_of(a: Args) -> i64 {
+pub fn arm_stun_layers(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     world::with_world(|w| w.stun[player_idx(a0)]) as i64
 }

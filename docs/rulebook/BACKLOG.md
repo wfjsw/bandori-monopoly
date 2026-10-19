@@ -2802,3 +2802,13 @@ to the [特] moment, which changes when the curve can start.
 
 *End of backlog. Standing file: `docs/rulebook/BACKLOG.md`. Audited 2026-10-17
 against master `1cd71939` (157 `TODO(规则书)`, 11 RULING ignores, ABI v85).*
+
+## Phase C batch 2 — generic status / marker verbs (closed)
+- **status**: **fixed** (2026-10-19, `bandori-std`) — `apply_abnormal` /
+  `skip_main_move` / `clear_move_skip` / marker-only `gain_marker` /
+  `spend_marker` / `add_marker_max`; named `give_*` / `charge*` / `*_of`
+  imports deleted from `crates/` and `rules/card-sdk`. `AbKind` is an opaque
+  newtype; `ActionKind::Exile` / `TriggerKind::Exile` named consts moved to
+  `bandori_std::kind::Exile`. Shared stay/stun/exile verbs live in
+  `bandori_std::status`. ABI_VERSION 87 -> 88. Still open: `fireSpent` ->
+  `MarkerSpent` rename (separate ticket).

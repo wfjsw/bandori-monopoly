@@ -120,8 +120,8 @@ crate::host_subset!(ag_dispatch {
     roll | roll_ask => arm_roll,
     // fire (colors-04 fill)
     charge => arm_fire,
-    charge_max => arm_charge_max,
-    gain_charge => arm_gain_charge,
+    ,
+    gain_marker => arm_gain_marker,
 });
 
 /// Install the sparse 2-seat world + the ag host subset **in place**.

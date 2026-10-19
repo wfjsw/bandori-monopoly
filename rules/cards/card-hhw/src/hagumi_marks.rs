@@ -142,7 +142,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（1）: 「[强制停下]」 -- behind `H.AbnormalGate`: a guarded or
     // unstoppable mover is not stopped, and the mark is not spent.
-    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     // C# `m.Remaining > 0 && !m.Teleport` -- force-stop only mid-walk.

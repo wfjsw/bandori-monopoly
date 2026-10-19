@@ -92,7 +92,7 @@ fn i2_gain_never_exceeds_max() {
     let got = t
         .m
         .world_mut()
-        .gain_charge(0, 10, game_core::msg::Msg::new("test"));
+        .gain_marker(0, "charge", 10);
     assert_eq!(got, 2, "room under cap 3 from 1 is 2");
     assert!(t.charge(0) <= 3, "I2: {} <= 3", t.charge(0));
 }
@@ -102,7 +102,7 @@ fn i2_gain_never_exceeds_max() {
 fn i2_cap_drop_pulls_value_under() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 5, 5);
-    t.m.world_mut().add_charge_max(0, -3);
+    t.m.world_mut().add_marker_max(0, "charge", -3);
     assert!(t.charge(0) <= 2, "value pulled under the new cap of 2");
 }
 
@@ -120,7 +120,7 @@ fn kernel_actuals_overflow_shape() {
     let got = t
         .m
         .world_mut()
-        .gain_charge(0, 2, game_core::msg::Msg::new("two_donuts_fire"));
+        .gain_marker(0, "charge", 2);
     let missed = 2 - got;
     assert_eq!(got, 0, "cap 1/1 refused the grant");
     assert_eq!(missed, 2, "both pots missed");
@@ -184,7 +184,7 @@ fn fire_regime_fill_drain_burn() {
     let got = t
         .m
         .world_mut()
-        .gain_charge(0, 3, game_core::msg::Msg::new("ave_mujica_refill"));
+        .gain_marker(0, "charge", 3);
     assert_eq!(got, 3, "fill_to_cap lands the room under the cap");
     assert_eq!(t.charge(0), 4);
     // drain 1 / burn_all: the spend path is `fire::regime::{drain,burn_all}` →

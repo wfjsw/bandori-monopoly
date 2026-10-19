@@ -39,7 +39,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[反击]: 「强制停下并触发结算」 -- C# `CardBeforeLive.Counteract`:
     // `m.Stopped = true; m.Resolve = true` behind `H.AbnormalGate`.
-    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     let shop = ctx::tile_named("江户川乐器店");

@@ -453,7 +453,7 @@ mod pass_fire {
     /// Unmodified `on_pass` (touko / nanami) reaches: gain_charge.
     /// Shared: both bodies are the same one-liner (`charge::gain(p, 1, …)`).
     crate::host_subset!(pass_gain_charge_dispatch {
-        gain_charge => arm_gain_charge,
+        gain_marker => arm_gain_marker,
         log | effect => arm_log,
     });
 

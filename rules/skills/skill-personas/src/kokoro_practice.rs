@@ -154,7 +154,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("kokoro_practice_spend")))? {
         return Ok(());
     }
-    if !ctx::gate(ctx::trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(ctx::trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     ctx::plan::set_stop_at(ctx::player_pos(player_id));

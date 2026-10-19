@@ -68,7 +68,7 @@ crate::host_subset!(vocalist_dispatch {
 
 /// `CRYCHIC:想要抓住...` play — one [停留] + arm the PASSER latch.
 crate::host_subset!(grab_dispatch {
-    give_stay => arm_give_stay,
+    apply_abnormal => arm_apply_abnormal,
     state_set => arm_state_set,
     log | effect => arm_log,
 });
@@ -81,7 +81,7 @@ crate::host_subset!(debut_play_dispatch {
 
 /// `CRYCHIC:初演大成功` at_end leaf — stun + one band crystal.
 crate::host_subset!(debut_at_end_dispatch {
-    give_stun => arm_give_stun,
+    apply_abnormal => arm_apply_abnormal,
     add_group_pool => arm_add_band_crystals,
 });
 

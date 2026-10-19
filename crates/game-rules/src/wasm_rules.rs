@@ -219,7 +219,7 @@ pub struct Run {
     counter_log: Vec<(i32, String, String, i32)>,
     /// Players this run granted exile layers to -- the engine raises `exile`
     /// for each once the run commits (「任意玩家获得exile…时」 handlers).
-    exile_log: Vec<i32>,
+    abnormal_log: Vec<(i32, i32)>,
     /// Skill-state 1↔2 toggles this run made, `(who, from, to)` -- the engine
     /// raises `state` for each once the run commits (Mujica:欢迎来到ave
     /// mujica的世界 clause (2)). The initial 0→1 / 0→2 write is not a toggle.
@@ -1616,9 +1616,6 @@ impl CardWorld for Run {
         self.world
             .add_group_skill(&self.data, player_id, id, extra, props)
     }
-    fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
-        self.gain_marker(player_id, game_core::state::key::CHARGE, n, why)
-    }
     fn gain_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
         let got = self.world.gain_marker(player_id, name, n);
         // Minimal world event-log line (wire kind is the marker name). The
@@ -1646,47 +1643,37 @@ impl CardWorld for Run {
         }
         got
     }
-    fn give_stay(&mut self, player_id: i32, n: i32) {
+    fn apply_abnormal(&mut self, player_id: i32, kind: i32, n: i32, to: i32) {
         if n > 0 {
-            let who = self.trigger.player_id;
-            self.outcome(
-                who,
-                Msg::new("log.outcome.stay")
-                    .player_id("who", who)
-                    .player_id("target", player_id),
-            );
-        }
-        self.world.give_stay(player_id, n);
-    }
-    fn give_stun(&mut self, player_id: i32, n: i32) {
-        if n > 0 {
-            let who = self.trigger.player_id;
-            self.outcome(
-                who,
-                Msg::new("log.outcome.stun")
-                    .player_id("who", who)
-                    .player_id("target", player_id),
-            );
-        }
-        self.world.give_stun(player_id, n);
-    }
-    fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
-        if n > 0 {
-            // 「该效果生效时无法重复获得该效果」 -- a refused re-acquisition is
-            // not a grant: no embers raise and no `outcome.exile` line (the
-            // layer itself is refused in `give_exile` below).
-            let already =
-                self.world.state_get(player_id, game_core::state::key::EXILE) > 0;
+            // 「该效果生效时无法重复获得该效果」 (exile) -- a refused
+            // re-acquisition is not a grant: no post-commit raise and no
+            // `outcome.*` line.
+            let already = kind == 3
+                && self.world.state_get(player_id, game_core::state::key::EXILE) > 0;
             if !already {
-                // 「任意玩家获得exile…时」 -- the grant is a raise point (embers).
-                self.exile_log.push(player_id);
+                // 「任意玩家获得[除外]…时」 and the stay / stun landing lines
+                // ride the same post-commit log; the raise fires for every
+                // kind (`kind.as_str()`), and only exile has listeners today.
+                self.abnormal_log.push((player_id, kind));
+                let key = match kind {
+                    1 => "stay",
+                    2 => "stun",
+                    3 => "exile",
+                    _ => "abnormal",
+                };
+                let who = self.trigger.player_id;
                 self.outcome(
-                    player_id,
-                    Msg::new("log.outcome.exile").player_id("target", player_id),
+                    who,
+                    Msg::new(format!("log.outcome.{key}"))
+                        .player_id("who", who)
+                        .player_id("target", player_id),
                 );
             }
         }
-        self.world.give_exile(player_id, n, to);
+        self.world.apply_abnormal(player_id, kind, n, to);
+    }
+    fn skip_main_move(&mut self, player_id: i32, locked: i32) {
+        self.world.skip_main_move(player_id, locked);
     }
     fn give_extra_turn(&mut self, player_id: i32) {
         self.world.give_extra_turn(player_id as usize);
@@ -2033,9 +2020,6 @@ impl CardWorld for Run {
         }
         0
     }
-    fn spend_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
-        self.spend_marker(player_id, game_core::state::key::CHARGE, n, why)
-    }
     fn spend_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
         // Spend from the named counter; logs the spend with its reason (the
         // caller's message is the log line, like `gain`/`pay`).
@@ -2207,9 +2191,6 @@ impl CardWorld for Run {
     }
     fn turn_main_steps(&self) -> i32 {
         self.world.turn.main_steps
-    }
-    fn add_charge_max(&mut self, player_id: i32, n: i32) -> i32 {
-        self.add_marker_max(player_id, game_core::state::key::CHARGE, n)
     }
     fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         self.world.add_marker_max(player_id, name, n)
@@ -3002,7 +2983,7 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                exile_log: vec![],
+                abnormal_log: vec![],
                 state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
@@ -3205,7 +3186,7 @@ impl<M: CardModules> RulesBridge<M> {
                         marker_spent_log: vec![],
                         house_log: vec![],
                         counter_log: vec![],
-                        exile_log: vec![],
+                        abnormal_log: vec![],
                         state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
@@ -3553,7 +3534,7 @@ impl<M: CardModules> RulesBridge<M> {
             let allowed = self.abnormal_gate(
                 cx,
                 player_id,
-                crate::AbKind::Forced,
+                crate::AbKind(5),
                 call.player_id(),
             )?;
             if allowed {
@@ -3575,7 +3556,7 @@ impl<M: CardModules> RulesBridge<M> {
             let allowed = self.abnormal_gate(
                 cx,
                 player_id,
-                crate::AbKind::Teleport,
+                crate::AbKind(4),
                 call.player_id(),
             )?;
             if allowed {
@@ -4197,7 +4178,7 @@ impl<M: CardModules> RulesBridge<M> {
         if !after.house_log.is_empty() {
             return true;
         }
-        if !after.exile_log.is_empty() {
+        if !after.abnormal_log.is_empty() {
             // Exile is a status hit -- Other (it lands on a player).
             return true;
         }
@@ -4313,7 +4294,7 @@ impl<M: CardModules> RulesBridge<M> {
             Some("reshuffle")
         } else if !after.house_log.is_empty() {
             Some("house")
-        } else if !after.exile_log.is_empty() {
+        } else if !after.abnormal_log.is_empty() {
             Some("exile")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
@@ -4424,7 +4405,7 @@ impl<M: CardModules> RulesBridge<M> {
                     && after.discard_log.is_empty()
                     && after.reshuffle_log.is_empty()
                     && after.house_log.is_empty()
-                    && after.exile_log.is_empty()
+                    && after.abnormal_log.is_empty()
                     && after.state_log.is_empty()
                     && after.marker_spent_log.is_empty();
                 if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
@@ -4556,11 +4537,15 @@ impl<M: CardModules> RulesBridge<M> {
             // field. The count watched is the on-card mark counter attached
             // to the card -- not the tile marks.
 
-            // `exile` -- 「任意玩家获得exile…时」 (火种燃尽之后会怎么样呢？
-            // 「移除所有此卡的复制品」) listens here rather than at each
-            // grant site, so a layer granted by *any* path still runs.
-            for player_id in after.exile_log {
-                self.raise_core(cx, "exile", player_id, |t| {
+            // Post-commit abnormal raise -- the wire event is named by the
+            // kind (`"stay"` / `"stun"` / `"exile"`). 「任意玩家获得[除外]…时」
+            // (火种燃尽之后会怎么样呢？ 「移除所有此卡的复制品」) listens on
+            // `"exile"` rather than at each grant site, so a layer granted by
+            // *any* path still runs. Only exile has listeners today; raising
+            // all three names is the generic form and is a no-op for the rest.
+            for (player_id, kind) in after.abnormal_log {
+                let wire = card_sdk::abi::AbKind(kind).as_str();
+                self.raise_core(cx, wire, player_id, |t| {
                     t.value = 1;
                     t.by_card = by;
                 })?;
@@ -5225,21 +5210,21 @@ impl<M: CardModules> RulesBridge<M> {
         //    new layers -- but 「也不会获得新的层数」 names only 晕眩 and 除外.
         let movement = matches!(
             kind,
-            crate::AbKind::Teleport
-                | crate::AbKind::Forced
-                | crate::AbKind::Stop
-                | crate::AbKind::Reverse
+            crate::AbKind(4)
+                | crate::AbKind(5)
+                | crate::AbKind(6)
+                | crate::AbKind(7)
         );
         let unstoppable = cx.state().players[s].unstoppable() > 0;
         if movement && by != player_id && unstoppable {
             return Ok(false);
         }
-        if matches!(kind, crate::AbKind::Stun | crate::AbKind::Exile) && unstoppable {
+        if matches!(kind, crate::AbKind(2) | crate::AbKind(3)) && unstoppable {
             return Ok(false);
         }
         let on = |t: &mut CoreTrigger| {
             t.target = player_id;
-            t.value = kind as i32;
+            t.value = kind.as_i32();
             t.by_card = Some(by);
         };
         // `Untargetable` at declaration, same as `target_player`: 「你只会被
@@ -5270,7 +5255,7 @@ impl<M: CardModules> RulesBridge<M> {
                     target: player_id,
                     from: -1,
                     tile: -1,
-                    value: kind as i32,
+                    value: kind.as_i32(),
                 });
             })?;
             if declared.is_cancelled() {
@@ -6228,7 +6213,7 @@ impl<M: CardModules> RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            exile_log: vec![],
+            abnormal_log: vec![],
             state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
@@ -6454,7 +6439,7 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                exile_log: vec![],
+                abnormal_log: vec![],
                 state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
@@ -7159,10 +7144,6 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.world.player_money(player_id)
     }
     #[inline]
-    fn charge(&self, player_id: i32) -> i32 {
-        self.world.charge(player_id)
-    }
-    #[inline]
     fn group_pool(&self, player_id: i32, name: &str) -> i32 {
         self.world.group_pool(player_id, name)
     }
@@ -7190,14 +7171,6 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
     #[inline]
     fn player_out(&self, player_id: i32) -> i32 {
         self.world.player_out(player_id) as i32
-    }
-    #[inline]
-    fn stay_of(&self, player_id: i32) -> i32 {
-        self.world.state_get(player_id, game_core::state::key::STAY)
-    }
-    #[inline]
-    fn stun_of(&self, player_id: i32) -> i32 {
-        self.world.state_get(player_id, game_core::state::key::STUN)
     }
     #[inline]
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
@@ -7499,7 +7472,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     }
     fn owner_charge(&self) -> i64 {
         let o = self.owner();
-        if o >= 0 { self.world.charge(o as i32) as i64 } else { 0 }
+        if o >= 0 { self.world.state_get(o as i32, "charge") as i64 } else { 0 }
     }
     fn owner_group_pool(&self, name: &str) -> i64 {
         let o = self.owner();
@@ -7636,7 +7609,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.world.player_money(seat as i32) as i64
     }
     fn charge(&self, seat: i64) -> i64 {
-        self.world.charge(seat as i32) as i64
+        self.world.state_get(seat as i32, "charge") as i64
     }
     fn group_pool(&self, seat: i64, name: &str) -> i64 {
         self.world.group_pool(seat as i32, name) as i64
@@ -8638,7 +8611,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            exile_log: vec![],
+            abnormal_log: vec![],
             state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
@@ -8730,7 +8703,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            exile_log: vec![],
+            abnormal_log: vec![],
             state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),

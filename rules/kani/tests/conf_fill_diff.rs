@@ -404,7 +404,13 @@ impl SnapSrc for Fixture {
             .map(|s| s.out as i32)
             .unwrap_or(0)
     }
-    fn stay_of(&self, p: i32) -> i32 {
+    fn state_get(&self, p: i32, key: &str) -> i32 {
+        match key {
+            "stay" => self.stay_of_model(p),
+            _ => 0,
+        }
+    }
+    fn stay_of_model(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.stay).unwrap_or(0)
     }
     fn stun_of(&self, p: i32) -> i32 {

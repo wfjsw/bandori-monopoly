@@ -80,20 +80,20 @@ fn settle_on(t: &mut Table, who: usize, tile: usize) {
     t.roll(who).unwrap();
 }
 
-/// `give_stay` / `give_stun` set the `Tick::TurnEnd` expiry the engine ticks;
+/// `apply_abnormal` sets the `Tick::TurnEnd` expiry the engine ticks;
 /// a bare `set_state` does not, and the layer would never wear off.
-fn give_stay(t: &mut Table, who: usize, n: i32) {
-    t.m.world_mut().give_stay(who as i32, n);
+fn add_stay(t: &mut Table, who: usize, n: i32) {
+    t.m.world_mut().apply_abnormal(who as i32, 1, n, -1);
 }
 
-fn give_stun(t: &mut Table, who: usize, n: i32) {
-    t.m.world_mut().give_stun(who as i32, n);
+fn add_stun(t: &mut Table, who: usize, n: i32) {
+    t.m.world_mut().apply_abnormal(who as i32, 2, n, -1);
 }
 
-fn give_exile(t: &mut Table, who: usize, n: i32, to: usize) {
+fn add_exile(t: &mut Table, who: usize, n: i32, to: usize) {
     // Engine service writes only the layer; the return tile is the
-    // `status:exile` host's marker (see `rules/status/src/exile.rs::grant`).
-    t.m.world_mut().give_exile(who as i32, n, -1);
+    // `status:exile` host's marker (see `bandori_std::status::exile::send`).
+    t.m.world_mut().apply_abnormal(who as i32, 3, n, -1);
     if n > 0 {
         t.set_state(who, "exileTo", to as i32);
         t.set_state(who, "exileHold", 0);
@@ -714,7 +714,7 @@ fn s05d_circle_affected_cancellation_skips_the_payout() {
 #[test]
 fn t01_stun_skips_operate_and_main_move() {
     let mut t = Table::vanilla(2);
-    give_stun(&mut t, 0, 1);
+    add_stun(&mut t, 0, 1);
     t.begin_turn(0);
     // The turn auto-ends: no 运营, no roll.
     assert!(t.prompt().is_none(), "nothing to do while stunned");
@@ -726,7 +726,7 @@ fn t01_stun_skips_operate_and_main_move() {
 #[test]
 fn t02_stay_skips_the_main_move() {
     let mut t = Table::vanilla(2);
-    give_stay(&mut t, 0, 1);
+    add_stay(&mut t, 0, 1);
     t.begin_turn(0);
     assert_eq!(t.step(), OPS, "reached 运营 with the move skipped");
     assert!(t.m.world().st.skip_move, "the main move is marked skipped");
@@ -743,7 +743,7 @@ const OPS: i32 = 2;
 #[test]
 fn t03_exile_drops_at_the_turn_start() {
     let mut t = Table::vanilla(3);
-    give_exile(&mut t, 0, 2, tile("CiRCLE"));
+    add_exile(&mut t, 0, 2, tile("CiRCLE"));
     // The turn end does not touch 除外.
     pass(&mut t, 0);
     assert_eq!(t.state(0, "exile"), 2, "unchanged at the turn end");
@@ -762,7 +762,7 @@ fn t03_exile_drops_at_the_turn_start() {
 #[test]
 fn t04_exile_ends_by_teleporting_to_the_written_tile() {
     let mut t = Table::vanilla(2);
-    give_exile(&mut t, 0, 1, tile("购物中心"));
+    add_exile(&mut t, 0, 1, tile("购物中心"));
     t.set_pos(0, 20); // off somewhere else while exiled
     t.begin_turn(0);
     assert_eq!(t.state(0, "exile"), 0);
@@ -911,7 +911,7 @@ fn t07_only_one_main_move_per_turn() {
 #[test]
 fn m02_stay_stacks_and_one_layer_drops_per_turn_end() {
     let mut t = Table::vanilla(2);
-    give_stay(&mut t, 0, 3);
+    add_stay(&mut t, 0, 3);
     t.begin_turn(0);
     assert!(t.m.world().st.skip_move, "still stayed");
     t.end(0).unwrap();
@@ -928,7 +928,7 @@ fn m02_stay_stacks_and_one_layer_drops_per_turn_end() {
 #[test]
 fn m03_stun_stacks_and_one_layer_drops_per_turn_end() {
     let mut t = Table::vanilla(2);
-    give_stun(&mut t, 0, 2);
+    add_stun(&mut t, 0, 2);
     t.begin_turn(0);
     // Window 4: stunned -> straight to 结束, dropping one layer.
     assert_ne!(t.turn(), 0, "the turn was skipped");
@@ -940,7 +940,7 @@ fn m03_stun_stacks_and_one_layer_drops_per_turn_end() {
 #[test]
 fn m04_stay_blocks_the_main_move() {
     let mut t = Table::vanilla(2);
-    give_stay(&mut t, 0, 1);
+    add_stay(&mut t, 0, 1);
     t.begin_turn(0);
     assert!(t.m.world().st.skip_move, "the walk is skipped");
     t.end(0).unwrap();

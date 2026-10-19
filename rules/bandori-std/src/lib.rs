@@ -45,11 +45,31 @@ pub mod roster_order;
 pub mod kind;
 /// Shared CEL guards.
 pub mod guards;
+/// Shared status verbs (stay / stun / exile) over the generic engine services.
+pub mod status;
 
-/// State-map keys that name this ruleset's pots / statuses.
+/// State-map keys that name this ruleset's pots / statuses. Frozen webui wire.
 pub mod state_key {
-    /// Fire pots held.
+    /// Fire pots held (火罐).
     pub const CHARGE: &str = "charge";
+    /// [停留] layers.
+    pub const STAY: &str = "stay";
+    /// [晕眩] layers.
+    pub const STUN: &str = "stun";
+    /// [晕眩] applied this turn, counting from next turn.
+    pub const STUN_START: &str = "stunStart";
+    /// [除外] layers.
+    pub const EXILE: &str = "exile";
+    /// Tile the exile returns to, or -1 for none.
+    pub const EXILE_TO: &str = "exileTo";
+    /// 「视为当回合的主要移动」 -- the return teleport is that turn's main move.
+    pub const EXILE_MAIN: &str = "exileMain";
+    /// Duration grant (「获得[除外]直至X」) marker.
+    pub const EXILE_HOLD: &str = "exileHold";
+    /// Layers of "may hold no hand cards".
+    pub const NO_HAND: &str = "noHand";
+    /// Layers of "cannot be stopped".
+    pub const UNSTOPPABLE: &str = "unstoppable";
 }
 
 /// Generic `card_sdk::ctx` plus this ruleset's sugar. Replace
@@ -155,19 +175,20 @@ pub fn decay() -> Result<i32, Prompt> {
 }
 
 // ------------------------------------------------------------- 火罐
+// Readable sugar over the generic `marker_*` / `state_*` family. The wire
+// key is `state_key::CHARGE`; the policy kernel is `rules_status::fire`.
 
 pub fn charge(player_id: i32) -> i32 {
-    unsafe { raw::sys::charge(player_id) }
+    card_sdk::ctx::state::get(player_id, state_key::CHARGE)
 }
 
 pub fn charge_max(player_id: i32) -> i32 {
-    unsafe { raw::sys::charge_max(player_id) }
+    card_sdk::ctx::state::max(player_id, state_key::CHARGE)
 }
 
 /// Gain fire pots, capped by the player's own cap.
 pub fn gain_charge(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
-    let (p, l) = raw::mj(why);
-    raw::asked(unsafe { raw::sys::gain_charge(player_id, n, p, l) })
+    card_sdk::ctx::gain_marker(player_id, state_key::CHARGE, n, why)
 }
 
 /// Spend `n` [火罐]; false when the player has fewer. Logs the spend.
@@ -186,13 +207,12 @@ pub fn spend_charge(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if !card_sdk::ctx::raise(player_id, crate::kind::ChargePaying, n)? {
         return Ok(true);
     }
-    let (p, l) = raw::mj(why);
-    raw::asked(unsafe { raw::sys::spend_charge(player_id, n, p, l) }).map(|v| v != 0)
+    card_sdk::ctx::spend_marker(player_id, state_key::CHARGE, n, why).map(|v| v != 0)
 }
 
 /// Raise (or lower) `player_id`'s [火罐] cap; returns the new cap.
 pub fn add_charge_max(player_id: i32, n: i32) -> i32 {
-    unsafe { raw::sys::add_charge_max(player_id, n) }
+    card_sdk::ctx::add_marker_max(player_id, state_key::CHARGE, n)
 }
 
 // ------------------------------------------------------------- band / character

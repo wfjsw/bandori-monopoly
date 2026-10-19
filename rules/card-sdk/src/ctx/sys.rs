@@ -337,18 +337,24 @@ extern "C-unwind" {
     // v50: guest-raised trigger points (e.g. `circleAffected` from tile:circle).
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_raise")]
     pub fn raise(player_id: i32, kind: i32, value: i32) -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_charge")]
-    pub fn charge(player_id: i32) -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_charge_max")]
-    pub fn charge_max(player_id: i32) -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_gain_charge")]
-    pub fn gain_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_give_stay")]
-    pub fn give_stay(player_id: i32, n: i32);
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_give_stun")]
-    pub fn give_stun(player_id: i32, n: i32);
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_give_exile")]
-    pub fn give_exile(player_id: i32, n: i32, to: i32);
+    // v88: generic marker family (the name is data). Readers are `state_get`
+    // / `state_max` with the marker's wire key.
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_gain_marker")]
+    pub fn gain_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32;
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_spend_marker")]
+    pub fn spend_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32;
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_add_marker_max")]
+    pub fn add_marker_max(player_id: i32, name_p: i32, name_l: i32, n: i32) -> i32;
+    // v88: one generic abnormal verb (replaces the three named host
+    // grants). `kind` is the `AbKind` wire id; `to` is the kind-specific
+    // payload (-1 = none), carried for the exile return destination.
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_apply_abnormal")]
+    pub fn apply_abnormal(player_id: i32, kind: i32, n: i32, to: i32);
+    // v88: this turn's main-move latch (the stay skip; exile is not part of it).
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_skip_main_move")]
+    pub fn skip_main_move(player_id: i32, locked: i32);
+    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_clear_move_skip")]
+    pub fn clear_move_skip(player_id: i32);
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_give_extra_turn")]
     pub fn give_extra_turn(player_id: i32);
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_end_turn_now")]
@@ -361,15 +367,6 @@ extern "C-unwind" {
     pub fn can_pay(player_id: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_cant_move")]
     pub fn cant_move(player_id: i32) -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_spend_charge")]
-    pub fn spend_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_stay_of")]
-    pub fn stay_of(player_id: i32) -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_stun_of")]
-    pub fn stun_of(player_id: i32) -> i32;
-    // v50: `[除外]` layers (mirrors `stun_of`).
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_exile_of")]
-    pub fn exile_of(player_id: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_turn_player")]
     pub fn turn_player() -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_round_no")]
@@ -610,8 +607,6 @@ extern "C-unwind" {
     pub fn set_next_steps(player_id: i32, n: i32);
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_turn_main_steps")]
     pub fn turn_main_steps() -> i32;
-    #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_add_charge_max")]
-    pub fn add_charge_max(player_id: i32, n: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_card_build")]
     pub fn card_build(player_id: i32, tile: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_set_can_build")]

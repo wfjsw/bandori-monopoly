@@ -142,7 +142,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: the stop runs behind `H.AbnormalGate` (C#
     // `H.WithCard(Seat, H.AbnormalGate(a))`); a guarded or unstoppable mover
     // simply is not stopped.
-    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     // C# `m.Stopped = true; m.Resolve = true; m.RentFactor *= 0.5`.

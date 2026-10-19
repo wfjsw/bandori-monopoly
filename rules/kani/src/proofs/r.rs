@@ -56,8 +56,8 @@ crate::host_subset!(sprechchor_dispatch {
 /// `R:（亚子）黑暗大魔姬亚子` counteract — stun, cancel pay, off-hand draw.
 /// `play_from_hand` is a protocol stub (always 0 = off-hand).
 crate::host_subset!(ako_dark_dispatch {
-    give_stun => arm_give_stun,
-    stun_of => arm_stun_of,
+    apply_abnormal => arm_apply_abnormal,
+    ,
     log | effect => arm_log,
     trig_set_pay_amount => arm_trig_set_pay_amount,
     play_from_hand => arm_protocol_stub,  // 0 = not-from-hand (dispatch polarity); TODO(规则书) if a proof needs 1
@@ -115,7 +115,7 @@ crate::host_subset!(nfo_play_dispatch {
 
 /// `R:NFO` AtEnd — one [停留] layer.
 crate::host_subset!(nfo_at_end_dispatch {
-    give_stay => arm_give_stay,
+    apply_abnormal => arm_apply_abnormal,
     log | effect => arm_log,
 });
 

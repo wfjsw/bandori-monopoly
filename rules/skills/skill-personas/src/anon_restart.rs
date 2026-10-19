@@ -50,7 +50,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 fn stay_or_teleport(_player_id: i32) -> bool {
     matches!(
         trigger::abnormal_kind(),
-        Some(AbKind::Stay | AbKind::Teleport)
+        Some(bandori_std::kind::abnormal::Stay | bandori_std::kind::abnormal::Teleport)
     )
 }
 

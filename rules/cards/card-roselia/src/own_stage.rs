@@ -46,7 +46,7 @@ fn abnormal_kind() -> Option<AbKind> {
 fn can_counteract(_player_id: i32) -> bool {
     // G4: the actor rel is the condition (`target == owner`); 「[除外]以外」 is
     // a derived chain lookup (GUARDS.md §6) and stays here.
-    abnormal_kind().is_some_and(|k| k != AbKind::Exile)
+    abnormal_kind().is_some_and(|k| k != bandori_std::kind::abnormal::Exile)
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -66,7 +66,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // when the abnormal is stay/stun (C# `CardOwnStage.Counteract` branches on
     // `c.Trigger.Ab.Kind`).
     match abnormal_kind() {
-        Some(AbKind::Stay) | Some(AbKind::Stun) => {
+        Some(bandori_std::kind::abnormal::Stay) | Some(bandori_std::kind::abnormal::Stun) => {
             ctx::set_slot(player_id, "stageEnd", if yes { 1 } else { 2 });
         }
         // 规则书[反击]: 「选择自己的本次移动…是否触发结算」 -- C# `H._resolveOverride[i] =

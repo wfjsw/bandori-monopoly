@@ -148,19 +148,16 @@ pub enum Op {
     invoke_skill = 132,
     raise_bought = 133,
     raise = 134,
-    charge = 135,
-    charge_max = 136,
-    gain_charge = 137,
-    give_stay = 138,
-    give_stun = 139,
-    give_exile = 140,
+    // 135/136 retired (charge / charge_max named readers; use state_get).
+    gain_marker = 137,
+    apply_abnormal = 138,
+    // 139 retired (stun grant).
+    // 140 was the exile grant; apply_abnormal lives at 138.
     give_extra_turn = 141,
     can_pay = 142,
     cant_move = 143,
-    spend_charge = 144,
-    stay_of = 145,
-    stun_of = 146,
-    exile_of = 147,
+    spend_marker = 144,
+    // 145/146/147 retired (status-layer readers; use state_get).
     turn_player = 148,
     round_no = 149,
     turn_key = 150,
@@ -269,7 +266,7 @@ pub enum Op {
     fixed_roll = 253,
     set_next_steps = 254,
     turn_main_steps = 255,
-    add_charge_max = 256,
+    // 256 retired (named marker-cap move; use add_marker_max).
     card_build = 257,
     set_can_build = 258,
     clear_dice = 259,
@@ -350,6 +347,10 @@ pub enum Op {
     end_turn_now = 327,
     teleport_as = 328,
     log_as = 329,
+    // v88: generic marker cap + stay move-latch verbs.
+    add_marker_max = 330,
+    skip_main_move = 331,
+    clear_move_skip = 332,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.
