@@ -31,15 +31,15 @@ export interface Box {
  * orientation -- the one measurement that is the same rectangle in portrait
  * and in landscape. The layout and visual viewports are both short of it in
  * portrait (Safari's address bar, the iOS PWA's status-bar strip) and full in
- * landscape, which left forced rotation laying out on a different canvas than
- * a real turn of the phone: the stage letterboxed, with a blank bar at each
- * end of the long axis. (The status-bar scrim used to hide the one by the
- * cutout; the other was always there.)
+ * landscape. Sizing to those left the stage short on the long axis: under
+ * forced rotation that axis is the phone's height, so the leftover strip sat
+ * under the cutout at the top (invisible behind the island) and showed as a
+ * blank bar at the **bottom** of the phone, with the app not filling the
+ * screen width.
  *
  * `screen` only counts on a handset-sized coarse device -- a desktop window on
  * a touch monitor must not be blown up to the monitor. Everywhere else the
- * window itself (the layout viewport, or a `100lvw` / `100lvh` probe of the
- * large one) is the right answer. Either way take the largest candidate: a
+ * window itself is the right answer. Either way take the largest candidate: a
  * short stage letterboxes, and letterbox is the bug.
  */
 export function windowBox(input: {
@@ -49,6 +49,9 @@ export function windowBox(input: {
   /** `window.innerWidth` / `innerHeight`. */
   innerW: number;
   innerH: number;
+  /** The `position: fixed; inset: 0` body's box -- the real drawing area. */
+  layoutW: number;
+  layoutH: number;
   /** `100lvw` / `100lvh` probe, or 0 where unavailable. */
   probeW: number;
   probeH: number;
@@ -58,6 +61,7 @@ export function windowBox(input: {
   coarse: boolean;
 }): Box {
   const candidates: Box[] = [{ vw: input.innerW, vh: input.innerH }];
+  if (input.layoutW > 0 && input.layoutH > 0) candidates.push({ vw: input.layoutW, vh: input.layoutH });
   if (input.probeW > 0 && input.probeH > 0) candidates.push({ vw: input.probeW, vh: input.probeH });
   const lo = Math.min(input.screenW, input.screenH);
   const hi = Math.max(input.screenW, input.screenH);

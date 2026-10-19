@@ -60,11 +60,18 @@ function largeViewport(): { vw: number; vh: number } {
     lvProbe = el;
   }
   const r = el.getBoundingClientRect();
+  // The drawing area: `html, body { position: fixed; inset: 0 }` is exactly
+  // the layout viewport, which `viewport-fit=cover` extends to the screen
+  // edges. Measured here rather than off `innerHeight`, which a browser's
+  // chrome can shrink without the drawing area moving.
+  const layout = document.body.getBoundingClientRect();
   return windowBox({
     screenW: window.screen.width,
     screenH: window.screen.height,
     innerW: window.innerWidth,
     innerH: window.innerHeight,
+    layoutW: layout.width,
+    layoutH: layout.height,
     probeW: r.width,
     probeH: r.height,
     portrait: window.matchMedia("(orientation: portrait)").matches,

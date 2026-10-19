@@ -18,6 +18,7 @@ test("windowBox: a handset uses the device screen, not the shrunken viewport", (
   const portrait = windowBox({
     screenW: 393, screenH: 852,
     innerW: 393, innerH: 750,
+    layoutW: 393, layoutH: 750,
     probeW: 393, probeH: 793,
     portrait: true, coarse: true,
   });
@@ -28,10 +29,34 @@ test("windowBox: a handset uses the device screen, not the shrunken viewport", (
   const landscape = windowBox({
     screenW: 852, screenH: 393,
     innerW: 852, innerH: 393,
+    layoutW: 852, layoutH: 393,
     probeW: 852, probeH: 393,
     portrait: false, coarse: true,
   });
   assert.deepEqual(landscape, { vw: 852, vh: 393 });
+});
+
+test("windowBox: the long side reaches the phone's bottom, not just under the island", () => {
+  // The reported bug: under forced rotation the stage was short on the long
+  // axis, so the leftover strip hid under the cutout at the top and showed as
+  // a blank bar at the BOTTOM of the phone. The stage's screen height under
+  // `rotate(90deg)` is its design width -- pin that it is the device's 852.
+  const win = windowBox({
+    screenW: 393, screenH: 852,
+    innerW: 393, innerH: 750,
+    layoutW: 393, layoutH: 750,
+    probeW: 393, probeH: 793,
+    portrait: true, coarse: true,
+  });
+  const forced = stageBox({
+    vw: win.vw, vh: win.vh,
+    inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
+  });
+  // After the 90deg turn the placer's screen box is h*scale x w*scale.
+  const screenW = forced.h * forced.scale;
+  const screenH = forced.w * forced.scale;
+  assert.equal(Math.round(screenH), 852, `long axis must be the device's 852, got ${screenH}`);
+  assert.equal(Math.round(screenW), 393, `short axis must be the device's 393, got ${screenW}`);
 });
 
 test("windowBox: never comes in short of the window (no blank bar at an end)", () => {
@@ -40,6 +65,7 @@ test("windowBox: never comes in short of the window (no blank bar at an end)", (
   const box = windowBox({
     screenW: 0, screenH: 0,
     innerW: 393, innerH: 852,
+    layoutW: 393, layoutH: 852,
     probeW: 0, probeH: 0,
     portrait: true, coarse: true,
   });
@@ -52,6 +78,7 @@ test("windowBox: a desktop window is not blown up to the monitor", () => {
   const box = windowBox({
     screenW: 1920, screenH: 1080,
     innerW: 1200, innerH: 800,
+    layoutW: 1200, layoutH: 800,
     probeW: 1200, probeH: 800,
     portrait: false, coarse: true,
   });
