@@ -25,6 +25,7 @@ const ARRAY_OPS: &[&str] = &[
     "prop_at", "set_prop_at", "state_get", "state_set", "state_add", "slot", "set_slot", "inc_slot",
     "group_pool", "add_group_pool", "group_skill", "persona_skill", "group_skills", "add_group_skill", "invoke_skill", "raise_bought",
     "raise", "charge", "charge_max", "gain_charge", "give_stay", "give_stun", "give_exile", "give_extra_turn",
+    "end_turn_now", "teleport_as", "log_as",
     "can_pay", "cant_move", "spend_charge", "stay_of", "stun_of", "exile_of", "turn_player", "round_no",
     "turn_key", "persona_is", "set_persona", "in_group", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
     "ask", "trig_kind", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",

@@ -24,6 +24,7 @@ export const STATE_LOG: Record<string, string> = {
   exile: "log.state.exile",
   exileTo: "log.state.exile",
   exileMain: "log.state.exile",
+  exileHold: "log.state.exile",
   noHand: "log.state.no_hand",
   unstoppable: "log.state.unstoppable",
   startHand: "log.state.start_hand",

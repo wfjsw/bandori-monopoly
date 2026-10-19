@@ -305,6 +305,7 @@
   "log.events_reshuffled": "The event deck ran out; the graveyard was shuffled into a new deck",
   "log.exile_over": "{{who}}'s [Exile] is over -- back on the board",
   "log.exiled_skip": "{{who}} is still [Exiled] ({{left}} layers) -- skipping this turn",
+  "log.exiled_skip_hold": "{{who}} is still [Exiled] -- skipping this turn",
   "log.force_buy": "{{who}} paid {{owner}} {{price}} to force-buy the mortgaged {{tile}} (still mortgaged)",
   "log.forfeit": "{{who}} left the match (forfeit) -- out, like a bankruptcy",
   "log.gain": "{{who}} gained {{amount}}{{src}}",

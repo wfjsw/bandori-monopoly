@@ -42,12 +42,16 @@ crate::host_subset!(childhood_after_move_dispatch {
     set_dest => arm_set_dest,
 });
 
-/// `Sumimi:一人两个甜甜圈` play body — pos / exile / slots / dest / place / log.
-/// Isolation: the multi-act `PassTile` / `SettleAfter` half (clause (2)) is
+/// `Sumimi:一人两个甜甜圈` play body — pos / exile hold / slots / dest / place /
+/// log. Isolation: the multi-act `PassTile` / `SettleAfter` half (clause (2)) is
 /// PROTOCOL-LEVEL and not entered here.
+/// `state_get` reads [不可阻挡] in the host `grant` guard (STA-01).
 crate::host_subset!(two_donuts_dispatch {
     player_pos => arm_player_pos,
+    exile_of => arm_exile_of,
     give_exile => arm_give_exile,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
     set_slot => arm_set_slot,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
@@ -495,10 +499,18 @@ fn twodonuts_01_exile_iff_at(user: i32) {
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
+    let hold = world::with_world(|ww| ww.key_get(user, intern::intern(card_sdk::abi::state_key::EXILE_HOLD)));
 
     crate::kassert!(
         spec::sumimi::twodonuts_exile_ok(effects, user),
         "C-SUMIMI-twodonuts-01: exactly one [除外] grant and no money/pos/fire side effects"
+    );
+    // The held half of the contract: a duration grant (「获得[除外]直至X」)
+    // leaves the `exileHold` marker set so the turn-start layer tick does not
+    // peel it.
+    crate::kassert!(
+        hold == 1,
+        "C-SUMIMI-twodonuts-01: exileHold == 1 after the body"
     );
     for p in 0..MAX_PLAYERS {
         crate::kassert!(post.money[p] == pre.money[p], "frame: money");

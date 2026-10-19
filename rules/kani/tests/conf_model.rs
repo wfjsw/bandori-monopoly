@@ -713,6 +713,9 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("give_exile {player_id} {n}"));
     }
     fn give_extra_turn(&mut self, _player_id: i32) {}
+    fn end_turn_now(&mut self, _player_id: i32) {}
+    fn teleport_as(&mut self, _player_id: i32, _tile: i32, _resolve: i32, _as_main: i32) {}
+    fn log_as(&mut self, _player_id: i32, _kind: &str, _msg: EngineMsg) {}
     fn can_pay(&self, player_id: i32) -> i32 {
         (self.money(player_id) > 0) as i32
     }

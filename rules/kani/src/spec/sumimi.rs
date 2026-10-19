@@ -118,15 +118,16 @@ pub fn childhood_fire_post(pre_fire: i32, cap: i32) -> i32 {
 // C-SUMIMI-twodonuts-01 -- 「（1）获得[除外]直至你原本所在格子被其他玩家经过。」
 // ===========================================================================
 
-/// The [手] body grants [除外]. The expiry clause (「直至…经过」) is a
+/// The [手] body grants [除外] as a **duration** hold (「获得[除外]直至X」):
+/// exactly one layer, not a stack. The expiry clause (「直至…经过」) is a
 /// multi-act window and is not part of this grant's effect log.
-/// The quote does not pin a layer count (`n >= 1` is the grant); the body
-/// also arms a field carrier and slots — those are the attachment plumbing
-/// and are not part of clause (1)'s status frame beyond the grant itself.
+/// The body also arms a field carrier and slots — those are the attachment
+/// plumbing and are not part of clause (1)'s status frame beyond the grant
+/// itself (plus the `exileHold` marker the hold writes).
 pub fn twodonuts_exile_grant_in(effects: &[Effect], player: i32) -> bool {
     let mut n_grants = 0;
     for e in effects {
-        if matches!(e, Effect::GiveExile { player: p, n, .. } if *p == player && *n >= 1) {
+        if matches!(e, Effect::GiveExile { player: p, n, .. } if *p == player && *n == 1) {
             n_grants += 1;
         }
     }

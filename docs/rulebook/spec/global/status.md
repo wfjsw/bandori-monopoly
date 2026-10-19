@@ -153,6 +153,12 @@ start) that is not named in the book -- see G-STATUS-01.
   (MyGO:无路矢 「获得2层[除外]」) -- 「无法重复获得」 bars a *second*
   acquisition while the first is active, not a multi-layer first grant. A
   grant after the decay leaves 0 is a fresh acquisition.
+  **Duration grants (「获得[除外]直至X」)** are a settled distinction (user
+  ruling 2026-10-18): the `until` clause governs and the per-turn layer tick
+  does **not** apply to them. They are held as one layer plus the
+  `status:exile` host's `exileHold` marker (`rules/status/src/exile.rs`);
+  the granting effect ends them (Sumimi:一人两个甜甜圈).
+  Layered grants (「获得N层」) still tick one layer per owner turn start.
 * **Executable:** `rules_spec::global::status::g_status_07`.
 
 ---

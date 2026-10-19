@@ -363,6 +363,17 @@ pub enum HostRequest {
     /// is logged), so it cannot re-teleport over a move that already ran.
     /// Answers 1 (it went through) or 0 (the gate blocked it).
     Teleport { player_id: i32, tile: i32 },
+    /// A teleport whose move tail runs through the engine's `teleport_as`
+    /// **without** the abnormal [反击] window: the status's own return clause
+    /// (「状态结束后在玩家回合开始时要[传送]到的格子」) is not a forced move
+    /// the responder answers. `as_main` marks the move as the turn's
+    /// [主要移动] and sets `turn.main_moved`. Answers 1 (it ran) or 0.
+    TeleportAs {
+        player_id: i32,
+        tile: i32,
+        resolve: bool,
+        as_main: bool,
+    },
     /// A full [触发结算] of `tile` for this player, without moving them.
     SettleAt {
         player_id: i32,
@@ -3927,6 +3938,28 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "end_turn_now",
+        |mut c: C<W>, player_id: i32| -> Result<(), Error> {
+            hostfns::end_turn_now(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "teleport_as",
+        |mut c: C<W>, player_id: i32, tile: i32, resolve: i32, as_main: i32| -> Result<(), Error> {
+            hostfns::teleport_as(&mut c, player_id, tile, resolve, as_main)
+                .map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "log_as",
+        |mut c: C<W>, player_id: i32, kp: i32, kn: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::log_as(&mut c, player_id, kp, kn, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "can_pay",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
             hostfns::can_pay(&mut c, player_id).map_err(HostErr::into_err)
@@ -5320,6 +5353,9 @@ impl CardWorld for NullWorld {
     fn give_stun(&mut self, _: i32, _: i32) {}
     fn give_exile(&mut self, _: i32, _: i32, _: i32) {}
     fn give_extra_turn(&mut self, _: i32) {}
+    fn end_turn_now(&mut self, _: i32) {}
+    fn teleport_as(&mut self, _: i32, _: i32, _: i32, _: i32) {}
+    fn log_as(&mut self, _: i32, _: &str, _: crate::Msg) {}
     fn set_dest(&mut self, _: i32) {}
     fn set_transfer_to_dest(&mut self, _: i32, _: i32) {}
     fn send_to_dest(&mut self, _: i32) -> Option<i32> {

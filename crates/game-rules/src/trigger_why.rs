@@ -259,7 +259,8 @@ pub fn state_key_name(key: &str) -> Msg {
         }
         card_sdk::abi::state_key::EXILE
         | card_sdk::abi::state_key::EXILE_TO
-        | card_sdk::abi::state_key::EXILE_MAIN => Msg::new("log.state.exile"),
+        | card_sdk::abi::state_key::EXILE_MAIN
+        | card_sdk::abi::state_key::EXILE_HOLD => Msg::new("log.state.exile"),
         card_sdk::abi::state_key::NO_HAND => Msg::new("log.state.no_hand"),
         card_sdk::abi::state_key::UNSTOPPABLE => Msg::new("log.state.unstoppable"),
         card_sdk::abi::state_key::START_HAND => Msg::new("log.state.start_hand"),

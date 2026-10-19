@@ -112,11 +112,12 @@ fn a_two_donuts_settle_teleport_lands_on_the_chosen_tile() {
         if p.text.key().contains("two_donuts_yes") {
             // 「可选择传送至…」 -- take the offer (the `ask.yes` option).
             t.answer(0, 0).unwrap();
-        } else if p.kind == "tile" {
+        } else if p.text.key().contains("two_donuts_ask") {
             // 「传送至…任一格」 -- pick 12 (between the original 10 and the
             // endpoint 15).
             t.answer_tile(0, 12).unwrap();
         } else {
+            // Settling on 中心学区 (agent) opens an optional buy -- decline it.
             t.decline();
         }
     }
