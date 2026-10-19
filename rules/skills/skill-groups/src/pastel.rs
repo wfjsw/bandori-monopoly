@@ -8,8 +8,9 @@
 //! > 此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡。
 //!
 //! Fan markers live in the per-player state dict ([`crate::fans`]), owned by
-//! no card. Clause （2） is an `On::Action` listener on
-//! [`ruleset_core::kind::FansFlip`] (「…时」 state clause = event handler).
+//! the standing `mark:pp_fans` host (MARKERS.md §7). Clause （2） is an
+//! `On::Action` listener on [`ruleset_core::kind::FansFlip`] (「…时」 state
+//! clause = event handler), filtered to its own owner seat (「你…受到」).
 
 use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
@@ -35,19 +36,13 @@ pub const PASTEL: CardDef = CardDef::new(
 /// Pastel✽Palettes乐队卡时此效果不重复发动）」 -- the band card's own game-start
 /// clause; it hits every non-Pastel✽Palettes character on the board, not just
 /// the card's owner.
-fn at_start(player_id: i32) -> card_sdk::Asked {
-    // 「如有场上有多张…乐队卡时此效果不重复发动」 -- only the first copy on
-    // the board (lowest seat holding one) deals.
-    let first = (0..ctx::player_count()).find(|&p| ctx::placed_cards(p).iter().any(|c| c == ID));
-    if first != Some(player_id) {
-        return Ok(());
-    }
-    for p in 0..ctx::player_count() {
-        if ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
-            continue;
-        }
-        let _ = fans::grant(p, 0, 1)?;
-    }
+///
+/// The exclusion test 「非Pastel✽Palettes**角色**」 is the **character's** group
+/// (where the face puts it). The 「多张…**乐队卡**时此效果不重复发动」 dedupe
+/// lives on the `mark:pp_fans` host ([`fans::initial_grant_once`]) -- creation
+/// is once-per-match, not once-per-instance (MARKERS.md §4.5 / §7).
+fn at_start(_player_id: i32) -> card_sdk::Asked {
+    let _ = fans::initial_grant_once("Pastel✽Palettes")?;
     Ok(())
 }
 
