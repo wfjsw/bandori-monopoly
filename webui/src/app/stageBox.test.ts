@@ -1,10 +1,11 @@
 // Run with: node --test webui/src/app/stageBox.test.ts
 // The stage geometry is pure math once the safe-area insets are probed: these
-// checks pin the window measurement (`windowBox`), the forced-rotation axis
-// swap, the edge-to-edge fit (the stage fills the window -- no safe-area inset
-// on the box itself), the safe mapping through the rotation (forced and a real
-// turn of the phone must agree), and the compact-canvas predicate so the phone
-// layouts stay predictable.
+// checks pin the window measurement (`windowBox` -- the layout viewport, never
+// larger, so the fixed placer cannot overflow the box it is centered in), the
+// forced-rotation axis swap, the edge-to-edge fit (the stage fills the window
+// -- no safe-area inset on the box itself), the safe mapping through the
+// rotation (forced and a real turn of the phone must agree), and the
+// compact-canvas predicate so the phone layouts stay predictable.
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, TOUCH_TOP_MIN } from "../styles/layout.ts";
@@ -12,77 +13,44 @@ import { type Insets, stageBox, windowBox } from "./stageBox.ts";
 
 const NO_INSET: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
 
-test("windowBox: a handset uses the device screen, not the shrunken viewport", () => {
-  // Portrait iPhone in Safari / PWA: the layout and visual viewports are short
-  // of the 852pt screen (address bar, status-bar strip), `screen` is not.
-  const portrait = windowBox({
-    screenW: 393, screenH: 852,
-    innerW: 393, innerH: 750,
-    layoutW: 393, layoutH: 750,
-    probeW: 393, probeH: 793,
-    portrait: true, coarse: true,
-  });
-  assert.deepEqual(portrait, { vw: 393, vh: 852 });
-  // The same handset turned: every source agrees, and the rectangle is the
-  // portrait one with the sides traded -- that is what makes forced (swapped)
-  // and a real turn share one canvas.
-  const landscape = windowBox({
-    screenW: 852, screenH: 393,
-    innerW: 852, innerH: 393,
-    layoutW: 852, layoutH: 393,
-    probeW: 852, probeH: 393,
-    portrait: false, coarse: true,
-  });
-  assert.deepEqual(landscape, { vw: 852, vh: 393 });
+test("windowBox: the layout viewport is the window -- never larger", () => {
+  // The placer is `position: fixed; left: 50%; top: 50%`, so it is centered in
+  // the layout viewport. Anything bigger overflows that box: the stage grows
+  // past the cutout on one side and leaves a blank border on the other.
+  assert.deepEqual(
+    windowBox({ layoutW: 393, layoutH: 750, innerW: 393, innerH: 750 }),
+    { vw: 393, vh: 750 },
+    "the layout viewport is the window, chrome and all",
+  );
+  // Fallback where the probe is missing.
+  assert.deepEqual(
+    windowBox({ layoutW: 0, layoutH: 0, innerW: 852, innerH: 393 }),
+    { vw: 852, vh: 393 },
+  );
 });
 
-test("windowBox: the long side reaches the phone's bottom, not just under the island", () => {
-  // The reported bug: under forced rotation the stage was short on the long
-  // axis, so the leftover strip hid under the cutout at the top and showed as
-  // a blank bar at the BOTTOM of the phone. The stage's screen height under
-  // `rotate(90deg)` is its design width -- pin that it is the device's 852.
-  const win = windowBox({
-    screenW: 393, screenH: 852,
-    innerW: 393, innerH: 750,
-    layoutW: 393, layoutH: 750,
-    probeW: 393, probeH: 793,
-    portrait: true, coarse: true,
-  });
+test("windowBox: forced rotation fills the box it is centered in -- no overflow, no gap", () => {
+  // Portrait handset with browser chrome: the layout viewport is 393x750 of a
+  // 393x852 screen. Sizing to the screen would overflow past the island and
+  // leave a blank at the opposite edge; sizing to the layout viewport fills
+  // the box exactly. Under `rotate(90deg)` the placer's screen box is
+  // h*scale x w*scale.
+  const win = windowBox({ layoutW: 393, layoutH: 750, innerW: 393, innerH: 750 });
   const forced = stageBox({
     vw: win.vw, vh: win.vh,
     inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
   });
-  // After the 90deg turn the placer's screen box is h*scale x w*scale.
   const screenW = forced.h * forced.scale;
   const screenH = forced.w * forced.scale;
-  assert.equal(Math.round(screenH), 852, `long axis must be the device's 852, got ${screenH}`);
-  assert.equal(Math.round(screenW), 393, `short axis must be the device's 393, got ${screenW}`);
+  assert.equal(Math.round(screenW), 393, `must fill the box's width, got ${screenW}`);
+  assert.equal(Math.round(screenH), 750, `must fill the box's height, got ${screenH}`);
 });
 
-test("windowBox: never comes in short of the window (no blank bar at an end)", () => {
-  // Even if `screen` is missing or wrong, the largest candidate wins -- a
-  // stage smaller than the window letterboxes into a blank bar at each end.
-  const box = windowBox({
-    screenW: 0, screenH: 0,
-    innerW: 393, innerH: 852,
-    layoutW: 393, layoutH: 852,
-    probeW: 0, probeH: 0,
-    portrait: true, coarse: true,
-  });
-  assert.deepEqual(box, { vw: 393, vh: 852 });
-});
-
-test("windowBox: a desktop window is not blown up to the monitor", () => {
-  // A touch-screen laptop: coarse, but the short side is well past handset
-  // size, so `screen` must not count.
-  const box = windowBox({
-    screenW: 1920, screenH: 1080,
-    innerW: 1200, innerH: 800,
-    layoutW: 1200, layoutH: 800,
-    probeW: 1200, probeH: 800,
-    portrait: false, coarse: true,
-  });
-  assert.deepEqual(box, { vw: 1200, vh: 800 });
+test("windowBox: a desktop window is the window, not the monitor", () => {
+  assert.deepEqual(
+    windowBox({ layoutW: 1200, layoutH: 800, innerW: 1200, innerH: 800 }),
+    { vw: 1200, vh: 800 },
+  );
 });
 
 test("desktop: the stage fills the window 1:1", () => {
