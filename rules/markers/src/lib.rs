@@ -12,6 +12,7 @@
 //! | id | file | rulebook |
 //! |---|---|---|
 //! | `mark:cp` | `cp.rs` | `data/rules.txt` 125 (「CP点：放置于路面上的指示物」) + 通用:该清CP了 |
+//! | `mark:pp_fans` | `pp_fans.rs` | Pastel✽Palettes band sheet （1） + glossary 「P✽P粉丝」 |
 //!
 //! Every body quotes the passage it implements and cites it per line, like a
 //! card. Gaps in the text are `TODO(规则书)`, never silently dropped.
@@ -50,9 +51,11 @@
 extern crate alloc;
 
 pub mod cp;
+pub mod pp_fans;
 pub use cp::MARK_CP;
+pub use pp_fans::MARK_PP_FANS;
 
-/// Every tile-mark rule, in registration order. The shipped module
+/// Every mark-host rule, in registration order. The shipped module
 /// (`card-all`) concatenates these tables with the card, skill, tile and event
 /// ones.
-pub static CARDS: &[card_sdk::CardDef] = &[MARK_CP];
+pub static CARDS: &[card_sdk::CardDef] = &[MARK_CP, MARK_PP_FANS];

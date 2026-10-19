@@ -164,9 +164,14 @@ declared counter** of the same instance (`fire.temp`), not a free key.
 
 ### P✽P粉丝 -- kind-owned host
 
-Owner: a standing `mark:pp_fans` pseudo-card (`rules/markers` pattern) that
-owns `fansUp`/`fansDown` per holder, the flip protocol (pre-raise), and the
-once-per-match initial grant (「多张…乐队卡时此效果不重复发动」).
+Owner: the standing `mark:pp_fans` pseudo-card, home
+`rules/markers/src/pp_fans.rs` (the `mark:*` kind-owned host family; the
+rename from `rules/tile_marks` is because hosts are not tile-only --
+`mark:cp` is tile-bound, `mark:pp_fans` is holder-bound). It owns
+`fansUp`/`fansDown` per holder, the flip protocol (pre-raise), and the
+once-per-match initial grant (「多张…乐队卡时此效果不重复发动」). Storage
+stays the wire keys; `rules/skills/skill-groups/src/fans.rs` re-exports the
+verbs so call sites keep the `fans::*` signatures.
 
 The Pastel band skill keeps only what its face binds to it: clause （1） as a
 creator call to the host, clause （2） as its listener (per its **own owner
@@ -212,24 +217,43 @@ the second, clause （2） is per band instance.
 
 1. 「进入状态2时」 clause order -- Ave Mujica 「将火罐补充至上限」 vs
    `skill:八幡海铃:熟练的支援贝斯手` 「进入状态2时你可消耗X个火罐」.
-   **Recommend: band refill first**, then face entry clauses (makes 八幡海铃's
-   entry-spend real, not free).
-2. `fire.temp` vs pool spend order when both are live. **Recommend: temp first**
-   (it is the over-cap allowance).
+   **Implemented as recommended: band refill first**, then face entry clauses
+   (makes 八幡海铃's entry-spend real, not free). The band skill's
+   `TurnStartBefore` body runs the refill before character-skill entry hooks
+   in the same pass; documented on `fire::regime` and `ave_mujica::on_state`.
+2. `fire.temp` vs pool spend order when both are live. **Implemented as
+   recommended: temp first** (it is the over-cap allowance) --
+   `fire::spend` draws `fire::temp` before the declared pool.
 3. Fan rows of out-players. **Recommend: persist** (the text never ties fan
-   lifetime to being alive).
+   lifetime to being alive). Not yet encoded as a test; `clean()` resets fans
+   only for the test harness.
 
-## 11. Migration
+## 11. What landed (2026-10-19)
 
-1. Land this doc; file the exceptions (§7) as BACKLOG tickets.
-2. Fire: declaration registry + kernel (actuals, logs, windows) behind the
-   existing `rules_status::fire` / `ruleset_core` names -- zero call-site
-   churn; then the guests (Ave Mujica regime, 二人一体/天生的演员 re-declare,
-   tempFire, the raw-bounds sites).
-3. Fans: `mark:pp_fans` host behind `fans::*`; once-flag; pastel.rs clauses
-   become caller/listener.
-4. Purge §6's inventory from `crates/` and `card-sdk`.
-5. Enforcement (§9).
+1. This doc; exceptions filed as BACKLOG tickets (nyamu's undefined
+   「失去2个火罐」 benefit stays `TODO(规则书)`; lisa's temp-pot 600-cost /
+   two-turn expiry stays `TODO(规则书)[judgement]`).
+2. **Fire**: declaration registry (`rules/status/src/fire_decl.rs`, keyed by
+   skill id, quoting the face) + kernel (`rules/status/src/fire.rs`:
+   `declare`/`redeclare`/`overlay`/`end_overlay`, `gain`/`spend`/`adjust_cap`
+   with actuals, `temp` as a second declared counter, `regime::{fill_to_cap,
+   drain, burn_all}`) behind the existing `rules_status::fire` /
+   `ruleset_core` names. `fire_pot(player)` looks up the registry (no body
+   literals). Guests routed: two_in_one (registry re-declare, hardcoded pairs
+   deleted), mutsumi_actor (fire overlay via the last-play latch; character
+   cover still `TODO(规则书)[judgement]`), ave_mujica (regime verbs),
+   kaoru_prince / uika_imprisoned (declare), yuri_crit (stops touching
+   CHARGE), lisa_goddess (`fire::temp::grant`).
+3. **Fans**: kind-owned host protocol in `rules/skills/skill-groups/src/fans.rs`
+   (`mark:pp_fans` -- the host family lives in `rules/markers`; this holder-
+   bound counter's protocol is the facade module, storage stays the wire
+   keys). Once-per-match initial grant (`fans::initial_grant_once`) replaces
+   pastel.rs's "lowest seat" dedupe; flip pre-raise preserved; `pastel.rs`
+   clause （1） is a caller, clause （2） stays the per-instance listener.
+4. **Purge** §6's inventory from `crates/` and `card-sdk` (see the §6 table).
+5. Enforcement: the `registry_has_no_body_literals` pin (source grep for
+   stray `fire_pot(player, N, M)` / raw CHARGE / `tempFire` writes in
+   skill bodies). Kani iff proofs not yet added (BACKLOG).
 
 Relation to the parallel branches: `twodonuts-exile` (exile into
 `rules/status`) and `status-hosts-rest` (stay/stun/noHand) are the conditions

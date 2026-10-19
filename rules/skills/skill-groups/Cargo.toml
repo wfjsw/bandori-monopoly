@@ -12,3 +12,4 @@ crate-type = ["rlib"]
 card-sdk = { path = "../../card-sdk", features = ["guest"] }
 ruleset-core = { path = "../../ruleset-core" }
 rules-status = { path = "../../status" }
+rules-markers = { path = "../../markers" }
