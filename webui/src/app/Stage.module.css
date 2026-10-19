@@ -1,9 +1,4 @@
 .backdrop { position: fixed; inset: 0; background: #f6e7ec center / cover no-repeat; opacity: 0; transition: opacity 0.3s; will-change: opacity; }
-/* Screen space, not stage space: the iOS status bar draws white-on-transparent
-   over the top inset under `apple-mobile-web-app-status-bar-style=black-translucent`,
-   and the backdrop under it is light. A dark band keeps the clock / battery
-   legible. Zero height where there is no inset (landscape, desktop). */
-.statusScrim { position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); background: rgba(60, 40, 50, 0.45); pointer-events: none; z-index: var(--z-status-scrim); }
 .backdrop.front { opacity: 1; }
 .backdrop::after { content: ""; position: absolute; inset: 0; background: rgba(246, 242, 243, 0.3); }
 .placer { position: fixed; left: 50%; top: 50%; transform-origin: 50% 50%; }
