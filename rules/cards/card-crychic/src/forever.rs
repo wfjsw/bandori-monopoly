@@ -11,7 +11,7 @@
 //! leaves the owner holding 7+ cards.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const FOREVER: CardDef = CardDef::new(

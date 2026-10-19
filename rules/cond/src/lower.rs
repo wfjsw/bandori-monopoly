@@ -350,10 +350,10 @@ fn pre_string(s: &str) -> Option<String> {
     if rest.starts_with("pre::MINE") {
         return Some("actor == owner".to_string());
     }
-    // `ruleset_core::guards::*` constant references — resolve to the literal.
+    // `bandori_std::guards::*` constant references — resolve to the literal.
     for (name, lit) in [
-        ("ruleset_core::guards::OWN_START", "actor == owner && tile_is(tile.id, \"circle\")"),
-        ("ruleset_core::guards::OWN_DEED", "actor == owner && tile_is(tile.id, \"ring\")"),
+        ("bandori_std::guards::OWN_START", "actor == owner && tile_is(tile.id, \"circle\")"),
+        ("bandori_std::guards::OWN_DEED", "actor == owner && tile_is(tile.id, \"ring\")"),
     ] {
         if rest.starts_with(name) {
             return Some(lit.to_string());

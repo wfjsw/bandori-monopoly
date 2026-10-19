@@ -11,7 +11,7 @@
 //! on this rule's own id -- not the player's counter.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:MyGO!!!!!:迷途之星";
@@ -80,7 +80,7 @@ fn on_discarded(player_id: i32) -> card_sdk::Asked {
 /// (2) move-1 and the (3) draw-1. `ctx::is_placed` is true for the skill
 /// press, so the instance's crystal pool is the one being spent.
 fn available(player_id: i32) -> [bool; 2] {
-    if ruleset_core::ctx::skill_blocked(player_id, "") || !is_my_turn(player_id) {
+    if bandori_std::ctx::skill_blocked(player_id, "") || !is_my_turn(player_id) {
         return [false, false];
     }
     let c = ctx::crystals();
@@ -91,7 +91,7 @@ fn available(player_id: i32) -> [bool; 2] {
 /// move-1 costs 1 crystal and the (3) draw costs 2, so 1 crystal is already
 /// enough for the move half.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
@@ -178,8 +178,8 @@ fn is_my_turn(player_id: i32) -> bool {
 // same moment (`teleport_to`).
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"MyGO!!!!!"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"MyGO!!!!!"#)
     .short_name(r#"MyGO"#)
     .color(r#"#3388BB"#)
     .skill(r#"迷途之星"#)

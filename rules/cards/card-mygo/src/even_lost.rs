@@ -10,7 +10,7 @@
 //! discards it to move as many tiles as your hand size.
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(

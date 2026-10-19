@@ -19,7 +19,7 @@
 //! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
 
 use card_sdk::abi::{state_key, FilterValue, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「回忆地块」 -- the three the clause names.
@@ -52,7 +52,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
             None,
             on_plan,
         ),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
         // settle that marks the latch is the owner's own settle onto one of the
         // three named tiles. Both facts are CEL (`actor == owner` and the three

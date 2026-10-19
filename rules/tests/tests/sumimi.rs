@@ -528,7 +528,7 @@ fn two_donuts_exile_ends_at_the_pass_and_money_is_not_blocked() {
 #[test]
 fn layered_exile_still_ticks_per_turn_start() {
     let mut t = Table::vanilla(2);
-    t.m.world_mut().give_exile(0, 2, 10);
+    t.m.world_mut().apply_abnormal(0, 3, 2, 10);
     assert_eq!(t.state(0, "exile"), 2, "two layers");
     assert_eq!(t.state(0, "exileHold"), 0, "a layered grant is not a hold");
     t.begin_turn(0);

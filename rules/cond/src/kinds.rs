@@ -67,7 +67,7 @@ pub mod trig {
     /// v43: the move head / move-tail pair (`SETTLE-STAGES.md` §7).
     pub const MoveBefore: i64 = 90;
     pub const MoveAfter: i64 = 91;
-    /// 「将X个反面[P㏄P粉丝]变正」 (ruleset-core::kind::FansFlip). Wire 107.
+    /// 「将X个反面[P㏄P粉丝]变正」 (bandori-std::kind::FansFlip). Wire 107.
     pub const FansFlip: i64 = 107;
 }
 

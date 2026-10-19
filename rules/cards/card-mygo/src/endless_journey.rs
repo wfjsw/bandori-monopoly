@@ -9,7 +9,7 @@
 //! out 60 per tile walked, and a long main move burns a crystal.
 
 use card_sdk::abi::{ActionKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new(

@@ -13,8 +13,8 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::{FilterKind, MoveKind};
-use ruleset_core::ctx::{plan, trigger};
-use ruleset_core::ctx;
+use bandori_std::ctx::{plan, trigger};
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TSUGU_YCM: CardDef = CardDef::new(

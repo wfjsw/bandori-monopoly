@@ -84,7 +84,7 @@ impl NativeIndex {
 
 impl NativeRulesHandle {
     pub fn new() -> Self {
-        tile_class::set_class_defs(ruleset_core::kind::class_defs());
+        tile_class::set_class_defs(bandori_std::kind::class_defs());
         let mut cards = Vec::new();
         let mut pre: Vec<Vec<Option<game_rules::CompiledPre>>> = Vec::new();
         let mut by_id = HashMap::new();
@@ -238,16 +238,16 @@ impl Default for NativeRulesHandle {
 /// wasm module's `card-all` passes to `ruleset!(; roster:)`.
 pub fn roster_metadata() -> card_sdk::meta::MetaDoc {
     static SOURCES: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
-        card_ordinals: ruleset_core::roster_order::CARDS,
+        card_ordinals: bandori_std::roster_order::CARDS,
         lists: &[
             card_sdk::meta::RosterList {
                 kind: "persona",
-                ordinals: ruleset_core::roster_order::PERSONAS,
+                ordinals: bandori_std::roster_order::PERSONAS,
                 rows: personas::roster_table::meta_rows,
             },
             card_sdk::meta::RosterList {
                 kind: "group",
-                ordinals: ruleset_core::roster_order::GROUPS,
+                ordinals: bandori_std::roster_order::GROUPS,
                 rows: skill_groups::roster_table::meta_rows,
             },
             card_sdk::meta::RosterList {

@@ -6,7 +6,7 @@
 //!
 //! on one of your tiles, then roll 3d20 and maybe build free on that tile.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SMILE_PATROL: CardDef =

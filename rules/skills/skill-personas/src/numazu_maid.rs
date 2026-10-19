@@ -12,7 +12,7 @@
 //! quarter is taken. 「分摊支付」 is the split-pay the vocabulary already has.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -25,7 +25,7 @@ pub const NUMAZU_MAID: CardDef = CardDef::new(
         // （2）「所有你拥有的格子中取最高值」 -- the offer exists only when some
         // deed carries a positive `build_cost × houses`. Derived scan, residual.
         On::Action(
-            &[ruleset_core::kind::HouseAdded],
+            &[bandori_std::kind::HouseAdded],
             "actor == owner && tok('PAREO标记') >= 1", "",
             Some(has_house_product),
             on_built,

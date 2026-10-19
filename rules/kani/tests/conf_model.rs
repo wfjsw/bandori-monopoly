@@ -666,14 +666,8 @@ impl CardWorld for ConfWorld {
         0
     }
     // fire / stay
-    fn charge(&self, player_id: i32) -> i32 {
-        self.charge[player_id.max(0) as usize % 4]
-    }
-    fn charge_max(&self, player_id: i32) -> i32 {
-        self.charge_max[player_id.max(0) as usize % 4]
-    }
-    fn gain_charge(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
-        // Matches `game_core::engine::ops::gain_charge`: return the amount
+    fn gain_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
+        // Matches `game_core::engine::ops::gain_marker`: return the amount
         // actually gained (clamped under cap), not the new total.
         let p = player_id.max(0) as usize % 4;
         if n <= 0 {
@@ -684,10 +678,10 @@ impl CardWorld for ConfWorld {
             return 0;
         }
         self.charge[p] += got;
-        self.events.push(format!("gain_charge {player_id} {got}"));
+        self.events.push(format!("gain_marker {player_id} {got}"));
         got
     }
-    fn spend_charge(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
+    fn spend_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
         let p = player_id.max(0) as usize % 4;
         if n <= 0 {
             return 1;
@@ -699,19 +693,28 @@ impl CardWorld for ConfWorld {
             0
         }
     }
-    fn give_stay(&mut self, player_id: i32, n: i32) {
+    fn add_marker_max(&mut self, player_id: i32, _name: &str, n: i32) -> i32 {
         let p = player_id.max(0) as usize % 4;
-        self.stay[p] = self.stay[p].saturating_add(n);
-        self.events.push(format!("give_stay {player_id} {n}"));
+        self.charge_max[p] = self.charge_max[p].saturating_add(n);
+        self.charge_max[p]
     }
-    fn give_stun(&mut self, player_id: i32, n: i32) {
+    fn apply_abnormal(&mut self, player_id: i32, kind: i32, n: i32, _to: i32) {
         let p = player_id.max(0) as usize % 4;
-        self.stay[p] = self.stay[p].saturating_add(n);
-        self.events.push(format!("give_stun {player_id} {n}"));
+        match kind {
+            1 => {
+                self.stay[p] = (self.stay[p] + n).max(0);
+                self.events.push(format!("give_stay {player_id} {n}"));
+            }
+            2 => {
+                self.events.push(format!("give_stun {player_id} {n}"));
+            }
+            3 => {
+                self.events.push(format!("give_exile {player_id} {n}"));
+            }
+            _ => {}
+        }
     }
-    fn give_exile(&mut self, player_id: i32, n: i32, _to: i32) {
-        self.events.push(format!("give_exile {player_id} {n}"));
-    }
+    fn skip_main_move(&mut self, _player_id: i32, _locked: i32) {}
     fn give_extra_turn(&mut self, _player_id: i32) {}
     fn end_turn_now(&mut self, _player_id: i32) {}
     fn teleport_as(&mut self, _player_id: i32, _tile: i32, _resolve: i32, _as_main: i32) {}
@@ -721,12 +724,6 @@ impl CardWorld for ConfWorld {
     }
     fn cant_move(&self, player_id: i32) -> i32 {
         (self.stay[player_id.max(0) as usize % 4] > 0) as i32
-    }
-    fn stay_of(&self, player_id: i32) -> i32 {
-        self.stay[player_id.max(0) as usize % 4]
-    }
-    fn stun_of(&self, player_id: i32) -> i32 {
-        self.stay[player_id.max(0) as usize % 4]
     }
     fn turn_player(&self) -> i32 {
         self.turn_player

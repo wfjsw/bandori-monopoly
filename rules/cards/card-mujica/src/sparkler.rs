@@ -7,7 +7,7 @@
 //! with 2 miracle crystals; each turn end burns one for an extra turn.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mujica:燃尽前的线香花火";

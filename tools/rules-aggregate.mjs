@@ -85,7 +85,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 card-sdk = { path = "../../card-sdk", features = ["guest"] }
-ruleset-core = { path = "../../ruleset-core" }
+bandori-std = { path = "../../bandori-std" }
 personas = { path = "../../personas" }
 ${deps}
 
@@ -105,16 +105,16 @@ writeFileSync(join(OUT, "src", "lib.rs"), `//! The shipped card ruleset: every b
 /// persona / group tables + the event table. \`ruleset_metadata\` builds the
 /// blob on request.
 static ROSTER: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
-    card_ordinals: ruleset_core::roster_order::CARDS,
+    card_ordinals: bandori_std::roster_order::CARDS,
     lists: &[
         card_sdk::meta::RosterList {
             kind: "persona",
-            ordinals: ruleset_core::roster_order::PERSONAS,
+            ordinals: bandori_std::roster_order::PERSONAS,
             rows: personas::roster_table::meta_rows,
         },
         card_sdk::meta::RosterList {
             kind: "group",
-            ordinals: ruleset_core::roster_order::GROUPS,
+            ordinals: bandori_std::roster_order::GROUPS,
             rows: skill_groups::roster_table::meta_rows,
         },
         card_sdk::meta::RosterList {

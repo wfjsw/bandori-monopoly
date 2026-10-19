@@ -20,7 +20,7 @@
 //! text's own constant for a draw.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const UP: &str = "X";
@@ -177,7 +177,7 @@ fn on_theirs(player_id: i32) -> card_sdk::Asked {
 
 /// （3） 「当场上除你之外的玩家都拥有一枚翻面后的X标记时」.
 fn can_cash(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     let all = (0..ctx::player_count())

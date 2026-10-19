@@ -3,7 +3,7 @@
 //! 事件文本（`CardMeta` beside the rule body, id `这只手我不会放开`）:
 //! > 所有玩家移动X，X=1d20-1d20+1d20，如果X是负数则向自身移动方向的反方向移动（每个玩家独立投掷三个1d20进行计算，不触发场地效果）
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};

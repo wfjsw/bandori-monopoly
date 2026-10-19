@@ -14,7 +14,7 @@
 //! taxes settles from the owner's field.
 
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(

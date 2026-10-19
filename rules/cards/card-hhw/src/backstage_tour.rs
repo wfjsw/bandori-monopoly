@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use alloc::string::String;
-use ruleset_core::ctx::{self, CardPile};
+use bandori_std::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BACKSTAGE_TOUR: CardDef =

@@ -384,7 +384,7 @@ impl World {
     /// counters, spendable resources, free-form slots). The engine holds these and
     /// enforces nothing -- see [`crate::state::StateVar`]. There is no
     /// `match key` here and there must never be: which keys mean what, and
-    /// what their caps are, belongs to whoever uses them. The `stun_of` / `charge`
+    /// what their caps are, belongs to whoever uses them. The status-layer / marker
     /// / ... accessors below are readers and verbs over this, not the other way
     /// round.
 
@@ -756,18 +756,6 @@ impl World {
     // (`{value, min, max}`) still apply on write; cap / partial-gain **policy**
     // lives in the rules-layer kernel, not here.
 
-    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
-    /// frozen webui key [`key::CHARGE`].
-    pub fn charge(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, key::CHARGE)
-    }
-
-    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
-    /// `max` of [`key::CHARGE`], written through the rules layer.
-    pub fn charge_max(&self, player_id: i32) -> i32 {
-        self.state_max(player_id, key::CHARGE)
-    }
-
     /// Move a named counter's *cap* up or down. Dumb storage fold: a consumer
     /// of the cap, so it is the one that pulls the value back under the new
     /// ceiling; [`Self::state_add`] would not. The name is data -- the frozen
@@ -780,17 +768,11 @@ impl World {
         cap
     }
 
-    /// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper
-    /// over [`Self::add_marker_max`].
-    pub fn add_charge_max(&mut self, player_id: i32, n: i32) -> i32 {
-        self.add_marker_max(player_id, key::CHARGE, n)
-    }
-
     /// Dumb add of `n` to a named counter; returns how many landed (the
-    /// storage bounds may refuse part of it). No cap policy and no
-    /// `log.gain_charge` -- the rules-layer kernel clamps and narrates.
-    /// `max == 0` means "no declaration" and refuses (the old
-    /// `gain_charge` shape: an undeclared resource cannot be gained).
+    /// storage bounds may refuse part of it). No cap policy and no log line --
+    /// the rules-layer kernel clamps and narrates.
+    /// `max == 0` means "no declaration" and refuses (an undeclared resource
+    /// cannot be gained).
     pub fn gain_marker(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -806,10 +788,20 @@ impl World {
         (after - before).max(0)
     }
 
-    /// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper
-    /// over [`Self::gain_marker`].
-    pub fn gain_charge(&mut self, player_id: i32, n: i32, _why: Msg) -> i32 {
-        self.gain_marker(player_id, key::CHARGE, n)
+    /// Spend `n` of a named counter; returns 1 when the player had enough.
+    /// All-or-nothing. The name is data.
+    pub fn spend_marker(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
+        let Some(s) = self.player_mut(player_id) else {
+            return 0;
+        };
+        if n <= 0 {
+            return 1;
+        }
+        if s.state_get(name) < n {
+            return 0;
+        }
+        s.state_add(name, -n);
+        1
     }
 
     // ---------------------------------------------------------- money moves
@@ -2166,49 +2158,33 @@ impl World {
 
     // ------------------------------------------------------ status effects
 
-    /// Layered status on a player (「stay」 / 「[眩晕]」 / 「exile」).
+    /// Layered abnormal status on a player (the wire kind id: 1 = stay,
+    /// 2 = stun, 3 = exile; see `AbKind`). One dumb layer write over the
+    /// keyed state, clamped at 0 because that is the status rule, not because
+    /// the engine enforces bounds -- [`Self::state_add`] would not.
     ///
-    /// These are *consumers* of the keyed state, and the two that are timed say
-    /// so on the item (`expires: TurnEnd`) rather than the engine remembering
-    /// which keys wear off. They clamp at 0 because that is the status rule,
-    /// not because the engine enforces bounds -- [`Self::state_add`] would not.
+    /// The verb is the `status:*` hosts' grant API (`docs/STATUS-HOSTS.md`,
+    /// `rules/status`) kept as a **generic engine service**: abnormal [反击]
+    /// window (`hostfns`) + layer write. Wear-off is declared by the host
+    /// verbs (`ctx::state::set_expires`); `default_expiry` stamps it on any
+    /// raw write as the safety net. The stay move-latch does **not** ride
+    /// here -- that is turn-flow ([`Self::skip_main_move`]), driven by
+    /// `status:stay`. Unstoppable refusal (STA-01) is the host's policy,
+    /// checked before this service is called.
     ///
-    /// The verbs are the `status:*` hosts' grant API (`docs/STATUS-HOSTS.md`,
-    /// `rules/status`) kept as **dumb engine services**: abnormal [反击] window
-    /// (`hostfns`) + layer write + the turn's move latch. Wear-off is declared
-    /// by the host verbs (`ctx::state::set_expires`); `default_expiry` stamps
-    /// it on any raw write as the safety net. The un-latch is the `status:stay`
-    /// host's count-changed clause ([`Self::stay_unlatch`]), not a side
-    /// effect the grant site invents. Unstoppable refusal (STA-01) is the
-    /// host's policy, checked before this service is called.
-    pub fn give_stay(&mut self, player_id: i32, n: i32) {
-        // 「stay：处于该状态时[无法移动]」 and step 7 「停留效果发动：跳过主要
-        // 移动阶段」 -- the skip is a *consequence* of the state, not a separate
-        // latch. A layer gained mid-turn (运营 plays like 轮符雨) locks the
-        // turn's main move immediately; dropping the last layer un-skips it,
-        // the same as when 壱雫空 clears the last layer.
-        // 「[不可阻挡]」: 「处于该状态时无视已存在的stay」 -- an unstoppable
-        // holder walks through the stay rather than losing the move.
-        //
-        // exile is **not** folded into this latch: it grants [无法移动]
-        // (glossary 13) but not 「跳过主要移动阶段」. A mid-turn exile
-        // (MyGO:无路矢) still owes the roll -- see
-        // `no_road_in_ops_still_owes_the_roll_and_does_not_read_as_skip` and
-        // the live-latch note in `engine/mod.rs`. exile's own turn-start
-        // auto-skip is `log.exiled_skip` in `play.rs`.
-        let mut skip = None;
+    /// `to` is the kind-specific payload (`-1` = none) -- carried for the
+    /// exile return destination; the engine layer write ignores it (markers
+    /// are the host's job). Kept so the ABI shape is one verb.
+    pub fn apply_abnormal(&mut self, player_id: i32, kind: i32, n: i32, _to: i32) {
+        let key = match kind {
+            1 => key::STAY,
+            2 => key::STUN,
+            3 => key::EXILE,
+            _ => return,
+        };
         if let Some(s) = self.player_mut(player_id) {
-            let v = (s.stay() + n).max(0);
-            s.state_set(key::STAY, v);
-            // Wear-off: `default_expiry` stamps `Tick::TurnEnd` on a fresh
-            // item; the host verb also declares it (`set_expires`).
-            let unstoppable = s.state_get(key::UNSTOPPABLE) > 0;
-            skip = Some(v > 0 && !unstoppable);
-        }
-        if let Some(skip) = skip {
-            if self.st.turn == player_id {
-                self.st.skip_move = skip;
-            }
+            let v = (s.state_get(key) + n).max(0);
+            s.state_set(key, v);
         }
     }
 
@@ -2249,42 +2225,21 @@ impl World {
         rules.exclusive_use(self, player, ask).unwrap_or(true)
     }
 
-    /// `status:stay` count-changed clause (rules.txt 48): when the last stay
-    /// layer (or an [不可阻挡] grant) leaves the player free to walk, the turn's
-    /// main-move latch is released. exile is deliberately not part of it (see
-    /// [`Self::give_stay`]). Documented owner of the un-skip is
-    /// `rules/status/src/stay.rs` (`unlatch_skip_move`); this is the engine's
-    /// interim home so StubRules matches and `tick_state` behave the same
-    /// (no `CounterChanged` hook on the key yet -- `docs/STATUS-HOSTS.md` §3.4).
-    pub fn stay_unlatch(&mut self, player_id: i32) {
-        let free = self
-            .player_id(player_id)
-            .is_some_and(|s| s.stay() == 0 || s.state_get(key::UNSTOPPABLE) > 0);
-        if free && self.st.turn == player_id {
-            self.st.skip_move = false;
+    /// Set this turn's main-move latch for `player_id`. `locked != 0` skips
+    /// the move; `0` releases it. A generic turn-flow verb -- the `status:stay`
+    /// host's count-changed clause (rules.txt 48) drives it. **exile is not
+    /// part of this latch**: it grants [无法移动] (glossary 13) but not
+    /// 「跳过主要移动阶段」 (closeout-2 ruling). A mid-turn exile
+    /// (MyGO:无路矢) still owes the roll. Only the turn player's latch moves.
+    pub fn skip_main_move(&mut self, player_id: i32, locked: i32) {
+        if self.st.turn == player_id {
+            self.st.skip_move = locked != 0;
         }
     }
 
-    /// Dumb layer write for [晕眩]. Wear-off is declared by `status:stun`'s
-    /// grant verb; `default_expiry` stamps `Tick::TurnEnd` on a fresh item.
-    /// The unstoppable refusal (STA-01) is the host's policy -- checked before
-    /// this service is reached.
-    pub fn give_stun(&mut self, player_id: i32, n: i32) {
-        if let Some(s) = self.player_mut(player_id) {
-            let v = (s.stun() + n).max(0);
-            s.state_set(key::STUN, v);
-        }
-    }
-
-    /// Dumb [除外] counter service: write `exile = max(0, exile + n)`.
-    /// Policy (「无法重复获得」, hold / return markers, [不可阻挡]) lives in the
-    /// `status:exile` host -- this only moves the layer. The `to` argument is
-    /// unused (markers are the host's job) and kept for ABI shape.
-    pub fn give_exile(&mut self, player_id: i32, n: i32, _to: i32) {
-        if let Some(s) = self.player_mut(player_id) {
-            let v = (s.exile() + n).max(0);
-            s.state_set(key::EXILE, v);
-        }
+    /// [`Self::skip_main_move`] with `locked = 0`.
+    pub fn clear_move_skip(&mut self, player_id: i32) {
+        self.skip_main_move(player_id, 0);
     }
 
     /// Generic "end this player's turn now" latch. A status host (or any

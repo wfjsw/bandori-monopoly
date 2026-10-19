@@ -814,7 +814,7 @@ impl<'a> Cx<'a> {
     /// own effects; the replay then re-applies the guest writes.
     ///
     /// Only **decreases** cross (「清除」). A status the body itself just
-    /// *applied* (心の雨's fallback `give_stun` then `gain 1000`) must not gate
+    /// *applied* (心の雨's fallback the stun grant then `gain 1000`) must not gate
     /// its own follow-on money -- 「无法收付款」 blocking a card's own gain to a
     /// player it just stunned is an open ruling, and the pre-overlay behaviour
     /// stands until it is decided. Money is not overlaid at all: a `gain_fixed`

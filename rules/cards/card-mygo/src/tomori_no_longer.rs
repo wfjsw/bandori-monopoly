@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 use alloc::string::String;
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger, CardPile};
+use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
@@ -37,7 +37,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // move); `set_cancelled()` makes `raise` return false, i.e. cost
         // substituted and the skill body proceeds.
         On::Action(
-            &[ruleset_core::kind::ChargePaying],
+            &[bandori_std::kind::ChargePaying],
             "actor == owner && card.counter('crystals') >= 1", "",
             None,
             cover,

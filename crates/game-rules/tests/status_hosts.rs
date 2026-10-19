@@ -122,14 +122,16 @@ fn exile_closes_all_but_presence_is_inverted() {
 // =====================================================================
 
 /// Dropping the last stay layer un-skips the turn's main move
-/// (`status:stay` count-changed clause).
+/// (`status:stay` count-changed clause, via `clear_move_skip`).
 #[test]
 fn stay_unlatch_restores_main_move() {
     let mut t = Table::vanilla(2);
     t.set_state(0, "stay", 1);
     t.m.world_mut().st.skip_move = true;
-    // Clear the last layer through the engine verb (the clause runs).
-    t.m.world_mut().give_stay(0, -1);
+    // Clear the last layer through the generic verb, then the stay host's
+    // count-changed clause releases the latch (`clear_move_skip`).
+    t.m.world_mut().apply_abnormal(0, 1, -1, -1);
+    t.m.world_mut().clear_move_skip(0);
     assert!(
         !t.m.world().st.skip_move,
         "last [停留] layer un-latches the main move"
@@ -145,7 +147,8 @@ fn stay_unlatch_ignores_exile() {
     t.set_state(0, "stay", 1);
     t.set_state(0, "exile", 1);
     t.m.world_mut().st.skip_move = true;
-    t.m.world_mut().give_stay(0, -1);
+    t.m.world_mut().apply_abnormal(0, 1, -1, -1);
+    t.m.world_mut().clear_move_skip(0);
     assert!(!t.m.world().st.skip_move);
     assert!(!t.m.world().st.players[0].status_gates().r#move);
 }
@@ -195,7 +198,7 @@ fn exile_return_counts_as_main_move() {
 fn charge_gain_is_partial_under_the_cap() {
     let mut t = Table::vanilla(2);
     t.set_charge(0, 1, 2);
-    let got = t.m.world_mut().gain_charge(0, 5, game_core::msg::Msg::new("test"));
+    let got = t.m.world_mut().gain_marker(0, "charge", 5);
     let have = t.charge(0);
     assert!(have <= 2, "capped at 2, have {have} (gain reported {got})");
     assert_eq!(have, 2, "partial gain fills to the cap");
@@ -206,7 +209,7 @@ fn charge_gain_is_partial_under_the_cap() {
 fn charge_cap_drop_pulls_value_down() {
     let mut t = Table::vanilla(2);
     t.set_charge(0, 5, 5);
-    t.m.world_mut().add_charge_max(0, -3);
+    t.m.world_mut().add_marker_max(0, "charge", -3);
     assert!(t.charge(0) <= 2, "value pulled under the new cap of 2");
 }
 

@@ -6,7 +6,7 @@
 //! crystals that stand in for band-skill crystal removal. Not in
 //! docs/rulebook/cards.json -- translated from the C# class and the card text.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const L11: CardDef = CardDef::new(

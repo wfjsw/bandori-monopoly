@@ -13,7 +13,7 @@
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
 use card_sdk::abi::{ChainKind, ActionKind, MarkFilter};
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团

@@ -18,12 +18,12 @@
 use alloc::string::String;
 
 use card_sdk::abi::CardPile;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AKAO_COOL: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
-    &[On::Action(&[ruleset_core::kind::PassRewardAffected], card_sdk::pre::MINE, "", None, on_circle)],
+    &[On::Action(&[bandori_std::kind::PassRewardAffected], card_sdk::pre::MINE, "", None, on_circle)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 /// Face-down cards this player has on the field.

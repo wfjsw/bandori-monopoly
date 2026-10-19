@@ -17,7 +17,7 @@
 //! the residual guard is gone.
 
 use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The teleport is armed (0/1). Presence only -- the tile to teleport to rides

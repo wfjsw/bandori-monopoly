@@ -12,7 +12,7 @@
 //! `CharityFx.TurnEndAfter` -> `H.RemoveExtra(this)`).
 
 use card_sdk::abi::{ActionKind, FilterKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:爱心义演";

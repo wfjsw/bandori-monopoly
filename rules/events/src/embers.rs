@@ -4,7 +4,7 @@
 //! > （1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。
 
 use card_sdk::abi::{state_key, AbKind, ActionKind, MarkFilter, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, keep};
@@ -36,7 +36,7 @@ pub const EMBERS: CardDef = CardDef::new(
         // hook. `settleBody` is the list; a field card that replaces the body
         // (`trigger::cancelled()`) skips this entry like every other.
         On::Action(&[ActionKind::SettleBody], "", "", Some(on_settle_applies), on_settle),
-        On::Action(&[ActionKind::Exile, ActionKind::Bankrupt, ActionKind::Abnormal], "", "", Some(on_out_applies), on_out),
+        On::Action(&[bandori_std::kind::Exile, ActionKind::Bankrupt, ActionKind::Abnormal], "", "", Some(on_out_applies), on_out),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -73,8 +73,8 @@ fn on_settle_applies(_player_id: i32) -> bool {
 /// (an `Abnormal` only counts when its kind is `Exile`).
 fn on_out_applies(_player_id: i32) -> bool {
     match trigger::kind() {
-        TriggerKind::Exile | TriggerKind::Bankrupt => true,
-        TriggerKind::Abnormal => trigger::abnormal_kind() == Some(AbKind::Exile),
+        TriggerKind(21) /* exile */ | TriggerKind::Bankrupt => true,
+        TriggerKind::Abnormal => trigger::abnormal_kind() == Some(bandori_std::kind::abnormal::Exile),
         _ => false,
     }
 }

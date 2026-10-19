@@ -11,7 +11,7 @@
 //! player's favour, latched per turn.
 
 use card_sdk::abi::{state_key, ActionKind, FilterKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Sumimi:人气偶像组合";
@@ -99,8 +99,8 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 //   form.
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"Sumimi"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"Sumimi"#)
     .short_name(r#"Sumimi"#)
     .color(r#"#FFFF66"#)
     .skill(r#"人气偶像组合"#)

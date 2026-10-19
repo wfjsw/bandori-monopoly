@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::MoveKind;
-use ruleset_core::ctx::{self, plan};
+use bandori_std::ctx::{self, plan};
 
 use card_sdk::{key, CardDef, Msg, On};
 

@@ -21,7 +21,7 @@ the new names:
 - `rules/skills/skill-characters/` → `rules/skills/skill-personas/`
 - `rules/skills/skill-bands/` → `rules/skills/skill-groups/`
 
-New crates the earlier drafts never listed: `rules/ruleset-core`, `rules/status`,
+New crates the earlier drafts never listed: `rules/bandori-std`, `rules/status`,
 `rules/personas`, `rules/markers`, `rules/cond-ir`, `rules/spec`, `rules/kani`.
 
 Ignored-test run: `node tools/build-ruleset.mjs` (no `CARGO_TARGET_DIR`) then
@@ -42,17 +42,17 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 # card-std-split leftovers (2026-10-12)
 
-Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
+Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 `tile_attr`/`tile_in`). Not merge blockers once drift is green.
 
 - **CD-01 CEL `is_live_house` group-10 quirk.** **Closed** (2026-10-17 audit):
   the CEL `is_live_house` sugar was removed (abi.rs v70). The only live answer
   is `tile_in(_, t, "livehouse")` = `VENUE_GROUP = 6`
-  (`rules/ruleset-core/src/kind.rs:81,90`); `is_venue` / `is_live_house_for`
-  route through it (`ruleset-core/src/lib.rs:96-105`). No second SnapSrc
+  (`rules/bandori-std/src/kind.rs:81,90`); `is_venue` / `is_live_house_for`
+  route through it (`bandori-std/src/lib.rs:96-105`). No second SnapSrc
   group-10 answer remains to reconcile.
-- **CD-02 `crystals_changed_guard` residuals.** `ruleset_core::crystals_changed_of`
-  is the shared base (`ruleset-core/src/lib.rs:370-375`); per-card copies still
+- **CD-02 `crystals_changed_guard` residuals.** `bandori_std::crystals_changed_of`
+  is the shared base (`bandori-std/src/lib.rs:370-375`); per-card copies still
   carry local residuals (value vs 0, `is_placed`, …) — e.g.
   `rules/cards/card-mujica/src/j11.rs:165-174`, `card-roselia/src/fire_bird.rs:25`.
   Fold the identical prefix onto the helper.
@@ -61,11 +61,11 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **CD-04 game-named wire variants.** **Restated** (2026-10-17 audit): the
   `HookKind` / `GateKind` types were retired at ABI v85 in favour of
   `ActionKind` / `FilterKind`, and the game-named kinds left `card-sdk` for
-  `rules_ruleset-core::kind` (v70) as opaque ruleset-declared ids. Wire
+  `rules_bandori-std::kind` (v70) as opaque ruleset-declared ids. Wire
   renames since: `CircleAffected` → `PassRewardAffected`, `firePaying` →
   `chargePaying` / `ChargePaying` (78), `FlipEffect`/`FlipAfter` retired (v83)
   → `FansFlip` (107). `CpChanged` / `CrystalsChanged` are no longer SDK wire
-  names. No further rename planned; document ownership in `ruleset-core`.
+  names. No further rename planned; document ownership in `bandori-std`.
 - **CD-05 native arena trap leak.** `native::enter`'s frame stack has a depth-64
   safety valve if `Drop` is skipped on a non-unwinding trap. Fine for
   `C-unwind`; revisit if a non-unwinding abort path appears.
@@ -671,16 +671,16 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   the flip-effect trigger is raised with the clause's intended X *before* the
   counters move. Originally landed as `TriggerKind::FlipEffect` /
   `HookKind::FlipEffect` (94); those kinds were **retired in ABI v83** and the
-  capability now lives as `ruleset_core::kind::FansFlip` (wire 107) with
+  capability now lives as `bandori_std::kind::FansFlip` (wire 107) with
   `ppFansUp` / `ppFansDown` counters. `PP:有你与我在这里共度` raises it; the
   PP band (2) hooks it and adds `X - owned` overflow crystals.
   Test: `band_skill_overflow_to_crystals` (un-ignored).
 - **locations**
   - `rules/tests/tests/pp.rs` `band_skill_overflow_to_crystals` (un-ignored)
-  - `rules/ruleset-core/src/kind.rs:33,56-59` (`FansFlip`)
+  - `rules/bandori-std/src/kind.rs:33,56-59` (`FansFlip`)
 - **rulebook**: PP band (2) 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 — passive hook on a fan-*flip*.
 - **was**: no flip-effect trigger; overflow never became crystals.
-- **capability**: flip-effect trigger. **Landed** as `ruleset_core::kind::FansFlip`.
+- **capability**: flip-effect trigger. **Landed** as `bandori_std::kind::FansFlip`.
 
 ## ABI-06 — world snapshot / restore (「取消所有受到的效果」)
 - **kind**: ABI defect
@@ -1298,7 +1298,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   the pre-spend hook is raised inside `ctx::spend_charge` before the pots move;
   a hook that substitutes cancels the link. Landed as `TriggerKind::FirePaying` /
   `HookKind::FirePaying` (78); the wire name is now **`ChargePaying`**
-  (`ruleset_core::kind::ChargePaying`, ABI v68 `firePaying` → `chargePaying`).
+  (`bandori_std::kind::ChargePaying`, ABI v68 `firePaying` → `chargePaying`).
   不再迷茫 (2) hooks it (`tomori_no_longer.rs:34-40`) and burns one crystal;
   (3) sweeps the card at 0 via `CounterChanged`.
   Tests: `light_crystal_pays_skill_fire_cost`, `light_removed_when_crystals_run_out` (un-ignored).
@@ -1306,7 +1306,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   - `rules/tests/tests/mygo.rs:126` `light_crystal_pays_skill_fire_cost`
   - `rules/tests/tests/mygo.rs:220` `light_removed_when_crystals_run_out`
   - `rules/cards/card-mygo/src/tomori_no_longer.rs:34-40`
-  - `rules/ruleset-core/src/kind.rs:30-31,51-55` (`ChargePaying`)
+  - `rules/bandori-std/src/kind.rs:30-31,51-55` (`ChargePaying`)
 - **rulebook**: 灯 不再迷茫 (2) 「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」; when crystals run out the card is [移除]d.
 - **was**: `spend_charge` had no pre-spend substitution hook (only post-commit `fireSpent`); crystal count never emptied.
 - **capability**: `ChargePaying` hook / substitute consult inside `spend_charge`. **Landed.**
@@ -1482,7 +1482,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 ## HOST-04 — `tile_kind` / ring query missing on the ABI
 - **status**: **fixed** (2026-10-13, `closeout-5-engine`, `fix: HOST-04 …`; name updated 2026-10-17) —
   stale row: the query has been on the ABI since v9. The symbol was renamed
-  **`ctx::is_ring` → `ctx::is_deed`** at ABI v69 (`ruleset-core/src/lib.rs:82-84`
+  **`ctx::is_ring` → `ctx::is_deed`** at ABI v69 (`bandori-std/src/lib.rs:82-84`
   `is_deed` = `tile_is(tile, "ring")`). `sweet_escape` / `now_sumimi` call
   `ctx::is_deed` + `ctx::ring_multiplier()` instead of the local rent-table
   approximation (`now_sumimi.rs:37-50`).
@@ -2802,3 +2802,13 @@ to the [特] moment, which changes when the curve can start.
 
 *End of backlog. Standing file: `docs/rulebook/BACKLOG.md`. Audited 2026-10-17
 against master `1cd71939` (157 `TODO(规则书)`, 11 RULING ignores, ABI v85).*
+
+## Phase C batch 2 — generic status / marker verbs (closed)
+- **status**: **fixed** (2026-10-19, `bandori-std`) — `apply_abnormal` /
+  `skip_main_move` / `clear_move_skip` / marker-only `gain_marker` /
+  `spend_marker` / `add_marker_max`; named `give_*` / `charge*` / `*_of`
+  imports deleted from `crates/` and `rules/card-sdk`. `AbKind` is an opaque
+  newtype; `ActionKind::Exile` / `TriggerKind::Exile` named consts moved to
+  `bandori_std::kind::Exile`. Shared stay/stun/exile verbs live in
+  `bandori_std::status`. ABI_VERSION 87 -> 88. Still open: `fireSpent` ->
+  `MarkerSpent` rename (separate ticket).

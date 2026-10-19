@@ -342,13 +342,10 @@ stun / stay checks run after it.
 
 **Still engine-side, and why:**
 
-* `give_stay` / `give_stun` / `give_exile` -- the abnormal [反击] window
-  (`hostfns::abnormal_gate`) + layer write. `TODO(ABI)` `apply_abnormal`.
-* `stay_unlatch` + `give_stay`'s move latch -- the `skip_move` turn latch is
-  turn-flow, not status policy. No `CounterChanged` hook on the state key
-  yet, so the count-changed clause cannot live entirely on the host.
-* `gain_charge` / `spend_charge` / `add_charge_max` + `HostRequest::Marker` --
-  the `markers` worktree's charge/Marker layer (out of scope here).
+* `apply_abnormal` -- the abnormal [反击] window (`hostfns::abnormal_gate`)
+  + the dumb layer write. Generic; the stay move-latch is a **separate**
+  turn-flow verb (`skip_main_move` / `clear_move_skip`) driven by
+  `bandori_std::status::stay`.
 * `MatchPlayer::status_gates` -- the engine-side mirror of the CEL gate
   conditions, kept for `StubRules` (`tests/status_gate_drift.rs` pins them
   equal).
@@ -370,15 +367,25 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
 * Phase C batch 1 (done): every card / skill / tile / event / fixture call
   site now goes through `rules_status::{stay,stun,exile,fire}::*` or the
   generic gate readers. No card names `ctx::give_stay` etc.
-* Phase C batch 2 (leftover): the old guest imports stay for now, marked
-  `#[doc(hidden)]`, because `give_stay` / `give_stun` / `give_exile` open the
-  abnormal [反击] window (`abnormal_gate`) and `gain_fire` / `spend_fire` /
-  `add_fire_max` own the cap / log / `markerSpend` service. They are the
-  **status hosts' engine services**, not the card-facing API.
-  TODO(ABI): genericize to `apply_abnormal(p, AbKind, n, to)` +
-  `marker::{gain_capped,spend}` + `clear_move_skip`, then delete the
-  game-named imports (HOST-09/10 dead-surface removal) and bump
-  `ABI_VERSION` 53 -> 54.
+* Phase C batch 2 (**done, ABI 88**). The named host verbs are gone from
+  `crates/` and `card-sdk`. Generic surface:
+  - `apply_abnormal(player_id, kind: AbKind, n, to)` -- one kind-parameterized
+    verb (wire kind id: 1 = stay, 2 = stun, 3 = exile). `n < 0` always
+    applies; `n > 0` opens the abnormal [反击] window. `to` is the
+    kind-specific payload (`-1` = none), carried for the exile return
+    destination. Post-commit raise is named by `kind.as_str()`.
+  - `skip_main_move(player_id, locked)` / `clear_move_skip(player_id)` --
+    this turn's main-move latch (the stay skip; **exile is not part of the
+    latch**, closeout-2 ruling). Wired `ctx` -> `sys` -> `hostfns` -> `World`
+    like `end_turn_now`.
+  - marker-only charge: `gain_marker` / `spend_marker` / `add_marker_max`
+    (name is data); readers are `state_get` / `state_max`. The 火罐 sugar
+    (`charge` / `gain_charge` / …) lives in `bandori-std` over those.
+  - `AbKind` is an opaque newtype (wire codec); the game names live in
+    `bandori_std::kind::abnormal`. `ActionKind` / `TriggerKind` lose the
+    `Exile` named consts (wire id 21 is `bandori_std::kind::Exile`).
+  - Shared stay / stun / exile verbs live in `bandori_std::status::{stay,stun,
+    exile}`; `rules/status` keeps the host cards + ticks and re-exports.
 * `give_extra_turn` stays an engine verb (turn order, not a marker).
 * **`status:*` hook collection (done).** `bind_tiles` already placed the hosts
   on `BOARD_OWNER` (`tile = -1`), but `collect_hook_jobs` / the inline

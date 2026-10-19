@@ -12,7 +12,7 @@
 //! teleport if the player is still standing there.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「每回合可选择只获得第一次受到的[异常移动效果]」 -- 1 once one has landed.
@@ -150,8 +150,8 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Roster band row for this band skill (ABI v63).
-pub const BAND: ruleset_core::roster::GroupDef =
-ruleset_core::roster::GroupDef::new(r#"RAISE A SUILEN"#)
+pub const BAND: bandori_std::roster::GroupDef =
+bandori_std::roster::GroupDef::new(r#"RAISE A SUILEN"#)
     .short_name(r#"RAS"#)
     .color(r#"#22CCCC"#)
     .skill(r#"UNSTOPPABLE"#)

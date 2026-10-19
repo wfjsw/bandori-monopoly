@@ -10,7 +10,7 @@
 //! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 
 use card_sdk::abi::{CardPile, ActionKind};
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// C# `Normal => false` with no `Play`/`Counteract`: the card is shown out of the

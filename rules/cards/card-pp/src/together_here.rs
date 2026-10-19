@@ -10,7 +10,7 @@
 //! `FansFlip` raise; `docs/CARDS.md`), which band clause （2） listens to.
 
 use card_sdk::{key, CardDef, Msg, On};
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use skill_groups::fans;
 
 pub const TOGETHER_HERE: CardDef =

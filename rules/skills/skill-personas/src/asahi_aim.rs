@@ -17,7 +17,7 @@ use alloc::format;
 use alloc::string::String;
 
 use card_sdk::abi::{prop, ActionKind};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const DONE: &str = "skill.asahiAim.first";

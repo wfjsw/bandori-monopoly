@@ -18,10 +18,10 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // Ops the sayo/rinko/lisa Pass hooks reach (`gain_charge`, `log`, `player_*`).
 crate::host_subset!(skills_r_dispatch {
     log | effect => arm_log,
-    gain_charge => arm_gain_charge,
+    gain_marker => arm_gain_marker,
     charge => arm_fire,
-    charge_max => arm_charge_max,
-    spend_charge => arm_spend_charge,
+    ,
+    spend_marker => arm_spend_marker,
     player_count => arm_player_count,
     player_out => arm_player_out,
     player_pos => arm_player_pos,

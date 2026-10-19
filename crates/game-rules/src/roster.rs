@@ -4,7 +4,7 @@
 //! it onto [`game_core::data::Roster`] -- the plain `CardData` / `PersonaData`
 //! / `GroupData` / `EventData` vectors `GameData` iterates in roster order. The
 //! field keys are this game's data-contract names (the roster row columns),
-//! mirrored by `ruleset_core::roster::meta_key`.
+//! mirrored by `bandori_std::roster::meta_key`.
 
 use card_sdk::meta::{MetaDoc, MetaRow};
 use game_core::data::{EventData, GroupData, CardData, PersonaData, Roster};

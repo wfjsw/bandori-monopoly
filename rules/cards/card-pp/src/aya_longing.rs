@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::ActionKind;
 use skill_groups::fans;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AYA_LONGING: CardDef = CardDef::new(

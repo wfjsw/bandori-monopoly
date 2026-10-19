@@ -5,7 +5,7 @@
 
 use alloc::format;
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};

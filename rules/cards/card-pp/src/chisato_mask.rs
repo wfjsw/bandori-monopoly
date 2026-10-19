@@ -16,7 +16,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CHISATO_MASK: CardDef = CardDef::new(

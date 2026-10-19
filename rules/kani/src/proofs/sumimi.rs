@@ -33,12 +33,12 @@ crate::host_subset!(idolband_dispatch {
 
 /// `skill:三角初华（Sumimi）:成为偶像` `on_pass` — one `gain_charge`.
 crate::host_subset!(hina_pass_dispatch {
-    gain_charge => arm_gain_charge,
+    gain_marker => arm_gain_marker,
 });
 
 /// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `after_move` — `gain_charge` + `set_dest`.
 crate::host_subset!(childhood_after_move_dispatch {
-    gain_charge => arm_gain_charge,
+    gain_marker => arm_gain_marker,
     set_dest => arm_set_dest,
 });
 
@@ -48,8 +48,8 @@ crate::host_subset!(childhood_after_move_dispatch {
 /// `state_get` reads [不可阻挡] in the host `grant` guard (STA-01).
 crate::host_subset!(two_donuts_dispatch {
     player_pos => arm_player_pos,
-    exile_of => arm_exile_of,
-    give_exile => arm_give_exile,
+    ,
+    apply_abnormal => arm_apply_abnormal,
     state_get => arm_state_get,
     state_set => arm_state_set,
     set_slot => arm_set_slot,
@@ -227,7 +227,7 @@ pub fn idolband_mutant_is_detected() {
 // ===========================================================================
 // C-SUMIMI-hina-01 -- pass CiRCLE → +1 [火罐]
 // `skill:三角初华（Sumimi）:成为偶像` `On::Action(Pass)` with the single-source
-// guard `ruleset_core::guards::OWN_START`.
+// guard `bandori_std::guards::OWN_START`.
 // Isolation: the turn-start pot placement (clause (2)) is a different entry.
 // Seat-symmetric (the user's own fire).
 // ===========================================================================
@@ -264,7 +264,7 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     hina_pass_world(user, tile);
 
     // single-source guard: the real CEL string, lowered once
-    let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
+    let gid = crate::guard_id!(bandori_std::guards::OWN_START);
     let ov = ir_fill::TriggerOverlay::default();
     let admitted = world::with_world(|w| {
         let ctx = ir_fill::fill_for_guard(w, gid, user, 0, true, -1, &ov);

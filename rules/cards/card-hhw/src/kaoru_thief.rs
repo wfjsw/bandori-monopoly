@@ -10,7 +10,7 @@
 //! stays a narrow TODO.
 
 use card_sdk::abi::{ActionKind, FilterKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（薰）怪盗hello happy";
@@ -131,7 +131,7 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
     // C# `m.Stopped = true; m.Resolve = true` -- stop at the marked player's
     // tile and settle (`plan::set_stop_at` + `set_resolve`).
     // 规则书: 「[强制停下]」 -- behind `H.AbnormalGate`.
-    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     let tile = trigger::tile();

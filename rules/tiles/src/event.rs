@@ -7,7 +7,7 @@
 //!
 //! Both board tiles share one rule -- the book gives them one sentence.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::abi::text_slot;
 use card_sdk::{CardDef, Msg, On};
 

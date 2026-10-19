@@ -15,7 +15,7 @@
 //! between setup and the first turn start would come first.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Latch so 「开局时」 pays once. Free-form state: this is a consumer naming its
@@ -26,7 +26,7 @@ pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
         On::Action(&[ActionKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", "", None, at_start),
-        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, "", None, on_pass),
+        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
     ],
 );
 

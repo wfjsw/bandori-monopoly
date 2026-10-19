@@ -9,7 +9,7 @@
 //! Counteraction-only (`Normal => false`).
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";

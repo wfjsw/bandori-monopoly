@@ -9,7 +9,7 @@
 //! [反击] the settler picks a forced play at you, or you teleport onto them.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(

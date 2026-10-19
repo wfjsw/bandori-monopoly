@@ -3889,44 +3889,49 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "charge",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::charge(&mut c, player_id).map_err(HostErr::into_err)
+        "gain_marker",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, p: i32, len: i32| -> Result<i32, Error> {
+            let name = hostfns::guest_str(&mut c, np, nl).map_err(HostErr::into_err)?;
+            hostfns::gain_marker(&mut c, player_id, &name, n, p, len)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "charge_max",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::charge_max(&mut c, player_id).map_err(HostErr::into_err)
+        "spend_marker",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, p: i32, len: i32| -> Result<i32, Error> {
+            let name = hostfns::guest_str(&mut c, np, nl).map_err(HostErr::into_err)?;
+            hostfns::spend_marker(&mut c, player_id, &name, n, p, len)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "gain_charge",
-        |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            hostfns::gain_charge(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
+        "add_marker_max",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32| -> Result<i32, Error> {
+            let name = hostfns::guest_str(&mut c, np, nl).map_err(HostErr::into_err)?;
+            hostfns::add_marker_max(&mut c, player_id, &name, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "give_stay",
-        |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-            hostfns::give_stay(&mut c, player_id, n).map_err(HostErr::into_err)
+        "apply_abnormal",
+        |mut c: C<W>, player_id: i32, kind: i32, n: i32, to: i32| -> Result<(), Error> {
+            hostfns::apply_abnormal(&mut c, player_id, kind, n, to).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "give_stun",
-        |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-            hostfns::give_stun(&mut c, player_id, n).map_err(HostErr::into_err)
+        "skip_main_move",
+        |mut c: C<W>, player_id: i32, locked: i32| -> Result<(), Error> {
+            hostfns::skip_main_move(&mut c, player_id, locked).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "give_exile",
-        |mut c: C<W>, player_id: i32, n: i32, to: i32| -> Result<(), Error> {
-            hostfns::give_exile(&mut c, player_id, n, to).map_err(HostErr::into_err)
+        "clear_move_skip",
+        |mut c: C<W>, player_id: i32| -> Result<(), Error> {
+            hostfns::clear_move_skip(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3970,34 +3975,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "cant_move",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
             hostfns::cant_move(&mut c, player_id).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "spend_charge",
-        |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            hostfns::spend_charge(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "stay_of",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::stay_of(&mut c, player_id).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "stun_of",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::stun_of(&mut c, player_id).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "exile_of",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::exile_of(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4842,13 +4819,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "add_charge_max",
-        |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-            hostfns::add_charge_max(&mut c, player_id, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "set_roller",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_roller(&mut c, v).map_err(HostErr::into_err)
@@ -5340,18 +5310,11 @@ impl CardWorld for NullWorld {
     fn add_group_pool(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn charge(&self, _: i32) -> i32 {
+    fn gain_marker(&mut self, _: i32, _: &str, _: i32, _: crate::Msg) -> i32 {
         0
     }
-    fn charge_max(&self, _: i32) -> i32 {
-        0
-    }
-    fn gain_charge(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
-        0
-    }
-    fn give_stay(&mut self, _: i32, _: i32) {}
-    fn give_stun(&mut self, _: i32, _: i32) {}
-    fn give_exile(&mut self, _: i32, _: i32, _: i32) {}
+    fn apply_abnormal(&mut self, _: i32, _: i32, _: i32, _: i32) {}
+    fn skip_main_move(&mut self, _: i32, _: i32) {}
     fn give_extra_turn(&mut self, _: i32) {}
     fn end_turn_now(&mut self, _: i32) {}
     fn teleport_as(&mut self, _: i32, _: i32, _: i32, _: i32) {}
@@ -5449,16 +5412,10 @@ impl CardWorld for NullWorld {
     fn cant_move(&self, _: i32) -> i32 {
         1
     }
-    fn spend_charge(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
+    fn spend_marker(&mut self, _: i32, _: &str, _: i32, _: crate::Msg) -> i32 {
         0
     }
-    fn stay_of(&self, _: i32) -> i32 {
-        0
-    }
-    fn stun_of(&self, _: i32) -> i32 {
-        0
-    }
-    fn exile_of(&self, _: i32) -> i32 {
+    fn add_marker_max(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
     fn turn_player(&self) -> i32 {

@@ -928,7 +928,9 @@ mod tests {
             ("Event", ActionKind::Event),
             ("Abnormal", ActionKind::Abnormal),
             ("Target", ActionKind::Target),
-            ("Exile", ActionKind::Exile),
+            // Wire id 21 (`exile`) is a ruleset-declared kind
+            // (`bandori_std::kind::Exile`); this table lists only the
+            // engine-generic named consts.
             ("State", ActionKind::State),
             ("Counteracted", ActionKind::Counteracted),
             ("DrawOut", ActionKind::DrawOut),

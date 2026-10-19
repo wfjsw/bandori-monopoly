@@ -296,18 +296,11 @@ impl CardWorld for TestWorld {
     fn add_group_pool(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn charge(&self, _: i32) -> i32 {
+    fn gain_marker(&mut self, _: i32, _: &str, _: i32, _: Msg) -> i32 {
         0
     }
-    fn charge_max(&self, _: i32) -> i32 {
-        0
-    }
-    fn gain_charge(&mut self, _: i32, _: i32, _: Msg) -> i32 {
-        0
-    }
-    fn give_stay(&mut self, _: i32, _: i32) {}
-    fn give_stun(&mut self, _: i32, _: i32) {}
-    fn give_exile(&mut self, _: i32, _: i32, _: i32) {}
+    fn apply_abnormal(&mut self, _: i32, _: i32, _: i32, _: i32) {}
+    fn skip_main_move(&mut self, _: i32, _: i32) {}
     fn give_extra_turn(&mut self, _: i32) {}
     fn end_turn_now(&mut self, _: i32) {}
     fn teleport_as(&mut self, _: i32, _: i32, _: i32, _: i32) {}
@@ -441,13 +434,10 @@ impl CardWorld for TestWorld {
     fn cant_move(&self, _: i32) -> i32 {
         0
     }
-    fn spend_charge(&mut self, _: i32, _: i32, _: Msg) -> i32 {
+    fn spend_marker(&mut self, _: i32, _: &str, _: i32, _: Msg) -> i32 {
         0
     }
-    fn stay_of(&self, _: i32) -> i32 {
-        0
-    }
-    fn stun_of(&self, _: i32) -> i32 {
+    fn add_marker_max(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
     fn turn_player(&self) -> i32 {

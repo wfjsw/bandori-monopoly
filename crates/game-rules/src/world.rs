@@ -809,7 +809,7 @@ pub trait CardWorld: Clone + 'static {
     /// Dumb keyed storage: `{value, min, max, expires}` items. The engine holds
     /// them and enforces nothing (see [`game_core::state::StateVar`]) -- which
     /// keys mean what, and what their caps are, belongs to whoever uses them.
-    /// The named accessors below (`stun_of`, `charge`, `slot`, ...) are sugar over
+    /// The named accessors below (status layers, named counters, `slot`, ...) are sugar over
     /// this, not the other way round.
     fn state_var(&self, player_id: i32, key: &str) -> game_core::state::StateVar;
     fn state_get(&self, player_id: i32, key: &str) -> i32;
@@ -941,28 +941,21 @@ pub trait CardWorld: Clone + 'static {
     fn add_group_skill(&mut self, _player_id: i32, _id: &str, _extra: bool) -> i32 {
         -1
     }
-    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
-    /// frozen webui key `charge`.
-    fn charge(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::CHARGE)
-    }
-    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
-    /// `max` of the frozen webui key `charge`.
-    fn charge_max(&self, player_id: i32) -> i32 {
-        self.state_max(player_id, game_core::state::key::CHARGE)
-    }
-    /// Wire name `charge`; policy lives in `rules_status::fire`. Dumb add.
-    fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
     /// Dumb add of `n` to a named counter; returns how many landed. The name is
     /// data. Cap / partial-gain policy lives in the rules-layer kernel.
-    /// Defaults to the wire-key verb; override for a generic path.
-    fn gain_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
-        let _ = name;
-        self.gain_charge(player_id, n, why)
+    fn gain_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32;
+    /// Layered abnormal status write (wire kind id: 1 = stay, 2 = stun,
+    /// 3 = exile). The name is data; `to` is the kind-specific payload
+    /// (`-1` = none, carried for the exile return destination).
+    fn apply_abnormal(&mut self, player_id: i32, kind: i32, n: i32, to: i32);
+    /// Set this turn's main-move latch (`locked != 0` skips; `0` releases).
+    /// Turn-flow, not status policy -- `status:stay` drives it. exile is not
+    /// part of the latch (closeout-2 ruling).
+    fn skip_main_move(&mut self, player_id: i32, locked: i32);
+    /// [`Self::skip_main_move`] with `locked = 0`.
+    fn clear_move_skip(&mut self, player_id: i32) {
+        self.skip_main_move(player_id, 0);
     }
-    fn give_stay(&mut self, player_id: i32, n: i32);
-    fn give_stun(&mut self, player_id: i32, n: i32);
-    fn give_exile(&mut self, player_id: i32, n: i32, to: i32);
     fn give_extra_turn(&mut self, player_id: i32);
     /// End this player's turn now (generic auto-skip latch). `turn_start`
     /// honors it after the `turnStartBefore` / `turnStart` raises.
@@ -979,27 +972,9 @@ pub trait CardWorld: Clone + 'static {
     /// May this player still take the main move? 0 = available, 1 = not your
     /// turn, 2 = already moved, 3 = cannot move this turn.
     fn cant_move(&self, player_id: i32) -> i32;
-    /// Wire name `charge`; policy lives in `rules_status::fire`.
-    fn spend_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
     /// Spend `n` of a named counter; 1 when the player had enough. The name is
-    /// data; the spent-raise carries the name. Defaults to the wire-key verb;
-    /// override for a generic path.
-    fn spend_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32 {
-        let _ = name;
-        self.spend_charge(player_id, n, why)
-    }
-    /// `stay` layers. Sugar over the keyed state.
-    fn stay_of(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::STAY)
-    }
-    /// `stun` layers. Sugar over the keyed state.
-    fn stun_of(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::STUN)
-    }
-    /// `exile` layers (mirrors [`Self::stun_of`]). Sugar over the keyed state.
-    fn exile_of(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::EXILE)
-    }
+    /// data; the spent-raise carries the name.
+    fn spend_marker(&mut self, player_id: i32, name: &str, n: i32, why: Msg) -> i32;
     /// Whose turn (-1 when none).
     fn turn_player(&self) -> i32;
     /// Current round number.
@@ -1085,15 +1060,7 @@ pub trait CardWorld: Clone + 'static {
     }
     /// Move a named counter's cap; returns the new cap. Dumb storage fold
     /// (pulls the value under the new ceiling). The name is data.
-    /// Defaults to the wire-key verb; override for a generic path.
-    fn add_marker_max(&mut self, player: i32, name: &str, n: i32) -> i32 {
-        let _ = name;
-        self.add_charge_max(player, n)
-    }
-    /// Wire name `charge`; policy lives in `rules_status::fire`.
-    fn add_charge_max(&mut self, _player: i32, _n: i32) -> i32 {
-        0
-    }
+    fn add_marker_max(&mut self, player: i32, name: &str, n: i32) -> i32;
     /// Make `id` the running card for a nested `play_card`: a **fresh** instance
     /// a fresh instance, with a fresh `Dest`. The uid goes to -1 rather than being
     /// inherited -- otherwise the inner run would read the *outer* instance's

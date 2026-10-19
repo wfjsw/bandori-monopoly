@@ -404,7 +404,13 @@ impl SnapSrc for Fixture {
             .map(|s| s.out as i32)
             .unwrap_or(0)
     }
-    fn stay_of(&self, p: i32) -> i32 {
+    fn state_get(&self, p: i32, key: &str) -> i32 {
+        match key {
+            "stay" => self.stay_of_model(p),
+            _ => 0,
+        }
+    }
+    fn stay_of_model(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.stay).unwrap_or(0)
     }
     fn stun_of(&self, p: i32) -> i32 {
@@ -1192,7 +1198,7 @@ fn fixtures_flip_the_guards_they_target() {
     let aya = "actor == owner && value > 0";
     let chain_pay =
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";
-    let is_start = ruleset_core::guards::OWN_START;
+    let is_start = bandori_std::guards::OWN_START;
     // No `actor == owner` clause — the fans fixture's actor is seat 1.
     let fans = "value > 0 && slot('ppFansUp') >= 1";
     let placed = "card.placed";

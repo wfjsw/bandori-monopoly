@@ -19,7 +19,7 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // `rules_status::charge::gain` → `gain_charge`.
 // ---------------------------------------------------------------------------
 crate::host_subset!(fire_pass_dispatch {
-    gain_charge => arm_gain_charge,
+    gain_marker => arm_gain_marker,
     log | effect => arm_log,
 });
 

@@ -6,7 +6,7 @@
 //!
 //! turn's money never drops, then stun + a band crystal after the turn.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::abi::ActionKind;
 

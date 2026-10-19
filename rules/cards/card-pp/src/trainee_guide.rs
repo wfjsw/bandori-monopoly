@@ -21,7 +21,7 @@
 
 use card_sdk::abi::{prop, state_key, ActionKind};
 use skill_groups::fans;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PP:练习生解密指南";
@@ -147,9 +147,9 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Residual guard for [`cash_in`] -- the shared "this instance's crystals
-/// changed" half lives in `ruleset_core`; the >= 5 state is the condition's.
+/// changed" half lives in `bandori_std`; the >= 5 state is the condition's.
 fn cash_in_guard(_player_id: i32) -> bool {
-    ctx::is_placed() && ruleset_core::crystals_changed_of(ID) && ctx::crystals() >= 5
+    ctx::is_placed() && bandori_std::crystals_changed_of(ID) && ctx::crystals() >= 5
 }
 
 /// 规则书[持续]（3）: 「此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作

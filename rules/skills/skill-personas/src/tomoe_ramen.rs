@@ -17,7 +17,7 @@
 //! pot refund fires on the wrap-around overshoot.
 
 use card_sdk::abi::{state_key, ActionKind};
-use ruleset_core::ctx::{self, plan, state};
+use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;
@@ -55,7 +55,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「你可以使用一个[火罐]」 + （3） 「若你位于银河拉面馆上，你无法使用（2）效果」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
+    if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if ctx::player_pos(player_id) == shop() {

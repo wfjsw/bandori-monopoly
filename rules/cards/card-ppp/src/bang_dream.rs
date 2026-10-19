@@ -8,7 +8,7 @@
 //! then teleport to one of your own tiles without settling (C#
 //! `H.ForceTeleport(..., resolve: false)`), then optionally build there.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BANG_DREAM: CardDef =

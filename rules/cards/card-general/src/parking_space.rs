@@ -14,7 +14,7 @@
 //! turn-end [停留].
 
 use card_sdk::abi::{ActionKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";

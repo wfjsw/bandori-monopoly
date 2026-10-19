@@ -19,7 +19,7 @@
 //! cut applies to the whole, and the split happens afterwards.
 
 use card_sdk::abi::ActionKind;
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -54,7 +54,7 @@ fn mine(player_id: i32) -> bool {
     // -- the `skillBlock:Pastel✽Palettes` token (one spelling, the band's real
     // name). `skill_blocked` covers the token, the global `skillBlock`, and a
     // `skillBlock` mark on the tile.
-    if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    if bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
     }
     ctx::trigger::player_id() == player_id
@@ -87,7 +87,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     // 「不可使用」 -- same gate as `mine`, repeated in the body.
-    if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    if bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
     let amount = ctx::trigger::value();

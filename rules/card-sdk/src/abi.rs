@@ -8,7 +8,7 @@ use alloc::{string::String, vec::Vec};
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
-/// v7: board/hand/status query + op wave (is_buyable ... in_group, spend_charge,
+/// v7: board/hand/status query + op wave (is_buyable ... in_group, marker spend,
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
 /// v8: `ruleset_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
 /// v9: `cant_move`, `hand_size`, `is_deed`/`is_start`/`is_venue`.
@@ -51,7 +51,7 @@ use alloc::{string::String, vec::Vec};
 /// v20: turn plan + scheduling -- `schedule_turn_end` (a card asks for a
 ///      `turnEnd` call at this turn's end or at the end of a player's next turn),
 ///      `set_no_money_loss`, `set_fixed_roll` / `fixed_roll`, `set_next_steps`,
-///      `turn_main_steps`, `add_charge_max`, `card_replayable`.
+///      `turn_main_steps`, marker-cap move, `card_replayable`.
 ///      `play_card` now returns the inner card's `Dest`, and the inner card runs
 ///      as itself (its own id and `Dest`, no longer the outer card's).
 /// v21: `CardDef` standardized like triggers -- `id` + a table of `On` entry
@@ -76,7 +76,7 @@ use alloc::{string::String, vec::Vec};
 ///      `set_extra_steps` / `set_more_steps` / `set_fire_roll` /
 ///      `set_no_circle_reward` / `set_settle_as_agent` and the `move_*` getters,
 ///      on the move being planned (guest: `ctx::plan::*`).
-/// v25: card-driven `give_stay` / `give_stun` / `give_exile` / `teleport_to`
+/// v25: card-driven abnormal grants / `teleport_to`
 ///      go through the abnormal gate: the `abnormalGuard` hook (new kind),
 ///      then the `abnormal` [反击] window when another player caused it; a blocked
 ///      effect does not apply. `abnormal_count(player_id)`,
@@ -290,8 +290,8 @@ use alloc::{string::String, vec::Vec};
 ///      returns whether the link settled. `gain_typed` -- a bank print through
 ///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
 ///      `typ` and a replacement log line (`Pay::text`). `prop_at` /
-///      `set_prop_at` (one declared property of a field instance), `exile_of`
-///      (`[除外]` layers, mirroring `stun_of`), `ai_agent_choice` (the AI's
+///      `set_prop_at` (one declared property of a field instance), exile layers
+///      (`[除外]` layers, mirroring stun layers), `ai_agent_choice` (the AI's
 ///      preferred index among agent-offer tiles), `trigger::move_from`
 ///      (`t.Move.From`, the 移动起点). `ctx::agent_landing` and
 ///      `ctx::settle_circle_reward` are **removed** -- the tile bodies carry
@@ -376,7 +376,7 @@ use alloc::{string::String, vec::Vec};
 ///      (`buyable`/`shop`/`livehouse`/`color:<g>`), with per-player overrides
 ///      as generic class-membership props (`class:` / `classFor:<p>:`) plus the
 ///      existing `anyColor` / `colorFor:<p>` colour props. Game sugar
-///      (`is_deed(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
+///      (`is_deed(t) = tile_is(t, "ring")`, …) lives in `bandori-std`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
 /// v65: **import-module rename** -- the wasm import module and every guest
@@ -405,7 +405,7 @@ use alloc::{string::String, vec::Vec};
 ///      request -- **not** through `ManifestEntry` (the match path is
 ///      unchanged and unbloomed). Rows sort by `(kind, ordinal)` where the
 ///      ordinal comes from a shared generated table
-///      (`ruleset_core::roster_order`) so the rebuilt vectors equal the JSON
+///      (`bandori_std::roster_order`) so the rebuilt vectors equal the JSON
 ///      file order exactly even though the Rust crates register alphabetically.
 ///      Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load`
 ///      consumes the converted `Roster`. No host-function change; SAVE_VERSION
@@ -505,7 +505,7 @@ use alloc::{string::String, vec::Vec};
 ///      raise points are associated consts. Game-named kinds
 ///      (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 /
 ///      `HouseAdded` 75 / `ChargePaying` 78) leave the SDK and live as
-///      ruleset-declared opaque ids (`ruleset-core::kind`). Custom ids
+///      ruleset-declared opaque ids (`bandori-std::kind`). Custom ids
 ///      serialize as decimal (`"26"`); no legacy aliases (`circleAffected`,
 ///      `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
 ///      `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
@@ -638,7 +638,7 @@ use alloc::{string::String, vec::Vec};
 ///      `ppFansDown` (`skill_groups::fans`, docs/CARDS.md 「PP fans in the
 ///      per-player state dict」), owned by no card. Band clause （2） runs for
 ///      **every** down→up flip via the ruleset-defined Action kind `FansFlip`
-///      (wire 107, `ruleset_core::kind`; raised before the dict writes with
+///      (wire 107, `bandori_std::kind`; raised before the dict writes with
 ///      `value` = the effect's intended X). CEL reads the fans as
 ///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
 ///      SAVE_VERSION unchanged.
@@ -670,7 +670,7 @@ use alloc::{string::String, vec::Vec};
 ///      same name tables, no id renumbering. Source-only: ABI_VERSION stays 85.
 /// v86: **display columns leave `ruleset_metadata`**. Printed text / display
 ///      strings stay authored on [`crate::meta::CardMeta`] /
-///      `ruleset_core::roster::{PersonaDef, GroupDef}` (the builder calls are
+///      `bandori_std::roster::{PersonaDef, GroupDef}` (the builder calls are
 ///      unchanged) but no longer ride the runtime metadata blob. Dropped
 ///      MetaRow keys: card `text` / `rawName` / `cell`; persona `display` /
 ///      `text` / `color` / `variantTag` / `art` / `costume` / `cnId`; group
@@ -686,7 +686,15 @@ use alloc::{string::String, vec::Vec};
 ///      (auto-skip latch), `teleport_as` (move-tail teleport with the `main`
 ///      flag and no abnormal window), `log_as` (typed log line). Additive
 ///      imports; SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 87;
+/// v88: **generic status / marker verbs**. The three named host grants
+///      collapse to `apply_abnormal(p, kind, n, to)`;
+///      the stay move-latch becomes `skip_main_move` / `clear_move_skip`;
+///      charge-named marker imports become the generic `marker_*` family
+///      (`gain_marker` / `spend_marker` / `add_marker_max`). `AbKind` is an
+///      opaque newtype (wire codec only); the game names live in
+///      `bandori-std`. `ActionKind`/`TriggerKind` lose the `Exile` named
+///      consts (wire id 21 stays). SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 88;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1331,45 +1339,40 @@ impl BuyKind {
     }
 }
 
-/// An abnormal effect, carried on `abnormalGuard` /
-/// `abnormal` triggers. Rulebook names: [停留] / [晕眩] / [除外] /
-/// [传送] / [强制移动] / [强制停下] / 反方向移动.
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AbKind {
-    Stay = 1,
-    Stun = 2,
-    Exile = 3,
-    Teleport = 4,
-    Forced = 5,
-    Stop = 6,
-    Reverse = 7,
-}
+/// An abnormal effect kind id (wire `i32`), carried on `abnormalGuard` /
+/// `abnormal` triggers and on the `apply_abnormal` verb.
+///
+/// Opaque newtype over the wire id, the same shape as [`ActionKind`] /
+/// [`FilterKind`]: this module is the **wire codec only** (`from_i32` /
+/// `as_i32` / `as_str`; the strings `"stay"`/`"stun"`/`"exile"`/`"teleport"`/
+/// `"forced"`/`"stop"`/`"reverse"` are frozen webui wire). The game names of
+/// the kinds live in `bandori-std::abnormal`, not here.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct AbKind(pub i32);
 
 impl AbKind {
+    /// Wire codec: `1..=7` are the abnormal kinds; anything else is none.
     pub fn from_i32(v: i32) -> Option<Self> {
-        Some(match v {
-            1 => Self::Stay,
-            2 => Self::Stun,
-            3 => Self::Exile,
-            4 => Self::Teleport,
-            5 => Self::Forced,
-            6 => Self::Stop,
-            7 => Self::Reverse,
-            _ => return None,
-        })
+        matches!(v, 1..=7).then_some(Self(v))
     }
 
-    /// The wire string for this abnormal kind.
+    pub fn as_i32(self) -> i32 {
+        self.0
+    }
+
+    /// The frozen webui wire string for this abnormal kind.
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Stay => "stay",
-            Self::Stun => "stun",
-            Self::Exile => "exile",
-            Self::Teleport => "teleport",
-            Self::Forced => "forced",
-            Self::Stop => "stop",
-            Self::Reverse => "reverse",
+        match self.0 {
+            1 => "stay",
+            2 => "stun",
+            3 => "exile",
+            4 => "teleport",
+            5 => "forced",
+            6 => "stop",
+            7 => "reverse",
+            _ => "",
         }
     }
 }
@@ -1540,10 +1543,9 @@ impl ActionKind {
     /// gates are Untargetable and Redirect.
     pub const Target: Self = Self(TriggerKind::Target.as_i32());
 
-    /// Action / Counteraction window. An exile layer has been granted by any path.
-    /// Payload: value = 1, by_card. Distinct from Abnormal, which is the landing
-    /// itself.
-    pub const Exile: Self = Self(TriggerKind::Exile.as_i32());
+    // Wire id 21 is the 「获得[除外]」 post-commit raise. The rule-facing name
+    // is `bandori_std::kind::Exile` (`ActionKind(21)`); this module carries no
+    // game-named kind const.
 
     /// Action / Counteraction window. A player toggled skill state (the 1↔2
     /// toggle commit). Payload: player_id = who, value = the new state, by_card.
@@ -2081,8 +2083,9 @@ impl TriggerKind {
 
     // Wire id 20 retired; never reuse.
 
-    /// `exile`
-    pub const Exile: Self = Self(21);
+    // Wire id 21 is `exile` (the 「获得[除外]」 post-commit raise). The
+    // rule-facing name is `bandori_std::kind::Exile` (`TriggerKind(21)` / the
+    // wire string `"exile"`); this module carries no game-named kind const.
 
     // Wire id 22 retired; never reuse.
 
@@ -2640,7 +2643,7 @@ const CHAIN_CODES: &[i32] = &[
 ];
 /// Ruleset-declared custom ids that are also [反击] links (wire 26 / 73 / 74 /
 /// 75 / 78). The engine dispatches them by opaque id; the names live in
-/// `ruleset-core::kind`.
+/// `bandori-std::kind`.
 const CUSTOM_LINKS: &[i32] = &[26, 73, 74, 75, 78];
 
 /// Which vocabulary an event kind belongs to.

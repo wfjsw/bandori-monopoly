@@ -16,10 +16,10 @@ crate::host_subset!(skills_hhw_dispatch {
     gain | gain_typed | gain_fixed => arm_gain,
     money => arm_money,
     pay | pay_to | pay_total => arm_pay,
-    gain_charge => arm_gain_charge,
+    gain_marker => arm_gain_marker,
     charge => arm_fire,
-    charge_max => arm_charge_max,
-    spend_charge => arm_spend_charge,
+    ,
+    spend_marker => arm_spend_marker,
     teleport_to => arm_teleport_to,
     player_count => arm_player_count,
     player_out => arm_player_out,
@@ -216,7 +216,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
     skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
 
-    let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
+    let gid = crate::guard_id!(bandori_std::guards::OWN_START);
     let ov = TriggerOverlay::default();
     let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, CIRCLE as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
@@ -256,7 +256,7 @@ pub fn kokoro_02_noop_non_circle() {
     skills_hhw_world(owner);
     // A non-CiRCLE tile (index 5).
     let w = symbolic_pass_world(owner, 5);
-    let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
+    let gid = crate::guard_id!(bandori_std::guards::OWN_START);
     let ov = TriggerOverlay::default();
     let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, 5i64, &ov);
     let admitted = crate::guard!(gid, &ctx);

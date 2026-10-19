@@ -32,7 +32,7 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::{CardDef, Msg, Prompt};
-use ruleset_core::ctx::{self, state};
+use bandori_std::ctx::{self, state};
 
 pub use crate::fire_decl::{decl_of, FireDecl, FIRE_DECLS};
 
@@ -74,12 +74,12 @@ pub fn pull_under_cap(have: i32, cap: i32) -> i32 {
 
 /// 火罐 held (the capped pool; does not include [`temp`]).
 pub fn get(player_id: i32) -> i32 {
-    ruleset_core::ctx::charge(player_id)
+    bandori_std::ctx::charge(player_id)
 }
 
 /// The declared cap (0 = none declared).
 pub fn max(player_id: i32) -> i32 {
-    ruleset_core::ctx::charge_max(player_id)
+    bandori_std::ctx::charge_max(player_id)
 }
 
 /// Total pots the seat can spend: the pool plus any live temp pots
@@ -190,7 +190,7 @@ pub fn gain(
     // requested `n` (today's window payload), then applies the storage
     // bounds and returns the actual. `max == 0` (no declaration) refuses in
     // the host verb (an undeclared resource cannot be gained).
-    ruleset_core::ctx::gain_charge(player_id, n, why)
+    bandori_std::ctx::gain_charge(player_id, n, why)
 }
 
 /// Spend `n` pots. `ChargePaying` runs first (spend substitution 「以代替此次
@@ -221,7 +221,7 @@ pub fn spend(
     if from_pool > 0 {
         // Opens ChargePaying + markerSpend for `from_pool`, then writes.
         // A substitution cancels the write and counts as paid.
-        return ruleset_core::ctx::spend_charge(player_id, from_pool, why);
+        return bandori_std::ctx::spend_charge(player_id, from_pool, why);
     }
     Ok(true)
 }
@@ -229,7 +229,7 @@ pub fn spend(
 /// Move the cap by `n`; pulls the value down under the new ceiling (I2).
 /// Returns the new cap.
 pub fn adjust_cap(player_id: i32, n: i32) -> i32 {
-    ruleset_core::ctx::add_charge_max(player_id, n)
+    bandori_std::ctx::add_charge_max(player_id, n)
 }
 
 /// Backwards-compatible alias of [`adjust_cap`] (the old `add_max` name).
@@ -267,7 +267,7 @@ pub mod regime {
         if take <= 0 {
             return Ok(0);
         }
-        if !ruleset_core::ctx::spend_charge(player_id, take, why)? {
+        if !bandori_std::ctx::spend_charge(player_id, take, why)? {
             return Ok(0);
         }
         Ok(take)

@@ -15,7 +15,7 @@
 //! a ladder of rewards keyed on how many field cards the user has.
 //! The ladder body runs off `cards_in(Field)` for the placed-card count.
 
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use skill_groups::fans;
 use card_sdk::{key, CardDef, Msg, On};
 

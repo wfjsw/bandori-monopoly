@@ -1342,16 +1342,6 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
             }
 }
 
-/// Wire name `charge`; policy lives in `rules_status::fire`.
-pub fn charge<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    marker_get(c, player_id, game_core::state::key::CHARGE)
-}
-
-/// Wire name `charge`; policy lives in `rules_status::fire`.
-pub fn charge_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    marker_max(c, player_id, game_core::state::key::CHARGE)
-}
-
 /// Named-counter read. The name is data.
 pub fn marker_get<C: HostCtx>(c: &mut C, player_id: i32, name: &str) -> Result<i32, HostErr> {
     Ok(c.st().wr().state_get(player_id, name))
@@ -1374,9 +1364,9 @@ pub fn gain_marker<C: HostCtx>(
             let why = guest_msg(c, p, l)?;
             // Marker window: `markerGain` opens before the markers move.
             //
-            // The pause is a **trap**, not the sentinel: `ctx::gain_charge`
+            // The pause is a **trap**, not the sentinel: `ctx::gain_marker`
             // returns `Result<i32, Prompt>` and a great many bodies discard
-            // that result (`ctx::gain_charge(...);`). With the sentinel the body
+            // that result (`ctx::gain_marker(...);`). With the sentinel the body
             // would catch the `Err(Prompt)` and keep going, which the replay
             // model's `finish` boundary check traps ("card published a prompt
             // and kept going" -- the card goes out) while the inline answer
@@ -1400,39 +1390,43 @@ pub fn gain_marker<C: HostCtx>(
             Ok(c.st_mut().w().gain_marker(player_id, name, n, why))
 }
 
-/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
-/// [`gain_marker`].
-pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
-    gain_marker(c, player_id, game_core::state::key::CHARGE, n, p, l)
+/// One generic abnormal-layer verb (wire kind id: 1 = stay, 2 = stun,
+/// 3 = exile). `n < 0` (removal) always applies -- 「移除一层」 is not a
+/// grant. `n > 0` opens the abnormal [反击] window; a cancelled window
+/// writes nothing. `to` is the kind-specific payload (`-1` = none), carried
+/// for the exile return destination.
+pub fn apply_abnormal<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    kind: i32,
+    n: i32,
+    to: i32,
+) -> Result<(), HostErr> {
+    if n < 0 {
+        c.st_mut().w().apply_abnormal(player_id, kind, n, to);
+    } else if n > 0 {
+        let Some(k) = AbKind::from_i32(kind) else {
+            return Ok(());
+        };
+        if abnormal_gate(c, player_id, k)? {
+            c.st_mut().w().apply_abnormal(player_id, kind, n, to);
+        }
+    }
+    Ok(())
 }
 
-pub fn give_stay<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), HostErr> {
-            if n < 0 {
-                c.st_mut().w().give_stay(player_id, n);
-            } else if n > 0 && abnormal_gate(c, player_id, AbKind::Stay)? {
-                c.st_mut().w().give_stay(player_id, n);
-            }
-            Ok(())
+/// Set this turn's main-move latch (`locked != 0` skips; `0` releases).
+/// Generic turn-flow; `status:stay` drives it. exile is not part of the
+/// latch (closeout-2 ruling).
+pub fn skip_main_move<C: HostCtx>(c: &mut C, player_id: i32, locked: i32) -> Result<(), HostErr> {
+    c.st_mut().w().skip_main_move(player_id, locked);
+    Ok(())
 }
 
-pub fn give_stun<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), HostErr> {
-            if n < 0 {
-                c.st_mut().w().give_stun(player_id, n);
-            } else if n > 0 && abnormal_gate(c, player_id, AbKind::Stun)? {
-                c.st_mut().w().give_stun(player_id, n);
-            }
-            Ok(())
-}
-
-pub fn give_exile<C: HostCtx>(c: &mut C, player_id: i32, n: i32, to: i32) -> Result<(), HostErr> {
-            if n < 0 {
-                // Removals (「移除一层[除外]」) always reach the engine; only
-                // grants are gated by [不可阻挡] 「无法获得新的[除外]层数」.
-                c.st_mut().w().give_exile(player_id, n, to);
-            } else if n > 0 && abnormal_gate(c, player_id, AbKind::Exile)? {
-                c.st_mut().w().give_exile(player_id, n, to);
-            }
-            Ok(())
+/// [`skip_main_move`] with `locked = 0`.
+pub fn clear_move_skip<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
+    c.st_mut().w().clear_move_skip(player_id);
+    Ok(())
 }
 
 pub fn give_extra_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
@@ -1551,30 +1545,6 @@ pub fn spend_marker<C: HostCtx>(
                 }
             }
             Ok(c.st_mut().w().spend_marker(player_id, name, n, why))
-}
-
-/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
-/// [`spend_marker`].
-pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
-    spend_marker(c, player_id, game_core::state::key::CHARGE, n, p, l)
-}
-
-pub fn stay_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().stay_of(player_id)
-    })
-}
-
-pub fn stun_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().stun_of(player_id)
-    })
-}
-
-pub fn exile_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().exile_of(player_id)
-    })
 }
 
 pub fn turn_player<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2638,12 +2608,6 @@ pub fn add_marker_max<C: HostCtx>(
     n: i32,
 ) -> Result<i32, HostErr> {
     Ok(c.st_mut().w().add_marker_max(player_id, name, n))
-}
-
-/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
-/// [`add_marker_max`].
-pub fn add_charge_max<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
-    add_marker_max(c, player_id, game_core::state::key::CHARGE, n)
 }
 
 pub fn set_roller<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {

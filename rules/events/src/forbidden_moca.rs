@@ -4,7 +4,7 @@
 //! > 直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！
 
 use card_sdk::abi::{ActionKind, FilterKind};
-use ruleset_core::ctx;
+use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{expire_removed, keep};

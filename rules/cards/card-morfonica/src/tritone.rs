@@ -9,7 +9,7 @@
 //! Counteraction-only (`Normal => false`): the player is about to lose or pay money.
 
 use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRITONE: CardDef = CardDef::new(

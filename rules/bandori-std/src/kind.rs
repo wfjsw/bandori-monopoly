@@ -31,6 +31,8 @@ pub const HOUSE_ADDED: i32 = 75;
 pub const CHARGE_PAYING: i32 = 78;
 /// After the fan-flip request is known, before the dict writes. Wire 107.
 pub const FANS_FLIP: i32 = 107;
+/// 「获得[除外]」 post-commit raise. Wire 21.
+pub const EXILE_I32: i32 = 21;
 
 /// Action / Counteraction window. The pass-reward pick is known, before the
 /// payout. Payload: player_id = the mover, value = the pick (0 = money,
@@ -57,6 +59,11 @@ pub const ChargePaying: ActionKind = ActionKind(CHARGE_PAYING);
 /// sees the pre-flip face-down count. Payload: player_id = the seat,
 /// value = the intended flip count.
 pub const FansFlip: ActionKind = ActionKind(FANS_FLIP);
+/// Action / Counteraction window. 「任意玩家获得[除外]…时」 -- an exile layer
+/// has been granted by any path (the engine's post-commit raise; wire 21).
+/// Payload: value = 1, by_card. Distinct from `ActionKind::Abnormal`, which is
+/// the landing itself.
+pub const Exile: ActionKind = ActionKind(EXILE_I32);
 
 // ------------------------------------------------------- tile kind strings
 
@@ -89,4 +96,41 @@ pub fn class_defs() -> Vec<(String, bool, Vec<i32>)> {
         (class::SHOP.into(), true, vec![class::SHOP_GROUP]),
         (class::VENUE.into(), true, vec![class::VENUE_GROUP]),
     ]
+}
+
+/// Abnormal-effect kind names (「异常效果」). The ids are the frozen webui
+/// wire values of `card_sdk::abi::AbKind`; the readable names live here so
+/// `card-sdk` / `crates/` carry no game status vocabulary.
+pub mod abnormal {
+    use card_sdk::abi::AbKind;
+
+    /// [停留]. Wire 1.
+    pub const STAY: i32 = 1;
+    /// [晕眩]. Wire 2.
+    pub const STUN: i32 = 2;
+    /// [除外]. Wire 3.
+    pub const EXILE: i32 = 3;
+    /// [传送]. Wire 4.
+    pub const TELEPORT: i32 = 4;
+    /// [强制移动]. Wire 5.
+    pub const FORCED: i32 = 5;
+    /// [强制停下]. Wire 6.
+    pub const STOP: i32 = 6;
+    /// 反方向移动. Wire 7.
+    pub const REVERSE: i32 = 7;
+
+    /// [停留] -- 「处于该状态时[无法移动]」，可叠加，每回合结束时移除一层.
+    pub const Stay: AbKind = AbKind(STAY);
+    /// [晕眩] -- 「无法移动」，无法使用[主动]技能和手卡的[手]效果，无法收付款.
+    pub const Stun: AbKind = AbKind(STUN);
+    /// [除外] -- 无法移动 / 指定 / 收付款，每回合开始前移除一层.
+    pub const Exile: AbKind = AbKind(EXILE);
+    /// [传送] -- an abnormal move that is not the main move.
+    pub const Teleport: AbKind = AbKind(TELEPORT);
+    /// [强制移动] -- the abnormal force-move.
+    pub const Forced: AbKind = AbKind(FORCED);
+    /// [强制停下] -- the abnormal stop.
+    pub const Stop: AbKind = AbKind(STOP);
+    /// 反方向移动 -- the abnormal reverse.
+    pub const Reverse: AbKind = AbKind(REVERSE);
 }

@@ -18,7 +18,7 @@
 //! settle so neither hook re-enters (STACK-01 / SETTLE-01).
 
 use card_sdk::abi::{ChainKind, ActionKind};
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";

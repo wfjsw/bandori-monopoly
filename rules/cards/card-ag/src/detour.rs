@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{prop, ChainKind, ActionKind, FilterKind};
 use card_sdk::ctx::plan;
-use ruleset_core::ctx::{self, trigger};
+use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DETOUR: CardDef = CardDef::new(
