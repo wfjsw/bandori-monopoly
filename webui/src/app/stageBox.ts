@@ -25,50 +25,31 @@ export interface Box {
 }
 
 /**
- * The window the stage lays out on.
+ * The window the stage lays out on: the box the placer is centered in, and
+ * nothing larger.
  *
- * A handset's `window.screen` is the whole device in CSS px and swaps with
- * orientation -- the one measurement that is the same rectangle in portrait
- * and in landscape. The layout and visual viewports are both short of it in
- * portrait (Safari's address bar, the iOS PWA's status-bar strip) and full in
- * landscape. Sizing to those left the stage short on the long axis: under
- * forced rotation that axis is the phone's height, so the leftover strip sat
- * under the cutout at the top (invisible behind the island) and showed as a
- * blank bar at the **bottom** of the phone, with the app not filling the
- * screen width.
+ * The placer is `position: fixed; left: 50%; top: 50%` -- it is centered in
+ * the **layout viewport**. Sizing it from anything bigger overflows that box:
+ * the stage grows past the cutout on one side and leaves a blank border on
+ * the other (and, in landscape, past both long edges). `window.screen` and
+ * `100lvh` are both bigger than the layout viewport whenever browser chrome
+ * is showing (Safari's address bar, the iOS PWA's status-bar strip), so they
+ * must not drive the size.
  *
- * `screen` only counts on a handset-sized coarse device -- a desktop window on
- * a touch monitor must not be blown up to the monitor. Everywhere else the
- * window itself is the right answer. Either way take the largest candidate: a
- * short stage letterboxes, and letterbox is the bug.
+ * What is *outside* the layout viewport is the browser's own chrome; it is
+ * not ours to fill, and trying is what produced the overflow. When the chrome
+ * hides, the layout viewport grows and the stage grows with it.
  */
 export function windowBox(input: {
-  /** `window.screen`, CSS px. */
-  screenW: number;
-  screenH: number;
-  /** `window.innerWidth` / `innerHeight`. */
-  innerW: number;
-  innerH: number;
-  /** The `position: fixed; inset: 0` body's box -- the real drawing area. */
+  /** The `position: fixed; inset: 0` box -- the layout viewport. */
   layoutW: number;
   layoutH: number;
-  /** `100lvw` / `100lvh` probe, or 0 where unavailable. */
-  probeW: number;
-  probeH: number;
-  /** `orientation: portrait`. */
-  portrait: boolean;
-  /** `pointer: coarse`. */
-  coarse: boolean;
+  /** `window.innerWidth` / `innerHeight`, a fallback. */
+  innerW: number;
+  innerH: number;
 }): Box {
-  const candidates: Box[] = [{ vw: input.innerW, vh: input.innerH }];
-  if (input.layoutW > 0 && input.layoutH > 0) candidates.push({ vw: input.layoutW, vh: input.layoutH });
-  if (input.probeW > 0 && input.probeH > 0) candidates.push({ vw: input.probeW, vh: input.probeH });
-  const lo = Math.min(input.screenW, input.screenH);
-  const hi = Math.max(input.screenW, input.screenH);
-  if (input.coarse && lo > 0 && lo <= 600) {
-    candidates.push(input.portrait ? { vw: lo, vh: hi } : { vw: hi, vh: lo });
-  }
-  return candidates.reduce((a, b) => ({ vw: Math.max(a.vw, b.vw), vh: Math.max(a.vh, b.vh) }));
+  if (input.layoutW > 0 && input.layoutH > 0) return { vw: input.layoutW, vh: input.layoutH };
+  return { vw: input.innerW, vh: input.innerH };
 }
 
 export interface StageBoxInput {

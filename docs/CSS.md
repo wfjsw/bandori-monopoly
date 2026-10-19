@@ -140,18 +140,22 @@ below the strip in one move. Floating transport: both are `0`, no offset.
 
 ### Safe area: what respects it and what does not
 
-The stage is laid out against the **device screen** on a handset (`windowBox`
-in `stageBox.ts`), not the layout or visual viewport: both of those are short
-of the screen in portrait (Safari's address bar, the iOS PWA's status-bar
-strip) and full in landscape, so sizing to them made forced rotation lay out
-on a different canvas than a real turn of the phone and letterboxed the stage
-into a blank bar at each end of the long axis. `window.screen` is the whole
-device in CSS px and swaps with orientation, so `rotate(90deg)` and turning
-the phone for real produce the same stage box; it only counts on a
-handset-sized coarse device (a desktop window on a touch monitor must not be
-blown up to the monitor). `index.html` claims the home-screen shell with
-`apple-mobile-web-app-status-bar-style=black-translucent` so the PWA is
-fullscreen in portrait too.
+The stage is laid out against the **layout viewport** (`windowBox` in
+`stageBox.ts`) -- the box the `position: fixed` placer is centered in. Nothing
+larger: `window.screen` and `100lvh` both exceed it while browser chrome is
+showing (Safari's address bar, the iOS PWA's status-bar strip), and a stage
+sized to them overflows the box it is centered in -- it grows past the cutout
+on one side and leaves a blank border on the other. What is outside the layout
+viewport is the browser's chrome, not ours to fill; when the chrome hides, the
+layout viewport grows and the stage grows with it.
+
+Because that chrome is not symmetric across the turn (an address bar shrinks
+portrait and not landscape), forced rotation and a real turn of the phone can
+still see different layout viewports in Safari. The stable full-screen case is
+the home-screen PWA: `index.html` claims the shell with
+`apple-mobile-web-app-status-bar-style=black-translucent`, which puts the
+webview on the whole device in both orientations (re-add the icon after that
+meta changes -- iOS freezes web-app metas at add time).
 
 The stage's edges are the real screen edges on both axes: the game runs edge
 to edge, and insetting the box for the cutout left the retractable strips (the
