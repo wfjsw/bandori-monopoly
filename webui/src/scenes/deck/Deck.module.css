@@ -47,9 +47,22 @@
 .poolHead > small { color: var(--sub); }
 .grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 164px); gap: 12px 10px; align-content: start; padding: 4px; }
 .kind { position: absolute; left: 10px; top: 10px; font-size: 12px; line-height: 20px; }
-.toggle { position: absolute; right: 8px; top: 8px; width: 36px; height: 36px; border-radius: 50%; background: var(--surface); color: var(--pink); border: 2px solid var(--pink); display: flex; align-items: center; justify-content: center; }
-.toggle i { width: 22px; height: 22px; }
-.toggleOn { background: var(--pink); color: #fff; border-color: #fff; }
+
+/* Standing card preview: the board's right-rail proportion (~280px), mirroring
+   CardStand.module.css `.stand` / `.empty`. The pool just reflows narrower. */
+.standCol { position: relative; flex: 0 0 280px; display: flex; flex-direction: column; min-height: 0; }
+.standFrame {
+  display: flex; flex-direction: column; flex: 1;
+  min-height: 0; overflow: hidden;
+  background: var(--panel); border-radius: var(--r-xl);
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+.standEmpty {
+  margin: auto; padding: 18px;
+  color: var(--faint); font-size: 14px; line-height: 1.6; text-align: center;
+  border: 2px dashed var(--pink-pale); border-radius: var(--r-lg);
+}
 
 .picker { display: flex; flex-direction: column; gap: 14px; }
 .pickerGrid { height: 560px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 124px); gap: 14px; padding: 4px; }

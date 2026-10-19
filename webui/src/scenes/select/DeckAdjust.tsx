@@ -286,12 +286,6 @@ function Adjust({ sess, view, at, auto, me, c }: {
                 return (
                   <InspectCard key={x.id} id={x.id} size="pool" on={on} onClick={cardTap(x.id)} title={cardTitle(x.id)}>
                     <KindChip kind={cardKind(x)} className={s.kind} />
-                    {/* State affordance only -- the whole face is the toggle. */}
-                    {!x.derived && (
-                      <span className={cx(s.toggle, on && s.toggleOn)} aria-hidden>
-                        <Icon name={on ? "check" : "add"} />
-                      </span>
-                    )}
                   </InspectCard>
                 );
               })}
