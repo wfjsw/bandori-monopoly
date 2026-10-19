@@ -1,6 +1,11 @@
-.backdrop { position: fixed; inset: 0; background: #f6e7ec center / cover no-repeat; opacity: 0; transition: opacity 0.3s; will-change: opacity; }
+/* Past the fixed box on every side: on an iPhone the screen runs on below it
+   (Safari's bottom toolbar, the home-indicator strip) and the forced stage
+   reaches down there; a box-sized plate would leave that strip as the bare
+   page colour behind the stage's gaps. */
+.backdrop { position: fixed; inset: -30vmax; background: #f6e7ec center / cover no-repeat; opacity: 0; transition: opacity 0.3s; will-change: opacity; }
 .backdrop.front { opacity: 1; }
 .backdrop::after { content: ""; position: absolute; inset: 0; background: rgba(246, 242, 243, 0.3); }
+/* `left` / `top` (the centre) come from Stage.tsx (`stageBox` cx / cy). */
 .placer { position: fixed; left: 50%; top: 50%; transform-origin: 50% 50%; }
 /* Design-space canvas under the placer: `width` / `height` / `zoom` come from
    Stage.tsx. `position: relative` keeps abspos children in design px (the old
