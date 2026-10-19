@@ -46,39 +46,29 @@ function forcedCompact(): boolean | null {
 }
 
 /**
- * The window to lay the stage out on -- see `windowBox` in `stageBox.ts` for
- * why this is the device screen on a handset and not the layout / visual
- * viewport. The `100lvw` / `100lvh` probe is one of the candidates: those
- * units are the large viewport (browser chrome hidden) by definition.
+ * The window to lay the stage out on. See `windowBox`: it is the layout
+ * viewport -- the box the `position: fixed` placer is centered in -- and
+ * never anything larger.
  */
 function largeViewport(): { vw: number; vh: number } {
-  let el = lvProbe;
+  let el = layoutProbe;
   if (!el) {
+    // `position: fixed; inset: 0` with no other styling: exactly the box a
+    // fixed element fills, which is what the placer is centered in.
     el = document.createElement("div");
-    el.style.cssText = "position:fixed;top:0;left:0;width:100lvw;height:100lvh;visibility:hidden;pointer-events:none";
+    el.style.cssText = "position:fixed;inset:0;visibility:hidden;pointer-events:none";
     document.body.appendChild(el);
-    lvProbe = el;
+    layoutProbe = el;
   }
   const r = el.getBoundingClientRect();
-  // The drawing area: `html, body { position: fixed; inset: 0 }` is exactly
-  // the layout viewport, which `viewport-fit=cover` extends to the screen
-  // edges. Measured here rather than off `innerHeight`, which a browser's
-  // chrome can shrink without the drawing area moving.
-  const layout = document.body.getBoundingClientRect();
   return windowBox({
-    screenW: window.screen.width,
-    screenH: window.screen.height,
+    layoutW: r.width,
+    layoutH: r.height,
     innerW: window.innerWidth,
     innerH: window.innerHeight,
-    layoutW: layout.width,
-    layoutH: layout.height,
-    probeW: r.width,
-    probeH: r.height,
-    portrait: window.matchMedia("(orientation: portrait)").matches,
-    coarse: window.matchMedia("(pointer: coarse)").matches,
   });
 }
-let lvProbe: HTMLElement | null = null;
+let layoutProbe: HTMLElement | null = null;
 
 /**
  * The device's safe-area insets on all four sides, read off a probe element.
