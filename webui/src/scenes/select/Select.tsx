@@ -20,6 +20,7 @@ import { Avatar, BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../u
 import { Chips, PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
 import { Live2DStand } from "../../ui/Live2DStand";
+import { ask } from "../../ui/Modal";
 import { toast } from "../../ui/Toast";
 import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
@@ -80,7 +81,8 @@ export function Select({ sess }: { sess: GameSession }) {
   const takenBy = new Map(st.players.map((x, playerId) => [x.persona, { name: x.player, playerId }] as const).filter(([c]) => c));
   const free = (n: string) => !st.bans.includes(n) && !takenBy.has(n);
   const cur = st.players[st.turn]?.player ?? "";
-  const leave = () => {
+  const leave = async () => {
+    if (!(await ask(tr("select.leaveTitle"), tr("select.leaveAsk"), tr("select.leave")))) return;
     endSession();
     navigate(sess.kind === "solo" ? { name: "menu" } : { name: "lobby" });
   };

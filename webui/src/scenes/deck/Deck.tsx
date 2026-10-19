@@ -13,10 +13,12 @@ import { D, cardTitle, rules, skillText } from "../../core/data";
 import { DECK_NAME_MAX, deckLabelWith, parseDeckList, sanitizeDeckName, type DeckEntry } from "../../core/deckNames";
 import { useProfile } from "../../core/hooks";
 import { useMountEffect } from "../../hooks/mount";
+import { useCardTap } from "../../hooks/doubleTap";
 import { markSeen, profileJson, updateProfile } from "../../core/store";
 import type { CardData, PersonaData } from "../../core/types";
 import { Btn } from "../../ui/Button";
-import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, showCard, type CardAction, type CardKind } from "../../ui/Card";
+import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, type CardKind } from "../../ui/Card";
+import { cardStandClass, CardPreview, stickCard, useStandingPreviewOn, useStickyCard } from "../../ui/CardPreview";
 import { BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
 import { Chips, PanelTab } from "../../ui/Chips";
 import { Form, FormRow, TextInput } from "../../ui/Form";
@@ -39,6 +41,10 @@ const matches = (c: CardData, f: Filter) => (f === "all" ? cardKind(c) !== "deri
 
 export function Deck() {
   useMountEffect(() => markSeen("deck"));
+  // The board's standing card panel is the detail surface here too: hover (PC)
+  // or tap (touch) previews on the right, so no detail modal is needed.
+  useStandingPreviewOn();
+  const stand = useStickyCard();
   const p = useProfile()!; // re-render on every save
   const [character, setCharacter] = useState<PersonaData>(() => D.persona(p.homePersona) ?? D.personas[0]);
   const [slot, setSlot] = useState(() => rules.deck_chosen_slot(profileJson(), character.name));
@@ -183,16 +189,9 @@ export function Deck() {
     updateProfile(rules.deck_move(profileJson(), character.name, slot, delta));
   }
 
-  function detail(id: string): void {
-    const c = D.card(id)!;
-    const has = cards.includes(id);
-    const acts: CardAction[] = [];
-    if (c.derived) acts.push({ label: tr("deck.cannotAdd"), enabled: false });
-    else if (has) acts.push({ label: slot === 0 ? tr("deck.removePreset") : tr("deck.remove"), enabled: true, run: () => toggle(id) });
-    else if (slot === 0) acts.push({ label: tr("deck.swapPreset"), enabled: true, run: () => toggle(id) });
-    else acts.push({ label: cards.length < SIZE ? tr("deck.add") : tr("deck.full"), enabled: cards.length < SIZE, run: () => toggle(id) });
-    showCard(id, acts);
-  }
+  // Preview (PC hover / touch tap) goes to the standing panel on the right; a
+  // card face toggles in and out of the deck -- no detail modal.
+  const cardTap = useCardTap({ onPreview: stickCard, onToggle: toggle });
 
   const counts = FILTERS.map((f) => pool.filter((c) => matches(c, f)).length);
   return (
@@ -258,7 +257,7 @@ export function Deck() {
         </div>
         <div className={s.stripCards}>
           {Array.from({ length: SIZE }, (_, k) => (cards[k]
-            ? <InspectCard key={k} id={cards[k]} size="strip" onClick={() => detail(cards[k])} />
+            ? <InspectCard key={k} id={cards[k]} size="strip" onClick={cardTap(cards[k])} title={tr("deck.remove")} />
             : <EmptySlot key={k} star={sceneImg("star5")} />))}
         </div>
         <div className={s.hint}>
@@ -276,18 +275,25 @@ export function Deck() {
           {pool.filter((c) => matches(c, filter)).map((c) => {
             const on = cards.includes(c.id);
             return (
-              <InspectCard key={c.id} id={c.id} size="pool" on={on} onClick={() => detail(c.id)} title={cardTitle(c.id)}>
+              <InspectCard key={c.id} id={c.id} size="pool" on={on} onClick={cardTap(c.id)} title={cardTitle(c.id)}>
                 <KindChip kind={cardKind(c)} className={s.kind} />
-                {!c.derived && (
-                  <button type="button" className={cx(s.toggle, on && s.toggleOn)} onClick={(e) => { e.stopPropagation(); toggle(c.id); }}>
-                    <Icon name={on ? "check" : "add"} />
-                  </button>
-                )}
               </InspectCard>
             );
           })}
         </div>
       </div>
+        </div>
+
+        {/* Standing card preview (the board's CardStand): the one detail this
+            screen shows, fed by hover / tap. No detail modal. */}
+        <div className={s.standCol} aria-live="polite">
+          <div className={s.standFrame}>
+            {stand ? (
+              <CardPreview id={stand.id} note={stand.note} pills={stand.pills} className={cardStandClass} scrollable />
+            ) : (
+              <div className={s.standEmpty}>{tr("prompt.cardHover")}</div>
+            )}
+          </div>
         </div>
       </div>
     </>
