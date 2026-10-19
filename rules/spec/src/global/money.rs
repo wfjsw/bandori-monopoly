@@ -67,9 +67,9 @@ fn half_parts(msg: &Msg) -> Option<(i64, i64)> {
     None
 }
 
-/// 「向上取整10」 on a half charge: `ceil(full / 2 / 10) * 10`.
+/// 「向上取整10」 on a half charge. Delegates to [`bandori_std::half_ceil10`].
 pub fn half_ceil10(full: i32) -> i32 {
-    ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10
+    bandori_std::half_ceil10(full)
 }
 
 /// The rulebook buy figure: 「购买格子地契和建造已有房子的资金总价」.
@@ -82,17 +82,17 @@ pub fn buy_price(step: &Step<'_>, t: usize) -> Option<i32> {
 /// The rulebook mortgage payout: 「地契购买价格50%」.
 pub fn mortgage_value(step: &Step<'_>, t: usize) -> Option<i32> {
     let tile = step.data.tiles.get(t)?;
-    Some(tile.price / 2)
+    Some(bandori_std::mortgage_value(tile.price))
 }
 
 /// The rulebook redeem cost: 「地契购买价格60%」.
 ///
-/// The book states the rate and not the rounding; every printed price on the
-/// current board is a multiple of 100, so `price * 60 / 100` is exact and the
-/// rounding question is moot (OPEN-60%舍入).
+/// Integer form of `round_ties_even(price * 0.6)` (the product of an integer
+/// price and 0.6 never lands on `.5`). Owned by [`bandori_std::redeem_cost`];
+/// the engine-side twin is `purchase::redeem_cost`.
 pub fn redeem_cost(step: &Step<'_>, t: usize) -> Option<i32> {
     let tile = step.data.tiles.get(t)?;
-    Some(tile.price * 60 / 100)
+    Some(bandori_std::redeem_cost(tile.price))
 }
 
 /// The rent table entry at the tile's house count (「现等级地租」).
@@ -650,9 +650,10 @@ pub fn g_money_05(step: &Step<'_>) -> Result<(), String> {
 ///   longer mortgaged in `post`.
 /// * **Frame:** only `money:P` and `mortgaged:T` move on a bare redeem.
 /// * **Rulings & OPEN:** the book states the rate and not the rounding.
-///   Every printed price on the current board times 0.6 is an integer, so
-///   `price * 60 / 100` is exact (OPEN-60%舍入). Rate is of **price**, not
-///   price+houses. Immune to money modifiers (其他规则 6).
+///   The integer form is `round_ties_even(price * 0.6)` (the product of an
+///   integer price and 0.6 never lands on `.5`), owned by
+///   [`bandori_std::redeem_cost`]. Rate is of **price**, not price+houses.
+///   Immune to money modifiers (其他规则 6).
 /// * **Executable:** [`g_money_06`].
 const G_MONEY_06: Clause = Clause::new(
     "G-MONEY-06",

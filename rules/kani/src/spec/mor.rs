@@ -183,6 +183,8 @@ pub fn xiaobai_01_effects_ok_mutant(effects: &[Effect], payee: i32, amount: i32)
 // ===========================================================================
 
 /// Round up to a multiple of 10 (the engine's end-of-calc money round).
+/// Positive-only twin of `play::ceil10_money`; distinct from
+/// `bandori_std::half_ceil10` (which takes a half already taken).
 pub fn round10(x: i32) -> i32 {
     if x <= 0 {
         return x;

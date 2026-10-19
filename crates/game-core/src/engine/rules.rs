@@ -715,57 +715,14 @@ pub trait CardRules: Send + Sync {
             .collect()
     }
 
-    /// The mortgage payout for this deed (规则书 基础规则 5: 「抵押后[获得]地契
-    /// 购买价格50%的资金」). The land price only -- standing houses are not
-    /// part of the figure.
-    ///
-    /// The authority is `rules/tiles/src/deed.rs`; the default here is the
-    /// same plain rulebook formula ([`super::play::purchase::mortgage_value`])
-    /// that `StubRules` and the sim run. `WasmRules` overrides it so a ruleset
-    /// can retune the figure.
-    fn deed_mortgage_value(&self, data: &crate::data::GameData, tile: i32) -> i32 {
-        super::play::purchase::mortgage_value(data, tile.max(0) as usize)
-    }
-
-    /// The redeem charge for this deed (规则书 基础规则 6: 「赎回后[消耗]地契
-    /// 购买价格60%的资金」). Ties-even at the half.
-    ///
-    /// The authority is `rules/tiles/src/deed.rs`; the default is
-    /// [`super::play::purchase::redeem_cost`].
-    fn deed_redeem_cost(&self, data: &crate::data::GameData, tile: i32) -> i32 {
-        super::play::purchase::redeem_cost(data, tile.max(0) as usize)
-    }
-
-    /// Why `player` may not mortgage `tile` right now, or `None`.
-    /// Routed through the rules crate so the tile rule can retune the gate
-    /// (规则书 基础规则 5: 「运营阶段及需[支付]或[消耗]资金且资金不足时可以
-    /// 选择抵押拥有的地契」). The default is the engine's standing gate.
-    fn why_not_deed_mortgage(
-        &self,
-        cx: &super::Cx,
-        player: usize,
-        tile: i32,
-        asking: bool,
-    ) -> Option<crate::msg::Msg> {
-        cx.why_not_mortgage(player, tile, asking)
-    }
-
-    /// Why `player` may not redeem `tile` right now, or `None`
-    /// (规则书 基础规则 6: 「运营阶段可赎回拥有的地契」).
-    fn why_not_deed_redeem(
-        &self,
-        cx: &super::Cx,
-        player: usize,
-        tile: i32,
-        asking: bool,
-    ) -> Option<crate::msg::Msg> {
-        cx.why_not_redeem(player, tile, asking)
-    }
-
     /// Run the tile rule's mortgage body (`On::Mortgage`) for `tile`.
     /// `reason`: 0 = player act, 1 = raise-funds, 2 = optional funding prompt.
     /// `true` when the deed went onto mortgage. The default is the engine's
-    /// standing `Cx::mortgage` (StubRules).
+    /// standing mortgage (StubRules).
+    ///
+    /// The mortgage **amount** is not a hook: [`super::play::purchase::mortgage_value`]
+    /// is the rulebook figure, and a retuned figure belongs on the tile rule
+    /// instance's props (`docs/TILES.md`).
     fn deed_mortgage(
         &self,
         cx: &mut super::Cx,
@@ -773,23 +730,22 @@ pub trait CardRules: Send + Sync {
         tile: usize,
         _reason: i32,
     ) -> super::Flow<bool> {
-        cx.mortgage(player, tile, None)
+        super::play::purchase::standalone_mortgage(cx, player, tile)
     }
 
     /// Run the tile rule's redeem body (`On::Redeem`) for `tile`.
-    /// The default is the engine's standing `Cx::redeem`.
+    /// The default is the engine's standing redeem. The redeem **charge** is
+    /// not a hook: [`super::play::purchase::redeem_cost`] is the rulebook
+    /// figure, and a retuned figure belongs on the tile rule instance's props
+    /// (`docs/TILES.md`).
     fn deed_redeem(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
-        if cx.why_not_redeem(player, tile as i32, false).is_some() {
-            return Ok(false);
-        }
-        cx.redeem(player, tile);
-        Ok(true)
+        super::play::purchase::standalone_redeem(cx, player, tile)
     }
 
     /// Run the tile rule's buy body (`On::Buy`) for `tile`.
     /// `kind` is the buy kind; `reason` is the source (0 = settle offer,
     /// 1 = card-driven, 2 = agent, 3 = acquire / auction). `true` when the
-    /// deed changed hands. The default is the engine's standing `Cx::buy`
+    /// deed changed hands. The default is the engine's standing buy
     /// (StubRules).
     fn deed_buy(
         &self,
@@ -799,13 +755,13 @@ pub trait CardRules: Send + Sync {
         kind: super::play::purchase::BuyKind,
         _reason: i32,
     ) -> super::Flow<bool> {
-        cx.buy(player, tile, kind)
+        super::play::purchase::standalone_buy(cx, player, tile, kind)
     }
 
     /// Run the tile rule's build body (`On::Build`) for `tile`.
-    /// The default is the engine's standing `Cx::build` (StubRules).
+    /// The default is the engine's standing build (StubRules).
     fn deed_build(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
-        cx.build(player, tile)
+        super::play::purchase::standalone_build(cx, player, tile)
     }
 }
 

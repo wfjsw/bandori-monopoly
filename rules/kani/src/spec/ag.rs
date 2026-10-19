@@ -82,6 +82,8 @@ pub fn half_speed_02_empty_dest_is_graveyard(dest: i32) -> bool {
 // ===========================================================================
 
 /// Round up to a multiple of 10 (the engine's end-of-calc money round).
+/// Positive-only twin of `play::ceil10_money`; distinct from
+/// `bandori_std::half_ceil10` (which takes a half already taken).
 pub fn round10(x: i32) -> i32 {
     if x <= 0 {
         return x;

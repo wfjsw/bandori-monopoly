@@ -10,12 +10,11 @@
 //! and 「基础[结算]规则」 item 5.1:
 //! > 升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得。
 //!
-//! These two figures are the **authority** the engine's mortgage / redeem
-//! charge and credit. The engine keeps a mechanical default
-//! (`purchase::mortgage_value` / `purchase::redeem_cost`, what `StubRules`
-//! runs) and asks [`crate::PROPERTY`]'s deed economics through
-//! `CardRules::deed_mortgage_value` / `deed_redeem_cost` when a ruleset is
-//! bound -- the same split as `buy_quote` (`docs/PURCHASE.md`).
+//! `bandori_std::{mortgage_value, redeem_cost}` owns the integer form. This
+//! module is the tile-facing alias those bodies call; the engine keeps its own
+//! copy of the same rulebook figure (`purchase::mortgage_value` /
+//! `purchase::redeem_cost`, what `StubRules` runs) pinned equal to
+//! `bandori_std` by a test.
 //!
 //! The upgrade-funding exclusion (「升级所[消耗]的资金不可通过[抵押]正在升级的
 //! 格子地契获得」) is enforced by the pay pipeline's optional-funding arm
@@ -33,16 +32,15 @@
 //! `offer_mortgage_funds` `exclude`.
 
 /// 规则书: 「抵押后[获得]地契购买价格50%的资金」.
-/// The land price only -- standing houses are not part of the mortgage payout.
+/// Delegates to [`bandori_std::mortgage_value`] (the integer form's owner).
 #[inline]
 pub fn mortgage_value(land_price: i32) -> i32 {
-    land_price / 2
+    bandori_std::mortgage_value(land_price)
 }
 
 /// 规则书: 「赎回后[消耗]地契购买价格60%的资金」.
-/// Integer form of `round_ties_even(price * 0.6)` (the product of an integer
-/// price and 0.6 never lands on `.5`, so this matches `DoRedeem`'s charge).
+/// Delegates to [`bandori_std::redeem_cost`] (the integer form's owner).
 #[inline]
 pub fn redeem_cost(land_price: i32) -> i32 {
-    (land_price * 3 + 2) / 5
+    bandori_std::redeem_cost(land_price)
 }

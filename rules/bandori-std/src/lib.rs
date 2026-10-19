@@ -366,7 +366,10 @@ pub fn skill_blocked(player_id: i32, group: &str) -> bool {
 // ------------------------------------------------------------- RiNG / rent / buy
 
 /// 规则书 基础规则 5: 「抵押后[获得]地契购买价格50%的资金」.
-/// Land price only. The authority is `rules/tiles/src/deed.rs`.
+/// Land price only -- standing houses are not part of the mortgage payout.
+/// This is the **rules-side** integer form; `rules/tiles/src/deed.rs` is the
+/// tile-facing alias and `purchase::mortgage_value` is the engine-side copy
+/// pinned equal to this by `game-rules`'s `deed_math` test.
 #[inline]
 pub fn mortgage_value(land_price: i32) -> i32 {
     land_price / 2
@@ -374,11 +377,24 @@ pub fn mortgage_value(land_price: i32) -> i32 {
 
 /// 规则书 基础规则 6: 「赎回后[消耗]地契购买价格60%的资金」.
 /// Integer form of `round_ties_even(price * 0.6)` (the product of an integer
-/// price and 0.6 never lands on `.5`, so this matches). The authority is
-/// `rules/tiles/src/deed.rs`.
+/// price and 0.6 never lands on `.5`, so this matches). This is the
+/// **rules-side** integer form; `rules/tiles/src/deed.rs` is the tile-facing
+/// alias and `purchase::redeem_cost` is the engine-side copy pinned equal to
+/// this by `game-rules`'s `deed_math` test.
 #[inline]
 pub fn redeem_cost(land_price: i32) -> i32 {
     (land_price * 3 + 2) / 5
+}
+
+/// 「向上取整10」 on a half charge: `ceil(full / 2 / 10) * 10`.
+/// Integer ceil-div (toward +inf), so this is `no_std`-clean. The half-rent
+/// rounding (「半价收费…向上取整10」). Engine-side twin is
+/// `purchase::half_ceil10`, pinned equal by `game-rules`'s `deed_math` test.
+#[inline]
+pub fn half_ceil10(full: i32) -> i32 {
+    let q = full.div_euclid(20);
+    let ceil = if full.rem_euclid(20) == 0 { q } else { q + 1 };
+    ceil * 10
 }
 
 /// The RiNG rent multiplier.
