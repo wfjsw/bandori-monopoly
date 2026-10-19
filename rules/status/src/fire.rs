@@ -175,6 +175,8 @@ pub fn end_overlay(player_id: i32) -> i32 {
 /// landed (actuals -- `Sumimi:一人两个甜甜圈` converts the rest to 500资金).
 ///
 /// Opens `markerGain` before the pots move (host verb, unchanged window).
+/// The window payload is the **requested** `n` (today's shape); the host
+/// clamps under the declared cap (I2) and returns the actual.
 pub fn gain(
     player_id: i32,
     n: i32,
@@ -183,36 +185,25 @@ pub fn gain(
     if n <= 0 {
         return Ok(0);
     }
-    // I2: never ask for more than the room under the declared cap. The host
-    // verb still opens `markerGain` with the requested figure and clamps, so
-    // the window payload matches today; the kernel's clamp is the policy.
-    let room = (max(player_id) - get(player_id)).max(0);
-    let want = n.min(room);
-    if want <= 0 {
-        // 「不能超过持有上限」: the effect applied and the cap refused it.
-        // Still narrate so the caller sees why nothing landed (matches the
-        // engine's `log.gain_charge_capped`).
-        if max(player_id) > 0 && get(player_id) >= max(player_id) {
-            ctx::log(
-                player_id,
-                &Msg::new("log.gain_charge_capped")
-                    .player_id("who", player_id)
-                    .msg("why", why)
-                    .i("charge", get(player_id) as i64)
-                    .i("max", max(player_id) as i64),
-            );
-        }
-        return Ok(0);
-    }
-    ruleset_core::ctx::gain_charge(player_id, want, why)
+    // I2 / 「不能超过持有上限」: the host verb clamps and returns actuals.
+    // Pass the requested `n` so `markerGain` sees today's payload; when the
+    // cap refuses everything the host still opens the window and logs
+    // `log.gain_charge_capped` (wasm_rules), matching today's shape.
+    ruleset_core::ctx::gain_charge(player_id, n, why)
 }
 
 /// Spend `n` pots. `ChargePaying` runs first (spend substitution), then
 /// `markerSpend` opens **before** the pots move; a cancelled window spends
 /// nothing. After a successful spend the engine raises `fireSpent`.
 ///
-/// Spend draws [`temp`] pots first (§10(2)), then the pool. Returns whether
-/// the full cost was paid.
+/// Spend draws [`temp`] pots first (§10(2): it is the over-cap allowance),
+/// then the pool. Returns whether the full cost was paid.
+///
+/// Note: `ChargePaying` / `markerSpend` / `fireSpent` ride the pool spend
+/// verb. A temp-only spend moves the temp counter (and logs) without those
+/// windows; temp pots are rare (lisa's 「可超过上限的临时火罐」) and their
+/// 600-cost provenance is still `TODO(规则书)`.
+/// TODO(规则书): open `fireSpent` on a temp-only spend too (「每当你消耗火罐时」).
 pub fn spend(
     player_id: i32,
     n: i32,

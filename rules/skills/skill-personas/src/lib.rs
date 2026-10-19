@@ -7,10 +7,11 @@
 //!
 //! The rule text lives in the roster character row (`skill` is the name, `text` /
 //! `simple` the wording); what is here is the behavior. A skill that mandates a
-//! fire-pot cap is the whole reason the keyed state carries bounds -- it writes
-//! `state::set_bounds(player_id, state_key::CHARGE, 0, 1)` and every card reads it
-//! back with `state::max(player_id, state_key::CHARGE)`. The engine holds the
-//! number and enforces nothing; see `game_core::state::StateVar`.
+//! fire-pot cap is the whole reason the keyed state carries bounds -- it
+//! declares them through the registry (`fire_pot(player)` →
+//! `rules_status::fire::declare_own`, which reads `fire_decl::FIRE_DECLS`) and
+//! every card reads them back with `rules_status::fire::{get, max}`. The
+//! engine holds the number and enforces nothing; see `game_core::state::StateVar`.
 //!
 //! # Hooks: use the two that exist
 //!
