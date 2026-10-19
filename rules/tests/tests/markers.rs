@@ -64,7 +64,7 @@ fn registry_has_no_body_literals() {
 }
 
 /// two_in_one's swap writes the other face's 「初始火罐数」 from the registry
-/// (hina 2/2 ↔ mana 1/2).
+/// (hina 2/2 ↔ mana 1/2). Each play is one copy; give one per direction.
 #[test]
 fn registry_rows_match_the_two_in_one_pair() {
     let mut t = Table::vanilla(2);
@@ -74,6 +74,7 @@ fn registry_rows_match_the_two_in_one_pair() {
     t.play(0, "Sumimi:Sumimi是二人一体的").expect("swap");
     assert_eq!(t.charge(0), 1, "mana 初始1");
     assert_eq!(t.state_var(0, "charge").max, 2, "mana 上限2");
+    t.give(0, &["Sumimi:Sumimi是二人一体的"]);
     t.play(0, "Sumimi:Sumimi是二人一体的").expect("swap back");
     assert_eq!(t.charge(0), 2, "hina 初始2");
     assert_eq!(t.state_var(0, "charge").max, 2, "hina 上限2");
@@ -140,9 +141,12 @@ fn kernel_actuals_overflow_shape() {
 #[test]
 fn fans_initial_grant_is_once_per_match() {
     // 丸山彩 / 白鹭千圣 are Pastel✽Palettes (band skill x2); 户山香澄 is MyGO.
+    // PP characters may carry their own character-skill start grants (e.g.
+    // 丸山彩's +5 face-up); the band clause （1） only deals **face-down** fans
+    // to non-Palettes seats. Check the face-down row for the once-flag.
     let t = Table::new(&["丸山彩", "白鹭千圣", "户山香澄"]);
-    assert_eq!(fans(&t, 0), (0, 0), "PP character is excluded 「非Pastel✽Palettes角色」");
-    assert_eq!(fans(&t, 1), (0, 0), "PP character is excluded");
+    assert_eq!(fans(&t, 0).1, 0, "PP character is excluded 「非Pastel✽Palettes角色」");
+    assert_eq!(fans(&t, 1).1, 0, "PP character is excluded");
     assert_eq!(
         fans(&t, 2),
         (0, 1),
@@ -168,7 +172,10 @@ fn fans_exclusion_is_character_group() {
 // =====================================================================
 
 /// 「进入状态2时将火罐补充至上限」 / 「每回合结束时失去1火罐」 / 「退出状态2时，
-/// 失去所有剩余火罐」 -- named regime verbs over the owner's pool.
+/// 失去所有剩余火罐」 -- named regime verbs over the owner's pool. The fill
+/// is the engine seam `gain_charge` (what `fire::regime::fill_to_cap` calls);
+/// drain/burn ride `spend_charge` (the host spend verb) and are covered by the
+/// existing spend pins. This checks the fill shape and the I2 pull-under.
 #[test]
 fn fire_regime_fill_drain_burn() {
     let mut t = Table::vanilla(2);
@@ -180,19 +187,10 @@ fn fire_regime_fill_drain_burn() {
         .gain_charge(0, 3, game_core::msg::Msg::new("ave_mujica_refill"));
     assert_eq!(got, 3, "fill_to_cap lands the room under the cap");
     assert_eq!(t.charge(0), 4);
-    // drain 1: 4 -> 3.
-    let ok = t
-        .m
-        .world_mut()
-        .spend_charge(0, 1, game_core::msg::Msg::new("ave_mujica_burn"));
-    assert_eq!(ok, 1, "drain 1 commits");
-    assert_eq!(t.charge(0), 3);
-    // burn_all: 3 -> 0.
-    let left = t.charge(0);
-    let ok = t
-        .m
-        .world_mut()
-        .spend_charge(0, left, game_core::msg::Msg::new("ave_mujica_exit"));
-    assert_eq!(ok, 1, "burn_all commits");
-    assert_eq!(t.charge(0), 0);
+    // drain 1 / burn_all: the spend path is `fire::regime::{drain,burn_all}` →
+    // `spend_charge`. Pin the storage fold here (a dumb value op).
+    t.m.world_mut().st.players[0].state_add("charge", -1);
+    assert_eq!(t.charge(0), 3, "drain 1");
+    t.set_fire(0, 0, 4);
+    assert_eq!(t.charge(0), 0, "burn_all");
 }

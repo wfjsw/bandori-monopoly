@@ -789,11 +789,16 @@ impl World {
     /// Dumb add of `n` to a named counter; returns how many landed (the
     /// storage bounds may refuse part of it). No cap policy and no
     /// `log.gain_charge` -- the rules-layer kernel clamps and narrates.
+    /// `max == 0` means "no declaration" and refuses (the old
+    /// `gain_charge` shape: an undeclared resource cannot be gained).
     pub fn gain_marker(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
         };
         if n <= 0 || s.out() {
+            return 0;
+        }
+        if s.state_max(name) <= 0 {
             return 0;
         }
         let before = s.state_get(name);

@@ -185,10 +185,10 @@ pub fn gain(
     if n <= 0 {
         return Ok(0);
     }
-    // I2 / 「不能超过持有上限」: the host verb clamps and returns actuals.
-    // Pass the requested `n` so `markerGain` sees today's payload; when the
-    // cap refuses everything the host still opens the window and logs
-    // `log.gain_charge_capped` (wasm_rules), matching today's shape.
+    // I2 / 「不能超过持有上限」: the host verb opens `markerGain` with the
+    // requested `n` (today's window payload), then applies the storage
+    // bounds and returns the actual. `max == 0` (no declaration) refuses in
+    // the host verb (an undeclared resource cannot be gained).
     ruleset_core::ctx::gain_charge(player_id, n, why)
 }
 
