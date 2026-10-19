@@ -174,6 +174,17 @@ impl NativeRulesHandle {
                         .collect(),
                     board_role: card.board_role.to_string(),
                     governs: card.governs.iter().map(|k| (*k).to_string()).collect(),
+                    gate_msgs: card
+                        .gate_msgs
+                        .iter()
+                        .map(|(k, v)| (*k, (*v).to_string()))
+                        .collect(),
+                    gate_skip_msgs: card
+                        .gate_skip_msgs
+                        .iter()
+                        .map(|(k, v)| (*k, (*v).to_string()))
+                        .collect(),
+                    exemption_prop: card.exemption_prop.to_string(),
                 });
             }
         }

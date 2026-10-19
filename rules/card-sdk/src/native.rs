@@ -35,7 +35,7 @@ use std::vec::Vec;
 
 #[cfg(kani)]
 mod arena {
-    /// Nested card calls (settle chains) stay well inside this.
+    /// Nested card calls (settle chains) remain well inside this.
     pub const MAX_FRAMES: usize = 8;
     /// Out-buffers per call. `cards_in` / `tiles_named` / mark scans use 1–3.
     pub const MAX_SLOTS: usize = 8;
@@ -236,7 +236,7 @@ pub fn intern(bytes: &[u8]) -> (i32, i32) {
         // `enter`/`exit` (a per-frame index went stale and `read` padded NULs).
         let frame = &mut stack[0];
         frame.push(bytes.to_vec());
-        // 1-based handle: 0 stays the wasm-style null / length-only probe.
+        // 1-based handle: 0 remains the wasm-style null / length-only probe.
         (frame.len() as i32, bytes.len() as i32)
     })
 }

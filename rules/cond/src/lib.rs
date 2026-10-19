@@ -48,7 +48,7 @@ pub mod schema;
 pub use compile::Cond;
 #[cfg(feature = "compile")]
 pub use compile::compile;
-pub use ctx::{CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx};
+pub use ctx::{fill_named_layers, CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx};
 pub use eval::{EvalError, WindowScope};
 pub use kinds::{constants as kind_constants, mv, trig};
 

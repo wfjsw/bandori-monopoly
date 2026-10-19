@@ -195,7 +195,7 @@ fn dummy_store_is_shareable_across_handles() {
 // ---------------------------------------------------------------- redis live
 
 /// The same primitives against a real Redis, when one can be started. Skipped
-/// (loudly) when `redis-server` is not on the PATH -- the Redis impl then stays
+/// (loudly) when `redis-server` is not on the PATH -- the Redis impl then remains
 /// untested live and only its code shape is reviewed.
 #[test]
 fn redis_live_primitives() {

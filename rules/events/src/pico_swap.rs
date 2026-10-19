@@ -5,7 +5,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::state_key;
+use bandori_std::state_key;
 use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
 

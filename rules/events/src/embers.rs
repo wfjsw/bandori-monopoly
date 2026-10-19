@@ -3,7 +3,7 @@
 //! 事件文本（`CardMeta` beside the rule body, id `火种燃尽之后会怎么样呢？`）:
 //! > （1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。
 
-use card_sdk::abi::{state_key, AbKind, ActionKind, MarkFilter, TriggerKind};
+use bandori_std::state_key; use card_sdk::abi::{AbKind, ActionKind, MarkFilter, TriggerKind};
 use bandori_std::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 

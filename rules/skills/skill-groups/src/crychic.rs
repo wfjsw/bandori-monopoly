@@ -13,7 +13,7 @@
 //! can be played from hand. （2） is the hand-emptying reshuffle that turns the
 //! player into a MyGO or Ave Mujica player. （3） is a crystal on a 4→5 crossing.
 
-use card_sdk::abi::{state_key, CardPile, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{CardPile, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

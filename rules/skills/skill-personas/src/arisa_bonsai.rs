@@ -10,7 +10,7 @@
 //! event draw there; (2) is this player's own pass that did not end there; (3)
 //! is a press on passing it.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

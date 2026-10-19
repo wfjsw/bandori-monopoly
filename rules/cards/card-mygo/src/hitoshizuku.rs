@@ -9,14 +9,15 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{prop, state_key};
+use bandori_std::state_key; use card_sdk::abi::prop;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", "", None, hitoshizuku)])
     // 规则书: 「（此卡可在眩晕时打出）」 -- the `playableStunned` property
     // (C# `Card.PlayableStunned`), skips the stun gate. The exile and no-hand
-    // gates have no such exception.
-    .props(&[(prop::PLAYABLE_STUNNED, 1), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+    // gates have no such exception. The prop name is ruleset vocabulary
+    // (`bandori_std::prop`); the engine reads it as data.
+    .props(&[(bandori_std::prop::PLAYABLE_STUNNED, 1), (prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"壱雫空"#)
         .raw_name(r#"壱雫空"#)
         .tags(&[])

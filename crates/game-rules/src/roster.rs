@@ -23,7 +23,7 @@ pub fn decode_metadata(bytes: &[u8]) -> Result<MetaDoc, String> {
 /// Events ride `kind = "event"` (`rules_events::meta_rows`, bare ids). A
 /// `kind = "card"` row whose id carries the `event:` rule-id prefix is the
 /// same prose exported twice (`CardMeta::to_row` always tags `"card"`); those
-/// duplicates are dropped so `Roster::cards` stays the physical deck pool.
+/// duplicates are dropped so `Roster::cards` remains the physical deck pool.
 pub fn roster_from_meta(doc: &MetaDoc) -> Roster {
     let mut cards = Vec::new();
     let mut personas = Vec::new();

@@ -8,7 +8,7 @@
 //! option cycling 1000 / 1500 / 2000 by how many times the money option has been
 //! taken -- a counter this skill owns, not the board's.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

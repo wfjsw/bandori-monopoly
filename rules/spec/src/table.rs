@@ -626,14 +626,14 @@ impl Table {
             p.pos = 0;
             // Keep bound skills only.
             p.field.retain(|f| f.card.starts_with("skill:"));
-            for k in [key::STAY, key::STUN, key::STUN_START, key::EXILE, key::NO_HAND] {
+            for k in [bandori_std::state_key::STAY, bandori_std::state_key::STUN, bandori_std::state_key::STUN_START, bandori_std::state_key::EXILE, bandori_std::state_key::NO_HAND] {
                 p.state.remove(k);
             }
             for f in p.field.iter_mut() {
                 f.props.remove(prop::NO_REWARD);
             }
-            p.state_set(key::EXILE_TO, -1);
-            p.state_set(key::CHARGE, 0);
+            p.state_set(bandori_std::state_key::EXILE_TO, -1);
+            p.state_set(bandori_std::state_key::CHARGE, 0);
             // Fans live in the state dict (`ppFansUp` / `ppFansDown`), owned
             // by the `mark:pp_fans` host. Clear the once-flag too.
             p.state_set("ppFansUp", 0);
@@ -704,8 +704,35 @@ impl Table {
         self.m.world_mut().hidden[who].discard = cards.iter().map(|s| s.to_string()).collect();
     }
 
+    /// Write a per-player state key. For the status layer counters this also
+    /// stamps the flags / wear-off the grant verbs declare (the engine no
+    /// longer guesses expiry from the key).
     pub fn set_state(&mut self, who: usize, key: &str, value: i32) {
-        self.m.world_mut().st.players[who].state_set(key, value);
+        let p = who as i32;
+        let w = self.m.world_mut();
+        use game_core::state::{state_flag, Tick};
+        let (flags, tick): (u8, Option<Tick>) = match key {
+            k if k == bandori_std::state_key::STAY || k == bandori_std::state_key::STUN => {
+                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnEnd))
+            }
+            k if k == bandori_std::state_key::STUN_START => {
+                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnStart))
+            }
+            k if k == bandori_std::state_key::EXILE => {
+                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnStart))
+            }
+            k if k == bandori_std::state_key::NO_HAND || k == bandori_std::state_key::UNSTOPPABLE => {
+                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, None)
+            }
+            _ => (0, None),
+        };
+        if flags != 0 {
+            w.state_set_flags(p, key, flags);
+        }
+        w.state_set(p, key, value);
+        if let Some(t) = tick {
+            w.state_set_expires(p, key, Some(t));
+        }
     }
 
     pub fn set_state_var(&mut self, who: usize, key: &str, v: StateVar) {
@@ -715,9 +742,9 @@ impl Table {
     /// Fire pots: `value` held, `max` cap.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
         let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(key::CHARGE, value);
-        let min = p.state_min(key::CHARGE);
-        p.state_set_bounds(key::CHARGE, min, max);
+        p.state_set(bandori_std::state_key::CHARGE, value);
+        let min = p.state_min(bandori_std::state_key::CHARGE);
+        p.state_set_bounds(bandori_std::state_key::CHARGE, min, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -934,7 +961,7 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, key::CHARGE)
+        self.state(who, bandori_std::state_key::CHARGE)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

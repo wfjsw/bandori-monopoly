@@ -1,8 +1,8 @@
 //! Whole-[`World`] snapshot and diff, plus a frame condition.
 //!
-//! Generalised from `crates/game-rules/tests/q4/snap.rs` (which stays
+//! Generalised from `crates/game-rules/tests/q4/snap.rs` (which remains
 //! untouched): the footprints `surface_of` mapping is game-specific and does
-//! not live here. What stays is the stable `path -> value` view of every
+//! not live here. What remains is the stable `path -> value` view of every
 //! observable world field, the bookkeeping filter, and [`frame`].
 //!
 //! Black-box: only `game_core`'s public `World` is read.
@@ -244,12 +244,10 @@ pub fn is_bookkeeping(path: &str) -> bool {
 /// A status item losing one layer to the engine's own turn-boundary tick.
 /// Snapshots store `value|min|max|expires`, so the tick is visible as the
 /// value dropping and `expires` flipping to `Some(TurnEnd)` / `Some(TurnStart)`.
+/// Any timed counter whose value dropped is a tick; the engine names none of
+/// the keys.
 pub fn is_engine_tick(path: &str, before: &str, after: &str) -> bool {
     if !path.starts_with("state:P") {
-        return false;
-    }
-    let key = path.split(':').nth(2).unwrap_or("");
-    if !matches!(key, "stay" | "stun" | "stunStart" | "exile") {
         return false;
     }
     let parse = |s: &str| -> Option<(i32, bool)> {

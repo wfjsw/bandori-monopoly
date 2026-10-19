@@ -119,14 +119,14 @@ mod opt_i32_neg1 {
     }
 }
 
-/// One player's turn-start snapshot: the status a turn-end undo restores to.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+/// One player's turn-start snapshot: the starting square plus a copy of the
+/// whole keyed state map. The guest picks which keys to restore; the engine
+/// names none of them.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TurnSnap {
     pub pos: i32,
-    pub stay: i32,
-    pub stun: i32,
-    pub exile: i32,
+    pub state: std::collections::BTreeMap<String, i32>,
 }
 
 /// Per-turn bookkeeping the shell uses.
@@ -194,7 +194,7 @@ pub struct TurnCtx {
     /// since reached.
     #[serde(default)]
     pub turn_start_pos: Vec<i32>,
-    /// Each player's pos / stay / stun / exile when the turn started.
+    /// Each player's pos / the layer counters when the turn started.
     /// 「回到起始地点并取消所有受到的效果」 restores from here.
     #[serde(default)]
     pub turn_snap: Vec<TurnSnap>,
@@ -662,7 +662,7 @@ pub struct World {
     /// Stamped on first creation from the creating run's `current_card`.
     /// Bankruptcy of the owning rule's player removes every copy of the
     /// marker, wherever it sits (`remove_from_game`). Neutral board marks
-    /// ([tile marks], `owner == -1`) have no player-owned rule and stay.
+    /// ([tile marks], `owner == -1`) have no player-owned rule and remain.
     #[serde(default)]
     pub marker_owner: std::collections::BTreeMap<String, String>,
     /// Pending walk segments + flush pacing (see [`WalkSeg`]). Transient: not
@@ -861,14 +861,14 @@ impl World {
     /// when it is a main move's un-published head (the dice-only `roll` on the
     /// very first `passBefore` -- the client must see the dice before the card
     /// that reacted to them). A non-main segment with no steps says nothing
-    /// and stays pending, so its head line lands with the first real step.
+    /// and remains pending, so its head line lands with the first real step.
     pub fn flush_walk(&mut self) {
         if self.walk_flush.flushing {
             return;
         }
         self.walk_flush.flushing = true;
         // Snapshot what to publish (and reset the slots) before logging:
-        // `log` takes `&mut self`, so the stack cannot stay borrowed.
+        // `log` takes `&mut self`, so the stack cannot remain borrowed.
         let mut pending = Vec::new();
         for seg in self.walk_flush.stack.iter_mut() {
             if seg.value == 0 && !(seg.pending_first && seg.main) {

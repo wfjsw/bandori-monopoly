@@ -32,12 +32,12 @@ pub const CLAUSES: &[Clause] = &[
 // shared helpers (local to this file; the kit has no status vocabulary)
 // ---------------------------------------------------------------------------
 
-const STAY: &str = game_core::state::key::STAY;
-const STUN: &str = game_core::state::key::STUN;
-const STUN_START: &str = game_core::state::key::STUN_START;
-const EXILE: &str = game_core::state::key::EXILE;
-const EXILE_TO: &str = game_core::state::key::EXILE_TO;
-const UNSTOPPABLE: &str = game_core::state::key::UNSTOPPABLE;
+const STAY: &str = bandori_std::state_key::STAY;
+const STUN: &str = bandori_std::state_key::STUN;
+const STUN_START: &str = bandori_std::state_key::STUN_START;
+const EXILE: &str = bandori_std::state_key::EXILE;
+const EXILE_TO: &str = bandori_std::state_key::EXILE_TO;
+const UNSTOPPABLE: &str = bandori_std::state_key::UNSTOPPABLE;
 
 fn layers(w: &game_core::engine::World, i: usize, key: &str) -> i32 {
     w.st.players.get(i).map(|p| p.state_get(key)).unwrap_or(0)

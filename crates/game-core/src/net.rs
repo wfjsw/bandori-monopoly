@@ -57,7 +57,7 @@ pub struct NetMessage {
     pub act: String,
     /// Console operation: money / tp / give / draw / state. Read by
     /// `engine/debug.rs`, which is compiled only under `cfg(debug_assertions)`;
-    /// the field itself stays on every build so a record's `Input::Act` shape
+    /// the field itself remains on every build so a record's `Input::Act` shape
     /// does not depend on the profile.
     pub debug: String,
     /// `ban` / `pick` / `preselect`: the persona id.

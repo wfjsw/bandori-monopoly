@@ -60,7 +60,7 @@ thread_local! {
     /// sha256 of this build's `glue.js` + `glue_bg.wasm` (hex), pushed by
     /// [`set_glue_sha`] from `webui/src/wasm/engine_id.json`. The last input
     /// of the engine-bundle id (`game_core::record::bundle_id`); empty means
-    /// "no bundle identity" and the stamp's `bundle` stays empty.
+    /// "no bundle identity" and the stamp's `bundle` remains empty.
     static GLUE_SHA: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
@@ -670,8 +670,8 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
 /// * data already loaded: **rebuild** `GameData` from the kept payload plus
 ///   this set's roster (replacing any empty-roster stand-in) and bind
 ///   [`WasmRules`] to it;
-/// * data not loaded yet: keep the set unbound (`RULES` stays empty /
-///   `StubRules`, stamp stays `"stub"` until a later [`load_data`] binds).
+/// * data not loaded yet: keep the set unbound (`RULES` remains empty /
+///   `StubRules`, stamp remains `"stub"` until a later [`load_data`] binds).
 #[wasm_bindgen]
 pub fn ruleset_build() -> Result<usize, JsError> {
     let built = PENDING

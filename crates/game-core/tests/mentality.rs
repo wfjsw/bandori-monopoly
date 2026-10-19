@@ -1,5 +1,5 @@
 //! Bot mentality: standard is the standard policy (`docs/BOT.md`), chaos is
-//! legal but maximally disruptive. Both must stay deterministic (same seed,
+//! legal but maximally disruptive. Both must remain deterministic (same seed,
 //! same game).
 
 use std::sync::{Arc, Mutex};

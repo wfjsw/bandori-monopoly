@@ -150,9 +150,9 @@ pub enum Op {
     raise = 134,
     // 135/136 retired (charge / charge_max named readers; use state_get).
     gain_marker = 137,
-    apply_abnormal = 138,
-    // 139 retired (stun grant).
-    // 140 was the exile grant; apply_abnormal lives at 138.
+    // 138 retired (kind-parameterized grant verb).
+    // 139 retired (second abnormal-kind grant).
+    // 140 was the third abnormal-kind grant.
     give_extra_turn = 141,
     can_pay = 142,
     cant_move = 143,
@@ -347,10 +347,13 @@ pub enum Op {
     end_turn_now = 327,
     teleport_as = 328,
     log_as = 329,
-    // v88: generic marker cap + stay move-latch verbs.
+    // v88: generic marker cap + move-latch verbs.
     add_marker_max = 330,
     skip_main_move = 331,
     clear_move_skip = 332,
+    // v89: state flag word + post-commit raise with opaque wire name.
+    state_set_flags = 333,
+    raise_after = 334,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

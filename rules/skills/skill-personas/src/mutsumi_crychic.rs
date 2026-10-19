@@ -15,7 +15,7 @@
 //! axis is `skillState`, and 「只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」
 //! carves a class of crystal gains the engine does not tag.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

@@ -197,10 +197,10 @@ const ORDER_WAIT: f32 = 4.0;
 /// Turn-clock defaults. `BASE_TIME` is gone as a reset-to value: the per-turn
 /// base refill is [`crate::clock::ClockSettings::base_refill`] (the
 /// `turnBaseTime` hook's default), and the bonus cap is
-/// [`crate::clock::ClockSettings::bonus_max`]. [`BONUS_REFILL`] stays the
+/// [`crate::clock::ClockSettings::bonus_max`]. [`BONUS_REFILL`] remains the
 /// `turnBonusTime` hook default -- it is a hook seed, not a pool knob.
 const BONUS_REFILL: f32 = 10.0;
-/// Hard cap on how long the acting seat's clock may stay held waiting for
+/// Hard cap on how long the acting seat's clock may remain held waiting for
 /// that seat's `anim_done` ack, in seconds. Fed by ticks (never wall time).
 const ANIM_HOLD_CAP: f32 = 10.0;
 /// End-match vote duration and cool-down after a failed vote.
@@ -512,7 +512,7 @@ impl Match {
     /// Force the tile table for this match (from [`crate::record::MatchSetup::board`]
     /// or a host that wants a non-default board). Replaces `data.tiles` on a
     /// private copy of the shared [`GameData`] and records the table on the
-    /// world so `save()` / restore stay self-contained.
+    /// world so `save()` / restore remain self-contained.
     pub fn set_board(&mut self, board: Vec<crate::data::TileData>) {
         let mut d = (*self.data).clone();
         d.tiles = board.clone();
@@ -633,7 +633,7 @@ impl Match {
 
     /// Shared body of [`Match::new`] / [`Match::new_seeded`]: `match_id` is
     /// already derived from the caller's seed, and the two streams arrive
-    /// fully built so the seeding recipe stays in exactly one place per
+    /// fully built so the seeding recipe remains in exactly one place per
     /// algorithm.
     fn build(
         data: Arc<GameData>,
@@ -650,14 +650,14 @@ impl Match {
         let members = &members[..members.len().min(10)];
         // G-FLOW-12 / G-FLOW-14: the book seats 娱乐 at 3-10 and 正规 at 5-6.
         // `MatchMode::check_seats` is the bound; the lobby (web-glue) is the
-        // refusal point. `Match::new` stays a harness constructor so unit
+        // refusal point. `Match::new` remains a harness constructor so unit
         // tests and the sim can hand-build small tables. Solo is unbounded.
         let w = weights.sanitized(ScoreWeights::default());
         // Solo with a persona already on every seat (the solo setup screen's
         // picks, its randoms resolved before the match is built) skips the
         // timed ban / pick entirely and opens the deck phase instead. Online
         // never takes this path: there `RoomMember::persona` is the lobby
-        // avatar, not a match pick, and the pick phase must stay. An unknown
+        // avatar, not a match pick, and the pick phase must remain. An unknown
         // or duplicated pick is not a preset -- fall through to the pick phase.
         let preset = mode == MatchMode::Solo
             && !members.is_empty()
@@ -682,7 +682,7 @@ impl Match {
                     // driven by an external search -- the server's `bot-service`
                     // (`docs/BOT.md` B5) online, the browser worker pool
                     // (`docs/BOT.md` B6) in Solo -- and starts held. Setup
-                    // (ban / pick / deck) stays engine-side
+                    // (ban / pick / deck) remains engine-side
                     // (`MatchPlayer::auto_setup`). An online room with no
                     // service attached rewrites the mentality to Standard
                     // before `new_match`; Solo's driver answers through the
@@ -817,8 +817,9 @@ impl Match {
             // `why_not_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
-            // it used to be re-derived from stay / exile, which disagrees with
-            // the gate (unstoppable, mid-turn stay, a exile granted this
+            // it used to be re-derived from the timed / off-board layers, which
+            // disagrees with the gate (a latch that ignores layer expiry, a
+            // mid-turn timed layer, an off-board grant this
             // turn by MyGO:无路矢): a policy that trusted it sent `end` into
             // `err.roll_first` forever.
             {
@@ -1526,7 +1527,7 @@ impl Match {
                 // snapshot and would drop the pre-prompt pass's flash events.
                 // `FlashState::saved` carries every flash already posted;
                 // re-insert any missing from the tail (renumbered) so a flash
-                // shown before the prompt stays shown and is not replayed.
+                // shown before the prompt remains shown and is not replayed.
                 if !answers.is_empty() {
                     let saved = w.flash.lock().saved.clone();
                     for e in saved {
@@ -2001,7 +2002,7 @@ impl Match {
                 }
                 // Drain order is **bonus first, then base** (`docs/SERVER.md`
                 // §Turn clock). Legacy matches keep the old base-first order so
-                // a pre-settings recording's countdowns stay identical.
+                // a pre-settings recording's countdowns remain identical.
                 if self.world.legacy_clock {
                     if self.base_time[turn] > 0.0 {
                         self.base_time[turn] = (self.base_time[turn] - dt).max(0.0);
@@ -2032,7 +2033,7 @@ impl Match {
     ///
     /// Under the post-settings clock an ordinary prompt (`use_pool`) draws on
     /// each pending **human** seat's own pool (bonus then base). `Live::time_left`
-    /// stays the soft window bots schedule against and the all-bot fallback
+    /// remains the soft window bots schedule against and the all-bot fallback
     /// deadline; a human is no longer force-completed just because that window
     /// closed if their pool still has time. Bankruptcy leftover auctions
     /// (`use_pool = false`) and every pre-settings (`legacy_clock`) prompt keep
@@ -2065,7 +2066,7 @@ impl Match {
             .collect();
         // Standard's bid step / nudge read the seat's `StrategyParams`
         // (`docs/BOT.md` §3.8). Chaos keeps the literals. Resolved up front so
-        // the `live` / `live_rng` borrows below stay disjoint.
+        // the `live` / `live_rng` borrows below remain disjoint.
         let strat: Vec<crate::strategy::StrategyParams> = players
             .iter()
             .map(|&s| {
@@ -2813,9 +2814,9 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
                 return Some(Msg::new("err.no_roll_now"));
             }
             if st.skip_move && st.turn == i as i32 {
-                return Some(Msg::new("err.roll_stay"));
+                return Some(cx.rules.gate_refusal_msg(Gate::Move, i));
             }
-            // The turn's main move is already spent (an `exileMain` expiry
+            // The turn's main move is already spent (an off-board main-move expiry
             // teleport, or a `card_move` that ran it early): 「一回合只能触发
             // 一次［主要移动］效果,多次触发［主要移动］时无效」. Refuse the roll
             // and let `end` through below.
@@ -2838,22 +2839,18 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if m.card.is_empty() {
                 return Some(Msg::new("err.skill_unknown"));
             }
-            // stun 「无法使用[主动]技能」 / exile 「玩家技能…停止生效」 close the
-            // status act gate. A card that prints 「可在眩晕时打出」
-            // (`prop::PLAYABLE_STUNNED`) is the one stun exception; exile has
-            // none. Mirrors `cannot_play` for hand plays.
-            let stun_ok = cx
-                .rules
-                .card_prop(&m.card, crate::state::prop::PLAYABLE_STUNNED)
-                != 0;
-            let gates = st.players[i].status_gates();
-            if !gates.on_board {
-                return Some(Msg::new("err.play_exiled"));
+            // The ruleset's act / on-board gates. A card the ruleset exempts
+            // from the act gate (`exemption_prop`) skips that one check.
+            // Mirrors `cannot_play` for hand plays.
+            if !cx.w.gate_open(cx.rules, Gate::OnBoard, i) {
+                return Some(cx.rules.gate_refusal_msg(Gate::OnBoard, i));
             }
-            if !cx.w.gate_open(cx.rules, Gate::Act, i) && !stun_ok {
-                return Some(Msg::new("err.play_stunned"));
+            if !cx.w.gate_open(cx.rules, Gate::Act, i)
+                && !cx.rules.card_act_exemption(&m.card)
+            {
+                return Some(cx.rules.gate_refusal_msg(Gate::Act, i));
             }
-            // The rule's own gate (`On::Play`'s), so the cost check stays in the
+            // The rule's own gate (`On::Play`'s), so the cost check remains in the
             // rule body where the 规则书 clause lives.
             cx.rules_cant_play(i, &m.card)
         }

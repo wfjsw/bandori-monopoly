@@ -15,7 +15,7 @@
 //!    the [`Simulator`] trait; [`MatchSim`] is the driver over the public
 //!    [`Match`] API.
 //!
-//! Advisory only: the sandboxed engine stays authoritative (§1). Search uses
+//! Advisory only: the sandboxed engine remains authoritative (§1). Search uses
 //! its own RNG ([`DeterminizerRng`], seeded per decision) and only ever works
 //! on forks.
 

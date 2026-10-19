@@ -18,7 +18,7 @@
 //! reads. 「主动移动经过任何玩家都将向其收取200资金」 is `PassPlayer`, and
 //! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
 
-use card_sdk::abi::{state_key, FilterValue, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -100,6 +100,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         crate::fire_pot(player_id);
         // 「获得[不可阻挡]」
         state::set(player_id, state_key::UNSTOPPABLE, 1);
+        bandori_std::status::declare_companion(player_id, state_key::UNSTOPPABLE);
         return Ok(());
     }
     // 「可在你的下回合开始时进入状态2」 -- `state2_or_clean` already promised

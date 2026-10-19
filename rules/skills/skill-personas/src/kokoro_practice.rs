@@ -17,7 +17,7 @@
 //! （3） has three parts: a pot on ending on a RiNG, losing them all off a RiNG,
 //! and a forced stop bought with a pot when someone passes you.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

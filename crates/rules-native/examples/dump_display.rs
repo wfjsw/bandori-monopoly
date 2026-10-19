@@ -144,7 +144,7 @@ fn counter_reason(card: &card_sdk::CardDef) -> String {
 
 /// Every event card, keyed by the **bare** event id (`对邦`, matching
 /// `data`'s `EventData::id` / `display.json`). `derived` is engine data and
-/// stays out.
+/// remains out.
 fn events_map() -> JsonMap {
     let mut map = JsonMap::new();
     for card in rules_events::CARDS {

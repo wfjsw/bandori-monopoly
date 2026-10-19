@@ -1,13 +1,11 @@
 //! The CEL-only gates' window (`docs/STATUS-HOSTS.md` / `docs/GUARDS.md`):
 //! the cheapest possible CEL window for the `ActGate` / `PayGate` / `MoveGate`
-//! / `ExclusiveUse` conditions.
+//! / `OnBoardGate` / `TargetableGate` / `ExclusiveUse` / `PlayGate` conditions.
 //!
-//! Status-gate conditions read only per-seat status layers via
-//! `state(p, 'key')` (`state(actor,'stay')`, `state(actor,'stun') +
-//! state(actor,'stunStart')`, `state(actor,'exile')`,
-//! `state(actor,'unstoppable')`), so that window is `actor` plus one
-//! [`PlayerSnap`] per seat -- no tile tables. Built per read (the view, a
-//! rollout's `can_pay`), so it must stay O(players).
+//! Gate conditions read per-seat keyed state via `state(p, 'key')`, so that
+//! window is `actor` plus one [`PlayerSnap`] per seat -- no tile tables. Built
+//! per read (the view, a rollout's `can_pay`), so it must remain O(players).
+//! The whole state map is copied in; the CEL names live in `rules/cond`.
 //!
 //! [`ExclusiveUse`] additionally carries the questioned exclusive: the card id
 //! hash in `trigger_card`, the card's `owner` persona name in `name`
@@ -20,7 +18,6 @@ use rules_cond::{id_of, PlayerSnap, WindowCtx};
 
 use game_core::data::GameData;
 use game_core::engine::{ExclusiveAsk, Gate, World};
-use game_core::state::key;
 
 use crate::world::CardWorld;
 use crate::TriggerKind;
@@ -31,22 +28,21 @@ pub fn kind_of(gate: Gate) -> TriggerKind {
         Gate::Act => TriggerKind::ActGate,
         Gate::Pay => TriggerKind::PayGate,
         Gate::Move => TriggerKind::MoveGate,
+        Gate::OnBoard => TriggerKind::OnBoardGate,
+        Gate::Targetable => TriggerKind::TargetableGate,
         Gate::Exclusive => TriggerKind::ExclusiveUse,
         Gate::Play => TriggerKind::PlayGate,
     }
 }
 
-/// One seat's status layers, however the caller reads them.
-#[derive(Clone, Copy, Debug, Default)]
+/// One seat's snapshot for a gate window.
+#[derive(Clone, Debug, Default)]
 pub struct Layers {
     pub out: bool,
-    pub stay: i32,
-    pub stun: i32,
-    pub stun_start: i32,
-    pub exile: i32,
-    pub unstoppable: i32,
+    /// Whole keyed state map (opaque names).
+    pub state: std::collections::BTreeMap<String, i64>,
     /// Hand size (for a standing play lock like CRYCHIC's 「大于等于6」).
-    pub hand: i32,
+    pub hand: i64,
 }
 
 fn window(actor: i32, seats: impl Iterator<Item = Layers>) -> WindowCtx {
@@ -57,33 +53,14 @@ fn window(actor: i32, seats: impl Iterator<Item = Layers>) -> WindowCtx {
         by: -1,
         players: seats
             .map(|l| {
-                let mut state = std::collections::BTreeMap::new();
-                if l.stay != 0 {
-                    state.insert(key::STAY.to_string(), l.stay as i64);
-                }
-                if l.stun != 0 {
-                    state.insert(key::STUN.to_string(), l.stun as i64);
-                }
-                if l.stun_start != 0 {
-                    state.insert(key::STUN_START.to_string(), l.stun_start as i64);
-                }
-                if l.exile != 0 {
-                    state.insert(key::EXILE.to_string(), l.exile as i64);
-                }
-                if l.unstoppable != 0 {
-                    state.insert(key::UNSTOPPABLE.to_string(), l.unstoppable as i64);
-                }
-                PlayerSnap {
+                let mut p = PlayerSnap {
                     out: l.out as i64,
-                    stay: l.stay as i64,
-                    stun: l.stun as i64,
-                    exile: l.exile as i64,
-                    // `hand(p)` for a standing hand-size play lock
-                    // (CRYCHIC 「手牌数大于等于6时…无法从手中打出任何牌」).
-                    hand: l.hand as i64,
-                    state,
+                    hand: l.hand,
+                    state: l.state,
                     ..PlayerSnap::default()
-                }
+                };
+                rules_cond::fill_named_layers(&mut p);
+                p
             })
             .collect(),
         ..WindowCtx::default()
@@ -96,13 +73,13 @@ pub fn window_of_world(w: &World, actor: usize) -> WindowCtx {
         actor as i32,
         w.st.players.iter().enumerate().map(|(i, p)| Layers {
             out: p.out(),
-            stay: p.state_get(key::STAY),
-            stun: p.state_get(key::STUN),
-            stun_start: p.state_get(key::STUN_START),
-            exile: p.state_get(key::EXILE),
-            unstoppable: p.state_get(key::UNSTOPPABLE),
+            state: p
+                .state
+                .iter()
+                .map(|(k, v)| (k.clone(), i64::from(v.value)))
+                .collect(),
             // Real hand pile, not the (often stale) `MatchPlayer::hand` size.
-            hand: w.hidden.get(i).map(|h| h.hand.len() as i32).unwrap_or(0),
+            hand: w.hidden.get(i).map(|h| h.hand.len() as i64).unwrap_or(0),
         }),
     )
 }
@@ -111,19 +88,22 @@ pub fn window_of_world(w: &World, actor: usize) -> WindowCtx {
 pub fn window_of_card_world<W: CardWorld>(w: &W, actor: i32) -> WindowCtx {
     window(
         actor,
-        (0..w.player_count()).map(|p| Layers {
-            out: w.player_out(p) != 0,
-            stay: w.state_get(p, key::STAY),
-            stun: w.state_get(p, key::STUN),
-            stun_start: w.state_get(p, key::STUN_START),
-            exile: w.state_get(p, key::EXILE),
-            unstoppable: w.state_get(p, key::UNSTOPPABLE),
-            hand: w.hand_size(p),
+        (0..w.player_count()).map(|p| {
+            let mut state = std::collections::BTreeMap::new();
+            // Copy every key the guest exposes; missing keys answer 0 later.
+            for (k, v) in w.state_pairs(p) {
+                state.insert(k, i64::from(v));
+            }
+            Layers {
+                out: w.player_out(p) != 0,
+                state,
+                hand: w.hand_size(p) as i64,
+            }
         }),
     )
 }
 
-/// The [`Gate::Exclusive`] window: status layers **plus** the questioned
+/// The [`Gate::Exclusive`] window: keyed state **plus** the questioned
 /// exclusive and each seat's `persona` / `group` identity hashes (so
 /// `group_is(actor, 'CRYCHIC')` reads the persona row's group -- the stable
 /// spelling, not the currently attached group-skill id).

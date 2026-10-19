@@ -4,7 +4,7 @@
 //! Buy / build are no longer END-step turn acts. They happen only by answering
 //! a settle Ask (`ctx::offer_buy` / `ctx::offer_build` → `Action::Offer` →
 //! `act:"answer"`). These tests pin that split: the END surface is decline /
-//! end only, and settle buy / build prompts stay on the prompt-answer path.
+//! end only, and settle buy / build prompts remain on the prompt-answer path.
 
 use std::sync::Arc;
 
@@ -235,7 +235,7 @@ fn settle_buy_is_always_optional_so_no_forced_mortgage_to_buy() {
     let acts = action::legal_actions(&data, &st, &[], &[], 1);
     assert!(
         acts.contains(&Action::Offer { index: 1 }),
-        "the no-buy fallback must stay on the menu: {:?}",
+        "the no-buy fallback must remain on the menu: {:?}",
         acts
     );
     let trivial = action::trivial_decision(&acts);

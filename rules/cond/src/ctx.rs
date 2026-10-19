@@ -58,6 +58,17 @@ pub struct PlayerSnap {
     pub targeted: i64,
 }
 
+/// Fill the named layer fields from [`PlayerSnap::state`]. The CEL names
+/// (`stay(seat)`, `stun(seat)`, …) are this crate's vocabulary; the host only
+/// copies the opaque state map in.
+pub fn fill_named_layers(p: &mut PlayerSnap) {
+    let g = |k: &str| p.state.get(k).copied().unwrap_or(0);
+    p.stay = g("stay");
+    p.stun = g("stun");
+    p.exile = g("exile");
+    p.no_hand = g("noHand");
+}
+
 /// The tile the trigger is about. Field access is `tile.owner`, `tile.houses`, …
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]

@@ -49,7 +49,7 @@ impl Ctx {
     }
 
     /// Load the game tables and card modules once. Read-only from here on.
-    /// `data_sha256` stays empty -- the record carries its own board and rule
+    /// `data_sha256` remains empty -- the record carries its own board and rule
     /// parameters (`MatchSetup`), so host tables are not part of a record's
     /// identity.
     ///

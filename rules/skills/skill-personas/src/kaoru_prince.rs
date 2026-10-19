@@ -20,7 +20,7 @@
 //! （3） 「不会经过…所拥有的格子」 is a walk that skips another player's deeds
 //! when they hold a mark -- the plan's route filter.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

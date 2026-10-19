@@ -237,7 +237,7 @@ fn seat_view_extras_match_the_server_on_seeded_games() {
     assert_eq!(t.skills_bad, 0, "skills must agree every time");
     assert_eq!(t.ai_presence_bad, 0, "aiAnswer presence must agree every time");
     // `ai_exact` covers the no-RNG prompts (the fallback fill). Divergences
-    // are the audit's RNG rows; they must stay a minority.
+    // are the audit's RNG rows; they must remain a minority.
     assert!(
         t.ai_exact + t.ai_both_none >= t.ai_diverged,
         "aiAnswer diverged more often than it agreed -- something beyond RNG moved: {t:?}"
@@ -284,7 +284,7 @@ fn seat_view_extras_match_on_a_solo_frame_too() {
                 let Some(member) = member else {
                     continue;
                 };
-                // Solo frame: extras stay on the view (`SeatView::from_match`
+                // Solo frame: extras remain on the view (`SeatView::from_match`
                 // filled them). `view_extras` must still agree with the live
                 // `view_extra_typed`.
                 compare_one(

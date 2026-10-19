@@ -178,7 +178,7 @@ impl PayKind {
 
 /// The log-line flavour of one money movement. These are exactly the
 /// [`crate::state::MatchEvent::kind`] values a money event carries on the
-/// wire -- serde / the event log stay stringly at the boundary.
+/// wire -- serde / the event log remain stringly at the boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PayEvent {
     /// A rent payment.
@@ -536,7 +536,7 @@ impl Cx<'_> {
         self.w.turn.lingering.retain(|l| l.expires > round);
         // `turnStartBefore` -- before any status ticks resolve, so a
         // counteraction sees the turn exactly as it was left last turn. Status
-        // hosts (e.g. `status:exile`'s layer tick) run as field hooks collected
+        // hosts (e.g. the off-board host's layer tick) run as field hooks collected
         // last inside this raise (`docs/STATUS-HOSTS.md` §4).
         raise!(self, "turnStartBefore", i, tile = self.w.st.players[i].pos)?;
         if self.out(i) {
@@ -551,10 +551,10 @@ impl Cx<'_> {
         }
         let s = &mut self.w.st.players[i];
         // Timed counters due now -- the item says so, not the engine naming
-        // `stunStart`. The `noHand` 2->1 fold is `status:no_hand`'s `TurnStart`
-        // hook (`rules/status/src/no_hand.rs`), not an inline dance here.
+        // the pending-layer counter. The hand-gate 2->1 fold is that host's `TurnStart`
+        // hook (in `rules/status`), not an inline dance here.
         s.tick_state(Tick::TurnStart);
-        // Snapshot the turn's starting squares and statuses (`turn_snap` /
+        // Snapshot the turn's starting square and keyed state (`turn_snap` /
         // `turn_start_pos`): 「在场地地块开始回合时」 is about the starting
         // square, and 「回到起始地点并取消所有受到的效果」 restores from here.
         self.w.turn.turn_start_pos = self.w.st.players.iter().map(|p| p.pos).collect();
@@ -565,9 +565,11 @@ impl Cx<'_> {
             .iter()
             .map(|p| super::world::TurnSnap {
                 pos: p.pos,
-                stay: p.stay(),
-                stun: p.stun(),
-                exile: p.exile(),
+                state: p
+                    .state
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.value))
+                    .collect(),
             })
             .collect();
         raise!(self, "turnStart", i, tile = self.w.st.players[i].pos)?;
@@ -602,9 +604,9 @@ impl Cx<'_> {
         self.w
             .signals
             .push(Signal::StartTimer(i, refill.max(0) as f32, base.max(0) as f32));
-        // The status hosts' act / move gates (`docs/STATUS-HOSTS.md` §4).
-        // stun closes the whole turn; stay (unless [不可阻挡]) closes only
-        // the main move.
+        // The ruleset's act / move gates (`docs/STATUS-HOSTS.md` §4).
+        // A closed act gate skips the whole turn; a closed move gate skips
+        // only the main move. Skip messages come from the ruleset.
         let (act, mv) = (
             self.w.gate_open(self.rules, super::Gate::Act, i),
             self.w.gate_open(self.rules, super::Gate::Move, i),
@@ -613,7 +615,7 @@ impl Cx<'_> {
             self.w.log(
                 "status",
                 i as i32,
-                Msg::new("log.stunned_skip").player_id("who", i),
+                self.rules.gate_skip_msg(super::Gate::Act, i),
             );
             self.w.st.step = stage::END;
             self.wait(1.2);
@@ -624,14 +626,14 @@ impl Cx<'_> {
             self.w.log(
                 "status",
                 i as i32,
-                Msg::new("log.stay_skip").player_id("who", i),
+                self.rules.gate_skip_msg(super::Gate::Move, i),
             );
         }
         // 开始阶段 is over: status has ticked, `turnStart` has run, and the
-        // stun/stay checks have run. The stage *stays* 开始 for a beat first,
+        // the gate checks have run. The stage *remains* 开始 for a beat first,
         // though -- exactly as 结束 holds after the walk -- so the stage swap
         // has time to read before 运营 opens. `tick_play` lifts the turn into
-        // 运营 once this delay expires. (A stunned player left above, so 眩晕
+        // 运营 once this delay expires. (A player with a closed act gate left above, so 眩晕
         // skips 运营 and 移动, as the rulebook says.)
         self.w.st.roller = i as i32;
         self.wait(1.2);
@@ -641,7 +643,7 @@ impl Cx<'_> {
     /// The player's "end turn" command.
     pub(crate) fn end_turn_cmd(&mut self, i: usize) -> Flow<()> {
         // `endTurnBefore` -- the player chose to end the turn. (Auto-skips --
-        // stun, exile -- go straight to [`Self::end_turn`] and so raise only
+        // a closed act gate -- go straight to [`Self::end_turn`] and so raise only
         // `endTurnAfter`, which is the "the turn ended" signal.)
         raise!(self, "endTurnBefore", i)?;
         if self.out(i) || !self.playing() {
@@ -669,9 +671,9 @@ impl Cx<'_> {
         }
         {
             let s = &mut self.w.st.players[i];
-            // Timed counters due now (stay/stun wear off here). The
-            // item carries its own expiry, so this names no keys. The `noHand`
-            // 1->0 clear is `status:no_hand`'s `TurnEnd` hook, not inline.
+            // Timed counters due now (timed layers wear off here). The
+            // item carries its own expiry, so this names no keys. The hand-gate
+            // 1->0 clear is that host's `TurnEnd` hook, not inline.
             s.tick_state(Tick::TurnEnd);
         }
         // 「并在回合结束时额外进行一次[触发结算]」 is no longer an engine
@@ -681,7 +683,7 @@ impl Cx<'_> {
         // `turnEnd` (Fx hook point) -- every placed card decays/acts here.
         raise!(self, "turnEnd", i)?;
         // `turnEndAfter` (Fx) -- also runs the `at_turn_end` callbacks, so a
-        // stay they grant survives this turn's wear-off.
+        // the layer they grant survives this turn's wear-off.
         raise!(self, "turnEndAfter", i)?;
         // `endTurnAfter` -- the turn is over and the next one is queued. Raised
         // for every turn end, including auto-skips.
@@ -940,7 +942,7 @@ impl Cx<'_> {
     ///
     /// Sets [`Move::settle_redirect`] so a hook on the nested settle can tell
     /// a card-initiated redirect from a real player settle. The plan is
-    /// cloned, never written back: the plan's own flag stays `false` (there
+    /// cloned, never written back: the plan's own flag remains `false` (there
     /// is no `plan::` setter for it) so a later move cannot inherit a sticky
     /// `true`.
     pub fn card_settle_move(&self, player_id: usize, tile: usize, main: bool) -> Move {
@@ -1324,20 +1326,22 @@ impl Cx<'_> {
                 if !self.w.turn.plan.resolve {
                     m.resolve = false;
                 }
-                // G-STATUS-02 [无法移动] (glossary 10 / items 11-13):
+                // G-STATUS-02 (glossary 10 / items 11-13):
                 // 「main move的[move end]视为当前所在格子且不settle」. The roll
                 // itself still happens (dice, counteractions, `log.roll`), but
                 // the walk goes nowhere and does not settle. A teleport rewrite
                 // above is unaffected (「无法使用非teleport的移动效果」).
-                // [不可阻挡] (item 14) cancels the stay half; a press that
-                // arms the move against abnormal movement (白金燐子 (2)
+                // The ruleset's move gate is the whole answer (its CEL clauses
+                // carry the 「不可阻挡」 exception). A press that arms the move
+                // against abnormal movement (白金燐子 (2)
                 // 「本次移动不受异常移动效果影响」) is the same flag and
                 // cancels the whole clamp for this walk.
-                let unstoppable = self.w.st.players[i].state_get(key::UNSTOPPABLE) > 0;
-                let immobile = !unstoppable
-                    && (self.w.st.players[i].stay() > 0
-                        || self.w.st.players[i].stun() > 0
-                        || self.w.st.players[i].exile() > 0);
+                // A press that arms the walk against abnormal movement sets
+                // `key::MOVE_EXEMPT`; that flag cancels the whole clamp for
+                // this walk only (the turn-start move-gate skip is a different
+                // question and is not cancelled).
+                let exempt = self.w.st.players[i].state_get(key::MOVE_EXEMPT) > 0;
+                let immobile = !exempt && !self.w.gate_open(self.rules, super::Gate::Move, i);
                 if immobile {
                     m.roll = 0;
                     m.steps = 0;
@@ -2063,11 +2067,13 @@ impl Cx<'_> {
     }
 
     /// The landing gates and bookkeeping both settle bodies share: nothing
-    /// settles for an exiled / out player or off the board, and a main landing
+    /// settles for an off-board / out player or off the board, and a main landing
     /// records where the player stopped (the end-step buy/build gates ask).
     /// Returns false when the settle does not run at all.
     pub fn prep_land(&mut self, i: usize, at: usize, main: bool) -> bool {
-        if at >= self.data.tiles.len() || !self.w.st.players[i].status_gates().on_board || self.out(i)
+        if at >= self.data.tiles.len()
+            || !self.w.gate_open(self.rules, super::Gate::OnBoard, i)
+            || self.out(i)
         {
             return false;
         }
@@ -2360,7 +2366,7 @@ impl Cx<'_> {
             return amount;
         }
         // Q3: adjustments compose freely -- no floor here. A scaled negative
-        // stays negative and is reversed after the chain resolves.
+        // remains negative and is reversed after the chain resolves.
         (amount as f64 * f) as i32
     }
 
@@ -2655,7 +2661,7 @@ impl Cx<'_> {
     pub(crate) fn why_not_build_on(&self, i: usize, t: usize) -> Option<Msg> {
         self.w
             .why_not_build_on(self.data, i as i32, t as i32)
-            // The payer's gate (stun/exile 「无法收付款」) -- `can_pay` also
+            // The payer's gate (the pay-gate layers 「无法收付款」) -- `can_pay` also
             // refuses an out seat.
             .or_else(|| (!self.can_pay(i)).then(|| Msg::new("err.cannot_spend")))
     }
@@ -3125,22 +3131,23 @@ impl Cx<'_> {
             return Ok(Paid::default());
         }
         if p.kind != PayKind::ForceBuy {
-            // The payer is gated by `can_pay` (the status hosts' pay gate -- stun
-            // and exile both close it). The payee is gated by stun up front
-            // (rulebook 49: 「无法收付款」 -- stunned cannot *receive* either).
-            // Exile is **not** blocked here: 「exile期间本应获得的格子收入由
+            // The payer is gated by `can_pay` (the status hosts' pay gate -- the
+            // act/pay/move gates all close it). The payee is gated by that same
+            // pay gate up front
+            // (rulebook 49: 「无法收付款」 -- a gated seat cannot *receive* either).
+            // The off-board layer is **not** blocked here: 「[除外]期间本应获得的格子收入由
             // 此前指定的那名玩家获得」 (MyGO:无路矢) reroutes the payee from a
-            // `paySplitAdd` hook, which runs below. The unredirected exile payee is
+            // `paySplitAdd` hook, which runs below. The unredirected off-board payee is
             // refused at transfer time instead (see the final-payee gate).
-            let stunned_payee = p.to.filter(|&t| self.w.st.players[t].stunned());
-            if let Some(x) = p.from.filter(|&f| !self.can_pay(f)).or(stunned_payee) {
+            let gated_payee = p.to.filter(|&t| !self.w.gate_open(self.rules, super::Gate::Pay, t));
+            if let Some(x) = p.from.filter(|&f| !self.can_pay(f)).or(gated_payee) {
                 let text = Msg::new(if p.from.is_some() {
                     "log.blocked_pay"
                 } else {
                     "log.blocked_gain"
                 })
                 .player_id("who", x)
-                .msg("status", Msg::new(self.blocked(x)))
+                .msg("status", self.blocked(x))
                 .n("amount", p.amount);
                 self.w.log("text", x as i32, text);
                 return Ok(Paid::default());
@@ -3159,7 +3166,7 @@ impl Cx<'_> {
         // multiple of 10 **once**, after every add/mul modifier has rewritten
         // the running figure. Modifiers transform exactly and must not CeilTo
         // inside their own body; this flag is what schedules the single
-        // end-of-calc round. An amount no modifier touched stays exactly as the
+        // end-of-calc round. An amount no modifier touched remains exactly as the
         // base formula produced it (rent table, split share, printed X, ...).
         let mut modified = false;
         // ---- declaration ------------------------------------------------
@@ -3317,7 +3324,7 @@ impl Cx<'_> {
             }
             amount = t.value;
             // A stage may redirect the payee (`set_pay_target`, e.g. 无路矢's
-            // 「exile期间本应获得的格子收入由此前指定的那名玩家获得」) or the
+            // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」) or the
             // payer; the payload's payer/payee is per-entry and each stage may
             // reshape it.
             if t.target >= 0 {
@@ -3455,21 +3462,21 @@ impl Cx<'_> {
             )?;
             return Ok(Paid::default());
         }
-        // [除外] 「无法收付款」 (rulebook 50): a final payee still on the exile
+        // [除外] 「无法收付款」 (rulebook 50): a final payee still on the off-board
         // gate cannot receive. A `set_pay_target` redirect (MyGO:无路矢's
         // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」) has already
-        // moved `to` off the exiled seat by now -- only an unredirected leg
-        // lands here. Refuse it the same way the early stun payee gate does.
+        // moved `to` off the off-board seat by now -- only an unredirected leg
+        // lands here. Refuse it the same way the early payee gate does.
         // `ForceBuy` skips the status pay gate (same as the early gate).
         if p.kind != PayKind::ForceBuy {
-            if let Some(t) = to.filter(|&t| !self.out(t) && self.w.st.players[t].exile() > 0) {
+            if let Some(t) = to.filter(|&t| !self.out(t) && !self.w.gate_open(self.rules, super::Gate::OnBoard, t)) {
                 let text = Msg::new(if p.from.is_some() {
                     "log.blocked_pay"
                 } else {
                     "log.blocked_gain"
                 })
                 .player_id("who", t)
-                .msg("status", Msg::new(self.blocked(t)))
+                .msg("status", self.blocked(t))
                 .n("amount", amount);
                 self.w.log("text", t as i32, text);
                 raise!(
@@ -3654,7 +3661,7 @@ impl Cx<'_> {
         //
         // User ruling 2026-10-15: if a pre-split add/mul hook rewrote the total,
         // round it up to a multiple of 10 **here**, once, before 「[分摊]」
-        // divides. An untouched total is the base figure and stays as-is (the
+        // divides. An untouched total is the base figure and remains as-is (the
         // per-share formula still CeilTo-10s each share -- that share rounding
         // is the book's printed 「向上取整10」, not this rule).
         Ok(shaped.map(|s| {
@@ -3940,25 +3947,12 @@ impl Cx<'_> {
         let s = &mut self.w.st.players[i];
         s.ai = true;
         s.money = 0;
-        for k in [
-            key::STAY,
-            key::STUN,
-            key::STUN_START,
-            key::EXILE,
-            key::NO_HAND,
-            key::CHARGE,
-            key::UNSTOPPABLE,
-        ] {
-            s.state_set(k, 0);
-        }
         // Bankruptcy clears **everything the player holds** (规则书 L81) --
-        // including ruleset-invented state keys (PP fans live here). The
-        // engine-owned keys above are listed for their expiry side effects;
-        // this zeros every remaining value in one generic sweep.
+        // including ruleset-invented state keys (PP fans live here). One
+        // generic sweep; the engine names no keys.
         for v in s.state.values_mut() {
             v.value = 0;
         }
-        s.state_set(key::EXILE_TO, -1);
         // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81: 「将其控制的所有棋子，persona卡，
         // group卡，和手卡移出游戏。所有其正在生效的卡，技能效果停止生效。」 The
         // field holds the persona cards, group cards and every 「[持续]」 card
@@ -3972,7 +3966,7 @@ impl Cx<'_> {
         // holds** -- spendable resources / named counters / tokens / statuses -- plus every
         // marker **owned by one of their rules** wherever that copy sits
         // (another player's counter, a tile). Neutral board marks ([tile marks],
-        // `owner == -1`) are not player-held and stay. `pp::
+        // `owner == -1`) are not player-held and remain. `pp::
         // shanyao_counter_on_short_payment` pins the fan being cleared.
         s.tokens.clear();
         s.field.clear();
@@ -3981,7 +3975,7 @@ impl Cx<'_> {
         // One cleanup path keyed by instance (user ruling 2026-10-10): every
         // bound counter unit dies with its owning card instance. The standing
         // the tile-mark owner pseudo card is never on a player field and is never
-        // destroyed, so its tile [tile marks] stay. Legacy rows (`instance == -1`)
+        // destroyed, so its tile [tile marks] remain. Legacy rows (`instance == -1`)
         // still go through the name-keyed purge below.
         for uid in owned_uids {
             self.w.destroy_instance_units(uid);
@@ -4013,7 +4007,7 @@ impl Cx<'_> {
     /// User ruling 2026-10-07 (marker ownership): drop every marker whose
     /// owning rule is in `rules`, wherever its copies sit -- every player's
     /// counter, and every tile mark of that kind. Neutral board marks
-    /// ([tile marks], `owner == -1`) are never player-rule-owned and stay.
+    /// ([tile marks], `owner == -1`) are never player-rule-owned and remain.
     fn purge_markers_owned_by(&mut self, rules: &[String]) {
         if rules.is_empty() {
             return;
@@ -4154,7 +4148,7 @@ impl Cx<'_> {
                 return Ok(());
             }
         }
-        // Money stays direct until ruling 7 (TODO(规则书) ruling 7).
+        // Money remains direct until ruling 7 (TODO(规则书) ruling 7).
         self.w.st.players[b].money -= bid;
         // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
         // one ownership write (`docs/PURCHASE.md`).
@@ -4372,28 +4366,24 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// The status gates. A card that declares 「可在眩晕时打出」 (the
-    /// `prop::PLAYABLE_STUNNED` property) skips the stun gate; the exile and
-    /// no-hand gates have no such exception in the pool.
-    fn cannot_play(&self, i: usize, id: &str) -> Option<&'static str> {
-        let s = &self.w.st.players[i];
-        let stun_ok = self.rules.card_prop(id, crate::state::prop::PLAYABLE_STUNNED) != 0;
-        let gates = s.status_gates();
-        if !gates.on_board {
-            Some("err.play_exiled")
-        } else if !self.w.gate_open(self.rules, super::Gate::Act, i) && !stun_ok {
-            // stun 「无法使用…手卡的hand效果」; `playableStunned` is the one
-            // exception in the pool.
-            Some("err.play_stunned")
-        } else if s.no_hand() > 0 {
-            Some("err.play_no_hand")
-        } else if !self.w.gate_open(self.rules, super::Gate::Play, i) {
-            // A standing play lock (CRYCHIC 「手牌数大于等于6时…无法从手中打出
-            // 任何牌」). Play-only: the turn still runs.
-            Some("err.play_pre")
-        } else {
-            None
+    /// Capability gates the ruleset owns. Each closed gate yields the
+    /// ruleset's own refusal `Msg` (its `gate_msgs` key as data). A card the
+    /// ruleset exempts from the act gate (its declared `exemption_prop`)
+    /// skips that one check.
+    fn cannot_play(&self, i: usize, id: &str) -> Option<Msg> {
+        if !self.w.gate_open(self.rules, super::Gate::OnBoard, i) {
+            return Some(self.rules.gate_refusal_msg(super::Gate::OnBoard, i));
         }
+        if !self.w.gate_open(self.rules, super::Gate::Act, i)
+            && !self.rules.card_act_exemption(id)
+        {
+            return Some(self.rules.gate_refusal_msg(super::Gate::Act, i));
+        }
+        if !self.w.gate_open(self.rules, super::Gate::Play, i) {
+            // A standing play lock. Play-only: the turn still runs.
+            return Some(self.rules.gate_refusal_msg(super::Gate::Play, i));
+        }
+        None
     }
 
     /// The exclusive-use check (`docs/GUARDS.md` §ExclusiveUse). The generic
@@ -4440,7 +4430,7 @@ impl Cx<'_> {
             return Some(Msg::new("err.play_phase"));
         }
         if let Some(why) = self.cannot_play(i, id) {
-            return Some(Msg::new(why));
+            return Some(why);
         }
         if let Some(card) = self.data.card(id) {
             if card.exclusive() {

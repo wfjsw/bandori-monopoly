@@ -10,7 +10,7 @@
 //! id). （1）'s 「从其他玩家处获得过资金」 is a `PayAfter` landing in this
 //! player's favour, latched per turn.
 
-use card_sdk::abi::{state_key, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

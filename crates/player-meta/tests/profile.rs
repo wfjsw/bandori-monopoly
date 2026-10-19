@@ -36,7 +36,7 @@ fn deck_save_choose_and_clear() {
         decks::save(&d, &mut p, c, id, &Vec::<String>::new()),
         "empty clears"
     );
-    assert_eq!(decks::list(&p, c).len(), 1, "the deck stays after a clear");
+    assert_eq!(decks::list(&p, c).len(), 1, "the deck remains after a clear");
     assert!(decks::cards(&d, &p, c, id).is_empty());
 
     assert!(decks::delete(&mut p, c, id));
@@ -95,7 +95,7 @@ fn profile_normalize_migrates_v1_saves() {
     assert_eq!((p.level, p.charge_per_game), (500, 3));
     assert_eq!(
         p.home_persona, "",
-        "empty home stays empty; the client substitutes its own default"
+        "empty home remains empty; the client substitutes its own default"
     );
     assert_eq!(p.history[0].mode, MatchMode::Ranked);
     assert_eq!(p.history[1].mode, MatchMode::Casual);

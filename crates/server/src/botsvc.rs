@@ -130,7 +130,7 @@ pub struct BotStats {
     pub ponder_ok: u64,
     /// Ponder replies that found the key already cached.
     pub ponder_reused: u64,
-    /// High-water mark of ponders in flight at once (must stay at 1 per seat;
+    /// High-water mark of ponders in flight at once (must remain at 1 per seat;
     /// the drive keeps one per seat, so this is the per-seat bound observed).
     pub ponder_in_flight_max: u64,
 }

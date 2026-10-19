@@ -89,9 +89,9 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     if pos >= 0 {
         ctx::teleport_to(player_id, pos);
     }
-    ctx::state::set(player_id, card_sdk::abi::state_key::STAY, stay);
-    ctx::state::set(player_id, card_sdk::abi::state_key::STUN, stun);
-    ctx::state::set(player_id, card_sdk::abi::state_key::EXILE, exile);
+    ctx::state::set(player_id, bandori_std::state_key::STAY, stay);
+    ctx::state::set(player_id, bandori_std::state_key::STUN, stun);
+    ctx::state::set(player_id, bandori_std::state_key::EXILE, exile);
     ctx::log(
         player_id,
         &Msg::new(key!("ran_as_usual_undo"))

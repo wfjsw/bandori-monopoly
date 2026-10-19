@@ -12,7 +12,7 @@
 //! heuristic action is the fallback (`docs/BOT.md` §1).
 //!
 //! Three upgrades over the B4 core (BOT-RESEARCH #2/#3/#5), each behind a flag
-//! so the old behaviour stays available for A/B:
+//! so the old behaviour remains available for A/B:
 //!
 //! * **Root-parallel search** ([`Ismcts::search_root_parallel`]): N
 //!   independent searches, one per thread, each with its own determinization
@@ -70,7 +70,7 @@ pub struct SearchConfig {
     pub profile: bool,
     /// Stop before the budget when the best root action cannot be overtaken
     /// (time management; `docs/BOT.md` §3.4 "Early stopping"). **Off by
-    /// default** so tests and the iteration-cap determinism mode stay
+    /// default** so tests and the iteration-cap determinism mode remain
     /// bit-identical; the production paths (`bot-service`, `bot-glue`) turn
     /// it on. See [`SearchConfig::deterministic`].
     pub early_stop: bool,

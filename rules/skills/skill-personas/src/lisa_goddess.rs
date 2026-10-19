@@ -22,7 +22,7 @@
 //! whose 「使用…需要支付你600资金」 needs the spend path to know the pot's
 //! provenance. See the TODO below.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

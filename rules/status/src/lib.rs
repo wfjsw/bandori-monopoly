@@ -24,7 +24,10 @@
 //! cards never special-case a status. They call this crate's canonical API
 //! (`status::stay::add`, `status::fire::spend`, …) or message the host. The
 //! engine keeps only generic primitives (keyed state, turn-flow verbs, player
-//! gates) and stops naming stay / stun / exile / fire at policy sites.
+//! gates) and **no named mirror** of stay / stun / exile / fire -- the frozen
+//! spellings live in `bandori_std::state_key` / `bandori_std::status` (raise
+//! names, i18n keys) and ride the manifest as data (`gate_msgs` /
+//! `gate_skip_msgs` / `exemption_prop`).
 //!
 //! ## Storage (recorded in `docs/STATUS-HOSTS.md` §3.1)
 //!

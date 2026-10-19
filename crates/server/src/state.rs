@@ -2,7 +2,7 @@
 //!
 //! Sessions, room records and match blobs live in the [`store`] -- two server
 //! processes sharing one store serve the same rooms, and a restart keeps
-//! them. What stays in memory is the room *handle* and its local broadcast
+//! them. What remains in memory is the room *handle* and its local broadcast
 //! channel: a read-through cache the process needs anyway for its SSE pumps,
 //! not a source of truth. Every mutation re-reads the record under the
 //! cross-process room lock ([`Server::with_room`]); [`Server::room`] loads a

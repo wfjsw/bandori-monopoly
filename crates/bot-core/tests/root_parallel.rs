@@ -279,7 +279,7 @@ fn search_flags_do_not_change_the_view_boundary() {
 fn early_stop_is_off_in_deterministic_mode_and_the_iteration_cap_binds() {
     // The determinism contract (`docs/BOT.md` §3.4): with the iteration cap
     // binding and the wall budget wide, `early_stop` must not change the
-    // result -- tests that pin seed+threads reproducibility stay valid.
+    // result -- tests that pin seed+threads reproducibility remain valid.
     let (m, member) = parked();
     let seat = seat_of(&m, member);
     let cfg_off = det_cfg(42, 8);

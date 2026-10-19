@@ -1201,7 +1201,7 @@ async fn advanced_bots_play_as_standard_without_the_service() {
 #[tokio::test]
 async fn a_bot_service_timeout_falls_back_without_stalling() {
     let (base, server) = spawn_tuned(Duration::from_secs(30), 3.0, |s| {
-        // The service is present (so the seats stay server-driven) but every
+        // The service is present (so the seats remain server-driven) but every
         // ask is given a deadline of zero, so every one of them times out.
         s.bots = Some(server::botsvc::BotService::in_process(
             s.data.clone(),
@@ -1216,7 +1216,7 @@ async fn a_bot_service_timeout_falls_back_without_stalling() {
 
     let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
     assert_eq!(s, StatusCode::OK, "{st}");
-    assert_eq!(advanced_seats(&st).len(), 2, "seats stay advanced: {st}");
+    assert_eq!(advanced_seats(&st).len(), 2, "seats remain advanced: {st}");
 
     // The drive loop must keep answering (via the heuristic) even though the
     // service never does. The clock moves, the match does not hang.
@@ -1271,7 +1271,7 @@ async fn the_bot_mentality_picker_accepts_advanced() {
         .find(|m| m["bot"] == true)
         .expect("one bot");
     assert_eq!(bot["mentality"], "advanced", "{room}");
-    // Standard / chaos still parse; the two stay the solo choices.
+    // Standard / chaos still parse; the two remain the solo choices.
     let room = a
         .ok(
             &format!("/api/rooms/{id}/bots"),
@@ -1338,7 +1338,7 @@ async fn ponder_is_sent_for_an_idle_advanced_seat_and_does_not_block_the_tick() 
         if bots.stats().ponders > 0 {
             saw_ponder = true;
             if in_flight > 0 && health_while_pondering.is_none() {
-                // The tick loop / HTTP surface must stay live while the
+                // The tick loop / HTTP surface must remain live while the
                 // speculative search runs on its own task.
                 let t0 = Instant::now();
                 let (s, _) = a.get("/api/health").await;

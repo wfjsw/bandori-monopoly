@@ -424,7 +424,7 @@ impl MatchHandle {
                 }
             }
             other => {
-                // The tick run comes first, so the log stays ordered.
+                // The tick run comes first, so the log remains ordered.
                 self.flush_buf(rec);
                 let line = LogEntry::Input(other.clone()).to_line();
                 if self.store.record_log_append(&self.id, &line).is_err() {
@@ -465,7 +465,7 @@ impl MatchHandle {
     /// the server kept. Idempotent -- the first caller under the match lock
     /// wins, and `RecMeta::done` is what every other instance sees. The log is
     /// cleared afterwards so the next match in this room starts clean; the
-    /// `done` meta stays until [`Self::start`] replaces it.
+    /// `done` meta remains until [`Self::start`] replaces it.
     pub fn finalize(&self) {
         let key = match_key(&self.id);
         let r = store::with_lock(
@@ -932,7 +932,7 @@ impl Room {
             self.dissolved = Some(reason.clone());
             // A dissolved room leaves no trace: the room record, its match blob
             // and any in-progress record log go, so a restart does not
-            // resurrect it. The **sealed** record (`record:{id}:last`) stays
+            // resurrect it. The **sealed** record (`record:{id}:last`) remains
             // until its TTL -- a participant may still want last match's replay.
             let _ = self.store.room_del(&self.info.id);
             let _ = self.store.match_del(&self.info.id);
@@ -1132,7 +1132,7 @@ impl Room {
         let derived = fair::derive_match_seed(&seed, &nonces);
         // Clock settings are part of the canonical room settings the record
         // header binds (`docs/FAIRNESS.md` §1.3). When they are default the
-        // canon string stays byte-identical to pre-settings records.
+        // canon string remains byte-identical to pre-settings records.
         let mut canon = CanonSettings::new(mode, step, &self.info.weights, &members);
         canon.clock = self.info.clock;
         let settings = canon.canon();
@@ -1189,7 +1189,7 @@ impl Room {
         )
         .map_err(|e| ApiError::bad(e.as_str()))?;
         self.game = Some(Arc::new(m));
-        // The slot is consumed: its commit stays up for the running match
+        // The slot is consumed: its commit remains up for the running match
         // (people copy it from there), and the next one is rolled when this
         // match ends.
         if let Some(f) = self.fair.as_mut() {

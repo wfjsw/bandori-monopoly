@@ -249,7 +249,7 @@ fn mortgaged_land_can_be_force_bought_at_double() {
 
     let (w2, _) = run(&d, &w, &[pick(0)], |cx| cx.land(0, true));
     assert_eq!(w2.st.owners[t], 0);
-    assert!(w2.st.mortgaged[t], "stays mortgaged");
+    assert!(w2.st.mortgaged[t], "remains mortgaged");
     assert_eq!(w2.st.players[0].money, 10_000 - price);
     assert_eq!(w2.st.players[1].money, 10_000 + price);
 
@@ -397,7 +397,7 @@ fn assign_deed_writes_owner_houses_mortgage() {
     let deal = purchase::default_deal(&d, &w.st, t, 0, purchase::BuyKind::Land, 500, false);
     assert_eq!(deal.seller, -1, "land buy pays the bank");
     assert_eq!(deal.owner_after, 0);
-    assert_eq!(deal.houses_after, 3, "houses stay unless a hook razes");
+    assert_eq!(deal.houses_after, 3, "houses remain unless a hook razes");
     assert!(!deal.mortgaged_after, "a land buy clears the mortgage");
     // A force-buy names the owner as payee and keeps the mortgage by default.
     let deal = purchase::default_deal(&d, &w.st, t, 0, purchase::BuyKind::Force, 1000, true);

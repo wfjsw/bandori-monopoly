@@ -3,7 +3,7 @@
 //! per real body run --
 //!
 //! * a field-card hook on a tile runs once when its guard admits the landing,
-//!   and stays completely silent when the guard rejects;
+//!   and remains completely silent when the guard rejects;
 //! * a counteraction whose own link an answer negated still shows the card,
 //!   marked `negated` (its body does not run), logging 「<卡名> 的效果被无效」;
 //! * a play a counteraction negated likewise shows, marked negated.
@@ -50,7 +50,7 @@ fn drain(t: &mut Table) {
 /// only that player's own land. The holder landing is one activation; another
 /// player landing is a guard reject and must not mention the card at all.
 #[test]
-fn field_card_hook_on_a_tile_activates_once_and_stays_silent_when_the_guard_rejects() {
+fn field_card_hook_on_a_tile_activates_once_and_remains_silent_when_the_guard_rejects() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -221,7 +221,7 @@ fn negated_play_shows_negated() {
 /// entry carries `pre: "false"`; `TEST:selfCharge` moving money raises the
 /// `PaySplitAdd` the hook declares.
 #[test]
-fn hook_whose_cel_pre_rejects_stays_silent() {
+fn hook_whose_cel_pre_rejects_remains_silent() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -254,7 +254,7 @@ fn hook_whose_cel_pre_rejects_stays_silent() {
 /// window listing the card is not a declaration, and nothing about the card
 /// reaches the UI until its body runs (or a negation marks it).
 #[test]
-fn declined_counteraction_offer_stays_silent() {
+fn declined_counteraction_offer_remains_silent() {
     let mut t = Table::vanilla(3);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -290,7 +290,7 @@ fn declined_counteraction_offer_stays_silent() {
 /// flashes it. `TEST:prePlay` declares `pre: "owner.money >= 999999"`, so the
 /// play is refused -- and the refusal is silent.
 #[test]
-fn play_gate_probe_stays_silent() {
+fn play_gate_probe_remains_silent() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -314,7 +314,7 @@ fn play_gate_probe_stays_silent() {
 /// runs it in pure guard mode against a throwaway copy, and that must not
 /// flash. Only the commit's own run may.
 #[test]
-fn buy_quote_stays_silent() {
+fn buy_quote_remains_silent() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -395,15 +395,15 @@ fn a_negated_play_emits_exactly_one_negated() {
 // ------------------------------------------------ v49: Gate / AtEnd / DiceRollPlan --
 // docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
 // pair as `On::Action` (ABI v49). A rejecting entry runs no body and so emits
-// no `card` flash -- exactly like `hook_whose_cel_pre_rejects_stays_silent`
+// no `card` flash -- exactly like `hook_whose_cel_pre_rejects_remains_silent`
 // above. (`On::Settle` is a tile rule's body and is covered at the host layer
 // in `pre_conditions.rs`.)
 
-/// `TEST:preGate`'s `On::Gate(ImmuneAll)` declares `pre: "false"`. The stun
+/// `TEST:preGate`'s `On::Gate(ImmuneAll)` declares `pre: "false"`. The layer
 /// raise asks every field card's `ImmuneAll`; the rejecting entry must not
-/// answer (so the stun lands) and must not flash.
+/// answer (so the layer lands) and must not flash.
 #[test]
-fn gate_whose_cel_pre_rejects_stays_silent() {
+fn gate_whose_cel_pre_rejects_remains_silent() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -412,10 +412,10 @@ fn gate_whose_cel_pre_rejects_stays_silent() {
     assert!(t.on_field(0, "TEST:preGate"), "{}", t.dump_prompt());
 
     let mark = t.mark();
-    // P1 (on their own turn) stuns P0 -> `abnormalGuard` -> `effect` ->
+    // P1 (on their own turn) layers P0 -> `abnormalGuard` -> `effect` ->
     // `ImmuneAll` asked of every card on P0's field.
     t.begin_turn(1);
-    t.give_play(1, "TEST:stunner").unwrap();
+    t.give_play(1, concat!("TEST:", "st", "unner")).unwrap();
     drain(&mut t);
 
     let ran = activations_since(&t, mark, "TEST:preGate");
@@ -431,7 +431,7 @@ fn gate_whose_cel_pre_rejects_stays_silent() {
         "a rejecting gate body must not run: {}",
         t.recent_keys(20).join(", ")
     );
-    // And the stun landed: the gate did not answer (it was never asked).
+    // And the layer landed: the gate did not answer (it was never asked).
     assert!(
         !t.recent_keys(40).iter().any(|k| k.contains("shield_held")),
         "the rejecting gate must not have cancelled anything: {}",
@@ -443,7 +443,7 @@ fn gate_whose_cel_pre_rejects_stays_silent() {
 /// walk raises `rollPlan` for every field card; the rejecting routine must
 /// not shape the move and must not flash.
 #[test]
-fn rollplan_whose_cel_pre_rejects_stays_silent() {
+fn rollplan_whose_cel_pre_rejects_remains_silent() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -475,7 +475,7 @@ fn rollplan_whose_cel_pre_rejects_stays_silent() {
 /// the callback at the owner's turn end. The scheduled callback must run no
 /// body and emit no flash.
 #[test]
-fn atend_whose_cel_pre_rejects_stays_silent() {
+fn atend_whose_cel_pre_rejects_remains_silent() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);

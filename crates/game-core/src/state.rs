@@ -12,7 +12,7 @@ use crate::msg::Msg;
 
 /// The movement the current turn is taking: the precomputed `reach[]` of tiles
 /// and how far along it the player has walked. `player_id == -1` when there is
-/// no plan (teleports and stay-settle walks may skip it).
+/// no plan (teleports and settle walks may skip it).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MovePlan {
@@ -29,7 +29,7 @@ pub struct MovePlan {
     /// Whether this move may build away from the landing
     /// (`MoveCtx::build_anywhere`, HOST-08). Was: lifts `why_not_build`'s
     /// landing-only check. Skipped when `false` so saves (and ckpt_equiv
-    /// turn hashes) stay byte-identical to the pre-HOST-08 shape.
+    /// turn hashes) remain byte-identical to the pre-HOST-08 shape.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub build_anywhere: bool,
 }
@@ -53,7 +53,7 @@ impl MovePlan {
 pub mod stage {
     /// No turn in progress: the match has not started, or is between turns.
     pub const NONE: i32 = 0;
-    /// 开始阶段 -- the turn starts: status ticks, `turnStart`, the stun/stay checks.
+    /// 开始阶段 -- the turn starts: timed-counter ticks, `turnStart`, the gate checks.
     pub const START: i32 = 1;
     /// 运营阶段 -- play cards, roll the dice, buy / redeem / mortgage.
     pub const OPS: i32 = 2;
@@ -152,8 +152,8 @@ pub struct MatchState {
     /// The same for `act {act:"end"}` (the end branch:
     /// `roll_first` while a main move is still owed, `moving`, `over_hand`).
     /// [`Self::skip_move`] is the same live latch, so the two always agree
-    /// (it was once re-derived from stay / exile, which did not: unstoppable,
-    /// mid-turn stay, exile -- a bot trusting it sent `end` into
+    /// (it was once re-derived from the named layer counters, which did not: the
+    /// mid-turn layer grants -- a bot trusting it sent `end` into
     /// `err.roll_first`).
     pub can_end_here: bool,
     /// The movement this turn is taking.
@@ -319,10 +319,9 @@ impl MatchState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Tick {
-    /// Loses one layer at its owner's start of turn (the stun that only
-    /// starts counting then).
+    /// Loses one layer at its owner's start of turn.
     TurnStart,
-    /// Loses one layer at its owner's end of turn (「停留」 / 「晕眩」 wear-off).
+    /// Loses one layer at its owner's end of turn.
     TurnEnd,
 }
 
@@ -361,43 +360,20 @@ pub struct StateVar {
     pub flags: u8,
 }
 
-/// The keys the engine's own game flow reads back (its turn rules and the
-/// status gates). Content is free to invent more; these are only the ones the
-/// engine names. Mirrored by `card_sdk::abi::state_key`.
+/// The keys the engine's own game flow reads back (its turn rules). Content is
+/// free to invent more; these are only the ones the engine names. Status-layer
+/// names live in the ruleset (`rules/bandori-std`) and reach the engine only as
+/// opaque strings.
 pub mod key {
-    /// 「停留」 layers -- wear off at end of turn.
-    pub const STAY: &str = "stay";
     /// Latch set when an abnormal move lands on the player and cleared when
     /// their next main move completes. Longer-lived than `TurnCtx::abnormal`
     /// (which is per calendar turn): 「若受到abnormal move影响，此卡不生效」
     /// (是我自己的问题 (2)) reads this so a forced move on another player's
     /// turn still suppresses the card at the owner's next main-move end.
     pub const ABNORMAL_HIT: &str = "abnormalHit";
-    /// 「晕眩」 layers -- wear off at end of turn.
-    pub const STUN: &str = "stun";
-    /// Stun applied this turn, which only starts counting next turn. A
-    /// timed counter: see [`Tick::TurnStart`].
-    pub const STUN_START: &str = "stunStart";
-    /// Turns spent off the board (「除外」).
-    pub const EXILE: &str = "exile";
-    /// Tile the exile return teleport lands on, or -1 for none.
-    pub const EXILE_TO: &str = "exileTo";
-    /// 「在exile层数归0后teleport至该格子，视为当回合的主要移动」 -- when the
-    /// exile ticks out, the return teleport **is** that turn's main move
-    /// (MyGO:无路矢). The expiry tick reads and consumes it:
-    /// `TurnCtx::main_moved` is set so the player cannot also roll.
-    pub const EXILE_MAIN: &str = "exileMain";
-    /// Wire key constant (webui contract); the engine never branches on it --
-    /// rules-layer kernel owns the counter. Its `max` is the owner-declared cap
-    /// written through the rules layer; there is no separate "effective cap".
-    pub const CHARGE: &str = "charge";
-    /// Layers of "may hold no hand cards".
-    pub const NO_HAND: &str = "noHand";
     /// Turn key of a live 「无法从手牌中使用counteraction」 lock (骰子已经掷下). Mirrors
     /// `card_sdk::abi::state_key::NO_COUNTERACT_TURN`.
     pub const NO_COUNTERACT_TURN: &str = "noCounteractTurn";
-    /// Layers of "cannot be stopped" (「不可阻挡」).
-    pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit (base 5; effects may cut or lift it).
     pub const HAND_LIMIT: &str = "handLimit";
     /// The [`HAND_LIMIT`] value meaning 「手牌数没有上限」. Mirrors
@@ -420,6 +396,10 @@ pub mod key {
     pub const MORTGAGED: &str = "mortgaged";
     /// A card has closed building for this turn (「本回合无法加盖房屋」).
     pub const NO_BUILD: &str = "noBuild";
+    /// This turn's walk is armed against abnormal movement (「本次移动不受异常
+    /// 移动效果影响」). The walk clamp skips while this is > 0; the turn-start
+    /// move-gate skip is a different question and is not cancelled.
+    pub const MOVE_EXEMPT: &str = "moveExempt";
 
     /// Is `key` one the engine itself owns (a status gate the engine ticks or
     /// enforces), as opposed to a card's own scratch / latch key? Only the
@@ -449,9 +429,6 @@ pub mod prop {
     /// onto the field instance at placement and gone with the card. `-1` cuts
     /// the owner's hand limit.
     pub const HAND_LIMIT_DELTA: &str = "handLimitDelta";
-    /// 「可在眩晕时打出」: `1` = the card skips the stun gate when played from
-    /// hand.
-    pub const PLAYABLE_STUNNED: &str = "playableStunned";
     /// Bot-only **estimated execution cost**. Mirrors
     /// `card_sdk::abi::prop::EST_COST`. Read only by bots / autopilot as a
     /// reserve check -- never by legality. `0` = unknown / assume free.
@@ -472,7 +449,7 @@ pub mod prop {
     /// (a count of `0` is legitimate); real `st.houses` is untouched. On a
     /// placed card of the tile's owner (`ctx::set_prop`, gone with the card) or
     /// on the tile's rule instance (`ctx::set_tile_prop`). Read by
-    /// [`crate::engine::ops::World::rent_houses`]; `houses_of` stays real.
+    /// [`crate::engine::ops::World::rent_houses`]; `houses_of` remains real.
     pub const RENT_HOUSES: &str = "rentHouses";
 
     // ---------------------------------------------------------- tile data
@@ -557,45 +534,30 @@ pub mod prop {
 pub const BOARD_OWNER: i32 = -1;
 
 /// Default [`state_flag`] bits for a new key. Only generic engine-mechanism
-/// names appear here (status layers, the capped resource, turn latches) --
-/// game vocabulary never does. Ruleset-invented keys start unflagged.
+/// names appear here (turn latches, the hand-size knobs) -- game vocabulary
+/// never does. Ruleset-invented keys start unflagged; the writer declares
+/// flooring and ownership via [`MatchPlayer::state_set_flags`].
 fn default_flags(key: &str) -> u8 {
-    use state_flag::{ENGINE_OWNED, NEVER_NEGATIVE};
+    use state_flag::ENGINE_OWNED;
     match key {
-        key::STAY | key::STUN | key::STUN_START | key::EXILE | key::CHARGE => {
-            NEVER_NEGATIVE | ENGINE_OWNED
-        }
-        key::EXILE_TO | key::EXILE_MAIN | key::NO_HAND | key::UNSTOPPABLE | key::HAND_LIMIT
-        | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT | key::REDEEMED
-        | key::MORTGAGED | key::NO_BUILD => ENGINE_OWNED,
+        key::HAND_LIMIT | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT
+        | key::REDEEMED | key::MORTGAGED | key::NO_BUILD | key::ABNORMAL_HIT | key::MOVE_EXEMPT
+        | key::NO_COUNTERACT_TURN => ENGINE_OWNED,
         _ => 0,
     }
 }
 
-/// Is this state item a status counter, whose value cannot go negative
-/// (「清除」 floors at 0)? Reads the item's [`state_flag::NEVER_NEGATIVE`].
-fn is_status_var(v: &StateVar) -> bool {
+/// Does this state item floor at 0 (「清除」)? Reads the item's
+/// [`state_flag::NEVER_NEGATIVE`], which the writer declares.
+fn floors_at_zero(v: &StateVar) -> bool {
     v.flags & state_flag::NEVER_NEGATIVE != 0
-}
-
-/// The tick the rulebook names for a timed status counter (规则书:
-/// stay/stun 「玩家的每回合结束时移除一层」; `stunStart` is the layer that
-/// starts counting next turn, `Tick::TurnStart`). `state_set` stamps this on
-/// any write whose item has no tick, so the book's wear-off holds no matter
-/// which writer landed the layer.
-fn default_expiry(key: &str) -> Option<Tick> {
-    match key {
-        key::STAY | key::STUN => Some(Tick::TurnEnd),
-        key::STUN_START => Some(Tick::TurnStart),
-        _ => None,
-    }
 }
 
 /// How a bot player decides. Serde-defaults to [`Self::Standard`] so older
 /// saves and room records load unchanged.
 ///
 /// Only `bot` seats take a mentality: a human who times out or disconnects is
-/// still answered with the standard policy (`ai` flips on, `bot` stays off).
+/// still answered with the standard policy (`ai` flips on, `bot` remains off).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BotMentality {
@@ -613,7 +575,7 @@ pub enum BotMentality {
     /// rewrites the mentality to Standard before `Match::new` in that case).
     /// With a service attached the server holds the seat (`ai` starts off) and
     /// answers every play-phase decision itself; setup (ban / pick / deck)
-    /// stays engine-side.
+    /// remains engine-side.
     Advanced,
 }
 
@@ -634,24 +596,6 @@ impl BotMentality {
             _ => None,
         }
     }
-}
-
-/// Generic **player gates** derived from the status hosts' counters
-/// (`docs/STATUS-HOSTS.md` §3.4). The engine reads these at policy sites
-/// instead of naming stay / stun / exile. `true` = the door is open.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct StatusGates {
-    /// [主动] skills and hand effects (rules.txt 49/50).
-    pub act: bool,
-    /// This turn's main move / non-teleport move effects (rules.txt 47).
-    pub r#move: bool,
-    /// May receive payment (rules.txt 49/50).
-    pub pay: bool,
-    /// The piece stands on a board square (rules.txt 50 「不失为存在于任何格子上」
-    /// is the *negation* -- exiled pieces are off-board).
-    pub on_board: bool,
-    /// May be designated (rules.txt 50 「不能被designate」).
-    pub targetable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -682,18 +626,16 @@ pub struct MatchPlayer {
     pub skill_owner: String,
     pub affiliations: String,
     pub tokens: Vec<Counter>,
-    /// Keyed state: the counters this player carries -- status pots plus the
-    /// arbitrary named slots content invents -- as `{value, min, max}` items.
+    /// Keyed state: the counters this player carries -- status-layer pots plus
+    /// the arbitrary named slots content invents -- as `{value, min, max}` items.
     /// See [`StateVar`] -- the engine holds these and enforces nothing. Keys
-    /// are content vocabulary; [`key`] names the ones the engine itself reads
+    /// are content vocabulary; [`key`] names the few the engine itself reads
     /// back.
     ///
     /// The key *names* are a wire contract, not just internal labels: the
     /// client reads this map by name and TS types are structural, so renaming
-    /// a key breaks the board render silently rather than at compile time. The
-    /// names the client actually reads today are `stay`, `stun`, `stunStart`,
-    /// `exile`, `exileTo`, `charge`, and `handLimit`. Treat those as frozen;
-    /// invent new ones freely.
+    /// a key breaks the board render silently rather than at compile time.
+    /// Status-layer names live in the ruleset and are frozen webui wire.
     pub state: BTreeMap<String, StateVar>,
     pub field: Vec<FieldCard>,
     pub assets: i32,
@@ -728,20 +670,13 @@ impl Default for MatchPlayer {
             affiliations: String::new(),
             tokens: vec![],
             state: {
-                // The two counters that start non-zero (hand limit 5, no exile
-                // return tile). Everything else is 0.
+                // The one engine knob that starts non-zero (hand limit 5).
+                // Every other key is content vocabulary and starts absent.
                 let mut m = BTreeMap::new();
                 m.insert(
                     key::HAND_LIMIT.to_string(),
                     StateVar {
                         value: 5,
-                        ..StateVar::default()
-                    },
-                );
-                m.insert(
-                    key::EXILE_TO.to_string(),
-                    StateVar {
-                        value: -1,
                         ..StateVar::default()
                     },
                 );
@@ -759,7 +694,7 @@ impl MatchPlayer {
     /// Does the machine handle this seat's **setup** (ban / pick / deck) without
     /// waiting on a human or the server? True for every engine-driven seat
     /// (`ai`) and for an Advanced bot: its play-phase decisions belong to the
-    /// server's `bot-service` (`docs/BOT.md` B5), but setup stays engine-side
+    /// server's `bot-service` (`docs/BOT.md` B5), but setup remains engine-side
     /// and runs the standard policy, exactly like a standard bot.
     pub fn auto_setup(&self) -> bool {
         self.ai || (self.bot && self.mentality == BotMentality::Advanced)
@@ -789,31 +724,24 @@ impl MatchPlayer {
 
     /// Write `value`, clamped to the item's declared bounds.
     ///
-    /// The engine holds the bounds and enforces them on write: a status counter
-    /// (stay / stun / exile / the frozen `charge` key) never goes negative
-    /// (「清除」 floors at 0), and a declared `max > 0` is a real cap (「上限M」).
+    /// The engine holds the bounds and enforces them on write: an item that
+    /// declared [`state_flag::NEVER_NEGATIVE`] never goes below 0 (「清除」
+    /// floors at 0), and a declared `max > 0` is a real cap (「上限M」).
     /// `max == 0` still means "uncapped". A consumer that wants a different
     /// policy (e.g. the rules-layer kernel's partial gain + log) does its own
     /// arithmetic first.
     ///
-    /// A **fresh** stay / stun / stunStart item also picks up the rulebook's
-    /// wear-off tick (see [`default_expiry`]): 「每回合结束时移除一层」 is a
-    /// property of the status, not of whichever writer happened to land the
-    /// layer, so a raw `state_set("stun", n)` cannot leave a permanent stun
-    /// that skips every later turn. The tick is re-asserted whenever it has
-    /// been cleared (`state_set_expires(..., None)`) -- the book has no
-    /// non-ticking stun -- but a non-default tick the writer asked for stays.
+    /// Wear-off is **not** guessed from the key. The writer declares it via
+    /// [`Self::state_set_expires`] (规则书 「每回合结束时移除一层」 lives in the
+    /// ruleset's grant verb). A raw write with no expiry means "no wear-off".
     pub fn state_set(&mut self, key: &str, value: i32) -> i32 {
         let e = self.state.entry(key.to_string()).or_default();
         if e.flags == 0 {
             e.flags = default_flags(key);
         }
-        if e.expires.is_none() {
-            e.expires = default_expiry(key);
-        }
         let mut v = value;
-        // Status counters cannot go negative -- clearing floors at 0.
-        if is_status_var(e) {
+        // Counters that declared NEVER_NEGATIVE cannot go negative.
+        if floors_at_zero(e) {
             v = v.max(0);
         }
         // A declared cap is honoured (`max > 0`; `max == 0` is uncapped).
@@ -838,6 +766,14 @@ impl MatchPlayer {
         e.max = max;
     }
 
+    /// Declare the generic [`state_flag`] bits for this key (floors at 0,
+    /// engine-owned, …). The writer owns the declaration; the engine never
+    /// infers it from the key name.
+    pub fn state_set_flags(&mut self, key: &str, flags: u8) {
+        let e = self.state.entry(key.to_string()).or_default();
+        e.flags = flags;
+    }
+
     /// Declare when this counter wears off (see [`Tick`]).
     pub fn state_set_expires(&mut self, key: &str, expires: Option<Tick>) {
         self.state.entry(key.to_string()).or_default().expires = expires;
@@ -856,85 +792,9 @@ impl MatchPlayer {
         moved
     }
 
-    // ------------------------------------------- the engine's named readers
-
-    /// 「停留」 layers.
-    pub fn stay(&self) -> i32 {
-        self.state_get(key::STAY)
-    }
-
-    /// 「晕眩」 layers.
-    pub fn stun(&self) -> i32 {
-        self.state_get(key::STUN)
-    }
-
-    /// 「晕眩」 applied this turn (starts counting next turn).
-    pub fn stun_start(&self) -> i32 {
-        self.state_get(key::STUN_START)
-    }
-
-    pub fn stunned(&self) -> bool {
-        self.stun() + self.stun_start() > 0
-    }
-
-    /// Turns left off the board (「除外」).
-    pub fn exile(&self) -> i32 {
-        self.state_get(key::EXILE)
-    }
-
-    /// Tile the exile return teleport lands on, or -1.
-    pub fn exile_to(&self) -> i32 {
-        self.state_get(key::EXILE_TO)
-    }
-
-    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
-    /// frozen webui key [`key::CHARGE`] -- prefer [`Self::state_get`] with an
-    /// explicit name at new call sites.
-    pub fn charge(&self) -> i32 {
-        self.state_get(key::CHARGE)
-    }
-
-    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
-    /// `max` of [`key::CHARGE`], written through the rules layer.
-    pub fn charge_max(&self) -> i32 {
-        self.state_max(key::CHARGE)
-    }
-
-    pub fn no_hand(&self) -> i32 {
-        self.state_get(key::NO_HAND)
-    }
-
-    pub fn unstoppable(&self) -> i32 {
-        self.state_get(key::UNSTOPPABLE)
-    }
-
-    /// The **status hosts'** gate clause, derived from the counters they own
-    /// (`docs/STATUS-HOSTS.md` §3.4). The engine reads these gates at policy
-    /// sites and stops naming stay / stun / exile there. Derivation lives
-    /// here -- not on a wasm host -- because `tick_state` and the turn flow
-    /// run outside a card run; the names appear only in this function and in
-    /// `rules/status`.
-    pub fn status_gates(&self) -> StatusGates {
-        let stay = self.stay();
-        let stun = self.stun() + self.stun_start();
-        let exile = self.exile();
-        let unstoppable = self.unstoppable();
-        StatusGates {
-            // stun 「无法使用[主动]技能和手卡的hand效果」 +
-            // exile same + 「玩家技能…停止生效」.
-            act: stun <= 0 && exile <= 0,
-            // [无法移动] (rules.txt 47) via stay (unless [不可阻挡]
-            // 「无视已存在的stay」), stun, exile.
-            r#move: !(exile > 0 || stun > 0 || (stay > 0 && unstoppable <= 0)),
-            // stun / exile 「无法收付款」.
-            pay: stun <= 0 && exile <= 0,
-            // exile 「玩家棋子不失为存在于任何格子上」 -- inverted: the piece
-            // is *not* on a board square while exiled.
-            on_board: exile <= 0,
-            // exile 「不能被designate」.
-            targetable: exile <= 0,
-        }
-    }
+    // ------------------------------------------- generic readers only
+    // The engine never names a status-layer key. Callers use `state_get(name)`
+    // with a name from the ruleset, or ask the ruleset's `gate_open`.
 
     /// Hand size limit: the `handLimit` state (base 5, cards may cut or lift
     /// it) plus every placed card's continuous `prop::HAND_LIMIT_DELTA`
@@ -1116,7 +976,7 @@ pub struct MatchEvent {
     pub negated: bool,
     /// Parent `"card"` activation event id this event groups under (the log
     /// nests it beneath that header; the flash rides the parent's face).
-    /// `-1` = top-level. Child events stay in the stream in code order so
+    /// `-1` = top-level. Child events remain in the stream in code order so
     /// walks, coin SFX and the like still animate -- the grouping is
     /// presentational.
     #[serde(default = "no_parent", skip_serializing_if = "is_no_parent")]
@@ -1354,7 +1214,7 @@ pub struct TileMark {
     pub category: String,
     /// The seat that placed a **player** mark (colours it in the view), or
     /// [`BOARD_OWNER`] (`-1`) for a neutral mark. Neutral marks (tile marks /
-    /// named-counter marks) stay unowned -- their provenance lives in
+    /// named-counter marks) remain unowned -- their provenance lives in
     /// [`Self::src`] / [`Self::card`] instead.
     pub owner: i32,
     pub count: i32,
@@ -1489,39 +1349,55 @@ pub struct SkillAction {
 mod tests {
     use super::*;
 
-    /// 规则书 stay/stun 「玩家的每回合结束时移除一层」 and `stunStart`'s
-    /// turn-start tick are properties of the status: a write that names no
-    /// expiry still wears off. (Fuzz soak iter 1517 -- a raw `state_set("stun",
-    /// 1)` left a permanent stun that skipped every later turn and turned
-    /// PPP:Returns' turn-start ask into a prompt storm.)
+    /// Wear-off is declared by the writer (`state_set_expires`), not guessed
+    /// from the key. A timed counter's tick is carried on the item.
     #[test]
-    fn status_writes_carry_the_books_tick() {
+    fn timed_counters_wear_off_on_their_tick() {
         let mut p = MatchPlayer::default();
-        p.state_set(key::STAY, 1);
-        p.state_set(key::STUN, 1);
-        p.state_set(key::STUN_START, 1);
-        assert_eq!(p.state.get(key::STAY).unwrap().expires, Some(Tick::TurnEnd));
-        assert_eq!(p.state.get(key::STUN).unwrap().expires, Some(Tick::TurnEnd));
-        assert_eq!(
-            p.state.get(key::STUN_START).unwrap().expires,
-            Some(Tick::TurnStart)
-        );
+        p.state_set_flags("k1", state_flag::NEVER_NEGATIVE);
+        p.state_set_flags("k2", state_flag::NEVER_NEGATIVE);
+        p.state_set("k1", 1);
+        p.state_set_expires("k1", Some(Tick::TurnEnd));
+        p.state_set("k2", 1);
+        p.state_set_expires("k2", Some(Tick::TurnStart));
+        assert_eq!(p.state.get("k1").unwrap().expires, Some(Tick::TurnEnd));
+        assert_eq!(p.state.get("k2").unwrap().expires, Some(Tick::TurnStart));
         // The tick actually moves the counter.
         p.tick_state(Tick::TurnEnd);
-        assert_eq!(p.stay(), 0);
-        assert_eq!(p.stun(), 0);
-        assert_eq!(p.stun_start(), 1, "stunStart waits for its own tick");
+        assert_eq!(p.state_get("k1"), 0);
+        assert_eq!(p.state_get("k2"), 1, "k2 waits for its own tick");
         p.tick_state(Tick::TurnStart);
-        assert_eq!(p.stun_start(), 0);
+        assert_eq!(p.state_get("k2"), 0);
     }
 
-    /// An explicit non-default tick the writer asked for stays.
+    /// A raw write with no expiry means "no wear-off" -- the engine does not
+    /// know which keys are timed.
+    #[test]
+    fn raw_write_carries_no_default_tick() {
+        let mut p = MatchPlayer::default();
+        p.state_set("k1", 1);
+        assert_eq!(p.state.get("k1").unwrap().expires, None);
+        p.tick_state(Tick::TurnEnd);
+        assert_eq!(p.state_get("k1"), 1);
+    }
+
+    /// An explicit non-default tick the writer asked for remains.
     #[test]
     fn explicit_expiry_is_not_overridden() {
         let mut p = MatchPlayer::default();
-        p.state_set(key::STUN, 1);
-        p.state_set_expires(key::STUN, Some(Tick::TurnStart));
-        p.state_set(key::STUN, 2);
-        assert_eq!(p.state.get(key::STUN).unwrap().expires, Some(Tick::TurnStart));
+        p.state_set("k1", 1);
+        p.state_set_expires("k1", Some(Tick::TurnStart));
+        p.state_set("k1", 2);
+        assert_eq!(p.state.get("k1").unwrap().expires, Some(Tick::TurnStart));
+    }
+
+    /// NEVER_NEGATIVE floors a clear at 0.
+    #[test]
+    fn never_negative_floors_at_zero() {
+        let mut p = MatchPlayer::default();
+        p.state_set_flags("k1", state_flag::NEVER_NEGATIVE);
+        p.state_set("k1", 1);
+        p.state_set("k1", -5);
+        assert_eq!(p.state_get("k1"), 0);
     }
 }

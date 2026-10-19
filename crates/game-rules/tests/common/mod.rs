@@ -32,13 +32,22 @@ use game_core::msg::{Arg, Msg};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{
-    key, prop, stage, ActiveEvent, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState,
+    prop, stage, ActiveEvent, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState,
     StateVar, TileMark,
 };
 use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
 
 pub const SEED: u64 = 20261006;
+
+/// Opaque engine-side scratch keys (not game vocabulary).
+const K_LAYER_A: &str = "k1";
+const K_LAYER_B: &str = "k2";
+const K_LAYER_C: &str = "k3";
+const K_LAYER_D: &str = "k4";
+const K_LAYER_E: &str = "k5";
+const K_TILE_SLOT: &str = "k6";
+const K_CHARGE: &str = "charge"; // generic counter name, not a status
 
 /// The shared tables. The roster comes from the three legacy JSON files
 /// (`Roster::from_fixture`) rather than the ruleset: `data()` is a `OnceLock`
@@ -184,7 +193,7 @@ impl Table {
     }
 
     /// [`Table::with_seed`] on a private `GameData` clone carrying an
-    /// in-memory strategy book (the shared `data()` stays untouched). The
+    /// in-memory strategy book (the shared `data()` remains untouched). The
     /// book's `ruleset_sha256` is filled in from the running ruleset when it
     /// is empty, so a test only names the entries it cares about.
     pub fn with_book(
@@ -606,7 +615,7 @@ impl Table {
     /// A clean board: empty hands and piles, 10000 each, everyone on the start square,
     /// no deeds / houses / mortgages / marks, no non-skill field cards, no
     /// statuses, no pending turn-end callbacks. Start-time resources (charge pots
-    /// 「初始N」, P✽P fans) are wiped too -- their caps stay, so a skill's
+    /// 「初始N」, P✽P fans) are wiped too -- their caps remain, so a skill's
     /// 「上限M」 still reads back. Use [`Table::set_charge`] to put a specific pot
     /// back.
     pub fn clean(&mut self) -> &mut Self {
@@ -625,7 +634,7 @@ impl Table {
             // turn starts, so a stray Returns is not a clean field. A test
             // that wants Returns places it itself.
             p.field.retain(|f| f.card.starts_with("skill:"));
-            for k in [key::STAY, key::STUN, key::STUN_START, key::EXILE, key::NO_HAND] {
+            for k in [K_LAYER_A, K_LAYER_B, K_LAYER_C, K_LAYER_D, K_LAYER_E] {
                 p.state.remove(k);
             }
             // A start-time gate like the charge pots: a group skill's 「无法获取
@@ -636,9 +645,9 @@ impl Table {
             for f in p.field.iter_mut() {
                 f.props.remove(prop::NO_REWARD);
             }
-            p.state_set(key::EXILE_TO, -1);
+            p.state_set(K_TILE_SLOT, -1);
             // Start-time resources: the value, not the cap.
-            p.state_set(key::CHARGE, 0);
+            p.state_set(K_CHARGE, 0);
             p.tokens
                 .retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
@@ -715,9 +724,9 @@ impl Table {
     /// Charge pots: `value` held, `max` cap.
     pub fn set_charge(&mut self, who: usize, value: i32, max: i32) {
         let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(key::CHARGE, value);
-        let min = p.state_min(key::CHARGE);
-        p.state_set_bounds(key::CHARGE, min, max);
+        p.state_set(K_CHARGE, value);
+        let min = p.state_min(K_CHARGE);
+        p.state_set_bounds(K_CHARGE, min, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -939,7 +948,7 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, key::CHARGE)
+        self.state(who, K_CHARGE)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

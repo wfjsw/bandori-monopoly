@@ -311,7 +311,7 @@ fn mana_skill_fire_on_circle_pass() {
     // 规则书: 「每次[经过]CiRCLE时获得1个[火罐]（初始1，上限2）」
     t.set_fire(0, 1, 2);
     assert_eq!(t.charge(0), 1);
-    assert_eq!(t.p(0).charge_max(), 2);
+    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 2);
 }
 
 /// 规则书: 「之后，直到你的下个回合结束，你的资金消耗减半」 -- the window
@@ -400,7 +400,7 @@ fn hina_sumimi_skill_fire_cap() {
     // 规则书: 「每次[经过]CiRCLE时获得1个[火罐]（初始2，上限2）」
     t.set_fire(0, 2, 2);
     assert_eq!(t.charge(0), 2);
-    assert_eq!(t.p(0).charge_max(), 2);
+    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 2);
 }
 
 // =====================================================================
@@ -528,7 +528,12 @@ fn two_donuts_exile_ends_at_the_pass_and_money_is_not_blocked() {
 #[test]
 fn layered_exile_still_ticks_per_turn_start() {
     let mut t = Table::vanilla(2);
-    t.m.world_mut().apply_abnormal(0, 3, 2, 10);
+    {
+        let w = t.m.world_mut();
+        w.apply_layer(0, bandori_std::state_key::EXILE, 2);
+        w.state_set_flags(0, bandori_std::state_key::EXILE, 1 | 2);
+        w.state_set_expires(0, bandori_std::state_key::EXILE, Some(game_core::state::Tick::TurnStart));
+    }
     assert_eq!(t.state(0, "exile"), 2, "two layers");
     assert_eq!(t.state(0, "exileHold"), 0, "a layered grant is not a hold");
     t.begin_turn(0);

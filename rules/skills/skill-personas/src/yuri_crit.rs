@@ -18,7 +18,7 @@
 //! say *whose* skill a running body belongs to when the body was copied, which
 //! is the same provenance question as the temporary-pot cost. See the TODO.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

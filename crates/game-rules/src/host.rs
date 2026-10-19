@@ -101,7 +101,7 @@ pub struct CardInfo {
     /// value`. Keys are `game_core::state::prop` / `card_sdk::abi::prop`
     /// constants; a key the card does not declare is absent and reads as its
     /// default (`0`). A `BTreeMap` (not a `HashMap`) so iteration and
-    /// serialization stay deterministic.
+    /// serialization remain deterministic.
     #[serde(default)]
     pub props: std::collections::BTreeMap<String, i32>,
     /// Tile texts this card's entries speak (`CardDef::texts`, ABI v59), in
@@ -115,6 +115,15 @@ pub struct CardInfo {
     /// Tile kinds this rule governs (`CardDef::governs`, ABI v66).
     #[serde(default)]
     pub governs: Vec<String>,
+    /// Gate-refusal i18n keys (`CardDef::gate_msgs`, ABI v89): `(gate kind i32, key)`.
+    #[serde(default)]
+    pub gate_msgs: Vec<(i32, String)>,
+    /// Turn-skip i18n keys (`CardDef::gate_skip_msgs`).
+    #[serde(default)]
+    pub gate_skip_msgs: Vec<(i32, String)>,
+    /// Card prop that exempts a play from this rule's act gate (`CardDef::exemption_prop`).
+    #[serde(default)]
+    pub exemption_prop: String,
 }
 
 impl CardInfo {
@@ -710,10 +719,12 @@ pub(crate) struct Inner {
 
 /// The gate kinds answered natively from conditions alone (see
 /// [`gate_open_over`]). Index = position in this array.
-pub const GATE_KINDS: [crate::TriggerKind; 5] = [
+pub const GATE_KINDS: [crate::TriggerKind; 7] = [
     crate::TriggerKind::ActGate,
     crate::TriggerKind::PayGate,
     crate::TriggerKind::MoveGate,
+    crate::TriggerKind::OnBoardGate,
+    crate::TriggerKind::TargetableGate,
     crate::TriggerKind::ExclusiveUse,
     crate::TriggerKind::PlayGate,
 ];
@@ -736,7 +747,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     out
 }
 
-/// A status gate entry is **CEL-only**: its condition is the whole answer, so
+/// A capability gate entry is **CEL-only**: its condition is the whole answer, so
 /// the host can evaluate it natively in a pure read. A residual wasm guard (or
 /// a missing condition) would be invisible to that read -- refuse at load.
 pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
@@ -954,7 +965,7 @@ impl RulesetBuilder {
         }
         let sha256 = hex_sha256(parts.join("\n").as_bytes());
         // Keep the metadata rows sorted the way the export produced them
-        // (`kind`, `ordinal`) so a multi-module merge stays deterministic.
+        // (`kind`, `ordinal`) so a multi-module merge remains deterministic.
         let mut metadata = self.metadata;
         metadata.sort_by(|a, b| {
             a.kind
@@ -1963,7 +1974,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     fn declares_buy(&self) -> bool {
         BUY_HOOK_KINDS.iter().any(|&k| self.declares(k))
     }
-    /// A CEL-only status gate (`ActGate` / `PayGate` / `MoveGate`): `true` =
+    /// A CEL-only capability gate (`ActGate` / `PayGate` / `MoveGate`): `true` =
     /// open. Default scans the manifest; [`Ruleset`] overrides with its
     /// load-time list.
     fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
@@ -2257,7 +2268,7 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let _ = (i, entry);
         None
     }
-    /// A CEL-only status gate, `true` = open (see [`CardModules::gate_open`]).
+    /// A CEL-only capability gate, `true` = open (see [`CardModules::gate_open`]).
     /// Default scans the card table through [`Self::card`].
     fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
         let mut entries = Vec::new();
@@ -2635,6 +2646,9 @@ fn inspect(
             texts: e.texts,
             board_role: e.board_role,
             governs: e.governs,
+            gate_msgs: e.gate_msgs,
+            gate_skip_msgs: e.gate_skip_msgs,
+            exemption_prop: e.exemption_prop,
         })
         .collect();
     if cards.is_empty() {
@@ -3922,6 +3936,22 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "state_set_flags",
+        |mut c: C<W>, player_id: i32, kp: i32, kn: i32, flags: i32| -> Result<(), Error> {
+            let key = hostfns::guest_str(&mut c, kp, kn).map_err(HostErr::into_err)?;
+            hostfns::state_set_flags(&mut c, player_id, &key, flags as u8).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "raise_after",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, value: i32| -> Result<(), Error> {
+            let name = hostfns::guest_str(&mut c, np, nl).map_err(HostErr::into_err)?;
+            hostfns::raise_after(&mut c, player_id, &name, value).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "skip_main_move",
         |mut c: C<W>, player_id: i32, locked: i32| -> Result<(), Error> {
             hostfns::skip_main_move(&mut c, player_id, locked).map_err(HostErr::into_err)
@@ -5131,6 +5161,11 @@ impl CardWorld for NullWorld {
     fn state_get(&self, _player_id: i32, _key: &str) -> i32 {
         0
     }
+    fn state_pairs(&self, _player_id: i32) -> Vec<(String, i32)> {
+        Vec::new()
+    }
+    fn state_set_flags(&mut self, _player_id: i32, _key: &str, _flags: u8) {}
+    fn raise_after(&mut self, _player_id: i32, _name: &str, _value: i32) {}
     fn state_min(&self, _player_id: i32, _key: &str) -> i32 {
         0
     }
@@ -5448,6 +5483,9 @@ mod gate_tests {
             texts: Default::default(),
             board_role: Default::default(),
             governs: Default::default(),
+            gate_msgs: Default::default(),
+            gate_skip_msgs: Default::default(),
+            exemption_prop: Default::default(),
         }
     }
 
@@ -5464,10 +5502,10 @@ mod gate_tests {
         }
     }
 
-    /// A status gate must be CEL-only: a residual guard or a missing
+    /// A capability gate must be CEL-only: a residual guard or a missing
     /// condition is invisible to a pure read, so the load refuses it.
     #[test]
-    fn status_gates_must_be_cel_only() {
+    fn gates_must_be_cel_only() {
         assert!(validate_cel_only_gates(&[card(vec![gate(false, Some("true"))])]).is_ok());
         assert!(validate_cel_only_gates(&[card(vec![gate(true, Some("true"))])]).is_err());
         assert!(validate_cel_only_gates(&[card(vec![gate(false, None)])]).is_err());

@@ -10,7 +10,7 @@
 //! 「为此卡添加一个[奇迹水晶]」 is a *band-card* crystal -- `add_card_crystals`
 //! on this rule's own id -- not the player's counter.
 
-use card_sdk::abi::{state_key, ActionKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 

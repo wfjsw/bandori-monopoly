@@ -3,7 +3,7 @@ name = "rules-native"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "The card ruleset linked as plain native Rust for the bot's simulations (docs/BOT.md B1). Advisory only -- the sandboxed WasmRules stays authoritative for real matches."
+description = "The card ruleset linked as plain native Rust for the bot's simulations (docs/BOT.md B1). Advisory only -- the sandboxed WasmRules remains authoritative for real matches."
 
 [dependencies]
 game-core = { path = "../game-core" }
@@ -15,7 +15,7 @@ bandori-std = { path = "../../rules/bandori-std" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = { workspace = true }
 # Ruleset binding: the shipped ruleset as an rlib (same crates the wasm module
-# links). Crate/path names stay as the ruleset ships them; this list is the
+# links). Crate/path names remain as the ruleset ships them; this list is the
 # same one `card-all` aggregates for the wasm module -- kept explicit here so
 # the native link does not depend on the cdylib's crate-type dance).
 card-ag = { path = "../../rules/cards/card-ag" }
