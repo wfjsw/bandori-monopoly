@@ -751,60 +751,60 @@ impl World {
         uid
     }
 
-    // ---------------------------------------------------------- charge resource
+    // ---------------------------------------------------------- named markers
+    // Name-as-data: the counter is the frozen wire key. Storage bounds
+    // (`{value, min, max}`) still apply on write; cap / partial-gain **policy**
+    // lives in the rules-layer kernel, not here.
 
-    /// Spendable resource held.
+    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
+    /// frozen webui key [`key::CHARGE`].
     pub fn charge(&self, player_id: i32) -> i32 {
         self.state_get(player_id, key::CHARGE)
     }
 
-    /// The mandated resource cap -- the `max` of the `charge` item,
-    /// which a persona skill writes. The engine never imposes it.
+    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
+    /// `max` of [`key::CHARGE`], written through the rules layer.
     pub fn charge_max(&self, player_id: i32) -> i32 {
         self.state_max(player_id, key::CHARGE)
     }
 
-    /// Move the resource *cap* up or down. A consumer of the cap, so it is
-    /// the one that pulls the value back under the new ceiling;
-    /// [`Self::state_add`] would not.
-    pub fn add_charge_max(&mut self, player_id: i32, n: i32) -> i32 {
-        let cap = self.charge_max(player_id).saturating_add(n).max(0);
-        self.state_set_bounds(player_id, key::CHARGE, 0, cap);
-        let have = self.charge(player_id).min(cap);
-        self.state_set(player_id, key::CHARGE, have);
+    /// Move a named counter's *cap* up or down. Dumb storage fold: a consumer
+    /// of the cap, so it is the one that pulls the value back under the new
+    /// ceiling; [`Self::state_add`] would not. The name is data -- the frozen
+    /// wire key is just one caller.
+    pub fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
+        let cap = self.state_max(player_id, name).saturating_add(n).max(0);
+        self.state_set_bounds(player_id, name, 0, cap);
+        let have = self.state_get(player_id, name).min(cap);
+        self.state_set(player_id, name, have);
         cap
     }
 
-    /// Gained `n` (at most up to the mandated cap) and logged it; 0 if nothing.
-    /// This is a consumer choosing to honour [`Self::charge_max`].
-    pub fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
+    /// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper
+    /// over [`Self::add_marker_max`].
+    pub fn add_charge_max(&mut self, player_id: i32, n: i32) -> i32 {
+        self.add_marker_max(player_id, key::CHARGE, n)
+    }
+
+    /// Dumb add of `n` to a named counter; returns how many landed (the
+    /// storage bounds may refuse part of it). No cap policy and no
+    /// `log.gain_charge` -- the rules-layer kernel clamps and narrates.
+    pub fn gain_marker(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
         };
         if n <= 0 || s.out() {
             return 0;
         }
-        let cap = s.charge_max();
-        if cap <= 0 {
-            return 0;
-        }
-        let got = n.clamp(0, (cap - s.charge()).max(0));
-        if got <= 0 {
-            return 0;
-        }
-        s.state_add(key::CHARGE, got);
-        let (charge, name) = (s.charge(), s.player.clone());
-        self.log(
-            "charge",
-            player_id,
-            Msg::new("log.gain_charge")
-                .text("who", name)
-                .i("n", got)
-                .msg("why", why)
-                .i("charge", charge)
-                .i("max", cap),
-        );
-        got
+        let before = s.state_get(name);
+        let after = s.state_add(name, n);
+        (after - before).max(0)
+    }
+
+    /// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper
+    /// over [`Self::gain_marker`].
+    pub fn gain_charge(&mut self, player_id: i32, n: i32, _why: Msg) -> i32 {
+        self.gain_marker(player_id, key::CHARGE, n)
     }
 
     // ---------------------------------------------------------- money moves

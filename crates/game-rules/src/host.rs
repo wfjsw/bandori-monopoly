@@ -486,10 +486,10 @@ pub enum HostRequest {
     OfferBuildOne { player_id: i32, tile: i32 },
     /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
     /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 counteraction
-    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用charge pots进行
+    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行
     /// 掷骰时」) with the roller, the face and `source`, then answers with the
     /// face any counteraction left on the link. `source` is an
-    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = a charge pot, ...).
+    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = marker-funded, ...).
     Roll {
         player_id: i32,
         count: i32,
@@ -564,8 +564,8 @@ pub enum HostRequest {
     /// whole-effect negation before the body already prevents them.
     Marker {
         player_id: i32,
-        /// Marker name (charge / named counters/「P✽P粉丝」/…). `charge` is the
-        /// charge shorthand (`key::CHARGE`).
+        /// Marker name (opaque data). The frozen webui key `charge` is one
+        /// caller; named counters / kind hosts pass their own.
         name: String,
         /// Signed delta. Negative = spend (raises `markerSpend`), positive =
         /// gain (raises `markerGain`).

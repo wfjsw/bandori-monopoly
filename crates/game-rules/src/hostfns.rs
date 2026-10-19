@@ -1342,21 +1342,37 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
             }
 }
 
+/// Wire name `charge`; policy lives in `rules_status::fire`.
 pub fn charge<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().charge(player_id)
-    })
+    marker_get(c, player_id, game_core::state::key::CHARGE)
 }
 
+/// Wire name `charge`; policy lives in `rules_status::fire`.
 pub fn charge_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().charge_max(player_id)
-    })
+    marker_max(c, player_id, game_core::state::key::CHARGE)
 }
 
-pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+/// Named-counter read. The name is data.
+pub fn marker_get<C: HostCtx>(c: &mut C, player_id: i32, name: &str) -> Result<i32, HostErr> {
+    Ok(c.st().wr().state_get(player_id, name))
+}
+
+/// Named-counter cap read. The name is data.
+pub fn marker_max<C: HostCtx>(c: &mut C, player_id: i32, name: &str) -> Result<i32, HostErr> {
+    Ok(c.st().wr().state_max(player_id, name))
+}
+
+/// Generic marker gain. The name is data; opens `markerGain` with that name.
+pub fn gain_marker<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    name: &str,
+    n: i32,
+    p: i32,
+    l: i32,
+) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
-            // Marker window: `markerGain` opens before the charge moves.
+            // Marker window: `markerGain` opens before the markers move.
             //
             // The pause is a **trap**, not the sentinel: `ctx::gain_charge`
             // returns `Result<i32, Prompt>` and a great many bodies discard
@@ -1372,7 +1388,7 @@ pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "charge".into(),
+                        name: name.to_string(),
                         delta: n,
                     },
                     crate::inline::Pause::Trap,
@@ -1381,7 +1397,13 @@ pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().gain_charge(player_id, n, why))
+            Ok(c.st_mut().w().gain_marker(player_id, name, n, why))
+}
+
+/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
+/// [`gain_marker`].
+pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+    gain_marker(c, player_id, game_core::state::key::CHARGE, n, p, l)
 }
 
 pub fn give_stay<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), HostErr> {
@@ -1441,16 +1463,24 @@ pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> 
     })
 }
 
-pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+/// Generic marker spend. The name is data; opens `markerSpend` with that name.
+pub fn spend_marker<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    name: &str,
+    n: i32,
+    p: i32,
+    l: i32,
+) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
             // Marker window (user ruling 2026-10-07): `markerSpend` opens
-            // **before** the charge moves. A cancelled link spends nothing.
+            // **before** the markers move. A cancelled link spends nothing.
             if n > 0 {
                 let ok = crate::inline::request_or_pause(
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "charge".into(),
+                        name: name.to_string(),
                         delta: -n,
                     },
                     crate::inline::Pause::Sentinel,
@@ -1461,7 +1491,13 @@ pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i3
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().spend_charge(player_id, n, why))
+            Ok(c.st_mut().w().spend_marker(player_id, name, n, why))
+}
+
+/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
+/// [`spend_marker`].
+pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+    spend_marker(c, player_id, game_core::state::key::CHARGE, n, p, l)
 }
 
 pub fn stay_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
@@ -2535,10 +2571,20 @@ pub fn turn_main_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     })
 }
 
+/// Generic marker-cap move. The name is data; dumb storage fold.
+pub fn add_marker_max<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    name: &str,
+    n: i32,
+) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().add_marker_max(player_id, name, n))
+}
+
+/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
+/// [`add_marker_max`].
 pub fn add_charge_max<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().add_charge_max(player_id, n)
-    })
+    add_marker_max(c, player_id, game_core::state::key::CHARGE, n)
 }
 
 pub fn set_roller<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
