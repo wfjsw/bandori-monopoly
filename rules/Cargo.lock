@@ -299,6 +299,7 @@ name = "skill-groups"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-markers",
  "rules-status",
  "ruleset-core",
 ]
