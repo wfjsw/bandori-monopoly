@@ -7,9 +7,9 @@
    which is the only part that scrolls; the empty state centres in the rest. */
 .page {
   position: absolute;
-  top: 124px;
-  left: 80px;
-  right: 80px;
+  top: calc(124px + var(--safe-top, 0px));
+  left: calc(80px + var(--safe-left, 0px));
+  right: calc(80px + var(--safe-right, 0px));
   bottom: 40px;
   display: flex;
   flex-direction: column;
@@ -114,7 +114,8 @@
 .bar.dockTop {
   left: 0;
   right: 0;
-  top: var(--topbar-h);
+  /* Under the TopBar, which itself starts below the stage's top inset. */
+  top: calc(var(--topbar-h) + var(--safe-top, 0px));
   bottom: auto;
   border-radius: 0 0 16px 16px;
   padding-top: 14px;
@@ -196,7 +197,7 @@
 .banner {
   position: absolute;
   left: 50%;
-  top: calc(88px + var(--replay-bar-top, 0px));
+  top: calc(88px + var(--safe-top, 0px) + var(--replay-bar-top, 0px));
   transform: translateX(-50%);
   display: flex;
   align-items: center;
