@@ -2,7 +2,7 @@
 # Build with tools/build-ruleset.sh (wasm32-unknown-unknown only).
 [workspace]
 resolver = "2"
-members = ["card-sdk", "ruleset-core", "cards/*", "skills/*", "personas", "tiles", "tile_marks", "status", "events", "fixtures/*"]
+members = ["card-sdk", "ruleset-core", "cards/*", "skills/*", "personas", "tiles", "markers", "status", "events", "fixtures/*"]
 
 [profile.release]
 opt-level = "z"

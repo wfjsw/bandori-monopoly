@@ -1,14 +1,14 @@
-# Kani unit `tiles` + `tile_marks` — results
+# Kani unit `tiles` + `markers` — results
 
 Branch `kani-tiles` at `/home/monopoly/kani-tiles-wt`.
 Sources: `docs/rulebook/rulebook-doc.md` 「基础[结算]规则」 (148–162) and
 「其他规则注意事项」 6 (146); clause docs `docs/rulebook/spec/global/settle.md`
 (`G-SETTLE-*`) and `docs/rulebook/spec/global/money.md` (`G-MONEY-*`).
-Bodies under proof: `rules/tiles` (6 tile rules) and `rules/tile_marks`
+Bodies under proof: `rules/tiles` (6 tile rules) and `rules/markers`
 (1 mark, `mark:cp`).
 
-**Method.** Specs in `rules/kani/src/spec/{tiles,tile_marks}.rs` are written
-from the book quotes only. Harnesses in `rules/kani/src/proofs/{tiles,tile_marks}.rs`
+**Method.** Specs in `rules/kani/src/spec/{tiles,markers}.rs` are written
+from the book quotes only. Harnesses in `rules/kani/src/proofs/{tiles,markers}.rs`
 invoke the unmodified bodies via the shipped `CardDef` function pointer
 (`call_settle` / `call_mark_cp_land` — see harness-verdicts note). Fail-closed: no `#[ignore]`,
 no weakened specs, no silent zeros on unmodeled `Op`s.
@@ -86,7 +86,7 @@ rows when those arrive.
 
 ## Harness verdicts
 
-`bash tools/kani/run.sh --unit tiles|tile_marks --harness NAME --jobs 1`
+`bash tools/kani/run.sh --unit tiles|markers --harness NAME --jobs 1`
 (`CARGO_TARGET_DIR=/home/monopoly/kani-target-tiles`, `--default-unwind 80`).
 Time is CBMC `Verification Time`. **Method note:** bodies are invoked via the
 shipped `CardDef` function pointer (`call_settle` / `call_mark_cp_land`), not

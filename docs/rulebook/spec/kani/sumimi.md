@@ -61,7 +61,7 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 | `hina_01_pass_circle_iff` + `_user1_` | TIMEOUT ×2 | 1800 s | **C** | `fill_for_guard` magic-number FnId masks (pre-batch-11): `TileIs`/`OWN_START` pulled `fill_geometry_bins` (kokoro_02 cliff) | masks from `FnId::*` already on master (batch 11) | `hina_01_pass_circle_iff` **SUCCESSFUL 605 s** (4/4 covers); user1 queued |
 | `hina_01_mutant_is_detected` | SUCCESSFUL | 147 s | — | pinned tile 0 / fire 0 | — | done |
 | `childhood_02_fire_iff` + `_user1_` + mutant | SUCCESSFUL | 287/291/176 s | — | — | — | done |
-| `twodonuts_01_exile_iff` + `_user1_` + mutant | SUCCESSFUL | 302/240/225 s | — | — | — | done |
+| `twodonuts_01_exile_iff` + `_user1_` + mutant | SUCCESSFUL | 349/345/327 s | — | — | — | done |
 | `twoinone_01b_fire_iff` + `_user1_` + mutant | TIMEOUT ×3 | 1800 s | **E** | (1) body `find_card` → `field_instances` → `postcard::from_bytes::<Vec<(i32,String)>>`; (2) symbolic `is_hina` muxed two CJK intern paths and BMC stalled at the first `sparse_play_world` unwind | (1) `cfg(kani)` `field_instances`/`find_card` facades (compact `[uid, name_id]`, no postcard); (2) pin swap direction per seat harness (seat0 三角初华→纯田真奈, seat1 纯田真奈→三角初华) — pair covers both halves | **SUCCESSFUL 457 / 542 / 396 s** (1/1 cover each) |
 | 3× `*_formula` | SUCCESSFUL | 3–7 s | — | — | — | done |
 
@@ -101,7 +101,7 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 | C-SUMIMI-sweetescape-01 | 「前后两格[收费标价]之和≥2000」 | OPEN + BLOCKED-HOST | — | — | body reads `rent_of` | OPEN-收费标价 |
 | C-SUMIMI-sweetescape-02 | 「传送…并触发结算」 | PROTOCOL-LEVEL / OPEN | — | — | settle pipeline | OPEN-收费标价, OPEN-触发结算 |
 | C-SUMIMI-sweetescape-03 | 「必须购买，视为主要移动」 | PROTOCOL-LEVEL | — | — | buy-as-main-move scheduling | — |
-| C-SUMIMI-twodonuts-01 | 「获得[除外]」 | PROVEN | `twodonuts_01_exile_iff` | SUCCESSFUL 302/240 s | one GiveExile grant; expiry is multi-act | — |
+| C-SUMIMI-twodonuts-01 | 「获得[除外]」 | PROVEN | `twodonuts_01_exile_iff` | SUCCESSFUL 349/345/327 s | exactly one GiveExile of n=1 (duration hold) + `exileHold==1`; expiry is multi-act | — |
 | C-SUMIMI-twodonuts-02 | 「选择传送…并触发结算」 | PROTOCOL-LEVEL | — | — | multi-act pass + settle-teleport | OPEN-触发结算 |
 | C-SUMIMI-twodonuts-03 | 「各获得2火罐」 | PROTOCOL-LEVEL | — | — | rides (2) | — |
 | C-SUMIMI-littlehina-01 | 「失去资金总额即将超过[收费标价]」 | OPEN + PROTOCOL-LEVEL | — | — | running-loss window | OPEN-收费标价 |

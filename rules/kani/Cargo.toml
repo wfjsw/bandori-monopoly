@@ -45,7 +45,7 @@ band-roselia = ["dep:card-roselia", "kani-bump"]
 band-sumimi = ["dep:card-sumimi", "kani-bump"]
 skills-groups = ["dep:skill-groups", "kani-bump"]
 skills-personas = ["dep:skill-personas", "kani-bump"]
-tiles = ["dep:rules-tiles", "dep:rules-tile-marks", "kani-bump"]
+tiles = ["dep:rules-tiles", "dep:rules-markers", "kani-bump"]
 events = ["dep:rules-events", "kani-bump"]
 
 [dependencies]
@@ -68,7 +68,7 @@ card-sumimi = { path = "../cards/card-sumimi", optional = true }
 skill-groups = { path = "../skills/skill-groups", optional = true }
 skill-personas = { path = "../skills/skill-personas", optional = true }
 rules-tiles = { path = "../tiles", optional = true }
-rules-tile-marks = { path = "../tile_marks", optional = true }
+rules-markers = { path = "../markers", optional = true }
 rules-events = { path = "../events", optional = true }
 # Single-source guard IR (heap-free; the translator output).
 rules-cond-ir = { path = "../cond-ir" }

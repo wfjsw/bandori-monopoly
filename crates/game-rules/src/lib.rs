@@ -25,11 +25,14 @@ pub mod hostfns;
 pub mod inline;
 /// Roster metadata (ABI v63): `ruleset_metadata` -> [`game_core::data::Roster`].
 pub mod roster;
-/// The `ruleset_*` host-import shims (native only). Lives here, not in
-/// `rules-native`, so every native binary that links `card-sdk` with `guest`
+/// The `ruleset_*` host-import shims. Lives here, not in
+/// `rules-native`, so every binary that links `card-sdk` with `guest`
 /// on -- including a server test binary in a unified `cargo test` -- resolves
-/// the symbols (`docs/BOT.md` B1, the `LNK2019` fix).
-#[cfg(not(target_arch = "wasm32"))]
+/// the symbols (`docs/BOT.md` B1, the `LNK2019` fix). On wasm32 these are only
+/// compiled for the **linked** monolith (`native-rules`): a sandbox guest
+/// module imports them from the host instead. wasm-ld resolves the plain
+/// symbol references inside the one module.
+#[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
 pub mod native_shims;
 /// THE ruleset class registration for `tile_in` (ABI v56).
 pub mod tile_class;
@@ -49,15 +52,21 @@ pub use cond_pre::{
 pub use game_core::msg::Msg;
 pub use host::{
     Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,
-    HostState, Outcome, Prompt, PromptOption, RuleError, Ruleset, RulesetBuilder, RulesHandle,
-    MAX_NESTING,
+    HostState, Outcome, Prompt, PromptOption, RuleError, RulesHandle, MAX_NESTING,
 };
+/// Sandbox-only: the wasmi/wasmtime card-module host (`Ruleset` is the
+/// `CardModules` over loaded wasm; `RulesetBuilder` assembles one).
+#[cfg(feature = "sandbox")]
+pub use host::{Ruleset, RulesetBuilder};
 /// Simulation-mode inline answers (`docs/BOT.md` §3.2).
 pub use inline::{with_inline_host, InlineHost};
 /// Shared with `rules-native`: the engine-side `Msg` decoder and the per-run
 /// fuel budget the nested-call plumbing shares.
 pub use host::{engine_msg, DEFAULT_FUEL};
-pub use wasm_rules::{take_silent_visible, RulesBridge, Run, WasmRules};
+pub use wasm_rules::{take_silent_visible, RulesBridge, Run};
+/// Sandbox-only `CardRules` over [`Ruleset`].
+#[cfg(feature = "sandbox")]
+pub use wasm_rules::WasmRules;
 mod trigger_why;
 pub use world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 /// The 「效果适用」 why-clause builder.

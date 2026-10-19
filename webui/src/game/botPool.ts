@@ -420,6 +420,10 @@ export interface DirectBotGlue {
   ruleset_add(bytes: Uint8Array): void;
   ruleset_precompiled(bytes: Uint8Array): void;
   ruleset_build(): number;
+  /** Monolith (docs/BOT.md §3.6): sandbox `Ruleset::sha256()` baked at build. */
+  ruleset_sha256?(): string;
+  /** `true` when the card rules are compiled into the bundle. */
+  rules_linked?(): boolean;
   decide(view: string, budgetMs: number, seed: number): string;
   ponder(view: string, budgetMs: number, seed: number): string;
   extras(view: string, seed: number): string;

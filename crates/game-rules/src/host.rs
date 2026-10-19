@@ -1,31 +1,49 @@
 //! wasmi host: loading a set of card modules, the `ruleset` import table, replay,
 //! and nested cross-module card calls.
 
-use std::collections::HashMap;
 use std::fmt;
+#[cfg(feature = "sandbox")]
+use std::collections::HashMap;
+#[cfg(feature = "sandbox")]
 use std::sync::Arc;
 
-use card_sdk::abi::{
-    self, export, AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind, ABI_VERSION,
-    IMPORT_MODULE,
-};
+use card_sdk::abi::{AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind};
+#[cfg(feature = "sandbox")]
+use card_sdk::abi::{self, export, ABI_VERSION, IMPORT_MODULE};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 // The engine behind the host: wasmi (an interpreter) in the browser, wasmtime
 // (the optimizing compiler) on the server. Same modules and same behaviour.
-#[cfg(any(target_arch = "wasm32", feature = "wasmi-native"))]
+// Compiled only with the `sandbox` feature -- the linked path (`native-rules`)
+// has no wasm engine at all.
+#[cfg(all(feature = "sandbox", any(target_arch = "wasm32", feature = "wasmi-native")))]
 #[path = "be_wasmi.rs"]
 mod be;
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "wasmi-native")))]
+#[cfg(all(
+    feature = "sandbox",
+    not(target_arch = "wasm32"),
+    not(feature = "wasmi-native")
+))]
 #[path = "be_wasmtime.rs"]
 mod be;
 
+#[cfg(feature = "sandbox")]
 use be::{
     err, error_text, has_func, instantiate, is_need_input, need_input, read_guest, read_mem,
     set_fuel, write_guest,
 };
+#[cfg(feature = "sandbox")]
 use be::{Caller, Engine, Error, Linker, Module, Store};
 
+/// Default [`RulesHandle`] for [`HostState`]: the sandbox's module index.
+/// Outside the sandbox there is no engine-owned index -- callers name their
+/// own handle (e.g. `rules-native`'s `NativeRulesHandle`).
+#[cfg(feature = "sandbox")]
+pub type DefaultRules = Arc<Inner>;
+#[cfg(not(feature = "sandbox"))]
+pub type DefaultRules = ();
+
+#[cfg(feature = "sandbox")]
 use crate::hostfns;
 use crate::world::CardWorld;
 
@@ -64,6 +82,7 @@ pub mod bot_cost {
 /// every machine.
 pub const DEFAULT_FUEL: u64 = 5_000_000;
 
+#[cfg(feature = "sandbox")]
 /// Fuel for the one-off `ruleset_metadata` export, which builds the whole
 /// roster (every card, persona and group) and so dwarfs a single effect run.
 const METADATA_FUEL: u64 = 500_000_000;
@@ -344,6 +363,17 @@ pub enum HostRequest {
     /// is logged), so it cannot re-teleport over a move that already ran.
     /// Answers 1 (it went through) or 0 (the gate blocked it).
     Teleport { player_id: i32, tile: i32 },
+    /// A teleport whose move tail runs through the engine's `teleport_as`
+    /// **without** the abnormal [反击] window: the status's own return clause
+    /// (「状态结束后在玩家回合开始时要[传送]到的格子」) is not a forced move
+    /// the responder answers. `as_main` marks the move as the turn's
+    /// [主要移动] and sets `turn.main_moved`. Answers 1 (it ran) or 0.
+    TeleportAs {
+        player_id: i32,
+        tile: i32,
+        resolve: bool,
+        as_main: bool,
+    },
     /// A full [触发结算] of `tile` for this player, without moving them.
     SettleAt {
         player_id: i32,
@@ -467,10 +497,10 @@ pub enum HostRequest {
     OfferBuildOne { player_id: i32, tile: i32 },
     /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
     /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 counteraction
-    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用charge pots进行
+    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行
     /// 掷骰时」) with the roller, the face and `source`, then answers with the
     /// face any counteraction left on the link. `source` is an
-    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = a charge pot, ...).
+    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = marker-funded, ...).
     Roll {
         player_id: i32,
         count: i32,
@@ -545,8 +575,8 @@ pub enum HostRequest {
     /// whole-effect negation before the body already prevents them.
     Marker {
         player_id: i32,
-        /// Marker name (charge / named counters/「P✽P粉丝」/…). `charge` is the
-        /// charge shorthand (`key::CHARGE`).
+        /// Marker name (opaque data). The frozen webui key `charge` is one
+        /// caller; named counters / kind hosts pass their own.
         name: String,
         /// Signed delta. Negative = spend (raises `markerSpend`), positive =
         /// gain (raises `markerGain`).
@@ -625,11 +655,13 @@ pub struct HookRun<W> {
     pub outcome: Outcome<W>,
 }
 
+#[cfg(feature = "sandbox")]
 struct LoadedModule {
     module: Module,
     sha256: String,
 }
 
+#[cfg(feature = "sandbox")]
 /// Where a card lives.
 #[derive(Clone, Copy)]
 struct Slot {
@@ -638,6 +670,7 @@ struct Slot {
     local: i32,
 }
 
+#[cfg(feature = "sandbox")]
 pub(crate) struct Inner {
     /// Unique across the process. Caches keyed on a set of modules must not
     /// survive one `Inner` into another that lands at the same address, so they
@@ -748,6 +781,7 @@ pub fn gate_open_over<'a>(
     true
 }
 
+#[cfg(feature = "sandbox")]
 /// Builds a [`Ruleset`] from any number of card modules (normally one per card).
 pub struct RulesetBuilder {
     engine: Engine,
@@ -764,6 +798,7 @@ pub struct RulesetBuilder {
     precompiled: HashMap<(String, i32), Vec<u8>>,
 }
 
+#[cfg(feature = "sandbox")]
 impl RulesetBuilder {
     /// Compile and validate one card module (ABI version, exports, manifest) and add
     /// its cards. Returns the module's SHA-256.
@@ -948,6 +983,7 @@ impl RulesetBuilder {
     }
 }
 
+#[cfg(feature = "sandbox")]
 /// Compile one condition source (host `compile` path) or load a precompiled
 /// blob (runtime-only path). Both end at the same `CompiledPre`, so the
 /// browser evaluates exactly what the host compiled.
@@ -1009,6 +1045,7 @@ pub const BUY_HOOK_KINDS: [crate::TriggerKind; 4] = [
     crate::TriggerKind::BuySet,
 ];
 
+#[cfg(feature = "sandbox")]
 /// A loaded, validated set of card modules.
 #[derive(Clone)]
 pub struct Ruleset {
@@ -1016,6 +1053,7 @@ pub struct Ruleset {
     fuel: u64,
 }
 
+#[cfg(feature = "sandbox")]
 impl Ruleset {
     pub fn builder() -> RulesetBuilder {
         RulesetBuilder {
@@ -1763,11 +1801,13 @@ impl Ruleset {
     }
 }
 
+#[cfg(feature = "sandbox")]
 fn trap(e: Error) -> RuleError {
     RuleError::Trap(be::error_text(&e))
 }
 
 /// Fold one guest call's result into an [`Outcome`] against the store it ran in.
+#[cfg(feature = "sandbox")]
 fn finish<W>(store: Store<HostState<W>>, res: Result<i64, Error>) -> Result<Outcome<W>, RuleError> {
     let state = store.into_data();
     match res {
@@ -2034,6 +2074,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     ) -> Result<Option<crate::Msg>, RuleError>;
 }
 
+#[cfg(feature = "sandbox")]
 impl CardModules for Ruleset {
     fn cards(&self) -> &[CardInfo] {
         Ruleset::cards(self)
@@ -2178,6 +2219,7 @@ impl HostErr {
         matches!(self, HostErr::NeedInput)
     }
 
+#[cfg(feature = "sandbox")]
     /// Convert to the wasm-engine error at the sandbox boundary.
     pub fn into_err(self) -> be::Error {
         match self {
@@ -2232,6 +2274,7 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
     }
 }
 
+#[cfg(feature = "sandbox")]
 impl RulesHandle for Arc<Inner> {
     fn by_id(&self, id: &str) -> Option<i32> {
         self.by_id.get(id).copied()
@@ -2293,7 +2336,7 @@ pub trait GuestMem {
 
 /// Per-run store data. `world` is `None` only while a nested `play_card` has
 /// borrowed it (the outer guest is suspended inside the host call at that time).
-pub struct HostState<W, R = Arc<Inner>> {
+pub struct HostState<W, R = DefaultRules> {
     pub rules: Option<R>,
     pub world: Option<W>,
     pub answers: Vec<i32>,
@@ -2319,10 +2362,13 @@ pub struct HostState<W, R = Arc<Inner>> {
     pub msg_reply: i32,
     /// Per-instance resource ceiling. Installed on the store by [`new_store`];
     /// lives in the store data because that is where `Store::limiter` wants its
-    /// resource limiter to come from. Unused on the native backend.
+    /// resource limiter to come from. Sandbox only -- the native backend has no
+    /// store limiter.
+    #[cfg(feature = "sandbox")]
     pub limits: be::StoreLimits,
 }
 
+#[cfg(feature = "sandbox")]
 /// The per-instance memory ceiling, as a fresh [`be::StoreLimits`]. One per
 /// store (each nested `play_card` is its own instance).
 fn store_limits() -> be::StoreLimits {
@@ -2332,6 +2378,7 @@ fn store_limits() -> be::StoreLimits {
 }
 
 /// Build a store with the per-instance memory ceiling installed.
+#[cfg(feature = "sandbox")]
 fn new_store<W>(engine: &Engine, state: HostState<W>) -> Store<HostState<W>> {
     let mut store = Store::new(engine, state);
     store.limiter(|s| &mut s.limits);
@@ -2356,6 +2403,7 @@ impl<W, R: RulesHandle> HostState<W, R> {
             msg_name: String::new(),
             msg: card_sdk::abi::Message::default(),
             msg_reply: 0,
+            #[cfg(feature = "sandbox")]
             limits: store_limits(),
         }
     }
@@ -2373,6 +2421,7 @@ impl<W, R: RulesHandle> HostState<W, R> {
     }
 }
 
+#[cfg(feature = "sandbox")]
 /// The sandbox's [`HostCtx`]: a wasmi/wasmtime `Caller` over a `HostState`.
 impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
     type World = W;
@@ -2444,6 +2493,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
     }
 }
 
+#[cfg(feature = "sandbox")]
 /// A card stops for a prompt by **returning** [`abi::EXIT_NEED_INPUT`] from
 /// `ruleset_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
 /// value. Fold it back into the host's own [`need_input`] marker so every
@@ -2465,6 +2515,7 @@ fn fold_exit(v: i64) -> Result<i64, Error> {
 /// Instantiate the card's module and call one of its entry points. Returns the
 /// i32 result for `can_counteract`, 0 otherwise. A guest that stops for a prompt comes
 /// back as [`need_input`], never as the raw sentinel.
+#[cfg(feature = "sandbox")]
 fn call_card<W: CardWorld>(
     rules: &Inner,
     store: &mut Store<HostState<W>>,
@@ -2499,6 +2550,7 @@ fn call_card<W: CardWorld>(
 /// [`export::OP_GUARD`] for the gate; a run that stops for a prompt never gets
 /// this far (the sentinel is folded first, so it cannot be misread as a `Msg`
 /// pointer).
+#[cfg(feature = "sandbox")]
 fn call_card_msg<W: CardWorld>(
     rules: &Inner,
     store: &mut Store<HostState<W>>,
@@ -2540,6 +2592,7 @@ fn call_card_msg<W: CardWorld>(
 
 /// Validate one module and read its manifest. Also reads the optional
 /// `ruleset_metadata` roster blob (ABI v63) when the module exports it.
+#[cfg(feature = "sandbox")]
 fn inspect(
     engine: &Engine,
     wasm: &[u8],
@@ -2636,6 +2689,7 @@ fn inspect(
 /// `true` ("gate passed") and the effect would run on an unevaluated gate. Same
 /// for `target`, `card_move` and the buy/build routines below -- see
 /// [`need_input`] for the whole split.
+#[cfg(feature = "sandbox")]
 fn gate<W: CardWorld>(
     c: &mut Caller<'_, HostState<W>>,
     player_id: i32,
@@ -2650,6 +2704,7 @@ fn gate<W: CardWorld>(
     Err(need_input())
 }
 
+#[cfg(feature = "sandbox")]
 fn guest_str<W>(
     caller: &mut Caller<'_, HostState<W>>,
     ptr: i32,
@@ -2663,6 +2718,7 @@ fn guest_str<W>(
 /// `Msg`). A card that sends anything else traps instead of showing raw text to
 /// players. Decoding uses the same `serde` type the guest encodes with, so the
 /// two sides cannot disagree on the layout.
+#[cfg(feature = "sandbox")]
 fn guest_msg<W: CardWorld>(
     caller: &mut Caller<'_, HostState<W>>,
     ptr: i32,
@@ -2695,6 +2751,7 @@ pub fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
     out
 }
 
+#[cfg(feature = "sandbox")]
 // Linkers, cached per (engine, world type). The linker is a pure function of
 // the world type -- every host function is a fixed registration -- but
 // building it walks ~160 `func_wrap` calls and cost ~1.3ms of every ~2ms
@@ -2707,6 +2764,7 @@ thread_local! {
 
 /// `Inner` ids, so the caches below cannot hit across two sets of modules that
 /// happen to share an address.
+#[cfg(feature = "sandbox")]
 fn next_inner_id() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -2717,6 +2775,7 @@ fn next_inner_id() -> u64 {
 // linker cached, resolving a module's imports against it is the rest of a
 // linker init; `Prepared` does that once and every call instantiates from it.
 // Same thread-local reasoning as [`LINKERS`].
+#[cfg(feature = "sandbox")]
 thread_local! {
     static PREPARED: std::cell::RefCell<
         HashMap<(u64, std::any::TypeId, usize), Box<dyn std::any::Any>>,
@@ -2726,6 +2785,7 @@ thread_local! {
 /// Instantiate `rules.modules[module_ix]` against its cached [`be::Prepared`],
 /// building it on the first call. Never clones the linker: the whole lookup,
 /// build and instantiate happens under one borrow.
+#[cfg(feature = "sandbox")]
 fn instantiate_cached<W: CardWorld + 'static>(
     rules: &Inner,
     store: &mut Store<HostState<W>>,
@@ -2748,6 +2808,7 @@ fn instantiate_cached<W: CardWorld + 'static>(
     })
 }
 
+#[cfg(feature = "sandbox")]
 fn linker<W: CardWorld + 'static>(rules: &Inner) -> Result<Linker<HostState<W>>, Error> {
     let key = (
         &rules.engine as *const Engine as usize,
@@ -2768,6 +2829,7 @@ fn linker<W: CardWorld + 'static>(rules: &Inner) -> Result<Linker<HostState<W>>,
     Ok(built)
 }
 
+#[cfg(feature = "sandbox")]
 fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, Error> {
     let mut l = Linker::<HostState<W>>::new(engine);
     let m = IMPORT_MODULE;
@@ -3872,6 +3934,28 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "give_extra_turn",
         |mut c: C<W>, player_id: i32| -> Result<(), Error> {
             hostfns::give_extra_turn(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "end_turn_now",
+        |mut c: C<W>, player_id: i32| -> Result<(), Error> {
+            hostfns::end_turn_now(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "teleport_as",
+        |mut c: C<W>, player_id: i32, tile: i32, resolve: i32, as_main: i32| -> Result<(), Error> {
+            hostfns::teleport_as(&mut c, player_id, tile, resolve, as_main)
+                .map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "log_as",
+        |mut c: C<W>, player_id: i32, kp: i32, kn: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::log_as(&mut c, player_id, kp, kn, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5029,6 +5113,7 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     Ok(l)
 }
 
+#[cfg(feature = "sandbox")]
 impl HostState<NullWorld> {
     fn without_rules() -> Self {
         Self {
@@ -5047,6 +5132,7 @@ impl HostState<NullWorld> {
             msg_name: String::new(),
             msg: card_sdk::abi::Message::default(),
             msg_reply: 0,
+            #[cfg(feature = "sandbox")]
             limits: store_limits(),
         }
     }
@@ -5054,8 +5140,10 @@ impl HostState<NullWorld> {
 
 /// World used only while reading module metadata.
 #[derive(Clone)]
+#[cfg(feature = "sandbox")]
 struct NullWorld;
 
+#[cfg(feature = "sandbox")]
 impl CardWorld for NullWorld {
     fn place_card_on(
         &mut self,
@@ -5265,6 +5353,9 @@ impl CardWorld for NullWorld {
     fn give_stun(&mut self, _: i32, _: i32) {}
     fn give_exile(&mut self, _: i32, _: i32, _: i32) {}
     fn give_extra_turn(&mut self, _: i32) {}
+    fn end_turn_now(&mut self, _: i32) {}
+    fn teleport_as(&mut self, _: i32, _: i32, _: i32, _: i32) {}
+    fn log_as(&mut self, _: i32, _: &str, _: crate::Msg) {}
     fn set_dest(&mut self, _: i32) {}
     fn set_transfer_to_dest(&mut self, _: i32, _: i32) {}
     fn send_to_dest(&mut self, _: i32) -> Option<i32> {

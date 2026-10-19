@@ -57,7 +57,7 @@ const run = (...args) => {
 const cargo = (...args) => run("cargo", ...args);
 
 // Regenerate the aggregate crate (one shipped module linking every band, the
-// skill crates, `rules/tiles`, `rules/tile_marks` and `rules/events`) so a
+// skill crates, `rules/tiles`, `rules/markers` and `rules/events`) so a
 // newly added rule crate is picked up automatically. That is how event card
 // rules (`rules/events`, `docs/EVENTS.md`) land in `card_all`: the aggregate
 // scans them, this build links the result.
@@ -139,3 +139,11 @@ const cards = idx.modules.reduce((n, m) => n + m.cards.length, 0);
 const total = idx.modules.reduce((n, m) => n + m.bytes, 0);
 const conds = idx.conds ? `, ${idx.conds.entries} conds (${idx.conds.bytes} B)` : "";
 console.log(`dist/cards: ${idx.modules.length} module(s), ${cards} cards, ${total} bytes${conds}`);
+
+// The bot monolith (`bot-glue` + `native-rules`, docs/BOT.md §3.6) links the
+// same card crates and bakes this `ruleset_sha256` at build time. Rebuild it
+// here so the two cannot drift (same rule as `crates/bot-service`: "must be
+// built from the same commit as the deployed `dist/cards`"). The worker
+// refuses to answer when the baked hash disagrees with this index.
+console.log("rebuilding bot-glue monolith against the new ruleset...");
+run(process.execPath, "tools/build-bot-glue.mjs");

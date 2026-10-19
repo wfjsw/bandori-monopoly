@@ -63,6 +63,25 @@ fn drain(t: &mut Table) {
     fix_step(t);
 }
 
+/// Advance until it is `who`'s 运营 stage.
+fn until_turn(t: &mut Table, who: usize) {
+    for _ in 0..60 {
+        if t.turn() == who && t.step() == stage::OPS {
+            return;
+        }
+        let cur = t.turn();
+        if t.turn() == who {
+            t.end(who).unwrap();
+            drain(t);
+            continue;
+        }
+        t.m.world_mut().st.skip_move = true;
+        t.end(cur).unwrap();
+        drain(t);
+    }
+    panic!("never reached turn {who} (at {})", t.turn());
+}
+
 fn answer_opt(t: &mut Table, who: usize, needle: &str) {
     let k = t
         .option(needle)
@@ -436,6 +455,90 @@ fn interaction_two_donuts_exile_blocks_move() {
     // The player either stayed (correct) or moved (engine divergence).
     // Assert only what's unambiguous: the exile state is present.
     assert!(t.state(0, "exile") > 0, "[除外] persists after the move attempt");
+}
+
+// 规则书 (Sumimi:一人两个甜甜圈)（1）: 「获得[除外]直至你原本所在格子被其他玩家
+// 经过」 -- a duration grant, not a layer stack. The turn-start layer tick
+// (规则书 「玩家的每回合开始前移除一层」) does not apply to it.
+#[test]
+fn two_donuts_exile_holds_across_owner_turns() {
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 10);
+    t.give_play(0, "Sumimi:一人两个甜甜圈").unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "exile"), 1, "one held layer");
+    assert_eq!(t.state(0, "exileHold"), 1, "duration-grant marker");
+    for round in 0..2 {
+        t.begin_turn(0);
+        drain(&mut t);
+        assert_eq!(
+            t.state(0, "exile"),
+            1,
+            "the hold does not peel a layer at owner turn start {round}: keys={:?}",
+            t.recent_keys(20)
+        );
+        assert_eq!(t.state(0, "exileHold"), 1, "the hold marker stays (round {round})");
+        assert_ne!(t.turn(), 0, "the exiled turn was skipped (round {round})");
+        assert!(
+            t.recent_keys(40).iter().any(|k| k.contains("exiled_skip_hold")),
+            "log.exiled_skip_hold at owner turn start {round}: keys={:?}",
+            t.recent_keys(40)
+        );
+    }
+}
+
+// 规则书 (1) 「直至…被其他玩家经过」 -- the exile ends the moment the original
+// tile is passed, not at the passer's settle. (2)/(3) then run unexiled, so
+// the overflow money is not blocked by 「无法收付款」.
+#[test]
+fn two_donuts_exile_ends_at_the_pass_and_money_is_not_blocked() {
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 10);
+    // Both pots overflow: the holder is already at the fire cap.
+    t.set_fire(0, 2, 2);
+    t.give_play(0, "Sumimi:一人两个甜甜圈").unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "exile"), 1);
+    let money0 = t.money(0);
+    // P1 walks from 5 past 10 (P0's original square) to 15.
+    until_turn(&mut t, 1);
+    t.set_pos(1, 5);
+    t.dice(&[10]);
+    t.roll(1).unwrap();
+    // The pass already ended the exile -- before the (2) settle window.
+    assert_eq!(t.state(0, "exile"), 0, "exile ends at the pass: keys={:?}", t.recent_keys(20));
+    assert_eq!(t.state(0, "exileHold"), 0, "hold marker cleared at the pass");
+    // Let the (2) window run (decline the optional settle-teleport).
+    drain(&mut t);
+    assert!(
+        t.money(0) >= money0 + 1000,
+        "2 overflow pots x 500 reach the holder unexiled: money={} (was {money0}) keys={:?}",
+        t.money(0),
+        t.recent_keys(30)
+    );
+    assert!(
+        !t.recent_keys(40).iter().any(|k| k.contains("blocked_gain")),
+        "the overflow money must not be blocked by [除外]: keys={:?}",
+        t.recent_keys(40)
+    );
+}
+
+// Layered grants (「获得N层[除外]」) still tick one layer per owner turn start
+// and auto-skip while layers remain -- the hold marker is not sticky.
+#[test]
+fn layered_exile_still_ticks_per_turn_start() {
+    let mut t = Table::vanilla(2);
+    t.m.world_mut().give_exile(0, 2, 10);
+    assert_eq!(t.state(0, "exile"), 2, "two layers");
+    assert_eq!(t.state(0, "exileHold"), 0, "a layered grant is not a hold");
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(t.state(0, "exile"), 1, "one layer peeled at the owner turn start");
+    assert_ne!(t.turn(), 0, "the exiled turn was skipped while layers remain");
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(t.state(0, "exile"), 0, "the second start drops the last layer");
+    assert_eq!(t.state(0, "exileHold"), 0);
 }
 
 #[test]

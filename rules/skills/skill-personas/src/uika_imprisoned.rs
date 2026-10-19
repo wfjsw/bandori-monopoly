@@ -95,8 +95,9 @@ fn state2_or_clean(player_id: i32) -> bool {
 /// 状态1's entry offer, and 状态2's cap.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        // 「（火罐上限3）」
-        state::set_bounds(player_id, state_key::CHARGE, 0, 3);
+        // 「（火罐上限3）」 -- the 状态2 cap comes from the registry row for
+        // this face (`skill:三角初华:Imprisoned XII`, cap 3 / initial 0).
+        crate::fire_pot(player_id);
         // 「获得[不可阻挡]」
         state::set(player_id, state_key::UNSTOPPABLE, 1);
         return Ok(());

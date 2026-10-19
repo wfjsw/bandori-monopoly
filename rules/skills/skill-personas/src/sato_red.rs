@@ -35,7 +35,7 @@ pub const SATO_RED: CardDef = CardDef::new(
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 0, 2);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

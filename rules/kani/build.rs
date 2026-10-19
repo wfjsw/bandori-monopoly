@@ -25,6 +25,7 @@ const ARRAY_OPS: &[&str] = &[
     "prop_at", "set_prop_at", "state_get", "state_set", "state_add", "slot", "set_slot", "inc_slot",
     "group_pool", "add_group_pool", "group_skill", "persona_skill", "group_skills", "add_group_skill", "invoke_skill", "raise_bought",
     "raise", "charge", "charge_max", "gain_charge", "give_stay", "give_stun", "give_exile", "give_extra_turn",
+    "end_turn_now", "teleport_as", "log_as",
     "can_pay", "cant_move", "spend_charge", "stay_of", "stun_of", "exile_of", "turn_player", "round_no",
     "turn_key", "persona_is", "set_persona", "in_group", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
     "ask", "trig_kind", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",
@@ -181,7 +182,7 @@ fn gen_cond_irs() {
 fn gen_body_dispatch() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let rules_dir = manifest.parent().unwrap().to_path_buf();
-    for d in ["cards", "skills", "tiles", "events", "tile_marks"] {
+    for d in ["cards", "skills", "tiles", "events", "markers"] {
         println!("cargo:rerun-if-changed={}", rules_dir.join(d).display());
     }
     println!(
@@ -208,7 +209,7 @@ fn gen_body_dispatch() {
         ("skill_groups", "skills-groups"),
         ("skill_personas", "skills-personas"),
         ("rules_tiles", "tiles"),
-        ("rules_tile_marks", "tiles"),
+        ("rules_markers", "tiles"),
         ("rules_events", "events"),
     ];
     let enabled: Vec<&str> = ALL_BANDS
@@ -520,7 +521,7 @@ fn parse_band_start(invoke: &str) -> Vec<usize> {
 /// Rust crate name → source dir under `rules/`.
 fn crate_dir(rules_dir: &PathBuf, crate_name: &str) -> PathBuf {
     match crate_name {
-        "rules_tile_marks" => rules_dir.join("tile_marks"),
+        "rules_markers" => rules_dir.join("markers"),
         "rules_tiles" => rules_dir.join("tiles"),
         "rules_events" => rules_dir.join("events"),
         "skill_groups" => rules_dir.join("skills/skill-groups"),

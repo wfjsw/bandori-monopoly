@@ -494,6 +494,20 @@ impl Cx<'_> {
         self.turn_start(i)
     }
 
+    /// Generic auto-skip latch (`World::end_turn_request`): true when a guest
+    /// asked to end `i`'s turn. Consumed here so one request closes at most
+    /// one turn; a request aimed at another seat waits for their turn. The
+    /// host logs its own skip line; the engine only paces (`wait(1.0)`) and
+    /// calls [`Self::end_turn`] -- same shape as the old status auto-skips.
+    fn take_end_turn_request(&mut self, i: usize) -> bool {
+        if self.w.end_turn_request == Some(i as i32) {
+            self.w.end_turn_request = None;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Turn start: status effects tick, then the clock starts.
     fn turn_start(&mut self, i: usize) -> Flow<()> {
         if self.out(i) {
@@ -520,53 +534,26 @@ impl Cx<'_> {
         // another player's turn -- today they last exactly one turn.
         let round = self.w.st.round;
         self.w.turn.lingering.retain(|l| l.expires > round);
-        // `turnStartBefore` -- before any exile/stun status ticks resolve, so a
-        // counteraction sees the turn exactly as it was left last turn.
+        // `turnStartBefore` -- before any status ticks resolve, so a
+        // counteraction sees the turn exactly as it was left last turn. Status
+        // hosts (e.g. `status:exile`'s layer tick) run as field hooks collected
+        // last inside this raise (`docs/STATUS-HOSTS.md` §4).
         raise!(self, "turnStartBefore", i, tile = self.w.st.players[i].pos)?;
         if self.out(i) {
             return Ok(());
         }
-        if self.w.st.players[i].exile() > 0 {
-            self.w.st.players[i].state_add(key::EXILE, -1);
-            let left = self.w.st.players[i].exile();
-            if left > 0 {
-                self.w.log(
-                    "status",
-                    i as i32,
-                    Msg::new("log.exiled_skip")
-                        .player_id("who", i)
-                        .i("left", left),
-                );
-                self.wait(1.0);
-                return self.end_turn(i);
-            }
-            let to = self.w.st.players[i].exile_to();
-            self.w.st.players[i].state_set(key::EXILE_TO, -1);
-            // MyGO:无路矢's 「视为当回合的主要移动」 (the `exileMain` player-state
-            // slot): the return teleport **is** that turn's main move. Read and
-            // consume the slot so the player cannot also roll, and mark the
-            // move `main` so anything observing it sees the main move.
-            let as_main = self.w.st.players[i].state_get(key::EXILE_MAIN) != 0;
-            if as_main {
-                self.w.st.players[i].state_set(key::EXILE_MAIN, 0);
-                self.w.turn.main_moved = true;
-            }
-            self.w.log(
-                "status",
-                i as i32,
-                Msg::new("log.exile_over").player_id("who", i),
-            );
-            if to >= 0 {
-                self.teleport_as(i, to as usize, false, None, as_main)?;
-            }
+        // Generic auto-skip latch (`end_turn_now`): the host logs its own line
+        // and asks the engine to close the turn. Same pacing as every status
+        // skip -- one beat, then `end_turn` (which raises only `endTurnAfter`).
+        if self.take_end_turn_request(i) {
+            self.wait(1.0);
+            return self.end_turn(i);
         }
         let s = &mut self.w.st.players[i];
         // Timed counters due now -- the item says so, not the engine naming
-        // `stunStart`.
+        // `stunStart`. The `noHand` 2->1 fold is `status:no_hand`'s `TurnStart`
+        // hook (`rules/status/src/no_hand.rs`), not an inline dance here.
         s.tick_state(Tick::TurnStart);
-        if s.no_hand() == 2 {
-            s.state_set(key::NO_HAND, 1);
-        }
         // Snapshot the turn's starting squares and statuses (`turn_snap` /
         // `turn_start_pos`): 「在场地地块开始回合时」 is about the starting
         // square, and 「回到起始地点并取消所有受到的效果」 restores from here.
@@ -586,6 +573,12 @@ impl Cx<'_> {
         raise!(self, "turnStart", i, tile = self.w.st.players[i].pos)?;
         if self.out(i) {
             return Ok(());
+        }
+        // Same generic latch as above -- a `turnStart` hook may also close the
+        // turn (`end_turn_now`).
+        if self.take_end_turn_request(i) {
+            self.wait(1.0);
+            return self.end_turn(i);
         }
         // The turn clock is a modifier point: hooks rewrite the 免费时间
         // refill and the 恢复时间 (seconds) before the host applies them.
@@ -677,11 +670,9 @@ impl Cx<'_> {
         {
             let s = &mut self.w.st.players[i];
             // Timed counters due now (stay/stun wear off here). The
-            // item carries its own expiry, so this names no keys.
+            // item carries its own expiry, so this names no keys. The `noHand`
+            // 1->0 clear is `status:no_hand`'s `TurnEnd` hook, not inline.
             s.tick_state(Tick::TurnEnd);
-            if s.no_hand() == 1 {
-                s.state_set(key::NO_HAND, 0);
-            }
         }
         // 「并在回合结束时额外进行一次[触发结算]」 is no longer an engine
         // counter: it is a scheduled turn-end rule op (`On::AtEnd`, whose body
@@ -1690,8 +1681,8 @@ impl Cx<'_> {
     }
 
     /// [`Self::teleport`] with the move's `main` flag named (「视为当回合的主要
-    /// 移动」 -- the `exileMain` expiry teleport).
-    pub(crate) fn teleport_as(
+    /// 移动」 -- the return teleport of a status's own clause).
+    pub fn teleport_as(
         &mut self,
         i: usize,
         to: usize,

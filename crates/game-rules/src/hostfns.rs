@@ -1342,21 +1342,37 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
             }
 }
 
+/// Wire name `charge`; policy lives in `rules_status::fire`.
 pub fn charge<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().charge(player_id)
-    })
+    marker_get(c, player_id, game_core::state::key::CHARGE)
 }
 
+/// Wire name `charge`; policy lives in `rules_status::fire`.
 pub fn charge_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().charge_max(player_id)
-    })
+    marker_max(c, player_id, game_core::state::key::CHARGE)
 }
 
-pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+/// Named-counter read. The name is data.
+pub fn marker_get<C: HostCtx>(c: &mut C, player_id: i32, name: &str) -> Result<i32, HostErr> {
+    Ok(c.st().wr().state_get(player_id, name))
+}
+
+/// Named-counter cap read. The name is data.
+pub fn marker_max<C: HostCtx>(c: &mut C, player_id: i32, name: &str) -> Result<i32, HostErr> {
+    Ok(c.st().wr().state_max(player_id, name))
+}
+
+/// Generic marker gain. The name is data; opens `markerGain` with that name.
+pub fn gain_marker<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    name: &str,
+    n: i32,
+    p: i32,
+    l: i32,
+) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
-            // Marker window: `markerGain` opens before the charge moves.
+            // Marker window: `markerGain` opens before the markers move.
             //
             // The pause is a **trap**, not the sentinel: `ctx::gain_charge`
             // returns `Result<i32, Prompt>` and a great many bodies discard
@@ -1372,7 +1388,7 @@ pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "charge".into(),
+                        name: name.to_string(),
                         delta: n,
                     },
                     crate::inline::Pause::Trap,
@@ -1381,7 +1397,13 @@ pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().gain_charge(player_id, n, why))
+            Ok(c.st_mut().w().gain_marker(player_id, name, n, why))
+}
+
+/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
+/// [`gain_marker`].
+pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+    gain_marker(c, player_id, game_core::state::key::CHARGE, n, p, l)
 }
 
 pub fn give_stay<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), HostErr> {
@@ -1403,7 +1425,11 @@ pub fn give_stun<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), Ho
 }
 
 pub fn give_exile<C: HostCtx>(c: &mut C, player_id: i32, n: i32, to: i32) -> Result<(), HostErr> {
-            if n > 0 && abnormal_gate(c, player_id, AbKind::Exile)? {
+            if n < 0 {
+                // Removals (「移除一层[除外]」) always reach the engine; only
+                // grants are gated by [不可阻挡] 「无法获得新的[除外]层数」.
+                c.st_mut().w().give_exile(player_id, n, to);
+            } else if n > 0 && abnormal_gate(c, player_id, AbKind::Exile)? {
                 c.st_mut().w().give_exile(player_id, n, to);
             }
             Ok(())
@@ -1412,6 +1438,61 @@ pub fn give_exile<C: HostCtx>(c: &mut C, player_id: i32, n: i32, to: i32) -> Res
 pub fn give_extra_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
         c.st_mut().w().give_extra_turn(player_id);
         Ok(())
+}
+
+/// Generic "end this player's turn now" latch. `turn_start` honors it after
+/// the `turnStartBefore` / `turnStart` raises (auto-skip pacing).
+pub fn end_turn_now<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
+        c.st_mut().w().end_turn_now(player_id);
+        Ok(())
+}
+
+/// Teleport with the move's `main` flag named and **no** abnormal window
+/// (the caller's own clause -- see [`HostRequest::TeleportAs`]).
+pub fn teleport_as<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    resolve: i32,
+    as_main: i32,
+) -> Result<(), HostErr> {
+            {
+                let st = c.st_mut();
+                if st.answers.get(st.next_answer).is_some() {
+                    let answer = st.next_answer;
+                    st.w().after_host(answer);
+                    st.next_answer += 1;
+                    return Ok(());
+                }
+            }
+            let make = || HostRequest::TeleportAs {
+                player_id,
+                tile,
+                resolve: resolve != 0,
+                as_main: as_main != 0,
+            };
+            if crate::inline::request_or_inline(c, make())?.is_some() {
+                return Ok(());
+            }
+            let st = c.st_mut();
+            st.host_request = Some(make());
+            Err(HostErr::NeedInput)
+}
+
+/// [`log`] with an explicit event kind (the engine's own skip / over lines use
+/// `"status"`; cards use the default `"text"` via [`log`]).
+pub fn log_as<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    kind_p: i32,
+    kind_n: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostErr> {
+            let kind = guest_str(c, kind_p, kind_n)?;
+            let msg = guest_msg(c, p, n)?;
+            c.st_mut().w().log_as(player_id, &kind, msg);
+            Ok(())
 }
 
 /// The payer's gate. Not out, and the `PayGate` conditions of the standing
@@ -1441,16 +1522,24 @@ pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> 
     })
 }
 
-pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+/// Generic marker spend. The name is data; opens `markerSpend` with that name.
+pub fn spend_marker<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    name: &str,
+    n: i32,
+    p: i32,
+    l: i32,
+) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
             // Marker window (user ruling 2026-10-07): `markerSpend` opens
-            // **before** the charge moves. A cancelled link spends nothing.
+            // **before** the markers move. A cancelled link spends nothing.
             if n > 0 {
                 let ok = crate::inline::request_or_pause(
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "charge".into(),
+                        name: name.to_string(),
                         delta: -n,
                     },
                     crate::inline::Pause::Sentinel,
@@ -1461,7 +1550,13 @@ pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i3
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().spend_charge(player_id, n, why))
+            Ok(c.st_mut().w().spend_marker(player_id, name, n, why))
+}
+
+/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
+/// [`spend_marker`].
+pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+    spend_marker(c, player_id, game_core::state::key::CHARGE, n, p, l)
 }
 
 pub fn stay_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
@@ -2535,10 +2630,20 @@ pub fn turn_main_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     })
 }
 
+/// Generic marker-cap move. The name is data; dumb storage fold.
+pub fn add_marker_max<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    name: &str,
+    n: i32,
+) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().add_marker_max(player_id, name, n))
+}
+
+/// Wire name `charge`; policy lives in `rules_status::fire`. Thin wrapper over
+/// [`add_marker_max`].
 pub fn add_charge_max<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().add_charge_max(player_id, n)
-    })
+    add_marker_max(c, player_id, game_core::state::key::CHARGE, n)
 }
 
 pub fn set_roller<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {

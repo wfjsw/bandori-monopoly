@@ -59,7 +59,7 @@ pub static RULESET: &[&[card_sdk::CardDef]] = &[
     #[cfg(feature = "tiles")]
     rules_tiles::CARDS,
     #[cfg(feature = "tiles")]
-    rules_tile_marks::CARDS,
+    rules_markers::CARDS,
     #[cfg(feature = "events")]
     rules_events::CARDS,
 ];

@@ -387,10 +387,9 @@ pub mod key {
     /// (MyGO:无路矢). The expiry tick reads and consumes it:
     /// `TurnCtx::main_moved` is set so the player cannot also roll.
     pub const EXILE_MAIN: &str = "exileMain";
-    /// A capped spendable resource held by the player (ruleset-defined; the
-    /// shipped ruleset uses it for spendable pots). Its `max` is the mandated cap, written
-    /// by the owning skill -- and that is the one number to show: there is no
-    /// separate "effective cap" beside it.
+    /// Wire key constant (webui contract); the engine never branches on it --
+    /// rules-layer kernel owns the counter. Its `max` is the owner-declared cap
+    /// written through the rules layer; there is no separate "effective cap".
     pub const CHARGE: &str = "charge";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
@@ -791,10 +790,11 @@ impl MatchPlayer {
     /// Write `value`, clamped to the item's declared bounds.
     ///
     /// The engine holds the bounds and enforces them on write: a status counter
-    /// (stay / stun / exile / charge) never goes negative (「清除」 floors at 0),
-    /// and a declared `max > 0` is a real cap (「上限M」). `max == 0`
-    /// still means "uncapped". A consumer that wants a different policy (e.g.
-    /// `gain_charge`'s partial gain + log) does its own arithmetic first.
+    /// (stay / stun / exile / the frozen `charge` key) never goes negative
+    /// (「清除」 floors at 0), and a declared `max > 0` is a real cap (「上限M」).
+    /// `max == 0` still means "uncapped". A consumer that wants a different
+    /// policy (e.g. the rules-layer kernel's partial gain + log) does its own
+    /// arithmetic first.
     ///
     /// A **fresh** stay / stun / stunStart item also picks up the rulebook's
     /// wear-off tick (see [`default_expiry`]): 「每回合结束时移除一层」 is a
@@ -887,13 +887,15 @@ impl MatchPlayer {
         self.state_get(key::EXILE_TO)
     }
 
-    /// Capped spendable resource held.
+    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
+    /// frozen webui key [`key::CHARGE`] -- prefer [`Self::state_get`] with an
+    /// explicit name at new call sites.
     pub fn charge(&self) -> i32 {
         self.state_get(key::CHARGE)
     }
 
-    /// The mandated resource cap -- the `max` of the `charge` item, written by a
-    /// persona skill. Not something the engine imposes.
+    /// Wire key only; the rules-layer kernel owns policy. Thin read of the
+    /// `max` of [`key::CHARGE`], written through the rules layer.
     pub fn charge_max(&self) -> i32 {
         self.state_max(key::CHARGE)
     }

@@ -28,7 +28,7 @@ card-sumimi = { path = "../card-sumimi" }
 skill-groups = { path = "../../skills/skill-groups" }
 skill-personas = { path = "../../skills/skill-personas" }
 rules-tiles = { path = "../../tiles" }
-rules-tile-marks = { path = "../../tile_marks" }
+rules-markers = { path = "../../markers" }
 rules-status = { path = "../../status" }
 rules-events = { path = "../../events" }
 

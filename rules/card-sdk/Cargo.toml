@@ -19,5 +19,13 @@ bitflags = { version = "2", default-features = false }
 # Guest builds (no_std cdylibs): panic handler + bump allocator. Enable it in
 # the card crate AND put `#![cfg_attr(target_arch = "wasm32", no_std)]` there too.
 guest = []
+# Third cfg: "wasm32 target, linked guest" (the bot monolith, `bot-glue` +
+# `rules-native`). `sys.rs` drops `wasm_import_module = "ruleset"` and keeps
+# the `link_name = "ruleset_*"` renames so wasm-ld resolves them to
+# `game-rules`'s `native_shims` inside the one module. Also disables the guest
+# panic handler / bump allocator (the monolith is a std cdylib) and keeps the
+# buffer arena (the host is `NativeHost`, which always reads the arena).
+# No new deps. See docs/BOT.md §3.6.
+native-rules = []
 # cfg(kani) only: static bump GlobalAlloc (experimental, see kani_alloc.rs).
 kani-bump = []

@@ -60,8 +60,10 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
 .quiet_when_empty(&[2, 3]);
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
+/// Declaration goes through the registry (`skill:濑田薰:梦幻的王子殿下`,
+/// cap 7 / initial 0) so the face parenthetical has one source of truth.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::CHARGE, 0, 7);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

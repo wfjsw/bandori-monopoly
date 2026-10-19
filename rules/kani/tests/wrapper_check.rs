@@ -126,7 +126,7 @@ fn missing_wrappers(file: &Path) -> Vec<String> {
     missing
 }
 
-/// Walk `rules/{cards,skills,events,tiles,tile_marks,status}` and collect
+/// Walk `rules/{cards,skills,events,tiles,markers,status}` and collect
 /// every file with a missing wrapper.
 fn scan_rules_tree(root: &Path) -> Vec<(String, Vec<String>)> {
     let mut out = Vec::new();
@@ -135,7 +135,7 @@ fn scan_rules_tree(root: &Path) -> Vec<(String, Vec<String>)> {
         "skills",
         "events",
         "tiles",
-        "tile_marks",
+        "markers",
         "status",
     ] {
         let base = root.join(dir);

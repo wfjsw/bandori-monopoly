@@ -37,7 +37,7 @@ pub const RAISE_EFFORT: CardDef = CardDef::new(
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 1, 1);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

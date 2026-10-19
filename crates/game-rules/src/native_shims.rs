@@ -1,12 +1,16 @@
-//! The `ruleset_*` host-import shims (native builds only).
+//! The `ruleset_*` host-import shims (native, and the wasm32-linked monolith).
 //!
 //! `card-sdk`'s `ctx` module declares these as `#[link_name = "ruleset_<name>"]`
-//! externs on non-wasm targets. They live **here**, in `game-rules` -- the crate
-//! every native consumer of `card-sdk` links -- so a `cargo test` that also
-//! builds `rules-native` (which turns `card-sdk/guest` on for everyone via
-//! feature unification) still resolves every symbol. The old copy in
-//! `rules-native/src/symbols.rs` was only linked by binaries that depended on
-//! `rules-native` itself, so a server test binary got `LNK2019` on all 289.
+//! externs whenever the target is not a pure wasm32 guest -- i.e. on native
+//! **and** on wasm32 with `native-rules` (the bot monolith, `bot-glue` +
+//! `rules-native`). On native they resolve as ordinary symbols; on wasm32-linked
+//! wasm-ld resolves them inside the one module (no `ruleset` import module).
+//! They live **here**, in `game-rules` -- the crate every consumer of
+//! `card-sdk` links -- so a `cargo test` that also builds `rules-native` (which
+//! turns `card-sdk/guest` on for everyone via feature unification) still
+//! resolves every symbol. The old copy in `rules-native/src/symbols.rs` was
+//! only linked by binaries that depended on `rules-native` itself, so a server
+//! test binary got `LNK2019` on all 289.
 //!
 //! The bodies are a thin object-safe forwarding layer ([`HostOps`]) over a
 //! [`crate::host::HostCtx`]; `rules-native` installs its concrete host with
@@ -256,6 +260,12 @@ pub trait HostOps {
     fn op_give_exile(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_give_extra_turn`
     fn op_give_extra_turn(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_end_turn_now`
+    fn op_end_turn_now(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_teleport_as`
+    fn op_teleport_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_log_as`
+    fn op_log_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_can_pay`
     fn op_can_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_cant_move`
@@ -1045,6 +1055,18 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_give_extra_turn(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::give_extra_turn(self, a[0])?;
+        Ok(0)
+    }
+    fn op_end_turn_now(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::end_turn_now(self, a[0])?;
+        Ok(0)
+    }
+    fn op_teleport_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::teleport_as(self, a[0], a[1], a[2], a[3])?;
+        Ok(0)
+    }
+    fn op_log_as(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::log_as(self, a[0], a[1], a[2], a[3], a[4])?;
         Ok(0)
     }
     fn op_can_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -2689,6 +2711,41 @@ pub unsafe extern "C-unwind" fn ruleset_give_extra_turn(player_id: i32) {
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_end_turn_now(player_id: i32) {
+    with_host(|h| match h.op_end_turn_now([player_id, 0, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_teleport_as(
+    player_id: i32,
+    tile: i32,
+    resolve: i32,
+    as_main: i32,
+) {
+    with_host(|h| match h.op_teleport_as([player_id, tile, resolve, as_main, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_log_as(
+    player_id: i32,
+    kind_ptr: i32,
+    kind_len: i32,
+    msg_ptr: i32,
+    msg_len: i32,
+) {
+    with_host(|h| match h.op_log_as([player_id, kind_ptr, kind_len, msg_ptr, msg_len, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_can_pay(player_id: i32) -> i32 {
     with_host(|h| match h.op_can_pay([player_id, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -4196,9 +4253,9 @@ pub unsafe extern "C-unwind" fn ruleset_count_held_name(np: i32, nl: i32, player
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_held_name(np: i32, nl: i32, player_id: i32, v: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_set_held_name(np: i32, nl: i32, player_id: i32, v: i32) {
     with_host(|h| match h.op_set_held_name(np, nl, player_id, v) {
-        Ok(v) => v as i32,
+        Ok(_) => {},
         Err(e) => abort_host(e),
     })
 }
@@ -4287,9 +4344,9 @@ pub unsafe extern "C-unwind" fn ruleset_msg_text(p: i32, n: i32) -> i32 {
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_msg_reply(v: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_msg_reply(v: i32) {
     with_host(|h| match h.op_msg_reply(v) {
-        Ok(v) => v as i32,
+        Ok(_) => {},
         Err(e) => abort_host(e),
     })
 }

@@ -91,7 +91,13 @@ fn give_stun(t: &mut Table, who: usize, n: i32) {
 }
 
 fn give_exile(t: &mut Table, who: usize, n: i32, to: usize) {
-    t.m.world_mut().give_exile(who as i32, n, to as i32);
+    // Engine service writes only the layer; the return tile is the
+    // `status:exile` host's marker (see `rules/status/src/exile.rs::grant`).
+    t.m.world_mut().give_exile(who as i32, n, -1);
+    if n > 0 {
+        t.set_state(who, "exileTo", to as i32);
+        t.set_state(who, "exileHold", 0);
+    }
 }
 
 /// 「向上取整10」 on a half charge: `ceil(full / 2 / 10) * 10`.

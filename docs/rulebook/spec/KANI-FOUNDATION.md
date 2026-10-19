@@ -70,7 +70,7 @@ unchanged (`cfg(not(kani))`).
 ## 2. Surface inventory (what guests actually call)
 
 Scanned `rules/cards`, `rules/skills`, `rules/events`, `rules/tiles`,
-`rules/tile_marks`, `rules/fixtures`: **306 files**, **219 unique ctx names**,
+`rules/markers`, `rules/fixtures`: **306 files**, **219 unique ctx names**,
 **4357 call-sites**. Full frequency + ctx→Op map: the generation notes below
 and `/tmp` snapshots from the foundation pass; the **coverage table**
 ([`KANI-COVERAGE.md`](KANI-COVERAGE.md)) is the live per-id view.
@@ -581,7 +581,7 @@ Each unit author owns **only** `spec/<unit>.rs` + `proofs/<unit>.rs`.
 | `skills_characters` | skills sheets / `skills` section | `rules/skills/skill-characters` | 54 character skills |
 | `skills_pp` … `skills_sumimi`, `skills_general` | (per-band skill stubs) | — | empty module slots; put per-band skill proofs here only if you split them |
 | `tiles` | tile rules / `data/board.json` | `rules/tiles` | 6 tile bodies |
-| `tile_marks` | mark rules | `rules/tile_marks` | 1 mark (`cp`) |
+| `markers` | mark rules | `rules/markers` | 1 mark (`cp`) |
 | `money_shave` / `teleport` / `prompt` | pilot clauses | — | keep; do not rewrite pilots |
 
 Pilot proofs (`money_shave`, `teleport`, `prompt`) stay where they are. New

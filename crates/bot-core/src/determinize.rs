@@ -220,6 +220,10 @@ fn sample_world(
                 draw,
                 discard,
                 next_steps: None,
+                // Private pick-screen UI state (world.rs): never part of
+                // `MatchState`, so it is not on the seat's view and the search
+                // must not invent one. Empty also keeps the serde skip.
+                pick_intent: String::new(),
             });
         } else {
             let (hand, draw, short) = sample_opponent(data, st, i, rng);
@@ -232,6 +236,9 @@ fn sample_world(
                 draw,
                 discard,
                 next_steps: None,
+                // Opponent seats: same rule as above -- never visible, never
+                // sampled.
+                pick_intent: String::new(),
             });
         }
     }

@@ -3,7 +3,7 @@
 Generated 2026-10-11 (HOST-OPS pass) from:
 
 * **op usage** — `ctx::` paths grepped from each guest source under
-  `rules/cards`, `rules/skills`, `rules/events`, `rules/tiles`, `rules/tile_marks`
+  `rules/cards`, `rules/skills`, `rules/events`, `rules/tiles`, `rules/markers`
   (row inventory: card_id → path → ops, same shape as `cov_rows.txt`).
 * **modeled ops** — `Op::*` arms in `rules/kani/src/host.rs::dispatch` that do
   **not** fall through to `unmodeled()`. A fall-through is a loud fail
@@ -49,7 +49,7 @@ needs their real semantics is **PROTOCOL-LEVEL** — see `KANI.md` §6 and
 | `skills_bands` | 12 | 12 | 0 |
 | `skills_characters` | 54 | 54 | 0 |
 | `sumimi` | 11 | 11 | 0 |
-| `tile_marks` | 1 | 1 | 0 |
+| `markers` | 1 | 1 | 0 |
 | `tiles` | 6 | 6 | 0 |
 
 ### Unmodeled ops that actually appear in guest bodies
@@ -279,7 +279,7 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `events` | `event:迷子的追逐` | `event_deck_push,event_is_active,log` | yes | — |
 | `events` | `event:飞鸟山之战` | `card_move,give_exile,log,neighbor,state::TURN_START,state::add,state::set,state::set_expires,teleport_to,tile_named` | yes | — |
 | `events` | `event:麻里奈小姐的礼物箱` | `ask_pick,gain,log,money_of,pay,prop,set_prop` | yes | — |
-| `tile_marks` | `mark:cp` | `add_counter_at,bump_mark,count_marks,counter_at,gain,mark_src_at,message::a,message::reply,message::sender_uid,message::tile,place_mark,tile_count` | yes | — |
+| `markers` | `mark:cp` | `add_counter_at,bump_mark,count_marks,counter_at,gain,mark_src_at,message::a,message::reply,message::sender_uid,message::tile,place_mark,tile_count` | yes | — |
 | `skills_bands` | `skill:Afterglow:商店街的宠儿` | `build_cost,card_build,is_shop,log,set_build_discount,tile_price,trigger::player_id,trigger::tile` | yes | — |
 | `skills_bands` | `skill:Ave Mujica:假面之下的真实` | `add_counter_at,add_crystals,counter_at,crystals,find_card,is_placed,log,skill_blocked,spend_fire,trigger::player_id,trigger::set_pay_amount,trigger::target,trigger::value` | yes | — |
 | `skills_bands` | `skill:CRYCHIC:美好的往日幻影` | `add_crystals,add_to_deck,ask_yes,cards_in,crystals,deck_count,discard_from_hand,discard_size,draw,field_instances,gain,hand_size,log,place_card,shuffle_into_deck,sweep_to_deck,take_card,take_from_hand,trigger::player_id,trigger::set_cancelled,trigger::set_pay_amount,trigger::target,trigger::value,unplace_at` | yes | — |

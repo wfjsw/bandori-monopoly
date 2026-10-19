@@ -134,7 +134,7 @@ fn offer_support_open(player_id: i32) -> bool {
 
 /// 「初始0，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    crate::fire_pot(player_id, 0, 4);
+    crate::fire_pot(player_id);
     Ok(())
 }
 

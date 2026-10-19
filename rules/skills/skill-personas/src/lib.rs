@@ -7,10 +7,11 @@
 //!
 //! The rule text lives in the roster character row (`skill` is the name, `text` /
 //! `simple` the wording); what is here is the behavior. A skill that mandates a
-//! fire-pot cap is the whole reason the keyed state carries bounds -- it writes
-//! `state::set_bounds(player_id, state_key::CHARGE, 0, 1)` and every card reads it
-//! back with `state::max(player_id, state_key::CHARGE)`. The engine holds the
-//! number and enforces nothing; see `game_core::state::StateVar`.
+//! fire-pot cap is the whole reason the keyed state carries bounds -- it
+//! declares them through the registry (`fire_pot(player)` →
+//! `rules_status::fire::declare_own`, which reads `fire_decl::FIRE_DECLS`) and
+//! every card reads them back with `rules_status::fire::{get, max}`. The
+//! engine holds the number and enforces nothing; see `game_core::state::StateVar`.
 //!
 //! # Hooks: use the two that exist
 //!
@@ -47,29 +48,23 @@
 
 extern crate alloc;
 
-use card_sdk::abi::{state_key, TriggerKind};
-use ruleset_core::ctx::{self, state};
 use card_sdk::CardDef;
 
-/// 「初始N，上限M」 -- the fire-pot bounds, plus the initial count at the
-/// after-match-start point (where initial tokens/resources are created).
+/// 「初始N，上限M」 -- declare this seat's fire pots from the registry
+/// ([`rules_status::fire::FIRE_DECLS`]), which is the face parenthetical's one
+/// source of truth. Bodies call `fire_pot(player)`; they do not carry literals.
 ///
 /// Hook this from both `TurnStartBefore` (so the cap holds from the first turn
 /// even when the skill is placed mid-game) and `DeckAtGameStart` (where
 /// 「初始N」 is created), e.g.
 /// `On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap)`.
 ///
-/// The cap is written **only when unset** (0), so a later `add_charge_max`
+/// The cap is written **only when unset** (0), so a later `adjust_cap`
 /// (「火罐上限加1」, e.g. `PPP:[衍生]拍卖撤下来了`) survives the per-turn
-/// re-hook. A character swap (`Sumimi:两个都想要`) writes the new bounds
-/// explicitly and is unaffected.
-pub fn fire_pot(player_id: i32, initial: i32, cap: i32) {
-    if state::max(player_id, state_key::CHARGE) == 0 {
-        state::set_bounds(player_id, state_key::CHARGE, 0, cap);
-    }
-    if ctx::trigger::kind() == TriggerKind::DeckAtGameStart {
-        state::set(player_id, state_key::CHARGE, initial);
-    }
+/// re-hook. A character swap (`Sumimi:两个都想要`) re-declares from the new
+/// face's row and is unaffected.
+pub fn fire_pot(player_id: i32) {
+    rules_status::fire::declare_own(player_id);
 }
 
 pub mod anon_restart;

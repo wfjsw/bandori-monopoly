@@ -7,7 +7,7 @@ Official card behaviours are WASM card modules (the authoring choice: **wasmi +
 [I18N.md](I18N.md)).
 
 The same authoring shape covers the other rule categories: board tiles
-(`rules/tiles`, [TILES.md](TILES.md)), tile marks (`rules/tile_marks`, `mark:*`
+(`rules/tiles`, [TILES.md](TILES.md)), tile marks (`rules/markers`, `mark:*`
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
 the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
@@ -780,7 +780,7 @@ field a `CounterChanged` hook uses for the counter name).
 
 通用:该清CP了 seeds tile [CP点] and an on-card stock; `mark:cp` owns the tile
 marks and the landing clause that spends both kinds
-(`rules/cards/card-general/src/clear_cp.rs`, `rules/tile_marks/src/cp.rs`).
+(`rules/cards/card-general/src/clear_cp.rs`, `rules/markers/src/cp.rs`).
 The shape:
 
 **Before** -- 该清CP了 called the CP helpers directly and listened to
@@ -845,7 +845,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
         && trigger::value() <= 0
 }
 
-// rules/tile_marks/src/cp.rs
+// rules/markers/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
 On::Action(&[ActionKind::SettleBody], "", "", Some(lands_on_cp), on_land),
 

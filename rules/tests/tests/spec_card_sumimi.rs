@@ -443,7 +443,9 @@ fn twoinone_opens_the_other_exclusive() {
 
 const TWO_DONUTS: &str = "Sumimi:一人两个甜甜圈";
 
-/// `C-SUMIMI-twodonuts-01` -- 「获得[除外]」.
+/// `C-SUMIMI-twodonuts-01` -- 「获得[除外]直至你原本所在格子被其他玩家经过」.
+/// The grant is a duration hold: one layer plus `exileHold`, so the turn-start
+/// layer tick does not peel it.
 pub fn c_sumimi_twodonuts_exile(step: &Step<'_>) -> Result<(), String> {
     let played = step.events.iter().any(|e| {
         e.r#type == "card" && e.card == TWO_DONUTS && (e.kind == "play" || e.kind.is_empty())
@@ -468,6 +470,16 @@ pub fn c_sumimi_twodonuts_exile(step: &Step<'_>) -> Result<(), String> {
         .unwrap_or(0);
     if post <= pre {
         return Err(format!("exile {pre} -> {post}, expected a [除外] gain"));
+    }
+    let hold = step
+        .post
+        .st
+        .players
+        .get(who)
+        .map(|p| p.state_get("exileHold"))
+        .unwrap_or(0);
+    if hold != 1 {
+        return Err(format!("exileHold = {hold}, expected the duration-grant marker"));
     }
     Ok(())
 }

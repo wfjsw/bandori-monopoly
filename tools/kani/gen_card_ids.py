@@ -46,7 +46,7 @@ BANDS: list[tuple[str, str, Path]] = [
     ("skill_bands", "SKILL_BAND", RULES / "skills" / "skill-groups"),
     ("skill_characters", "SKILL", RULES / "skills" / "skill-personas"),
     ("rules_tiles", "TILE", RULES / "tiles"),
-    ("rules_tile_marks", "MARK", RULES / "tile_marks"),
+    ("rules_markers", "MARK", RULES / "markers"),
     ("rules_events", "EVENT", RULES / "events"),
 ]
 

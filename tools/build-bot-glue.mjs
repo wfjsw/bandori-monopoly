@@ -6,6 +6,15 @@
 // (webui/src/wasm/) is untouched: the bot bundle is lazy-loaded only when an
 // advanced seat / advanced 托管 is in use.
 //
+// **Monolith (default `native-rules`, docs/BOT.md §3.6):** the card ruleset is
+// linked in as rlibs via `rules-native`. This bundle must be rebuilt from the
+// same commit as the deployed `dist/cards` / `webui/public/assets/rules` --
+// same rule as `crates/bot-service` ("must be built from the same commit as
+// the deployed `dist/cards`"). `tools/build-ruleset.mjs` invokes this script
+// so the two cannot drift; the worker also compares the baked
+// `ruleset_sha256` to the page's `index.json` and refuses to answer on
+// mismatch. Run `tools/check-bot-monolith.mjs` after every build (done here).
+//
 // Runs on any platform Node runs on (no shell). Usage:
 //
 //   node tools/build-bot-glue.mjs
@@ -149,6 +158,9 @@ try {
   const st = runOut("git", "status", "--porcelain", "--",
     "Cargo.toml", "Cargo.lock",
     "crates/bot-core", "crates/bot-glue", "crates/game-core", "crates/game-rules",
+    "crates/rules-native", "rules/cards", "rules/skills", "rules/tiles",
+    "rules/markers", "rules/status", "rules/events", "rules/personas",
+    "rules/card-sdk",
     "tools/build-bot-glue.mjs",
   );
   dirty = st.split("\n").filter(Boolean).length > 0;
@@ -176,3 +188,6 @@ writeFileSync(
 );
 console.log(`webui/public/assets/engine/bot-glue/bundle.json`);
 if (dirty) console.log("NOTE: working tree is dirty -- this bundle has no source commit.");
+
+// Hard gate: the monolith must not import from a `ruleset` wasm module.
+run(process.execPath, "tools/check-bot-monolith.mjs", wasmPath);

@@ -306,10 +306,18 @@ Card id `Sumimi:一人两个甜甜圈`.
 * **Condition:** the user has a 原本所在格子 (the tile they were on).
 * **Effect:** the user gains [除外].
 * **Frame:** `state:P*:exile`.
-* **Rulings & OPEN:** 「直至你原本所在格子被其他玩家经过」 is the expiry
-  clause; the base [除外] layer also ticks at turn start
-  (rulebook-doc.md:98). Whether the card's expiry is *instead of* the
-  turn-start tick is unspecified when the two overlap.
+* **Rulings & OPEN:** 「直至X」 is a **duration** clause and governs (user
+  ruling 2026-10-18): the exile is continuous and the per-turn layer tick
+  (「玩家的每回合开始前移除一层」) does not apply to it. Layered grants
+  (「获得N层[除外]」, e.g. MyGO:无路矢 / RAS:LOCK) still tick. Implementation
+  shape: one layer plus the engine-owned `exileHold` marker (`hold` / `clear`
+  in `rules/status/src/exile.rs`); the hold suppresses the turn-start peel
+  (`log.exiled_skip_hold`) and the granting effect ends it. The exile ends at
+  the **pass** moment (clause (1) 「直至…被其他玩家经过」), while (2)/(3)
+  open after the passer's 触发结算 and then run unexiled.
+  **OPEN-C-SUMIMI-twodonuts-barred:** the book does not say what the card
+  does when the (1) acquisition is barred by 「该效果生效时无法重复获得该
+  效果」; the body treats the whole effect as void (no carrier / slots / log).
 * **Executable:** `c_sumimi_twodonuts_exile`.
 
 #### C-SUMIMI-twodonuts-02

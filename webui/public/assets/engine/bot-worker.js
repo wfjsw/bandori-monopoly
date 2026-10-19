@@ -1,8 +1,15 @@
 // The advanced-bot search worker (`docs/BOT.md` B6). One instance per pool
-// slot: it loads its own `bot-glue` wasm bundle (game-core + game-rules wasmi +
-// bot-core -- never the page's glue), feeds it the same game tables and card
-// modules the page loads (`webui/src/core/rulesetLoad.ts`'s sequence), and
-// answers `decide` / `ponder` / `extras` for ONE seat's view.
+// slot: it loads its own `bot-glue` wasm bundle (game-core + game-rules +
+// bot-core -- never the page's glue), feeds it the same game tables the page
+// loads, and answers `decide` / `ponder` / `extras` for ONE seat's view.
+//
+// Default bundle is the **monolith** (docs/BOT.md §3.6): the card ruleset is
+// linked into `glue_bg.wasm`, so this worker does **not** fetch
+// `/assets/rules/*.wasm`. It only fetches `index.json` (small) and refuses to
+// answer when its `ruleset_sha256` disagrees with the linked ruleset -- the
+// monolith is built from one commit and can silently drift from whatever
+// `dist/cards` the page deployed. A fallback wasmi build
+// (`--no-default-features`) still loads the modules the page loads.
 //
 // Kept as a plain ES module in webui/public/ (not bundled) on purpose: it
 // dynamically imports `./bot-glue/glue.js` at runtime, which no bundler should
@@ -40,6 +47,41 @@ async function loadRulesetInto(g, read) {
   return g.ruleset_build();
 }
 
+/**
+ * Monolith path: the rules are compiled in. Fetch `index.json` only and
+ * refuse to answer when the page's deployed ruleset is not the one this
+ * bundle was built from.
+ */
+async function verifyLinkedRuleset(g, read) {
+  const indexText = new TextDecoder().decode(await read("index.json"));
+  if (indexText.trimStart().startsWith("<")) {
+    throw new Error("index.json: got HTML (the ruleset was not built -- run tools/build-ruleset.mjs)");
+  }
+  const index = JSON.parse(indexText);
+  const want = index.ruleset_sha256;
+  const have = g.ruleset_sha256();
+  if (!want) {
+    throw new Error(
+      "index.json has no ruleset_sha256 -- cannot verify the linked bot ruleset " +
+        "(run tools/build-ruleset.mjs)",
+    );
+  }
+  if (!have) {
+    throw new Error(
+      "bot-glue was built without a ruleset identity (BOT_GLUE_RULESET_SHA256 / " +
+        "dist/cards/index.json) -- rebuild with node tools/build-bot-glue.mjs",
+    );
+  }
+  if (have !== want) {
+    throw new Error(
+      `linked ruleset mismatch: bot-glue ${have} != page index.json ${want}. ` +
+        "The monolith is built from one commit; rebuild it from the same tree " +
+        "as dist/cards (node tools/build-bot-glue.mjs) and reload the workers.",
+    );
+  }
+  return g.ruleset_build();
+}
+
 async function init(base) {
   const baseHref = new URL(base, self.location.href).href;
   glue = await import(new URL("glue.js", baseHref).href);
@@ -69,17 +111,20 @@ async function init(base) {
     /* absent book is fine */
   }
   glue.load_data(JSON.stringify(files));
-  // The ruleset the page loads (`/assets/rules/`) -- same bytes, same sequence.
-  // Data-then-ruleset is safe: the glue rebuilds GameData from the kept tables
-  // plus the set's roster at `ruleset_build` (was `cards.json` etc.).
+  // Ruleset: linked (monolith) or fetched (wasmi fallback). Data-then-ruleset
+  // is safe: the glue rebuilds GameData from the kept tables plus the set's
+  // roster at `ruleset_build` (was `cards.json` etc.).
   const rulesBase = new URL("../../../assets/rules/", baseHref);
-  const n = await loadRulesetInto(glue, async (rel) => {
+  const read = async (rel) => {
     const r = await fetch(new URL(rel, rulesBase));
     if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
     return new Uint8Array(await r.arrayBuffer());
-  });
+  };
+  const linked = typeof glue.rules_linked === "function" ? glue.rules_linked() : false;
+  const n = linked ? await verifyLinkedRuleset(glue, read) : await loadRulesetInto(glue, read);
   return {
     modules: n,
+    linked,
     info: JSON.parse(glue.info()),
   };
 }

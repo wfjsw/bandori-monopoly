@@ -3,7 +3,7 @@ name = "bot-glue"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Browser worker bundle for the advanced (ISMCTS) bot (docs/BOT.md B6): bot-core + game-core + game-rules (wasmi) exposed to a Web Worker. One seat's view in, a proposed answer out. The main page glue (web-glue) stays unchanged."
+description = "Browser worker bundle for the advanced (ISMCTS) bot (docs/BOT.md B6): bot-core + game-core + game-rules exposed to a Web Worker. Default `native-rules` links the card ruleset as rlibs (the monolith -- no wasmi sandbox, no /assets/rules/*.wasm fetch). One seat's view in, a proposed answer out. The main page glue (web-glue) stays unchanged."
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -11,14 +11,35 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 bot-core = { path = "../bot-core" }
 game-core = { path = "../game-core" }
-game-rules = { path = "../game-rules" }
+# Default-features off: the monolith must not compile wasmi. The non-native
+# path re-enables the sandbox through the `sandbox` feature below.
+game-rules = { path = "../game-rules", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # Must match the wasm-bindgen CLI exactly (tools/build-bot-glue.mjs).
 wasm-bindgen = "=0.2.129"
+
+# The monolith: card crates linked as rlibs (same list `bot-service` ships).
+# Must be built from the same commit as the deployed `dist/cards` /
+# `webui/public/assets/rules` -- the ruleset is compiled in.
+[dependencies.rules-native]
+path = "../rules-native"
+optional = true
 
 # Same allocator note as web-glue: the worker is long-lived and the search
 # allocates on every iteration. Pinned -- see web-glue's Cargo.toml.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 talc = "=5.1.1"
 js-sys = "0.3"
+
+[features]
+# Rules compiled into the module (docs/BOT.md §3.6 follow-up): `rules-native`
+# supplies `NativeRules` instead of sandboxed `WasmRules`. On by default so
+# `tools/build-bot-glue.mjs` produces the monolith (and `cargo tree -p bot-glue`
+# contains no wasmi). The old wasmi path is
+# `--no-default-features --features sandbox` (fetch `/assets/rules/*.wasm`)
+# for fallback / tests. Cargo cannot express "sandbox iff not native-rules",
+# so the fallback names the feature explicitly.
+default = ["native-rules"]
+native-rules = ["dep:rules-native", "game-rules/native-rules"]
+sandbox = ["game-rules/sandbox"]

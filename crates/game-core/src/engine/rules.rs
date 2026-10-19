@@ -31,7 +31,7 @@ pub enum Dest {
 
 // `MoveFlags` is gone: a move is exactly one [`super::move_ctx::MoveKind`] and
 // what it resolves is `super::move_ctx::Settle` -- two categories, not one flag
-// soup. Card-owned move state (a [charge pots] roll, say) rides on the move's tags.
+// soup. Card-owned move state (a marker-funded roll, say) rides on the move's tags.
 
 /// Which way a move travels along the board loop (turn order).
 ///
@@ -82,7 +82,7 @@ pub struct TriggerMove {
     /// Does the move settle where it lands? `false` = a card effect prevented
     /// settle entirely (the move still happens).
     pub resolve: bool,
-    /// Free-form per-card counters on the move (a [charge pots] roll is card-owned
+    /// Free-form per-card counters on the move (a marker-funded roll is card-owned
     /// state, tagged by whoever armed it).
     pub tags: Vec<(String, i32)>,
     /// The direction the move travels.
@@ -198,15 +198,16 @@ impl TriggerPay {
     }
 }
 
-/// Where a `diceRollBefore` / `diceRollResult` face came from (「when you roll using charge pots」).
-/// Mirrors `card_sdk::abi::roll_source`'s codes; the guest ABI still sees the
-/// `i32`.
+/// Where a `diceRollBefore` / `diceRollResult` face came from. Mirrors
+/// `card_sdk::abi::roll_source`'s wire codes; the guest ABI still sees the `i32`.
+/// The engine never branches on a game name -- code `1` is the marker-funded
+/// roll that rules-layer clauses match by wire code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RollSource {
     /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
     #[default]
     Unattributed,
-    /// A charge pot (the guest code `1`).
+    /// Marker-funded roll (the guest code `1`, wire name `charge`).
     Charge,
     /// A hand / field card (the guest code `2`).
     Card,

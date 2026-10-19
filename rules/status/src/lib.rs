@@ -3,16 +3,24 @@
 //! (`BOARD_OWNER`, `tile = -1`) via `game_core::data::status_rule_ids` ->
 //! `bind_tiles`. See [`docs/STATUS-HOSTS.md`].
 //!
+//! ## Taxonomy (rulebook 「标志物解释」)
+//!
+//! | kind | ids | what they are |
+//! |---|---|---|
+//! | **状态 / conditions** | `status:stay`, `status:stun`, `status:exile`, `status:unstoppable` | 「处于该状态时…」 gates + ticks. The real status hosts. |
+//! | **指示物 / counters** | `fire.rs` (no status-shaped machinery) | 火罐 「技能指示物」 -- a capped resource over the generic `charge` / `Marker` machinery. Kin of CP点 / 奇迹水晶. |
+//! | **companions** | `status:no_hand` | `noHand` card-text slot (turn-flow 2→1→0 dance), not a glossary status. |
+//!
 //! | id | file | rulebook (`data/rules.txt`) |
 //! |---|---|---|
 //! | `status:stay` | `stay.rs` | 48 「[停留]」 + 47 「[无法移动]」 |
 //! | `status:stun` | `stun.rs` | 49 「[晕眩]」 |
 //! | `status:exile` | `exile.rs` | 50 「[除外]」 |
-//! | `status:fire` | `fire.rs` | 126 「火罐」 |
 //! | `status:unstoppable` | `unstoppable.rs` | 51 「[不可阻挡]」 |
 //! | `status:no_hand` | `no_hand.rs` | `noHand` companion (card text) |
+//! | (placeholder) | `fire.rs` | 126 「火罐」 -- resource API, not a status |
 //!
-//! The `mark:cp` precedent (`rules/tile_marks/src/cp.rs`, `docs/TILES.md`):
+//! The `mark:cp` precedent (`rules/markers/src/cp.rs`, `docs/TILES.md`):
 //! cards never special-case a status. They call this crate's canonical API
 //! (`status::stay::add`, `status::fire::spend`, …) or message the host. The
 //! engine keeps only generic primitives (keyed state, turn-flow verbs, player
@@ -21,7 +29,7 @@
 //! ## Storage (recorded in `docs/STATUS-HOSTS.md` §3.1)
 //!
 //! The named state keys `stay` / `stun` / `stunStart` / `exile` / `exileTo` /
-//! `exileMain` / `fire` / `noHand` / `unstoppable` remain the player-bound
+//! `exileMain` / `charge` / `noHand` / `unstoppable` remain the player-bound
 //! counters **and** the frozen webui wire (`MatchPlayer.state`). Each host is
 //! the creating rule of its key(s): it owns wear-off, clamping, gates and
 //! clauses. Wear-off is item-carried (`ctx::state::set_expires`,
@@ -44,6 +52,7 @@ extern crate alloc;
 
 pub mod exile;
 pub mod fire;
+pub mod fire_decl;
 pub mod no_hand;
 pub mod stay;
 pub mod stun;

@@ -22,7 +22,7 @@ the new names:
 - `rules/skills/skill-bands/` → `rules/skills/skill-groups/`
 
 New crates the earlier drafts never listed: `rules/ruleset-core`, `rules/status`,
-`rules/personas`, `rules/tile_marks`, `rules/cond-ir`, `rules/spec`, `rules/kani`.
+`rules/personas`, `rules/markers`, `rules/cond-ir`, `rules/spec`, `rules/kani`.
 
 Ignored-test run: `node tools/build-ruleset.mjs` (no `CARGO_TARGET_DIR`) then
 `cargo test -p ruleset-tests -- --ignored` and
@@ -1726,9 +1726,10 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **suggested batch**: crystal/marker accounting
 - **locations**: `rules/status/src/unstoppable.rs:14-15`
 - **rulebook**: glossary 14 「无法获得新的[除外]层数」/「也不会获得新的层数」.
-- **current**: only `abnormal_gate` refuses (that is CH-12's fix); `give_stun` /
-  `give_exile` themselves do not refuse. Phase C is the planned check in the
-  hosts' grant verbs.
+- **current (2026-10-18)**: **done** -- both halves refuse in the host grant
+  verbs before the engine service (no abnormal window for a refused grant):
+  [晕眩] in `status::stun::add` / `add_start` (`status-hosts-rest`), [除外] in
+  `rules/status/src/exile.rs::grant` (`twodonuts-exile`).
 
 ## STA-02 — no prompt surface for 「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」
 - **kind**: ABI defect
@@ -1745,15 +1746,20 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **suggested batch**: skills: CiRCLE / sumimi
 - **locations**: `rules/status/src/no_hand.rs:6-7`
 - **rulebook**: 「手卡上限数量减1」 is card text; the 2→1→0 ladder is ours.
+- **current (2026-10-18, `status-hosts-rest`)**: the dance **moved** from the
+  inline `play.rs` steps into `status:no_hand`'s `TurnStart` / `TurnEnd`
+  hooks. The `TODO(规则书)` stays (the ladder is still our reading of card
+  text, not a glossary clause); the host now owns it.
 
 ## STA-04 — [除外] re-gain stacks despite 「该效果生效时无法重复获得该效果」
 - **kind**: implementation bug
 - **class**: A
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
-- **locations**: `rules/status/src/exile.rs:19-21`, `:119-121`
+- **locations**: `rules/status/src/exile.rs::grant`
 - **rulebook**: 「该效果生效时无法重复获得该效果」 (`data/rules.txt`).
-- **current**: layers stack on `give_exile`.
+- **current**: **done** (2026-10-18) -- the guard lives in the host grant verbs
+  (`grant` / `send` / `hold`); `give_exile` is a dumb layer write.
 
 ## STA-05 — [除外] 「不能被[指定]」 / on-board clause still engine-side
 - **kind**: ABI defect
@@ -1809,6 +1815,45 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **locations**: `rules/cards/card-mujica/src/nyamu_card.rs:57-62`
 - **rulebook**: 「每当此卡将从正面翻至背面时可选择失去2个火罐」 — the clause
   does not say what losing the 2 fire pots buys (C# also silent).
+
+## MARKERS-LISA-01 — temp-pot 600-cost and two-turn expiry under-specified
+- **kind**: rulebook divergence
+- **class**: C
+- **severity**: medium
+- **suggested batch**: skills: Roselia / fire kernel
+- **locations**: `rules/status/src/fire.rs` (`temp` module),
+  `rules/skills/skill-personas/src/lisa_goddess.rs`
+- **rulebook**: （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
+  需要支付你600资金」 — the spend path has to know a pot's *provenance* to charge
+  the provider, and 「被冲榜类效果被动消耗无需支付」 carves out a class of
+  spends the engine does not tag. The counter itself is real
+  (`fire::temp`, spendable temp-first per MARKERS.md §10(2)); the 600-cost and
+  the two-turn expiry stay open. In-source `TODO(规则书)[judgement]`.
+
+## MARKERS-MUTSU-01 — 状态2 character cover pile has no vocabulary
+- **kind**: rulebook divergence
+- **class**: C
+- **severity**: medium
+- **suggested batch**: skills: Ave Mujica
+- **locations**: `rules/skills/skill-personas/src/mutsumi_actor.rs`
+- **rulebook**: 状态2's 「从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其
+  覆盖于自己角色卡上」 — 「角色卡堆」 is a pile the vocabulary has no read for.
+  The fire half (「并获得其初始火罐」) landed as a registry overlay
+  (`fire::overlay` / `end_overlay`) keyed on the last-play latch; the character
+  cover stays open. In-source `TODO(规则书)[judgement]`.
+
+## MARKERS-KANI-01 — fire kernel iff proofs not yet added
+- **kind**: coverage gap
+- **class**: A
+- **severity**: low
+- **suggested batch**: kani / fire
+- **locations**: `rules/kani/src/proofs/` (missing `fire_kernel` harness)
+- **rulebook**: MARKERS.md §9 wants Kani iff proofs on the kernel bodies
+  (exact effect sets -- one grant/spend effect + one 效果适用 log + window; no
+  money/pos side effects) and I2 as a Kani assert. Not yet written; the
+  `registry_has_no_body_literals` / `i2_*` / `fire_regime_*` native pins in
+  `rules/tests/tests/markers.rs` cover the same ground at the integration
+  level.
 
 ## DETOUR-01 — 「"afterglow"式的移动」 under-specified; counter C# vs text
 - **kind**: rulebook divergence

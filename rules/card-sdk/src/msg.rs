@@ -50,7 +50,7 @@ use serde::Serialize;
 // card and the host, so it decodes Msg too -- only the wasm32 cdylib keeps
 // the derive off for size.
 #[cfg(not(kani))]
-#[cfg(not(all(feature = "guest", target_arch = "wasm32")))]
+#[cfg(not(all(feature = "guest", target_arch = "wasm32", not(feature = "native-rules"))))]
 use serde::Deserialize;
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ use serde::Deserialize;
 /// `Arg` enum in `game-core/src/msg.rs`.
 #[cfg(not(kani))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(not(all(feature = "guest", target_arch = "wasm32")), derive(Deserialize))]
+#[cfg_attr(not(all(feature = "guest", target_arch = "wasm32", not(feature = "native-rules"))), derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub enum Arg {
     /// A player -> that player's name.
@@ -85,7 +85,7 @@ pub enum Arg {
 /// A message by key with typed arguments (production).
 #[cfg(not(kani))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(not(all(feature = "guest", target_arch = "wasm32")), derive(Deserialize))]
+#[cfg_attr(not(all(feature = "guest", target_arch = "wasm32", not(feature = "native-rules"))), derive(Deserialize))]
 pub struct Msg {
     pub k: String,
     /// Always present on the wire: postcard is not self-describing.
