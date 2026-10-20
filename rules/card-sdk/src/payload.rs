@@ -168,6 +168,37 @@ pub fn drive_payload<P: FilterPayload>(player_id: i32, body: *const ()) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Pure body calls (proofs / tests). Same one-cast-per-shape discipline as the
+// `drive_*` fns above, but return the rewritten value and do no host IO.
+// `drive_*` is the host read/call/write path; these are the value-in/value-out
+// path used by `rules-kani::invoke::filter_*_idx`.
+// ---------------------------------------------------------------------------
+
+/// `fn(i32, i32) -> i32` pure fold. Sibling of [`drive_value`].
+pub fn pure_value(player_id: i32, body: *const (), value: i32) -> i32 {
+    // SAFETY: `body` was packed by `kinds::filter_value` from a
+    // `fn(i32, i32) -> i32`.
+    let body: fn(i32, i32) -> i32 = unsafe { core::mem::transmute(body) };
+    body(player_id, value)
+}
+
+/// `fn(i32, i32) -> bool` pure decision. Sibling of [`drive_flag`].
+pub fn pure_flag(player_id: i32, body: *const (), value: i32) -> bool {
+    // SAFETY: `body` was packed by `kinds::filter_flag` from a
+    // `fn(i32, i32) -> bool`.
+    let body: fn(i32, i32) -> bool = unsafe { core::mem::transmute(body) };
+    body(player_id, value)
+}
+
+/// `fn(i32, P) -> P` pure payload rewrite. Sibling of [`drive_payload`].
+pub fn pure_payload<P: FilterPayload>(player_id: i32, body: *const (), value: P) -> P {
+    // SAFETY: `body` was packed by `kinds::filter_payload::<P>` from a
+    // `fn(i32, P) -> P` with the same `P`.
+    let body: fn(i32, P) -> P = unsafe { core::mem::transmute(body) };
+    body(player_id, value)
+}
+
 impl FilterPayload for GateValue {
     fn read() -> Self {
         Self::default()
