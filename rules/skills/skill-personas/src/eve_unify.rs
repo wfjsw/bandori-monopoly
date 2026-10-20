@@ -42,9 +42,9 @@
 //! (no prompts). Fixing that needs a `diceRollBefore` raise on the card_move
 //! path.
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
 use skill_groups::fans;
 
 /// Y chosen at [`ActionKind::DiceRollBefore`], consumed by the Plan filter.
@@ -73,7 +73,7 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
             &[FilterKind::DiceRollPlan],
             "actor == owner",
             None,
-            on_plan,
+            FilterBody::Plan(on_plan),
         ),
         // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
         On::Action(
@@ -172,18 +172,17 @@ fn on_before(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2） 「为此次投掷结果增加Yd4」 -- pure FilterValue at [`FilterKind::DiceRollPlan`].
-/// Appends `Y`d4 to the move's dice table (`add_base_*`), so `roll_tables`
+/// （2） 「为此次投掷结果增加Yd4」 -- pure PlanValue at [`FilterKind::DiceRollPlan`].
+/// Appends `Y`d4 to the move's dice table (`add_base`), so `roll_tables`
 /// includes it in the face. Reads the stash [`on_before`] wrote; never writes.
-fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     // NOTE: `slot('evePendingY')` as a *condition* on this FilterValue did not
     // see the stash `on_before` writes earlier in the same roll (the Action
     // `slot` conditions do). Gate on `actor == owner` and read the stash here
     // -- `state::get` is legal in filters and does see it.
     let y = state::get(player_id, PENDING_Y);
     if y >= 1 {
-        v.add_base_count = y;
-        v.add_base_sides = 4;
+        v.add_base = Some(Dice { count: y, sides: 4 });
     }
     v
 }
@@ -209,7 +208,7 @@ pub fn on_before_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
     on_plan(player_id, v)
 }
 

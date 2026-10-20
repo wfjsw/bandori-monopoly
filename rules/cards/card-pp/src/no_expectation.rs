@@ -15,9 +15,9 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{prop, FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{prop, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, Msg, On, RollValue};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
@@ -28,7 +28,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         // FilterValue at DiceRollValue (option C -- the text is a result
         // modifier, not a 「掷骰后」 listener). No DiceRollAfter entry.
         // PaySplitAdd is the pure payment bend.
-        On::FilterValue(&[FilterKind::DiceRollValue], "card.placed", None, roll_shave),
+        On::FilterValue(&[FilterKind::DiceRollValue], "card.placed", None, FilterBody::Roll(roll_shave)),
         On::Filter(&[FilterKind::PaySplitAdd], "card.placed", None, pay_add),
         On::Action(
             &[ActionKind::Reshuffled],
@@ -93,10 +93,10 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
 /// `CardNoExpectation` (1): 「投掷结果减少2（…如果为0则此次移动不[结算]）」.
-/// Pure FilterValue at DiceRollValue (v79): shaves the face by 2 and, when the
+/// Pure RollValue at DiceRollValue (v79): shaves the face by 2 and, when the
 /// result is 0, clears `resolve` so the walk does not settle. `card.placed`
 /// is the pre; only the owner's rolls are shaved.
-fn roll_shave(player_id: i32, v: FilterValue) -> FilterValue {
+fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
     if trigger::player_id() != player_id {
         return v;
     }
@@ -109,11 +109,11 @@ fn roll_shave(player_id: i32, v: FilterValue) -> FilterValue {
         player_id,
         &Msg::new(key!("no_expectation_roll")).i("n", cut as i64),
     );
-    let mut out = FilterValue { value: cut, ..v };
+    let mut out = RollValue { value: cut, ..v };
     if cut == 0 {
         // 「如果为0则此次移动不[结算]」 -- also when the face was already 0
         // (the clause keys on 「为0」, not on the shave having done work).
-        out.resolve = 0;
+        out.resolve = Some(false);
         ctx::log(
             player_id,
             &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
@@ -165,7 +165,7 @@ pub fn no_expectation_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_shave_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn roll_shave_kani(player_id: i32, v: RollValue) -> RollValue {
     roll_shave(player_id, v)
 }
 

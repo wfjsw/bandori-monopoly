@@ -8,10 +8,10 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{prop, ChainKind, ActionKind, FilterKind};
+use card_sdk::abi::{prop, ChainKind, ActionKind, Dice, FilterKind};
 use card_sdk::ctx::plan;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
 
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
@@ -23,7 +23,7 @@ pub const DETOUR: CardDef = CardDef::new(
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
-        On::FilterValue(&[FilterKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, next_roll),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, FilterBody::Plan(next_roll)),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
         On::Action(&[ActionKind::DiceRollAfter], "slot('detour_next_roll') != 0", "", None, consume_next_roll),
@@ -140,8 +140,11 @@ const NEXT_ROLL: &str = "detour_next_roll";
 /// plan is being built, so this is where the override belongs. Pure: only the
 /// dice reshape. The one-shot latch is consumed by [`consume_next_roll`] on
 /// `DiceRollAfter`.
-fn next_roll(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    card_sdk::abi::FilterValue { base_count: 1, base_sides: 6, ..v }
+fn next_roll(_player_id: i32, v: PlanValue) -> PlanValue {
+    PlanValue {
+        base: Some(Dice { count: 1, sides: 6 }),
+        ..v
+    }
 }
 
 /// Drop the one-shot [`NEXT_ROLL`] latch once the rewritten roll has landed.
@@ -190,7 +193,7 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn next_roll_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+pub fn next_roll_kani(player_id: i32, v: PlanValue) -> PlanValue {
     next_roll(player_id, v)
 }
 

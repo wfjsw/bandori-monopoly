@@ -5,9 +5,9 @@
 //! > 将此卡放置于自己场上，直到自己的下一回合开始，场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你，你的下回合开始时将其翻入弃牌堆，若在此期间此卡没有造成影响，抽1张卡
 //!
 
-use card_sdk::abi::FilterValue; use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, FilterKind, Payee, Seat};
 use bandori_std::ctx::{self};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, Msg, On, RedirectValue};
 
 pub const EXIST: CardDef = CardDef::new(
     "RAS:EXIST",
@@ -15,7 +15,7 @@ pub const EXIST: CardDef = CardDef::new(
         On::Play("", "", None, exist),
         // The body-top `target == owner` early-out is the condition now (C#
         // `return target != Seat`): already aimed at us, nothing to retarget.
-        On::FilterValue(&[FilterKind::Redirect], "target != owner", None, redirect),
+        On::FilterValue(&[FilterKind::Redirect], "target != owner", None, FilterBody::Redirect(redirect)),
         // 「造成影响」 latch: the redirect lands, then `Effect` fires at the
         // target window. Mark used there (Action) rather than inside the
         // Redirect Filter (`set_prop` is refuse_if_filter'd).
@@ -55,13 +55,13 @@ fn exist(player_id: i32) -> card_sdk::Asked {
 /// `redirect` at single-target `ctx::target` calls and applies the answer only
 /// when it differs from both the intended target and the actor (C# `H.Target`'s
 /// `card.Seat != p && card.Seat != c.Seat`).
-/// Pure: the retarget rides `FilterValue.payee`. The 「造成影响」 latch is
+/// Pure: the retarget rides `RedirectValue.payee`. The 「造成影响」 latch is
 /// [`mark_used`] on `Effect`.
-fn redirect(player_id: i32, v: FilterValue) -> FilterValue {
+fn redirect(player_id: i32, v: RedirectValue) -> RedirectValue {
     // 规则书: 「场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你」
     // -- already aimed at us is the entry's condition (`target != owner`).
-    FilterValue {
-        payee: player_id,
+    RedirectValue {
+        payee: Some(Payee::Seat(Seat(player_id))),
         ..v
     }
 }
@@ -113,7 +113,7 @@ pub fn exist_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn redirect_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn redirect_kani(player_id: i32, v: RedirectValue) -> RedirectValue {
     redirect(player_id, v)
 }
 

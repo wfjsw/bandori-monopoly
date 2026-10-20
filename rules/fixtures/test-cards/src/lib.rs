@@ -2,9 +2,9 @@
 
 //! Test-only cards for the host's cross-module tests.
 
-use card_sdk::abi::{ChainKind, FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On, PlanValue};
 
 /// Plays another card (in another module) in the middle of its own effect.
 const RELAY: CardDef = CardDef::new("TEST:relay", &[On::Play("", "", None, relay)]);
@@ -40,7 +40,7 @@ const GUARD: CardDef = CardDef::new(
     "TEST:guard",
     &[
         On::Play("", "", None, guard_play),
-        On::FilterFlag(&[FilterKind::AbnormalGuard], "", None, guard),
+        On::FilterValue(&[FilterKind::AbnormalGuard], "", None, FilterBody::Gate(guard)),
     ],
 );
 
@@ -54,7 +54,7 @@ const SHIELD: CardDef = CardDef::new(
     "TEST:shield",
     &[
         On::Play("", "", None, shield_play),
-        On::FilterFlag(&[FilterKind::ImmuneAll], "", None, shield),
+        On::FilterValue(&[FilterKind::ImmuneAll], "", None, FilterBody::Gate(shield)),
     ],
 );
 
@@ -113,12 +113,13 @@ fn shield_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn shield(player_id: i32, _v: i32) -> bool {
+fn shield(player_id: i32, mut g: GateValue) -> GateValue {
     if trigger::player_id() == player_id && !trigger::cancelled() {
         ctx::log(player_id, &Msg::new(key!("shield_held")));
-        return false; // deny
+        g.allowed = Some(false); // deny
+        return g;
     }
-    true
+    g
 }
 
 /// Shapes a 3-step walk via the plan ops and runs it immediately with
@@ -280,12 +281,13 @@ fn guard_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn guard(player_id: i32, _v: i32) -> bool {
+fn guard(player_id: i32, mut g: GateValue) -> GateValue {
     if trigger::target() == player_id && !trigger::cancelled() {
         ctx::log(player_id, &Msg::new(key!("guard_blocked")));
-        return false; // deny
+        g.allowed = Some(false); // deny
+        return g;
     }
-    true
+    g
 }
 
 fn relay(player_id: i32) -> card_sdk::Asked {
@@ -569,7 +571,7 @@ const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
         On::Play("", "", None, fire_roll_play),
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, fire_roll_plan),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, FilterBody::Plan(fire_roll_plan)),
     ],
 );
 
@@ -579,12 +581,11 @@ fn fire_roll_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn fire_roll_plan(_player_id: i32, v: FilterValue) -> FilterValue {
-    // tag_key 1 = "fireRoll" (see rt.rs TAG_FIRE_ROLL). Pure FilterValue write
-    // instead of the old in-body `plan::set_tag` (refuse_if_filter'd).
-    FilterValue {
-        tag_key: 1,
-        tag: 1,
+fn fire_roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
+    // Pure PlanValue write instead of the old in-body `plan::set_tag`
+    // (refuse_if_filter'd).
+    PlanValue {
+        tag: Some(("fireRoll", 1)),
         ..v
     }
 }
@@ -686,7 +687,7 @@ const PRE_GATE: CardDef = CardDef::new(
     "TEST:preGate",
     &[
         On::Play("", "", None, pre_gate_place),
-        On::FilterFlag(&[FilterKind::ImmuneAll], "false", None, pre_gate_body),
+        On::FilterValue(&[FilterKind::ImmuneAll], "false", None, FilterBody::Gate(pre_gate_body)),
     ],
 );
 
@@ -696,8 +697,9 @@ fn pre_gate_place(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn pre_gate_body(player_id: i32, _v: i32) -> bool {
-    false // deny
+fn pre_gate_body(_player_id: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// `On::RollPlan` with a rejecting condition: the move being planned must not
@@ -706,7 +708,7 @@ const PRE_ROLLPLAN: CardDef = CardDef::new(
     "TEST:preRollPlan",
     &[
         On::Play("", "", None, pre_rollplan_place),
-        On::FilterValue(&[FilterKind::DiceRollPlan], "false", None, pre_rollplan_body),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "false", None, FilterBody::Plan(pre_rollplan_body)),
     ],
 );
 
@@ -716,14 +718,12 @@ fn pre_rollplan_place(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn pre_rollplan_body(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    // tag_key 2 = "preRollPlan" (see rt.rs TAG_PRE_ROLLPLAN). Pure FilterValue
-    // write instead of the old in-body `plan::set_tag`. The log is allowed
-    // (not a mutation).
+fn pre_rollplan_body(player_id: i32, v: PlanValue) -> PlanValue {
+    // Pure PlanValue write instead of the old in-body `plan::set_tag`. The log
+    // is allowed (not a mutation).
     ctx::log(player_id, &Msg::new(key!("pre_rollplan_ran")));
-    card_sdk::abi::FilterValue {
-        tag_key: 2,
-        tag: 1,
+    PlanValue {
+        tag: Some(("preRollPlan", 1)),
         ..v
     }
 }

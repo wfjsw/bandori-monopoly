@@ -3,9 +3,9 @@
 //! 事件文本（`CardMeta` beside the rule body, id `幻觉来了`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, FilterKind, Seat};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{CardDef, FilterBody, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};
 
@@ -22,7 +22,12 @@ pub const HALLUCINATION: CardDef = CardDef::new(
         On::Play("", "", None, play),
         // 「任何玩家进行投掷前」 -- every plan, so the category filter is the
         // whole applicability. `always` deleted (a no-op prefetch).
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, on_plan),
+        On::FilterValue(
+            &[FilterKind::DiceRollPlan],
+            "",
+            None,
+            FilterBody::Plan(on_plan),
+        ),
         On::Action(&[ActionKind::TurnStartBefore], "", "", None, on_turn_start),
     ],
 )
@@ -66,7 +71,7 @@ fn prev_player(p: i32) -> i32 {
 /// previous player; the move still belongs to the original one (and its
 /// modifiers key off them), which is what `v.roller` does: the log line
 /// shows 「by」, `t.Move.Main` / the mover are unchanged.
-fn on_plan(_owner: i32, mut v: FilterValue) -> FilterValue {
+fn on_plan(_owner: i32, mut v: PlanValue) -> PlanValue {
     let who = trigger::player_id();
     if who < 0 {
         return v;
@@ -76,7 +81,7 @@ fn on_plan(_owner: i32, mut v: FilterValue) -> FilterValue {
         return v;
     }
     // 「上一名玩家代替进行此次投掷」
-    v.roller = by;
+    v.roller = Some(Seat(by));
     ctx::log(
         who,
         &Msg::new("log.event.hallucination_sub")
@@ -109,7 +114,7 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
     on_plan(player_id, v)
 }
 

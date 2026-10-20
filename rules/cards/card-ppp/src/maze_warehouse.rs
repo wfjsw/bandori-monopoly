@@ -6,9 +6,9 @@
 //!
 //! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
-use card_sdk::abi::{FilterValue, FilterKind};
+use card_sdk::abi::{FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, DealValue, FilterBody, Msg, On};
 
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
     "PPP:迷宫般的仓库",
@@ -18,7 +18,7 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).
         On::Filter(&[FilterKind::BuySet], card_sdk::pre::MINE, None, free_buy),
-        On::FilterValue(&[FilterKind::BuyAssign], card_sdk::pre::MINE, None, raze),
+        On::FilterValue(&[FilterKind::BuyAssign], card_sdk::pre::MINE, None, FilterBody::Deal(raze)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 6000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷宫般的仓库"#)
@@ -39,11 +39,11 @@ fn free_buy(_player_id: i32, value: i32) -> i32 {
 
 /// 「如果购买则拆除那个格子上的所有房屋」 -- `BuyAssign` rewrites the deal's
 /// post-commit house count (`docs/PURCHASE.md`).
-fn raze(_player_id: i32, mut v: FilterValue) -> FilterValue {
+fn raze(_player_id: i32, mut v: DealValue) -> DealValue {
     if trigger::tile() < 0 {
         return v;
     }
-    v.deal_houses = 0;
+    v.houses = Some(0);
     v
 }
 
@@ -152,6 +152,6 @@ pub fn free_buy_kani(player_id: i32, value: i32) -> i32 {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn raze_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn raze_kani(player_id: i32, v: DealValue) -> DealValue {
     raze(player_id, v)
 }

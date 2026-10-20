@@ -23,9 +23,9 @@
 //! the sweep runs after each of this skill's own croquette-raising writes --
 //! the only sites that can raise the count (marker ownership).
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind, MarkFilter};
+use card_sdk::abi::{ActionKind, Dice, FilterKind, MarkFilter};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
 
 /// The mark kind 「可乐饼」 parked on a tile.
 const ON_TILE: &str = "可乐饼";
@@ -51,7 +51,7 @@ pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
         ),
         // 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the skill button.
         On::Play("", "", Some(can_cash), cash),
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, on_plan),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, FilterBody::Plan(on_plan)),
     ],
 );
 
@@ -245,13 +245,12 @@ fn sweep_overflow(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「角色每拥有一个可乐饼，移动时多投掷1个1d2」 -- one extra d2 per croquette.
-/// The host folds `extra_count`/`extra_sides` via `add_extra_dice`, so a single
-/// `(n, 2)` pair is the same dice pool as the old `n` one-die calls.
-fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
+/// The host folds `extra` via `add_extra_dice`, so a single `(n, 2)` pair is the
+/// same dice pool as the old `n` one-die calls.
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     let n = ctx::tok(player_id, HELD);
     if n > 0 {
-        v.extra_count = n;
-        v.extra_sides = 2;
+        v.extra = Some(Dice { count: n, sides: 2 });
     }
     v
 }
@@ -277,7 +276,7 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
     on_plan(player_id, v)
 }
 

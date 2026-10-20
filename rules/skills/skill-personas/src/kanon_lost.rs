@@ -15,9 +15,9 @@
 //! counter that a CiRCLE reward resets; 「下回合移动投掷改为1d20+1d4」 is the
 //! dice table being rewritten when it fires.
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
 
 /// Turns since the last CiRCLE reward. Cleared on the reward.
 const SILENT: &str = "skill.kanonLost.silent";
@@ -42,7 +42,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // the roll). Verify whether the gate ever mis-fires here; if it does,
         // fix the condition evaluation snapshot (or move the gate into the
         // body) and re-run the kanon tests + a two-roll scenario.
-        On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, FilterBody::Plan(on_plan)),
     ],
 )
     .silent(&[2, 3]);
@@ -90,13 +90,11 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 /// (3) 「下回合移动投掷改为1d20+1d4」 -- the plan's dice table, rewritten while
-/// the silence holds. Pure: the base pair is `base_count`/`base_sides` and the
-/// extra d4 rides `add_base_count`/`add_base_sides` (the wrapper appends it).
-fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
-    v.base_count = 1;
-    v.base_sides = 20;
-    v.add_base_count = 1;
-    v.add_base_sides = 4;
+/// the silence holds. Pure: the base pair is `base` and the
+/// extra d4 rides `add_base` (the wrapper appends it).
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
+    v.base = Some(Dice { count: 1, sides: 20 });
+    v.add_base = Some(Dice { count: 1, sides: 4 });
     ctx::log(player_id, &Msg::new(key!("kanon_lost_dice")));
     v
 }
@@ -128,6 +126,6 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
     on_plan(player_id, v)
 }

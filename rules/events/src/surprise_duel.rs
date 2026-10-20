@@ -3,9 +3,9 @@
 //! 事件文本（`CardMeta` beside the rule body, id `意外的对邦`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{CardDef, FilterBody, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};
 
@@ -23,7 +23,12 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", Some(on_plan_others), on_plan),
+        On::FilterValue(
+            &[FilterKind::DiceRollPlan],
+            "",
+            Some(on_plan_others),
+            FilterBody::Plan(on_plan),
+        ),
         On::Action(&[ActionKind::TurnStartBefore], "", "", None, on_turn_start),
     ],
 )
@@ -64,7 +69,7 @@ fn on_plan_others(_player_id: i32) -> bool {
 /// reverse path is strictly closer to the drawer's seat walks backwards; a tie
 /// keeps the normal direction. Only the direction is rewritten, not the length.
 /// Applicability is [`on_plan_others`].
-fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
+fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     let mover = ctx::turn_player();
     let drawer = ctx::prop(DRAWER);
     let here = ctx::player_pos(mover);
@@ -78,7 +83,7 @@ fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
     let f = ctx::tile_forward(here, there);
     let b = n - f;
     if f > 0 && b < f {
-        v.reverse = 1;
+        v.reverse = Some(true);
         ctx::log(
             mover,
             &Msg::new("log.event.surprise_duel_dir").player_id("who", mover),
@@ -110,7 +115,7 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
     on_plan(player_id, v)
 }
 

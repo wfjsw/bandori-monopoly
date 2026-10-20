@@ -18,9 +18,9 @@
 //! reads. 「主动移动经过任何玩家都将向其收取200资金」 is `PassPlayer`, and
 //! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
 
-use bandori_std::state_key; use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
 
 /// 「回忆地块」 -- the three the clause names.
 const MEMORY: [&str; 3] = ["小豆岛", "武道馆", "旧古河庭园"];
@@ -50,7 +50,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
             &[FilterKind::DiceRollPlan],
             "actor == owner && slot('skillState') != 2",
             None,
-            on_plan,
+            FilterBody::Plan(on_plan),
         ),
         On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
@@ -120,14 +120,12 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态1: 「移动改为10+1d10」.
-fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
+fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     // 规则书: 「移动改为10+1d10」 -- the d20 becomes a d10 and a flat 10 rides
     // along; the summed roll is the walk's length (`set_steps` would pin the
     // walk to 10 and drop the die).
-    v.base_count = 1;
-    v.base_sides = 10;
-    v.extra_count = 10;
-    v.extra_sides = 0;
+    v.base = Some(Dice { count: 1, sides: 10 });
+    v.extra = Some(Dice { count: 10, sides: 0 });
     v
 }
 
@@ -216,7 +214,7 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
     on_plan(player_id, v)
 }
 
