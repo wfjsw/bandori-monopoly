@@ -118,7 +118,17 @@ bandori_std::roster::GroupDef::new(r#"Hello, Happy World!"#)
     .text(r#"（1）向他人的格子付款时可选择支付双倍价格，若如此做，记录该玩家并使此卡获得一个奇迹水晶。（2）被记录的玩家的格子产生收款时，移除此卡的一个奇迹水晶，记录该次收款的价格（可累加）。（3）你进行盖房时，可从盖房花费中减去所记录的数字，然后将记录数字归零。"#)
     .logo(r#"003"#);
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_choose_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay_choose(player_id)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
@@ -129,10 +139,4 @@ pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
     before_build(player_id)
-}
-
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
-#[cfg(kani)]
-pub fn on_pay_choose_kani(player_id: i32) -> card_sdk::Asked {
-    on_pay_choose(player_id)
 }

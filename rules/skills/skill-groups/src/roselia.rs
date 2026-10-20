@@ -115,17 +115,15 @@ bandori_std::roster::GroupDef::new(r#"Roselia"#)
     .text(r#"（1）本局游戏购买的第一个非Live House格子购买价格减半，在你拥有任意初始Live House格子前，那个格子对你视为Live House。（2）购买任何Live House格子的地契时购买价格减半"#)
     .logo(r#"005"#);
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn half_price_kani(player_id: i32, value: i32) -> i32 {
     half_price(player_id, value)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start(player_id)
 }
 
 #[cfg(kani)]
@@ -138,4 +136,10 @@ pub fn on_bought_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_live_bought_kani(player_id: i32) -> card_sdk::Asked {
     on_live_bought(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
 }

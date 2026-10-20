@@ -88,6 +88,10 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -103,12 +107,12 @@ pub fn on_event_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
-    on_pass(player_id)
-}
-
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
-#[cfg(kani)]
 pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }

@@ -166,21 +166,9 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
-    on_pass(player_id)
-}
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_pass_player_kani(player_id: i32) -> card_sdk::Asked {
-    on_pass_player(player_id)
-}
-
 #[cfg(kani)]
 #[inline(always)]
 pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
@@ -189,14 +177,26 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     on_plan(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
     on_settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_player_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass_player(player_id)
 }
 
 #[cfg(kani)]

@@ -187,6 +187,10 @@ fn counteract2(player_id: i32) -> card_sdk::Asked {
     rolls(player_id, 2 + gains)
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -194,16 +198,14 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
+    hook(player_id)
+}
 
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract2_kani(player_id: i32) -> card_sdk::Asked {
     counteract2(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
-    hook(player_id)
 }

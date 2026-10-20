@@ -181,6 +181,10 @@ fn field_crystals(p: i32) -> i32 {
         .sum()
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -199,8 +203,6 @@ pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
 pub fn after_build_kani(player_id: i32) -> card_sdk::Asked {
     after_build(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]

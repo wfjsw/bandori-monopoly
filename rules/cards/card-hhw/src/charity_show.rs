@@ -178,17 +178,15 @@ fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn turn_end_after_kani(player_id: i32) -> card_sdk::Asked {
-    turn_end_after(player_id)
 }
 
 #[cfg(kani)]
@@ -201,4 +199,10 @@ pub fn pay_mul_kani(player_id: i32, value: i32) -> i32 {
 #[inline(always)]
 pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
     pass_tile(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_after_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end_after(player_id)
 }

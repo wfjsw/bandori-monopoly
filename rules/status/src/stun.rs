@@ -92,8 +92,9 @@ pub use bandori_std::status::stun::{
     add, add_start, blocks_act, blocks_move, blocks_on_board, blocks_pay, clear, get,
 };
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_stun_landed_kani(player_id: i32) -> card_sdk::Asked {
@@ -102,6 +103,6 @@ pub fn on_stun_landed_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, g: GateValue) -> GateValue {
-    refuse(owner, g)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

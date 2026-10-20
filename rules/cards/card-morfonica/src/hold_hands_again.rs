@@ -87,7 +87,17 @@ fn pay_after(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn pay_at_kani(player_id: i32, value: i32) -> i32 {
@@ -98,10 +108,4 @@ pub fn pay_at_kani(player_id: i32, value: i32) -> i32 {
 #[inline(always)]
 pub fn pay_after_kani(player_id: i32) -> card_sdk::Asked {
     pay_after(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
 }

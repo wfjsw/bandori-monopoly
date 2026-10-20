@@ -132,6 +132,8 @@ pub fn get(player_id: i32) -> i32 {
     card_sdk::ctx::state::get(player_id, KEY)
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -147,6 +149,6 @@ pub fn on_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(player_id: i32, g: GateValue) -> GateValue {
-    refuse(player_id, g)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

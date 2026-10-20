@@ -158,6 +158,8 @@ fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -165,16 +167,14 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
 
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_settle_body_kani(player_id: i32) -> card_sdk::Asked {
     on_settle_body(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_pass_kani(owner: i32) -> card_sdk::Asked {
-    on_pass(owner)
 }

@@ -118,7 +118,15 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 //   vocabulary has no read for. Two_in_one's fixed-pair swap (`set_persona` +
 //   unplace/place) is the shape; here the pair is 「上一位打出过手牌的玩家」.
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_play_kani(player_id: i32) -> card_sdk::Asked {
@@ -129,10 +137,4 @@ pub fn on_play_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_end(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start(player_id)
 }

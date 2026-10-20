@@ -113,6 +113,10 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
     half
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -128,7 +132,7 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_half_kani(player_id: i32, v: RollValue) -> RollValue {
+pub fn roll_half_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
     roll_half(player_id, v)
 }
 

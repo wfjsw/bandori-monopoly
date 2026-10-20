@@ -107,6 +107,10 @@ fn _group(player_id: i32) -> i32 {
     state::get(player_id, GROUP)
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]

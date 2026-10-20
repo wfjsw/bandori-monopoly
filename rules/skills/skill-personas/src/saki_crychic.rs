@@ -135,6 +135,8 @@ fn nudge(who: i32, goal: i32) {
 //   shared with the Ave Mujica band skill, and 「只有洗牌时可以…添加奇迹水晶」
 //   carves a class of gains the engine does not tag.
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -147,8 +149,6 @@ pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]

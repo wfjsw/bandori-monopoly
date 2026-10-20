@@ -102,6 +102,8 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -111,12 +113,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    on_turn_start(player_id)
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
-    on_pass(player_id)
+pub fn on_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_start(player_id)
 }

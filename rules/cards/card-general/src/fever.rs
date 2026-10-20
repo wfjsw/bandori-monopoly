@@ -104,6 +104,10 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -113,8 +117,8 @@ pub fn fever_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
-    pay_add(player_id, value)
+pub fn pay_add_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    pay_add(player_id, v)
 }
 
 #[cfg(kani)]

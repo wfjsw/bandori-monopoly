@@ -187,6 +187,8 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -208,12 +210,12 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
-    tick(player_id)
+pub fn on_skill_kani(player_id: i32) -> card_sdk::Asked {
+    on_skill(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_skill_kani(player_id: i32) -> card_sdk::Asked {
-    on_skill(player_id)
+pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
+    tick(player_id)
 }

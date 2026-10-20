@@ -157,15 +157,19 @@ fn redirect(player_id: i32, v: PayAddValue) -> PayAddValue {
 // 一次［主要移动］」 keeps the player from rolling as well (C#
 // `H.MoveWhyNot` / `_turnCtx.MainMoved`).
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
-    no_road(player_id)
+pub fn redirect_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    redirect(player_id, v)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn redirect_kani(player_id: i32, v: PayAddValue) -> PayAddValue {
-    redirect(player_id, v)
+pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
+    no_road(player_id)
 }

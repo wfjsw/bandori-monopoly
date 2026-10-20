@@ -185,8 +185,9 @@ pub use bandori_std::status::exile::{
     blocks_act, blocks_move, blocks_on_board, blocks_pay, blocks_targeted, clear, get, hold, send,
 };
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_exile_landed_kani(player_id: i32) -> card_sdk::Asked {
@@ -207,12 +208,6 @@ pub fn on_turn_start_before_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, g: GateValue) -> GateValue {
-    refuse(owner, g)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn turn_start_peels_or_holds_kani(owner: i32) -> bool {
-    turn_start_peels_or_holds(owner)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

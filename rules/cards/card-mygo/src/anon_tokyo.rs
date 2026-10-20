@@ -205,6 +205,10 @@ fn link_rent(player_id: i32, v: PayAddValue) -> PayAddValue {
     }
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -214,6 +218,6 @@ pub fn anon_tokyo_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn link_rent_kani(player_id: i32, v: PayAddValue) -> PayAddValue {
+pub fn link_rent_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
     link_rent(player_id, v)
 }

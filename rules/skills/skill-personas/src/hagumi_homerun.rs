@@ -256,10 +256,14 @@ fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
 // skill's own write sites (plus the turn-end tick). A host `heldChanged` event
 // would let this be a pure event handler.
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn spawn_kani(player_id: i32) -> card_sdk::Asked {
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_end(player_id)
 }
 
@@ -267,12 +271,6 @@ pub fn spawn_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
-    on_plan(player_id, v)
 }
 
 #[cfg(kani)]
@@ -289,12 +287,6 @@ pub fn cash_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn sweep_overflow_kani(player_id: i32) -> card_sdk::Asked {
-    sweep_overflow(player_id)
-}
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_end(player_id)
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
+    on_plan(player_id, v)
 }

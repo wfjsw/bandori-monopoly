@@ -83,6 +83,10 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -92,14 +96,12 @@ pub fn summer_camp_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    turn_start(player_id)
+pub fn untargetable_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    untargetable(player_id, v)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn untargetable_kani(player_id: i32, g: GateValue) -> GateValue {
-    untargetable(player_id, g)
+pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    turn_start(player_id)
 }

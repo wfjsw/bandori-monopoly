@@ -33,9 +33,13 @@ fn roll_plan(player_id: i32, v: PlanValue) -> PlanValue {
     }
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_plan_kani(player_id: i32, v: PlanValue) -> PlanValue {
+pub fn roll_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     roll_plan(player_id, v)
 }

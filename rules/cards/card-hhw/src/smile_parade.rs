@@ -326,11 +326,33 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
 // （3） is `settle_body` / `on_resolved` above: a two-way board position
 // exchange for the settle body/ownership/rent reads, then the discard.
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
+    settle_body(player_id)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_resolved_kani(player_id: i32) -> card_sdk::Asked {
     on_resolved(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn move_after_kani(player_id: i32) -> card_sdk::Asked {
+    move_after(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }
 
 #[cfg(kani)]
@@ -343,24 +365,4 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
     on_crystals_changed(player_id)
-}
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn move_after_kani(player_id: i32) -> card_sdk::Asked {
-    move_after(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
-    settle_body(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
 }

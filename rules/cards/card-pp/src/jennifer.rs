@@ -125,6 +125,10 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 // hook may move the hit). `CardDef.targeting()` / `Normal` are not declared on
 // the manifest yet; they only feed PLEASE CHOOSE's hand filter.
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -137,4 +141,3 @@ pub fn jennifer_kani(player_id: i32) -> card_sdk::Asked {
 pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
     pass_tile(player_id)
 }
-

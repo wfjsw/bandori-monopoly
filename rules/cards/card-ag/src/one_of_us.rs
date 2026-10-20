@@ -291,11 +291,21 @@ fn before_out(owner: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn before_out_kani(player_id: i32) -> card_sdk::Asked {
+    before_out(player_id)
 }
 
 #[cfg(kani)]
@@ -306,20 +316,12 @@ pub fn measure_rent_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn clear_measured_rent_kani(player_id: i32) -> card_sdk::Asked {
-    clear_measured_rent(player_id)
-}
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn before_out_kani(player_id: i32) -> card_sdk::Asked {
-    before_out(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
 pub fn share_at_resolved_kani(player_id: i32) -> card_sdk::Asked {
     share_at_resolved(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_measured_rent_kani(player_id: i32) -> card_sdk::Asked {
+    clear_measured_rent(player_id)
 }

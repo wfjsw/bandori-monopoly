@@ -154,6 +154,12 @@ fn pick_from_discard(
     Ok(ctx::take_card(player_id, ctx::CardPile::Discard, &id).then_some(id))
 }
 
+//
+
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]

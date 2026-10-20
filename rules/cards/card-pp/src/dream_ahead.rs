@@ -221,6 +221,10 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -245,4 +249,3 @@ pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
 pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
     settle_body(player_id)
 }
-

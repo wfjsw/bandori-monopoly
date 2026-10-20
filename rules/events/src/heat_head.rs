@@ -110,6 +110,8 @@ fn phase_end(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -119,13 +121,13 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn add_die_kani(player_id: i32, v: PlanValue) -> PlanValue {
+pub fn add_die_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     add_die(player_id, v)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn sub_die_filter_kani(player_id: i32, v: RollValue) -> RollValue {
+pub fn sub_die_filter_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
     sub_die_filter(player_id, v)
 }
 

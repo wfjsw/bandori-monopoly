@@ -178,6 +178,10 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -195,6 +199,12 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn pay_choose_ask_kani(player_id: i32) -> card_sdk::Asked {
     pay_choose_ask(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_choose_cancel_kani(player_id: i32, value: i32) -> bool {
+    pay_choose_cancel(player_id, value)
 }
 
 #[cfg(kani)]

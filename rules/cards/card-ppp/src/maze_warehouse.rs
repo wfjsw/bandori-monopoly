@@ -137,6 +137,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -152,6 +156,6 @@ pub fn free_buy_kani(player_id: i32, value: i32) -> i32 {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn raze_kani(player_id: i32, v: DealValue) -> DealValue {
+pub fn raze_kani(player_id: i32, v: card_sdk::DealValue) -> card_sdk::DealValue {
     raze(player_id, v)
 }

@@ -152,6 +152,10 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -161,17 +165,13 @@ pub fn no_expectation_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_shave_kani(player_id: i32, v: RollValue) -> RollValue {
+pub fn roll_shave_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
     roll_shave(player_id, v)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn pay_add_kani(player_id: i32, v: PayAddValue) -> PayAddValue {
+pub fn pay_add_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
     pay_add(player_id, v)
 }
 
@@ -180,4 +180,3 @@ pub fn pay_add_kani(player_id: i32, v: PayAddValue) -> PayAddValue {
 pub fn reshuffled_kani(player_id: i32) -> card_sdk::Asked {
     reshuffled(player_id)
 }
-

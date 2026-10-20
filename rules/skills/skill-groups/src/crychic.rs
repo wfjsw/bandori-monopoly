@@ -277,6 +277,10 @@ bandori_std::roster::GroupDef::new(r#"CRYCHIC"#)
     .text(r#"CRYCHIC团技能：（1）你的手牌数没有上限，任何时刻拥有手牌数大于等于6时，你无法获得或失去资金，无法从手中打出任何牌且领取CiRCLE奖励时必须选择抽一张卡。（2）你的回合结束时，若你的抽牌堆与弃牌堆中都没有卡，移除此卡与你所有区域的所有“CRYCHIC”卡，将你剩余的所有手牌放入抽牌堆，并向抽牌堆中加入角色对应的自选“MyGO”或“Ave Mujica”卡至抽牌堆中总共有10张卡并洗切；获得角色对应的“MyGO”或“Ave Mujica”乐队技能卡，然后抽2张卡。（3）每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶 （上限10）；当此卡移除时，你获得X*500资金，X为此卡上的奇迹水晶数。"#)
     .logo("");
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -310,8 +314,8 @@ pub fn force_card_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(player_id: i32, g: GateValue) -> GateValue {
-    refuse(player_id, g)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }
 
 #[cfg(kani)]

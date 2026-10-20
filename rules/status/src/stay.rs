@@ -99,8 +99,9 @@ fn on_stay_landed(_owner: i32) -> card_sdk::Asked {
 
 pub use bandori_std::status::stay::{add, blocks_act, blocks_move, blocks_pay, clear, get, unlatch, unlatch_skip_move};
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_stay_landed_kani(player_id: i32) -> card_sdk::Asked {
@@ -109,6 +110,6 @@ pub fn on_stay_landed_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, g: GateValue) -> GateValue {
-    refuse(owner, g)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

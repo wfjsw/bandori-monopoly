@@ -331,11 +331,27 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
 //   (The band skill's fire-pot drain is the engine's stand-in exit; it does not
 //   clear the SPLIT keys or the designation marks -- see `enter_two`.)
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
     declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
+    offer_support(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
 }
 
 #[cfg(kani)]
@@ -350,14 +366,6 @@ pub fn enter_two_kani(player_id: i32) -> card_sdk::Asked {
     enter_two(player_id)
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
-    offer_support(player_id)
-}
-
 #[cfg(kani)]
 #[inline(always)]
 pub fn split_rent_kani(player_id: i32, value: i32) -> i32 {
@@ -368,10 +376,4 @@ pub fn split_rent_kani(player_id: i32, value: i32) -> i32 {
 #[inline(always)]
 pub fn split_rent_gain_kani(player_id: i32) -> card_sdk::Asked {
     split_rent_gain(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start(player_id)
 }

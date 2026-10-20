@@ -113,6 +113,8 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 //   checkable. 「（抵押或赎回以外）」 carves out a class of resets the engine
 //   does not tag either.
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]

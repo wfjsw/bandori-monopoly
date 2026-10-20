@@ -142,6 +142,10 @@ fn pay_res(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -151,8 +155,8 @@ pub fn aya_longing_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn shave_x_filter_kani(player_id: i32, value: i32) -> i32 {
-    shave_x_filter(player_id, value)
+pub fn shave_x_filter_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    shave_x_filter(player_id, v)
 }
 
 #[cfg(kani)]

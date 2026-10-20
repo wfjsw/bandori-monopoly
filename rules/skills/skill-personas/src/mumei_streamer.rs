@@ -156,14 +156,14 @@ fn at_turn_end_exit(player_id: i32) -> card_sdk::Asked {
 //   no moment of its own to fire at. Taken to mean: whatever else clears
 //   `skillState` also un-flips, which is what `at_turn_end_exit` keys on.
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
     declare_cap(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]
@@ -173,8 +173,8 @@ pub fn on_pay_declare_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pay_add_kani(player_id: i32, value: i32) -> i32 {
-    on_pay_add(player_id, value)
+pub fn on_pay_add_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    on_pay_add(player_id, v)
 }
 
 #[cfg(kani)]
@@ -185,12 +185,12 @@ pub fn clear_bump_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn at_turn_end_exit_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_end_exit(player_id)
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_end(player_id)
+pub fn at_turn_end_exit_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end_exit(player_id)
 }

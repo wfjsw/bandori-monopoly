@@ -196,15 +196,11 @@ fn pull(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn tomori_inner_shout_kani(player_id: i32) -> card_sdk::Asked {
-    tomori_inner_shout(player_id)
-}
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
-
 #[cfg(kani)]
 #[inline(always)]
 pub fn pull_kani(player_id: i32) -> card_sdk::Asked {
@@ -221,4 +217,10 @@ pub fn clear_latch_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
     on_pay(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn tomori_inner_shout_kani(player_id: i32) -> card_sdk::Asked {
+    tomori_inner_shout(player_id)
 }

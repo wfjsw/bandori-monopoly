@@ -178,6 +178,10 @@ fn clear_no_reward(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -193,7 +197,7 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn next_roll_kani(player_id: i32, v: PlanValue) -> PlanValue {
+pub fn next_roll_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     next_roll(player_id, v)
 }
 

@@ -114,6 +114,10 @@ bandori_std::roster::GroupDef::new(r#"Pastel✽Palettes"#)
 （4）回合开始时此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡。"#)
     .logo(r#"004"#);
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
