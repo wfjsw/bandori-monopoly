@@ -13,6 +13,7 @@ import { useLatestRef } from "../../hooks/latest";
 import { getProfile } from "../../core/store";
 import type { PersonaData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
+import { blankPlayer } from "../board/model";
 import { Btn } from "../../ui/Button";
 import { SkillBody } from "../../ui/SkillBody";
 import { Avatar, BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
@@ -38,15 +39,18 @@ export function Select({ sess }: { sess: GameSession }) {
   const [picked, setPicked] = useState("");
 
   const act = async (cmd: Command) => {
-    if (sess.autoMode !== "off") return false;
+    if (sess.readOnly || sess.autoMode !== "off") return false;
     const err = await sess.act(cmd);
     if (err) toast(fmtMsg(err, namesOf(sess.view?.state)), "error");
     return !err;
   };
 
-  const me = view?.state.players[view.playerId];
+  const me = view?.state.players[view.playerId] ?? blankPlayer();
+  /** No seat (`playerId` -1): watch the ban / pick board, never choose. */
+  const spectating = !!view && view.playerId < 0;
   const pickRef = useLatestRef({
     auto,
+    spectating,
     hasChar: !!me?.persona,
     phase: view?.state.phase ?? "",
     free: (n: string) => {
@@ -57,7 +61,7 @@ export function Select({ sess }: { sess: GameSession }) {
     sess,
   });
   const pickChar = useCallback((c: PersonaData) => {
-    if (pickRef.current.auto) return;
+    if (pickRef.current.auto || pickRef.current.spectating) return;
     sfx("place");
     if (pickRef.current.hasChar) return;
     setPicked(c.name);
@@ -71,10 +75,12 @@ export function Select({ sess }: { sess: GameSession }) {
     }
   }, []);
 
-  if (!view || !me) return null;
+  if (!view) return null;
   const st = view.state;
   const myTurn = st.turn === view.playerId;
-  const chosen = me.persona || picked || getProfile().homePersona || D.personas[0].name;
+  // A spectator has no persona of their own: never fall back to the profile's
+  // home character, which would paint it as "chosen" on the public board.
+  const chosen = spectating ? picked : me.persona || picked || getProfile().homePersona || D.personas[0].name;
   const preview = D.persona(chosen);
   const secs = Math.max(0, Math.ceil(st.timeLeft - (performance.now() - at) / 1000));
   const takenBy = new Map(st.players.map((x, playerId) => [x.persona, { name: x.player, playerId }] as const).filter(([c]) => c));
@@ -90,7 +96,11 @@ export function Select({ sess }: { sess: GameSession }) {
   let hint = "";
   let label = tr("select.decide");
   let onGo: (() => void) | null = null;
-  if (st.phase === "order") {
+  if (spectating) {
+    // Watchers see the public ban / pick board; nothing is theirs to decide.
+    hint = tr("board.watching");
+    label = tr("board.watching");
+  } else if (st.phase === "order") {
     hint = tr("select.orderHint");
     label = tr("select.rolling");
   } else if (st.phase === "ban") {

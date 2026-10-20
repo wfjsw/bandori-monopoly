@@ -162,7 +162,7 @@ export function Board({ sess }: { sess: GameSession }) {
   // Why the button is (or is not) live, shown under it.
   let hint: string;
   if (S.phase !== "play") hint = "";
-  else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
+  else if (m.out) hint = m.playerId < 0 ? tr("board.watching") : m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
   else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
   else if (S.busy || anim.animating) hint = tr("board.settling");
   else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: names.playerId(S.turn) });

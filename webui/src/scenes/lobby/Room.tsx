@@ -51,14 +51,17 @@ export function useOnline(id: string): OnlineSession | null {
   // room -- and again whenever the room shows a new commitment (the slot the
   // server rolls after every match). No window, no wait: a nonce that never
   // arrives is simply absent from the derived seed.
+  // `seated` is in the deps because a spectator who later takes a free seat
+  // (`join` upgrades in place) becomes a human the seed must cover.
   const commit = sess?.room?.fair?.commit ?? "";
+  const seated = !!sess && !sess.spectator && !!sess.room?.members.some((m) => m.id === sess.you);
   useEffect(() => {
     const r = sess?.room;
     if (!r || !commit || r.playing) return;
     const me = r.members.find((m) => m.id === sess!.you);
     if (!me || me.bot) return;
     submitRoomNonce(r.id, commit);
-  }, [sess, commit]);
+  }, [sess, commit, seated]);
 
   useEffect(() => {
     if (sess?.dissolved) {
@@ -83,9 +86,14 @@ export function Room({ id }: { id: string }) {
   useEffect(() => {
     if (!sess) return;
     return sess.subscribe((v) => {
-      // A seat that forfeited / went bankrupt (or a spectator) left the match
-      // screen on purpose; do not bounce it straight back into the match.
-      if (v && matchScene(v) && sess.room?.playing && !model(v).out) navigate({ name: "play", id }, { replace: true });
+      // A seat that forfeited / went bankrupt left the match screen on purpose;
+      // do not bounce it straight back into the match. A spectator is `out` by
+      // construction (`playerId` -1) but has no seat to abandon — they came to
+      // watch, so send them in.
+      const spectating = sess.spectator;
+      if (v && matchScene(v) && sess.room?.playing && (spectating || !model(v).out)) {
+        navigate({ name: "play", id }, { replace: true });
+      }
     });
   }, [sess, id]);
 
@@ -93,9 +101,18 @@ export function Room({ id }: { id: string }) {
   const r = sess.room;
   const me = r.members.find((m) => m.id === sess.you);
   const isHost = !!me?.host;
+  const spectating = sess.spectator;
   const leave = () => {
     endSession();
     navigate({ name: "lobby" });
+  };
+  /** Take a free seat without leaving first (`join` upgrades in place). */
+  const takeSeat = async () => {
+    const res = await api.join(r.id, "", false);
+    if (!res.ok) return toast(fmtMsg(res.error!), "error");
+    // Apply the reply now: the SSE `room` frame would get there eventually,
+    // but a reconnecting stream must not leave us locked in watcher mode.
+    sess.adoptSeat(res.data!.room, res.data!.you);
   };
   const start = async () => {
     const res = await api.start(r.id, armed);
@@ -115,6 +132,19 @@ export function Room({ id }: { id: string }) {
         <span className={cx(s.mode, r.ranked && s.ranked)}>{r.ranked ? tr("mode.ranked") : tr("mode.casual")}</span>
         <b>{tr("room.idLabel", { id: r.id })}</b>
         <span>{tr("room.players", { n: r.members.length, max: r.maxPlayers, hint: r.ranked ? tr("lobby.playersHintRanked") : tr("solo.playersHint"), locked: r.locked ? tr("room.locked") : "" })}</span>
+        {spectating && <span className={s.tagWatching}>{tr("room.watching")}</span>}
+        {(r.spectators?.length ?? 0) > 0 && (
+          <span className={s.spectators} title={r.spectators!.map((sp) => sp.player).join(", ")}>
+            <Icon name="groups" />
+            {tr("room.spectators", { n: r.spectators!.length })}
+            {r.spectators!.slice(0, 3).map((sp) => (
+              <span key={sp.id} className={cx(s.spectator, sp.id === sess.you && s.me)}>
+                {sp.player}{sp.id === sess.you && <small>{tr("common.youSuffix")}</small>}
+              </span>
+            ))}
+            {r.spectators!.length > 3 && <span className={s.spectator}>+{r.spectators!.length - 3}</span>}
+          </span>
+        )}
         {!sess.connected && <span className={s.warn}>{tr("room.reconnecting")}</span>}
         <span className={s.spacer} />
         <Btn size="small" icon="leaderboard" onClick={() => showScoreWeights(r.weights, isHost && !r.playing, async (w) => report(await api.weights(r.id, w)))}>{tr("solo.scoreRules")}</Btn>
@@ -171,7 +201,8 @@ export function Room({ id }: { id: string }) {
       </div>
       <div className={s.foot}>
         <p className={s.formula}>{formula(r.weights)}</p>
-        {!r.playing && (
+        {/* The sealed record reveals every hand: only a seat may download it. */}
+        {!r.playing && !spectating && (
           <Btn
             icon="download"
             onClick={async () => {
@@ -188,7 +219,11 @@ export function Room({ id }: { id: string }) {
         )}
         <Btn size="big" icon="logout" onClick={leave}>{tr("room.leave")}</Btn>
         {r.playing ? <Btn kind="pink" size="big" className={s.main} onClick={() => navigate({ name: "play", id })}>{tr("room.backToMatch")}</Btn>
-          : isHost ? <Btn kind="pink" size="big" className={s.main} onClick={start}>{armed ? tr("room.forceStart") : tr("solo.start")}</Btn>
+          : spectating
+            ? (r.members.length < r.maxPlayers
+              ? <Btn kind="pink" size="big" className={s.main} onClick={takeSeat}>{tr("lobby.join")}</Btn>
+              : <Btn kind="white" size="big" className={s.main} disabled>{tr("room.watching")}</Btn>)
+            : isHost ? <Btn kind="pink" size="big" className={s.main} onClick={start}>{armed ? tr("room.forceStart") : tr("solo.start")}</Btn>
           : <Btn kind={me?.ready ? "white" : "pink"} size="big" className={s.main} onClick={async () => report(await api.ready(r.id, !me?.ready))}>{me?.ready ? tr("room.cancelReady") : tr("room.ready")}</Btn>}
       </div>
     </>

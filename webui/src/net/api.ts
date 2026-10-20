@@ -63,7 +63,14 @@ export const api = {
   session: () => call<{ room: string | null; member: number }>("GET", "/api/session"),
   rooms: () => call<RoomInfo[]>("GET", "/api/rooms"),
   createRoom: (o: { name: string; ranked: boolean; maxPlayers: number; password: string; weights?: ScoreWeights; clock?: ClockSettings }) => call<{ room: RoomInfo; you: number }>("POST", "/api/rooms", o),
-  join: (id: string, password = "") => call<{ room: RoomInfo; you: number }>("POST", `/api/rooms/${id}/join`, { password, version: "9" }),
+  /**
+   * Join (or rejoin) a room. `spectate` takes a watcher's place instead of a
+   * seat: allowed while the room is playing or full, still gated by the
+   * password. The reply's `you` is the room member id (a spectator id is never
+   * a seat id).
+   */
+  join: (id: string, password = "", spectate = false) =>
+    call<{ room: RoomInfo; you: number }>("POST", `/api/rooms/${id}/join`, { password, version: "9", spectate }),
   ready: (id: string, on: boolean) => call<RoomInfo>("POST", `/api/rooms/${id}/ready`, { on }),
   bot: (id: string, op: "add" | "remove", member = 0, mentality: BotMentality = "standard") =>
     call<RoomInfo>("POST", `/api/rooms/${id}/bots`, { op, member, mentality }),

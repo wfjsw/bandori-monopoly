@@ -234,7 +234,7 @@ works, for tools.
 | GET  | `/api/session` | | `{token, player, room, member}` |
 | GET  | `/api/rooms` | | `RoomInfo[]` |
 | POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?, clock?}` | `{room, you}` |
-| POST | `/api/rooms/{id}/join` | `{password, version?}` | `{room, you}` |
+| POST | `/api/rooms/{id}/join` | `{password, version?, spectate?}` | `{room, you}` |
 | POST | `/api/rooms/{id}/ready` | `{on}` | `RoomInfo` |
 | POST | `/api/rooms/{id}/bots` | `{op: "add" \| "remove", member?, mentality?}` | `RoomInfo` (host) |
 | POST | `/api/rooms/{id}/weights` | `{money, property, houses}` | `RoomInfo` (host) |
@@ -415,12 +415,50 @@ pinned by the same test under `cargo test --release -p game-core --test debug`.
 | `dissolve` | | `{reason}` — the room is gone |
 
 * `hand` / `handNotes` are only ever your own; `state.players[*].hand` is just a count.
+* A **spectator**'s `match` frame is the public view: `playerId` is `-1` (no
+  seat), `you` is the spectator's room member id, and `hand` / `handNotes` /
+  `draw` are empty. The per-viewer extras (`aiAnswer` / `playable` / `estCost` /
+  `skills`) are absent on the online path for everyone; a spectator has no
+  seat to derive them from either. `tileQuotes` is the seat-independent
+  reading. See §Spectating.
 * Only `event` frames carry ids. On reconnect the browser sends the last one as
   `Last-Event-ID` and the stream resumes right after it. A new match (new `matchId`)
   starts from its first event.
 * `state.prompt` describes the prompt in progress (`id`, `kind`, `players`, `answers`
   with `-1` = still waiting, `timeLeft`, auction `bid` / `bidder`).
 * Keep-alive comments every 15 s.
+
+## Spectating
+
+`POST /api/rooms/{id}/join` with `spectate: true` makes the caller a **watcher**:
+no seat, no secrets, no input.
+
+* **When.** A spectator may join a room that is already `playing`, or one that
+  is `full`. The room password still applies (`err.join.password`); so does the
+  protocol version. Rejoin by session token always returns the existing
+  membership, seat or spectator.
+* **Wire.** `RoomInfo.spectators: RoomSpectator[]`
+  (`{id, player, persona, cnId}`) rides alongside `members` and is omitted
+  while empty. Spectator ids come from the same counter as seats, so a
+  spectator id is never a seat id. `GET …/state` and the SSE `match` frame use
+  the unseated view above (`playerId: -1`).
+* **What they cannot do.** `act` / `anim-done` / `ready` / `start` / `bots` /
+  `weights` / `clock` / `nonce` are seat-only and answer `err.not_a_player`.
+  The engine would also refuse an unseated member (`err.not_in_match`).
+  `GET …/record` stays 403 `err.record.forbidden` -- the sealed record reveals
+  every hand and the deck order.
+* **Seats.** Spectators are excluded from `maxPlayers`, from the match's
+  participants at `start`, and from the fair nonce window. There is no cap
+  on how many may watch a room.
+* **Presence.** A spectator is never marked `away` and never hands a seat to
+  the AI. A stale one is simply removed from the room. Leaving never forfeits
+  (`act: "leave"` is skipped for them).
+* **Lifetime.** A room dissolves when no **human seats** remain
+  (`humans() == 0` -- a bot-only roster does not keep a room alive), even if
+  spectators are still watching. They receive `dissolve` like everyone else.
+* **Taking a seat.** `join` with `spectate: false` upgrades a spectator in
+  place (same member id, same token) once a seat is free. The password and
+  version were already checked when they joined to watch.
 
 ## Match records
 
@@ -522,6 +560,9 @@ stream closes. A player with **no live key** for `presence_timeout`:
 * in a match: the AI takes the player (`members[].away = true`); reopening the
   stream hands it back;
 * in the lobby: removed from the room.
+
+A **spectator** with no live key is removed from the room -- never marked
+`away`, never handed to the AI (they have no seat). See §Spectating.
 
 Because the keys are in the store, a stream held open on server B keeps the
 member present as far as server A's reaper is concerned.

@@ -844,6 +844,12 @@ export function resumeSolo(): SoloSession | null {
 export class OnlineSession extends GameSession {
   readonly kind = "online";
   readonly id: string;
+  /**
+   * Watching, not seated: no hand, `view.playerId === -1`, every input locked.
+   * A spectator is anyone whose member id is not in `room.members`. Flips to
+   * `false` if they later take a free seat (`join` upgrades in place).
+   */
+  spectator: boolean;
   private close: () => void;
   dissolved: Msg | null = null;
   /**
@@ -864,6 +870,9 @@ export class OnlineSession extends GameSession {
     this.id = room.id;
     this.room = room;
     this.you = you;
+    this.spectator = !room.members.some((m) => m.id === you);
+    // A watcher has no seat and no secrets to compute extras from.
+    if (this.spectator) this.readOnly = true;
     this.extras = new OnlineExtras(room.id, you);
     // Route the initial frame through `emitView` too, so extras kick off
     // before the first subscriber attaches (they get the merged view).
@@ -871,6 +880,13 @@ export class OnlineSession extends GameSession {
     this.close = openStream(room.id, {
       room: (r) => {
         this.room = r;
+        // A spectator who took a free seat is now a player: unlock the inputs
+        // and let the next frame derive extras from the seat view.
+        const seated = r.members.some((m) => m.id === this.you);
+        if (this.spectator && seated) {
+          this.spectator = false;
+          this.readOnly = false;
+        }
         this.emitOther();
       },
       match: (v) => this.emitView(v),
@@ -925,10 +941,14 @@ export class OnlineSession extends GameSession {
    * frame -- greying may be coarse and 托管 falls back to its policy table.
    */
   protected emitView(v: MatchView): void {
+    // A spectator's frame is already the public view; there is no seat to
+    // derive `playable` / `estCost` / `skills` / `aiAnswer` from.
+    if (this.spectator) return super.emitView(v);
     emitOnlineView(this.extras, v, (m) => super.emitView(m), () => this.view);
   }
 
   async act(cmd: Command): Promise<Msg | null> {
+    if (this.readOnly) return { k: "err.not_a_player" };
     const r = await api.act(this.id, cmd);
     return r.ok ? null : (r.error ?? { k: "err.unknown_act" });
   }
@@ -939,6 +959,9 @@ export class OnlineSession extends GameSession {
    * version by the caller (Board); no-op on a stale ack.
    */
   async animDone(seq: number): Promise<void> {
+    // A watcher has no seat whose turn-clock hold to release; don't spam the
+    // endpoint (it would answer `err.not_a_player`) on every frame.
+    if (this.readOnly) return;
     await api.animDone(this.id, seq);
   }
 
@@ -949,6 +972,21 @@ export class OnlineSession extends GameSession {
       document.removeEventListener("visibilitychange", this.onVisible);
     }
     if (!this.dissolved) void api.leave(this.id);
+  }
+
+  /**
+   * Apply a join reply that took a free seat: the SSE `room` frame is the
+   * usual path, but a reconnecting stream must not leave the client locked in
+   * watcher mode after the server has already seated us.
+   */
+  adoptSeat(room: RoomInfo, you: number): void {
+    this.room = room;
+    this.you = you;
+    if (this.spectator) {
+      this.spectator = false;
+      this.readOnly = false;
+    }
+    this.emitOther();
   }
 }
 

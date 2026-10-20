@@ -118,6 +118,7 @@
   "err.no_such_card": "You don't have that card",
   "err.no_vote": "There is no vote right now",
   "err.not_in_match": "You are not in this match",
+  "err.not_a_player": "You are spectating -- watchers cannot act",
   "err.not_mortgaged": "This deed is not mortgaged",
   "err.not_over_hand": "Your hand is within the limit -- nothing to discard",
   "err.not_playing": "Not in a match",

@@ -79,12 +79,12 @@ function enter(room: RoomInfo, you: number): void {
   navigate({ name: "room", id: room.id });
 }
 
-async function join(id: string, locked: boolean, password = ""): Promise<void> {
+async function join(id: string, locked: boolean, password = "", spectate = false): Promise<void> {
   if (locked && !password) {
-    openModal(tr("lobby.passwordTitle"), (close) => <PasswordForm onDone={(pw) => { close(); void join(id, true, pw); }} />, { size: "small" });
+    openModal(tr("lobby.passwordTitle"), (close) => <PasswordForm onDone={(pw) => { close(); void join(id, true, pw, spectate); }} />, { size: "small" });
     return;
   }
-  const r = await api.join(id, password);
+  const r = await api.join(id, password, spectate);
   if (!r.ok) return toast(fmtMsg(r.error!), "error");
   enter(r.data!.room, r.data!.you);
 }
@@ -160,8 +160,11 @@ function Empty({ title, text }: { title: string; text: string }) {
 
 function RoomCard({ r }: { r: RoomInfo }) {
   const host = r.members.find((m) => m.host);
+  const watching = r.spectators?.length ?? 0;
+  // A playing / full room has no seat to take: the card offers the watch path.
+  const canJoin = joinable(r);
   return (
-    <button type="button" className={cx(s.card, r.ranked && s.ranked, r.playing && s.playing)} onClick={() => void join(r.id, r.locked)}>
+    <button type="button" className={cx(s.card, r.ranked && s.ranked, r.playing && s.playing)} onClick={() => void join(r.id, r.locked, "", !canJoin)}>
       <div className={s.cardHead}>
         <span className={cx(s.mode, r.ranked && s.modeRanked)}>{r.ranked ? tr("common.rankShort") : tr("common.casualShort")}</span>
         <b>{r.name}</b>
@@ -173,8 +176,10 @@ function RoomCard({ r }: { r: RoomInfo }) {
       </div>
       <div className={s.cardFoot}>
         <span>{tr("lobby.host", { who: host?.player ?? "—", id: r.id })}</span>
+        {watching > 0 && <span className={s.watching}>{tr("lobby.watchingN", { n: watching })}</span>}
         <b>{r.members.length}/{r.maxPlayers}</b>
         <span className={s.state}>{r.playing ? tr("lobby.playing") : tr("lobby.waiting")}</span>
+        <span className={s.watch}>{canJoin ? tr("lobby.join") : tr("lobby.spectate")}</span>
       </div>
     </button>
   );
