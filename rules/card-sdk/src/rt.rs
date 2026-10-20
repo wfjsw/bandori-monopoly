@@ -17,10 +17,11 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
     for band in bands {
         for c in band.iter() {
             for (ei, o) in c.on.iter().enumerate() {
-                if let Err(code) = o.check_kind_variant() {
+                if let Err(kind) = o.check_kind_variant() {
                     panic!(
-                        "ruleset build: {} entry {ei} kind {code} does not match {} (see TriggerKind::is_filter)",
+                        "ruleset build: {} entry {ei} kind {} does not match {} (see TriggerKind::is_filter)",
                         c.id,
+                        kind.as_str(),
                         match o.kind() {
                             crate::abi::OnKind::Filter => "On::Filter",
                             _ => "On::Action",

@@ -907,15 +907,15 @@ impl On {
     /// Kind/variant agreement (ABI v73): a [`On::Filter`] may only list filter
     /// kinds and an [`On::Action`] only non-filter kinds. Wrong-side *consts*
     /// are a rustc error at the signature; this cheap check still catches raw
-    /// ids (`ActionKind(i)` / rule-defined kinds) crossing the wire. Returns
-    /// the first mismatched kind code, or `Ok(())`.
-    pub fn check_kind_variant(&self) -> Result<(), i32> {
+    /// ids (`ActionKind(TriggerKind::engine(i))` / rule-defined kinds) crossing
+    /// the wire. Returns the first mismatched kind, or `Ok(())`.
+    pub fn check_kind_variant(&self) -> Result<(), abi::TriggerKind> {
         match self {
             On::Action(kinds, ..) => {
                 for k in *kinds {
-                    let code = k.as_i32();
-                    if abi::TriggerKind::from_i32(code).is_filter() {
-                        return Err(code);
+                    let t = k.as_trigger();
+                    if t.is_filter() {
+                        return Err(t);
                     }
                 }
                 Ok(())
@@ -924,9 +924,9 @@ impl On {
             | On::FilterFlag(kinds, ..)
             | On::FilterValue(kinds, ..) => {
                 for k in *kinds {
-                    let code = k.as_i32();
-                    if !abi::TriggerKind::from_i32(code).is_filter() {
-                        return Err(code);
+                    let t = k.as_trigger();
+                    if !t.is_filter() {
+                        return Err(t);
                     }
                 }
                 Ok(())
@@ -935,16 +935,16 @@ impl On {
         }
     }
 
-    /// The wire values this entry answers (empty for non-trigger entries).
-    /// The three kind enums share [`abi::TriggerKind`]'s numbering, so this is
-    /// what the manifest carries.
+    /// The wire values this entry answers (empty for non-trigger entries),
+    /// as the CEL single-int packing ([`abi::TriggerKind::as_cel_i64`],
+    /// truncated to `i32`).
     pub fn triggers(&self) -> Vec<i32> {
         match self {
-            On::Counteract(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::Action(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::Filter(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::FilterFlag(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::FilterValue(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::Counteract(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
+            On::Action(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
+            On::Filter(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
+            On::FilterFlag(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
+            On::FilterValue(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
             // Message names travel as the manifest's `triggers` string list
             // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
             // The names ride a separate manifest field; see `rt.rs`.
@@ -1018,7 +1018,7 @@ mod tests {
             TriggerKind::SettleBody,
             TriggerKind::CounterChanged,
             TriggerKind::DrewBefore,
-            TriggerKind(78), // marker spend-substitution (name is payload); prompts, remains Action
+            TriggerKind::ruleset(78), // marker spend-substitution (name is payload); prompts, remains Action
         ] {
             assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
         }
@@ -1152,18 +1152,20 @@ mod tests {
         }
     }
 
-    /// Runtime assert for raw ids crossing the wire (`ActionKind(i)` /
-    /// `FilterKind(i)` / rule-defined kinds). Wrong-side *consts* are already a
+    /// Runtime assert for raw ids crossing the wire (`ActionKind(k)` /
+    /// `FilterKind(k)` / rule-defined kinds). Wrong-side *consts* are already a
     /// rustc error at the `On` signature.
     #[test]
     fn kind_variant_agreement() {
         const FILTER_OK: &[FilterKind] = &[FilterKind::PaySplitAdd];
         const ACTION_OK: &[ActionKind] = &[ActionKind::TurnEnd];
-        // Raw-id smuggle: the typed consts cannot land here, but `FilterKind(45)`
-        // can. The cheap runtime assert still fires.
-        const FILTER_BAD: &[FilterKind] = &[FilterKind(45)]; // TurnEnd
-        const ACTION_BAD: &[ActionKind] = &[ActionKind(55)]; // PaySplitAdd
-        const ACTION_MIXED: &[ActionKind] = &[ActionKind::TurnEnd, ActionKind(55)];
+        // Raw-id smuggle: the typed consts cannot land here, but
+        // `FilterKind(TriggerKind::engine(45))` can. The cheap runtime assert
+        // still fires.
+        const FILTER_BAD: &[FilterKind] = &[FilterKind(TriggerKind::engine(45))]; // TurnEnd
+        const ACTION_BAD: &[ActionKind] = &[ActionKind(TriggerKind::engine(55))]; // PaySplitAdd
+        const ACTION_MIXED: &[ActionKind] =
+            &[ActionKind::TurnEnd, ActionKind(TriggerKind::engine(55))];
         let filter_ok = On::Filter(FILTER_OK, "", None, fbody);
         assert!(filter_ok.check_kind_variant().is_ok());
         let action_ok = On::Action(ACTION_OK, "", "", None, body);
@@ -1171,17 +1173,17 @@ mod tests {
         let filter_bad = On::Filter(FILTER_BAD, "", None, fbody);
         assert_eq!(
             filter_bad.check_kind_variant(),
-            Err(TriggerKind::TurnEnd.as_i32())
+            Err(TriggerKind::TurnEnd)
         );
         let action_bad = On::Action(ACTION_BAD, "", "", None, body);
         assert_eq!(
             action_bad.check_kind_variant(),
-            Err(TriggerKind::PaySplitAdd.as_i32())
+            Err(TriggerKind::PaySplitAdd)
         );
         let mixed = On::Action(ACTION_MIXED, "", "", None, body);
         assert_eq!(
             mixed.check_kind_variant(),
-            Err(TriggerKind::PaySplitAdd.as_i32())
+            Err(TriggerKind::PaySplitAdd)
         );
     }
 
@@ -1210,17 +1212,17 @@ mod tests {
     fn trigger_kind_ids() {
         // TriggerKind ids are opaque; pin the retired wire names and holes.
         // FlipEffect = 94 / FlipAfter = 104 retired in v83 -- never reuse.
-        assert_eq!(TriggerKind::from_i32(94).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(104).as_str(), "");
+        assert_eq!(TriggerKind::engine(94).as_str(), "");
+        assert_eq!(TriggerKind::engine(104).as_str(), "");
         assert_eq!(TriggerKind::from_str("flipEffect"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("flipAfter"), TriggerKind::None);
         // Ids 16 / 17 / 19 / 20 / 22 (retired abnormal / force kinds) retired in
         // v84 -- never reuse.
-        assert_eq!(TriggerKind::from_i32(16).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(17).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(19).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(20).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(22).as_str(), "");
+        assert_eq!(TriggerKind::engine(16).as_str(), "");
+        assert_eq!(TriggerKind::engine(17).as_str(), "");
+        assert_eq!(TriggerKind::engine(19).as_str(), "");
+        assert_eq!(TriggerKind::engine(20).as_str(), "");
+        assert_eq!(TriggerKind::engine(22).as_str(), "");
         assert_eq!(TriggerKind::from_str("stop"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("retiredAb19"), TriggerKind::None);
