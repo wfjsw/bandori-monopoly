@@ -924,8 +924,6 @@ impl Room {
             if self.info.is_full() {
                 return Err(ApiError::reject(net::reject::FULL));
             }
-        } else if !upgrading && self.info.spectators.len() >= net::MAX_SPECTATORS {
-            return Err(ApiError::reject(net::reject::SPECTATORS));
         }
         if upgrading {
             let id = existing.expect("upgrading implies existing");

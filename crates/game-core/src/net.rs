@@ -24,10 +24,6 @@ pub const MAX_MESSAGE: usize = 1_048_576;
 pub const REJOIN_WINDOW: f32 = 120.0;
 /// Seconds of silence before a client counts as dropped.
 pub const TIMEOUT: f32 = 20.0;
-/// Watchers per room. Seats are clamped to 2..=10; a watcher costs a roster
-/// entry and an SSE fan-out but no match work, so the cap is generous -- just
-/// enough that one room cannot inflate every `room` frame without bound.
-pub const MAX_SPECTATORS: usize = 32;
 
 /// Join-reject reason codes.
 pub mod reject {
@@ -36,7 +32,6 @@ pub mod reject {
     pub const PLAYING: &str = "playing";
     pub const VERSION: &str = "version";
     pub const REJOIN: &str = "rejoin";
-    pub const SPECTATORS: &str = "spectators";
 }
 
 /// The message for a reject reason
