@@ -344,6 +344,75 @@ fn fever_x_falls_as_field_fills() {
     assert!(duo < solo, "X shrinks with more cards: {solo} vs {duo}");
 }
 
+/// 规则书（1）: 「[拥有者]场上每拥有一张卡则X降低200」 -- **every** card, face-down
+/// included. There is no printed carve-out.
+#[test]
+fn fever_x_counts_face_down_field_cards() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:[衍生]FEVER!").unwrap();
+    // A face-down second card on the owner's field.
+    t.place_raw(0, "通用:GREAT");
+    let uid = t.field(0).iter().find(|f| f.card == "通用:GREAT").unwrap().uid;
+    t.m.world_mut().st.players[0].field.iter_mut()
+        .find(|f| f.uid == uid).unwrap().face_down = true;
+    // Two cards (FEVER + the face-down GREAT) → X = 600 - 400 = 200.
+    t.set_pos(0, 55);
+    t.dice(&[6]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.money(0), 12_200, "X counts the face-down card too: {}", t.money(0) - 12_000);
+}
+
+/// 规则书（2）: 「[拥有者]回合开始时将此卡放入[使用者]弃卡区」 -- the **user's**
+/// discard. Give the user a real deck so `to_discard`'s empty-draw reshuffle does
+/// not lift the card straight back into the draw pile.
+#[test]
+fn fever_leaves_to_the_users_discard_pile() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
+    t.give_play(0, "通用:[衍生]FEVER!").unwrap();
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    t.end(0).unwrap();
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    skip_all(&mut t);
+    t.end(1).unwrap();
+    assert!(!t.on_field(0, "通用:[衍生]FEVER!"), "field {:?}", t.field_ids(0));
+    assert!(
+        t.discard(0).contains(&"通用:[衍生]FEVER!".to_string()),
+        "user discard {:?}",
+        t.discard(0)
+    );
+    assert!(
+        !t.draw_pile(0).contains(&"通用:[衍生]FEVER!".to_string()),
+        "not reshuffled into the draw pile: {:?}",
+        t.draw_pile(0)
+    );
+}
+
+/// 规则书[手]: 「所有其他玩家可选择[消耗]500资金」 -- **every** other player may
+/// choose. No printed cash gate, so a seat under 500 is still asked.
+#[test]
+fn thanks_party_offers_a_player_under_500() {
+    let mut t = Table::vanilla(2);
+    t.set_money(1, 200);
+    t.give(0, &["通用:CiRCLE THANKS PARTY!"]);
+    t.play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
+    let mut saw_offer = false;
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if format!("{:?}", p.title).contains("thanks") {
+            saw_offer = true;
+            let _ = t.answer_one(1); // decline the 500 chip-in
+        } else {
+            t.decline();
+        }
+    }
+    assert!(saw_offer, "a player under 500 is still offered the 500 spend");
+}
+
 // 规则书: 「[拥有者]回合开始时将此卡放入[使用者]弃卡区」
 #[test]
 fn fever_leaves_to_users_discard() {
