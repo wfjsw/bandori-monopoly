@@ -69,12 +69,12 @@
 .stripCards { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
 /* Standard 2:3 card shape at whatever width the column gives (the shared strip
    face is a fixed 118px tall, which squashed it on narrow screens). */
-.stripCards > .stripCard { width: 100%; height: auto; aspect-ratio: 2 / 3; min-width: 0; box-sizing: border-box; }
+.stripCards > .stripCard { width: 100%; height: auto; aspect-ratio: 2 / 3; min-width: 0; min-height: 0; overflow: hidden; align-self: start; box-sizing: border-box; }
 /* The stage is a design canvas scaled down to the screen, so a phone shrinks
    everything by the same factor; the title is sized in design px to stay
    legible after that, and the empty slots share the exact same box. */
 .stripCards > .stripCard { padding: 4px; }
-.stripCards > .stripCard .title { font-size: 15px; line-height: 1.25; padding: 3px 1px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.stripCards > .stripCard .title { font-size: 15px; line-height: 1.25; padding: 3px 1px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; flex: none; max-height: 2.9em; }
 .hint { margin-top: 6px; font-size: 13px; color: var(--sub); }
 
 .pool { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; gap: 12px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; }
