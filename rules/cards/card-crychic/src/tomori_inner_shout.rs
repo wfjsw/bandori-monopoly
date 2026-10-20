@@ -215,3 +215,15 @@ pub fn tomori_inner_shout_kani(player_id: i32) -> card_sdk::Asked {
 pub fn pull_kani(player_id: i32) -> card_sdk::Asked {
     pull(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_latch_kani(player_id: i32) -> card_sdk::Asked {
+    clear_latch(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
+    on_pay(player_id, value)
+}

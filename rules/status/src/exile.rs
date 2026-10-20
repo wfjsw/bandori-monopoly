@@ -42,7 +42,7 @@
 use bandori_std::kind::abnormal;
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, On};
+use card_sdk::{CardDef, FilterBody, GateValue, On};
 
 /// The board-owned [除外] rule. One instance on `BOARD_OWNER`, `tile = -1`.
 pub const STATUS_EXILE: CardDef = CardDef::new(
@@ -69,19 +69,19 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         ),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
-        On::FilterFlag(
+        On::FilterValue(
             &[FilterKind::ActGate, FilterKind::PayGate, FilterKind::MoveGate],
             EXILED,
             None,
-            refuse,
+            FilterBody::Gate(refuse),
         ),
         // 「玩家棋子不失为存在于任何格子上」 + 「不能被[指定]」 -- the on-board
         // and targetable gates, **CEL-only**, same shape as the three above.
-        On::FilterFlag(
+        On::FilterValue(
             &[FilterKind::OnBoardGate, FilterKind::TargetableGate],
             EXILED,
             None,
-            refuse,
+            FilterBody::Gate(refuse),
         ),
     ],
 )
@@ -94,8 +94,9 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
 /// The condition under which [除外] closes the act, pay and move gates.
 pub const EXILED: &str = "state(actor,'exile') > 0";
 
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 fn exile_landed(_owner: i32) -> bool {
@@ -219,8 +220,8 @@ pub fn on_turn_start_before_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, v: i32) -> bool {
-    refuse(owner, v)
+pub fn refuse_kani(owner: i32, g: GateValue) -> GateValue {
+    refuse(owner, g)
 }
 
 #[cfg(kani)]

@@ -1270,7 +1270,7 @@ pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
             }
 }
 
-/// Pack a `FilterValue` (BuyAssign) raise result into the single answer log
+/// Pack a `DealValue` (BuyAssign) raise result into the single answer log
 /// slot: bit 0 = cancelled, bits 1-4 = houses, bit 5 = mortgaged, bits 6-31 =
 /// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
 pub fn pack_deal(cancelled: bool, owner: i32, houses: i32, mortgaged: bool) -> i32 {
@@ -1302,7 +1302,7 @@ pub fn raise<C: HostCtx>(
     kind: &str,
     value: i32,
 ) -> Result<i32, HostErr> {
-    // v78: a `FilterValue` kind (BuyAssign) carries the default
+    // v78: a `DealValue` kind (BuyAssign) carries the default
     // deal from the guest's trigger in, and writes the rewritten
     // deal back so `trigger::deal_*` reads the fold.
     let tk = card_sdk::abi::TriggerKind::from_str(kind);

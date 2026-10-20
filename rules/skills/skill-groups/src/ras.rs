@@ -13,7 +13,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
 
 /// 「每回合可选择只获得第一次受到的[异常移动效果]」 -- 1 once one has landed.
 const TAKEN: &str = "skill.ras.taken";
@@ -32,11 +32,11 @@ pub const RAS: CardDef = CardDef::new(
         // 「受到的」 is `target == owner` (the recipient), not `actor == owner`.
         // Pure decision (ABI v74): the one-shot latch is written by
         // [`mark_taken`] when the allowed effect actually lands.
-        On::FilterFlag(
+        On::FilterValue(
             &[card_sdk::abi::FilterKind::AbnormalGuard],
             "target == owner",
             None,
-            on_abnormal,
+            FilterBody::Gate(on_abnormal),
         ),
         // One-shot latch for （1）: `Abnormal` reports what actually landed
         // (受到的), self-applied included. Paired with the pure gate above.
@@ -122,8 +122,12 @@ fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
 /// pure; `state::set` is refuse_if_filter'd).
 /// TODO(规则书): 「可选择」 -- the claim is automatic (no decline window for
 ///   the first hit). Same discrepancy as `m09_ras_band_first_abnormal_only`.
-fn on_abnormal(player_id: i32, _v: i32) -> bool {
-    state::get(player_id, TAKEN) == 0
+fn on_abnormal(player_id: i32, mut g: GateValue) -> GateValue {
+    // Allow (leave the host's answer) on the first hit; deny the rest.
+    if state::get(player_id, TAKEN) != 0 {
+        g.allowed = Some(false);
+    }
+    g
 }
 
 /// One-shot latch for （1）: the allowed abnormal actually landed (「受到的」).
@@ -181,8 +185,8 @@ pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_abnormal_kani(player_id: i32, v: i32) -> bool {
-    on_abnormal(player_id, v)
+pub fn on_abnormal_kani(player_id: i32, g: GateValue) -> GateValue {
+    on_abnormal(player_id, g)
 }
 
 #[cfg(kani)]

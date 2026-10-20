@@ -34,7 +34,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, On};
+use card_sdk::{CardDef, FilterBody, GateValue, On};
 
 /// The board-owned `noHand` rule. One instance on `BOARD_OWNER`, tile = -1`.
 /// Registered in [`crate::CARDS`]; `bind_tiles` places it.
@@ -48,7 +48,7 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
         On::Action(&[ActionKind::TurnEnd], "", "", None, on_turn_end),
         // 「不可使用手牌」 -- the play gate, **CEL-only**. No turn-skip: the
         // turn still runs; only hand-card plays are refused.
-        On::FilterFlag(&[FilterKind::PlayGate], NO_HAND_HELD, None, refuse),
+        On::FilterValue(&[FilterKind::PlayGate], NO_HAND_HELD, None, FilterBody::Gate(refuse)),
     ],
 )
     .board_role("status")
@@ -57,8 +57,9 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
 /// The condition under which `noHand` closes the play gate.
 pub const NO_HAND_HELD: &str = "state(actor,'noHand') > 0";
 
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// Turn-start fold (2 -> 1). Returns the new value.
@@ -129,4 +130,23 @@ pub fn add(player_id: i32, n: i32) {
 
 pub fn get(player_id: i32) -> i32 {
     card_sdk::ctx::state::get(player_id, KEY)
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn refuse_kani(player_id: i32, g: GateValue) -> GateValue {
+    refuse(player_id, g)
 }

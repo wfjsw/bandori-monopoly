@@ -31,7 +31,7 @@
 use bandori_std::kind::abnormal;
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, On};
+use card_sdk::{CardDef, FilterBody, GateValue, On};
 
 /// The state key this host owns (frozen webui wire).
 pub const KEY: &str = "stun";
@@ -49,8 +49,8 @@ pub const STATUS_STUN: CardDef = CardDef::new(
         // pending `stunStart` layer too (it already holds the gate).
         // 「不可阻挡」 does **not** cancel this layer's move block (it only
         // 「无视」s the stay half).
-        On::FilterFlag(&[FilterKind::ActGate, FilterKind::PayGate], STUNNED, None, refuse),
-        On::FilterFlag(&[FilterKind::MoveGate], STUNNED, None, refuse),
+        On::FilterValue(&[FilterKind::ActGate, FilterKind::PayGate], STUNNED, None, FilterBody::Gate(refuse)),
+        On::FilterValue(&[FilterKind::MoveGate], STUNNED, None, FilterBody::Gate(refuse)),
     ],
 )
     .board_role("status")
@@ -68,8 +68,9 @@ pub const STATUS_STUN: CardDef = CardDef::new(
 /// The condition under which [晕眩] closes the act, pay and move gates.
 pub const STUNNED: &str = "state(actor,'stun') + state(actor,'stunStart') > 0";
 
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 fn stun_landed(_owner: i32) -> bool {
@@ -100,6 +101,6 @@ pub fn on_stun_landed_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, v: i32) -> bool {
-    refuse(owner, v)
+pub fn refuse_kani(owner: i32, g: GateValue) -> GateValue {
+    refuse(owner, g)
 }

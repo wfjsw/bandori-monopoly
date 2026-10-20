@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";
 
@@ -31,7 +31,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         // The body-top `trigger::player_id() != player_id` early-out is
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
-        On::FilterFlag(&[FilterKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
+        On::FilterValue(&[FilterKind::ImmuneAll], card_sdk::pre::MINE, None, FilterBody::Gate(immune_all)),
         On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -63,8 +63,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// targeting, before abnormals, and before card-driven payments, so this one
 /// hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`). The
 /// "only our own seat" check is the entry's condition (`pre::MINE`).
-fn immune_all(player_id: i32, _v: i32) -> bool {
-    false // deny
+fn immune_all(_player_id: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// `Fx.TurnStart` (C# `CardCentrifugal.TurnStart` -> `H.Unplace`): the immunity
@@ -84,8 +85,8 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn immune_all_kani(player_id: i32, v: i32) -> bool {
-    immune_all(player_id, v)
+pub fn immune_all_kani(player_id: i32, g: GateValue) -> GateValue {
+    immune_all(player_id, g)
 }
 
 #[cfg(kani)]

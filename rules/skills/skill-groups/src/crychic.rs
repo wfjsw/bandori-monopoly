@@ -15,7 +15,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{CardPile, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
 
 const ID: &str = "skill:CRYCHIC:美好的往日幻影";
 /// Hand size last seen, so （3） can see a 4→5 crossing.
@@ -36,13 +36,13 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
         // seat's hand size.
-        On::FilterFlag(&[FilterKind::PlayGate], "hand(actor) >= 6", None, refuse),
+        On::FilterValue(&[FilterKind::PlayGate], "hand(actor) >= 6", None, FilterBody::Gate(refuse)),
         // 「CRYCHIC variants may not use base character's exclusives」 -- a
         // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
         // is the generic own/base rule; this entry closes the base case for
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
-        On::FilterFlag(&[FilterKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
+        On::FilterValue(&[FilterKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, FilterBody::Gate(refuse)),
         On::Play("", "", Some(can_transform), transform_now),
     ],
 )
@@ -56,8 +56,9 @@ pub const EXCLUSIVE_USE_DENIED: &str =
 
 /// The answer of a closed exclusive-use gate (only run if a gate is ever
 /// raised; pure reads use the condition alone).
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// （1）「任何时刻拥有手牌数大于等于6时」.
@@ -308,8 +309,8 @@ pub fn force_card_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(player_id: i32, v: i32) -> bool {
-    refuse(player_id, v)
+pub fn refuse_kani(player_id: i32, g: GateValue) -> GateValue {
+    refuse(player_id, g)
 }
 
 #[cfg(kani)]

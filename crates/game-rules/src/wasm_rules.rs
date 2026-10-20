@@ -2803,7 +2803,7 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(0);
         }
         // v78: pre-roll a recorded die into the world so a DiceRollPlan /
-        // DiceRollValue Filter body can read `FilterValue.recorded_roll` instead
+        // DiceRollValue Filter body can read `RollValue.recorded_roll` instead
         // of calling `roll` (pure + replay-deterministic: the same RNG stream).
         if matches!(
             trigger.kind,
@@ -3759,7 +3759,7 @@ impl<M: CardModules> RulesBridge<M> {
         // cancelled it.
         //
         // v78: filter kinds (`TriggerKind::is_filter`) fold the filter chain
-        // instead of opening a counteraction window. A `FilterValue` kind
+        // instead of opening a counteraction window. A typed-payload kind
         // (BuyAssign) carries the deal in `deal_*` and answers the packed
         // rewritten deal (`hostfns::pack_deal`).
         HostRequest::Raise {

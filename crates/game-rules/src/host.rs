@@ -215,7 +215,7 @@ pub enum Call {
     },
     /// Scheduled turn-end callback (`On::Action(&[AtEnd])`).
     AtEnd { card: i32, player_id: i32 },
-    /// Movement routine (`On::FilterValue(&[DiceRollPlan])`), called while the walk
+    /// Movement routine (`On::FilterValue(&[DiceRollPlan], …, FilterBody::Plan(…))`), called while the walk
     /// is being planned.
     DiceRollPlan { card: i32, player_id: i32 },
     /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the
@@ -531,7 +531,7 @@ pub enum HostRequest {
     ///
     /// v78: when `kind` is a filter (`TriggerKind::is_filter`), the host folds
     /// the filter chain instead of opening a counteraction window. A
-    /// `FilterValue` kind (BuyAssign) carries the default deal in and answers
+    /// `DealValue` kind (BuyAssign) carries the default deal in and answers
     /// the packed rewritten deal (see `hostfns::pack_deal` / `unpack_deal`):
     /// bit 0 = cancelled, bits 1-4 = houses, bit 5 = mortgaged, bits 6-31 =
     /// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
@@ -1393,7 +1393,7 @@ impl Ruleset {
             Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             // v75: AtEnd / DiceRollPlan are ordinary kind-keyed entries
-            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])`).
+            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan], …, FilterBody::Plan(…))`).
             Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
             Call::DiceRollPlan { .. } => info.hook_entry(crate::TriggerKind::DiceRollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),

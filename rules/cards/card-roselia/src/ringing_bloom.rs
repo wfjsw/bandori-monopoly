@@ -176,3 +176,9 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn pay_after_kani(player_id: i32) -> card_sdk::Asked {
     pay_after(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_house_added_kani(player_id: i32) -> card_sdk::Asked {
+    on_house_added(player_id)
+}

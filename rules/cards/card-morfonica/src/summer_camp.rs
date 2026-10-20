@@ -8,7 +8,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";
 
@@ -23,11 +23,11 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         // seat, and only against another player's card (C#
         // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
         // the targeting is not card-caused, so `by >= 0` is "there is a card".
-        On::FilterFlag(
+        On::FilterValue(
             &[FilterKind::Untargetable],
             "actor == owner && by >= 0 && by != owner",
             None,
-            untargetable,
+            FilterBody::Gate(untargetable),
         ),
         On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
     ],
@@ -59,8 +59,9 @@ fn summer_camp(player_id: i32) -> card_sdk::Asked {
 /// owner's own effects may target them. Counts negations for the draw gate.
 /// Applicability is the entry's condition (`actor == owner && by >= 0 &&
 /// by != owner` -- C# `if (seat != Seat || by == Seat) return false;`).
-fn untargetable(player_id: i32, _v: i32) -> bool {
-    false // deny
+fn untargetable(_player_id: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// `Fx.TurnStart` (C# `CardSummerCamp.TurnStart` -> `End`): the effect ends at
@@ -104,6 +105,6 @@ pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn untargetable_kani(player_id: i32, v: i32) -> bool {
-    untargetable(player_id, v)
+pub fn untargetable_kani(player_id: i32, g: GateValue) -> GateValue {
+    untargetable(player_id, g)
 }

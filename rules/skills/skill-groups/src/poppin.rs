@@ -14,7 +14,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{counter, ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
 
 const ID: &str = "skill:Poppin' Party:星之鼓动";
 /// 「星星贴纸」.
@@ -56,32 +56,27 @@ pub const POPPIN: CardDef = CardDef::new(
         // (`tile.id == tile_named('星之鼓动山丘')` -- an unknown name reads -1 and so
         // never matches a real buy tile); 「只有全部…破产后」 is the residual
         // guard, a derived scan outside the CEL schema (docs/GUARDS.md §4.2c).
-        // FilterValue (not FilterFlag) so the denial reason rides `reason`.
+        // Gate payload so the denial reason rides `reason`.
         On::FilterValue(
             &[FilterKind::BuyGate],
             "tile.id == tile_named('星之鼓动山丘')",
             Some(lock_hill_applies),
-            lock_hill,
+            FilterBody::Gate(lock_hill),
         ),
     ],
 )
     .silent(&[0]);
 
-/// Denial reason intern id 1 = `poppin_locked` (see rt.rs REASON_POPPIN_LOCKED).
-const REASON_POPPIN_LOCKED: i32 = 1;
-
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].
-/// Pure: deny via `allowed: 0`; the reason id rides `FilterValue.reason`.
-fn lock_hill(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+/// Pure: deny via `allowed: Some(false)`; the reason rides `GateValue.reason`.
+fn lock_hill(player_id: i32, mut g: GateValue) -> GateValue {
     // 「只有全部Poppin' Party角色破产后才可被正常购买」 -- someone is still
     // standing, so the lock holds.
     ctx::log(player_id, &Msg::new(key!("poppin_locked")));
-    card_sdk::abi::FilterValue {
-        allowed: 0,
-        reason: REASON_POPPIN_LOCKED,
-        ..v
-    }
+    g.allowed = Some(false);
+    g.reason = Some(key!("poppin_locked"));
+    g
 }
 
 /// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- the lock is in play
@@ -373,6 +368,6 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 /// cfg(kani) direct-call wrapper (ppcost body-id pattern).
 #[cfg(kani)]
-pub fn lock_hill_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    lock_hill(player_id, v)
+pub fn lock_hill_kani(player_id: i32, g: GateValue) -> GateValue {
+    lock_hill(player_id, g)
 }

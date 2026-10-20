@@ -34,7 +34,7 @@
 use bandori_std::kind::abnormal;
 use card_sdk::ctx::trigger;
 use card_sdk::abi::{ActionKind, FilterKind};
-use card_sdk::{CardDef, On};
+use card_sdk::{CardDef, FilterBody, GateValue, On};
 
 /// The board-owned [停留] rule. One instance on `BOARD_OWNER`, `tile = -1`.
 /// Registered in [`crate::CARDS`]; `bind_tiles` places it.
@@ -52,7 +52,7 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // (`Gate::Move` at turn start, the view's `can_roll_here`). Holding
         // another status (`unstoppable`) is why the vocabulary exposes
         // per-seat status functions.
-        On::FilterFlag(&[FilterKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
+        On::FilterValue(&[FilterKind::MoveGate], STAY_HOLDS_MOVE, None, FilterBody::Gate(refuse)),
     ],
 )
     .board_role("status")
@@ -70,8 +70,9 @@ pub const STAY_HOLDS_MOVE: &str = "state(actor,'stay') > 0 && state(actor,'unsto
 
 /// The answer of a closed gate (only run if a gate is ever raised; pure reads
 /// use the condition alone).
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// 规则书: the hook fires for an [停留] abnormal landing on anyone.
@@ -108,6 +109,6 @@ pub fn on_stay_landed_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, v: i32) -> bool {
-    refuse(owner, v)
+pub fn refuse_kani(owner: i32, g: GateValue) -> GateValue {
+    refuse(owner, g)
 }
