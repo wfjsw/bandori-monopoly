@@ -906,6 +906,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "flate2",
+ "game-kinds",
  "rand_chacha",
  "rand_core",
  "ruzstd",
@@ -919,6 +920,9 @@ dependencies = [
 [[package]]
 name = "game-kinds"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "game-rules"
