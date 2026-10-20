@@ -174,13 +174,17 @@ fn chain_kinds_and_counters_have_locale_text() {
                 missing.push(format!("{loc}: {key}"));
             }
         }
-        // Kinds with no dedicated `log.why.*` phrase, named in the fallback.
+        // Kinds with no dedicated `log.why.*` phrase, named in the fallback
+        // (`kind_name` always builds `log.kind.{spelling}`).
         for k in [
             "diceRollPlan",
             "playGate",
+            "onBoardGate",
+            "targetableGate",
             "markerSpent",
             "cardUsed",
             "houseAdded",
+            "r:bandori:21",
             "r:bandori:26",
             "r:bandori:78",
             "r:bandori:107",

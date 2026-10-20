@@ -79,6 +79,10 @@ pub fn rules() -> Arc<WasmRules> {
     static RULES: OnceLock<Arc<WasmRules>> = OnceLock::new();
     RULES
         .get_or_init(|| {
+            // Kind flags ride the `ruleset_kind_flags` export on a rebuilt
+            // module; older dist wasm may lack it, so seed from the ruleset
+            // declaration the tests already link (`bandori-std` is a dev-dep).
+            game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist");
             let mut b = Ruleset::builder();
             for sub in ["cards", "fixtures"] {

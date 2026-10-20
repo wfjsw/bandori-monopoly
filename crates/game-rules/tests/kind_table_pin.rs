@@ -23,6 +23,38 @@ fn engine_kind_rows_match_trigger_kind() {
     }
 }
 
+/// `game_kinds::hook_only` agrees with `game_rules::hook_only` for engine
+/// kinds, and the ruleset declaration (seeded here) agrees for the four
+/// bandori kinds. The engine names no ruleset id -- the declaration does.
+#[test]
+fn hook_only_matches_tables() {
+    for row in ENGINE_KINDS {
+        let k = TriggerKind::engine(row.id);
+        assert_eq!(
+            game_rules::hook_only(k),
+            row.hook_only,
+            "engine hook_only id {}",
+            row.id
+        );
+    }
+    // Seed the ruleset side from the declaration this test crate links.
+    // The ids below are pin examples of that declaration (this test may spell
+    // them; the host itself never does).
+    game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
+    let cases = [
+        (21i32, false), // Exile -- window opens
+        (26, false),    // PassRewardAffected -- window opens
+        (78, true),     // ChargePaying -- hook-only
+        (107, true),    // FansFlip -- hook-only
+    ];
+    for (id, want) in cases {
+        let k = TriggerKind::ruleset("bandori", id);
+        assert_eq!(game_rules::hook_only(k), want, "ruleset hook_only id {id}");
+    }
+    // An unregistered ruleset kind defaults to opening a window.
+    assert!(!game_rules::hook_only(TriggerKind::ruleset("bandori", 999)));
+}
+
 /// Every named engine const in the typed mirror has a table row (and the
 /// spelling is non-empty). Ruleset consts (`ActionKind::Exile` etc.) live in
 /// `bandori-std` and are not engine rows.

@@ -232,16 +232,13 @@ pub fn counter_name(name: &str) -> Msg {
 }
 
 /// A trigger-kind wire name, for the generic why fallback. Never raw.
+///
+/// Always the dedicated key `log.kind.{spelling}`: the locale file decides
+/// whether a phrase exists. A kind with no phrase renders as its key (never
+/// blank); `log.kind.wire` remains the raw-spelling shape for callers that
+/// want the wire token quoted as data.
 fn kind_name(kind: &str) -> Msg {
-    // Kinds that reach the generic fallback have a display name; the verbatim
-    // wire spelling is only for a kind nobody has named yet.
-    if matches!(
-        kind,
-        "diceRollPlan" | "playGate" | "markerSpent" | "cardUsed" | "houseAdded" | "r:bandori:26" | "r:bandori:78"
-    ) {
-        return Msg::new(format!("log.kind.{kind}"));
-    }
-    Msg::new("log.kind.wire").text("name", kind)
+    Msg::new(format!("log.kind.{kind}"))
 }
 
 /// A keyed state item's display phrase. The engine has no key→phrase table:
