@@ -12,10 +12,8 @@ import { clearForced, isForced, subscribeForced, usePortraitPhone } from "./rota
 import { STAGE_H, STAGE_W } from "../styles/layout";
 import { type Insets, type StageBox, stageBox, windowBox } from "./stageBox";
 import { setStageRotated, setStageScale } from "./stageScale";
-import { ViewportDiag } from "./ViewportDiag";
+import { VDIAG, ViewportDiag } from "./ViewportDiag";
 import s from "./Stage.module.css";
-
-const VDIAG = new URLSearchParams(location.search).has("vdiag");
 
 export { STAGE_H, STAGE_W };
 
@@ -74,31 +72,33 @@ function largeViewport(): { vw: number; vh: number } {
 let layoutProbe: HTMLElement | null = null;
 
 /**
- * The screen's long side where the page draws from the physical top to the
- * physical bottom -- iPhone WebKit (Safari, and every iOS browser, which all
- * run it): the fixed box starts under the island and Safari paints the page
- * behind its bottom toolbar. Elsewhere 0: Android's fixed box already ends at
- * the screen bottom, and its top sits below the URL bar, so the screen's long
- * side would push the stage off the bottom. iOS reports `screen` in portrait
- * terms in every orientation; the max is taken anyway.
+ * Could `held` be the open (keyboard-down) box in `cur`'s orientation? Its
+ * height cannot exceed the screen's side along that axis. A turn of the phone
+ * passes through a half-turned box (measured: 852 x 793 -- landscape width,
+ * portrait height); with a text field focused the keyboard hold took that for
+ * the open size and kept it after the turn settled at 852 x 393, leaving the
+ * stage 479 tall on a 393 screen. `screen` is only an upper bound here.
  */
-function screenLong(): number {
-  if (!/iPhone|iPod/.test(navigator.userAgent)) return 0;
-  return Math.max(window.screen.width, window.screen.height);
+function fitsScreen(held: { vw: number; vh: number }, cur: { vw: number; vh: number }): boolean {
+  const long = Math.max(screen.width, screen.height);
+  const short = Math.min(screen.width, screen.height);
+  if (!(long > 0 && short > 0)) return true;
+  return held.vh <= (cur.vw > cur.vh ? short : long) + 1;
 }
 
 /**
  * The device's safe-area insets on all four sides, read off a probe element.
  * `env(safe-area-inset-*)` is only available to CSS, so a hidden fixed div
- * with the values in its padding forces a sync layout that reports them.
+ * with the values in its padding forces a sync layout that reports them. The
+ * padding comes from a stylesheet class (`.safeProbe`): built through
+ * `style.cssText` it read 0 on iOS while the island was right there.
  * The values can resolve late on a PWA cold start and go stale across a
  * rotation, so re-probe on the events below rather than trusting one read.
  */
 function useSafeInsets(): Insets {
   const read = (): Insets => {
     const probe = document.createElement("div");
-    probe.style.cssText =
-      "position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+    probe.className = s.safeProbe;
     document.body.appendChild(probe);
     const cs = getComputedStyle(probe);
     const r = {
@@ -144,8 +144,9 @@ function useSafeInsets(): Insets {
 }
 
 function useStage(tall: boolean): StageBox {
-  // Size against the fixed box (see `largeViewport` / `windowBox`); forced
-  // rotation on an iPhone stretches past it to the screen bottom (`stageBox`).
+  // Size against the fixed box (see `largeViewport` / `windowBox`). In an
+  // installed app base.css keeps the root out of `position: fixed`, so that
+  // box is the whole screen there.
   // While a text field is focused the on-screen keyboard can still shrink the
   // layout on some browsers; hold the height from before it came up.
   const open = useRef<{ vw: number; vh: number } | null>(null);
@@ -159,7 +160,7 @@ function useStage(tall: boolean): StageBox {
     const a = document.activeElement;
     const editing = a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement;
     const prev = open.current;
-    if (editing && prev && Math.abs(prev.vw - cur.vw) < 1 && cur.vh < prev.vh) return prev;
+    if (editing && prev && Math.abs(prev.vw - cur.vw) < 1 && cur.vh < prev.vh && fitsScreen(prev, cur)) return prev;
     open.current = cur;
     return cur;
   };
@@ -168,6 +169,31 @@ function useStage(tall: boolean): StageBox {
   useEventListener(() => window.visualViewport, "resize", () => set(measure()));
   useEventListener(() => window.visualViewport, "scroll", () => set(measure()));
   useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
+  // A turn of the phone can fire its one resize while the box is half-turned
+  // (measured: 852 x 793 -- landscape width, portrait height) and nothing
+  // after it settles, which left the stage scaled to that box and sticking
+  // out past both long edges. Watch the box itself, so any later change of
+  // its size re-measures, and re-sample past the turn as well.
+  useEffect(() => {
+    largeViewport();
+    const probe = layoutProbe;
+    const ro = typeof ResizeObserver === "function" && probe ? new ResizeObserver(() => set(measure())) : null;
+    if (ro && probe) ro.observe(probe);
+    const timers: number[] = [];
+    const turned = () => {
+      // A size held for the keyboard belongs to the old orientation.
+      open.current = null;
+      for (const ms of [150, 400, 900]) timers.push(window.setTimeout(() => set(measure()), ms));
+    };
+    window.addEventListener("orientationchange", turned);
+    screen.orientation?.addEventListener?.("change", turned);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("orientationchange", turned);
+      screen.orientation?.removeEventListener?.("change", turned);
+      timers.forEach((id) => clearTimeout(id));
+    };
+  }, []);
   // Keep the controls clear of the notch / home indicator. The insets just
   // trade sides under `rotate(90deg)` (see `stageBox`), so forced rotation
   // protects the same stage edge a real turn does.
@@ -183,7 +209,6 @@ function useStage(tall: boolean): StageBox {
   const box = stageBox({
     vw: win.vw,
     vh: win.vh,
-    screenLong: screenLong(),
     inset,
     rotated,
     tall,
@@ -283,7 +308,7 @@ function Backdrop({ src, snap }: { src: string; snap: boolean }) {
 
 export function Stage({ children, transitioning }: { children: ReactNode; transitioning: boolean }) {
   const tall = useStageFillValue();
-  const { scale, w, h, safe, cx: centerX, cy: centerY, compact, rotated } = useStage(tall);
+  const { scale, w, h, safe, compact, rotated } = useStage(tall);
   setStageRotated(rotated);
   setStageScale(scale);
   useEffect(() => {
@@ -311,8 +336,6 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
       <div
         className={s.placer}
         style={{
-          left: centerX,
-          top: centerY,
           width: w * scale,
           height: (tall ? h : STAGE_H) * scale,
           transform: `translate(-50%, -50%)${rotated ? " rotate(90deg)" : ""}`,
@@ -326,6 +349,8 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
             height: tall ? h : STAGE_H,
             zoom: scale,
             ["--safe-top" as string]: `${safe.top}px`,
+            // Unitless twin, for scale factors (CSS cannot divide lengths).
+            ["--safe-top-n" as string]: String(safe.top),
             ["--safe-right" as string]: `${safe.right}px`,
             ["--safe-bottom" as string]: `${safe.bottom}px`,
             ["--safe-left" as string]: `${safe.left}px`,

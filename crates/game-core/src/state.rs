@@ -334,25 +334,26 @@ pub mod state_flag {
     pub const ENGINE_OWNED: u8 = 2;
 }
 
-/// One keyed state item: `value`, the bounds a consumer may enforce, and when
-/// it wears off.
+/// One keyed state item: `value`, the advertised bounds, and when it wears off.
 ///
-/// The engine holds these and enforces **nothing** -- it is storage, no more. A
-/// ruleset skill that mandates a resource cap writes `max`, and whoever
-/// moves `value` is free to honour the bounds or ignore them: enforcement
-/// belongs to the consumer, not to the holder. `min`/`max` default to 0: a
-/// declared cap of 0 means "none yet" / uncapped. [`Self::flags`] carries the
-/// generic declarations ([`state_flag`]) so special-casing never needs the key
-/// name.
+/// The engine holds these and enforces **only** the writer-declared
+/// [`state_flag::NEVER_NEGATIVE`] floor (「清除」 never goes negative). The
+/// advertised `min`/`max` are **for display** -- a ruleset skill that prints
+/// 「（初始N，上限M）」 writes `max` so the UI can show 「3/5」, and whoever
+/// moves `value` polices that cap itself (enforcement belongs to the card
+/// implementation, not to the holder). `min`/`max` default to 0: a declared
+/// cap of 0 means "none yet" / uncapped. [`Self::flags`] carries the generic
+/// declarations ([`state_flag`]) so special-casing never needs the key name.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StateVar {
     pub value: i32,
-    /// Lower bound a consumer may enforce. The engine floors status counters
-    /// at 0 regardless; `min` is informational.
+    /// Advertised lower bound (informational). The engine floors
+    /// [`state_flag::NEVER_NEGATIVE`] counters at 0 regardless.
     pub min: i32,
-    /// Upper bound a consumer may enforce -- the mandated cap. `max > 0` is
-    /// enforced on write; `max == 0` is uncapped.
+    /// Advertised upper bound -- the mandated cap, for display. `max > 0` is
+    /// a real ceiling the card implementation polices; `max == 0` is uncapped.
+    /// The engine stores it and does **not** clamp to it.
     pub max: i32,
     /// When this wears off, if it is a timed counter. See [`Tick`].
     pub expires: Option<Tick>,
@@ -699,9 +700,11 @@ impl MatchPlayer {
     }
 
     // ---------------------------------------------------------- keyed state
-    // Dumb storage. The engine holds `{value, min, max}` items and enforces
-    // none of it -- see [`StateVar`]. Everything below that looks like a rule
-    // is a *reader*: the engine's own game flow asking for a value it named.
+    // Dumb storage plus the writer-declared floor. The engine holds
+    // `{value, min, max}` items and honours only `NEVER_NEGATIVE`; the
+    // advertised `max` is display-only (see [`StateVar`]). Everything below
+    // that looks like a rule is a *reader*: the engine's own game flow asking
+    // for a value it named.
 
     /// The whole item, or `StateVar::default()` when the key is absent.
     pub fn state_var(&self, key: &str) -> StateVar {
@@ -720,14 +723,13 @@ impl MatchPlayer {
         self.state_var(key).max
     }
 
-    /// Write `value`, clamped to the item's declared bounds.
+    /// Write `value`, honouring the writer-declared floor.
     ///
-    /// The engine holds the bounds and enforces them on write: an item that
-    /// declared [`state_flag::NEVER_NEGATIVE`] never goes below 0 (「清除」
-    /// floors at 0), and a declared `max > 0` is a real cap (「上限M」).
-    /// `max == 0` still means "uncapped". A consumer that wants a different
-    /// policy (e.g. the rules-layer kernel's partial gain + log) does its own
-    /// arithmetic first.
+    /// The engine honours [`state_flag::NEVER_NEGATIVE`] (「清除」 floors at 0)
+    /// and nothing else. The advertised `max` is stored for display -- the
+    /// engine does **not** police it; the card implementation (e.g.
+    /// `bandori_std::fire`'s 「在任意时刻，您持有的火罐数量不能超过持有上限」)
+    /// does its own arithmetic and writes only what should land.
     ///
     /// Wear-off is **not** guessed from the key. The writer declares it via
     /// [`Self::state_set_expires`] (规则书 「每回合结束时移除一层」 lives in the
@@ -742,22 +744,18 @@ impl MatchPlayer {
         if floors_at_zero(e) {
             v = v.max(0);
         }
-        // A declared cap is honoured (`max > 0`; `max == 0` is uncapped).
-        if e.max > 0 {
-            v = v.min(e.max);
-        }
         e.value = v;
         v
     }
 
-    /// Add `delta`, clamped like [`Self::state_set`].
+    /// Add `delta`, floored like [`Self::state_set`].
     pub fn state_add(&mut self, key: &str, delta: i32) -> i32 {
         let v = self.state_get(key).saturating_add(delta);
         self.state_set(key, v)
     }
 
-    /// Declare the bounds a consumer may enforce. `max > 0` is enforced on
-    /// the next write; `max == 0` is uncapped.
+    /// Declare the advertised bounds (for display). `max` is stored and
+    /// exposed; the engine does not clamp to it. `max == 0` means uncapped.
     pub fn state_set_bounds(&mut self, key: &str, min: i32, max: i32) {
         let e = self.state.entry(key.to_string()).or_default();
         e.min = min;

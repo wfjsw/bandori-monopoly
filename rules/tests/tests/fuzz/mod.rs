@@ -158,8 +158,8 @@ pub fn one_iter(seed: u64, turns: u32) -> Result<Trace, Finding> {
             }
             let after: Vec<i32> = (0..t.n).map(|i| t.money(i)).collect();
             let events = t.events_since(mark);
-            drive::check_money(&before, &after, &events, &mut tr)?;
             drive::check_nonneg(&t)?;
+            drive::check_money(&before, &after, &events, &mut tr)?;
             drive::check_cards(&t, known)?;
         }
         Ok(tr)
@@ -202,8 +202,8 @@ pub fn one_iter(seed: u64, turns: u32) -> Result<Trace, Finding> {
                         let after: Vec<i32> = (0..t.n).map(|i| t.money(i)).collect();
                         let events = t.events_since(mark);
                         let mut tr = Trace::new();
-                        drive::check_money(&before, &after, &events, &mut tr)?;
                         drive::check_nonneg(&t)?;
+                        drive::check_money(&before, &after, &events, &mut tr)?;
                         drive::check_cards(&t, known)?;
                     }
                     Ok::<(), String>(())

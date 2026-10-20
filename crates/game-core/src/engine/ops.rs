@@ -417,7 +417,8 @@ impl World {
         self.state_var(player_id, key).min
     }
 
-    /// The cap a consumer may enforce -- `0` when none has been mandated.
+    /// The advertised cap (`0` when none has been mandated). Display-only:
+    /// the engine stores it and does not police it.
     pub fn state_max(&self, player_id: i32, key: &str) -> i32 {
         self.state_var(player_id, key).max
     }
@@ -427,8 +428,9 @@ impl World {
         self.state_var(player_id, key).expires
     }
 
-    /// Write `value`, clamped to the item's declared bounds (status floors at
-    /// 0; `max > 0` is a real cap). See [`crate::state::MatchPlayer::state_set`].
+    /// Write `value`, honouring the writer-declared `NEVER_NEGATIVE` floor.
+    /// The advertised `max` is not enforced here. See
+    /// [`crate::state::MatchPlayer::state_set`].
     pub fn state_set(&mut self, player_id: i32, key: &str, value: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -436,7 +438,7 @@ impl World {
         s.state_set(key, value)
     }
 
-    /// Add `delta`, clamped like [`Self::state_set`]. No log.
+    /// Add `delta`, floored like [`Self::state_set`]. No log.
     pub fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -767,35 +769,28 @@ impl World {
     }
 
     // ---------------------------------------------------------- named markers
-    // Name-as-data: the counter is the frozen wire key. Storage bounds
-    // (`{value, min, max}`) still apply on write; cap / partial-gain **policy**
-    // lives in the rules-layer kernel, not here.
+    // Name-as-data: the counter is the frozen wire key. Cap / partial-gain
+    // **policy** lives in the rules-layer kernel (`bandori_std::fire`), not
+    // here. The advertised `max` is stored for display; this engine does not
+    // police it.
 
-    /// Move a named counter's *cap* up or down. Dumb storage fold: a consumer
-    /// of the cap, so it is the one that pulls the value back under the new
-    /// ceiling; [`Self::state_add`] would not. The name is data -- the frozen
+    /// Move a named counter's advertised *cap* up or down. Storage-only: the
+    /// pull-under is the rules-layer kernel's job (`bandori_std::fire`'s
+    /// `pull_under_cap`, applied 「在任意时刻」). The name is data -- the frozen
     /// wire key is just one caller.
     pub fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         let cap = self.state_max(player_id, name).saturating_add(n).max(0);
         self.state_set_bounds(player_id, name, 0, cap);
-        let have = self.state_get(player_id, name).min(cap);
-        self.state_set(player_id, name, have);
         cap
     }
 
-    /// Dumb add of `n` to a named counter; returns how many landed (the
-    /// storage bounds may refuse part of it). No cap policy and no log line --
-    /// the rules-layer kernel clamps and narrates.
-    /// `max == 0` means "no declaration" and refuses (an undeclared resource
-    /// cannot be gained).
+    /// Dumb add of `n` to a named counter; returns how many landed. No cap
+    /// policy and no log line -- the rules-layer kernel clamps and narrates.
     pub fn gain_marker(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
         };
         if n <= 0 || s.out() {
-            return 0;
-        }
-        if s.state_max(name) <= 0 {
             return 0;
         }
         let before = s.state_get(name);

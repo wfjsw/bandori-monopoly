@@ -17,7 +17,6 @@ import { hasProfile, profileJson, updateProfile } from "../../core/store";
 import type { CardData, Command, MatchPlayer, MatchView, PersonaData } from "../../core/types";
 import { endSession, type GameSession } from "../../game/session";
 import { useCardTap } from "../../hooks/doubleTap";
-import { AutoBanner, AutoToggle, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, type CardKind } from "../../ui/Card";
 import { cardStandClass, CardPreview, stickCard, useStandingPreviewOn, useStickyCard } from "../../ui/CardPreview";
@@ -192,9 +191,7 @@ function Adjust({ sess, view, at, auto, me, c }: {
           </div>
         }
       />
-      {/* Outside the TopBar so it can sit above modals: clickable at any time. */}
-      <div className={cx(autoFloat, s.autoSlot)}><AutoToggle sess={sess} /></div>
-      <AutoBanner sess={sess} />
+      {/* No 托管 toggle before the match (see Select). */}
 
       <div className={s.body}>
         <div className={s.left}>

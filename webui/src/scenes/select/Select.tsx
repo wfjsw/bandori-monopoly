@@ -13,7 +13,6 @@ import { useLatestRef } from "../../hooks/latest";
 import { getProfile } from "../../core/store";
 import type { PersonaData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
-import { AutoBanner, AutoToggle, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { SkillBody } from "../../ui/SkillBody";
 import { Avatar, BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
@@ -123,9 +122,9 @@ export function Select({ sess }: { sess: GameSession }) {
           </div>
         }
       />
-      {/* Outside the TopBar so it can sit above modals: clickable at any time. */}
-      <div className={cx(autoFloat, s.autoSlot)}><AutoToggle sess={sess} /></div>
-      <AutoBanner sess={sess} />
+      {/* No 托管 toggle here: auto play belongs to the match itself (the
+          board's hand dock has it). A session starts with it off, so nothing
+          before the board can be left running on auto. */}
       {sess instanceof SoloSession && (
         <Btn size="small" icon="redo" className={s.quick} title={tr("select.quickHint")} disabled={auto} onClick={() => sess.quickStart()}>{tr("select.quickStart")}</Btn>
       )}
