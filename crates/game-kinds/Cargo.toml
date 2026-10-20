@@ -1,0 +1,8 @@
+[package]
+name = "game-kinds"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Data-only engine trigger-kind table. Engine vocabulary, defined in crates/."
+
+[dependencies]
