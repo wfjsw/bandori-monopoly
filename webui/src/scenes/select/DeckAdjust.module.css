@@ -4,13 +4,19 @@
    share the stage's extra width through flex, never a modal's viewport-height
    hack. */
 
-.body { position: absolute; left: 37px; right: 38px; top: 125px; height: 750px; display: flex; gap: 23px; }
-.left { position: relative; flex: 0 0 390px; }
+.body { position: absolute; left: max(37px, var(--safe-left, 0px)); right: max(38px, var(--safe-right, 0px)); top: 125px; height: 750px; display: flex; gap: 23px; }
+/* The figure column shrinks into its bottom-left corner by however far the
+   TopBar dropped to clear the top hardware (`max(16px, --safe-top)` vs the
+   design's 16), so the character card keeps its design gap below the bar
+   instead of sliding under the back button. 750 = the column's height. */
+.left { position: relative; flex: 0 0 390px; transform-origin: 0 100%; transform: scale(calc(1 - max(0, var(--safe-top-n, 0) - 16) / 750)); }
 .right { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
 /* TopBar right: steps pill (mode + 1 禁用 › 2 选角 › 3 选卡) + deck-window clock. */
-.steps { position: absolute; right: 37px; top: 20px; min-width: 466px; height: 60px; border-radius: 30px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 12px; }
-.autoSlot { right: 720px; top: 22px; }
+/* Sized to its labels and never wrapped: a phone's font runs wider than the
+   design's, and a squeezed mode label broke onto two lines. */
+.steps { position: absolute; right: max(37px, var(--safe-right, 0px)); top: 20px; min-width: 466px; width: max-content; height: 60px; border-radius: 30px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 12px; white-space: nowrap; }
+.steps > * { flex: none; }
 .steps > i { font-style: normal; color: var(--faint); font-size: 12px; }
 .mode { height: 2.25em; line-height: 2.25em; padding: 0 1.375em; border-radius: 1.125em; color: #fff; font-weight: 700; font-size: 16px; background: var(--blue); margin-right: 10px; }
 .casual { background: var(--teal); }

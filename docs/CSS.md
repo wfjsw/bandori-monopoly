@@ -128,7 +128,7 @@ not set them is unchanged.
 | `--replay-bar-h` | `ReplayBar` (ResizeObserver on the bar) | measured transport height, `0` when hidden |
 | `--replay-bar-bottom` | `ReplayBar` | height while the transport is docked at the **bottom**, else `0` |
 | `--replay-bar-top` | `ReplayBar` | board-body top inset while the transport is docked at the **top**, else `0` |
-| `--safe-top` / `-right` / `-bottom` / `-left` | `Stage` (`stageBox`) | hardware sitting on that stage edge (safe-area inset + the landscape top touch dead zone), in design px |
+| `--safe-top` / `-right` / `-bottom` / `-left` | `Stage` (`stageBox`) | hardware sitting on that stage edge (the safe-area inset), in design px; `--safe-top-n` is `--safe-top` unitless, for scale factors |
 
 Bottom-edge chrome (hand dock / peek / skill stack / sheet strip, the left
 column's actions and player list, the log) adds `--replay-bar-bottom` to its
@@ -149,18 +149,18 @@ on one side and leaves a blank border on the other. What is outside the layout
 viewport is the browser's chrome, not ours to fill; when the chrome hides, the
 layout viewport grows and the stage grows with it.
 
-One exception: **forced rotation on an iPhone** (`stageBox` `screenLong`). Held
-upright, the fixed box runs from the screen top (under the island) but stops
-above Safari's bottom toolbar / the home-indicator strip, and Safari paints
-that strip with the bare page colour. There the stage takes the screen's full
-long side *and* is anchored at the box's top (`cx` / `cy` place the placer's
-centre; they are the box's middle everywhere else), so it spans the physical
-screen island to home indicator. Both halves matter: a screen-sized stage left
-centred in the box overflowed past the island and still left the strip. The
-stretch past the box counts as hardware for the controls on that stage edge
-(`--safe-right` under the turn), and the backdrop plate runs past the box on
-every side so no bare page colour shows behind the stage's gaps. Android is
-left on the box -- its fixed box already ends at the screen bottom.
+**The root is not `position: fixed` in an installed app** (`base.css`,
+`@media (display-mode: standalone), (display-mode: fullscreen)`). In a browser
+the fixed root pins the document so touches cannot desync from the stage, and
+the fixed box correctly ends at the browser's toolbar. In a home-screen app a
+fixed root makes iOS shrink the whole layout box by the status-bar height and
+paint nothing below it: measured on a handset held upright, a fixed root gave
+a box of 0..793 on an 852 screen, and stripes sized to 856 / 917 still stopped
+at 793 -- the blank strip at the home-indicator end under forced rotation,
+which no sizing of the stage can reach. A root in normal flow at `100lvh`
+gave a box of 0..852. An app has no address bar to collapse, so the scroll the
+fixed root guards against does not arise there; `unscroll` in `Stage` still
+snaps any stray scroll back.
 
 `index.html` claims the home-screen shell with
 `apple-mobile-web-app-status-bar-style=black-translucent`, which puts the
@@ -169,24 +169,54 @@ meta changes -- iOS freezes web-app metas at add time).
 
 `?vdiag=1` overlays a live readout of every viewport (screen, inner, visual,
 the fixed box, `lvh` / `svh`, safe-area insets, the placer's box) for checking
-this geometry on a real handset, which no simulator reproduces.
+this geometry on a real handset, which no simulator reproduces. A dev server
+started with `BM_VDIAG=<file>` forces it on (the home-screen app has no address
+bar) and logs each reading the page posts to `/__vdiag`.
 
 The stage's edges are the real screen edges on both axes: the game runs edge
 to edge, and insetting the box for the cutout left the retractable strips (the
 field row, the hand) hanging short of the border. What clears the hardware is
 the **tappable pieces**, padding by `--safe-*` (the safe-area inset on that
-stage edge plus the landscape top touch dead zone, already mapped through the
-forced rotation and divided by the fit scale) -- and *only* those. Shifting a
+stage edge, already mapped through the forced rotation and divided by the fit
+scale) -- and *only* those. There is deliberately no extra floor for the iOS
+landscape top touch edge: one pushed the TopBar's left group ~30 design px
+below its right-hand pill, and at design offsets the bar's buttons already run
+well below that edge. Shifting a
 whole scene or column instead (the first pass did) pushes every element away
 from the edge and leaves the cutout band as bare backdrop.
 
-So the split is: **surfaces run under the cutout** (panel backs, seat cards,
-art, the retractable strips -- any full-bleed shape a normal app would draw
-behind the status bar); **controls do not**. Today that is `TopBar`'s back /
-menu / crumb / status (the bar itself stays flush), the left column's actions
-row (`left` + `bottom`), and the prompt sheet's window body (`padding-bottom`;
-its *surface* still runs to the screen edge). A new edge-anchored control
-follows the controls; a new surface follows the surfaces.
+So the split is:
+
+* **Controls pad on every edge** they sit on: `TopBar`'s back / menu / crumb /
+  status (the bar itself stays flush), the left column's actions row
+  (`bottom`), and the prompt sheet's window body (`padding-bottom`; its
+  *surface* still runs to the screen edge).
+* **Scene content clears the cutout horizontally only**: each scene's content
+  box takes `max(<its margin>, var(--safe-left))` / `-right` for its side
+  offsets (Board `.body`, Select / DeckAdjust / Deck `.body`, Menu `.left` /
+  `.cluster`, Lobby, Room, Gallery, the replay list). The island sits on a
+  short edge -- left or right in landscape, the stage's left under forced
+  rotation -- so this keeps the character art and panels out from under it.
+  Never vertically: a top inset pushed every scene down and left a band of
+  empty space above it.
+* **`max()`, not a sum.** The margin already keeps content off the edge, and
+  iOS reports the inset on *both* sides in landscape; `margin + inset` counted
+  the clearance twice and squeezed every scene in from both short edges. An
+  element laid out *beside* an edge control keeps its gap from it instead --
+  `calc(max(<edge margin>, var(--safe-*)) + <gap>)` (TopBar breadcrumb and
+  status, the select screens' auto toggle and quick-start) -- so a row moves in
+  as one rather than sliding under itself. With no cutout every offset is
+  exactly its old value.
+* **Surfaces run to the real edge** on the long axis: the backdrop, the
+  retractable strips (field row, hand), any full-bleed shape.
+
+A new edge-anchored control follows the controls; a new scene box follows the
+scene content.
+
+The insets are read off a stylesheet-styled probe (`.safeProbe`), not a
+`style.cssText` one: on iOS `env()` set through `cssText` reads 0 while the
+island is on screen (measured on a handset held upright: 0 0 0 0 that way,
+59 0 34 0 from a stylesheet; 0 59 20 59 in landscape).
 
 ## (b) Shared primitives — `ui/primitives.module.css`
 

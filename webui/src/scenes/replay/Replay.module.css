@@ -8,8 +8,8 @@
 .page {
   position: absolute;
   top: 124px;
-  left: 80px;
-  right: 80px;
+  left: max(80px, var(--safe-left, 0px));
+  right: max(80px, var(--safe-right, 0px));
   bottom: 40px;
   display: flex;
   flex-direction: column;

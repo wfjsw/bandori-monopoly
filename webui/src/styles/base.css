@@ -172,6 +172,16 @@ html, body, #root { margin: 0; height: 100%; overflow: hidden; background: var(-
    layout, so every button answers below where it is drawn. A fixed body
    cannot scroll. */
 html, body { position: fixed; inset: 0; overscroll-behavior-x: none; }
+/* Except in an installed app. A home-screen web app has no address bar to
+   collapse, and a fixed root there makes iOS shrink the whole layout box by
+   the status-bar height (793 of an 852 screen held upright) and draw nothing
+   below it -- the strip at the home-indicator end under forced rotation. A
+   root in normal flow, sized to the large viewport, gets the whole screen.
+   Measured on a handset: fixed root -> layout box 0..793, nothing paints
+   past it; this root -> layout box 0..852. */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  html, body { position: static; inset: auto; height: 100lvh; }
+}
 /* A game is not a document. Dragging across the board must not select the
    labels under the pointer, and a long press must not raise the iOS
    Copy / Lookup / Share callout. Everything inherits the ban from here; the
