@@ -79,7 +79,7 @@
    yields (two lines, clipped), so every image is the same size. */
 .stripCards > .stripCard > *:not(:only-child) { flex: none; }
 .stripCards > .stripCard > :nth-child(1):not(:only-child) { width: 100%; aspect-ratio: 4 / 3; }
-.stripCards > .stripCard > :nth-child(3) { font-size: 12px; line-height: 1.25; padding: 3px 1px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 2.6em; }
+.stripCards > .stripCard > :nth-child(3) { font-size: 10px; line-height: 1.25; padding: 3px 1px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 2.6em; }
 .hint { margin-top: 6px; font-size: 13px; color: var(--sub); }
 
 .pool { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; gap: 12px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; }
