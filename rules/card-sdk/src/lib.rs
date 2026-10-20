@@ -36,6 +36,7 @@
 extern crate alloc;
 
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+use alloc::string::String;
 use alloc::vec::Vec;
 
 pub mod abi;
@@ -935,19 +936,17 @@ impl On {
         }
     }
 
-    /// The wire values this entry answers (empty for non-trigger entries),
-    /// as the CEL single-int packing ([`abi::TriggerKind::as_cel_i64`],
-    /// truncated to `i32`).
-    pub fn triggers(&self) -> Vec<i64> {
+    /// The wire **spellings** this entry answers (empty for non-trigger
+    /// entries): `TriggerKind::spelling` -- engine camelCase or
+    /// `"r:{key}:{id}"`.
+    pub fn triggers(&self) -> Vec<String> {
         match self {
-            On::Counteract(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
-            On::Action(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
-            On::Filter(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
-            On::FilterFlag(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
-            On::FilterValue(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
-            // Message names travel as the manifest's `triggers` string list
-            // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
-            // The names ride a separate manifest field; see `rt.rs`.
+            On::Counteract(k, ..) => k.iter().map(|x| x.spelling().into_owned()).collect(),
+            On::Action(k, ..) => k.iter().map(|x| x.spelling().into_owned()).collect(),
+            On::Filter(k, ..) | On::FilterFlag(k, ..) | On::FilterValue(k, ..) => {
+                k.iter().map(|x| x.spelling().into_owned()).collect()
+            }
+            // Message names ride a separate manifest field; see `rt.rs`.
             On::Message(..) => Vec::new(),
             _ => Vec::new(),
         }

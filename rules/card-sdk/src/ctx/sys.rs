@@ -337,8 +337,9 @@ extern "C-unwind" {
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_raise_bought")]
     pub fn raise_bought(player_id: i32, tile: i32) -> i32;
     // v50: guest-raised trigger points (e.g. `circleAffected` from tile:circle).
+    // v91: `kind` is the wire spelling (pointer+len).
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_raise")]
-    pub fn raise(player_id: i32, kind: i64, value: i32) -> i32;
+    pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32) -> i32;
     // v88: generic marker family (the name is data). Readers are `state_get`
     // / `state_max` with the marker's wire key.
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_gain_marker")]
@@ -401,8 +402,10 @@ extern "C-unwind" {
         text_ptr: i32,
         text_len: i32,
     ) -> i32;
+    // v91: two-call out-buffer -- returns the needed length, writes the
+    // spelling into `(p, n)`. Same pattern as `trig_name`.
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_kind")]
-    pub fn trig_kind() -> i64;
+    pub fn trig_kind(p: i32, n: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_player")]
     pub fn trig_player() -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_target")]
@@ -487,8 +490,9 @@ extern "C-unwind" {
     pub fn trig_answers() -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_count")]
     pub fn trig_effect_count() -> i32;
+    // v91: two-call out-buffer like `trig_kind`.
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_kind")]
-    pub fn trig_effect_kind(i: i32) -> i64;
+    pub fn trig_effect_kind(i: i32, p: i32, n: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_target")]
     pub fn trig_effect_target(i: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_from")]
@@ -497,8 +501,9 @@ extern "C-unwind" {
     pub fn trig_effect_tile(i: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_value")]
     pub fn trig_effect_value(i: i32) -> i32;
+    // v91: `kind` is the wire spelling (pointer+len).
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_declare_effect")]
-    pub fn declare_effect(kind: i64, target: i32, from: i32, tile: i32, value: i32);
+    pub fn declare_effect(kind_p: i32, kind_l: i32, target: i32, from: i32, tile: i32, value: i32);
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_card_is")]
     pub fn trig_card_is(ptr: i32, len: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_play_card")]

@@ -1470,9 +1470,9 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
     let buf = out_read(p, need, scratch);
     #[cfg(kani)]
     {
-        // No UTF-8 validation under CBMC (unwinding cliff). Return empty.
-        let _ = buf;
-        return String::new();
+        // Skip UTF-8 *validation* (the CBMC unwind cliff) -- the host writes
+        // ASCII kind spellings / interned names only.
+        return unsafe { String::from_utf8_unchecked(buf) };
     }
     #[cfg(not(kani))]
     {
@@ -1648,7 +1648,8 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result<bool, Prompt> {
     let kind = kind.into();
-    asked(unsafe { sys::raise(player_id, kind.as_cel_i64(), value) }).map(|v| v != 0)
+    let (p, l) = s(&kind.spelling());
+    asked(unsafe { sys::raise(player_id, p, l, value) }).map(|v| v != 0)
 }
 
 // ---------------------------------------------------------- generic status verbs
@@ -2568,7 +2569,8 @@ pub mod trigger {
     use super::*;
 
     pub fn kind() -> TriggerKind {
-        TriggerKind::from_cel_i64(unsafe { sys::trig_kind() })
+        let s = read_str(|b, c| unsafe { sys::trig_kind(b, c) });
+        TriggerKind::from_str(&s)
     }
 
     /// `t.Seat` -- whose action this is (the mover, the payer, the player of the card).
@@ -2856,7 +2858,7 @@ pub mod trigger {
 /// `CRYCHIC:主唱太拼命了` (「一次性向其他玩家支付至少5000资金时」) wants one
 /// entry. Both are here; the card picks.
 pub mod effect {
-    use super::sys;
+    use super::{read_str, s, sys};
     use crate::abi::TriggerKind;
 
     /// How many effects this link declares.
@@ -2866,7 +2868,8 @@ pub mod effect {
 
     /// What effect `i` does, as a [`TriggerKind`] wire value.
     pub fn kind(i: i32) -> TriggerKind {
-        TriggerKind::from_cel_i64(unsafe { sys::trig_effect_kind(i) })
+        let s = read_str(|b, c| unsafe { sys::trig_effect_kind(i, b, c) });
+        TriggerKind::from_str(&s)
     }
 
     /// The seat effect `i` is aimed at (-1 for none).
@@ -2917,7 +2920,8 @@ pub mod effect {
     /// Append an effect to the current link, naming its recipient now -- at
     /// declaration, not at settlement.
     pub fn declare(kind: TriggerKind, target: i32, from: i32, tile: i32, value: i32) {
-        unsafe { sys::declare_effect(kind.as_cel_i64(), target, from, tile, value) }
+        let (p, l) = s(&kind.spelling());
+        unsafe { sys::declare_effect(p, l, target, from, tile, value) }
     }
 }
 

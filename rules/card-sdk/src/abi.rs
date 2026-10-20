@@ -713,15 +713,7 @@ use std::borrow::Cow;
 ///      collide with a future engine id -- or with another ruleset's ids
 ///      (the key names the ruleset). Wire spelling: engine stays camelCase,
 ///      ruleset is `"r:{key}:{id}"` (e.g. `"r:bandori:21"`). Bare decimals
-///      do not parse. CEL keeps one `i64` **per ruleset**, as a bit field:
-///      `TriggerKind::as_cel_i64` packs engine = `id`, ruleset =
-///      `(1 << 32) | id` (the key is not on the CEL wire -- conditions
-///      compile inside one ruleset). The `trig_kind` hostcall returns that
-///      packing as `i64`; `raise` / `declare_effect` carry it as `i32`
-///      (every current id fits) -- `ctx::trigger::kind()` decodes with
-///      `from_cel_i64`. `is_filter` is engine-only; the host treats
-///      `OnKind::Filter` / `OnKind::Action` as authoritative for ruleset
-///      kinds. Host masks are per-namespace (a second `u128` for ruleset
+///      do not parse. Host masks are per-namespace (a second `u128` for ruleset
 ///      ids); a ruleset id outside `0..128` is a load error.
 /// Three universal raises that Phase 1 still spelled as ruleset ids are
 /// engine kinds, same numbers: **`markerSpent` (73)** any named-counter
@@ -731,9 +723,16 @@ use std::borrow::Cow;
 /// `"r:bandori:73/74/75"` are gone. What remains in `KindNs::Ruleset` is
 /// genuinely ruleset vocabulary: `Exile` (21), `PassRewardAffected` (26),
 /// `ChargePaying` (78), `FansFlip` (107).
+/// v91: **CEL `kind` is a string**. `as_cel_i64` / `from_cel_i64` are dead;
+///      the bit-pack encoding is gone. `trig_kind` / `raise` /
+///      `declare_effect` / `trig_effect_kind` carry spellings (the
+///      two-call out-buffer pattern for host-to-guest, pointer+len for
+///      guest-to-host). `ManifestOn.triggers` is `Vec<String>` of spellings.
+///      CEL `kind` compares spellings; the IR bakes `id_of(spelling)`.
+///      `move.kind` stays `int` (`MoveKind` is a closed engine enum).
 /// SAVE_VERSION unchanged (kinds are not in `Saved`).
 /// RECORD_VERSION unchanged (the record codec does not carry kind ids).
-pub const ABI_VERSION: i32 = 90;
+pub const ABI_VERSION: i32 = 91;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1880,9 +1879,6 @@ impl ActionKind {
     /// View a wire id as this side (no side check -- the consts pin the set).
     pub const fn from_trigger(k: TriggerKind) -> Self { Self(k) }
 
-    /// CEL single-int encoding. See [`TriggerKind::as_cel_i64`].
-    pub const fn as_cel_i64(self) -> i64 { self.0.as_cel_i64() }
-
     /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
     pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
 
@@ -2079,11 +2075,12 @@ impl FilterKind {
     /// View a wire id as this side (no side check -- the consts pin the set).
     pub const fn from_trigger(k: TriggerKind) -> Self { Self(k) }
 
-    /// CEL single-int encoding. See [`TriggerKind::as_cel_i64`].
-    pub const fn as_cel_i64(self) -> i64 { self.0.as_cel_i64() }
-
     /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
     pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
+
+    /// Engine gate id for `gate_msgs` / `gate_skip_msgs` (the manifest's
+    /// `(i32, key)` pairs). Engine gates only -- ruleset kinds have no gate id.
+    pub const fn gate_id(self) -> i32 { self.0.id }
 
     /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
     /// const is always `false` and a `FilterKind` const always `true`; a raw
@@ -2435,33 +2432,6 @@ impl TriggerKind {
         Self { ns: KindNs::Ruleset(key), id }
     }
 
-    /// CEL single-int kind encoding -- a bit field, not a decimal reserved
-    /// range. Engine: `id`. Ruleset: `(1 << 32) | id`.
-    /// CEL is compiled per-ruleset, so the ns bit is enough to separate engine
-    /// from rule-defined kinds inside one ruleset's conditions; the `KindNs`
-    /// string key is what prevents cross-ruleset collision on the wire.
-    ///
-    /// Also the packing used by the `trig_kind` / `raise` / `declare_effect`
-    /// hostcalls.
-    pub const fn as_cel_i64(self) -> i64 {
-        match self.ns {
-            KindNs::Engine => self.id as i64,
-            KindNs::Ruleset(_) => (1i64 << 32) | (self.id as u32 as i64),
-        }
-    }
-
-    /// Inverse of [`Self::as_cel_i64`].
-    ///
-    /// The ruleset key is not on the CEL wire (see [`Self::as_cel_i64`]); this
-    /// decodes to [`KindNs::BANDORI`] -- the one ruleset that speaks CEL today.
-    pub const fn from_cel_i64(v: i64) -> Self {
-        if v & (1i64 << 32) != 0 {
-            Self::ruleset("bandori", (v as u32) as i32)
-        } else {
-            Self::engine(v as i32)
-        }
-    }
-
     /// Is this a filter kind? Filter kinds are modifier-pipeline /
     /// value-shaping stages whose result the host folds back (pay amount,
     /// buy price, turn clock, roll plan, charge-cost substitute), plus the
@@ -2595,10 +2565,9 @@ pub struct ManifestTileText {
 pub struct ManifestOn {
     /// An [`OnKind`] as `i32`.
     pub kind: i32,
-    /// `TriggerKind`s, as the CEL single-int packing
-    /// ([`TriggerKind::as_cel_i64`]). Engine ids are their bare id; ruleset
-    /// ids are `(1 << 32) | id`.
-    pub triggers: Vec<i64>,
+    /// `TriggerKind` wire **spellings** (`TriggerKind::spelling`): engine
+    /// camelCase or `"r:{key}:{id}"`.
+    pub triggers: Vec<String>,
     /// Guard **condition** source (docs/GUARDS.md §4.3), CEL over the §4.2
     /// window/candidate vocabulary. `None` = no condition (the guard alone
     /// decides). Compiled once at ruleset build (`RuleError::BadPre` on any
@@ -2817,18 +2786,11 @@ mod tests {
         assert_eq!(TriggerKind::MoveAfter.spelling(), "moveAfter");
     }
 
-    /// ABI v90: the two namespaces pack into one CEL int without collision
-    /// (per-ruleset bit field -- see `as_cel_i64`), and the `"r:{key}:{id}"`
-    /// spelling round-trips. A bare decimal is **not** a spelling.
+    /// ABI v90/v91: the two namespaces keep distinct wire spellings and the
+    /// `"r:{key}:{id}"` form round-trips. A bare decimal is **not** a spelling.
+    /// CEL `kind` is that spelling (v91); there is no int pack.
     #[test]
-    fn namespaced_cel_and_wire_spelling() {
-        assert_eq!(TriggerKind::engine(55).as_cel_i64(), 55);
-        assert_eq!(TriggerKind::ruleset("bandori", 21).as_cel_i64(), (1 << 32) | 21);
-        assert_eq!(TriggerKind::from_cel_i64(55), TriggerKind::engine(55));
-        assert_eq!(
-            TriggerKind::from_cel_i64((1 << 32) | 21),
-            TriggerKind::ruleset("bandori", 21)
-        );
+    fn namespaced_wire_spelling() {
         assert_eq!(TriggerKind::ruleset("bandori", 21).spelling(), "r:bandori:21");
         assert_eq!(TriggerKind::ruleset("bandori", 107).spelling(), "r:bandori:107");
         assert_eq!(
