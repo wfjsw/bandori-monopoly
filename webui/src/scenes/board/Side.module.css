@@ -6,13 +6,11 @@
    the transport floats or is hidden) so nothing hides behind it. */
 .actions {
   position: absolute;
-  /* The row is the left column's own edge controls: it pads out of the cutout
-     (`--safe-left`) and off the home indicator (`--safe-bottom`). The seat
-     panels above it do not -- their surfaces run under the notch on purpose,
-     the way any full-bleed app does. */
-  left: var(--safe-left, 0px);
+  /* Off the home indicator (`--safe-bottom`). The cutout on the left is
+     already cleared by Board `.body`, which this column sits in. */
+  left: 0;
   right: 0;
-  bottom: calc(var(--actions-bottom, 22px) + var(--safe-bottom, 0px) + var(--replay-bar-bottom, 0px));
+  bottom: calc(max(var(--actions-bottom, 22px), var(--safe-bottom, 0px)) + var(--replay-bar-bottom, 0px));
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;

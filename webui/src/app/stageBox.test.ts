@@ -8,7 +8,7 @@
 // compact-canvas predicate so the phone layouts stay predictable.
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, TOUCH_TOP_MIN } from "../styles/layout.ts";
+import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W } from "../styles/layout.ts";
 import { type Insets, stageBox, windowBox } from "./stageBox.ts";
 
 const NO_INSET: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -38,7 +38,7 @@ test("windowBox: forced rotation fills the box it is centered in -- no overflow,
   const win = windowBox({ layoutW: 393, layoutH: 750, innerW: 393, innerH: 750 });
   const forced = stageBox({
     vw: win.vw, vh: win.vh,
-    screenLong: 0, inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
+    inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
   });
   const screenW = forced.h * forced.scale;
   const screenH = forced.w * forced.scale;
@@ -55,7 +55,7 @@ test("windowBox: a desktop window is the window, not the monitor", () => {
 
 test("desktop: the stage fills the window 1:1", () => {
   const box = stageBox({
-    vw: 1600, vh: 900, screenLong: 0, inset: NO_INSET, rotated: false, tall: false, coarse: false, compactForced: null,
+    vw: 1600, vh: 900, inset: NO_INSET, rotated: false, tall: false, coarse: false, compactForced: null,
   });
   assert.equal(box.scale, 1);
   assert.equal(box.w, 1600);
@@ -66,7 +66,7 @@ test("desktop: the stage fills the window 1:1", () => {
 
 test("wide window letterboxes height on a non-tall scene", () => {
   const box = stageBox({
-    vw: 2000, vh: 900, screenLong: 0, inset: NO_INSET, rotated: false, tall: false, coarse: false, compactForced: null,
+    vw: 2000, vh: 900, inset: NO_INSET, rotated: false, tall: false, coarse: false, compactForced: null,
   });
   // scale is still min(2000/1600, 900/900) = 1; the stage width grows, height does not.
   assert.equal(box.scale, 1);
@@ -76,7 +76,7 @@ test("wide window letterboxes height on a non-tall scene", () => {
 
 test("landscape iPhone: the stage runs edge to edge on both axes", () => {
   const box = stageBox({
-    vw: 852, vh: 393, screenLong: 0, inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: null,
+    vw: 852, vh: 393, inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: null,
   });
   assert.equal(box.scale, Math.min(852 / COMPACT_MIN_W, 393 / COMPACT_H));
   assert.ok(box.scale > 0);
@@ -90,7 +90,7 @@ test("landscape iPhone: the stage runs edge to edge on both axes", () => {
 test("rotated lays the stage out on the swapped window", () => {
   // Portrait phone forced to landscape: the window's height carries the stage width.
   const box = stageBox({
-    vw: 393, vh: 852, screenLong: 0, inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
+    vw: 393, vh: 852, inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
   });
   assert.equal(box.w, 852 / box.scale);
   assert.equal(box.h, 393 / box.scale);
@@ -106,10 +106,10 @@ test("forced rotation and a real turn of the phone share one canvas", () => {
   const upright: Insets = { top: 59, right: 0, bottom: 34, left: 0 };
   const turned: Insets = { top: 0, right: 34, bottom: 0, left: 59 };
   const forced = stageBox({
-    vw: 393, vh: 852, screenLong: 0, inset: upright, rotated: true, tall: true, coarse: true, compactForced: null,
+    vw: 393, vh: 852, inset: upright, rotated: true, tall: true, coarse: true, compactForced: null,
   });
   const actual = stageBox({
-    vw: 852, vh: 393, screenLong: 0, inset: turned, rotated: false, tall: true, coarse: true, compactForced: null,
+    vw: 852, vh: 393, inset: turned, rotated: false, tall: true, coarse: true, compactForced: null,
   });
   assert.equal(forced.scale, actual.scale);
   assert.equal(forced.w, actual.w);
@@ -126,7 +126,7 @@ test("rotate(90deg) trades the inset sides onto the stage edges", () => {
   // stage bottom <- screen left, stage left <- screen top.
   const inset: Insets = { top: 10, right: 20, bottom: 30, left: 40 };
   const box = stageBox({
-    vw: 393, vh: 852, screenLong: 0, inset, rotated: true, tall: true, coarse: false, compactForced: null,
+    vw: 393, vh: 852, inset, rotated: true, tall: true, coarse: false, compactForced: null,
   });
   assert.equal(box.safe.top, 20 / box.scale);
   assert.equal(box.safe.right, 30 / box.scale);
@@ -134,21 +134,20 @@ test("rotate(90deg) trades the inset sides onto the stage edges", () => {
   assert.equal(box.safe.left, 10 / box.scale);
 });
 
-test("coarse pointers floor the top inset at the touch dead zone", () => {
+test("the top inset is the device's, with no touch-zone floor added", () => {
+  // A handset in landscape reports 0 at the top (measured: 0 59 20 59). A
+  // floor here pushed the TopBar's left group below its right-hand pill.
   const box = stageBox({
-    vw: 852, vh: 393, screenLong: 0, inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: null,
+    vw: 852, vh: 393, inset: { top: 0, right: 59, bottom: 20, left: 59 }, rotated: false, tall: true, coarse: true, compactForced: null,
   });
-  // iOS landscape eats the top ~20 CSS px of touches even with no cutout.
-  assert.equal(box.safe.top, TOUCH_TOP_MIN / box.scale);
-  const fine = stageBox({
-    vw: 852, vh: 393, screenLong: 0, inset: NO_INSET, rotated: false, tall: true, coarse: false, compactForced: null,
-  });
-  assert.equal(fine.safe.top, 0);
+  assert.equal(box.safe.top, 0);
+  assert.equal(box.safe.left, 59 / box.scale);
+  assert.equal(box.safe.bottom, 20 / box.scale);
 });
 
 test("fine pointer, compact forced off: stays on the 1600 x 900 canvas", () => {
   const box = stageBox({
-    vw: 500, vh: 300, screenLong: 0, inset: NO_INSET, rotated: false, tall: true, coarse: false, compactForced: false,
+    vw: 500, vh: 300, inset: NO_INSET, rotated: false, tall: true, coarse: false, compactForced: false,
   });
   assert.equal(box.compact, false);
   assert.equal(box.scale, Math.min(500 / STAGE_W, 300 / STAGE_H));
@@ -156,81 +155,16 @@ test("fine pointer, compact forced off: stays on the 1600 x 900 canvas", () => {
 
 test("compactForced=false wins even when the window would auto-select compact", () => {
   const box = stageBox({
-    vw: 852, vh: 352, screenLong: 0, inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: false,
+    vw: 852, vh: 352, inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: false,
   });
   assert.equal(box.compact, false);
 });
 
 test("a degenerate window still yields a positive scale", () => {
   const box = stageBox({
-    vw: 0, vh: 0, screenLong: 0, inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: null,
+    vw: 0, vh: 0, inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: null,
   });
   assert.ok(box.scale > 0);
   assert.ok(Number.isFinite(box.w));
   assert.ok(Number.isFinite(box.h));
-});
-
-test("iPhone forced rotation: the stage spans the whole screen, island to home indicator", () => {
-  // The reported bug: the fixed box is 393x750 of a 393x852 screen -- it
-  // starts under the island and stops above Safari's bottom toolbar, which
-  // Safari paints with the bare page colour. A box-sized stage left that
-  // strip blank; a screen-sized stage centred in the box overflowed past the
-  // island and still left it. Screen-sized AND anchored at the box's top
-  // covers 0..852 exactly.
-  const box = stageBox({
-    vw: 393, vh: 750, screenLong: 852,
-    inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
-  });
-  // Under rotate(90deg) the placer's screen AABB is h*scale wide, w*scale tall.
-  const aabbW = box.h * box.scale;
-  const aabbH = box.w * box.scale;
-  const top = box.cy - aabbH / 2;
-  const left = box.cx - aabbW / 2;
-  assert.equal(Math.round(top), 0, "top edge at the screen top (under the island)");
-  assert.equal(Math.round(top + aabbH), 852, "bottom edge at the screen bottom (home indicator)");
-  assert.equal(Math.round(left), 0);
-  assert.equal(Math.round(left + aabbW), 393);
-});
-
-test("iPhone forced rotation: the stretch under the toolbar counts as hardware for controls", () => {
-  // Stage right lands on the screen bottom under rotate(90deg); the 102px
-  // past the fixed box is under Safari's toolbar, so controls on that edge
-  // pad by at least that much (more than the 34px home indicator).
-  const box = stageBox({
-    vw: 393, vh: 750, screenLong: 852,
-    inset: { top: 59, right: 0, bottom: 34, left: 0 },
-    rotated: true, tall: true, coarse: true, compactForced: null,
-  });
-  assert.equal(box.safe.right, 102 / box.scale);
-  // The island side is unchanged: the portrait top inset on the stage's left.
-  assert.equal(box.safe.left, 59 / box.scale);
-});
-
-test("the box is kept where there is no stretch: real landscape, Android", () => {
-  // Real landscape on an iPhone: nothing changes -- centre of the box.
-  const real = stageBox({
-    vw: 852, vh: 393, screenLong: 852,
-    inset: NO_INSET, rotated: false, tall: true, coarse: true, compactForced: null,
-  });
-  assert.deepEqual([real.cx, real.cy], [426, 196.5]);
-  assert.equal(real.w * real.scale, 852);
-  assert.equal(real.h * real.scale, 393);
-  // Android (screenLong 0): forced rotation stays on the box, centred.
-  const android = stageBox({
-    vw: 393, vh: 750, screenLong: 0,
-    inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
-  });
-  assert.deepEqual([android.cx, android.cy], [196.5, 375]);
-  assert.equal(Math.round(android.w * android.scale), 750);
-});
-
-test("a screen reading far past the box is not trusted", () => {
-  // Past MAX_REACH: a bad `screen` (zoomed display, desktop emulation) must
-  // not blow the stage off the bottom.
-  const box = stageBox({
-    vw: 393, vh: 500, screenLong: 852,
-    inset: NO_INSET, rotated: true, tall: true, coarse: true, compactForced: null,
-  });
-  assert.equal(box.cy, 250);
-  assert.equal(Math.round(box.w * box.scale), 500);
 });

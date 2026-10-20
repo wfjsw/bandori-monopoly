@@ -11,7 +11,7 @@ const api = process.env.BM_API ?? "http://127.0.0.1:8080";
 // `BM_VDIAG=<file>` (dev server only): force the viewport readout on
 // (app/ViewportDiag) and append every reading a client posts to `/__vdiag` to
 // <file>, one JSON line each -- for collecting a real handset's screen
-// geometry from a dev server the phone reaches over the LAN.
+// geometry from a dev server the phone reaches over the LAN (`--host ::`).
 const vdiagLog = process.env.BM_VDIAG;
 const vdiagSink: RequestHandler = (req, res, next) => {
   if (req.method !== "POST" || !req.url?.startsWith("/__vdiag")) return next();
@@ -38,7 +38,6 @@ export default defineConfig({
     entry: { index: "./src/index.tsx" },
     define: { "import.meta.env.BM_VDIAG": JSON.stringify(vdiagLog ? "1" : "") },
   },
-  dev: vdiagLog ? { setupMiddlewares: [(middlewares) => middlewares.unshift(vdiagSink)] } : {},
   html: { template: "./index.html", title: "BanG Dream 大富翁" },
   server: {
     port: Number(process.env.BM_PORT ?? 5173),
@@ -48,6 +47,13 @@ export default defineConfig({
       "/api": { target: api, changeOrigin: true },
       "/data": { target: api, changeOrigin: true },
     },
+    // Registered here, ahead of the built-ins, so the history fallback never
+    // answers the readout's POST.
+    setup: vdiagLog
+      ? (ctx) => {
+          if (ctx.action === "dev") ctx.server.middlewares.use(vdiagSink);
+        }
+      : undefined,
   },
   output: { dataUriLimit: 0, cssModules: { localIdentName: "[name]__[local]--[hash:base64:4]" } },
 });

@@ -16,8 +16,11 @@
 .body {
   position: absolute;
   top: var(--replay-bar-top, 0px);
-  left: var(--board-inset-x);
-  right: var(--board-inset-x);
+  /* Clear the cutout on the short edges (`--safe-left` / `-right`); never
+     inset vertically -- the field row and the hand run to the real top and
+     bottom edges. */
+  left: max(var(--board-inset-x), var(--safe-left, 0px));
+  right: max(var(--board-inset-x), var(--safe-right, 0px));
   bottom: 0;
   display: flex;
   justify-content: space-between;

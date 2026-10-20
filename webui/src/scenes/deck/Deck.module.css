@@ -1,8 +1,11 @@
 /* Deck: character + slot list on the left, deck strip + card pool on the right.
    The two columns are a flex row so the pool absorbs the stage's extra width
    instead of the gutter opening up. */
-.body { position: absolute; left: 37px; right: 38px; top: 125px; height: 750px; display: flex; gap: 23px; }
-.left { position: relative; flex: 0 0 390px; }
+.body { position: absolute; left: max(37px, var(--safe-left, 0px)); right: max(38px, var(--safe-right, 0px)); top: 125px; height: 750px; display: flex; gap: 23px; }
+/* Shrinks into its bottom-left corner by however far the TopBar dropped for
+   the top hardware, keeping the character card clear of the back button (see
+   select/DeckAdjust `.left`). 750 = the column's height. */
+.left { position: relative; flex: 0 0 390px; transform-origin: 0 100%; transform: scale(calc(1 - max(0, var(--safe-top-n, 0) - 16) / 750)); }
 .right { position: relative; flex: 1 1 auto; min-width: 0; }
 
 .char { position: absolute; left: 0; top: 0; width: 390px; height: 440px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }

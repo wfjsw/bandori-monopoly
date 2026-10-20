@@ -11,6 +11,17 @@
 
 import { useEffect, useState } from "react";
 import { isStageRotated } from "./stageScale";
+import stage from "./Stage.module.css";
+
+function classProbe(cls: string): string {
+  const el = document.createElement("div");
+  el.className = cls;
+  document.body.appendChild(el);
+  const cs = getComputedStyle(el);
+  const v = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map((p) => parseFloat(p) || 0).join(" ");
+  el.remove();
+  return v;
+}
 
 const REPORT = import.meta.env?.BM_VDIAG === "1";
 /** Is the readout on for this page load? */
@@ -50,7 +61,12 @@ function read(): string[] {
     `100svw/svh ${probe("top:0;left:0;width:100svw;height:100svh")}`,
     `100vw/vh ${probe("top:0;left:0;width:100vw;height:100vh")}`,
     `html ${rect(document.documentElement)}  body ${rect(document.body)}`,
-    `safe t r b l ${probe("padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)")}`,
+    `safe t r b l (stylesheet, used) ${classProbe(stage.safeProbe)}`,
+    `safe t r b l (cssText, old) ${probe("padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)")}`,
+    `--safe t r b l ${(() => {
+      const st = document.querySelector<HTMLElement>("[data-stage]");
+      return st ? ["top", "right", "bottom", "left"].map((k) => st.style.getPropertyValue(`--safe-${k}`).replace("px", "").slice(0, 5)).join(" ") : "-";
+    })()}`,
     `placer ${rect(placer)}  ${placer?.style.transform ?? ""}`,
     `placer at ${placer ? `${placer.style.left || "-"} ${placer.style.top || "-"}` : "-"}  forced ${isStageRotated()}`,
   ];

@@ -75,11 +75,3 @@ export function isCompactWindow(w: number, h: number, coarse: boolean, forced: b
   if (forced !== null) return forced;
   return coarse && Math.min(w, h) <= 560 && w > h;
 }
-
-/**
- * Phantom top dead zone on iOS landscape: touches in the top ~20 CSS px are
- * silently eaten by the system even though `safe-area-inset-top` reports 0.
- * Floor the stage's top inset to this on coarse pointers so top-edge controls
- * (TopBar) stay tappable. Screen px, not design px.
- */
-export const TOUCH_TOP_MIN = 20;
