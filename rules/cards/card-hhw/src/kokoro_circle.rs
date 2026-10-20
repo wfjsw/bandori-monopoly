@@ -33,7 +33,7 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
 
 fn cant_play(_player_id: i32) -> Option<Msg> {
     // C# `CardKokoroCircle.WhyNot`: refuses when a `CardKokoroCircle` is
-    // already placed on CiRCLE. TODO(规则书) NEGATION-AUDIT V2: the **money** half is gone (see
+    // already placed on CiRCLE. NEGATION-AUDIT V2 (settled): the **money** half is gone (see
     // V2): the 「支付10000资金」 is effect content.
     // 规则书: 「并将此卡置于CiRCLE上」 -- C# `H._placed.Any(p => p is CardKokoroCircle)`
     // (`ctx::placed_tile` answers "is this id in play on that player").

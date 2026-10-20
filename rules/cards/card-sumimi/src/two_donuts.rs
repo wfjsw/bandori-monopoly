@@ -47,9 +47,9 @@ const SLOT_BY: &str = "two_donuts_by";
 fn two_donuts(player_id: i32) -> card_sdk::Asked {
     // 「该效果生效时无法重复获得该效果」 bars the (1) acquisition while the
     // user is already exiled.
-    // TODO(规则书): the book does not say what the card does when the
-    // acquisition is barred; we treat the whole effect as void (no carrier, no
-    // slots, no log). The card is still spent (the play itself is done).
+    // TODO(规则书) DONUT-VOID-01: the book does not say what the card does when
+    // the acquisition is barred; we treat the whole effect as void (no carrier,
+    // no slots, no log). The card is still spent (the play itself is done).
     if rules_status::exile::get(player_id) > 0 {
         return Ok(());
     }

@@ -4462,8 +4462,8 @@ impl<M: CardModules> RulesBridge<M> {
                     t.cards = vec![id];
                 })?;
             }
-            // kind 73 (`fireSpent`, wire-stable; `TODO(ABI)` rename to
-            // `MarkerSpent` when card bodies can follow). Name is payload.
+            // kind 73 (`fireSpent`, wire-stable; `TODO(ABI) ABI-MARKER-SPENT`
+            // rename to `MarkerSpent` when card bodies can follow). Name is payload.
             for (player_id, n, name) in after.marker_spent_log {
                 self.raise_core(cx, "73", player_id, |t| {
                     t.value = n;

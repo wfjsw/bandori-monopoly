@@ -362,7 +362,7 @@ fn self_payment_may_be_funded_by_mortgage() {
 // no activation costs (NEGATION-AUDIT V2 / money-gate list)
 // =====================================================================
 
-// TODO(规则书) NEGATION-AUDIT V2 -- the six text-less money play gates are
+// NEGATION-AUDIT V2 (settled) -- the six text-less money play gates are
 // gone. Each card below is playable while short; the in-body 「[消耗]/[支付]」
 // is effect content and takes the Q1 shortfall path (mortgage, then
 // bankruptcy).

@@ -15,7 +15,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
     &[
-        // TODO(规则书) NEGATION-AUDIT V2: no activation cost. The 「支付1600资金」
+        // NEGATION-AUDIT V2 (settled): no activation cost. The 「支付1600资金」
         // is effect content (rulebook L13-14), so there is no `money >= 1600`
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
