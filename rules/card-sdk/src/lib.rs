@@ -37,6 +37,7 @@ extern crate alloc;
 
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
 use alloc::string::String;
+#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 use alloc::vec::Vec;
 
 pub mod abi;

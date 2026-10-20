@@ -15,7 +15,7 @@ use bandori_std::kind as rk;
 #[test]
 fn split_cards_declare_filter_and_action_halves() {
     let r = rules();
-    let shape = |id: &str| -> Vec<(i32, Vec<i64>, bool)> {
+    let shape = |id: &str| -> Vec<(i32, Vec<String>, bool)> {
         let idx = r.ruleset().card(id).unwrap_or_else(|| panic!("{id} loaded"));
         let info = &r.ruleset().cards()[idx as usize];
         info.on
@@ -39,11 +39,11 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s.len(), 4, "no_expectation entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Filter"));
-    assert_eq!(s[1].1, vec![102], "DiceRollValue");
+    assert_eq!(s[1].1, vec!["diceRollValue".to_string()], "DiceRollValue");
     assert_eq!(s[2].0, kind("Filter"));
-    assert_eq!(s[2].1, vec![55], "PaySplitAdd");
+    assert_eq!(s[2].1, vec!["paySplitAdd".to_string()], "PaySplitAdd");
     assert_eq!(s[3].0, kind("Action"));
-    assert_eq!(s[3].1, vec![62], "Reshuffled");
+    assert_eq!(s[3].1, vec!["reshuffled".to_string()], "Reshuffled");
 
     // j11 (ABI v78): Play / Action(TurnEnd, Targeted) /
     //   Action(PaySplitChooseBefore) / FilterFlag(PaySplitChoose) / Action(CounterChanged)
@@ -52,22 +52,26 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s.len(), 5, "j11 entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Action"));
-    assert_eq!(s[1].1, vec![45, 51], "TurnEnd, Targeted");
+    assert_eq!(
+        s[1].1,
+        vec!["turnEnd".to_string(), "targeted".to_string()],
+        "TurnEnd, Targeted"
+    );
     assert_eq!(s[2].0, kind("Action"));
-    assert_eq!(s[2].1, vec![105], "PaySplitChooseBefore");
+    assert_eq!(s[2].1, vec!["paySplitChooseBefore".to_string()], "PaySplitChooseBefore");
     assert_eq!(s[3].0, kind("Filter"));
-    assert_eq!(s[3].1, vec![52], "PaySplitChoose");
+    assert_eq!(s[3].1, vec!["paySplitChoose".to_string()], "PaySplitChoose");
     assert_eq!(s[4].0, kind("Action"));
-    assert_eq!(s[4].1, vec![76], "CounterChanged");
+    assert_eq!(s[4].1, vec!["counterChanged".to_string()], "CounterChanged");
 
     // fever: Play / Filter(PaySplitAdd) / Action(TurnStart)
     let s = shape("通用:[衍生]FEVER!");
     assert_eq!(s.len(), 3, "fever entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Filter"));
-    assert_eq!(s[1].1, vec![55], "PaySplitAdd");
+    assert_eq!(s[1].1, vec!["paySplitAdd".to_string()], "PaySplitAdd");
     assert_eq!(s[2].0, kind("Action"));
-    assert_eq!(s[2].1, vec![3], "TurnStart");
+    assert_eq!(s[2].1, vec!["turnStart".to_string()], "TurnStart");
 }
 
 /// The shifted `.silent` index on no_expectation still points at the
