@@ -1,7 +1,7 @@
 // "Add to home screen" cover, shown on a phone browser tab ahead of the
-// rotate cover (see InstallHint.module.css). One prompt at a time: this one
-// takes the screen until it is installed or explicitly overridden, and only
-// then does RotateHint ask for a turn.
+// rotate cover (see InstallHint.module.css). Either orientation. One prompt
+// at a time: this one takes the screen until it is installed or explicitly
+// overridden, and only then does RotateHint ask for a turn.
 
 import { useSyncExternalStore, useState } from "react";
 import { t as tr } from "../i18n/t";

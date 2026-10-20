@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
 import { showInstallHint } from "./installGate";
-import { ROTATE_QUERY } from "./rotation";
 import { PHONE_QUERY } from "./router";
 
 // "Add to home screen" gate for the cover ahead of the rotate cover (see
@@ -79,7 +78,6 @@ export function useInstallHint(): boolean {
   useSyncExternalStore(subscribeInstallHint, installHintVersion);
   return showInstallHint({
     phone: isPhoneDevice(),
-    portrait: window.matchMedia(ROTATE_QUERY).matches,
     standalone: isStandalone(),
     dismissed: isInstallHintDismissed(),
   });
