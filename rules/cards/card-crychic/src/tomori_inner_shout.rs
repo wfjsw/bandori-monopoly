@@ -88,9 +88,17 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
     // 规则书（3）: 「若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上」
     // -- C# `H.InBand(i, "MyGO!!!!!")` then `H.PlaceFromPlay(c, i, tile)` at the
     // first owned tile (`H.V(i, "firstTile") - 1` falling back to `list.Min()`).
-    // TODO(规则书)（3）「最早拥有的格子」 (LOY-TOMORI-03): the engine records no
-    //   acquisition order and `firstTile` is never written, so the lowest tile
-    //   index stands in for "earliest owned".
+    //
+    // TODO(规则书)（3）「最早拥有的格子」 (LOY-TOMORI-03) -- **class B**. The engine
+    //   has no tile-acquisition order: `owners` is tile→owner only,
+    //   `ctx::owned_tiles` walks board indices (so `.min()` is the lowest
+    //   board index, not the earliest acquisition), and `ctx::slot` is a single
+    //   integer per key -- there is no ordered accumulator to push onto. A
+    //   correct 「最早拥有」 needs a per-player list written by a deed-acquisition
+    //   hook (`bought` / `buyAfter`), running from game start so tiles taken
+    //   before this card was played are already ordered. Until that lands, the
+    //   lowest board index stands in for "earliest owned", and `firstTile` is
+    //   honoured if anything ever writes it.
     if ctx::in_group(player_id, "MyGO!!!!!") {
         let owned = ctx::owned_tiles(player_id);
         if let Some(&first) = owned.iter().min() {
