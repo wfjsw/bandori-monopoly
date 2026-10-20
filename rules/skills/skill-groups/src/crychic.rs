@@ -129,14 +129,39 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     // 「此卡」 is the band skill instance itself (`skill:CRYCHIC:美好的往日幻影`),
     // whose id does not start with `CRYCHIC:` -- it was skipped by the old
     // prefix sweep and stayed on the field beside the successor.
+    //
+    // 「此卡不会被你乐队技能的（2）效果移除，乐队技能的（2）效果发动时展示此卡
+    // 并将其洗入抽牌堆」 (内心的呐喊 (2)) -- that card is **not** banished; when
+    // this (2) fires it is shown and shuffled into the draw pile instead. Doing
+    // it here (not on a separate empty-piles hook) is the text: the band (2)
+    // effect is what moves the card, and by then the deck is already refilled.
+    const SHOUT: &str = "CRYCHIC:（灯）内心的呐喊";
+    let mut shout_at = |player_id: i32, card: &str| {
+        if card != SHOUT {
+            return false;
+        }
+        ctx::log(
+            player_id,
+            &Msg::new(key!("tomori_inner_shout_shown")).card("card", SHOUT),
+        );
+        true
+    };
     for (uid, c) in ctx::field_instances(player_id) {
+        // The field copy (3) places: unplace it into the draw pile below.
+        if shout_at(player_id, &c) {
+            if ctx::unplace_at(uid) >= 0 {
+                ctx::add_to_deck_at(player_id, SHOUT, ctx::DeckPos::Random);
+            }
+            continue;
+        }
         if c == ID || c.starts_with("CRYCHIC:") {
             ctx::unplace_at(uid);
         }
     }
     for c in ctx::cards_in(player_id, CardPile::Hand) {
-        // 「此卡不会被你乐队技能的（2）效果移除」 -- 「内心的呐喊」 stays.
-        if c == "CRYCHIC:（灯）内心的呐喊" {
+        if shout_at(player_id, &c) {
+            ctx::take_from_hand(player_id, &c);
+            ctx::add_to_deck_at(player_id, SHOUT, ctx::DeckPos::Random);
             continue;
         }
         if c.starts_with("CRYCHIC:") {
@@ -145,7 +170,11 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     }
     for pile in [CardPile::Deck, CardPile::Discard] {
         for c in ctx::cards_in(player_id, pile) {
-            if c == "CRYCHIC:（灯）内心的呐喊" {
+            if shout_at(player_id, &c) {
+                if pile != CardPile::Deck {
+                    ctx::take_card(player_id, pile, &c);
+                    ctx::add_to_deck_at(player_id, SHOUT, ctx::DeckPos::Random);
+                }
                 continue;
             }
             if c.starts_with("CRYCHIC:") {
