@@ -131,8 +131,8 @@ impl NativeRulesHandle {
                 // kinds nothing listens to and open counteraction windows the sandbox
                 // skips -- a drift the check caught.
                 for o in &on {
-                    for &t in &o.triggers {
-                        let tk = TriggerKind::from_cel_i64(t);
+                    for t in &o.triggers {
+                        let tk = TriggerKind::from_str(t);
                         declared.insert(tk).unwrap_or_else(|e| {
                             panic!("{}: {e}", card.id)
                         });
@@ -231,7 +231,7 @@ impl NativeRulesHandle {
                 for o in card.on {
                     h.update((o.kind() as i32).to_le_bytes());
                     for t in o.triggers() {
-                        h.update(t.to_le_bytes());
+                        h.update(t.as_bytes());
                     }
                 }
             }

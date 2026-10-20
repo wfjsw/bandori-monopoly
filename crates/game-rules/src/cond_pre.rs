@@ -74,8 +74,8 @@ impl<'a, S: SnapSrc> SnapView<'a, S> {
 
 impl<S: SnapSrc> CondView for SnapView<'_, S> {
     // -- window / trigger ---------------------------------------------------
-    fn kind(&self) -> i64 {
-        self.trigger.kind.as_cel_i64()
+    fn kind(&self) -> std::borrow::Cow<'_, str> {
+        self.trigger.kind.spelling()
     }
     fn actor(&self) -> i64 {
         self.trigger.player_id as i64
@@ -185,11 +185,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn chain_count(&self) -> i64 {
         self.trigger.effects.len() as i64
     }
-    fn chain_kinds(&self) -> Vec<i64> {
+    fn chain_kinds(&self) -> Vec<String> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64())
+            .map(|e| e.kind.clone())
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -1216,7 +1216,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         .effects
         .iter()
         .map(|e| ChainLink {
-            kind: crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64(),
+            kind: e.kind.clone(),
             from: e.from as i64,
             hits: e.target as i64,
         })
@@ -1258,7 +1258,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     };
 
     WindowCtx {
-        kind: t.kind.as_cel_i64(),
+        kind: t.kind.spelling().into_owned(),
         actor: t.player_id as i64,
         target: t.target as i64,
         tile,
@@ -1332,7 +1332,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         })
         .collect();
     WindowCtx {
-        kind: 0,
+        kind: String::new(),
         actor: player_id as i64,
         target: -1,
         tile: TileSnap {

@@ -1295,49 +1295,52 @@ pub fn unpack_deal(v: i32) -> (bool, i32, i32, bool) {
     (cancelled, owner, houses, mortgaged)
 }
 
-pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i64, value: i32) -> Result<i32, HostErr> {
-                        {
-                // v78: a `FilterValue` kind (BuyAssign) carries the default
-                // deal from the guest's trigger in, and writes the rewritten
-                // deal back so `trigger::deal_*` reads the fold.
-                let tk = card_sdk::abi::TriggerKind::from_cel_i64(kind);
-                let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
-                let trig = c.st().wr().trigger();
-                let tile = trig.tile;
-                let (deal_owner, deal_houses, deal_mortgaged) = if is_deal {
-                    match trig.buy {
-                        Some(b) => (
-                            b.deal_owner.unwrap_or(i32::MIN),
-                            b.deal_houses,
-                            b.deal_mortgaged as i32,
-                        ),
-                        None => (i32::MIN, 0, 0),
-                    }
-                } else {
-                    (i32::MIN, 0, 0)
-                };
-                let req = HostRequest::Raise {
-                player_id,
-                kind,
-                value,
-                tile,
-                deal_owner,
-                deal_houses,
-                deal_mortgaged,
-            };
-                let packed = crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)?;
-                if is_deal {
-                    let (_cancelled, o, h, m) = unpack_deal(packed);
-                    let st = c.st_mut();
-                    if o != i32::MIN {
-                        st.w().set_trigger_deal_owner(o);
-                    }
-                    st.w().set_trigger_deal_houses(h);
-                    st.w().set_trigger_deal_mortgaged(m as i32);
-                    return Ok(packed);
-                }
-                return Ok(packed);
-            }
+/// Raise a trigger point from a guest body. `kind` is the wire **spelling**.
+pub fn raise<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    kind: &str,
+    value: i32,
+) -> Result<i32, HostErr> {
+    // v78: a `FilterValue` kind (BuyAssign) carries the default
+    // deal from the guest's trigger in, and writes the rewritten
+    // deal back so `trigger::deal_*` reads the fold.
+    let tk = card_sdk::abi::TriggerKind::from_str(kind);
+    let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
+    let trig = c.st().wr().trigger();
+    let tile = trig.tile;
+    let (deal_owner, deal_houses, deal_mortgaged) = if is_deal {
+        match trig.buy {
+            Some(b) => (
+                b.deal_owner.unwrap_or(i32::MIN),
+                b.deal_houses,
+                b.deal_mortgaged as i32,
+            ),
+            None => (i32::MIN, 0, 0),
+        }
+    } else {
+        (i32::MIN, 0, 0)
+    };
+    let req = HostRequest::Raise {
+        player_id,
+        kind: kind.to_string(),
+        value,
+        tile,
+        deal_owner,
+        deal_houses,
+        deal_mortgaged,
+    };
+    let packed = crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)?;
+    if is_deal {
+        let (_cancelled, o, h, m) = unpack_deal(packed);
+        let st = c.st_mut();
+        if o != i32::MIN {
+            st.w().set_trigger_deal_owner(o);
+        }
+        st.w().set_trigger_deal_houses(h);
+        st.w().set_trigger_deal_mortgaged(m as i32);
+    }
+    Ok(packed)
 }
 
 /// Named-counter read. The name is data.
@@ -2170,13 +2173,11 @@ pub fn ask<C: HostCtx>(c: &mut C, kind: i32, player_id: i32, tp: i32, tl: i32, x
             )
 }
 
-/// The raise's [`TriggerKind`], as the CEL single-int packing
-/// ([`card_sdk::abi::TriggerKind::as_cel_i64`]: engine = id, ruleset =
-/// `(1 << 32) | id`). Returns `i64` so both fields survive the hostcall.
-pub fn trig_kind<C: HostCtx>(c: &mut C) -> Result<i64, HostErr> {
-    Ok({
-        c.st().wr().trigger().kind.as_cel_i64()
-    })
+/// The raise's [`TriggerKind`] wire **spelling** (`TriggerKind::spelling`).
+/// Two-call out-buffer pattern like [`trig_name`].
+pub fn trig_kind<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
+    let s = c.st().wr().trigger().kind.spelling();
+    write_str(c, &s, p, n)
 }
 
 pub fn trig_player<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2398,13 +2399,16 @@ pub fn trig_effect_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     })
 }
 
-pub fn trig_effect_kind<C: HostCtx>(c: &mut C, i: i32) -> Result<i64, HostErr> {
-    Ok({
+/// The effect `i`'s kind **spelling**. Two-call out-buffer like [`trig_name`].
+pub fn trig_effect_kind<C: HostCtx>(c: &mut C, i: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+    let s = {
         let t = c.st().wr().trigger();
         t.effects
             .get(i.max(0) as usize)
-            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64())
-    })
+            .map(|e| e.kind.clone())
+            .unwrap_or_default()
+    };
+    write_str(c, &s, p, n)
 }
 
 pub fn trig_effect_target<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostErr> {
@@ -2451,10 +2455,18 @@ pub fn trig_effect_value<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostErr> 
     })
 }
 
-pub fn declare_effect<C: HostCtx>(c: &mut C, kind: i64, target: i32, from: i32, tile: i32, value: i32) -> Result<(), HostErr> {
-            c.st_mut()
-                .w()
-                .declare_trigger_effect(kind, target, from, tile, value);
+/// Append a declared effect. `kind` is the wire **spelling**.
+pub fn declare_effect<C: HostCtx>(
+    c: &mut C,
+    kind: &str,
+    target: i32,
+    from: i32,
+    tile: i32,
+    value: i32,
+) -> Result<(), HostErr> {
+    c.st_mut()
+        .w()
+        .declare_trigger_effect(kind, target, from, tile, value);
     Ok(())
 }
 

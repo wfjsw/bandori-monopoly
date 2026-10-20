@@ -52,7 +52,7 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
     ],
 )
     .board_role("status")
-    .gate_msgs(&[(FilterKind::PlayGate.as_cel_i64() as i32, "err.play_no_hand")]);
+    .gate_msgs(&[(FilterKind::PlayGate.gate_id(), "err.play_no_hand")]);
 
 /// The condition under which `noHand` closes the play gate.
 pub const NO_HAND_HELD: &str = "state(actor,'noHand') > 0";

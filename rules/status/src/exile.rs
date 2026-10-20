@@ -89,7 +89,7 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
     // Play refusal when the piece is off board (`cannot_play` checks OnBoard
     // first). The turn is auto-skipped by `on_turn_start_before`'s own
     // `log.exiled_skip` / `log.exiled_skip_hold` lines, not by `gate_refusal_msg`.
-    .gate_msgs(&[(FilterKind::OnBoardGate.as_cel_i64() as i32, "err.play_exiled")]);
+    .gate_msgs(&[(FilterKind::OnBoardGate.gate_id(), "err.play_exiled")]);
 
 /// The condition under which [除外] closes the act, pay and move gates.
 pub const EXILED: &str = "state(actor,'exile') > 0";

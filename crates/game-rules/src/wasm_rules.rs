@@ -2063,9 +2063,9 @@ impl CardWorld for Run {
     fn set_trigger_spare(&mut self, seat: i32) {
         self.trigger.spare(seat);
     }
-    fn declare_trigger_effect(&mut self, kind: i64, target: i32, from: i32, tile: i32, value: i32) {
+    fn declare_trigger_effect(&mut self, kind: &str, target: i32, from: i32, tile: i32, value: i32) {
         self.trigger.declare(game_core::engine::rules::Effect {
-            kind: card_sdk::abi::TriggerKind::from_cel_i64(kind).spelling().into_owned(),
+            kind: kind.to_string(),
             target,
             from,
             tile,
@@ -3771,8 +3771,7 @@ impl<M: CardModules> RulesBridge<M> {
             deal_houses,
             deal_mortgaged,
         } => {
-            let tk = card_sdk::abi::TriggerKind::from_cel_i64(kind);
-            let kind = tk.spelling();
+            let tk = card_sdk::abi::TriggerKind::from_str(&kind);
             let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
             let t = self.raise_core(cx, kind, player_id, |t| {
                 t.value = value;
@@ -7269,8 +7268,8 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
 /// `self.world.*` / `self.data.*` **directly** -- never `self.<SnapSrc::method>`,
 /// which would re-enter this trait and overflow the stack.
 impl rules_cond::view::CondView for LiveSnap<'_> {
-    fn kind(&self) -> i64 {
-        self.trigger.kind.as_cel_i64()
+    fn kind(&self) -> std::borrow::Cow<'_, str> {
+        self.trigger.kind.spelling()
     }
     fn actor(&self) -> i64 {
         self.trigger.player_id as i64
@@ -7393,11 +7392,11 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn chain_count(&self) -> i64 {
         self.trigger.effects.len() as i64
     }
-    fn chain_kinds(&self) -> Vec<i64> {
+    fn chain_kinds(&self) -> Vec<String> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64())
+            .map(|e| e.kind.clone())
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -8180,7 +8179,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             if let Some((_, key)) = c
                 .gate_msgs
                 .iter()
-                .find(|(k, _)| *k == kind.as_cel_i64() as i32)
+                .find(|(k, _)| *k == kind.id)
             {
                 return Msg::new(key);
             }
@@ -8193,7 +8192,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             if let Some((_, key)) = c
                 .gate_skip_msgs
                 .iter()
-                .find(|(k, _)| *k == kind.as_cel_i64() as i32)
+                .find(|(k, _)| *k == kind.id)
             {
                 return Msg::new(key);
             }

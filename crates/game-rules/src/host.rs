@@ -141,7 +141,7 @@ impl CardInfo {
             .enumerate()
             .filter(|(_, o)| {
                 o.kind == kind as i32
-                && trigger.is_none_or(|t| o.triggers.contains(&t.as_cel_i64()))
+                && trigger.is_none_or(|t| o.triggers.iter().any(|s| s == &t.spelling()))
             })
             .map(|(i, _)| i as i32)
             .collect()
@@ -537,7 +537,8 @@ pub enum HostRequest {
     /// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
     Raise {
         player_id: i32,
-        kind: i64,
+        /// Wire **spelling** (`TriggerKind::spelling`).
+        kind: String,
         value: i32,
         /// The tile the raise is about (`t.tile`) -- filter pres like
         /// `tile.id == tile_named('…')` read it.
@@ -787,7 +788,9 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     let mut out = Vec::new();
     for (ci, c) in cards.iter().enumerate() {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_cel_i64()) {
+            if o.kind == OnKind::Filter as i32
+                && o.triggers.iter().any(|s| s == &kind.spelling())
+            {
                 out.push((ci as i32, ei as i32));
             }
         }
@@ -807,7 +810,7 @@ pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
             if !o
                 .triggers
                 .iter()
-                .any(|&t| GATE_KINDS.iter().any(|&k| k.as_cel_i64() == t))
+                .any(|t| GATE_KINDS.iter().any(|&k| &*k.spelling() == t.as_str()))
             {
                 continue;
             }
@@ -927,8 +930,8 @@ impl RulesetBuilder {
                 // emits a registration table).
                 if matches!(ok, Some(OnKind::Action) | Some(OnKind::Filter)) {
                     let want_filter = ok == Some(OnKind::Filter);
-                    for &k in &o.triggers {
-                        let tk = crate::TriggerKind::from_cel_i64(k);
+                    for s in &o.triggers {
+                        let tk = crate::TriggerKind::from_str(s);
                         if tk.ns == card_sdk::abi::KindNs::Engine && tk.is_filter() != want_filter {
                             return Err(RuleError::Load(format!(
                                 "{} entry {ei}: {} lists trigger {} which is filter={} (see TriggerKind::is_filter)",
@@ -940,8 +943,8 @@ impl RulesetBuilder {
                         }
                     }
                 }
-                for &k in &o.triggers {
-                    let tk = crate::TriggerKind::from_cel_i64(k);
+                for s in &o.triggers {
+                    let tk = crate::TriggerKind::from_str(s);
                     declared.insert(tk).map_err(RuleError::Load)?;
                     match ok {
                         Some(OnKind::Counteract) => {
@@ -2360,7 +2363,9 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let mut i = 0;
         while let Some(c) = self.card(i) {
             for (ei, o) in c.on.iter().enumerate() {
-                if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_cel_i64()) {
+                if o.kind == OnKind::Filter as i32
+                    && o.triggers.iter().any(|s| s == &kind.spelling())
+                {
                     entries.push((i, ei as i32));
                 }
             }
@@ -3996,8 +4001,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "raise",
-        |mut c: C<W>, player_id: i32, kind: i64, value: i32| -> Result<i32, Error> {
-            hostfns::raise(&mut c, player_id, kind, value).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, kp: i32, kl: i32, value: i32| -> Result<i32, Error> {
+            let kind = hostfns::guest_str(&mut c, kp, kl).map_err(HostErr::into_err)?;
+            hostfns::raise(&mut c, player_id, &kind, value).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4564,8 +4570,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "trig_kind",
-        |mut c: C<W>| -> Result<i64, Error> {
-            hostfns::trig_kind(&mut c).map_err(HostErr::into_err)
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trig_kind(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4844,8 +4850,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "trig_effect_kind",
-        |mut c: C<W>, i: i32| -> Result<i64, Error> {
-            hostfns::trig_effect_kind(&mut c, i).map_err(HostErr::into_err)
+        |mut c: C<W>, i: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trig_effect_kind(&mut c, i, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4879,8 +4885,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "declare_effect",
-        |mut c: C<W>, kind: i64, target: i32, from: i32, tile: i32, value: i32| -> Result<(), Error> {
-            hostfns::declare_effect(&mut c, kind, target, from, tile, value).map_err(HostErr::into_err)
+        |mut c: C<W>, kp: i32, kl: i32, target: i32, from: i32, tile: i32, value: i32| -> Result<(), Error> {
+            let kind = hostfns::guest_str(&mut c, kp, kl).map_err(HostErr::into_err)?;
+            hostfns::declare_effect(&mut c, &kind, target, from, tile, value).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5477,7 +5484,7 @@ impl CardWorld for NullWorld {
     fn set_trigger_cancelled(&mut self) {}
     fn set_trigger_negate_effect(&mut self) {}
     fn set_trigger_spare(&mut self, _: i32) {}
-    fn declare_trigger_effect(&mut self, _: i64, _: i32, _: i32, _: i32, _: i32) {}
+    fn declare_trigger_effect(&mut self, _: &str, _: i32, _: i32, _: i32, _: i32) {}
     fn trig_card_is(&self, _: &str) -> i32 {
         0
     }
@@ -5591,7 +5598,7 @@ mod gate_tests {
     fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
         ManifestOn {
             kind: OnKind::Filter as i32,
-            triggers: vec![crate::TriggerKind::PayGate.as_cel_i64()],
+            triggers: vec![crate::TriggerKind::PayGate.spelling().into_owned()],
             pre: pre.map(str::to_string),
             has_guard,
             messages: vec![],

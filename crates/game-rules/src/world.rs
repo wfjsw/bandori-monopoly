@@ -1023,9 +1023,9 @@ pub trait CardWorld: Clone + 'static {
     /// Take one recipient out of settlement; the effect still settles for the rest.
     fn set_trigger_spare(&mut self, seat: i32);
     /// Append a declared effect to the current chain link, naming its recipient
-    /// now -- at declaration, not at settlement. `kind` is a `TriggerKind` wire
-    /// value.
-    fn declare_trigger_effect(&mut self, kind: i64, target: i32, from: i32, tile: i32, value: i32);
+    /// now -- at declaration, not at settlement. `kind` is the `TriggerKind`
+    /// wire **spelling**.
+    fn declare_trigger_effect(&mut self, kind: &str, target: i32, from: i32, tile: i32, value: i32);
     /// `t.Card == id` -- is this trigger about that card?
     fn trig_card_is(&self, id: &str) -> i32;
     /// `t.Buy.Price` -- rewrite the quoted price (the `BuyAdd` / `BuyMul` /

@@ -349,9 +349,9 @@ impl CardWorld for TestWorld {
     fn set_trigger_spare(&mut self, seat: i32) {
         self.trigger.spare(seat);
     }
-    fn declare_trigger_effect(&mut self, kind: i64, target: i32, from: i32, tile: i32, value: i32) {
+    fn declare_trigger_effect(&mut self, kind: &str, target: i32, from: i32, tile: i32, value: i32) {
         self.trigger.declare(game_core::engine::rules::Effect {
-            kind: card_sdk::abi::TriggerKind::from_cel_i64(kind).spelling().into_owned(),
+            kind: kind.to_string(),
             target,
             from,
             tile,

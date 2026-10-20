@@ -59,8 +59,8 @@ pub const STATUS_STUN: CardDef = CardDef::new(
     // are **different frozen keys** on the same gate. `gate_msgs` is the play
     // path; `gate_skip_msgs` is the skip path. Host `gate_refusal_msg` reads
     // the play table; the turn-skip site should read the skip table.
-    .gate_msgs(&[(FilterKind::ActGate.as_cel_i64() as i32, "err.play_stunned")])
-    .gate_skip_msgs(&[(FilterKind::ActGate.as_cel_i64() as i32, "log.stunned_skip")])
+    .gate_msgs(&[(FilterKind::ActGate.gate_id(), "err.play_stunned")])
+    .gate_skip_msgs(&[(FilterKind::ActGate.gate_id(), "log.stunned_skip")])
     // 「（此卡可在眩晕时打出）」 cards name this prop; the engine skips the
     // act-gate check for them (`CardRules::card_act_exemption`).
     .exemption_prop(bandori_std::prop::PLAYABLE_STUNNED);
