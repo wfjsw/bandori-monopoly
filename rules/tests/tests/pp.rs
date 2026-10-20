@@ -814,6 +814,41 @@ fn jennifer_pass_agency_pays_and_grants_ranger() {
     );
 }
 
+/// 规则书[持续]: 「依次进行以下操作」 -- 1 pay, 2 fans, 3 [移除] *then* the
+/// Pastel Ranger. The removal must not precede the money or the fans.
+#[test]
+fn jennifer_runs_its_steps_in_printed_order() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["PP:找回珍妮弗"]);
+    t.play(0, "PP:找回珍妮弗").unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("jennifer") {
+            let _ = t.answer(0, 0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(t.on_field(1, "PP:找回珍妮弗"), "{:?}", t.field_ids(1));
+    t.begin_turn(1);
+    walk_onto(&mut t, 1, 3, 6); // path 4,5,6 passes 偶像经纪公司 (5)
+    let keys = t.recent_keys(40);
+    let idx = |k: &str| {
+        keys
+            .iter()
+            .position(|x| x == k)
+            .unwrap_or_else(|| panic!("{k} missing from {keys:?}"))
+    };
+    // 1 「[使用者][支付][拥有者]400资金」 -> `log.pay`
+    // 3 「此卡[移除]」 -> `log.outcome.unplace`
+    // 3 「将1张…Ranger加入[使用者]手卡」 -> `jennifer_ranger`
+    let pay = idx("log.pay");
+    let gone = idx("log.outcome.unplace");
+    let ranger = idx("cards:card-pp.jennifer_ranger");
+    assert!(pay < gone, "pay (step 1) must precede the [移除] (step 3): {keys:?}");
+    assert!(gone < ranger, "[移除] must precede the Ranger add: {keys:?}");
+}
+
 // ============================================================ PP:[衍生]魔法战队Pastel✽Ranger
 
 /// 规则书: 「仅在你的绝对距离30-“粉丝数量”格内有你拥有房的格子时可使用。」
