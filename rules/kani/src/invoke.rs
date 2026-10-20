@@ -311,7 +311,10 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
                 hook_name.is_empty()
                     || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
-            (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
+            // Gates are `On::FilterValue(..., FilterBody::Gate)` only; the
+            // pure-decision `On::FilterFlag` (PaySplitChoose / PayCombinedCancel)
+            // is not a gate.
+            (KindTag::Gate, On::FilterValue(kinds, _, _, card_sdk::FilterBody::Gate(..))) => {
                 hook_name.is_empty()
                     || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
@@ -319,7 +322,7 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
                 hook_name.is_empty()
                     || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
-            (KindTag::DiceRollPlan, On::FilterValue(kinds, ..)) => {
+            (KindTag::DiceRollPlan, On::FilterValue(kinds, _, _, card_sdk::FilterBody::Plan(..))) => {
                 hook_name.is_empty()
                     || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
@@ -548,6 +551,8 @@ pub fn filter_kind_only_idx(
 }
 
 /// First `On::FilterFlag` of card `idx` matching `want` (true = keep).
+/// Pure-decision only (PaySplitChoose / PayCombinedCancel); gates moved to
+/// [`filter_gate_kind_only_idx`].
 #[inline(always)]
 pub fn filter_flag_kind_only_idx(
     idx: usize,
@@ -575,6 +580,68 @@ pub fn filter_flag_kind_only_idx(
         }
     }
     fail_no_kind("FilterFlag")
+}
+
+/// First `On::FilterValue(..., FilterBody::Gate)` of card `idx` matching
+/// `want`. Returns the rewritten [`card_sdk::GateValue`].
+#[inline(always)]
+pub fn filter_gate_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::FilterKind,
+    player: i32,
+    value: card_sdk::GateValue,
+) -> card_sdk::GateValue {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::FilterValue(kinds, _, _, card_sdk::FilterBody::Gate(run)) = on {
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == want {
+                    hit = true;
+                }
+            }
+            if hit {
+                return run(player, value);
+            }
+        }
+    }
+    fail_no_kind("Gate")
+}
+
+/// First `On::FilterValue(..., FilterBody::Plan)` of card `idx` matching
+/// `want`. Returns the rewritten [`card_sdk::PlanValue`].
+#[inline(always)]
+pub fn filter_plan_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::FilterKind,
+    player: i32,
+    value: card_sdk::PlanValue,
+) -> card_sdk::PlanValue {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::FilterValue(kinds, _, _, card_sdk::FilterBody::Plan(run)) = on {
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == want {
+                    hit = true;
+                }
+            }
+            if hit {
+                return run(player, value);
+            }
+        }
+    }
+    fail_no_kind("DiceRollPlan")
 }
 
 /// Skill entry: alias of [`play_idx`].

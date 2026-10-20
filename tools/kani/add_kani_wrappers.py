@@ -5,8 +5,14 @@ Body shapes (ABI v75+):
   Play / Counteract / Action / Settle / Mortgage / Redeem / Buy / Build
       `fn(player_id) -> Asked`
   Filter      `fn(player_id, value: i32) -> i32`
-  FilterFlag  `fn(player_id, value: i32) -> bool`
-  FilterValue `fn(player_id, v: FilterValue) -> FilterValue`
+  FilterFlag  `fn(player_id, value: i32) -> bool`  (pure-decision only)
+  FilterValue `FilterBody::Arm(fn)` -- typed payload bodies:
+      Plan      `fn(i32, PlanValue) -> PlanValue`
+      Deal      `fn(i32, DealValue) -> DealValue`
+      Gate      `fn(i32, GateValue) -> GateValue`
+      Redirect  `fn(i32, RedirectValue) -> RedirectValue`
+      PayAdd    `fn(i32, PayAddValue) -> PayAddValue`
+      Roll      `fn(i32, RollValue) -> RollValue`
 
 The wrapper is a pub `NAME_kani` that direct-calls the (possibly private)
 body, so rules-kani trampolines can invoke it without a `code*` IF-chain.
@@ -48,12 +54,14 @@ pub fn {name}_kani(player_id: i32, value: i32) -> bool {{
 }}
 """
 
-FILTER_VALUE = """#[cfg(kani)]
+def _payload(payload: str) -> str:
+    return f"""#[cfg(kani)]
 #[inline(always)]
-pub fn {name}_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {{
-    {name}(player_id, v)
+pub fn {{name}}_kani(player_id: i32, v: card_sdk::{payload}) -> card_sdk::{payload} {{
+    {{name}}(player_id, v)
 }}
 """
+
 
 SHAPE = {
     "Play": ASKED,
@@ -66,7 +74,13 @@ SHAPE = {
     "Build": ASKED,
     "Filter": FILTER,
     "FilterFlag": FILTER_FLAG,
-    "FilterValue": FILTER_VALUE,
+    "FilterValue/Plan": _payload("PlanValue"),
+    "FilterValue/Deal": _payload("DealValue"),
+    "FilterValue/Gate": _payload("GateValue"),
+    "FilterValue/Redirect": _payload("RedirectValue"),
+    "FilterValue/PayAdd": _payload("PayAddValue"),
+    "FilterValue/Roll": _payload("RollValue"),
+    "FilterValue": _payload("PlanValue"),
 }
 
 
@@ -109,6 +123,15 @@ def parse_on_bodies(src: str) -> list[tuple[str, str]]:
         last = parts[-1]
         if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", last):
             bodies.append((variant, last))
+            continue
+        # Typed payload: `FilterBody::Arm(fn)` (path prefix ok).
+        m = re.fullmatch(
+            r"(?:[A-Za-z_][A-Za-z0-9_]*::)*FilterBody::([A-Za-z_][A-Za-z0-9_]*)"
+            r"\(([A-Za-z_][A-Za-z0-9_]*)\)",
+            last,
+        )
+        if m and variant == "FilterValue":
+            bodies.append((f"FilterValue/{m.group(1)}", m.group(2)))
     return bodies
 
 

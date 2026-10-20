@@ -94,19 +94,34 @@ fn bodies_in(src: &str) -> Vec<String> {
         }
         parts.push(inner[cur..].trim());
         if let Some(last) = parts.iter().rev().find(|p| !p.trim().is_empty()) {
-            let last = last.trim();
-            if !last.is_empty()
-                && last
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
-                && last.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
-            {
-                bodies.push(last.to_string());
+            if let Some(body) = body_ident(last.trim()) {
+                bodies.push(body);
             }
         }
         search_from = j + 1;
     }
     bodies
+}
+
+/// Last-arg body: a bare ident, or `FilterBody::Arm(ident)` (path prefix ok).
+fn body_ident(last: &str) -> Option<String> {
+    let is_ident = |s: &str| {
+        !s.is_empty()
+            && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && s.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
+    };
+    if is_ident(last) {
+        return Some(last.to_string());
+    }
+    if last.ends_with(')') {
+        if let Some(open) = last.rfind('(') {
+            let inner = last[open + 1..last.len() - 1].trim();
+            if is_ident(inner) {
+                return Some(inner.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Every `On::*` body ident in `file` must have a `pub fn {body}_kani(` in

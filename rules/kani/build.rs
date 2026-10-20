@@ -332,8 +332,28 @@ fn gen_body_dispatch() {
                     let call = match variant.as_str() {
                         "Filter" => format!("{{ let _ = {target}(player, 0); Ok(()) }}"),
                         "FilterFlag" => format!("{{ let _ = {target}(player, 0); Ok(()) }}"),
+                        // Typed payload bodies: `FilterBody::Arm(fn)`. The arm
+                        // picks the default payload so the trampoline type-checks.
+                        "FilterValue/Plan" => format!(
+                            "{{ let _ = {target}(player, card_sdk::PlanValue::default()); Ok(()) }}"
+                        ),
+                        "FilterValue/Deal" => format!(
+                            "{{ let _ = {target}(player, card_sdk::DealValue::default()); Ok(()) }}"
+                        ),
+                        "FilterValue/Gate" => format!(
+                            "{{ let _ = {target}(player, card_sdk::GateValue::default()); Ok(()) }}"
+                        ),
+                        "FilterValue/Redirect" => format!(
+                            "{{ let _ = {target}(player, card_sdk::RedirectValue::default()); Ok(()) }}"
+                        ),
+                        "FilterValue/PayAdd" => format!(
+                            "{{ let _ = {target}(player, card_sdk::PayAddValue::default()); Ok(()) }}"
+                        ),
+                        "FilterValue/Roll" => format!(
+                            "{{ let _ = {target}(player, card_sdk::RollValue::default()); Ok(()) }}"
+                        ),
                         "FilterValue" => format!(
-                            "{{ let _ = {target}(player, card_sdk::abi::FilterValue::default()); Ok(()) }}"
+                            "{{ let _ = {target}(player, card_sdk::PlanValue::default()); Ok(()) }}"
                         ),
                         _ => format!("{target}(player)"),
                     };
@@ -486,19 +506,52 @@ fn parse_on_bodies(
         // take the last **non-empty** ident instead (class B: aya_with's
         // `at_start,` / `on_pay,` trailing commas made the dispatch emit
         // `fail_entry_oob` for every entry).
+        //
+        // Typed filter bodies are `FilterBody::Arm(fn)` (or a path to it);
+        // unwrap to the fn ident and tag the variant with the arm so the
+        // trampoline picks the matching payload default.
         if let Some(last) = parts.iter().rev().find(|p| !p.trim().is_empty()) {
-            let last = last.trim();
-            if last
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-                && last.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
-            {
-                bodies.push((variant.clone(), last.to_string()));
+            if let Some((body, arm)) = body_ident(last.trim()) {
+                let mut v = variant.clone();
+                if variant == "FilterValue" {
+                    if let Some(arm) = arm {
+                        v = format!("FilterValue/{arm}");
+                    }
+                }
+                bodies.push((v, body));
             }
         }
         search_from = j + 1;
     }
     bodies
+}
+
+/// Last-arg body: a bare ident, or `FilterBody::Arm(ident)` (path prefix ok).
+/// Returns `(body_fn, filter_body_arm)`.
+fn body_ident(last: &str) -> Option<(String, Option<String>)> {
+    let is_ident = |s: &str| {
+        !s.is_empty()
+            && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && s.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
+    };
+    if is_ident(last) {
+        return Some((last.to_string(), None));
+    }
+    // `…FilterBody::Plan(on_plan)` / `FilterBody::Gate(lock_hill)`
+    if last.ends_with(')') {
+        if let Some(open) = last.rfind('(') {
+            let inner = last[open + 1..last.len() - 1].trim();
+            if is_ident(inner) {
+                let head = &last[..open];
+                if let Some(arm) = head.rsplit("::").next() {
+                    if is_ident(arm) {
+                        return Some((inner.to_string(), Some(arm.to_string())));
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Parse `pub const BAND_START: [usize; 18] = [ … ];` from `invoke.rs`.
