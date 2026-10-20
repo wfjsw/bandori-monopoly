@@ -133,9 +133,6 @@
   --z-hosted: 60;
   --z-toast: 80;
   --z-console: 1000;
-  /* iOS status-bar scrim (Stage `.statusScrim`): over every surface so the
-     white glyphs stay readable on the light backdrop, under the rotate cover. */
-  --z-status-scrim: 1500;
 
   font-family: "BDRounded", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-weight: 500;

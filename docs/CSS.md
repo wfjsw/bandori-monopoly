@@ -140,29 +140,53 @@ below the strip in one move. Floating transport: both are `0`, no offset.
 
 ### Safe area: what respects it and what does not
 
-The stage is laid out against the **large** viewport (`100lvw` / `100lvh`), not
-the visual one: the visual viewport is shorter in portrait (Safari's address
-bar, and the iOS PWA's status-bar strip) than in landscape, so sizing to it
-made forced rotation lay out on a different canvas than a real turn of the
-phone and left the cutout band drawing nothing. The large viewport is the
-whole screen in both orientations, so `rotate(90deg)` and turning the phone
-for real produce the same stage box. `index.html` claims the home-screen shell
-with `apple-mobile-web-app-status-bar-style=black-translucent` so the PWA is
-fullscreen in portrait too; Stage paints a screen-space `.statusScrim` over
-the top inset to keep the white status-bar glyphs readable.
+The stage is laid out against the **layout viewport** (`windowBox` in
+`stageBox.ts`) -- the box the `position: fixed` placer is centered in. Nothing
+larger: `window.screen` and `100lvh` both exceed it while browser chrome is
+showing (Safari's address bar, the iOS PWA's status-bar strip), and a stage
+sized to them overflows the box it is centered in -- it grows past the cutout
+on one side and leaves a blank border on the other. What is outside the layout
+viewport is the browser's chrome, not ours to fill; when the chrome hides, the
+layout viewport grows and the stage grows with it.
+
+One exception: **forced rotation on an iPhone** (`stageBox` `screenLong`). Held
+upright, the fixed box runs from the screen top (under the island) but stops
+above Safari's bottom toolbar / the home-indicator strip, and Safari paints
+that strip with the bare page colour. There the stage takes the screen's full
+long side *and* is anchored at the box's top (`cx` / `cy` place the placer's
+centre; they are the box's middle everywhere else), so it spans the physical
+screen island to home indicator. Both halves matter: a screen-sized stage left
+centred in the box overflowed past the island and still left the strip. The
+stretch past the box counts as hardware for the controls on that stage edge
+(`--safe-right` under the turn), and the backdrop plate runs past the box on
+every side so no bare page colour shows behind the stage's gaps. Android is
+left on the box -- its fixed box already ends at the screen bottom.
+
+`index.html` claims the home-screen shell with
+`apple-mobile-web-app-status-bar-style=black-translucent`, which puts the
+webview on the whole device in both orientations (re-add the icon after that
+meta changes -- iOS freezes web-app metas at add time).
+
+`?vdiag=1` overlays a live readout of every viewport (screen, inner, visual,
+the fixed box, `lvh` / `svh`, safe-area insets, the placer's box) for checking
+this geometry on a real handset, which no simulator reproduces.
 
 The stage's edges are the real screen edges on both axes: the game runs edge
 to edge, and insetting the box for the cutout left the retractable strips (the
 field row, the hand) hanging short of the border. What clears the hardware is
-the **controls**, padding by `--safe-*` (the safe-area inset on that stage edge
-plus the landscape top touch dead zone, already mapped through the forced
-rotation and divided by the fit scale). So the split is: **retractable /
-edge-docked strips do not respect the safe area** (they must connect to the
-real boundary); **controls do**. Today that is `TopBar` (the whole bar shifts
-in on every edge), Board `.body` (the side columns clear the cutout), the left
-column's actions row and the prompt sheet's window body (`padding-bottom`) --
-the sheet's *surface* still runs to the screen edge. A new edge-anchored
-control follows the controls, not the strips.
+the **tappable pieces**, padding by `--safe-*` (the safe-area inset on that
+stage edge plus the landscape top touch dead zone, already mapped through the
+forced rotation and divided by the fit scale) -- and *only* those. Shifting a
+whole scene or column instead (the first pass did) pushes every element away
+from the edge and leaves the cutout band as bare backdrop.
+
+So the split is: **surfaces run under the cutout** (panel backs, seat cards,
+art, the retractable strips -- any full-bleed shape a normal app would draw
+behind the status bar); **controls do not**. Today that is `TopBar`'s back /
+menu / crumb / status (the bar itself stays flush), the left column's actions
+row (`left` + `bottom`), and the prompt sheet's window body (`padding-bottom`;
+its *surface* still runs to the screen edge). A new edge-anchored control
+follows the controls; a new surface follows the surfaces.
 
 ## (b) Shared primitives — `ui/primitives.module.css`
 
