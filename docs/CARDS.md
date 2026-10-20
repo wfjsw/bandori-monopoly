@@ -159,15 +159,22 @@ const *and* a `ChainKind` value. From the current codebase:
 
 `DiceRollBefore`, `Effect`, `Bankrupt`, `Card`, `Event`, `MoveBefore`,
 `MoveAfter`, `Pass`, `PassBefore`, `PassTile`, `Settle`, `SettleBefore`,
-`SettleBody`, plus the rule-defined `PassRewardAffected` (26) and `SkillUsed`
-(74). `Effect` (72) is the canonical example. No Filter kind is a ChainKind.
+`SettleBody`, `MarkerSpent`, `CardUsed`, `HouseAdded`, plus the rule-defined
+`PassRewardAffected` (26) and `ChargePaying` (78). `Effect` (72) is the
+canonical example. No Filter kind is a ChainKind.
 
 **Rule-defined kinds** live in `rules/bandori-std/src/kind.rs` and join the
-Action side today:
+Action side today. Only four are genuinely rules/-emitted:
 
 ```rust
-pub const PassRewardAffected: ActionKind = ActionKind(PASS_REWARD_AFFECTED); // 26
+pub const PassRewardAffected: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 26));
+pub const Exile: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 21));
+pub const ChargePaying: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 78));
+pub const FansFlip: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 107));
 ```
+
+The three universal raises (`markerSpent` 73 / `cardUsed` 74 / `houseAdded` 75)
+are engine kinds (`card_sdk::abi::ActionKind`), not ruleset vocabulary.
 
 A future rule-defined **FILTER** kind would declare `FilterKind(id)` there
 **and** teach `TriggerKind::is_filter()` (or a `CUSTOM_FILTERS` table beside
@@ -239,8 +246,9 @@ when the rulebook puts a 「可」 offer on the reshape.
 opt-in prompts and Filter bodies cannot. It stays on `On::Action`.
 
 Everything else is `On::Action` (turn/pass/draw/settle/buy/build/counter/…
-event points, including the custom bandori-std kinds `PassRewardAffected` /
-`FireSpent` / `SkillUsed` / `HouseAdded`).
+event points, including the engine kinds `MarkerSpent` / `CardUsed` /
+`HouseAdded` and the ruleset kinds `PassRewardAffected` / `Exile` /
+`ChargePaying` / `FansFlip`).
 
 **Kind/variant agreement is a ruleset-build error:** a Filter* may only list
 filter kinds and a `On::Action` only non-filter kinds
