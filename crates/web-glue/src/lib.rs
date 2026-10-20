@@ -731,6 +731,37 @@ fn rules() -> Result<Arc<dyn CardRules>, JsError> {
     })
 }
 
+// ------------------------------------------------------------------ frame
+
+/// One seat's frame: the same shape the server's `match` frame uses.
+/// `state` is passed in rather than recomputed because `public_state()` is
+/// not member-dependent -- a batch of frames (`views`) pays for it once.
+fn frame(
+    m: &game_core::engine::Match,
+    member: i32,
+    state: &game_core::state::MatchState,
+) -> serde_json::Value {
+    let player_id = state.player_of(member);
+    // Typed twin of `view_extra`: same fields, without building an
+    // intermediate `serde_json::Value` and cloning its members back out
+    // just to re-embed them here. `view()` / `views()` are the per-dirty-tick
+    // hot path (one call per human seat plus one per advanced bot).
+    let extra = m.view_extra_typed(member);
+    serde_json::json!({
+        "state": state,
+        "hand": m.hand_of(member),
+        "handNotes": m.hand_notes_of(member),
+        "draw": m.draw_of(member),
+        "you": member,
+        "playerId": player_id,
+        "aiAnswer": extra.ai_answer,
+        "playable": extra.playable,
+        "estCost": extra.est_cost,
+        "tileQuotes": m.tile_quotes(member),
+        "skills": extra.skills,
+    })
+}
+
 // ------------------------------------------------------------------ solo match
 
 /// A match running entirely in the browser (solo mode vs bots). Wraps a
@@ -869,26 +900,29 @@ impl SoloMatch {
     /// the per-viewer board caption data ([`Match::tile_quotes`]).
     pub fn view(&self, member: i32) -> String {
         let m = self.m.inner();
+        json(&frame(m, member, &m.state()))
+    }
+
+    /// Frames for several seats in one call. `state` is computed and serialised
+    /// once and shared by every frame -- `public_state()` is not member-dependent,
+    /// so a dirty pump that wants the human seat plus N advanced bots pays for it
+    /// once instead of N+1 times.
+    ///
+    /// `members_json` is a JSON array of member indices (`[1, 2, 3]`).
+    /// Returns a JSON array of `MatchView` objects in the same order, each with
+    /// its own `you` / hand / extras fields and the shared `state`.
+    pub fn views(&self, members_json: &str) -> Result<String, JsError> {
+        let members: Vec<i32> = parse("members", members_json)?;
+        let m = self.m.inner();
         let state = m.state();
-        let player_id = state.player_of(member);
-        // Typed twin of `view_extra`: same fields, without building an
-        // intermediate `serde_json::Value` and cloning its members back out
-        // just to re-embed them here. `view()` is the per-dirty-tick hot path
-        // (one call per human seat plus one per advanced bot).
-        let extra = m.view_extra_typed(member);
-        json(&serde_json::json!({
-            "state": state,
-            "hand": m.hand_of(member),
-            "handNotes": m.hand_notes_of(member),
-            "draw": m.draw_of(member),
-            "you": member,
-            "playerId": player_id,
-            "aiAnswer": extra.ai_answer,
-            "playable": extra.playable,
-            "estCost": extra.est_cost,
-            "tileQuotes": m.tile_quotes(member),
-            "skills": extra.skills,
-        }))
+        let frames: Vec<serde_json::Value> = members
+            .iter()
+            .map(|&member| frame(m, member, &state))
+            .collect();
+        // One `json()` over the whole array: a single `serde_json::to_string`,
+        // not per-frame strings concatenated (the shared `state` would then be
+        // paid for once per frame again, in the writer).
+        Ok(json(&frames))
     }
 
     pub fn events_since(&self, last_id: i32) -> String {
@@ -1027,6 +1061,12 @@ impl ReplayMatch {
     /// The same frame shape as [`SoloMatch::view`]. `member` 0 is the
     /// spectator: no hand, no draw, no per-viewer extras. `tileQuotes` is
     /// still filled -- the seat-independent reading.
+    ///
+    /// The spectator branch is an explicit special case and must not go
+    /// through [`frame`]: `view_extra_typed` on an unknown member returns
+    /// `ViewExtra::default()`, whose vectors serialise to `[]`, not the
+    /// `null`s this frozen replay shape (`docs/REPLAY.md` §9.3) carries for
+    /// `playable` / `estCost` / `skills`.
     pub fn view(&self, member: i32) -> String {
         let m = self.rp.match_ref();
         let state = m.state();
@@ -1045,21 +1085,7 @@ impl ReplayMatch {
                 "skills": serde_json::Value::Null,
             }));
         }
-        let player_id = state.player_of(member);
-        let extra = m.view_extra_typed(member);
-        json(&serde_json::json!({
-            "state": state,
-            "hand": m.hand_of(member),
-            "handNotes": m.hand_notes_of(member),
-            "draw": m.draw_of(member),
-            "you": member,
-            "playerId": player_id,
-            "aiAnswer": extra.ai_answer,
-            "playable": extra.playable,
-            "estCost": extra.est_cost,
-            "tileQuotes": m.tile_quotes(member),
-            "skills": extra.skills,
-        }))
+        json(&frame(m, member, &state))
     }
 
     /// Events the replayer has produced so far (the full stream, not the

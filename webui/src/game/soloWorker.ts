@@ -57,6 +57,17 @@ let lastSavePush = 0;
 let viewJson = "";
 /** Last pushed per-seat frame (JSON) for the 进阶 seats the page drives. */
 const botJson = new Map<number, string>();
+/**
+ * Members of the 进阶 seats the page drives, requested beside the human seat in
+ * the batched `views()` call. Seeded from the human frame (which carries every
+ * seat), so on the very first pump `botSeats` is empty and only the human frame
+ * comes back -- advanced bots get their first frame one pump (~50 ms) later.
+ * That lag is acceptable: `session.ts` `driveAdvancedBots` already does
+ * `if (!v) continue` for a seat with no frame. Seats only ever leave the set
+ * mid-match (bankrupt / left), never join, so the request list does not grow
+ * unbounded.
+ */
+const botSeats = new Set<number>();
 let haveView = false;
 
 function post(msg: unknown): void {
@@ -158,6 +169,7 @@ function openMatch(m: Match, eventCursor: number): void {
   last = eventCursor;
   viewJson = "";
   botJson.clear();
+  botSeats.clear();
   haveView = false;
   dirty = false;
   lastSavePush = 0;
@@ -201,6 +213,15 @@ function tick(): void {
  * posted only when its JSON differs from the last push. The pre-worker pump
  * re-serialised every 进阶 seat's frame every 50 ms -- this is the same set of
  * frames, but only when they change.
+ *
+ * One batched `views()` covers the human seat plus every known 进阶 bot:
+ * `public_state()` is not member-dependent, so the shared `state` is computed
+ * and serialised once instead of N+1 times. Discovery lag: on the very first
+ * pump `botSeats` is empty, so only the human frame comes back and `botSeats`
+ * is seeded for the next pump -- advanced bots get their first frame one pump
+ * (~50 ms) later. `session.ts` `driveAdvancedBots` already does `if (!v)
+ * continue` for a seat with no frame. Seats only ever leave the set mid-match
+ * (bankrupt / left), never join, so the request list does not grow unbounded.
  */
 function pump(forceSave = false): void {
   if (!match) return;
@@ -211,13 +232,20 @@ function pump(forceSave = false): void {
     dirty = true;
     haveView = true;
     const push: SoloPush = { push: "sync", events: evs };
-    const v = JSON.parse(match.view(you)) as MatchView;
+    const members = [you, ...botSeats];
+    const frames = JSON.parse(match.views(JSON.stringify(members))) as MatchView[];
+    const v = frames[0];
     const j = JSON.stringify(v);
     if (j !== viewJson) {
       viewJson = j;
       push.view = v;
     }
-    const bots = botFrames(v);
+    // Seed / re-check `botSeats` from the human frame (it carries every seat)
+    // before filtering the batched bot frames: a seat that left the predicate
+    // since the request must not be pushed, and its diff cache must go so the
+    // next request list shrinks.
+    refreshBotSeats(v);
+    const bots = botFrames(frames.slice(1));
     if (bots.length) push.bots = bots;
     if (match.ended()) push.ended = true;
     post(push);
@@ -226,16 +254,36 @@ function pump(forceSave = false): void {
   if (forceSave || (dirty && now - lastSavePush >= SAVE_MS)) pushSave();
 }
 
-/** The 进阶 seats' frames, only where the JSON moved since the last push. */
-function botFrames(main: MatchView): { member: number; view: MatchView }[] {
-  const out: { member: number; view: MatchView }[] = [];
+/**
+ * The 进阶 seats the page drives, read off the human frame (which carries every
+ * seat). Prunes `botJson` for seats that left the predicate (bankrupt / left)
+ * so the request list does not accumulate. Seats never join mid-match.
+ */
+function refreshBotSeats(main: MatchView): void {
+  botSeats.clear();
   for (const p of main.state.players) {
     if (!(p.bot && p.mentality === "advanced" && !p.ai && !p.bankrupt && !p.left)) continue;
-    const v = JSON.parse(match!.view(p.member)) as MatchView;
+    botSeats.add(p.member);
+  }
+  for (const k of [...botJson.keys()]) {
+    if (!botSeats.has(k)) botJson.delete(k);
+  }
+}
+
+/**
+ * The 进阶 seats' frames, only where the JSON moved since the last push.
+ * `frames` are the non-human seats returned by the batched `views()` call;
+ * membership is checked against the fresh `botSeats` so a seat that left the
+ * predicate mid-pump is not pushed.
+ */
+function botFrames(frames: MatchView[]): { member: number; view: MatchView }[] {
+  const out: { member: number; view: MatchView }[] = [];
+  for (const v of frames) {
+    if (!botSeats.has(v.you)) continue;
     const j = JSON.stringify(v);
-    if (j !== botJson.get(p.member)) {
-      botJson.set(p.member, j);
-      out.push({ member: p.member, view: v });
+    if (j !== botJson.get(v.you)) {
+      botJson.set(v.you, j);
+      out.push({ member: v.you, view: v });
     }
   }
   return out;
