@@ -2284,11 +2284,12 @@ pub fn arm_players_on_count(a: Args) -> i64 {
 /// instances whose owner == `player_id` run `on_fans_flip_kani`. Cancelled /
 /// aborted (`0`) leaves the caller's counters untouched.
 pub fn arm_raise(a: Args) -> i64 {
-    let [player_id, kind, value, ..] = a;
+    let [player_id, kp, kl, value, ..] = a;
     // Nested trigger (matches `wasm_rules::raise_core`): save the outer
     // payload, install the raise's, run listeners, restore. `arm_trig_value`
     // answers `pay_amount` (the hostfns `trigger().value` twin); `trig_value`
     // is the ir_fill / fixture view of the same number.
+    let kind_sp: &'static str = crate::intern::resolve_str(name_id(kp, kl));
     let saved = world::with_world(|w| {
         (
             w.trig_kind,
@@ -2299,7 +2300,7 @@ pub fn arm_raise(a: Args) -> i64 {
         )
     });
     world::with_world_mut(|w| {
-        w.trig_kind = kind;
+        w.trig_kind = kind_sp;
         w.trig_player = player_id;
         w.trig_value = value;
         w.pay_amount = value;
@@ -2308,7 +2309,7 @@ pub fn arm_raise(a: Args) -> i64 {
     let mut settled = 1i64;
     #[cfg(all(kani, feature = "skills-groups"))]
     {
-        if kind == bandori_std::kind::FANS_FLIP {
+        if kind_sp == "r:bandori:107" {
             settled = arm_raise_fans_flip(player_id, value);
         }
     }
@@ -2998,9 +2999,19 @@ pub fn arm_tok_names(a: Args) -> i64 {
     0
 }
 
+/// `trigger::kind()` — two-call out-buffer: write the spelling bytes.
 pub fn arm_trig_kind(a: Args) -> i64 {
-    let _ = a;
-    world::with_world(|w| w.trig_kind) as i64
+    let [p, n, ..] = a;
+    let sp = world::with_world(|w| w.trig_kind);
+    let bytes = sp.as_bytes();
+    if p == 0 {
+        return bytes.len() as i64;
+    }
+    if n < bytes.len() as i32 {
+        return bytes.len() as i64;
+    }
+    card_sdk::native::write(p, bytes);
+    bytes.len() as i64
 }
 
 pub fn arm_trig_move_main(a: Args) -> i64 {
@@ -3013,9 +3024,23 @@ pub fn arm_trig_move_roll(a: Args) -> i64 {
     world::with_world(|w| w.move_snap.roll) as i64
 }
 
+/// `trigger::name()` — two-call out-buffer writing the interned name bytes.
 pub fn arm_trig_name(a: Args) -> i64 {
-    let _ = a;
-    world::with_world(|w| w.counter_name) as i64
+    let [p, n, ..] = a;
+    let id = world::with_world(|w| w.counter_name);
+    let bytes: &[u8] = if id == 0 {
+        &b""[..]
+    } else {
+        crate::intern::resolve(crate::intern::NameId(id as u16))
+    };
+    if p == 0 {
+        return bytes.len() as i64;
+    }
+    if n < bytes.len() as i32 {
+        return bytes.len() as i64;
+    }
+    card_sdk::native::write(p, bytes);
+    bytes.len() as i64
 }
 
 pub fn arm_trig_player(a: Args) -> i64 {

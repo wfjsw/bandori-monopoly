@@ -305,23 +305,23 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::Counteract, On::Counteract(..)) => true,
             (KindTag::Action, On::Action(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
             (KindTag::Filter, On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
             (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
             (KindTag::AtEnd, On::Action(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
             (KindTag::DiceRollPlan, On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
             }
             (KindTag::Settle, On::Settle(..)) => true,
             (KindTag::Mortgage, On::Mortgage(..)) => true,
@@ -660,34 +660,38 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 ///
 /// Parse `hook_name` to a [`card_sdk::abi::TriggerKind`] first (a `match` on
 /// literals that constant-folds when the caller passes `"PaySplitAdd"`), then
-/// an integer compare against `kinds`. Works for both [`card_sdk::abi::ActionKind`]
-/// and [`card_sdk::abi::FilterKind`] slices (same wire id space). The old
-/// `hook_kind_name(k) == hook_name` lowered to `memcmp` per arm (14 unwinds in
-/// the shave profile).
-fn hook_kind_matches<K: Copy>(kinds: &[K], id_of: fn(K) -> i32, hook_name: &str) -> bool {
+/// a `TriggerKind` equality against `kinds`. Works for both
+/// [`card_sdk::abi::ActionKind`] and [`card_sdk::abi::FilterKind`] slices
+/// (same wire id space). The old `hook_kind_name(k) == hook_name` lowered to
+/// `memcmp` per arm (14 unwinds in the shave profile).
+fn hook_kind_matches<K: Copy>(
+    kinds: &[K],
+    to_tk: fn(K) -> card_sdk::abi::TriggerKind,
+    hook_name: &str,
+) -> bool {
     let want = match hook_kind_parse(hook_name) {
-        Some(w) => w.as_cel_i64() as i32,
+        Some(w) => w,
         None => return false,
     };
     // Zero-loop (see `hook_kind_only_idx`).
     let mut hit = false;
     if let Some(&k0) = kinds.get(0) {
-        if id_of(k0) == want {
+        if to_tk(k0) == want {
             hit = true;
         }
     }
     if let Some(&k1) = kinds.get(1) {
-        if id_of(k1) == want {
+        if to_tk(k1) == want {
             hit = true;
         }
     }
     if let Some(&k2) = kinds.get(2) {
-        if id_of(k2) == want {
+        if to_tk(k2) == want {
             hit = true;
         }
     }
     if let Some(&k3) = kinds.get(3) {
-        if id_of(k3) == want {
+        if to_tk(k3) == want {
             hit = true;
         }
     }

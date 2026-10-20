@@ -25,7 +25,7 @@
 //!    declares flooring and ownership (the engine's `default_flags` no longer
 //!    names these keys).
 //! 4. `state::set_expires(p, key, Tick)` -- wear-off is item-carried.
-//! 5. `ctx::raise_after(p, "stay"|"stun"|"exile", 1)` -- post-commit raise with
+//! 5. `ctx::raise_after(p, RAISE_STAY|RAISE_STUN|RAISE_EXILE, 1)` -- post-commit raise with
 //!    the frozen event name as data.
 //! 6. `ctx::log_as` with `log.outcome.stay` / `stun` / `exile`.
 //!
@@ -46,7 +46,10 @@ pub const RAISE_STAY: &str = "stay";
 /// Post-commit raise name for a [晕眩] grant (frozen event wire).
 pub const RAISE_STUN: &str = "stun";
 /// Post-commit raise name for an [除外] grant (frozen event wire).
-pub const RAISE_EXILE: &str = "exile";
+/// Post-commit raise name for 「获得[除外]」. Must be the canonical
+/// `TriggerKind` spelling so `from_str` finds `bandori_std::kind::Exile`
+/// listeners -- the old `"exile"` never matched.
+pub const RAISE_EXILE: &str = "r:bandori:21";
 
 /// `log_as` the frozen grant outcome. `who` is the source (trigger actor),
 /// `target` the player who gained the layer.

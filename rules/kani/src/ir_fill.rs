@@ -288,8 +288,8 @@ pub const TILE_NAME_IDS: [i64; 60] = [
 /// documented default that matches `fill_window`'s "absent trigger" reading.
 #[derive(Clone, Copy, Debug)]
 pub struct TriggerOverlay {
-    /// Override `w.trig_kind` when set.
-    pub kind: Option<i32>,
+    /// Override `w.trig_kind` when set (wire spelling).
+    pub kind: Option<&'static str>,
     /// Override `w.trig_value` when set (e.g. a chained rewrite).
     pub value: Option<i64>,
     pub step: i64,
@@ -352,6 +352,8 @@ impl Default for TriggerOverlay {
 impl TriggerOverlay {
     /// Append a chain link `(kind, from, hits)`. Extra links beyond 4 are dropped
     /// (bounded overlay; fixtures stay under the cap).
+    /// Push a chain link. `kind` is `id_of(spelling)` (the same hash
+    /// `SetId::ChainKinds` keys on -- see `CondView::chain_kinds`).
     pub fn push_chain(&mut self, kind: i64, from: i64, hits: i64) {
         let n = self.chain_n as usize;
         if n < 4 {
@@ -774,8 +776,8 @@ pub fn fill_from_world(
     // ---- window scalars ----
     // Overlay wins only when explicitly set (non-default); otherwise the
     // World's trigger payload is the source. See module docs.
-    let kind = ov.kind.unwrap_or(w.trig_kind) as i64;
-    c.set_scalar(VarId::Kind, kind);
+    let kind = ov.kind.unwrap_or(w.trig_kind);
+    c.set_scalar(VarId::Kind, rules_cond_ir::ctx::id_of(kind));
     c.set_scalar(VarId::Actor, w.trig_player as i64);
     c.set_scalar(VarId::Target, w.trig_target as i64);
     let value = ov.value.unwrap_or(w.trig_value as i64);
@@ -880,6 +882,8 @@ pub fn fill_from_world(
         VarId::MoveDir,
         if ov.move_dir != 1 { ov.move_dir } else { move_dir },
     );
+    // No World/overlay field yet; `move.by_skill` reads false (absent move).
+    c.set_scalar(VarId::MoveBySkill, 0);
 
     // ---- chain (overlay; World has no chain list) ----
     let chain_n = (ov.chain_n as usize).min(4);
@@ -1229,7 +1233,7 @@ pub fn fill_for_guard(
             }
         };
     }
-    set_if!(VarId::Kind, ov.kind.unwrap_or(w.trig_kind) as i64);
+    set_if!(VarId::Kind, rules_cond_ir::ctx::id_of(ov.kind.unwrap_or(w.trig_kind)));
     set_if!(VarId::Actor, w.trig_player as i64);
     set_if!(VarId::Target, w.trig_target as i64);
     set_if!(VarId::Value, ov.value.unwrap_or(w.trig_value as i64));
@@ -1332,6 +1336,7 @@ pub fn fill_for_guard(
         VarId::MoveDir,
         if ov.move_dir != 1 { ov.move_dir } else { move_dir }
     );
+    set_if!(VarId::MoveBySkill, 0);
     let chain_n = (ov.chain_n as usize).min(4);
     set_if!(VarId::EffectCount, chain_n as i64);
     set_if!(VarId::Owner, owner as i64);

@@ -699,7 +699,10 @@ pub struct World {
     pub trig_value: i32,
     /// Last value written by `trig_set_pay_amount`.
     pub pay_amount: i32,
-    pub trig_kind: i32,
+    /// Trigger kind wire **spelling** (`TriggerKind::spelling`). `""` = none.
+    /// The `trig_kind` hostcall writes these bytes; the IR `kind` scalar stores
+    /// `id_of` of the same spelling (`VarTy::Str`).
+    pub trig_kind: &'static str,
     pub trig_target: i32,
     pub trig_tile: i32,
     pub trig_cancelled: bool,
@@ -834,7 +837,7 @@ impl World {
             trig_player: 0,
             trig_value: 0,
             pay_amount: 0,
-            trig_kind: 0,
+            trig_kind: "",
             trig_target: -1,
             trig_tile: -1,
             trig_cancelled: false,
