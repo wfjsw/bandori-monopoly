@@ -48,4 +48,8 @@
 }
 .stand .text { max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .stand .art { border-bottom-width: 6px; }
-.stand .title { font-size: 19px; }
+.stand .title { font-size: 19px; }.stand .text { font-size: 15px; line-height: 1.65; }
+.stand .title { font-size: 20px; }
+.stand .note { font-size: 13px; }
+.stand .tagChip { font-size: 13px; line-height: 20px; }
+.stand .pill { font-size: 15px; }

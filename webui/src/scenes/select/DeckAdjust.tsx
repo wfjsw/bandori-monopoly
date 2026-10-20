@@ -199,7 +199,7 @@ function Adjust({ sess, view, at, auto, me, c }: {
             <div className={s.glow} style={{ background: c.color }} />
             <Live2DStand key={D.artId(c)} id={D.artId(c)} className={s.stand} zoom={1.25} focusTop={0.13} headroom={0.103} />
             <div className={s.band}><BandMark band={c.group} /></div>
-            <div className={s.plate}><NamePlate c={c} width={350} /></div>
+            <div className={s.plate}><NamePlate c={c} width={276} /></div>
           </div>
 
           {/* Public picks this window is reacting to. Opponent decks stay hidden. */}
@@ -228,8 +228,6 @@ function Adjust({ sess, view, at, auto, me, c }: {
         </div>
 
         <div className={s.right}>
-          <p className={s.desc}>{tr("deckPick.desc")}</p>
-
           {/* Seeds are starting points, not submits. Incomplete ones are fine. */}
           <div className={s.seeds}>
             {seeds.map((r) => (
@@ -261,7 +259,7 @@ function Adjust({ sess, view, at, auto, me, c }: {
             </div>
             <div className={s.stripCards}>
               {Array.from({ length: SIZE }, (_, k) => (buffer[k]
-                ? <InspectCard key={k} id={buffer[k]} size="strip" onClick={cardTap(buffer[k])} title={tr("deck.remove")} />
+                ? <InspectCard key={k} id={buffer[k]} size="strip" className={s.stripCard} onClick={cardTap(buffer[k])} title={tr("deck.remove")} />
                 : <EmptySlot key={k} star={sceneImg("star5")} />))}
             </div>
             <div className={s.hint}>{tr("deckPick.hint")}</div>
@@ -288,12 +286,6 @@ function Adjust({ sess, view, at, auto, me, c }: {
               })}
             </div>
           </div>
-
-          <div className={s.foot}>
-            {ready
-              ? <div className={s.done}>{tr("select.deckDone")}</div>
-              : <Btn kind="pink" className={s.go} disabled={!canConfirm} onClick={() => void confirm()}>{tr("common.confirm")}</Btn>}
-          </div>
         </div>
 
         {/* Standing card preview (the board's CardStand): the one detail this
@@ -305,6 +297,12 @@ function Adjust({ sess, view, at, auto, me, c }: {
             ) : (
               <div className={s.standEmpty}>{tr("prompt.cardHover")}</div>
             )}
+          </div>
+
+          <div className={s.foot}>
+            {ready
+              ? <div className={s.done}>{tr("select.deckDone")}</div>
+              : <Btn kind="pink" className={s.go} disabled={!canConfirm} onClick={() => void confirm()}>{tr("common.confirm")}</Btn>}
           </div>
         </div>
       </div>

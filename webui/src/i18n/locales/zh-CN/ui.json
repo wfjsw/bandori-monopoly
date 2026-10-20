@@ -347,7 +347,6 @@
   "deck.slotTab": "卡组",
   "deck.title": "预组与卡组",
   "deckPick.deckWindow": "选卡时间",
-  "deckPick.desc": "从下面的卡池里组出本局的初始卡组（10 张，不能重复，[衍生] 不能放）。上方的预组 / 卡组是起点，可以再改。对局里的手牌会从这套里抽。",
   "deckPick.heading": "为「{{char}}」组初始卡组（10 张）",
   "deckPick.hint": "点卡牌加入或移出（触屏双击）；悬停或点按预览",
   "deckPick.picks": "已选角色",

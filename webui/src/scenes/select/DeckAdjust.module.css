@@ -9,7 +9,7 @@
    TopBar dropped to clear the top hardware (`max(16px, --safe-top)` vs the
    design's 16), so the character card keeps its design gap below the bar
    instead of sliding under the back button. 750 = the column's height. */
-.left { position: relative; flex: 0 0 390px; transform-origin: 0 100%; transform: scale(calc(1 - max(0, var(--safe-top-n, 0) - 16) / 750)); }
+.left { position: relative; flex: 0 0 300px; transform-origin: 0 100%; transform: scale(calc(1 - max(0, var(--safe-top-n, 0) - 16) / 750)); }
 .right { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
 /* TopBar right: steps pill (mode + 1 禁用 › 2 选角 › 3 选卡) + deck-window clock. */
@@ -30,14 +30,14 @@
 .clock b { font-size: 18px; color: var(--pink); }
 
 /* Left: character panel (Deck.tsx .char) over the known-picks list. */
-.char { position: absolute; left: 0; top: 0; width: 390px; height: 440px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.char { position: absolute; left: 0; top: 0; width: 300px; height: 440px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
 .glow { position: absolute; inset: 20% 10% -10%; border-radius: 50%; opacity: 0.25; filter: blur(50px); }
 .stand { position: absolute; left: 50%; top: 0; height: 100%; transform: translateX(-50%); }
 .band { position: absolute; left: 14px; top: 14px; }
-.band img { max-width: 190px; max-height: 80px; }
+.band img { max-width: 150px; max-height: 80px; }
 .plate { position: absolute; left: 12px; bottom: 12px; }
 
-.picks { position: absolute; left: 0; top: 455px; width: 390px; height: 295px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.picks { position: absolute; left: 0; top: 455px; width: 300px; height: 295px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .picksHead { color: var(--sub); font-size: 13px; font-weight: 700; padding-left: 4px; }
 .pickList { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 2px; }
 .seat { flex: none; display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 12px 0 8px; border-radius: var(--r-lg); background: var(--surface); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06); }
@@ -50,8 +50,7 @@
 .who b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who small { font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Right: short task note, then seeds / strip / pool / confirm. */
-.desc { flex: none; margin: 0; font-size: 12px; color: var(--sub); line-height: 1.5; }
+/* Right: seeds / strip / pool. Confirm sits under the standing preview. */
 
 .seeds { flex: none; display: flex; flex-wrap: wrap; gap: 8px; }
 .seed { display: inline-flex; align-items: baseline; gap: 8px; height: 32px; padding: 0 14px; border-radius: var(--r-pill); background: var(--surface); border: 2px solid var(--line); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
@@ -68,6 +67,10 @@
 .full { color: var(--pink); }
 .row { display: flex; gap: 10px; align-items: center; }
 .stripCards { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin-top: 6px; }
+/* Standard 2:3 card shape at whatever width the column gives (the shared strip
+   face is a fixed 118px tall, which squashed it on narrow screens). */
+.stripCards > .stripCard { height: auto; aspect-ratio: 2 / 3; min-width: 0; }
+.stripCards > .stripCard .title { font-size: clamp(10px, 1vw, 13px); }
 .hint { margin-top: 6px; font-size: 13px; color: var(--sub); }
 
 .pool { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; gap: 12px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; }
@@ -77,8 +80,8 @@
 .grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 164px); gap: 12px 10px; align-content: start; padding: 4px; }
 .kind { position: absolute; left: 10px; top: 10px; font-size: 12px; line-height: 20px; }
 
-.foot { flex: none; display: flex; align-items: center; justify-content: center; min-height: 72px; }
-.go { width: 100%; height: 72px; font-size: 30px; }
+.foot { flex: none; display: flex; align-items: center; justify-content: center; min-height: 64px; margin-top: 12px; }
+.go { width: 100%; height: 64px; font-size: 28px; }
 .done { font-size: 20px; font-weight: 700; color: var(--pink); }
 
 /* Standing card preview: the board's right-rail proportion (~280px), mirroring
