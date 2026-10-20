@@ -96,22 +96,26 @@ fn jennifer(player_id: i32) -> card_sdk::Asked {
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // `card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')`
     // is the pre.
+    //
+    // 规则书[持续]: 「依次进行以下操作」 -- the three steps run in printed order.
+    // 1 pay, 2 fans, 3 [移除] *then* the Pastel Ranger. The card is removed in
+    // step 3, after the money and the fans, not before them.
     let user = ctx::slot(player_id, SLOT_USER);
-    // 规则书[持续]3: 「此卡[移除]」 -- C# `H.Unplace(this, "gone", ...)`.
-    ctx::send_to_dest(ctx::Dest::Banished);
-    ctx::set_slot(player_id, SLOT_USER, -1);
-    // 规则书[持续]1: 「[使用者][支付][拥有者]400资金」
+    // 1. 「[使用者][支付][拥有者]400资金」
     if user >= 0 && !ctx::player_out(user) {
         ctx::transfer(user, player_id, 400, &Msg::new(key!("jennifer_pay")))?;
     }
-    // 规则书[持续]2: 「[使用者]获得1个正面的[P✽P粉丝]」 -- C# `H.GainFans(user, 1, up: true)`.
+    // 2. 「[使用者]获得1个正面的[P✽P粉丝]」 -- C# `H.GainFans(user, 1, up: true)`.
     if user >= 0 && !ctx::player_out(user) {
         let _ = fans::grant(user, 1, 0)?;
     }
-    // 规则书[持续]2: 「[拥有者]将一个[P✽P粉丝]变为正面」 -- C# `H.FlipUp(owner, 1)`.
+    // 2. 「[拥有者]将一个[P✽P粉丝]变为正面」 -- C# `H.FlipUp(owner, 1)`.
     // X = 1; the band card applies clause （2） when 1 > the owner's face-downs.
     let _ = fans::flip_up(player_id, 1)?;
-    // 规则书[持续]3: 「将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡」
+    // 3. 「此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡」
+    //    -- C# `H.Unplace(this, "gone", ...)`, and only after that the hand add.
+    ctx::send_to_dest(ctx::Dest::Banished);
+    ctx::set_slot(player_id, SLOT_USER, -1);
     if user >= 0 && !ctx::player_out(user) {
         ctx::add_to_hand(user, "PP:[衍生]魔法战队Pastel✽Ranger");
         ctx::log(

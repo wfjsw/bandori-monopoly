@@ -140,12 +140,20 @@ fn leave_current(s: &Server, sess: &Session) {
     let Some((rid, member)) = &sess.room else {
         return;
     };
-    // Mid-match, leaving forfeits: run that on the handle first, with the room
-    // lock dropped (the match has its own lock), then take the room lock for
-    // the bookkeeping.
-    let m = s.room(rid).and_then(|room| room.lock().unwrap().match_handle());
+    // Mid-match, leaving a **seat** forfeits: run that on the handle first,
+    // with the room lock dropped (the match has its own lock), then take the
+    // room lock for the bookkeeping. A spectator has no seat to forfeit.
+    let (m, spectating) = s
+        .room(rid)
+        .map(|room| {
+            let r = room.lock().unwrap();
+            (r.match_handle(), r.is_spectator(*member))
+        })
+        .unwrap_or((None, false));
     if let Some(m) = m {
-        let _ = m.act(*member, &game_core::net::NetMessage::act("leave"));
+        if !spectating {
+            let _ = m.act(*member, &game_core::net::NetMessage::act("leave"));
+        }
     }
     let dissolved = s
         .with_room(rid, |r| {
@@ -220,7 +228,7 @@ pub async fn create_room(
             persona: &persona,
             cn_id: &cn_id,
         };
-        let you = room.join(who, &req.password, "")?;
+        let you = room.join(who, &req.password, "", false)?;
         Ok::<_, ApiError>((room, you))
     })
     .await
@@ -239,9 +247,13 @@ pub async fn create_room(
 pub struct JoinReq {
     pub password: String,
     pub version: String,
+    /// Join as a watcher: no seat, allowed while the room is playing or full.
+    /// The password still applies. See [`game_core::net::RoomSpectator`].
+    pub spectate: bool,
 }
 
-/// `POST /api/rooms/{id}/join` -- join (or rejoin) a room.
+/// `POST /api/rooms/{id}/join` -- join (or rejoin) a room, as a seat or (with
+/// `spectate`) as a watcher.
 pub async fn join_room(
     State(s): S,
     Auth(sess): Auth,
@@ -263,7 +275,7 @@ pub async fn join_room(
         if r.dissolved.is_some() {
             return Err(ApiError::not_found("err.room.gone"));
         }
-        let you = r.join(who, &req.password, &req.version)?;
+        let you = r.join(who, &req.password, &req.version, req.spectate)?;
         Ok((you, r.info.clone()))
     })?;
     s.set_room(&sess.token, Some((id.clone(), you)));
@@ -299,8 +311,10 @@ pub fn member_in(sess: &Session, id: &str) -> ApiResult<i32> {
     Ok(member)
 }
 
-/// Run `f` as `member` of the room: membership checked under the room lock,
-/// then the mutation runs against a freshly loaded record.
+/// Run `f` as a **seat** of the room: membership checked under the room lock,
+/// then the mutation runs against a freshly loaded record. Spectators are not
+/// seats and are refused — this guards `act` / `ready` / `start` / the host
+/// ops. Use [`as_viewer`] for read-only access.
 pub fn as_member<T>(
     s: &Server,
     sess: &Session,
@@ -313,7 +327,29 @@ pub fn as_member<T>(
         if r.member_of(&token) != Some(me) {
             return Err(ApiError::bad("err.room.not_member"));
         }
+        if r.is_spectator(me) {
+            return Err(ApiError::bad("err.not_a_player"));
+        }
         f(r, me)
+    })
+}
+
+/// Run `f` as anyone in the room — a seat **or** a spectator. For read-only
+/// endpoints (`GET …/state`, the SSE stream) where a watcher is a legitimate
+/// caller but must never reach the engine.
+pub fn as_viewer<T>(
+    s: &Server,
+    sess: &Session,
+    id: &str,
+    f: impl FnOnce(&Room, i32) -> ApiResult<T>,
+) -> ApiResult<T> {
+    let me = member_in(sess, id)?;
+    let token = sess.token.clone();
+    s.with_room(id, move |r| {
+        if r.member_of(&token) != Some(me) {
+            return Err(ApiError::bad("err.room.not_member"));
+        }
+        f(&*r, me)
     })
 }
 
@@ -550,8 +586,9 @@ pub async fn room_state(
     Path(id): Path<String>,
 ) -> ApiResult<Json<RoomState>> {
     // Fresh roster under the room lock; the match view is a worker call and
-    // runs after the lock is dropped (the handle is stateless).
-    let (info, me, m) = as_member(&s, &sess, &id, |r, me| {
+    // runs after the lock is dropped (the handle is stateless). Spectators may
+    // read: their frame is the public view (`playerId` -1, no hand).
+    let (info, me, m) = as_viewer(&s, &sess, &id, |r, me| {
         Ok((r.info.clone(), me, r.match_handle()))
     })?;
     let game = match m {

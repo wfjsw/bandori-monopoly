@@ -327,9 +327,19 @@ export interface RoomMember {
   ready: boolean; host: boolean; bot: boolean; away: boolean;
   mentality: BotMentality;
 }
+/**
+ * A watcher with no seat: sees the public view, never acts, never counts
+ * toward `maxPlayers`. Ids share the seat counter, so a spectator id is never
+ * a seat id. Omitted on the wire while the list is empty.
+ */
+export interface RoomSpectator {
+  id: number; player: string; persona: string; cnId: string;
+}
 export interface RoomInfo {
   id: string; name: string; ranked: boolean; maxPlayers: number; locked: boolean;
   playing: boolean; theme: string; weights: ScoreWeights; members: RoomMember[];
+  /** Watchers with no seat (`RoomSpectator` on the wire). */
+  spectators?: RoomSpectator[];
   /** Match clock / timer settings (host-editable before start). */
   clock?: ClockSettings;
   /** Commit-reveal fairness (`docs/FAIRNESS.md`): the commitment is public

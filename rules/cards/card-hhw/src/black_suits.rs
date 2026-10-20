@@ -25,10 +25,11 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
     &[
         // 规则书: 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- the tile
         // and the owner's own pass are the condition; the crystal mark count is
-        // the residual guard.
+        // the residual guard. `ActionKind::Pass` (not `PassTile`) matches the
+        // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki_other.rs`).
         On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner && tile.id == tile_named('弦卷集团')", "",
+            &[ActionKind::Pass],
+            "card.placed && actor == owner && tile.id == tile_named('弦卷集团')", "",
             Some(pass_tile_guard),
             pass_tile,
         ),
@@ -79,8 +80,21 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // The instance's own `On::Settle` (landing draw) and Pass entry (the
         // [经过] reward) are what 「全部效果」 means; no card hook draws.
         sync_circle_instance(group);
+        // 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- field hooks only
+        // dispatch to placed instances, and a [反击] declaration would otherwise
+        // be discarded, leaving the `PassTile` hook below dead. Place this card
+        // as the stand-in for C# `BlackSuitFx` (same pattern as `HHW:育美标记`).
+        if !ctx::is_placed() {
+            ctx::set_dest(ctx::Dest::Field);
+            ctx::place_card(player_id, "HHW:黑衣人的补给", &Msg::new(key!("black_suits_attach")));
+        }
     }
     Ok(())
+}
+
+/// Crystals this player parked on `tile` (mark owner = the card's owner).
+fn own_crystals(tile: i32, owner: i32) -> i32 {
+    ctx::count_marks(tile, &MarkFilter::any().kind(MARK).owner(owner))
 }
 
 /// Attach or drop the borrowed `tile:circle` instance so it exists exactly
@@ -107,20 +121,25 @@ fn sync_circle_instance(group: i32) {
 
 /// Residual guard for [`pass_tile`] -- the crystal mark count on the tile
 /// (`count_marks`) stays here (not yet in the condition vocabulary).
-fn pass_tile_guard(_player_id: i32) -> bool {
-    ctx::count_marks(ctx::trigger::tile(), &MarkFilter::any().kind(MARK)) > 0
+fn pass_tile_guard(player_id: i32) -> bool {
+    own_crystals(ctx::trigger::tile(), player_id) > 0
 }
 
 /// 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s
 /// `mark.count--`, which is `bump_mark`'s single-tick form. Dropping the last
 /// crystal takes the borrowed `tile:circle` instance with it.
-fn pass_tile(_player_id: i32) -> card_sdk::Asked {
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && tile.id == tile_named('弦卷集团')` is the pre; the
     // crystal mark count is the residual guard.
     let t = ctx::trigger::tile();
-    // `MarkFilter::any()` keeps the old `owner: -2` "any owner" match.
-    ctx::bump_mark(t, &MarkFilter::any().kind(MARK), -1);
+    // The owner's own crystal is the one spent (`owner(player_id)`), so two
+    // players' stand-ins never eat each other's crystals.
+    ctx::bump_mark(t, &MarkFilter::any().kind(MARK).owner(player_id), -1);
     sync_circle_instance(t);
+    // Stand-in cleanup: nothing left to remove, so file the card away.
+    if own_crystals(t, player_id) == 0 {
+        ctx::set_dest(ctx::Dest::Graveyard);
+    }
     Ok(())
 }
 

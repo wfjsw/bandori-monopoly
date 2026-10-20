@@ -57,7 +57,25 @@ export function DeckAdjust({ sess }: { sess: GameSession }) {
 
   const me = view?.state.players[view.playerId];
   const c = me?.persona ? D.persona(me.persona) : undefined;
-  if (!view || !me || !c) return null;
+  if (!view) return null;
+  // A watcher has no seat, and a starting deck is private: show a waiting
+  // shell with a way out rather than anyone's card list.
+  if (view.playerId < 0 || !me || !c) {
+    const leave = async () => {
+      if (!(await ask(tr("select.leaveTitle"), tr("select.leaveAsk"), tr("select.leave")))) return;
+      endSession();
+      // Match Board.tsx's exit: a replay goes back to the replay list, not the
+      // online lobby.
+      if (sess.kind === "replay") navigate({ name: "replay" });
+      else navigate(sess.kind === "solo" ? { name: "menu" } : { name: "lobby" });
+    };
+    return (
+      <>
+        <TopBar section={tr("select.section")} title={tr("select.stepDeck")} onBack={leave} />
+        <div className={s.spectating}>{tr("board.watching")}</div>
+      </>
+    );
+  }
   return <Adjust sess={sess} view={view} at={at} auto={auto} me={me} c={c} />;
 }
 

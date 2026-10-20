@@ -1039,3 +1039,156 @@ fn crychic_variants_cannot_use_base_exclusives() {
         "another character's exclusive stays denied"
     );
 }
+
+// =====================================================================
+// CRYCHIC:（灯）内心的呐喊 (3) window / body, (2) sweep exemption
+// =====================================================================
+
+const SHOUT: &str = "CRYCHIC:（灯）内心的呐喊";
+
+/// Put `who`'s copy of the card on the field at `tile`.
+fn place_shout_at(t: &mut Table, who: usize, tile: i32) {
+    t.place_raw(who, SHOUT);
+    let w = t.m.world_mut();
+    let f = w.st.players[who].field.iter_mut().find(|f| f.card == SHOUT).unwrap();
+    f.tile = tile;
+}
+
+/// Roll P1 from `from` by `n` and answer the tomori prompt with `accept`.
+/// Returns whether the prompt was offered.
+fn run_shout_move(t: &mut Table, from: usize, n: i32, accept: bool) -> bool {
+    t.begin_turn(1);
+    drain(t);
+    t.set_pos(1, from);
+    t.dice(&[n]);
+    t.roll(1).unwrap();
+    let mut offered = false;
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if t.prompt_refers("tomori_inner_shout") || p.title.key().contains("tomori_inner_shout") {
+            offered = true;
+            if accept {
+                let _ = t.answer_one(0);
+            } else {
+                t.decline();
+            }
+        } else {
+            t.decline();
+        }
+    }
+    offered
+}
+
+#[test]
+fn tomori_shout_window_is_the_controller_near_the_card() {
+    // 规则书（3）: 「你位于此卡前后5格内时」 -- 你 (the controller) near the card,
+    // not the mover's endpoint. P0 stands 2 from the card; P1 lands far away.
+    let mut t = Table::vanilla(2);
+    t.clean();
+    t.set_pos(0, 32);
+    place_shout_at(&mut t, 0, 30);
+    t.set_fire(0, 1, 10);
+    assert!(
+        run_shout_move(&mut t, 5, 4, false),
+        "offered although the mover is far; keys={:?}",
+        t.recent_keys(16)
+    );
+}
+
+#[test]
+fn tomori_shout_window_closed_when_controller_is_far() {
+    // The mover lands right next to the card, but 你 is more than 5 away.
+    let mut t = Table::vanilla(2);
+    t.clean();
+    t.set_pos(0, 50);
+    place_shout_at(&mut t, 0, 30);
+    t.set_fire(0, 1, 10);
+    assert!(
+        !run_shout_move(&mut t, 25, 4, false),
+        "not offered when the controller is far; keys={:?}",
+        t.recent_keys(16)
+    );
+}
+
+#[test]
+fn tomori_shout_pulls_to_the_controllers_own_tile_with_settle() {
+    // 规则书（3）+ 高松灯 (2): the mover goes to 「自己所在的格子」 (P0's tile, not
+    // the card's tile) and that tile's settle runs, with payments halved.
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.clean();
+    t.set_pos(0, deed);
+    t.set_owner(deed, Some(0));
+    place_shout_at(&mut t, 0, ((deed + 3) % 60) as i32);
+    t.set_fire(0, 1, 10);
+    t.set_money(1, 5000);
+    run_shout_move(&mut t, (deed + 20) % 60, 8, true);
+    assert_eq!(t.pos(1), deed, "pulled onto the controller's own tile, not the card's tile");
+    let paid = 5000 - t.money(1);
+    assert!(paid > 0, "the destination settle ran (rent paid); keys={:?}", t.recent_keys(20));
+    // Baseline: the same landing without the pull.
+    let mut b = Table::vanilla(2);
+    b.clean();
+    b.set_pos(0, 5);
+    b.set_owner(deed, Some(0));
+    b.set_money(1, 5000);
+    b.begin_turn(1);
+    drain(&mut b);
+    b.set_pos(1, deed - 2);
+    b.dice(&[2]);
+    b.roll(1).unwrap();
+    for _ in 0..8 {
+        if b.prompt().is_none() {
+            break;
+        }
+        b.decline();
+    }
+    let full = 5000 - b.money(1);
+    assert!(full > 0, "baseline rent is positive");
+    assert!(paid < full, "half-pay bend: paid {paid} vs full {full}");
+}
+
+// LOY-TOMORI-03 「最早拥有的格子」 is unpinned: (3) only runs for a MyGO-band
+// player (`ctx::in_group(…, "MyGO!!!!!")`), and the harness has no band setter
+// -- 高松灯（CRYCHIC）is the card's exclusive and is CRYCHIC band, so the (3)
+// placement path is unreachable from a test today. The fallback itself is
+// documented at the `TODO(规则书)` in `tomori_inner_shout.rs`.
+
+#[test]
+fn crychic_band_2_spares_the_field_copy_but_sweeps_other_crychic_cards() {
+    // 规则书（2）: 「此卡不会被你乐队技能的（2）效果移除」 -- also on the field.
+    let mut t = Table::new(&["高松灯（CRYCHIC）", "长崎素世（CRYCHIC）"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    place_shout_at(&mut t, 0, 30);
+    t.place_raw(0, "CRYCHIC:想要成为人类");
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    for _ in 0..16 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let _ = t.answer_one(0);
+    }
+    assert!(!t.on_field(0, "CRYCHIC:想要成为人类"), "other CRYCHIC cards are swept");
+    let n: usize = t
+        .draw_pile(0)
+        .into_iter()
+        .chain(t.hand(0))
+        .chain(t.discard(0))
+        .filter(|c| c == SHOUT)
+        .count();
+    let on_field = t.on_field(0, SHOUT);
+    assert_eq!(
+        n + on_field as usize,
+        1,
+        "the card survived the sweep: piles={n} field={on_field}; keys={:?}",
+        t.recent_keys(24)
+    );
+    // 「将其洗入抽牌堆」: the field copy moved into the draw pile.
+    assert!(!on_field, "the field copy was shuffled into the deck");
+}

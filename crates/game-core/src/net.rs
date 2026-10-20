@@ -127,6 +127,11 @@ pub struct RoomInfo {
     #[serde(default)]
     pub clock: crate::clock::ClockSettings,
     pub members: Vec<RoomMember>,
+    /// Watchers with no seat: they see the public view, never act, and never
+    /// count toward [`Self::is_full`] or the match's participants. Absent on
+    /// the wire while empty so a room without spectators serializes as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spectators: Vec<RoomSpectator>,
     /// Commit-reveal fairness (`docs/FAIRNESS.md`). `commit` is published the
     /// moment the room is **created** -- before any entropy can be collected
     /// -- and a fresh one is drawn after every match; the openings (server
@@ -159,6 +164,11 @@ impl RoomInfo {
         self.members.iter().find(|m| m.host)
     }
 
+    /// The spectator with this member id, if any.
+    pub fn spectator(&self, id: i32) -> Option<&RoomSpectator> {
+        self.spectators.iter().find(|s| s.id == id)
+    }
+
     pub fn is_full(&self) -> bool {
         self.members.len() as i32 >= self.max_players
     }
@@ -183,6 +193,22 @@ pub struct RoomMember {
     /// Bot decision policy (bots only). Carried on the room record so the match
     /// can apply it when it starts; serde-defaults to standard.
     pub mentality: BotMentality,
+}
+
+/// One room spectator: a watcher with no seat.
+///
+/// Deliberately **not** a [`RoomMember`] with a flag: `RoomMember` is embedded
+/// in `MatchSetup.members` and `body_check` re-serializes archived `.bdrec`
+/// bodies byte-identically (`record.rs`), so its shape must not move. Ids come
+/// from the same counter as seats, so a spectator id is never a seat id.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RoomSpectator {
+    pub id: i32,
+    pub player: String,
+    /// JSON key is `persona` (same wire name as [`RoomMember::persona`]).
+    pub persona: String,
+    pub cn_id: String,
 }
 
 /// The next bot name not already in `taken`: the data's bot

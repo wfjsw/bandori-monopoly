@@ -25,6 +25,9 @@ use card_sdk::{key, CardDef, Msg, On};
 const ARMED: &str = "skill.soyoClear.armed";
 /// 「下次经过CiRCLE时不获得火罐」 -- the penalty latch.
 const PENALTY: &str = "skill.soyoClear.penalty";
+/// The tile the `colorFor:<p>` re-colour sits on, stored as `tile + 1` so 0
+/// means "none". Cleared at the player's next turn start.
+const COLOURED: &str = "skill.soyoClear.coloured";
 
 pub const SOYO_CLEAR: CardDef = CardDef::new(
     "skill:长崎素世:通透的颜色",
@@ -46,9 +49,21 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
-/// 「初始1，上限1」.
+/// 「初始1，上限1」 -- and the re-colour's expiry.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id);
+    // 规则书（2）: 「持续至你的下回合开始」 -- the `colorFor:<p>` write ends at
+    // the player's next turn start. Silent bookkeeping (this entry is on the
+    // `silent` list -- the expiry is not a printed effect to narrate).
+    let remembered = state::get(player_id, COLOURED);
+    if remembered > 0 && ctx::trigger::player_id() == player_id {
+        state::set(player_id, COLOURED, 0);
+        ctx::set_tile_prop(
+            remembered - 1,
+            &alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id),
+            0,
+        );
+    }
     Ok(())
 }
 
@@ -79,13 +94,10 @@ fn offer(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「使自己本回合的[移动终点]对你视为对应颜色的地产商格子，持续至你的下回合
-/// 开始」 -- applied at the settle, when the landing tile is known.
-// TODO(规则书): 「持续至你的下回合开始」 -- the book scopes the re-colour to last
-//   until the player's next turn start, but the `colorFor:<p>` tile prop write
-//   below does not expire. Behaviour is kept identical to the old write (which
-//   also had no expiry); the clause is not implemented as stated.
+/// 开始」 -- applied at the settle, when the landing tile is known. The
+/// `colorFor:<p>` write is cleared at the player's next turn start
+/// ([`declare_cap`]).
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    
     state::set(player_id, ARMED, 0);
     let t = ctx::trigger::tile();
     if t < 0 {
@@ -105,6 +117,9 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
         &alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id),
         g,
     );
+    // Remember it as `tile + 1` so `declare_cap` can expire it at the player's
+    // next turn start (0 = none).
+    state::set(player_id, COLOURED, t + 1);
     ctx::log(
         player_id,
         &Msg::new(key!("soyo_clear_coloured")).tile("tile", t),

@@ -1,0 +1,13 @@
+/* A phone browser tab that is not yet an installed app: ask for the home
+   screen first, before the rotate cover asks for a turn. Same cover chrome
+   as RotateHint.module.css so the two prompts read as one flow. Over
+   everything, padded by the real safe area (screen-space, not stage-space). */
+.hint { position: fixed; inset: 0; z-index: 2100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px)); background: var(--backdrop); color: var(--pink-deep); text-align: center; font-size: 18px; font-weight: 700; line-height: 1.5; }
+.phone { position: relative; width: 56px; height: 96px; border: 5px solid var(--pink); border-radius: 12px; animation: bob 2.4s ease-in-out infinite; }
+.arrow { position: absolute; left: 50%; bottom: -34px; width: 14px; height: 14px; border-right: 5px solid var(--pink); border-bottom: 5px solid var(--pink); transform: translateX(-50%) rotate(45deg); }
+.install { padding: 10px 20px; border: 0; border-radius: 999px; background: var(--pink); color: #fff; font: inherit; font-size: 15px; }
+.override { padding: 8px 16px; border: 0; border-radius: 999px; background: transparent; color: var(--sub); font: inherit; font-size: 13px; font-weight: 500; text-decoration: underline; }
+.hint small { display: block; color: var(--sub); font-size: 13px; font-weight: 500; }
+.steps { margin-top: 8px; max-width: 280px; }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .phone { animation: none; } }

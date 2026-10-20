@@ -15,6 +15,7 @@ import { InspectPreviewHost } from "../ui/CardPreview";
 import { ToastHost } from "../ui/Toast";
 import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
+import { InstallHint } from "./InstallHint";
 import { RotateHint } from "./RotateHint";
 import { Console } from "../console/Console";
 import { LazyScene } from "./scenes";
@@ -98,6 +99,7 @@ export function App() {
         <InspectPreviewHost />
         <ToastHost />
       </Stage>
+      <InstallHint />
       <RotateHint />
       <Console />
     </>

@@ -630,6 +630,94 @@ fn unanimous_vote_ends_the_match() {
     );
 }
 
+/// Drain `changed` and assert the frame-identity invariant: `changed` and
+/// `seq` move together. `prev` is the `seq` at the previous sample.
+fn sample_frame_id(m: &mut Match, step: &str, prev: i32) -> i32 {
+    let seq = m.state().seq;
+    let changed = m.take_changed();
+    assert_eq!(
+        changed,
+        seq > prev,
+        "{step}: changed={changed} with seq {prev} -> {seq}; the two must move together"
+    );
+    seq
+}
+
+/// `state.seq` is the identity of one public frame: the SSE `match` event
+/// (`server/src/sse.rs`) only emits when it moves, and the clock hold treats a
+/// lower one as a stale ack. So `changed` and `seq` must move together.
+///
+/// The vote used to set `changed` and leave `seq` alone. Where nothing is
+/// pending that was masked -- `host_log` detours through `direct`, which bumps
+/// as a side effect -- but `act("vote")` is dispatched before the busy gate and
+/// `tick_vote` runs even with a routine pending, where `host_log` only defers.
+/// A vote landing in that window never reached online clients: its log row
+/// arrived on the `event` stream while the vote UI stayed on the old frame.
+#[test]
+fn changed_and_seq_move_together() {
+    let members = [member(1, false), member(2, false), member(3, true)];
+    let mut m = new_match(&members, 5, MatchMode::Casual);
+    m.quick_start();
+    let mut prev = m.state().seq;
+    let _ = m.take_changed();
+
+    // Play, with a routine still pending -- the window where `host_log`
+    // defers and only the explicit pairing moves `seq`.
+    for _ in 0..400 {
+        if m.state().phase == "play" && m.state().busy {
+            break;
+        }
+        answer_first(&mut m, 1);
+        answer_first(&mut m, 2);
+        m.tick(0.25);
+        prev = sample_frame_id(&mut m, "settle", prev);
+    }
+    assert!(
+        m.state().phase == "play" && m.state().busy,
+        "need a live prompt in the play phase so host_log defers"
+    );
+
+    // Open + cast a vote under that prompt.
+    m.act(
+        1,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
+    prev = sample_frame_id(&mut m, "vote open + first answer", prev);
+
+    // A refused re-cast is not a change.
+    assert!(m
+        .act(
+            1,
+            &NetMessage {
+                value: 1,
+                ..NetMessage::act("vote")
+            }
+        )
+        .is_err());
+    prev = sample_frame_id(&mut m, "refused vote", prev);
+
+    // The engine fills the bot seat on the next tick (`tick_vote`'s auto-vote).
+    m.tick(0.25);
+    prev = sample_frame_id(&mut m, "auto-vote", prev);
+
+    // The last human answers and the tally ends the vote (`end_vote`).
+    m.act(
+        2,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
+    prev = sample_frame_id(&mut m, "last vote + end_vote", prev);
+    let _ = prev;
+    assert_eq!(m.state().vote.id, 0, "the unanimous vote has resolved");
+}
+
 /// An 进阶 (Advanced) bot seat is held for its external driver (`ai` off), but
 /// the drivers never answer a vote surface and a solo vote never expires. The
 /// engine must cast the seat's vote (user ruling 2026-10-09: "have the engine

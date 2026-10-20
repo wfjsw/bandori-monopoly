@@ -50,8 +50,13 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
     let down = fans::down(player_id);
     // 规则书[特]（2）: 「[共鸣]无视此卡的[特]效果（1）」 -- when the gate was passed
     // only because a 共鸣 is in hand, paying that 共鸣 is the cost of the play.
-    // Declining ends the effect here.
+    // Declining means the play was never allowed (「才可使用」): the card goes
+    // back to the hand instead of the discard pile (`Dest::Hand`).
+    // TODO(规则书): the engine has no pre-commit abort, so the play was already
+    // announced (log, `card` window, played/two-cards counters) before this
+    // refusal; only the card's fate is undone here.
     if up > down && !crate::resonance::try_resonance(player_id)? {
+        ctx::set_dest(ctx::Dest::Hand);
         return Ok(());
     }
     // 规则书[手]: 「将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正」 -- X is the

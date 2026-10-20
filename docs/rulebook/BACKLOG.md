@@ -1,28 +1,43 @@
 # Rulebook / ABI backlog
 
-**2026-10-17 audit.** Standing backlog for continuous iteration on rulebook
+**2026-10-20 audit.** Standing backlog for continuous iteration on rulebook
 divergences, rule-implementation bugs and ABI problems. Fix agents take
 independent batches from here; do not merge into the primary branch from this
-file. (Originally opened 2026-10-10 as `rulebook-triage`.)
+file. (Originally opened 2026-10-10 as `rulebook-triage`; full recount
+2026-10-17; card-rule TODO review + reconstruction 2026-10-20.)
 
-Sources (re-counted 2026-10-17 against master):
-- **157** `TODO(规则书)` tags in `rules/` + `crates/` (was 144 at the 2026-10-10 triage)
-- **11** live `#[ignore = "…"]` rulebook tests in `rules/tests/tests/*.rs` — **all `RULING:`**, zero `DISCREPANCY:` (the un-ignore waves closed every discrepancy; was 85 = 69 DISCREPANCY / 13 RULING / 2 meta). Plus 2 meta `q4_unintended` tooling ignores (soak / report generator). `crates/game-rules/tests/` is clean.
-- `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
+Sources (re-counted 2026-10-20 against master `b8e26436`):
+- **153** `TODO(规则书)` tags in `rules/` + `crates/` after the 2026-10-20
+  review. Breakdown: `rules/cards` 66, `rules/skills` 28, `rules/events` 21,
+  `crates/` 18, `rules/tiles`+`status`+`markers`+`bandori-std`+`card-sdk` 13,
+  `rules/tests` 5, `rules/kani` 2. Of these **7 are convention markers** (a
+  module doc naming the `TODO(规则书)` policy, not a gap) and **146 are live
+  gaps**. The 2026-10-17 figure of 157 included the 7 `NEGATION-AUDIT V2`
+  leftovers that this audit settled (see D-02).
+- **11** live `#[ignore = "RULING: …"]` rulebook tests in
+  `rules/tests/tests/*.rs`, zero live `DISCREPANCY:` (comment mentions of the
+  convention do not count). Plus 2 meta `q4_unintended` tooling ignores (soak /
+  report generator). `crates/game-rules/tests/` is clean. Unchanged since
+  2026-10-17.
+- `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `rules/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
-**Current ABI: v85** (`rules/card-sdk/src/abi.rs` `ABI_VERSION`). The doc body
-still quotes v53–v61-era names in places; where a kind has since been renamed
+**Current ABI: v89** (`rules/card-sdk/src/abi.rs` `ABI_VERSION`). The doc body
+still quotes v53–v85-era names in places; where a kind has since been renamed
 (`HookKind`/`GateKind` → `ActionKind`/`FilterKind`; `MoveRoll` → `DiceRollResult`;
-the `Pay*` / `Roll*` families restructured), treat the live name as canonical.
+the `Pay*` / `Roll*` families restructured; `ruleset-core` → `bandori-std`),
+treat the live name as canonical. ABI bumps since the 2026-10-17 audit:
+v86–87 (markers / fire declaration), v88 (Phase C batch 2 — status verbs into
+`bandori-std`), v89 (status-vocab-zero — opaque status keys).
 
-**Crate renames since the 2026-10-10 triage** — every path below is quoted in
-the new names:
+**Crate renames** — every path below is quoted in the new names:
 - `rules/skills/skill-characters/` → `rules/skills/skill-personas/`
 - `rules/skills/skill-bands/` → `rules/skills/skill-groups/`
+- `rules/ruleset-core/` → `rules/bandori-std/`
 
-New crates the earlier drafts never listed: `rules/bandori-std`, `rules/status`,
-`rules/personas`, `rules/markers`, `rules/cond-ir`, `rules/spec`, `rules/kani`.
+Crates: `rules/bandori-std`, `rules/status`, `rules/personas`, `rules/markers`,
+`rules/cond-ir`, `rules/spec`, `rules/kani`, plus the per-band card crates
+under `rules/cards/` and the skill crates under `rules/skills/`.
 
 Ignored-test run: `node tools/build-ruleset.mjs` (no `CARGO_TARGET_DIR`) then
 `cargo test -p ruleset-tests -- --ignored` and
@@ -37,6 +52,60 @@ Ignored-test run: `node tools/build-ruleset.mjs` (no `CARGO_TARGET_DIR`) then
 **Severity**: high (common play) | medium | low (rare edge)
 
 Sort: severity, then class. One item = one root cause; every file:line / test is listed.
+
+---
+
+# TODO(规则书) ↔ item index (2026-10-20)
+
+The 2026-10-20 review walked every `TODO(规则书)` in `rules/` + `crates/` and
+assigned it a home. **One tag = one gap**; several tags may share one item
+(e.g. the 「视为此卡未生效」 observer is CH-07 across seven card bodies).
+A tag with no item is a backlog bug — file it.
+
+## Where the 146 live gap tags sit
+
+| area | tags | owning items (cluster) |
+|---|---|---|
+| `rules/cards/card-ag` | 8 | CH-10, DETOUR-01, MONEY-05, ABI-04, ABI-10 |
+| `rules/cards/card-crychic` | 5 | MOVE-08, MOVE-09, TOMORI-BIND-01, HARU-SOYO-FX, SETTLE-04 |
+| `rules/cards/card-general` | 4 | ABI-02, ABI-03, CH-06, DRAW-OUT-01 |
+| `rules/cards/card-hhw` | 8 | CH-07, CRYSTAL-06, CRYSTAL-07, TILE-02, ABI-05, SETTLE-04 |
+| `rules/cards/card-morfonica` | 2 | CH-07, MOVE-13 |
+| `rules/cards/card-mujica` | 8 | CH-05, CH-09, LOW-03, NYAMU-01, SKILL-04, LOW-04 |
+| `rules/cards/card-mygo` | 4 | CH-07, CRYSTAL-02, LOY-ANON-01 |
+| `rules/cards/card-pp` | 6 | AYA-LONG-01 **closed**, LOY-DREAM-01, ABI-07, ABI-10 |
+| `rules/cards/card-ppp` | 1 | CRYSTAL-06 |
+| `rules/cards/card-ras` | 8 | ABI-01, ABI-03, CH-05, CH-11, LOY-GUERRILLA-01, MONEY-04 |
+| `rules/cards/card-roselia` | 5 | CH-07, LISA-BOND-01, NFO-CANCEL-01, CRYSTAL-08, MONEY-04 |
+| `rules/cards/card-sumimi` | 6 | CH-05, LINGER-10, MONEY-08, **DONUT-VOID-01 (new)** |
+| `rules/skills/skill-personas` | 17 | AYA-POOL-01, SKILL-04/07/10, MARKERS-LISA-01, MARKERS-MUTSU-01, SKILL-05, ABI-11, HAG-01 |
+| `rules/skills/skill-groups` | 8 | SKILL-06, CRYSTAL-05, AVE-CLAW-01, SKILL-06 |
+| `rules/events` | 18 | EVENT-01..04, DETOUR-01, MONEY-08, MOVE-15, LOW-01 |
+| `rules/tiles` | 4 | TILE-03/06, LOW-02, GUARD-PERVISIT |
+| `rules/status` | 2 | STA-02, STA-03 |
+| `rules/markers` + `bandori-std` | 2 | MARKERS-LISA-01, ABI-MARKER-SPENT (new) |
+| `rules/card-sdk` | 2 | MONEY-04, TILE-03 |
+| `crates/game-core` | 12 | MONEY-01..05, MOVE-06, LINGER-10, GUARD-SETTLE-DEPTH, ABI-12, HOST-01 |
+| `crates/game-rules` | 3 | GUARD-PERVISIT, DRAW-OUT-01, FORCE-WRITE-01 |
+| `rules/tests` | 5 | HOST-01, MOVE-06, LOY-ANON-01, EVENT-03 |
+| `rules/kani` | 2 | MARKERS-KANI-01 (spec pins) |
+
+## Convention markers (not gaps — do not count as open)
+
+`rules/{events,tiles,markers}/src/lib.rs`, `rules/skills/{skill-personas,
+skill-groups}/src/lib.rs`, `crates/game-core/src/data.rs` (`event_rule_id` doc),
+`rules/card-sdk/src/ctx.rs:576` (cross-ref to the ruling-6 note). These name the
+`TODO(规则书)` policy: a gap in the text is tagged, never silently dropped.
+
+## Orphans closed by this audit
+
+- `rules/cards/card-sumimi/src/two_donuts.rs:50` had no item → filed
+  **DONUT-VOID-01** below.
+- `fireSpent` → `MarkerSpent` was called a "separate ticket" twice (Phase C
+  batch 2 / status-vocab-zero notes) and never filed → **ABI-MARKER-SPENT**
+  below.
+- `crates/game-core/src/engine/tile_text.rs:30` (settle-priority) is covered by
+  **EVENT-03** / C-Q40h via `circle_rebuild.rs:117`; no new id.
 
 ---
 
@@ -1769,16 +1838,22 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **locations**: `rules/status/src/exile.rs:47-49`
 - **capability**: Untargetable / on-board gate kinds (today `MatchPlayer::status_gates`).
 
-## AYA-GRANT-01 — PP (1) skill-attachment grant fires the wrong (2) — **high**
-- **kind**: implementation bug
-- **class**: B
-- **severity**: **high** (a granted skill runs someone else's body)
-- **suggested batch**: skills: PP
-- **locations**: `rules/skills/skill-personas/src/aya_with.rs:13-16`
-- **rulebook**: 「获得X的（2）技能」.
-- **current**: `H.ReplaceSkill` shape is not built — a non-P◇P player pressing
-  this card presses 丸山彩's own (2).
-- **capability**: skill-attachment grant that swaps the (2) body.
+## AYA-GRANT-01 — PP (1) skill-attachment grant fires the wrong (2)
+- **status**: **not a bug** (2026-10-20, `batch3b-aya-grant`) — closed as **D**.
+- **was**: the in-source note claimed a non-P◇P player pressing the granted
+  skill runs 「丸山彩's own (2), which is the wrong clause」, and asked for an
+  `H.ReplaceSkill` shape.
+- **why it is not a bug**: the clause names the character — 「所有非Pastel✽Palettes
+  玩家获得**丸山彩**的（2）技能」 — so the grantee running 丸山彩's (2) **is** the
+  rulebook text. `H.ReplaceSkill` is C# machinery for reaching that clause (it
+  replaces the (2) slot); we place the skill rule on the grantee's field, which
+  is the same clause by a different mechanism. C# is not a spec. Each of
+  `chisato_frank` / `eve_unify` likewise places its own named skill
+  (「获得白鹭千圣的（2）技能」 / 「获得若宫伊芙的（2）技能」).
+- **pinned**: `aya_with_grants_ayaa_2_to_non_pp_players` (the non-P◇P seat gets
+  丸山彩's (2); a different P◇P seat does not, and keeps her own),
+  `aya_flip_all_pp_clause2_crystal` (the grantee runs 丸山彩's (2) body).
+- **action taken**: the in-source note is rewritten as a settled reading.
 
 ## AYA-POOL-01 — 「将Y个…变正」 pool-of-Y vs per-seat remaining-Y
 - **kind**: rulebook divergence
@@ -1972,6 +2047,48 @@ Two of the 11 remaining `#[ignore = "RULING: …"]` tests had no id here. Filed 
 
 ---
 
+# Newly filed 2026-10-20 (card-rule TODO review)
+
+Two items the 2026-10-17/18 waves referenced but never gave an id. Everything
+else in the 153-tag sweep already had a home (see the index above).
+
+## DONUT-VOID-01 — 一人两个甜甜圈 has no clause for a barred acquisition
+- **kind**: rulebook gap
+- **class**: C
+- **severity**: low
+- **suggested batch**: crystal/marker accounting
+- **locations**: `rules/cards/card-sumimi/src/two_donuts.rs:50-55`
+- **rulebook**: 「获得[除外]直至你原本所在格子被其他玩家经过」 +
+  glossary 「该效果生效时无法重复获得该效果」.
+- **current**: when the presser is already [除外], the no-stack guard bars the
+  (1) acquisition and the whole effect is treated as void — no carrier, no
+  `SLOT_ORIG` / `SLOT_BY`, no log. The card is still spent (the play itself
+  resolved).
+- **question**: does a barred acquisition still spend the card and leave
+  nothing, or does the card stay in hand / go to the graveyard without the
+  exile? The book is silent. We chose "void + still spent" because the press
+  itself has no [限] and the no-stack clause only names the *effect*.
+
+## ABI-MARKER-SPENT — `fireSpent` wire kind should become `MarkerSpent`
+- **kind**: ABI defect (rename)
+- **class**: B
+- **severity**: low
+- **suggested batch**: crystal/marker accounting
+- **locations**: `crates/game-rules/src/wasm_rules.rs` (`spend_charge` /
+  `charge_spent_log` / the `fireSpent` raise), `docs/MARKERS.md` §6 row,
+  `docs/STATUS-HOSTS.md:560`, card bodies subscribing `FireSpent`
+- **current**: `charge_spent_log` is already name-generic
+  (`marker_spent_log`), but the wire kind is still `fireSpent` (73) because
+  card bodies subscribe `FireSpent`. Called a "separate ticket" by the Phase C
+  batch 2 and status-vocab-zero notes and never filed.
+- **capability**: rename the wire kind to `MarkerSpent { name }` (keep 73 as a
+  source-compat alias for one ABI bump, then drop it), or declare `fireSpent`
+  the permanent name of the fire counter's spend raise and close this as D.
+- **cross-link**: MARKERS-LISA-01 (temp-pot spend provenance) — a
+  `MarkerSpent` carrying `name` is the same wire shape that tag needs.
+
+---
+
 # D — stale (already fixed / already landed)
 
 Do **not** put these in the open backlog. Keep as notes so they are not re-filed.
@@ -1990,17 +2107,20 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 | `sweet_escape_gate_requires_high_rent` | `rules/tests/tests/sumimi.rs:185` | 「收费标价」 (still a C question if reopened) |
 
 ## D-02 — NEGATION-AUDIT V2 "no activation cost" TODOs (already landed)
+- **status**: **done** (2026-10-20, `backlog-reconstruct`) — the seven
+  `TODO(规则书) NEGATION-AUDIT V2` markers are rewritten as
+  `NEGATION-AUDIT V2 (settled)` notes. They no longer count as open TODOs
+  (160 → 153 in the 2026-10-20 sweep).
 - One root cause, already applied: the six text-less money play gates are gone; in-body 「[消耗]/[支付]」 is effect content and takes the Q1 shortfall path.
-- Locations (documentation leftovers only):
+- Locations (now settled notes):
   - `rules/cards/card-roselia/src/fire_bird.rs:18`
   - `rules/cards/card-general/src/gacha10.rs:13`
   - `rules/cards/card-ag/src/crimson_soul.rs:28`
   - `rules/cards/card-morfonica/src/starry_night.rs:23`
-  - `rules/cards/card-hhw/src/believe_you.rs:22`
-  - `rules/cards/card-hhw/src/kokoro_circle.rs:30`
+  - `rules/cards/card-hhw/src/believe_you.rs:28`
+  - `rules/cards/card-hhw/src/kokoro_circle.rs:36`
   - `rules/tests/tests/money.rs:365`
 - Tests green: `gacha10_playable_while_short_then_bankrupts`, `fire_bird_playable_while_short_then_mortgages`, `crimson_soul_playable_while_short_then_bankrupts`, `believe_you_playable_while_short_then_bankrupts`, `kokoro_circle_playable_while_short_then_bankrupts`, `starry_night_playable_while_short_then_bankrupts`.
-- Action: rewrite the TODO as a settled note (or delete) so it stops counting as open.
 
 ## D-03 — 2026-10-09 batch already fixed (do not re-open)
 - 凑友希那 (3) fire cap; 要乐奈 (2) Space teleport; 白金燐子 (2) pre-roll window (test bug); 麻里奈小姐的礼物箱 「可」; 飞鸟山之战 stun layers (test bug); CiRCLE band (2) doubling; 游击演出 ends on the chosen tile.
@@ -2508,8 +2628,9 @@ generalize.
 
 # Summary counts
 
-**Recounted 2026-10-17** against master `1cd71939` after the full item audit.
-The 2026-10-10 figures (78 open from 144 TODOs + ~85 ignores) are historical.
+**Recounted 2026-10-20** against master `b8e26436` after the card-rule TODO
+review. The 2026-10-10 figures (78 open from 144 TODOs + ~85 ignores) and the
+2026-10-17 figures (157 TODOs, ABI v85) are historical.
 
 **2026-10-18 addendum** — card loyalty review wave 1 (15 quote-dense cards +
 a `.text()`/quoted-name sweep of all 180): **8 display/behavior items closed**
@@ -2520,7 +2641,28 @@ a Class-B fallback. **Wave 2** (15 more cards) opened **32** items (5 high).
 See "Newly filed 2026-10-18 (wave 1)" and "(wave 2)". **140 cards remain
 unreviewed at clause level.**
 
-What the audit changed:
+**2026-10-20 addendum — card-rule TODO review + reconstruction.** Walked all
+153 `TODO(规则书)` tags in `rules/` + `crates/` against the backlog and against
+the live code:
+- **7 stale tags settled** (D-02 NEGATION-AUDIT V2 leftovers) — rewritten as
+  `NEGATION-AUDIT V2 (settled)` notes in the six card bodies + `money.rs`.
+  160 → 153 tags. Of the 153, 7 are convention markers and **146 are live gaps**.
+- **2 orphans filed**: DONUT-VOID-01 (`two_donuts.rs` barred-acquisition void),
+  ABI-MARKER-SPENT (`fireSpent` → `MarkerSpent`, previously an unfiled
+  "separate ticket").
+- **Every other tag already had a home** — see the "TODO(规则书) ↔ item index"
+  above. Notable clusters: CH-07 「视为此卡未生效」 is 7 card-body tags on one
+  observer; the settle-priority rule is EVENT-03 / C-Q40h across
+  `circle_rebuild.rs` + `tile_text.rs`.
+- **Verified live** (not stale): ruling 6 / 7 (force-buy and auction still skip
+  `bought`/`buyAfter`; auction money is still a direct delete), ruling 8
+  (MONEY-05 巴 base), ruling 10 (LINGER-10), GUARD-PERVISIT /
+  GUARD-SETTLE-DEPTH (book states no bounds). STA-01 and STA-04 are closed
+  (2026-10-18) and stay closed.
+- **Header drift fixed**: ABI v85 → **v89** (markers / Phase C batch 2 /
+  status-vocab-zero landed after the last audit).
+
+What the 2026-10-17 audit changed (kept for the record):
 - **4 items closed** (the tree had landed them and the doc had not noticed):
   SETTLE-02 (both halves — the `cantPlayHand` B-split is `FilterKind::PlayGate`),
   SKILL-02 (hina lottery borrow), SKILL-03 (`prop::PLAYABLE_STUNNED`), CD-01
@@ -2540,15 +2682,15 @@ What the audit changed:
 
 ## Per class (open items only; D excluded)
 
-| class | meaning | open items (2026-10-17) |
+| class | meaning | open items (2026-10-20) |
 |---|---|---|
 | **A** | fixable now from clear text + current ABI | ~40 |
-| **B** | needs a new/changed ABI capability | ~28 |
-| **C** | needs a user ruling | ~30 |
-| **D** | stale (already fixed / landed) | 6 note groups + the 4 closures above |
+| **B** | needs a new/changed ABI capability | ~30 |
+| **C** | needs a user ruling | ~32 |
+| **D** | stale (already fixed / landed) | 6 note groups + the closures above |
 
-*(A+B+C ≈ 98 open root-cause items after dedup of 157 `TODO(规则书)` tags + 11
-RULING ignore rows + the 2026-10-10 ABI audit + the 2026-10-17 TODO sweep.
+*(A+B+C ≈ 100 open root-cause items after dedup of 146 live `TODO(规则书)` gap
+tags + 11 RULING ignore rows + the 2026-10-10 ABI audit + the loyalty waves.
 Treat these as approximate — the per-item entries are the source of truth.
 Some A items are "contained engine bug" one-liners; some B items unblock
 several A/C.)*
@@ -2573,9 +2715,9 @@ several A/C.)*
 | rent multipliers | MONEY-01, TILE-01..03, CRYSTAL-08 | 1 high C |
 | host ABI: out-buffers / queries | ABI-01, ABI-02, STA-02, STA-05, HOST-01 | 1 high B (HOST-01) |
 | HostRequest handlers / reply sentinels | ABI-04, ABI-09, HOST-05 | (HOST-06/07/08/13 fixed) |
-| crystal/marker accounting | CRYSTAL-02/05/06/07/08, STA-01, STA-04, HAG-01, HARU-SOYO-FX, MONEY-07 | 1 high via CH-07 |
+| crystal/marker accounting | CRYSTAL-02/05/06/07/08, STA-01 **closed**, STA-04 **closed**, HAG-01, HARU-SOYO-FX, MONEY-07, **DONUT-VOID-01**, **ABI-MARKER-SPENT** | 1 high via CH-07 |
 | draw/discard pipeline | ABI-07, ABI-08, DRAW-OUT-01, CH-13 fixed | |
-| skills: PP | **AYA-GRANT-01 (high)**, AYA-POOL-01 | 1 high B |
+| skills: PP | AYA-GRANT-01 **closed (not a bug)**, AYA-POOL-01 | 0 |
 | skills: Roselia / CRYCHIC | SKILL-05, SKILL-07, TOMORI-BIND-01 | |
 | skills: Mujica | SKILL-04, CH-08, NYAMU-01 | |
 | skills: CiRCLE / sumimi / HHW | SKILL-06, SKILL-10, STA-03, CRYSTAL-05/06, SETTLE-01 reverse | |
@@ -2590,7 +2732,8 @@ several A/C.)*
 # Proposed batch order
 
 Do these in order; each batch should be a PR that does not share files with the next.
-**2026-10-17 rewrite** — batches 1/2/3/4/5 below are already done, kept for the record.
+**2026-10-20 rewrite** — batches 1/2/3/4/5 below are already done, kept for the record.
+STA-01 / STA-04 dropped out of batch 6 (closed 2026-10-18).
 
 1. ~~**high-A engine: settle recursion / stack safety** (STACK-01)~~ **fixed 2026-10-10**
 2. ~~**high-A engine bugs — movement** (MOVE-01..05, SKILL-08, SKILL-09, TILE-04, TILE-05)~~ **fixed**
@@ -2598,24 +2741,25 @@ Do these in order; each batch should be a PR that does not share files with the 
 4. ~~**high-A money** (MONEY-03, CRYSTAL-03, SETTLE-02, SETTLE-03)~~ **fixed** (SETTLE-02 closed in the 2026-10-17 audit)
 5. ~~**high-A host ABI: reply sentinels + quote==charge** (HOST-06, HOST-07, HOST-08)~~ **fixed**
 6. **high-B unblockers** — the live ones, in this order
-   - **AYA-GRANT-01** skill-attachment grant (a granted (2) runs the wrong body — highest new item)
+   - ~~**AYA-GRANT-01** skill-attachment grant~~ **closed 2026-10-20 -- not a bug; the clause names the character**
    - **CH-05 play-history + nested PlayCtx** (unblocks Mortis, Mana Champion, dice_cast counters)
    - **HOST-01 HostRequest nested-settle write journal** (unblocks inline equivalence)
-   - **STA-01 / STA-04** status grant-verb enforcement ([不可阻挡] / [除外] no-stacking)
+   - ~~**STA-01 / STA-04** status grant-verb enforcement~~ **closed 2026-10-18**
    - **CH-07 general 「视为此卡未生效」 observer** (C-Q5 first, then `CardWasted`)
 7. **C questions to the user** (all of §C below, now C-Q1..C-Q45, in one sitting).
    While waiting, continue on:
 8. **medium-A contained bugs** (SKILL-07 soyo expiry, CRYSTAL-08 ringing_bloom
    continuous max, AYA-LONG-01, AVE-CLAW-01, NFO-CANCEL-01, LOW-02 docs)
 9. **medium-B ABI pile** (ABI-01..12, HOST-05 ask_money, STA-02/05, HAG-01,
-   EVE-01, TOMORI-BIND-01, HARU-SOYO-FX, DRAW-OUT-01, FORCE-WRITE-01) — one ABI
-   bump, many cards.
+   EVE-01, TOMORI-BIND-01, HARU-SOYO-FX, DRAW-OUT-01, FORCE-WRITE-01,
+   **ABI-MARKER-SPENT**) — one ABI bump, many cards.
 10. **medium-C leftovers + events** (MONEY-01..08, MOVE-06..15, SETTLE-05..07,
     CH-08..10, TILE-03/06, EVENT-01..04, DETOUR-01, NYAMU-01, STA-03,
-    LINGER-10, NOBUY-CARD-01) after the user answers §C.
-11. **D cleanup** — rewrite NEGATION-AUDIT V2 TODOs as settled notes; strike the
-    stale TEST-FINDINGS / COVERAGE / CROSS-TESTS / NEGATION-AUDIT / SETTLE-STAGES
-    sections listed above (all still stale as of 2026-10-17).
+    LINGER-10, NOBUY-CARD-01, **DONUT-VOID-01**) after the user answers §C.
+11. **D cleanup** — ~~rewrite NEGATION-AUDIT V2 TODOs as settled notes~~ **done
+    2026-10-20**; strike the stale TEST-FINDINGS / COVERAGE / CROSS-TESTS /
+    NEGATION-AUDIT / SETTLE-STAGES sections listed above (all still stale as of
+    2026-10-20).
 
 ---
 
@@ -2800,8 +2944,7 @@ to the [特] moment, which changes when the curve can start.
 
 ---
 
-*End of backlog. Standing file: `docs/rulebook/BACKLOG.md`. Audited 2026-10-17
-against master `1cd71939` (157 `TODO(规则书)`, 11 RULING ignores, ABI v85).*
+# Closed after the 2026-10-17 audit (kept for the record)
 
 ## Phase C batch 2 — generic status / marker verbs (closed)
 - **status**: **fixed** (2026-10-19, `bandori-std`) — `apply_abnormal` /
@@ -2811,7 +2954,7 @@ against master `1cd71939` (157 `TODO(规则书)`, 11 RULING ignores, ABI v85).*
   newtype; `ActionKind::Exile` / `TriggerKind::Exile` named consts moved to
   `bandori_std::kind::Exile`. Shared stay/stun/exile verbs live in
   `bandori_std::status`. ABI_VERSION 87 -> 88. Still open: `fireSpent` ->
-  `MarkerSpent` rename (separate ticket).
+  `MarkerSpent` rename → **ABI-MARKER-SPENT** (filed 2026-10-20).
 
 ## status-vocab-zero — opaque status keys (closed)
 - **status**: **fixed** (2026-10-19) — the engine no longer names stay/stun/
@@ -2824,4 +2967,12 @@ against master `1cd71939` (157 `TODO(规则书)`, 11 RULING ignores, ABI v85).*
   / `StatusGates`, `MatchPlayer::{stay,stun,exile,…}`, `default_expiry`, and
   the `state::key` status constants are deleted. ABI_VERSION 88 -> 89.
   `apply_abnormal` is split (`gate` + `state_add` + `raise_after`).
-  Still open: `fireSpent` -> `MarkerSpent` rename (separate ticket).
+  Still open: `fireSpent` -> `MarkerSpent` rename → **ABI-MARKER-SPENT**
+  (filed 2026-10-20).
+
+---
+
+*End of backlog. Standing file: `docs/rulebook/BACKLOG.md`. Reconstructed
+2026-10-20 against master `b8e26436` (153 `TODO(规则书)` tags = 146 live gaps +
+7 convention markers, 11 RULING ignores, ABI v89). Every live gap tag has an
+item id — see the "TODO(规则书) ↔ item index" at the top.*

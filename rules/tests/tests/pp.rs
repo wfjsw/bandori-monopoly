@@ -310,6 +310,37 @@ fn seeyou_echo_ignores_gate() {
     t.give(0, &["PP:[衍生]共鸣", "PP:[衍生]明天见"]);
     assert!(t.play(0, "PP:[衍生]明天见").is_ok(), "echo bypasses the gate");
     accept_echo(&mut t);
+    assert!(!t.hand(0).contains(&"PP:[衍生]明天见".to_string()), "spent");
+    assert!(!t.hand(0).contains(&"PP:[衍生]共鸣".to_string()), "共鸣 paid");
+    assert_eq!(fans(&t, 0), (5, 0), "effect ran");
+}
+
+/// Gate holds (up <= down): played without 共鸣, resolves and is spent.
+#[test]
+fn seeyou_gate_holds_plays_free() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 1, 3);
+    t.give(0, &["PP:[衍生]明天见"]);
+    t.play(0, "PP:[衍生]明天见").unwrap();
+    drain(&mut t);
+    assert_eq!(fans(&t, 0), (4, 0));
+    assert!(!t.hand(0).contains(&"PP:[衍生]明天见".to_string()), "spent");
+}
+
+/// 「才可使用」: gate fails and 共鸣 is declined -> not played, card stays in hand.
+#[test]
+fn seeyou_declined_echo_keeps_card_in_hand() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 3, 1);
+    t.give(0, &["PP:[衍生]共鸣", "PP:[衍生]明天见"]);
+    assert!(t.play(0, "PP:[衍生]明天见").is_ok());
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let hand = t.hand(0);
+    assert!(hand.contains(&"PP:[衍生]明天见".to_string()), "kept: {hand:?}");
+    assert!(hand.contains(&"PP:[衍生]共鸣".to_string()), "共鸣 unspent: {hand:?}");
+    assert_eq!(fans(&t, 0), (3, 1), "no effect");
 }
 
 // ============================================================ PP:不要背负期待
@@ -781,6 +812,41 @@ fn jennifer_pass_agency_pays_and_grants_ranger() {
         "Ranger in user hand: {:?}",
         t.hand(0)
     );
+}
+
+/// 规则书[持续]: 「依次进行以下操作」 -- 1 pay, 2 fans, 3 [移除] *then* the
+/// Pastel Ranger. The removal must not precede the money or the fans.
+#[test]
+fn jennifer_runs_its_steps_in_printed_order() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["PP:找回珍妮弗"]);
+    t.play(0, "PP:找回珍妮弗").unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("jennifer") {
+            let _ = t.answer(0, 0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(t.on_field(1, "PP:找回珍妮弗"), "{:?}", t.field_ids(1));
+    t.begin_turn(1);
+    walk_onto(&mut t, 1, 3, 6); // path 4,5,6 passes 偶像经纪公司 (5)
+    let keys = t.recent_keys(40);
+    let idx = |k: &str| {
+        keys
+            .iter()
+            .position(|x| x == k)
+            .unwrap_or_else(|| panic!("{k} missing from {keys:?}"))
+    };
+    // 1 「[使用者][支付][拥有者]400资金」 -> `log.pay`
+    // 3 「此卡[移除]」 -> `log.outcome.unplace`
+    // 3 「将1张…Ranger加入[使用者]手卡」 -> `jennifer_ranger`
+    let pay = idx("log.pay");
+    let gone = idx("log.outcome.unplace");
+    let ranger = idx("cards:card-pp.jennifer_ranger");
+    assert!(pay < gone, "pay (step 1) must precede the [移除] (step 3): {keys:?}");
+    assert!(gone < ranger, "[移除] must precede the Ranger add: {keys:?}");
 }
 
 // ============================================================ PP:[衍生]魔法战队Pastel✽Ranger
@@ -1401,6 +1467,35 @@ fn jennifer_owner_flip_clause2_crystal() {
     assert_eq!(band_xtal(&t, 1), 1, "clause (2): owner flip X=1 > 0 downs");
 }
 
+/// 规则书（1）: 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- the
+/// grant attaches **丸山彩's** (2) to each non-P◇P player. The clause names the
+/// character, so the grantee running 丸山彩's (2) is the rulebook text, not a
+/// mis-dispatch (AYA-GRANT-01 settled).
+#[test]
+fn aya_with_grants_ayaa_2_to_non_pp_players() {
+    let mut t = Table::new(&["丸山彩", "户山香澄", "白鹭千圣"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    assert!(
+        t.on_field(1, "skill:丸山彩:With~"),
+        "the non-P◇P seat gained 丸山彩's (2): {:?}",
+        t.field_ids(1)
+    );
+    // P0 is 丸山彩 herself -- her own bound skill is the same id, so what
+    // matters is that a *different* P◇P seat did not get it.
+    assert!(
+        !t.on_field(2, "skill:丸山彩:With~"),
+        "the other P◇P seat is not a grantee: {:?}",
+        t.field_ids(2)
+    );
+    assert!(
+        t.on_field(2, "skill:白鹭千圣:保持坦率的你"),
+        "白鹭千圣 keeps her own (2): {:?}",
+        t.field_ids(2)
+    );
+}
+
 /// aya's (2) on a **non-PP** user is 「将所有Pastel✽Palettes角色的1个反面
 /// [P✽P粉丝]变正」 -- X=1 per PP seat even when they hold 0 face-downs, so
 /// each pays the overflow crystal to that seat's band card.
@@ -1741,6 +1836,85 @@ fn aya_exclusive_places_and_recycles() {
     drain(&mut t);
     assert!(t.on_field(0, "PP:[丸山彩]憧憬的前方"));
     assert!(t.hand(0).contains(&"通用:GREAT".to_string()));
+}
+
+/// 规则书[持续]（1）: 「如果[拥有者]的资金数是所有存活玩家中最少则[拥有者]
+/// [消耗]或[支付]时将金额降低X（最低0）；X为100」 -- the owner pays, and the
+/// shave lands as a `PaySplitAdd` amount modifier.
+#[test]
+fn aya_longing_shaves_the_poorest_owners_payment_by_100() {
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.give_play(0, "PP:[丸山彩]憧憬的前方").unwrap();
+    drain(&mut t);
+    // P1 owns a high-rent tile; P0 is the poorest and walks onto it.
+    t.set_owner(deed, Some(1));
+    t.set_houses(deed, 1);
+    t.set_money(0, 10000);
+    t.set_money(1, 15_000);
+    let before = t.money(0);
+    t.begin_turn(0);
+    t.set_pos(0, (deed + 59) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let paid = before - t.money(0);
+    assert!(paid > 0, "rent was paid: {}", paid);
+    // X = 100 (no fans) -- the shave is exactly 100 off the un-shaved rent.
+    // Compare against the same landing with no card.
+    let mut b = Table::vanilla(2);
+    b.set_owner(deed, Some(1));
+    b.set_houses(deed, 1);
+    b.set_money(0, 10000);
+    b.set_money(1, 15_000);
+    let bbefore = b.money(0);
+    b.begin_turn(0);
+    b.set_pos(0, (deed + 59) % 60);
+    b.dice(&[1]);
+    b.roll(0).unwrap();
+    drain(&mut b);
+    let full = bbefore - b.money(0);
+    assert!(full > 0, "baseline rent is positive");
+    assert_eq!(paid, full - 100, "X=100 shaved off a {full} rent");
+}
+
+/// 「[拥有者][消耗]或[支付]时」 -- only the owner's own payments shave. A
+/// payment **to** the owner is not the owner's [支付].
+#[test]
+fn aya_longing_does_not_shave_a_payment_to_the_owner() {
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.give_play(0, "PP:[丸山彩]憧憬的前方").unwrap();
+    drain(&mut t);
+    // P0 (owner) holds the deed; P1 is the poorest and walks onto it.
+    t.set_owner(deed, Some(0));
+    t.set_houses(deed, 1);
+    t.set_money(0, 15_000);
+    t.set_money(1, 10_000);
+    let before = t.money(1);
+    t.begin_turn(1);
+    t.set_pos(1, (deed + 59) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let paid = before - t.money(1);
+    assert!(paid > 0, "rent was paid: {}", paid);
+    // Baseline with no card.
+    let mut b = Table::vanilla(2);
+    b.set_owner(deed, Some(0));
+    b.set_houses(deed, 1);
+    b.set_money(0, 15_000);
+    b.set_money(1, 10_000);
+    let bbefore = b.money(1);
+    b.begin_turn(1);
+    b.set_pos(1, (deed + 59) % 60);
+    b.dice(&[1]);
+    b.roll(1).unwrap();
+    drain(&mut b);
+    let full = bbefore - b.money(1);
+    assert_eq!(paid, full, "the owner's card does not shave someone else's rent");
 }
 
 /// 规则书: 「将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。」(白鹭千圣 exclusive)

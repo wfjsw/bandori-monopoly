@@ -21,6 +21,10 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
     &[
         On::Play("", "", None, play),
         On::Action(&[ActionKind::PayAfter], "card.placed && pay_is_rent && target == owner", "", None, pay_after),
+        // 规则书（2）: 「视为」 is continuous -- it tracks the max as houses move.
+        // `HouseAdded` covers the rise path; there is no `HouseRemoved` kind yet,
+        // so a raze of the max tile is not tracked (see the TODO on `apply_view`).
+        On::Action(&[bandori_std::kind::HouseAdded], "card.placed && actor == owner", "", None, on_house_added),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -78,25 +82,36 @@ fn play(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("ringing_bloom_placed")).player_id("who", player_id),
     );
-    // 规则书（2）: 「你的所有格子上的房屋数视为与你房屋数最多的格子等同」 --
-    // `prop::RENT_HOUSES` on this instance is the counted value the rent
-    // lookup reads (`ctx::rent_houses_of` / `pay_rent`). Gone with the card.
+    // 规则书（2）: the 「视为」 view.
+    apply_view(player_id);
+    // 规则书（3）: 「你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。」
+    //   -- `CardRingingBloom.PayAfter` -> `Done`, see `pay_after`.
+    Ok(())
+}
+
+/// 规则书（2）: 「你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此
+/// 效果影响获得额外房屋数的格子收费减半」 -- recompute the counted max and the
+/// half-charge set. Called at play and on every `HouseAdded`, so the 「视为」
+/// tracks the max as houses rise.
+///
+/// TODO(规则书)（2）: the **fall** path is still open. There is no `HouseRemoved`
+///   kind, so a raze of the max tile (or a sale) leaves the view at the old max
+///   until the next build. Also, a removal path other than [`pay_after`]'s
+///   discard leaves the tile `RENT_FACTOR`s armed -- there is no general
+///   "instance left the field" hook to disarm on.
+fn apply_view(player_id: i32) {
     let max_h = counted_max(player_id);
     if max_h > 0 {
         ctx::set_prop(prop::RENT_HOUSES, max_h);
     }
-    // 规则书（2）: 「但受此效果影响获得额外房屋数的格子收费减半」 -- only the
-    // raised ones, via `prop::RENT_FACTOR` (500 = x0.5) on the tile's rule
-    // instance. Cleared when this card leaves (see `pay_after`).
     for &t in &raised_tiles(player_id, max_h) {
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 500);
     }
-    // 规则书（3）: 「你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。」
-    //   -- `CardRingingBloom.PayAfter` -> `Done`, see `pay_after`.
-    // TODO(规则书)（2）: 「视为」 is continuous (it tracks the max as houses
-    //   move); this snapshots the max at play. A later build past the snapshot
-    //   or a raze of the max tile is not tracked. A `houseAdded` refresh would
-    //   cover the rise; no hook covers the fall.
+}
+
+/// 规则书（2）: the 「视为」 tracks the max as houses move (rise path).
+fn on_house_added(player_id: i32) -> card_sdk::Asked {
+    apply_view(player_id);
     Ok(())
 }
 

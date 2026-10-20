@@ -652,6 +652,10 @@ pub struct Room {
     /// redrawn after every match. `None` only until the first [`Room::roll_fair`]
     /// (or when a stored room carries none and the re-roll has not run yet).
     fair: Option<FairState>,
+    /// Last time the spectator stale-scan ran. Process-local, like `tx`: a
+    /// watcher is only ever dropped, never handed to an AI, so the scan does
+    /// not need the tick cadence the seat scan gets.
+    last_spectator_scan: std::time::Instant,
 }
 
 pub struct NewMember<'a> {
@@ -691,6 +695,7 @@ impl Room {
                 weights,
                 clock: clock.sanitized(),
                 members: vec![],
+                spectators: vec![],
                 fair: None,
             },
             password: password.to_string(),
@@ -704,6 +709,7 @@ impl Room {
             bot_search: false,
             presence_timeout: crate::state::PRESENCE_TIMEOUT,
             fair: None,
+            last_spectator_scan: std::time::Instant::now(),
         }
     }
 
@@ -753,6 +759,7 @@ impl Room {
             bot_search: false,
             presence_timeout: crate::state::PRESENCE_TIMEOUT,
             fair: None,
+            last_spectator_scan: std::time::Instant::now(),
         };
         this.apply_record(&rec);
         this
@@ -849,6 +856,11 @@ impl Room {
             .map(|(&m, _)| m)
     }
 
+    /// Is this member id a watcher rather than a seat?
+    pub fn is_spectator(&self, member: i32) -> bool {
+        self.info.spectator(member).is_some()
+    }
+
     pub fn is_host(&self, member: i32) -> bool {
         self.info.members.iter().any(|m| m.id == member && m.host)
     }
@@ -857,25 +869,9 @@ impl Room {
         self.info.members.iter().filter(|m| !m.bot).count()
     }
 
-    /// `hello` handling: version, full, playing, password. Rejoining is always allowed.
-    pub fn join(&mut self, who: NewMember, password: &str, version: &str) -> ApiResult<i32> {
-        if let Some(m) = self.member_of(who.token) {
-            return Ok(m);
-        }
-        if !version.is_empty() && version != net::VERSION {
-            return Err(ApiError::reject(net::reject::VERSION));
-        }
-        if self.info.playing {
-            return Err(ApiError::reject(net::reject::PLAYING));
-        }
-        if self.info.is_full() {
-            return Err(ApiError::reject(net::reject::FULL));
-        }
-        if self.info.locked && password != self.password {
-            return Err(ApiError::reject(net::reject::PASSWORD));
-        }
-        let id = self.next_member;
-        self.next_member += 1;
+    /// A human takes a seat under `id` (fresh join, or a spectator upgrading).
+    /// The host flag follows the same rule on both paths: first human seat.
+    fn push_human_seat(&mut self, id: i32, who: &NewMember<'_>) {
         let host = self.humans() == 0;
         self.info.members.push(RoomMember {
             id,
@@ -888,6 +884,70 @@ impl Room {
             away: false,
             mentality: Default::default(),
         });
+    }
+
+    /// `hello` handling: version, full, playing, password. Rejoining is always allowed.
+    ///
+    /// `spectate` joins as a watcher: no seat, so `playing` and `full` do not
+    /// apply (that is the point), but the password still does. Spectators never
+    /// take host and never contribute a fair nonce. A spectator who asks for a
+    /// seat (`spectate: false`) **upgrades in place** -- same member id, same
+    /// token -- once one is free; they already passed the password when they
+    /// sat down to watch.
+    pub fn join(
+        &mut self,
+        who: NewMember,
+        password: &str,
+        version: &str,
+        spectate: bool,
+    ) -> ApiResult<i32> {
+        let existing = self.member_of(who.token);
+        // A seat asking to spectate stays seated; only a watcher can move up.
+        let upgrading = existing.is_some_and(|m| self.is_spectator(m)) && !spectate;
+        if let Some(m) = existing {
+            if !upgrading {
+                return Ok(m);
+            }
+        }
+        if !upgrading {
+            if !version.is_empty() && version != net::VERSION {
+                return Err(ApiError::reject(net::reject::VERSION));
+            }
+            if self.info.locked && password != self.password {
+                return Err(ApiError::reject(net::reject::PASSWORD));
+            }
+        }
+        if !spectate {
+            if self.info.playing {
+                return Err(ApiError::reject(net::reject::PLAYING));
+            }
+            if self.info.is_full() {
+                return Err(ApiError::reject(net::reject::FULL));
+            }
+        }
+        if upgrading {
+            let id = existing.expect("upgrading implies existing");
+            self.info.spectators.retain(|s| s.id != id);
+            self.push_human_seat(id, &who);
+            self.persist();
+            // Same `idle` backstop a fresh join gets: the upgrade may be the
+            // only request this member makes before the next reaper pass.
+            self.presence_touch(id, "idle", self.presence_timeout);
+            self.notify();
+            return Ok(id);
+        }
+        let id = self.next_member;
+        self.next_member += 1;
+        if spectate {
+            self.info.spectators.push(net::RoomSpectator {
+                id,
+                player: net::clean_name(who.player),
+                persona: who.persona.into(),
+                cn_id: who.cn_id.into(),
+            });
+        } else {
+            self.push_human_seat(id, &who);
+        }
         self.tokens.insert(id, who.token.into());
         self.persist();
         // Presence: an `idle` key covers "joined but no stream yet"; a live
@@ -899,7 +959,8 @@ impl Room {
 
     /// Leave the room. Mid-match this forfeits -- the caller runs the leave
     /// command on the handle first (see [`Room::match_handle`]), then calls
-    /// this. Returns the token that left.
+    /// this. A spectator never forfeits; the caller skips the engine command.
+    /// Returns the token that left.
     pub fn leave(&mut self, member: i32) -> Option<String> {
         let token = self.tokens.remove(&member);
         let _ = self.store.presence_clear(&self.info.id, member);
@@ -910,6 +971,7 @@ impl Room {
         }
         let was_host = self.is_host(member);
         self.info.members.retain(|m| m.id != member);
+        self.info.spectators.retain(|s| s.id != member);
         if was_host {
             // The original dissolved the room (the host *was* the server). A dedicated
             // server can keep it alive: hosting passes to the next human.
@@ -918,6 +980,9 @@ impl Room {
                 m.ready = false;
             }
         }
+        // Spectators alone cannot start a game, so they do not keep a room
+        // alive -- but a spectator leaving a room that still has players never
+        // dissolves it (`humans()` counts seats only).
         if self.humans() == 0 {
             self.dissolve(Msg::new("room.dissolved_empty"));
         } else {
@@ -1333,6 +1398,9 @@ impl Room {
     /// live stream on any process, and the post-drop grace has expired. The
     /// timeout is baked into the keys' TTLs ([`Self::presence_touch`]); the
     /// argument here is the reaper's own view of it and must agree.
+    ///
+    /// Spectators are never marked `away` and never handed to the AI: a stale
+    /// one is simply removed from the room.
     pub fn tick_presence(&mut self, timeout: std::time::Duration) -> (Vec<i32>, Vec<String>) {
         let _ = timeout; // the TTLs set at stream_opened/join carry it
         let mut dropped = vec![];
@@ -1360,6 +1428,34 @@ impl Room {
                 dropped.push(m);
             } else if let Some(t) = self.leave(m) {
                 removed.push(t);
+            }
+        }
+        // A disconnected spectator has no seat to hand over: drop them the way
+        // a silent lobby member is dropped. `leave` is safe here because a
+        // spectator never dissolves a room that still has players.
+        //
+        // Unlike the seat scan (which must notice an away seat promptly so the
+        // AI can take it), nothing waits on a watcher -- presence keys expire
+        // after `presence_timeout`, so a 1 s cadence is plenty and keeps this
+        // off the per-tick store round-trip.
+        if self.last_spectator_scan.elapsed() >= std::time::Duration::from_secs(1) {
+            self.last_spectator_scan = std::time::Instant::now();
+            let stale_spec: Vec<i32> = self
+                .info
+                .spectators
+                .iter()
+                .filter(|s| {
+                    self.store
+                        .presence_count(&self.info.id, s.id)
+                        .unwrap_or(1)
+                        == 0
+                })
+                .map(|s| s.id)
+                .collect();
+            for s in stale_spec {
+                if let Some(t) = self.leave(s) {
+                    removed.push(t);
+                }
             }
         }
         if !dropped.is_empty() {

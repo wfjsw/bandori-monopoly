@@ -377,8 +377,32 @@ pub struct Match {
     vote_seq: i32,
     vote_cooldown: f32,
     deferred: Vec<Deferred>,
+    /// Public state version: the identity of one [`MatchState`] frame.
+    ///
+    /// **Invariant: `seq` moves exactly when [`Self::changed`].** Three
+    /// consumers key on it and would otherwise serve a stale frame after a
+    /// change it did not observe:
+    ///
+    /// * the SSE `match` event (`server/src/sse.rs`) only emits when `seq`
+    ///   differs from the last one sent -- a change that leaves `seq` alone is
+    ///   never broadcast;
+    /// * the client's `OnlineExtras` cache (`webui/src/game/viewExtras.ts`)
+    ///   is keyed `state.seq:prompt.id`;
+    /// * the clock hold is armed with the current `seq` and
+    ///   [`Self::anim_done`] treats a lower one as a stale ack.
+    ///
+    /// The vote used to break this: casting / auto-filling / ending a vote
+    /// set `changed` but left `seq` alone, so a vote never reached online
+    /// clients. Every `changed = true` site must pair with `seq += 1`.
+    ///
+    /// Not a gameplay counter: `decision_seed` mixes it only to vary bot
+    /// search samples ("never game state", `server/src/lib.rs`), and a record
+    /// replays through the engine bundle that wrote it (`docs/REPLAY.md` §9),
+    /// so changing where it bumps is not a rules or replay break.
     seq: i32,
     clock_hold: Option<ClockHold>,
+    /// Set on every visible change; [`Self::take_changed`] drains it. Must
+    /// move with [`Self::seq`] -- see the note there.
     changed: bool,
     /// STACK-01: true while [`Self::flush_deferred`] is draining. Nested
     /// `execute` (Leave → start(Act)) must not re-enter the drain.
@@ -1963,7 +1987,13 @@ impl Match {
             return;
         }
         if st.roller >= 0 && self.world.out(st.roller as usize) {
+            // Reassign the roll to the seat now at the plate. Not through
+            // `direct`: that would re-arm the clock hold on a tick. It is a
+            // visible field (`MatchState::roller`), so it still owes the frame
+            // identity its bump -- see the note on `seq`.
             self.world.st.roller = turn as i32;
+            self.changed = true;
+            self.seq += 1;
         }
         if self.wait > 0.0 {
             return;
@@ -2597,6 +2627,7 @@ impl Match {
             );
         }
         self.changed = true;
+        self.seq += 1;
         self.check_vote();
         Ok(())
     }
@@ -2619,6 +2650,7 @@ impl Match {
             if self.vote.answers[k] < 0 && (self.world.out(s) || self.auto_vote(s)) {
                 self.vote.answers[k] = 1;
                 self.changed = true;
+                self.seq += 1;
             }
         }
         if self.mode != MatchMode::Solo && self.vote.time_left <= 0.0 {
@@ -2642,6 +2674,7 @@ impl Match {
     fn end_vote(&mut self, pass: bool, why: Msg) {
         self.vote = MatchVote::default();
         self.changed = true;
+        self.seq += 1;
         if pass {
             self.host_log("vote", -1, Msg::new("log.vote_passed"));
             self.finish_now("vote");

@@ -118,6 +118,7 @@
   "err.no_such_card": "你没有这张牌",
   "err.no_vote": "现在没有在投票",
   "err.not_in_match": "你不在这局对局里",
+  "err.not_a_player": "你是观战者，不能操作",
   "err.not_mortgaged": "这块地没有抵押",
   "err.not_over_hand": "手牌没有超过上限，不用弃",
   "err.not_playing": "现在不在对局中",
