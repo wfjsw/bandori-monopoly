@@ -338,7 +338,7 @@ extern "C-unwind" {
     pub fn raise_bought(player_id: i32, tile: i32) -> i32;
     // v50: guest-raised trigger points (e.g. `circleAffected` from tile:circle).
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_raise")]
-    pub fn raise(player_id: i32, kind: i32, value: i32) -> i32;
+    pub fn raise(player_id: i32, kind: i64, value: i32) -> i32;
     // v88: generic marker family (the name is data). Readers are `state_get`
     // / `state_max` with the marker's wire key.
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_gain_marker")]
@@ -402,7 +402,7 @@ extern "C-unwind" {
         text_len: i32,
     ) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_kind")]
-    pub fn trig_kind() -> i32;
+    pub fn trig_kind() -> i64;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_player")]
     pub fn trig_player() -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_target")]
@@ -488,7 +488,7 @@ extern "C-unwind" {
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_count")]
     pub fn trig_effect_count() -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_kind")]
-    pub fn trig_effect_kind(i: i32) -> i32;
+    pub fn trig_effect_kind(i: i32) -> i64;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_target")]
     pub fn trig_effect_target(i: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_from")]
@@ -498,7 +498,7 @@ extern "C-unwind" {
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_effect_value")]
     pub fn trig_effect_value(i: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_declare_effect")]
-    pub fn declare_effect(kind: i32, target: i32, from: i32, tile: i32, value: i32);
+    pub fn declare_effect(kind: i64, target: i32, from: i32, tile: i32, value: i32);
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_trig_card_is")]
     pub fn trig_card_is(ptr: i32, len: i32) -> i32;
     #[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"), link_name = "ruleset_play_card")]

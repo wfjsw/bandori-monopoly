@@ -1187,7 +1187,7 @@ fn starry_pass_world(user: i32, crystals: i32) {
     set_self_crystals(crystals);
     sparse2(starry_hook_dispatch, user, |w| {
         w.trig_tile = 0; // 0-based engine index; TILES[0] kind 0 = CiRCLE
-        w.trig_kind = card_sdk::abi::TriggerKind::PassTile.as_i32() as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::PassTile.as_cel_i64() as i32;
         w.field_n = 1;
     });
 }
@@ -1522,7 +1522,7 @@ crate::host_subset!(tritone_dispatch {
 
 fn tritone_counteract_world(user: i32, amount: i32) {
     sparse2(tritone_dispatch, user, |w| {
-        w.trig_kind = card_sdk::abi::TriggerKind::Effect.as_i32() as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::Effect.as_cel_i64() as i32;
         w.pay_amount = amount; // trigger::value()
         w.trig_value = amount;
     });
@@ -1586,7 +1586,7 @@ fn tritone_02_tick_iff_at(user: i32) {
     let owed_key = crate::intern::intern_or_fail("tritone_owed");
     sparse2(tritone_dispatch, user, |w| {
         w.key_set(user, owed_key, owed);
-        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd.as_i32() as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd.as_cel_i64() as i32;
         // Own turn end: the tick is gated on `trig_player == user`.
         w.field_n = 1;
         w.dest = 2; // sentinel (Field): not Graveyard
@@ -1651,7 +1651,7 @@ pub fn tritone_02_mutant_is_detected() {
     let owed_key = crate::intern::intern_or_fail("tritone_owed");
     sparse2(tritone_dispatch, user, |w| {
         w.key_set(user, owed_key, owed);
-        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd.as_i32() as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd.as_cel_i64() as i32;
         w.field_n = 1;
         w.money[user as usize] = 10_000;
     });

@@ -73,7 +73,7 @@ struct NativeIndex {
     /// sandbox manifest carries.
     pre: Vec<Vec<Option<game_rules::CompiledPre>>>,
     by_id: HashMap<String, i32>,
-    declared: u128,
+    declared: game_rules::KindMask,
 }
 
 impl NativeIndex {
@@ -88,7 +88,7 @@ impl NativeRulesHandle {
         let mut cards = Vec::new();
         let mut pre: Vec<Vec<Option<game_rules::CompiledPre>>> = Vec::new();
         let mut by_id = HashMap::new();
-        let mut declared: u128 = 0;
+        let mut declared = game_rules::KindMask::default();
         for module in RULESET {
             for card in module.iter() {
                 let idx = cards.len() as i32;
@@ -130,10 +130,11 @@ impl NativeRulesHandle {
                 // kinds nothing listens to and open counteraction windows the sandbox
                 // skips -- a drift the check caught.
                 for o in &on {
-                    for t in &o.triggers {
-                        if (0..128).contains(t) {
-                            declared |= 1u128 << *t;
-                        }
+                    for &t in &o.triggers {
+                        let tk = TriggerKind::from_cel_i64(t);
+                        declared.insert(tk).unwrap_or_else(|e| {
+                            panic!("{}: {e}", card.id)
+                        });
                     }
                 }
                 let mut props: BTreeMap<String, i32> = card
@@ -203,8 +204,7 @@ impl NativeRulesHandle {
     }
 
     pub fn declares(&self, kind: TriggerKind) -> bool {
-        let v = kind.as_i32();
-        (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
+        self.inner.declared.contains(kind)
     }
 
     /// Content hash of the linked table, so a record stamped with it can tell

@@ -202,7 +202,7 @@ pub(crate) fn build(player_id: i32) -> card_sdk::Asked {
         .n("cost", spent as i64);
     ctx::log(player_id, &text);
     // `houseAdded` (75) -- 「你拥有格子上的房屋总数增加时」.
-    ctx::raise(player_id, TriggerKind::from_i32(75), h)?;
+    ctx::raise(player_id, bandori_std::kind::HouseAdded, h)?;
     // `buildAfter` -- only after the house actually commits.
     ctx::raise(player_id, TriggerKind::BuildAfter, 0)?;
     Ok(())

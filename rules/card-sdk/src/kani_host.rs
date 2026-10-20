@@ -150,7 +150,10 @@ pub enum Op {
     raise = 134,
     // 135/136 retired (charge / charge_max named readers; use state_get).
     gain_marker = 137,
-    // 138 retired (kind-parameterized grant verb).
+    /// HostOps bridge only (the guest `apply_abnormal` import is gone -- rules
+    /// compose `gate` + `state::*` + `raise_after`). The C export
+    /// `ruleset_apply_abnormal` still routes here for native-rules.
+    apply_abnormal = 138,
     // 139 retired (second abnormal-kind grant).
     // 140 was the third abnormal-kind grant.
     give_extra_turn = 141,

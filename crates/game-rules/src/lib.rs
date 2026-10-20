@@ -52,7 +52,7 @@ pub use cond_pre::{
 pub use game_core::msg::Msg;
 pub use host::{
     Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,
-    HostState, Outcome, Prompt, PromptOption, RuleError, RulesHandle, MAX_NESTING,
+    HostState, KindMask, Outcome, Prompt, PromptOption, RuleError, RulesHandle, MAX_NESTING,
 };
 /// Sandbox-only: the wasmi/wasmtime card-module host (`Ruleset` is the
 /// `CardModules` over loaded wasm; `RulesetBuilder` assembles one).

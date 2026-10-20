@@ -938,13 +938,13 @@ impl On {
     /// The wire values this entry answers (empty for non-trigger entries),
     /// as the CEL single-int packing ([`abi::TriggerKind::as_cel_i64`],
     /// truncated to `i32`).
-    pub fn triggers(&self) -> Vec<i32> {
+    pub fn triggers(&self) -> Vec<i64> {
         match self {
-            On::Counteract(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
-            On::Action(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
-            On::Filter(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
-            On::FilterFlag(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
-            On::FilterValue(k, ..) => k.iter().map(|x| x.as_cel_i64() as i32).collect(),
+            On::Counteract(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
+            On::Action(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
+            On::Filter(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
+            On::FilterFlag(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
+            On::FilterValue(k, ..) => k.iter().map(|x| x.as_cel_i64()).collect(),
             // Message names travel as the manifest's `triggers` string list
             // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
             // The names ride a separate manifest field; see `rt.rs`.
@@ -1018,7 +1018,7 @@ mod tests {
             TriggerKind::SettleBody,
             TriggerKind::CounterChanged,
             TriggerKind::DrewBefore,
-            TriggerKind::ruleset(78), // marker spend-substitution (name is payload); prompts, remains Action
+            TriggerKind::ruleset("bandori", 78), // marker spend-substitution (name is payload); prompts, remains Action
         ] {
             assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
         }

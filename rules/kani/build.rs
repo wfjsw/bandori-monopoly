@@ -48,6 +48,7 @@ const ARRAY_OPS: &[&str] = &[
     "field_instances", "unplace_at", "tile_at", "set_tile_at", "is_face_down_at", "set_face_down_at", "is_immune_at", "set_immune_at",
     "set_build_cost_pct", "set_card_face_down", "card_face_down",
     "join_redirect_target", "set_join_used", "adjust_money", "card_prop",
+    "state_set_flags", "raise_after",
 ];
 
 fn main() {

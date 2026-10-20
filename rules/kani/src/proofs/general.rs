@@ -328,7 +328,7 @@ fn fever_turn_start_world(placed: bool, same_turn: bool) -> World {
         w.field_n = 0;
     }
     use card_sdk::abi::TriggerKind;
-    w.trig_kind = TriggerKind::TurnStart.as_i32() as i32;
+    w.trig_kind = TriggerKind::TurnStart.as_cel_i64() as i32;
     if same_turn {
         w.trig_player = player;
     } else {

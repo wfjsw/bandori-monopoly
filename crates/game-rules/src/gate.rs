@@ -114,7 +114,7 @@ pub fn window_of_exclusive(
     ask: &ExclusiveAsk<'_>,
 ) -> WindowCtx {
     let mut win = window_of_world(w, actor);
-    win.kind = TriggerKind::ExclusiveUse.as_i32() as i64;
+    win.kind = TriggerKind::ExclusiveUse.as_cel_i64();
     win.trigger_card = id_of(ask.card);
     win.name = ask.owner.to_string();
     win.value = ask.owner_is_base as i64;

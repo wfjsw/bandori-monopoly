@@ -237,7 +237,7 @@ fn kind_name(kind: &str) -> Msg {
     // wire spelling is only for a kind nobody has named yet.
     if matches!(
         kind,
-        "diceRollPlan" | "playGate" | "26" | "73" | "74" | "75" | "78"
+        "diceRollPlan" | "playGate" | "r:bandori:26" | "r:bandori:73" | "r:bandori:74" | "r:bandori:75" | "r:bandori:78"
     ) {
         return Msg::new(format!("log.kind.{kind}"));
     }

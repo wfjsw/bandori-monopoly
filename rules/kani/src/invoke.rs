@@ -305,23 +305,23 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::Counteract, On::Counteract(..)) => true,
             (KindTag::Action, On::Action(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
             }
             (KindTag::Filter, On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
             }
             (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
             }
             (KindTag::AtEnd, On::Action(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
             }
             (KindTag::DiceRollPlan, On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+                    || hook_kind_matches(kinds, |k| k.as_cel_i64() as i32, hook_name)
             }
             (KindTag::Settle, On::Settle(..)) => true,
             (KindTag::Mortgage, On::Mortgage(..)) => true,
@@ -666,7 +666,7 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 /// the shave profile).
 fn hook_kind_matches<K: Copy>(kinds: &[K], id_of: fn(K) -> i32, hook_name: &str) -> bool {
     let want = match hook_kind_parse(hook_name) {
-        Some(w) => w.as_i32(),
+        Some(w) => w.as_cel_i64() as i32,
         None => return false,
     };
     // Zero-loop (see `hook_kind_only_idx`).
@@ -767,20 +767,20 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
         PASS => Some(T::Pass),
         PASS_TILE => Some(T::PassTile),
         PASS_PLAYER => Some(T::PassPlayer),
-        EXILE => Some(T(21)), /* exile */
+        EXILE => Some(bandori_std::kind::Exile.as_trigger()),
         _ => None,
     }
 }
 
 fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
     use card_sdk::abi::TriggerKind as T;
-    if k.as_i32() == bandori_std::kind::HOUSE_ADDED {
+    if k == bandori_std::kind::HouseAdded.as_trigger() {
         return "HouseAdded";
     }
-    if k.as_i32() == bandori_std::kind::FIRE_SPENT {
+    if k == bandori_std::kind::FireSpent.as_trigger() {
         return "FireSpent";
     }
-    if k.as_i32() == bandori_std::kind::FANS_FLIP {
+    if k == bandori_std::kind::FansFlip.as_trigger() {
         return "FansFlip";
     }
     match k {
@@ -814,7 +814,7 @@ fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
         T::Pass => "Pass",
         T::PassTile => "PassTile",
         T::PassPlayer => "PassPlayer",
-        T(21) => "Exile", /* exile */
+        _ if k == bandori_std::kind::Exile.as_trigger() => "Exile",
         _ => "",
     }
 }

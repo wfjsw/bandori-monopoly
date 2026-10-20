@@ -2063,9 +2063,9 @@ impl CardWorld for Run {
     fn set_trigger_spare(&mut self, seat: i32) {
         self.trigger.spare(seat);
     }
-    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32) {
+    fn declare_trigger_effect(&mut self, kind: i64, target: i32, from: i32, tile: i32, value: i32) {
         self.trigger.declare(game_core::engine::rules::Effect {
-            kind: card_sdk::abi::TriggerKind::from_i32(kind).as_str(),
+            kind: card_sdk::abi::TriggerKind::from_cel_i64(kind).as_str(),
             target,
             from,
             tile,
@@ -3771,7 +3771,7 @@ impl<M: CardModules> RulesBridge<M> {
             deal_houses,
             deal_mortgaged,
         } => {
-            let tk = card_sdk::abi::TriggerKind::from_i32(kind);
+            let tk = card_sdk::abi::TriggerKind::from_cel_i64(kind);
             let kind = tk.as_str();
             let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
             let t = self.raise_core(cx, kind, player_id, |t| {
@@ -4465,13 +4465,13 @@ impl<M: CardModules> RulesBridge<M> {
             // kind 73 (`fireSpent`, wire-stable; `TODO(ABI) ABI-MARKER-SPENT`
             // rename to `MarkerSpent` when card bodies can follow). Name is payload.
             for (player_id, n, name) in after.marker_spent_log {
-                self.raise_core(cx, "73", player_id, |t| {
+                self.raise_core(cx, "r:bandori:73", player_id, |t| {
                     t.value = n;
                     t.name = Some(name.clone());
                 })?;
             }
             for (player_id, tile, nth) in after.house_log {
-                self.raise_core(cx, "75", player_id, |t| {
+                self.raise_core(cx, "r:bandori:75", player_id, |t| {
                     t.tile = tile;
                     t.value = nth;
                 })?;
@@ -5709,7 +5709,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // scope's `_hand` table are stale from here.
                     memo.on_declaration();
                     let mut link =
-                        CoreTrigger::new(if uid >= 0 { "74" } else { "card" }, cursor);
+                        CoreTrigger::new(if uid >= 0 { "r:bandori:74" } else { "card" }, cursor);
                     if uid >= 0 {
                         link.cards = vec![id.clone()];
                     }
@@ -7271,7 +7271,7 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
 /// which would re-enter this trait and overflow the stack.
 impl rules_cond::view::CondView for LiveSnap<'_> {
     fn kind(&self) -> i64 {
-        self.trigger.kind.as_i32() as i64
+        self.trigger.kind.as_cel_i64()
     }
     fn actor(&self) -> i64 {
         self.trigger.player_id as i64
@@ -7398,7 +7398,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind).as_i32() as i64)
+            .map(|e| crate::TriggerKind::from_str(e.kind).as_cel_i64())
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -8178,7 +8178,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         let kind = crate::gate::kind_of(gate);
         // The gate-declaring rule supplies the i18n key as data.
         for c in self.ruleset.cards() {
-            if let Some((_, key)) = c.gate_msgs.iter().find(|(k, _)| *k == kind.as_i32()) {
+            if let Some((_, key)) = c
+                .gate_msgs
+                .iter()
+                .find(|(k, _)| *k == kind.as_cel_i64() as i32)
+            {
                 return Msg::new(key);
             }
         }
@@ -8187,7 +8191,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     fn gate_skip_msg(&self, gate: game_core::engine::Gate, _player: usize) -> Msg {
         let kind = crate::gate::kind_of(gate);
         for c in self.ruleset.cards() {
-            if let Some((_, key)) = c.gate_skip_msgs.iter().find(|(k, _)| *k == kind.as_i32()) {
+            if let Some((_, key)) = c
+                .gate_skip_msgs
+                .iter()
+                .find(|(k, _)| *k == kind.as_cel_i64() as i32)
+            {
                 return Msg::new(key);
             }
         }
@@ -9029,8 +9037,14 @@ fn source_group(world: &game_core::engine::World, uid: i32) -> LookupGroup {
 /// skips the whole cycle when no seat holds a card that answers, which is the
 /// common case on a `passTile` (it runs on every tile walked).
 fn is_hook_only(kind: &str) -> bool {
+    let t = trigger_kind(kind);
+    // Ruleset kinds (bandori ChargePaying 78 / FansFlip 107) are hook-only too;
+    // they cannot be `matches!` patterns (the constructor is not a const path).
+    if t == TriggerKind::ruleset("bandori", 78) || t == TriggerKind::ruleset("bandori", 107) {
+        return true;
+    }
     matches!(
-        trigger_kind(kind),
+        t,
         TriggerKind::TurnEnd
             | TriggerKind::Drawn
             | TriggerKind::PayAfter
@@ -9052,8 +9066,6 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::DeckAtGameStart
             | TriggerKind::Drew
             | TriggerKind::DrewBefore
-            | TriggerKind(78)
-            | TriggerKind(107) // ruleset FansFlip
             | TriggerKind::Reshuffled
             | TriggerKind::Bought
             | TriggerKind::BeforeOut
@@ -9247,7 +9259,7 @@ mod tests {
             "drew",
             "reshuffled",
             "bought",
-            "26",
+            "r:bandori:26",
             "settleBody",
             "beforeOut",
             "teleported",
@@ -9263,12 +9275,12 @@ mod tests {
             "turnBonusTime",
             "turnBaseTime",
             // v28 post-commit points (what a committed effect did)
-            "73",
-            "74",
-            "75",
+            "r:bandori:73",
+            "r:bandori:74",
+            "r:bandori:75",
             // v50: named counter writes
             "counterChanged",
-            "78",
+            "r:bandori:78",
             // v42: the command-wide pre-split payment stage + terminals
             "payCombinedAdd",
             "payCombinedMul",

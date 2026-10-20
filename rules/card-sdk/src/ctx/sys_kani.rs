@@ -675,8 +675,8 @@ pub fn ask(kind: i32, player_id: i32, title_ptr: i32, title_len: i32, text_ptr: 
     kani_host::call_i32(Op::ask, [kind, player_id, title_ptr, title_len, text_ptr, text_len])
 }
 
-pub fn trig_kind() -> i32 {
-    kani_host::call_i32(Op::trig_kind, [0, 0, 0, 0, 0, 0])
+pub fn trig_kind() -> i64 {
+    kani_host::call(Op::trig_kind, [0, 0, 0, 0, 0, 0])
 }
 
 pub fn trig_player() -> i32 {

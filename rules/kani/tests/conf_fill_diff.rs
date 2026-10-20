@@ -258,11 +258,11 @@ fn board_price(tile: i32) -> i32 {
 /// through `TriggerKind::from_str`.
 fn chain_kind_str(kind: i64) -> &'static str {
     match kind {
-        x if x == TriggerKind::Pay.as_i32() as i64 => "pay",
-        x if x == TriggerKind::Target.as_i32() as i64 => "target",
-        x if x == TriggerKind::Abnormal.as_i32() as i64 => "abnormal",
-        x if x == TriggerKind::Card.as_i32() as i64 => "card",
-        x if x == TriggerKind::Settle.as_i32() as i64 => "settle",
+        x if x == TriggerKind::Pay.as_cel_i64() as i64 => "pay",
+        x if x == TriggerKind::Target.as_cel_i64() as i64 => "target",
+        x if x == TriggerKind::Abnormal.as_cel_i64() as i64 => "abnormal",
+        x if x == TriggerKind::Card.as_cel_i64() as i64 => "card",
+        x if x == TriggerKind::Settle.as_cel_i64() as i64 => "settle",
         _ => "pay",
     }
 }
@@ -587,7 +587,7 @@ fn to_world(fx: &Fixture) -> KWorld {
     w.trig_target = fx.trig.target;
     w.trig_tile = fx.trig.tile;
     w.trig_value = fx.trig.value as i32;
-    w.trig_kind = fx.trig.kind.as_i32() as i32;
+    w.trig_kind = fx.trig.kind.as_cel_i64() as i32;
     w.turn_player = fx.trig.turn_player;
     w.turn_key = fx.trig.turn_key;
     w
@@ -596,7 +596,7 @@ fn to_world(fx: &Fixture) -> KWorld {
 fn to_overlay(fx: &Fixture) -> TriggerOverlay {
     let t = &fx.trig;
     let mut ov = TriggerOverlay::default();
-    ov.kind = Some(t.kind.as_i32() as i32);
+    ov.kind = Some(t.kind.as_cel_i64() as i32);
     ov.value = Some(t.value);
     ov.step = t.step;
     ov.by = t.by;
@@ -969,8 +969,8 @@ fn fx_chain_pay_move() -> Fixture {
         by: 1,
         pay_is_rent: true,
         chain: vec![
-            (TriggerKind::Pay.as_i32() as i64, 0, 1),
-            (TriggerKind::Target.as_i32() as i64, 1, 0),
+            (TriggerKind::Pay.as_cel_i64() as i64, 0, 1),
+            (TriggerKind::Target.as_cel_i64() as i64, 1, 0),
         ],
         mv: Some(MoveFx {
             roll: Some(5),

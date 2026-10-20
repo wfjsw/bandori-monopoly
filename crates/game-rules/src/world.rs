@@ -1025,7 +1025,7 @@ pub trait CardWorld: Clone + 'static {
     /// Append a declared effect to the current chain link, naming its recipient
     /// now -- at declaration, not at settlement. `kind` is a `TriggerKind` wire
     /// value.
-    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32);
+    fn declare_trigger_effect(&mut self, kind: i64, target: i32, from: i32, tile: i32, value: i32);
     /// `t.Card == id` -- is this trigger about that card?
     fn trig_card_is(&self, id: &str) -> i32;
     /// `t.Buy.Price` -- rewrite the quoted price (the `BuyAdd` / `BuyMul` /

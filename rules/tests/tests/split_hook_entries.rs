@@ -15,7 +15,7 @@ use bandori_std::kind as rk;
 #[test]
 fn split_cards_declare_filter_and_action_halves() {
     let r = rules();
-    let shape = |id: &str| -> Vec<(i32, Vec<i32>, bool)> {
+    let shape = |id: &str| -> Vec<(i32, Vec<i64>, bool)> {
         let idx = r.ruleset().card(id).unwrap_or_else(|| panic!("{id} loaded"));
         let info = &r.ruleset().cards()[idx as usize];
         info.on

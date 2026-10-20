@@ -75,7 +75,7 @@ impl<'a, S: SnapSrc> SnapView<'a, S> {
 impl<S: SnapSrc> CondView for SnapView<'_, S> {
     // -- window / trigger ---------------------------------------------------
     fn kind(&self) -> i64 {
-        self.trigger.kind.as_i32() as i64
+        self.trigger.kind.as_cel_i64()
     }
     fn actor(&self) -> i64 {
         self.trigger.player_id as i64
@@ -189,7 +189,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind).as_i32() as i64)
+            .map(|e| crate::TriggerKind::from_str(e.kind).as_cel_i64())
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -1216,7 +1216,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         .effects
         .iter()
         .map(|e| ChainLink {
-            kind: crate::TriggerKind::from_str(e.kind).as_i32() as i64,
+            kind: crate::TriggerKind::from_str(e.kind).as_cel_i64(),
             from: e.from as i64,
             hits: e.target as i64,
         })
@@ -1258,7 +1258,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     };
 
     WindowCtx {
-        kind: t.kind.as_i32() as i64,
+        kind: t.kind.as_cel_i64(),
         actor: t.player_id as i64,
         target: t.target as i64,
         tile,

@@ -73,7 +73,8 @@ fn on_settle_applies(_player_id: i32) -> bool {
 /// (an `Abnormal` only counts when its kind is `Exile`).
 fn on_out_applies(_player_id: i32) -> bool {
     match trigger::kind() {
-        TriggerKind(21) /* exile */ | TriggerKind::Bankrupt => true,
+        // exile (ruleset 21) or bankruptcy
+        k if k == bandori_std::kind::Exile.as_trigger() || k == TriggerKind::Bankrupt => true,
         TriggerKind::Abnormal => trigger::abnormal_kind() == Some(bandori_std::kind::abnormal::Exile),
         _ => false,
     }

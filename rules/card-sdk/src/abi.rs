@@ -3,7 +3,7 @@
 //! refuses rulesets built against a different version.
 
 #[cfg(target_arch = "wasm32")]
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
@@ -703,19 +703,22 @@ use alloc::{string::String, vec::Vec};
 ///      i18n keys and the exempting prop key as data. `state::set_flags` +
 ///      `ctx::raise_after` are additive. SAVE_VERSION unchanged.
 /// v90: **namespaced trigger kinds**. `TriggerKind` is `{ ns: KindNs, id: i32 }`
-///      (`KindNs::Engine` / `KindNs::Ruleset`) instead of a bare `i32`;
+///      (`KindNs::Engine` / `KindNs::Ruleset(key)`) instead of a bare `i32`;
 ///      `ActionKind` / `FilterKind` wrap it. A rule-defined kind can no longer
-///      collide with a future engine id. Wire spelling: engine stays camelCase,
-///      ruleset is `"r:{id}"` (bare decimal `"21"` is a deprecated alias for
-///      `"r:21"`, gone one ABI from now). CEL keeps one `i64`:
+///      collide with a future engine id -- or with another ruleset's ids
+///      (the key names the ruleset). Wire spelling: engine stays camelCase,
+///      ruleset is `"r:{key}:{id}"` (e.g. `"r:bandori:21"`). Bare decimals
+///      do not parse. CEL keeps one `i64` **per ruleset**, as a bit field:
 ///      `TriggerKind::as_cel_i64` packs engine = `id`, ruleset =
-///      `1_000_000 + id`. The `trig_kind` / `raise` / `declare_effect`
-///      hostcalls carry that packing (as `i32`; every current id fits) --
-///      `ctx::trigger::kind()` decodes with `from_cel_i64`. `is_filter` is
-///      engine-only; the host treats `OnKind::Filter` / `OnKind::Action` as
-///      authoritative for ruleset kinds. Host masks are per-namespace (a
-///      second `u128` for ruleset ids); a ruleset id outside `0..128` is a
-///      load error. SAVE_VERSION unchanged (kinds are not in `Saved`).
+///      `(1 << 32) | id` (the key is not on the CEL wire -- conditions
+///      compile inside one ruleset). The `trig_kind` hostcall returns that
+///      packing as `i64`; `raise` / `declare_effect` carry it as `i32`
+///      (every current id fits) -- `ctx::trigger::kind()` decodes with
+///      `from_cel_i64`. `is_filter` is engine-only; the host treats
+///      `OnKind::Filter` / `OnKind::Action` as authoritative for ruleset
+///      kinds. Host masks are per-namespace (a second `u128` for ruleset
+///      ids); a ruleset id outside `0..128` is a load error.
+///      SAVE_VERSION unchanged (kinds are not in `Saved`).
 ///      RECORD_VERSION unchanged (the record codec does not carry kind ids).
 pub const ABI_VERSION: i32 = 90;
 
@@ -1395,25 +1398,57 @@ pub const REWARD_CARD: i32 = 1;
 /// Which id space a [`TriggerKind`] lives in.
 ///
 /// Engine kinds are the fixed generic raise points; ruleset kinds are declared
-/// by the loaded rule set and can never collide with a future engine id.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[repr(u8)]
+/// by a named rule set and can never collide with a future engine id -- or
+/// with a different rule set's ids.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum KindNs {
     /// The engine's generic raise points (`0..`).
     #[default]
-    Engine = 0,
-    /// Rule-defined raise points, namespaced away from the engine ids.
-    Ruleset = 1,
+    Engine,
+    /// A ruleset-declared namespace, keyed by the ruleset's stable name
+    /// (`"bandori"`). Distinct rulesets cannot collide on the wire.
+    Ruleset(&'static str),
+}
+
+impl KindNs {
+    /// The `bandori-std` ruleset key (see `bandori_std::kind::RULESET_KEY`).
+    pub const BANDORI: Self = Self::Ruleset("bandori");
+}
+
+// `&'static str` has no `Deserialize` that fits an owned postcard buffer, so
+// the enum decodes through an owned wire form and interns the key (the known
+// `BANDORI` key is matched first; anything else is leaked once per unique key).
+impl<'de> serde::Deserialize<'de> for KindNs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        enum Wire {
+            Engine,
+            Ruleset(String),
+        }
+        Ok(match Wire::deserialize(deserializer)? {
+            Wire::Engine => KindNs::Engine,
+            Wire::Ruleset(key) => {
+                if key == "bandori" {
+                    KindNs::BANDORI
+                } else {
+                    KindNs::Ruleset(Box::leak(key.into_boxed_str()))
+                }
+            }
+        })
+    }
 }
 
 /// Trigger kind: a namespaced wire id for every raise point.
 ///
 /// Engine-generic kinds are named associated constants that serialize to
-/// camelCase wire names; ruleset-declared kinds are opaque ids in
-/// [`KindNs::Ruleset`] that serialize as `"r:{id}"`. `as_str` and `from_str`
-/// map those two spellings. `is_filter` is the side declaration for engine
-/// ids; the host treats `OnKind::Filter` / `OnKind::Action` as authoritative
-/// for ruleset kinds (see [`Self::is_filter`]).
+/// camelCase wire names; ruleset-declared kinds are opaque ids in a named
+/// [`KindNs::Ruleset`] that serialize as `"r:{key}:{id}"` (e.g. `"r:bandori:21"`).
+/// `as_str` and `from_str` map those two spellings. `is_filter` is the side
+/// declaration for engine ids; the host treats `OnKind::Filter` /
+/// `OnKind::Action` as authoritative for ruleset kinds (see [`Self::is_filter`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct TriggerKind {
     /// The id space this id lives in.
@@ -1536,8 +1571,8 @@ impl ActionKind {
     pub const Target: Self = Self(TriggerKind::Target);
 
     // Wire id 21 is the 「获得[除外]」 post-commit raise. The rule-facing name
-    // is the ruleset-declared kind (`ActionKind::ruleset(21)` / `"r:21"`); this
-    // module carries no game-named kind const.
+    // is the ruleset-declared kind (`ActionKind::ruleset(RULESET_KEY, 21)` /
+    // `"r:bandori:21"`); this module carries no game-named kind const.
 
     /// Action / Counteraction window. A player toggled skill state (the 1↔2
     /// toggle commit). Payload: player_id = who, value = the new state, by_card.
@@ -1803,7 +1838,9 @@ impl ActionKind {
     pub const fn engine(id: i32) -> Self { Self(TriggerKind::engine(id)) }
 
     /// Ruleset-namespace kind. Same id as [`TriggerKind::ruleset`].
-    pub const fn ruleset(id: i32) -> Self { Self(TriggerKind::ruleset(id)) }
+    pub const fn ruleset(key: &'static str, id: i32) -> Self {
+        Self(TriggerKind::ruleset(key, id))
+    }
 
     /// View this id in the wire namespace.
     pub const fn as_trigger(self) -> TriggerKind { self.0 }
@@ -2000,7 +2037,9 @@ impl FilterKind {
     pub const fn engine(id: i32) -> Self { Self(TriggerKind::engine(id)) }
 
     /// Ruleset-namespace kind. Same id as [`TriggerKind::ruleset`].
-    pub const fn ruleset(id: i32) -> Self { Self(TriggerKind::ruleset(id)) }
+    pub const fn ruleset(key: &'static str, id: i32) -> Self {
+        Self(TriggerKind::ruleset(key, id))
+    }
 
     /// View this id in the wire namespace.
     pub const fn as_trigger(self) -> TriggerKind { self.0 }
@@ -2093,8 +2132,8 @@ impl TriggerKind {
 
     // Wire id 21 is a ruleset-declared kind (the 「获得[除外]」 post-commit
     // raise). The rule-facing name lives in `bandori_std::kind`
-    // (`TriggerKind::ruleset(21)` / wire string `"r:21"`); this module carries
-    // no game-named kind const.
+    // (`TriggerKind::ruleset(RULESET_KEY, 21)` / wire string `"r:bandori:21"`);
+    // this module carries no game-named kind const.
 
     // Wire id 22 retired; never reuse.
 
@@ -2344,28 +2383,35 @@ impl TriggerKind {
         Self { ns: KindNs::Engine, id }
     }
 
-    /// Ruleset-namespace kind. Rule-defined raise points; they cannot collide
-    /// with a future engine id.
-    pub const fn ruleset(id: i32) -> Self {
-        Self { ns: KindNs::Ruleset, id }
+    /// Ruleset-namespace kind. Rule-defined raise points, keyed by the
+    /// ruleset's stable name; they cannot collide with a future engine id or
+    /// with another ruleset's ids.
+    pub const fn ruleset(key: &'static str, id: i32) -> Self {
+        Self { ns: KindNs::Ruleset(key), id }
     }
 
-    /// CEL single-int encoding: engine = `id`; ruleset = `1_000_000 + id`.
-    /// CEL keeps a single `i64` kind (see `rules/cond/src/kinds.rs`); this is
-    /// the packing both sides agree on. Also the packing used by the
-    /// `trig_kind` / `raise` / `declare_effect` hostcalls (as `i32`, which
-    /// every current id fits).
+    /// CEL single-int kind encoding -- a bit field, not a decimal reserved
+    /// range. Engine: `id`. Ruleset: `(1 << 32) | id`.
+    /// CEL is compiled per-ruleset, so the ns bit is enough to separate engine
+    /// from rule-defined kinds inside one ruleset's conditions; the `KindNs`
+    /// string key is what prevents cross-ruleset collision on the wire.
+    ///
+    /// Also the packing used by the `trig_kind` / `raise` / `declare_effect`
+    /// hostcalls.
     pub const fn as_cel_i64(self) -> i64 {
         match self.ns {
             KindNs::Engine => self.id as i64,
-            KindNs::Ruleset => 1_000_000 + self.id as i64,
+            KindNs::Ruleset(_) => (1i64 << 32) | (self.id as u32 as i64),
         }
     }
 
     /// Inverse of [`Self::as_cel_i64`].
+    ///
+    /// The ruleset key is not on the CEL wire (see [`Self::as_cel_i64`]); this
+    /// decodes to [`KindNs::BANDORI`] -- the one ruleset that speaks CEL today.
     pub const fn from_cel_i64(v: i64) -> Self {
-        if v >= 1_000_000 {
-            Self::ruleset((v - 1_000_000) as i32)
+        if v & (1i64 << 32) != 0 {
+            Self::ruleset("bandori", (v as u32) as i32)
         } else {
             Self::engine(v as i32)
         }
@@ -2426,11 +2472,11 @@ impl TriggerKind {
     /// The trigger-kind wire string.
     ///
     /// Engine kinds keep their camelCase spelling; a ruleset-declared id is
-    /// `"r:{id}"`. An unregistered id reads as `""` (no `Box::leak` in
-    /// `no_std`).
+    /// `"r:{key}:{id}"` (e.g. `"r:bandori:21"`). An unregistered id reads as
+    /// `""` (no `Box::leak` in `no_std`).
     pub fn as_str(self) -> &'static str {
         match self.ns {
-            KindNs::Ruleset => ruleset_wire(self.id),
+            KindNs::Ruleset(key) => ruleset_wire(key, self.id),
             KindNs::Engine => match self.id {
                 0 => "",
                 1 => "diceRollBefore",
@@ -2541,22 +2587,23 @@ impl TriggerKind {
         }
     }
 
-    /// Inverse of [`Self::as_str`]. Generic camelCase names and `"r:{id}"`
-    /// parse; anything else is [`Self::None`].
-    ///
-    /// Bare decimal `"21"` is accepted as a deprecated alias for `"r:21"`
-    /// (i.e. [`Self::ruleset`]); it goes away one ABI from now.
+    /// Inverse of [`Self::as_str`]. Generic camelCase names and
+    /// `"r:{key}:{id}"` parse; anything else is [`Self::None`].
+    /// A bare decimal `"21"` is **not** accepted -- only the real spelling.
     pub fn from_str(s: &str) -> Self {
         if let Some(rest) = s.strip_prefix("r:") {
-            if !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()) {
-                return Self::ruleset(rest.parse::<i32>().unwrap_or(0));
+            if let Some((key, id)) = rest.split_once(':') {
+                if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
+                    let id = id.parse::<i32>().unwrap_or(0);
+                    return if key == "bandori" {
+                        Self::ruleset("bandori", id)
+                    } else {
+                        // Unknown ruleset key: leak once so the kind can compare.
+                        Self::ruleset(Box::leak(key.to_string().into_boxed_str()), id)
+                    };
+                }
             }
             return Self::None;
-        }
-        if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
-            // Deprecated alias for "r:{id}" -- bare decimal means ruleset.
-            // Goes away one ABI from now.
-            return Self::ruleset(s.parse::<i32>().unwrap_or(0));
         }
         match s {
             "diceRollBefore" => Self::engine(1),
@@ -2579,7 +2626,7 @@ impl TriggerKind {
             // "skillTeleport" retired in v85 (id 18 never reuse).
             // second abnormal kind retired in v84 (id 19 never reuse).
             // first abnormal kind retired in v84 (id 20 never reuse).
-            // id 21 is ruleset-declared; "r:21" / bare "21" accept it.
+            // id 21 is ruleset-declared; "r:bandori:21" / bare "21" accept it.
             // third abnormal kind retired in v84 (id 22 never reuse).
             "state" => Self::engine(23),
             "counteracted" => Self::engine(24),
@@ -2681,7 +2728,7 @@ impl TriggerKind {
                     EventRole::Hook
                 }
             }
-            KindNs::Ruleset => {
+            KindNs::Ruleset(_) => {
                 if list_has(CUSTOM_LINKS, self.id) {
                     EventRole::Link
                 } else {
@@ -2692,20 +2739,21 @@ impl TriggerKind {
     }
 }
 
-/// Wire spelling for the known ruleset-declared ids (`"r:{id}"`).
+/// Wire spelling for the known ruleset-declared ids (`"r:{key}:{id}"`).
 ///
-/// `as_str` returns `&'static str`, so the handful of ids the tree knows about
-/// get a table here rather than formatting. An unknown ruleset id reads as
-/// `""`, matching today's behaviour for unregistered ids.
-const fn ruleset_wire(id: i32) -> &'static str {
-    match id {
-        21 => "r:21",
-        26 => "r:26",
-        73 => "r:73",
-        74 => "r:74",
-        75 => "r:75",
-        78 => "r:78",
-        107 => "r:107",
+/// `as_str` returns `&'static str`, so the handful of `(key, id)` pairs the
+/// tree knows about get a table here rather than formatting. An unknown
+/// ruleset id reads as `""`, matching today's behaviour for unregistered ids.
+/// (Not `const fn` -- `str` cannot be matched at compile time.)
+fn ruleset_wire(key: &str, id: i32) -> &'static str {
+    match (key, id) {
+        ("bandori", 21) => "r:bandori:21",
+        ("bandori", 26) => "r:bandori:26",
+        ("bandori", 73) => "r:bandori:73",
+        ("bandori", 74) => "r:bandori:74",
+        ("bandori", 75) => "r:bandori:75",
+        ("bandori", 78) => "r:bandori:78",
+        ("bandori", 107) => "r:bandori:107",
         _ => "",
     }
 }
@@ -2836,9 +2884,9 @@ pub struct ManifestOn {
     /// An [`OnKind`] as `i32`.
     pub kind: i32,
     /// `TriggerKind`s, as the CEL single-int packing
-    /// ([`TriggerKind::as_cel_i64`], truncated to `i32` -- every current id
-    /// fits). Engine ids are their bare id; ruleset ids are `1_000_000 + id`.
-    pub triggers: Vec<i32>,
+    /// ([`TriggerKind::as_cel_i64`]). Engine ids are their bare id; ruleset
+    /// ids are `(1 << 32) | id`.
+    pub triggers: Vec<i64>,
     /// Guard **condition** source (docs/GUARDS.md §4.3), CEL over the §4.2
     /// window/candidate vocabulary. `None` = no condition (the guard alone
     /// decides). Compiled once at ruleset build (`RuleError::BadPre` on any
@@ -3057,24 +3105,38 @@ mod tests {
         assert_eq!(TriggerKind::MoveAfter.as_str(), "moveAfter");
     }
 
-    /// ABI v90: the two namespaces pack into one CEL int without collision,
-    /// and the `"r:N"` spelling round-trips (bare decimal is the deprecated
-    /// alias).
+    /// ABI v90: the two namespaces pack into one CEL int without collision
+    /// (per-ruleset bit field -- see `as_cel_i64`), and the `"r:{key}:{id}"`
+    /// spelling round-trips. A bare decimal is **not** a spelling.
     #[test]
     fn namespaced_cel_and_wire_spelling() {
         assert_eq!(TriggerKind::engine(55).as_cel_i64(), 55);
-        assert_eq!(TriggerKind::ruleset(21).as_cel_i64(), 1_000_021);
+        assert_eq!(TriggerKind::ruleset("bandori", 21).as_cel_i64(), (1 << 32) | 21);
         assert_eq!(TriggerKind::from_cel_i64(55), TriggerKind::engine(55));
-        assert_eq!(TriggerKind::from_cel_i64(1_000_021), TriggerKind::ruleset(21));
-        assert_eq!(TriggerKind::ruleset(21).as_str(), "r:21");
-        assert_eq!(TriggerKind::ruleset(107).as_str(), "r:107");
-        assert_eq!(TriggerKind::from_str("r:21"), TriggerKind::ruleset(21));
-        // Deprecated bare-decimal alias; goes away one ABI from now.
-        assert_eq!(TriggerKind::from_str("21"), TriggerKind::ruleset(21));
+        assert_eq!(
+            TriggerKind::from_cel_i64((1 << 32) | 21),
+            TriggerKind::ruleset("bandori", 21)
+        );
+        assert_eq!(TriggerKind::ruleset("bandori", 21).as_str(), "r:bandori:21");
+        assert_eq!(TriggerKind::ruleset("bandori", 107).as_str(), "r:bandori:107");
+        assert_eq!(
+            TriggerKind::from_str("r:bandori:21"),
+            TriggerKind::ruleset("bandori", 21)
+        );
+        // Bare decimals are not spellings -- only "r:{key}:{id}" parses.
+        assert_eq!(TriggerKind::from_str("21"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("paySplitAdd"), TriggerKind::engine(55));
         // Engine and ruleset with the same numeric id are different kinds.
-        assert_ne!(TriggerKind::engine(21), TriggerKind::ruleset(21));
-        assert_eq!(TriggerKind::ruleset(21).ns, KindNs::Ruleset);
-        assert!(!TriggerKind::ruleset(55).is_filter(), "ruleset is never is_filter");
+        assert_ne!(TriggerKind::engine(21), TriggerKind::ruleset("bandori", 21));
+        assert_eq!(TriggerKind::ruleset("bandori", 21).ns, KindNs::BANDORI);
+        // Two rulesets with the same id are different kinds.
+        assert_ne!(
+            TriggerKind::ruleset("bandori", 21),
+            TriggerKind::ruleset("other", 21)
+        );
+        assert!(
+            !TriggerKind::ruleset("bandori", 55).is_filter(),
+            "ruleset is never is_filter"
+        );
     }
 }

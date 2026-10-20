@@ -165,7 +165,7 @@ fn chain_kinds_and_counters_have_locale_text() {
     for loc in ["zh-CN", "en"] {
         let (ui, game) = (load(loc, "ui"), load(loc, "game"));
         for id in 1..=400 {
-            let k = game_rules::TriggerKind::from_i32(id).as_str();
+            let k = game_rules::TriggerKind::engine(id).as_str();
             if k.is_empty() {
                 continue;
             }
@@ -175,7 +175,16 @@ fn chain_kinds_and_counters_have_locale_text() {
             }
         }
         // Kinds with no dedicated `log.why.*` phrase, named in the fallback.
-        for k in ["diceRollPlan", "playGate", "26", "73", "74", "75", "78", "107"] {
+        for k in [
+            "diceRollPlan",
+            "playGate",
+            "r:bandori:26",
+            "r:bandori:73",
+            "r:bandori:74",
+            "r:bandori:75",
+            "r:bandori:78",
+            "r:bandori:107",
+        ] {
             if game.get(format!("log.kind.{k}")).is_none() {
                 missing.push(format!("{loc}: log.kind.{k}"));
             }

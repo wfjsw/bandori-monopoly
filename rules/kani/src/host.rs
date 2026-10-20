@@ -815,7 +815,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| w.play_doubled = a0);
             0
         }
-                Op::apply_abnormal => arm_apply_abnormal(a),
+        Op::apply_abnormal => arm_apply_abnormal(a),
         // The stay move-latch is turn-flow; the kani world has no skip_move
         // field (the model records the layer write only). Protocol-level.
         Op::skip_main_move | Op::clear_move_skip => 0,

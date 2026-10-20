@@ -1,10 +1,15 @@
 //! Kind constants as they are written inside conditions.
 //!
 //! The values mirror the host wire enums (`card-sdk::abi::{TriggerKind,
-//! ChainKind, ActionKind, MoveKind}`) so a host can pass its raw `i32` through
+//! ChainKind, ActionKind, MoveKind}`) so a host can pass its raw value through
 //! without a translation table. This crate stays free of `card-sdk` /
 //! `game-core` types on purpose (G1 is an isolated module); when the host
-//! wires it up (G2) it fills these `i64`s from the same discriminants.
+//! wires it up (G2) it fills these `i64`s from `TriggerKind::as_cel_i64`.
+//!
+//! CEL keeps a single `i64` kind -- a bit field (ABI v90): engine = `id`;
+//! ruleset = `(1 << 32) | id`. Conditions compile inside one ruleset, so the
+//! ns bit separates engine from rule-defined kinds there; the `KindNs` string
+//! key is what prevents cross-ruleset collision on the wire.
 //!
 //! CEL spells them as bare identifiers: `move.kind == Walk`,
 //! `effect.has(Pay)`. They are bound as int constants at compile time
@@ -13,7 +18,7 @@
 //! `Teleport` is a [`MoveKind`] only (the old TriggerKind 17 was retired in
 //! ABI v84). Write `move.kind == Teleport`.
 
-/// Trigger / chain / hook kind values (shared wire numbering).
+/// Trigger / chain / hook kind values (CEL packing; see module docs).
 #[allow(non_upper_case_globals)]
 pub mod trig {
     pub const DiceRollBefore: i64 = 1;
@@ -34,11 +39,13 @@ pub mod trig {
     pub const Target: i64 = 15;
     // 16 / 17 / 19 / 20 / 22 retired in ABI v84 (Stop / Teleport / Stun /
     // Stay / Forced); 18 (SkillTeleport) retired in ABI v85 -- never reuse.
-    pub const Exile: i64 = 21;
+    /// Ruleset namespace (bandori-std::kind::Exile). CEL `(1 << 32) | 21`.
+    pub const Exile: i64 = (1 << 32) | 21;
     pub const State: i64 = 23;
     pub const Counteracted: i64 = 24;
     pub const DrawOut: i64 = 25;
-    pub const PassRewardAffected: i64 = 26;
+    /// Ruleset namespace (bandori-std::kind::PassRewardAffected). CEL `(1 << 32) | 26`.
+    pub const PassRewardAffected: i64 = (1 << 32) | 26;
     pub const TwoCards: i64 = 27;
     pub const TurnStartBefore: i64 = 28;
     pub const PassBefore: i64 = 29;
@@ -61,14 +68,18 @@ pub mod trig {
     pub const SettleBody: i64 = 64;
     /// ChainKind::Effect -- 「被…效果影响」.
     pub const Effect: i64 = 72;
-    pub const FireSpent: i64 = 73;
-    pub const SkillUsed: i64 = 74;
-    pub const HouseAdded: i64 = 75;
+    /// Ruleset namespace (bandori-std::kind::FireSpent). CEL `(1 << 32) | 73`.
+    pub const FireSpent: i64 = (1 << 32) | 73;
+    /// Ruleset namespace (bandori-std::kind::SkillUsed). CEL `(1 << 32) | 74`.
+    pub const SkillUsed: i64 = (1 << 32) | 74;
+    /// Ruleset namespace (bandori-std::kind::HouseAdded). CEL `(1 << 32) | 75`.
+    pub const HouseAdded: i64 = (1 << 32) | 75;
     /// v43: the move head / move-tail pair (`SETTLE-STAGES.md` §7).
     pub const MoveBefore: i64 = 90;
     pub const MoveAfter: i64 = 91;
-    /// 「将X个反面[P㏄P粉丝]变正」 (bandori-std::kind::FansFlip). Wire 107.
-    pub const FansFlip: i64 = 107;
+    /// 「将X个反面[P㏄P粉丝]变正」 (bandori-std::kind::FansFlip).
+    /// Ruleset namespace. CEL `(1 << 32) | 107`.
+    pub const FansFlip: i64 = (1 << 32) | 107;
 }
 
 /// MoveKind values. `Walk` / `Teleport` are what `move.kind ==` compares.
