@@ -90,7 +90,7 @@
 .poolHead button { min-width: 104px; }
 .poolHead > small { color: var(--sub); }
 .grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 164px); gap: 12px 10px; align-content: start; padding: 4px; }
-.kind { position: absolute; left: 10px; top: 10px; font-size: 12px; line-height: 20px; }
+.kind { position: absolute; left: 10px; top: 10px; font-size: 12px; line-height: 1.7; }
 
 .foot { flex: none; display: flex; align-items: center; justify-content: center; min-height: 64px; margin-top: 12px; }
 .go { width: 100%; height: 64px; font-size: 28px; }
