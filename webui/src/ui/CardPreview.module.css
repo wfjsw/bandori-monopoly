@@ -53,3 +53,9 @@
 .stand .note { font-size: 13px; }
 .stand .tagChip { font-size: 13px; }
 .stand .pill { font-size: 15px; }
+/* Phone canvas: the browser's minimum font size floors small text, so at 15px
+   and 20px design both land on the same on-screen size and the long effect text
+   read larger than the name. Push the name well clear of the floor and let the
+   body sit at the lowest size the floor allows. */
+:global(:root[data-compact]) .stand .title { font-size: 28px; line-height: 1.25; }
+:global(:root[data-compact]) .stand .text { font-size: 12px; line-height: 1.6; }
