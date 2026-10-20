@@ -13,9 +13,10 @@
 //! can be played from hand. （2） is the hand-emptying reshuffle that turns the
 //! player into a MyGO or Ave Mujica player. （3） is a crystal on a 4→5 crossing.
 
+use bandori_std::kind::Actions;
 use bandori_std::state_key; use card_sdk::abi::{CardPile, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
 
 const ID: &str = "skill:CRYCHIC:美好的往日幻影";
 /// Hand size last seen, so （3） can see a 4→5 crossing.
@@ -24,25 +25,25 @@ const SEEN: &str = "skill.crychic.seen";
 pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
-        On::Action(&[ActionKind::Drawn], card_sdk::pre::MINE, "", None, on_drawn),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, at_turn_start)),
+        On::Action(Action::Drawn(card_sdk::pre::MINE, "", None, on_drawn)),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
-        On::Action(&[ActionKind::TurnEndBefore], card_sdk::pre::MINE, "", Some(decks_empty), at_turn_end),
-        On::Filter(&[FilterKind::PaySplitChoose], "", Some(in_lock), lock_pay),
-        On::Action(&[bandori_std::kind::PassRewardAffected], "", "", Some(in_lock), force_card),
+        On::Action(Action::TurnEndBefore(card_sdk::pre::MINE, "", Some(decks_empty), at_turn_end)),
+        On::Filter(Filter::PaySplitChoose("", Some(in_lock), lock_pay)),
+        On::Action(Actions::PassRewardAffected("", "", Some(in_lock), force_card)),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
         // seat's hand size.
-        On::FilterValue(&[FilterKind::PlayGate], "hand(actor) >= 6", None, FilterBody::Gate(refuse)),
+        On::Filter(Filter::PlayGate("hand(actor) >= 6", None, refuse)),
         // 「CRYCHIC variants may not use base character's exclusives」 -- a
         // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
         // is the generic own/base rule; this entry closes the base case for
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
-        On::FilterValue(&[FilterKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, FilterBody::Gate(refuse)),
+        On::Filter(Filter::ExclusiveUse(EXCLUSIVE_USE_DENIED, None, refuse)),
         On::Play("", "", Some(can_transform), transform_now),
     ],
 )
@@ -76,14 +77,14 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// （1）「你无法获得或失去资金」 -- a payment in **either direction for this
 /// player** is voided. The lock is the skill owner's money only (`你`); a
 /// payment between two other players is untouched.
-fn lock_pay(player_id: i32, value: i32) -> i32 {
+fn lock_pay(player_id: i32, _value: i32) -> bool {
     let payer = ctx::trigger::player_id();
     let payee = ctx::trigger::target();
     if payer != player_id && payee != player_id {
-        return value;
+        return true;
     }
     ctx::log(player_id, &Msg::new(key!("crychic_locked")));
-    0
+    false
 }
 
 /// （3）「每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶（上限10）」.
@@ -297,7 +298,7 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn lock_pay_kani(player_id: i32, value: i32) -> i32 {
+pub fn lock_pay_kani(player_id: i32, value: i32) -> bool {
     lock_pay(player_id, value)
 }
 

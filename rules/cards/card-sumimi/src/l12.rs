@@ -11,13 +11,13 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use bandori_std::state_key; use card_sdk::abi::prop;
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
         On::Play("", "", None, l12),
-        On::Action(&[card_sdk::abi::ActionKind::MarkerSpent], "", "", Some(fire_spent_guard), fire_spent),
+        On::Action(Action::MarkerSpent("", "", Some(fire_spent_guard), fire_spent)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()

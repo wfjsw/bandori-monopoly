@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";
 
@@ -31,8 +31,8 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         // The body-top `trigger::player_id() != player_id` early-out is
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
-        On::FilterValue(&[FilterKind::ImmuneAll], card_sdk::pre::MINE, None, FilterBody::Gate(immune_all)),
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
+        On::Filter(Filter::ImmuneAll(card_sdk::pre::MINE, None, immune_all)),
+        On::Action(Action::TurnStart("actor == owner && card.placed", "", None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"离心力，不为所动"#)

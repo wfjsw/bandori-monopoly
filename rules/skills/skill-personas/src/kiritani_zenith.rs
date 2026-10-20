@@ -16,7 +16,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// Latch for 「一回合一次」.
 const USED: &str = "skill.kiritani.used";
@@ -25,12 +25,13 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     "skill:桐谷透子:天上天下，唯我独尊",
     &[
         On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, reset),
+        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, "", None, on_pass)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, reset)),
     ],
 )
-    .silent(&[1, 3])
+    .silent(&[1, 2, 4])
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 

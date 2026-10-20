@@ -12,13 +12,14 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const FATE_TOGETHER: CardDef = CardDef::new(
     "CRYCHIC:一起演奏音乐的命运共同体",
     &[
         On::Play("", "", None, fate_together),
-        On::Action(&[ActionKind::PayAfter, ActionKind::TurnStart], "", "", Some(counteract_guard), counteract),
+        On::Action(Action::PayAfter("", "", Some(counteract_guard), counteract)),
+        On::Action(Action::TurnStart("", "", Some(counteract_guard), counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一起演奏音乐的命运共同体"#)

@@ -13,7 +13,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 const ID: &str = "Mor:再次牵起手来";
 
@@ -27,8 +27,8 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Filter(&[FilterKind::PaySplitAt], "actor == owner && card.placed && value > 0", None, pay_at),
-        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", "", None, pay_after),
+        On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_at)),
+        On::Action(Action::PayAfter("actor == owner && card.placed", "", None, pay_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次牵起手来"#)

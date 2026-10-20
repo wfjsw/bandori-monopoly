@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
@@ -28,7 +28,8 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
         On::Play("", "", None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
         // latch, the `move_dir` read) stay in the arms below.
-        On::Action(&[ActionKind::PassTile, ActionKind::SettleAfter], "card.placed", "", None, fx),
+        On::Action(Action::PassTile("card.placed", "", None, fx)),
+        On::Action(Action::SettleAfter("card.placed", "", None, fx)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)

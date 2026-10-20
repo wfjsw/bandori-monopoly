@@ -17,7 +17,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 /// Which character's (2) this player is currently holding, or `""`.
@@ -34,13 +34,8 @@ const POOL: [&str; 4] = [
 pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
-        On::Action(
-            &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')", "",
-            None,
-            at_start,
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, roll),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", "", None, at_start)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, roll)),
     ],
 );
 

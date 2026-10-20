@@ -17,7 +17,7 @@
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{plan, trigger};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The passer this card is waiting for, or -1. A slot rather than a `GrabFx`
 /// attachment: it is a value the card stores under its own key.
@@ -31,8 +31,8 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
         // 经过 (行动阶段 12, a mid-route pass of my tile) or 重叠 (`passPlayer`,
         // the end-tile overlap)? The C# `GrabFx` used `PassPlayer`; the text
         // says 「经过」. Pending ruling -- left as `PassPlayer` (C#-carried).
-        On::Action(&[ActionKind::PassPlayer], "actor != owner && actor >= 0", "", None, on_pass),
-        On::Action(&[ActionKind::SettleBefore], "", "", None, grab),
+        On::Action(Action::PassPlayer("actor != owner && actor >= 0", "", None, on_pass)),
+        On::Action(Action::SettleBefore("", "", None, grab)),
     ],
 ).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想要抓住..."#)

@@ -29,7 +29,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{CardPile, ActionKind};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "PPP:Returns";
 /// Index into `SKILLS` of the currently borrowed band, on the Returns instance
@@ -46,31 +46,16 @@ pub const RETURNS: CardDef = CardDef::new(
         // states the actor; the residual guard names the 通用 card. The body
         // used to re-check the actor and the prefix and return early -- a flash
         // per non-通用 play by the owner.
-        On::Action(
-            &[card_sdk::abi::ActionKind::CardPlayed],
-            card_sdk::pre::MINE, "",
-            Some(on_played_is_general),
-            on_played,
-        ),
+        On::Action(Action::CardPlayed(card_sdk::pre::MINE, "", Some(on_played_is_general), on_played)),
         // [持续]（2）「每回合开始时选择一个其他存活玩家的团卡」 -- the offer
         // exists only while Returns is placed and some other survivor has a
         // band card to borrow. Derived scans (pool + `is_placed`), residual.
-        On::Action(
-            &[card_sdk::abi::ActionKind::TurnStartBefore],
-            card_sdk::pre::MINE, "",
-            Some(choose_band_applies),
-            choose_band,
-        ),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", Some(choose_band_applies), choose_band)),
         // [特]（1）「如果此卡被加入初始卡组则卡组卡数添加8」 -- the +8 is
         // unconditional on the rulebook, but the pick prompt only exists when
         // the pool can feed eight draws. Empty pool = no offer, no flash.
-        On::Action(&[ActionKind::DeckBeforeGame], "", "", Some(deck_pool_ready), deck_before_game),
-        On::Action(
-            &[ActionKind::DeckAtGameStart],
-            "trigger_card == card.id", "",
-            None,
-            deck_at_game_start,
-        ),
+        On::Action(Action::DeckBeforeGame("", "", Some(deck_pool_ready), deck_before_game)),
+        On::Action(Action::DeckAtGameStart("trigger_card == card.id", "", None, deck_at_game_start)),
     ],
 )
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

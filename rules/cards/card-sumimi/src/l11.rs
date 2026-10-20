@@ -7,13 +7,13 @@
 //! docs/rulebook/cards.json -- translated from the C# class and the card text.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
         On::Play("", "", None, l11),
-        On::Action(&[card_sdk::abi::ActionKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') <= 0", "", None, sweep),
+        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", "", None, sweep)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

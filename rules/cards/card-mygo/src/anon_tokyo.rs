@@ -17,13 +17,13 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, Filter, key, Msg, On, PayAddValue};
 
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
         On::Play("", "", Some(cant_play), anon_tokyo),
-        On::Filter(&[FilterKind::PaySplitAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
+        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && value > 0", None, link_rent)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)
@@ -170,10 +170,10 @@ fn link_guard(player_id: i32) -> bool {
 /// -- C# `AnonLinkFx.PaySplitAdd`: `p.IsRent && p.to == Seat && p.amount > 0`, then per
 /// link add `RentOf(linked) / 2` when `p.tile` is either end and the other end is
 /// owned by Player.
-fn link_rent(player_id: i32, value: i32) -> i32 {
+fn link_rent(player_id: i32, v: PayAddValue) -> PayAddValue {
     let tile = trigger::tile();
     if tile < 0 {
-        return value;
+        return v;
     }
     // The settled tile is one end of a link; the partner is the other end
     // (`TileMark.partner`, placed by `place_mark_pair`).
@@ -182,16 +182,16 @@ fn link_rent(player_id: i32, value: i32) -> i32 {
         &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
     );
     if other < 0 {
-        return value;
+        return v;
     }
     // C# `the other end is owned by Player`.
     if ctx::tile_owner(other) != player_id {
-        return value;
+        return v;
     }
     // 「被连接的其他格子收费的一半」 -- half of the linked tile's rent.
     let bonus = ctx::rent_of(other) / 2;
     if bonus <= 0 {
-        return value;
+        return v;
     }
     ctx::log(
         player_id,
@@ -199,7 +199,10 @@ fn link_rent(player_id: i32, value: i32) -> i32 {
             .tile("tile", other)
             .i("n", bonus as i64),
     );
-    value + bonus
+    PayAddValue {
+        value: v.value + bonus,
+        ..v
+    }
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -211,6 +214,6 @@ pub fn anon_tokyo_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn link_rent_kani(player_id: i32, value: i32) -> i32 {
-    link_rent(player_id, value)
+pub fn link_rent_kani(player_id: i32, v: PayAddValue) -> PayAddValue {
+    link_rent(player_id, v)
 }

@@ -31,7 +31,7 @@
 use bandori_std::kind::abnormal;
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, FilterBody, GateValue, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The state key this host owns (frozen webui wire).
 pub const KEY: &str = "stun";
@@ -43,14 +43,15 @@ pub const STATUS_STUN: CardDef = CardDef::new(
     "status:stun",
     &[
         // 「受到[晕眩]时」 -- the landing clause, same shape as `status:stay`.
-        On::Action(&[ActionKind::Abnormal], "", "", Some(stun_landed), on_stun_landed),
+        On::Action(Action::Abnormal("", "", Some(stun_landed), on_stun_landed)),
         // rules.txt 49: 「处于该状态时[无法移动]，无法使用[主动]技能和手卡的[手]
         // 效果，无法收付款」 -- three gates, **CEL-only**. `stunned` counts the
         // pending `stunStart` layer too (it already holds the gate).
         // 「不可阻挡」 does **not** cancel this layer's move block (it only
         // 「无视」s the stay half).
-        On::FilterValue(&[FilterKind::ActGate, FilterKind::PayGate], STUNNED, None, FilterBody::Gate(refuse)),
-        On::FilterValue(&[FilterKind::MoveGate], STUNNED, None, FilterBody::Gate(refuse)),
+        On::Filter(Filter::ActGate(STUNNED, None, refuse)),
+        On::Filter(Filter::PayGate(STUNNED, None, refuse)),
+        On::Filter(Filter::MoveGate(STUNNED, None, refuse)),
     ],
 )
     .board_role("status")

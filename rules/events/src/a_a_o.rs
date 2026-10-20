@@ -4,7 +4,7 @@
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。
 
 use bandori_std::ctx;
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 use card_sdk::abi::ActionKind;
 
 use crate::util::{expire, keep};
@@ -18,7 +18,7 @@ pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
         On::Play("", "", None, play),
-        On::Action(&[ActionKind::AtEnd], "", "", None, expire_at_end),
+        On::Action(Action::AtEnd("", "", None, expire_at_end)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

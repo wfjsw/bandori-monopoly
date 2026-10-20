@@ -11,18 +11,18 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const STUDIO_STORM: CardDef = CardDef::new(
     "RAS:练习室里的风暴",
     &[
         On::Play("", "", Some(cant_play), play),
-        On::Action(&[ActionKind::PassTile], "actor == owner && card.placed && tile_is(tile.id, \"circle\")", "", None, pass_tile),
+        On::Action(Action::PassTile("actor == owner && card.placed && tile_is(tile.id, \"circle\")", "", None, pass_tile)),
         // （2）「在距此卡所在格子X个格子处[结算]时」 is 行动阶段 15
         // (`SETTLE-STAGES.md` §4 M2) -- an entry in the settle's effect list.
         // The body is a one-shot 「收费」 (sheet 2026-10-06), not a re-settle;
         // `settleBody` is still the raise point for 「[结算]时」.
-        On::Action(&[ActionKind::SettleBody], "actor != owner && card.placed", "", None, settle_body),
+        On::Action(Action::SettleBody("actor != owner && card.placed", "", None, settle_body)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"练习室里的风暴"#)

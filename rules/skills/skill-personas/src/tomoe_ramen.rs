@@ -18,7 +18,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 use super::ran_red::REST_TURNS;
 
@@ -33,10 +33,11 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
         On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
+        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
+        On::Action(Action::TurnEnd("", "", Some(afterglow), tick)),
     ],
-).silent(&[1])
+).silent(&[1, 2])
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 

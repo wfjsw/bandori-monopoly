@@ -28,7 +28,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 /// Settle this player owes at their own next turn end, from （2）.
 const DUE: &str = "skill.tomoriPoem.due";
@@ -39,28 +39,24 @@ const ACTED: &str = "skill.tomoriPoem.acted";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_DEED, "", None, on_pass),
+        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_DEED, "", None, on_pass)),
         // （2）/（3） applicability: a landing within five tiles of the other
         // party. `actor == owner` is （3） (own landing near someone else);
         // `actor != owner` is （2） (someone else's landing near us). Both arms
         // live in the residual guard -- the CEL `pre` only needs a real tile.
         // The pot-cost split and the fire balance stay residual (dynamic).
         // `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
-        On::Action(
-            &[ActionKind::SettleBefore],
-            "tile.id >= 0", "",
-            Some(before_settle_applies),
-            before_settle,
-        ),
-        On::Filter(&[FilterKind::PaySplitMul], "", Some(half), on_pay),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", "", None, at_turn_end),
+        On::Action(Action::SettleBefore("tile.id >= 0", "", Some(before_settle_applies), before_settle)),
+        On::Filter(Filter::PaySplitMul("", Some(half), on_pay)),
+        On::Action(Action::TurnEnd("actor == owner && slot('skill.tomoriPoem.due') != 0", "", None, at_turn_end)),
         // Drop the once-per-move latch when the move is fully resolved (after
         // any settle), so the next move gets a fresh press.
-        On::Action(&[ActionKind::MoveResolved], "", "", None, clear_acted),
+        On::Action(Action::MoveResolved("", "", None, clear_acted)),
     ],
 )
-    .silent(&[0])
+    .silent(&[0, 1])
     // 「（初始4，上限4）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 4), (bandori_std::fire::FIRE_CAP, 4)]);
 

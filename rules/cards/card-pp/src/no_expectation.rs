@@ -17,7 +17,7 @@
 
 use card_sdk::abi::{prop, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, FilterBody, Msg, On, RollValue};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue, RollValue};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
@@ -28,14 +28,9 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         // FilterValue at DiceRollValue (option C -- the text is a result
         // modifier, not a 「掷骰后」 listener). No DiceRollAfter entry.
         // PaySplitAdd is the pure payment bend.
-        On::FilterValue(&[FilterKind::DiceRollValue], "card.placed", None, FilterBody::Roll(roll_shave)),
-        On::Filter(&[FilterKind::PaySplitAdd], "card.placed", None, pay_add),
-        On::Action(
-            &[ActionKind::Reshuffled],
-            "actor == owner && card.placed", "",
-            None,
-            reshuffled,
-        ),
+        On::Filter(Filter::DiceRollValue("card.placed", None, roll_shave)),
+        On::Filter(Filter::PaySplitAdd("card.placed", None, pay_add)),
+        On::Action(Action::Reshuffled("actor == owner && card.placed", "", None, reshuffled)),
     ],
 )
 // 规则书[特]: 「此卡不受任何其他效果影响」 -- static [特] property, stamped at
@@ -125,26 +120,27 @@ fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
 /// 规则书[持续]（2）: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
 /// -- C# `CardNoExpectation.PaySplitAdd`, once per stack. Pure Filter (ABI v74):
 /// returns the bent figure.
-fn pay_add(player_id: i32, value: i32) -> i32 {
+fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     let n = stacks(player_id);
     if n <= 0 {
-        return value;
+        return PayAddValue { value: v.value, ..v };
     }
     let from = trigger::player_id();
     let to = trigger::target();
-    if value <= 0 {
-        return value;
+    if v.value <= 0 {
+        return PayAddValue { value: v.value, ..v };
     }
     let bump = 100 * n;
-    if from == player_id && to >= 0 && to != player_id {
+    let out = if from == player_id && to >= 0 && to != player_id {
         // paying someone else: amount up
-        value + bump
+        v.value + bump
     } else if to == player_id && from >= 0 && from != player_id {
         // being paid by someone else: amount down
-        (value - bump).max(0)
+        (v.value - bump).max(0)
     } else {
-        value
-    }
+        v.value
+    };
+    PayAddValue { value: out, ..v }
 }
 
 /// C# `CardNoExpectation.Reshuffled` -- each time the owner's discard pile is
@@ -175,8 +171,8 @@ pub fn roll_shave_kani(player_id: i32, v: RollValue) -> RollValue {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
-    pay_add(player_id, value)
+pub fn pay_add_kani(player_id: i32, v: PayAddValue) -> PayAddValue {
+    pay_add(player_id, v)
 }
 
 #[cfg(kani)]

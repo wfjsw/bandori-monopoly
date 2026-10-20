@@ -11,7 +11,7 @@
 //!
 //! whose flip face-down may cost 2 fire, flip face-up draws 1.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 
 const ID: &str = "Mujica:（喵梦）";
 /// `card_face_down` as of the last check, so a flip is a change.
@@ -21,7 +21,7 @@ pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
         On::Play("", "", None, nyamu_card),
-        On::Action(&[card_sdk::abi::ActionKind::TurnEnd], "actor == owner && card.placed", "", None, watch_flips),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", "", None, watch_flips)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

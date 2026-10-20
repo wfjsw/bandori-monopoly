@@ -18,7 +18,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "AG:绯红之魂";
 
@@ -38,15 +38,9 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive -1000 rewrite sits immediately before the pure
         // `PaySplitChoose` filter stage.
-        On::Action(
-            &[ActionKind::PaySplitChooseBefore],
-            "actor == owner && card.placed && value > 0 && card.counter('crystals') > 0",
-            r#"[拥有者]因导致的[消耗]或[支付]"#,
-            None,
-            pay_choose,
-        ),
-        On::Action(&[card_sdk::abi::ActionKind::CardUsed], "", "", Some(skill_used_guard), skill_used),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && card.counter('crystals') > 0", r#"[拥有者]因导致的[消耗]或[支付]"#, None, pay_choose)),
+        On::Action(Action::CardUsed("", "", Some(skill_used_guard), skill_used)),
+        On::Action(Action::CounterChanged("", "", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 )
 .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])

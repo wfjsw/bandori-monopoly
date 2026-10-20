@@ -17,13 +17,13 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     "PP:[大和麻弥]可能性为∞",
     &[
         On::Play("", "", Some(can_swap), swap),
-        On::Action(&[ActionKind::Drew], "actor == owner && card.placed && value > 0", "", None, drew),
+        On::Action(Action::Drew("actor == owner && card.placed && value > 0", "", None, drew)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"可能性为∞"#)

@@ -79,22 +79,12 @@ pub struct RedirectValue {
     pub payee: Option<Payee>,
 }
 
-/// Temporary shape-erasure for `On::FilterValue` bodies until Phase 3's
-/// `FilterEntry` drive. One arm per payload; registration picks the arm.
-/// The list form of `On::FilterValue(&[FilterKind], pre, guard, body)` is
-/// unchanged -- only the body type moves.
-#[derive(Clone, Copy, Debug)]
-pub enum FilterBody {
-    Plan(fn(i32, PlanValue) -> PlanValue),
-    Deal(fn(i32, DealValue) -> DealValue),
-    Gate(fn(i32, GateValue) -> GateValue),
-    Redirect(fn(i32, RedirectValue) -> RedirectValue),
-    PayAdd(fn(i32, PayAddValue) -> PayAddValue),
-    Roll(fn(i32, RollValue) -> RollValue),
-}
-
 /// A typed filter payload: snapshot in, rewrite, apply the delta.
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
+///
+/// Always available so `drive_payload::<P>` can be packed into a `const`
+/// registration on non-guest builds (manifest / pin tests). The `read` /
+/// `write` bodies do their host IO only under `guest`; outside it they are
+/// declaration-only.
 pub trait FilterPayload: Copy + Default {
     /// Snapshot the fields this payload speaks. `Default` is "leave everything
     /// alone"; readable scalars (the running figure, the roll face) are filled
@@ -105,139 +95,218 @@ pub trait FilterPayload: Copy + Default {
     fn write(before: Self, after: Self);
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
-impl FilterBody {
-    /// Run the body over its payload: snapshot, call (pure), apply the delta.
-    pub fn run(self, player_id: i32) {
-        match self {
-            FilterBody::Plan(body) => drive(player_id, body),
-            FilterBody::Deal(body) => drive(player_id, body),
-            FilterBody::Gate(body) => drive(player_id, body),
-            FilterBody::Redirect(body) => drive(player_id, body),
-            FilterBody::PayAdd(body) => drive(player_id, body),
-            FilterBody::Roll(body) => drive(player_id, body),
+// ---------------------------------------------------------------------------
+// Drive functions -- the **only** place `FilterEntry::body` is cast back to a
+// typed `fn`. One per shape. Never call `body` from anywhere else.
+// ---------------------------------------------------------------------------
+
+/// `fn(i32, i32) -> i32` scalar fold. Reads `trigger::value()`, folds, writes
+/// the running figure back through the existing `set_*` imports.
+pub fn drive_value(player_id: i32, body: *const ()) {
+    // SAFETY: `body` was packed by `kinds::filter_value` from a
+    // `fn(i32, i32) -> i32` and is never reinterpreted as another shape.
+    let body: fn(i32, i32) -> i32 = unsafe { core::mem::transmute(body) };
+    #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+    {
+        let v_in = crate::ctx::trigger::value();
+        let v_out = {
+            let _p = crate::pure::enter();
+            body(player_id, v_in)
+        };
+        if v_out != v_in {
+            crate::ctx::trigger::set_pay_amount(v_out);
+            crate::ctx::trigger::set_price(v_out);
+            crate::ctx::trigger::set_move_roll(v_out);
         }
+    }
+    #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+    {
+        let _ = (player_id, body);
     }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
-fn drive<P: FilterPayload>(player_id: i32, body: fn(i32, P) -> P) {
-    let before = P::read();
-    let after = {
-        let _p = crate::pure::enter();
-        body(player_id, before)
-    };
-    P::write(before, after);
+/// `fn(i32, i32) -> bool` pure decision. `false` cancels the pipeline stage.
+pub fn drive_flag(player_id: i32, body: *const ()) {
+    // SAFETY: `body` was packed by `kinds::filter_flag` from a
+    // `fn(i32, i32) -> bool`.
+    let body: fn(i32, i32) -> bool = unsafe { core::mem::transmute(body) };
+    #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+    {
+        let keep = {
+            let _p = crate::pure::enter();
+            body(player_id, crate::ctx::trigger::value())
+        };
+        if !keep {
+            crate::ctx::trigger::set_cancelled();
+        }
+    }
+    #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+    {
+        let _ = (player_id, body);
+    }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
+/// `fn(i32, P) -> P` typed payload rewrite: snapshot, call (pure), apply delta.
+/// Shared by every `payload(Ty)` / `gate` kind -- including downstream custom
+/// payloads that impl [`FilterPayload`].
+pub fn drive_payload<P: FilterPayload>(player_id: i32, body: *const ()) {
+    // SAFETY: `body` was packed by `kinds::filter_payload::<P>` from a
+    // `fn(i32, P) -> P` with the same `P`.
+    let body: fn(i32, P) -> P = unsafe { core::mem::transmute(body) };
+    #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+    {
+        let before = P::read();
+        let after = {
+            let _p = crate::pure::enter();
+            body(player_id, before)
+        };
+        P::write(before, after);
+    }
+    #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+    {
+        let _ = (player_id, body);
+    }
+}
+
 impl FilterPayload for GateValue {
     fn read() -> Self {
         Self::default()
     }
 
     fn write(before: Self, after: Self) {
-        if after.allowed == Some(false) && before.allowed != Some(false) {
-            crate::ctx::trigger::set_cancelled();
-        }
-        if let Some(reason) = after.reason {
-            if before.reason != Some(reason) {
-                crate::ctx::trigger::set_reason(reason);
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            if after.allowed == Some(false) && before.allowed != Some(false) {
+                crate::ctx::trigger::set_cancelled();
             }
+            if let Some(reason) = after.reason {
+                if before.reason != Some(reason) {
+                    crate::ctx::trigger::set_reason(reason);
+                }
+            }
+        }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            let _ = (before, after);
         }
     }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 impl FilterPayload for PlanValue {
     fn read() -> Self {
-        Self {
-            recorded_roll: crate::ctx::plan::recorded_roll(),
-            ..Self::default()
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            Self {
+                recorded_roll: crate::ctx::plan::recorded_roll(),
+                ..Self::default()
+            }
+        }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            Self::default()
         }
     }
 
     fn write(before: Self, after: Self) {
-        use crate::ctx::plan;
-        if let Some(seat) = after.roller {
-            if before.roller != Some(seat) {
-                plan::set_roller(seat.0);
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            use crate::ctx::plan;
+            if let Some(seat) = after.roller {
+                if before.roller != Some(seat) {
+                    plan::set_roller(seat.0);
+                }
+            }
+            if let Some(d) = after.base {
+                if before.base != Some(d) {
+                    plan::set_base_dice(d.count, d.sides, "filter");
+                }
+            }
+            if let Some(d) = after.extra {
+                if before.extra != Some(d) {
+                    plan::add_extra_dice(d.count, d.sides, "filter");
+                }
+            }
+            if let Some(d) = after.add_base {
+                if before.add_base != Some(d) {
+                    plan::add_base_dice(d.count, d.sides, "filter");
+                }
+            }
+            if let Some(on) = after.reverse {
+                if before.reverse != Some(on) {
+                    plan::set_reverse(on);
+                }
+            }
+            if let Some(k) = after.move_kind {
+                if before.move_kind != Some(k) {
+                    plan::set_kind(k);
+                }
+            }
+            if let Some(t) = after.teleport_to {
+                if before.teleport_to != Some(t) {
+                    plan::set_teleport_to(t.0);
+                }
+            }
+            if let Some(on) = after.resolve {
+                if before.resolve != Some(on) {
+                    plan::set_resolve(on);
+                }
+            }
+            if after.clear_dice {
+                plan::clear_dice();
+            }
+            if let Some(n) = after.min_roll {
+                if before.min_roll != Some(n) {
+                    plan::set_min_roll(n);
+                }
+            }
+            if let Some((key, value)) = after.tag {
+                if before.tag != Some((key, value)) {
+                    plan::set_tag(key, value);
+                }
             }
         }
-        if let Some(d) = after.base {
-            if before.base != Some(d) {
-                plan::set_base_dice(d.count, d.sides, "filter");
-            }
-        }
-        if let Some(d) = after.extra {
-            if before.extra != Some(d) {
-                plan::add_extra_dice(d.count, d.sides, "filter");
-            }
-        }
-        if let Some(d) = after.add_base {
-            if before.add_base != Some(d) {
-                plan::add_base_dice(d.count, d.sides, "filter");
-            }
-        }
-        if let Some(on) = after.reverse {
-            if before.reverse != Some(on) {
-                plan::set_reverse(on);
-            }
-        }
-        if let Some(k) = after.move_kind {
-            if before.move_kind != Some(k) {
-                plan::set_kind(k);
-            }
-        }
-        if let Some(t) = after.teleport_to {
-            if before.teleport_to != Some(t) {
-                plan::set_teleport_to(t.0);
-            }
-        }
-        if let Some(on) = after.resolve {
-            if before.resolve != Some(on) {
-                plan::set_resolve(on);
-            }
-        }
-        if after.clear_dice {
-            plan::clear_dice();
-        }
-        if let Some(n) = after.min_roll {
-            if before.min_roll != Some(n) {
-                plan::set_min_roll(n);
-            }
-        }
-        if let Some((key, value)) = after.tag {
-            if before.tag != Some((key, value)) {
-                plan::set_tag(key, value);
-            }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            let _ = (before, after);
         }
     }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 impl FilterPayload for RollValue {
     fn read() -> Self {
-        Self {
-            value: crate::ctx::trigger::value(),
-            recorded_roll: crate::ctx::plan::recorded_roll(),
-            resolve: None,
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            Self {
+                value: crate::ctx::trigger::value(),
+                recorded_roll: crate::ctx::plan::recorded_roll(),
+                resolve: None,
+            }
+        }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            Self::default()
         }
     }
 
     fn write(before: Self, after: Self) {
-        if after.value != before.value {
-            crate::ctx::trigger::set_move_roll(after.value);
-        }
-        if let Some(on) = after.resolve {
-            if before.resolve != Some(on) {
-                crate::ctx::plan::set_resolve(on);
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            if after.value != before.value {
+                crate::ctx::trigger::set_move_roll(after.value);
             }
+            if let Some(on) = after.resolve {
+                if before.resolve != Some(on) {
+                    crate::ctx::plan::set_resolve(on);
+                }
+            }
+        }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            let _ = (before, after);
         }
     }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 impl FilterPayload for DealValue {
     fn read() -> Self {
         // `None` = leave the host's deal alone. A body that needs the standing
@@ -246,58 +315,84 @@ impl FilterPayload for DealValue {
     }
 
     fn write(before: Self, after: Self) {
-        use crate::ctx::trigger;
-        if let Some(owner) = after.owner {
-            if before.owner != Some(owner) {
-                trigger::set_deal_owner(owner.as_i32());
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            use crate::ctx::trigger;
+            if let Some(owner) = after.owner {
+                if before.owner != Some(owner) {
+                    trigger::set_deal_owner(owner.as_i32());
+                }
+            }
+            if let Some(h) = after.houses {
+                if before.houses != Some(h) {
+                    trigger::set_deal_houses(h);
+                }
+            }
+            if let Some(m) = after.mortgaged {
+                if before.mortgaged != Some(m) {
+                    trigger::set_deal_mortgaged(m);
+                }
             }
         }
-        if let Some(h) = after.houses {
-            if before.houses != Some(h) {
-                trigger::set_deal_houses(h);
-            }
-        }
-        if let Some(m) = after.mortgaged {
-            if before.mortgaged != Some(m) {
-                trigger::set_deal_mortgaged(m);
-            }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            let _ = (before, after);
         }
     }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 impl FilterPayload for PayAddValue {
     fn read() -> Self {
-        Self {
-            value: crate::ctx::trigger::value(),
-            payee: None,
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            Self {
+                value: crate::ctx::trigger::value(),
+                payee: None,
+            }
+        }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            Self::default()
         }
     }
 
     fn write(before: Self, after: Self) {
-        if after.value != before.value {
-            crate::ctx::trigger::set_pay_amount(after.value);
-            crate::ctx::trigger::set_price(after.value);
-        }
-        if let Some(p) = after.payee {
-            if before.payee != Some(p) {
-                crate::ctx::trigger::set_pay_target(p.as_i32());
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            if after.value != before.value {
+                crate::ctx::trigger::set_pay_amount(after.value);
+                crate::ctx::trigger::set_price(after.value);
             }
+            if let Some(p) = after.payee {
+                if before.payee != Some(p) {
+                    crate::ctx::trigger::set_pay_target(p.as_i32());
+                }
+            }
+        }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            let _ = (before, after);
         }
     }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 impl FilterPayload for RedirectValue {
     fn read() -> Self {
         Self::default()
     }
 
     fn write(before: Self, after: Self) {
-        if let Some(p) = after.payee {
-            if before.payee != Some(p) {
-                crate::ctx::trigger::set_pay_target(p.as_i32());
+        #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+        {
+            if let Some(p) = after.payee {
+                if before.payee != Some(p) {
+                    crate::ctx::trigger::set_pay_target(p.as_i32());
+                }
             }
+        }
+        #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+        {
+            let _ = (before, after);
         }
     }
 }

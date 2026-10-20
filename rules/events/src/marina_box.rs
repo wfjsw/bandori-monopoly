@@ -5,7 +5,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep, roll};
 
@@ -24,8 +24,8 @@ pub const MARINA_BOX: CardDef = CardDef::new(
         // spendability are the condition now (body-top early-outs). The
         // `always` guard is deleted: it prefetched every pass of every tile
         // for a no-op.
-        On::Action(&[ActionKind::PassTile], "tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500", "", None, on_pass),
-        On::Action(&[ActionKind::TurnStartBefore], "", "", None, on_turn_start),
+        On::Action(Action::PassTile("tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500", "", None, on_pass)),
+        On::Action(Action::TurnStartBefore("", "", None, on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

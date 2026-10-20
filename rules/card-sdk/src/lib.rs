@@ -77,11 +77,13 @@ mod kani_alloc;
 #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
 pub mod native;
 
+pub mod kinds;
+
+pub use kinds::{Action, ActionEntry, Filter, FilterEntry, FilterShape, KindInfo};
 pub use msg::Msg;
 pub use payload::{
-    DealValue, FilterBody, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue,
+    DealValue, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue,
 };
-#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 pub use payload::FilterPayload;
 
 /// The run stopped at a prompt: the host has published the question and will
@@ -117,8 +119,8 @@ pub mod rt;
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
 ///     On::Play("", "", None, play),
-///     On::Action(&[ActionKind::TurnEnd], pre::MINE, "", guard, tick),
-///     On::FilterFlag(&[FilterKind::ImmuneAll], pre::MINE, None, immune),
+///     On::Action(Action::TurnEnd(pre::MINE, "", guard, tick)),
+///     On::Filter(Filter::ImmuneAll(pre::MINE, None, immune)),
 /// ]);
 /// ```
 ///
@@ -290,9 +292,9 @@ impl CardDef {
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
     ///     On::Play("", "", None, use_skill),                                     // 0: flashes
-    ///     On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
-    ///              "", "", None, declare_cap),                                   // 1: bookkeeping
-    /// ]).silent(&[1]);
+    ///     On::Action(Action::TurnStartBefore("", "", None, declare_cap)),         // 1: bookkeeping
+    ///     On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),         // 2: bookkeeping
+    /// ]).silent(&[1, 2]);
     /// ```
     pub const fn silent(self, entries: &'static [i32]) -> Self {
         Self {
@@ -348,7 +350,7 @@ impl CardDef {
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
     ///     On::Play("", "", None, use_skill),                 // 0: Auto
-    ///     On::Action(&[ActionKind::TurnEnd], "", "", None, tick), // 1: Always (self-only)
+    ///     On::Action(Action::TurnEnd("", "", None, tick)), // 1: Always (self-only)
     /// ]).flash(&[(1, Flash::Always)]);
     /// ```
     pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
@@ -408,7 +410,7 @@ impl CardDef {
     /// use card_sdk::abi::text_slot;
     /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
     ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Action(&[ActionKind::PassTile], "", "", Some(pass_pays), on_pass),      // 1
+    ///     On::Action(Action::PassTile("", "", Some(pass_pays), on_pass)),      // 1
     /// ]).texts(&[
     ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
     ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
@@ -653,58 +655,23 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
-    /// An **event reaction** at these field-hook kinds: runs automatically
-    /// while the card is in play. Same shape as [`On::Counteract`]. May emit
-    /// effects; does not modify the triggering value. Kinds are
-    /// [`abi::ActionKind`] (non-filter: [`abi::TriggerKind::is_filter`] == false).
-    /// Third field: `counterReason` -- the human-readable 「…时」 clause the
-    /// counteraction prompt shows when this trigger is the [反击] window.
-    Action(
-        &'static [abi::ActionKind],
-        &'static str,
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// **Integer value transform** (ABI v74). Body is
-    /// `fn(player_id, value) -> i32` -- pure: no prompts, no `ctx::gain`,
-    /// no plan/deal writes. The host folds the return into the running figure
-    /// (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds).
-    /// Kinds are [`abi::FilterKind`] ([`abi::TriggerKind::is_filter`] == true)
-    /// whose payload is an integer: PaySplitAdd / PaySplitMul / PaySplitAt / PayCombinedAdd /
-    /// PayCombinedMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
-    /// DiceRollValue.
-    Filter(
-        &'static [abi::FilterKind],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32, value: i32) -> i32,
-    ),
-    /// **Boolean decision** (ABI v74). Body is `fn(player_id, value) -> bool`
-    /// -- pure. `false` cancels / substitutes the pipeline stage.
-    /// Kinds: PayCombinedCancel (false = drop the command) and PaySplitChoose
-    /// (false = cancel the payment). The gates moved to
-    /// [`On::FilterValue`] with [`payload::GateValue`] (ABI v92).
-    /// The generic marker spend-substitution window (`ChargePaying`, id 78;
-    /// name is payload) is **not** here: its 「可」 opt-in prompts, so it remains
-    /// `On::Action`. A PaySplitChoose that *also* rewrites the amount is split
-    /// into [`On::Filter`] (amount) plus this variant (cancel).
-    FilterFlag(
-        &'static [abi::FilterKind],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32, value: i32) -> bool,
-    ),
-    /// **Typed payload rewrite** (ABI v75 / v92). Body is a [`payload::FilterBody`]
-    /// arm -- one typed struct per kind family. Pure: copy, tweak, return.
-    /// Kinds: BuyAssign (deal), DiceRollPlan (move plan), DiceRollValue (face),
-    /// Redirect / PaySplitAdd (payee), and the gates (`GateValue`).
-    FilterValue(
-        &'static [abi::FilterKind],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        payload::FilterBody,
-    ),
+    /// An **event reaction** at one field-hook kind: runs automatically
+    /// while the card is in play. Same body shape as [`On::Counteract`]. May
+    /// emit effects; does not modify the triggering value. One kind per entry
+    /// -- a card that listens at two raises declares two entries. Built from
+    /// the `action_kinds!` constructors (`Action::TurnStart(pre, reason, guard, body)`).
+    Action(ActionEntry),
+    /// **Pure value / decision / gate / payload rewrite** at one filter kind.
+    /// Built from the `filter_kinds!` constructors
+    /// (`Filter::DiceRollPlan(pre, guard, body)`). The entry's [`FilterShape`]
+    /// names the body type:
+    /// - [`FilterShape::Value`] -- `fn(i32, i32) -> i32` scalar fold
+    /// - [`FilterShape::Flag`] -- `fn(i32, i32) -> bool` decision
+    /// - [`FilterShape::Gate`] -- `fn(i32, GateValue) -> GateValue`
+    /// - [`FilterShape::Payload`] -- `fn(i32, P) -> P` typed rewrite
+    ///
+    /// Pure: copy, tweak, return. No prompts, no `ctx::gain`.
+    Filter(FilterEntry),
     /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
     /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
     /// `CardDef` per tile kind and this is their body; the engine keeps
@@ -792,10 +759,14 @@ impl On {
         match self {
             On::Play(_, reason, g, r) => On::Play(pre, reason, g, r),
             On::Counteract(k, _, reason, g, r) => On::Counteract(k, pre, reason, g, r),
-            On::Action(k, _, reason, g, r) => On::Action(k, pre, reason, g, r),
-            On::Filter(k, _, g, r) => On::Filter(k, pre, g, r),
-            On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
-            On::FilterValue(k, _, g, r) => On::FilterValue(k, pre, g, r),
+            On::Action(mut e) => {
+                e.pre = pre;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.pre = pre;
+                On::Filter(e)
+            }
             On::Settle(_, g, r) => On::Settle(pre, g, r),
             On::Mortgage(_, g, r) => On::Mortgage(pre, g, r),
             On::Redeem(_, g, r) => On::Redeem(pre, g, r),
@@ -810,10 +781,14 @@ impl On {
     pub const fn no_guard(self) -> Self {
         match self {
             On::Counteract(k, pre, reason, _, r) => On::Counteract(k, pre, reason, None, r),
-            On::Action(k, pre, reason, _, r) => On::Action(k, pre, reason, None, r),
-            On::Filter(k, pre, _, r) => On::Filter(k, pre, None, r),
-            On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
-            On::FilterValue(k, pre, _, r) => On::FilterValue(k, pre, None, r),
+            On::Action(mut e) => {
+                e.guard = None;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.guard = None;
+                On::Filter(e)
+            }
             On::Settle(pre, _, r) => On::Settle(pre, None, r),
             On::Mortgage(pre, _, r) => On::Mortgage(pre, None, r),
             On::Redeem(pre, _, r) => On::Redeem(pre, None, r),
@@ -830,16 +805,13 @@ impl On {
     pub const fn guard(&self) -> Option<fn(i32) -> bool> {
         match self {
             On::Counteract(_, _, _, g, _)
-            | On::Action(_, _, _, g, _)
-            | On::Filter(_, _, g, _)
-            | On::FilterFlag(_, _, g, _)
-            | On::FilterValue(_, _, g, _)
             | On::Settle(_, g, _)
             | On::Mortgage(_, g, _)
             | On::Redeem(_, g, _)
             | On::Message(_, _, g, _) => *g,
-            On::Buy(_, g, _)
-            | On::Build(_, g, _) => *g,
+            On::Action(e) => e.guard,
+            On::Filter(e) => e.guard,
+            On::Buy(_, g, _) | On::Build(_, g, _) => *g,
             _ => None,
         }
     }
@@ -850,16 +822,13 @@ impl On {
         match self {
             On::Play(_, _, g, _) => g.is_some(),
             On::Counteract(_, _, _, g, _)
-            | On::Action(_, _, _, g, _)
-            | On::Filter(_, _, g, _)
-            | On::FilterFlag(_, _, g, _)
-            | On::FilterValue(_, _, g, _)
             | On::Settle(_, g, _)
             | On::Mortgage(_, g, _)
             | On::Redeem(_, g, _)
             | On::Message(_, _, g, _) => g.is_some(),
-            On::Buy(_, g, _)
-            | On::Build(_, g, _) => g.is_some(),
+            On::Action(e) => e.guard.is_some(),
+            On::Filter(e) => e.guard.is_some(),
+            On::Buy(_, g, _) | On::Build(_, g, _) => g.is_some(),
         }
     }
 
@@ -869,16 +838,13 @@ impl On {
         match self {
             On::Play(pre, _, _, _)
             | On::Counteract(_, pre, _, _, _)
-            | On::Action(_, pre, _, _, _)
-            | On::Filter(_, pre, _, _)
-            | On::FilterFlag(_, pre, _, _)
-            | On::FilterValue(_, pre, _, _)
             | On::Settle(pre, _, _)
             | On::Mortgage(pre, _, _)
             | On::Redeem(pre, _, _)
             | On::Message(_, pre, _, _) => *pre,
-            On::Buy(pre, _, _)
-            | On::Build(pre, _, _) => *pre,
+            On::Action(e) => e.pre,
+            On::Filter(e) => e.pre,
+            On::Buy(pre, _, _) | On::Build(pre, _, _) => *pre,
         }
     }
 
@@ -886,9 +852,8 @@ impl On {
     /// counteraction prompt shows (`""` for entries that carry no clause).
     pub const fn counter_reason(&self) -> &'static str {
         match self {
-            On::Counteract(_, _, reason, _, _)
-            | On::Action(_, _, reason, _, _)
-            | On::Play(_, reason, _, _) => *reason,
+            On::Counteract(_, _, reason, _, _) | On::Play(_, reason, _, _) => *reason,
+            On::Action(e) => e.counter_reason,
             _ => "",
         }
     }
@@ -899,8 +864,6 @@ impl On {
             On::Counteract(..) => abi::OnKind::Counteract,
             On::Action(..) => abi::OnKind::Action,
             On::Filter(..) => abi::OnKind::Filter,
-            On::FilterFlag(..) => abi::OnKind::Filter,
-            On::FilterValue(..) => abi::OnKind::Filter,
             On::Settle(..) => abi::OnKind::Settle,
             On::Mortgage(..) => abi::OnKind::Mortgage,
             On::Redeem(..) => abi::OnKind::Redeem,
@@ -910,46 +873,21 @@ impl On {
         }
     }
 
-    /// Kind/variant agreement (ABI v73): a [`On::Filter`] may only list filter
-    /// kinds and an [`On::Action`] only non-filter kinds. Wrong-side *consts*
-    /// are a rustc error at the signature; this cheap check still catches raw
-    /// ids (`ActionKind(TriggerKind::engine(i))` / rule-defined kinds) crossing
-    /// the wire. Returns the first mismatched kind, or `Ok(())`.
-    pub fn check_kind_variant(&self) -> Result<(), abi::TriggerKind> {
-        match self {
-            On::Action(kinds, ..) => {
-                for k in *kinds {
-                    let t = k.as_trigger();
-                    if t.is_filter() {
-                        return Err(t);
-                    }
-                }
-                Ok(())
-            }
-            On::Filter(kinds, ..)
-            | On::FilterFlag(kinds, ..)
-            | On::FilterValue(kinds, ..) => {
-                for k in *kinds {
-                    let t = k.as_trigger();
-                    if !t.is_filter() {
-                        return Err(t);
-                    }
-                }
-                Ok(())
-            }
-            _ => Ok(()),
-        }
-    }
-
     /// The wire **spellings** this entry answers (empty for non-trigger
     /// entries): `TriggerKind::spelling` -- engine camelCase or
-    /// `"r:{key}:{id}"`.
+    /// `"r:{key}:{id}"`. `On::Action` / `On::Filter` are one kind each.
     pub fn triggers(&self) -> Vec<String> {
         match self {
             On::Counteract(k, ..) => k.iter().map(|x| x.spelling().into_owned()).collect(),
-            On::Action(k, ..) => k.iter().map(|x| x.spelling().into_owned()).collect(),
-            On::Filter(k, ..) | On::FilterFlag(k, ..) | On::FilterValue(k, ..) => {
-                k.iter().map(|x| x.spelling().into_owned()).collect()
+            On::Action(e) => {
+                let mut v = Vec::new();
+                v.push(e.kind.spelling().into_owned());
+                v
+            }
+            On::Filter(e) => {
+                let mut v = Vec::new();
+                v.push(e.kind.spelling().into_owned());
+                v
             }
             // Message names ride a separate manifest field; see `rt.rs`.
             On::Message(..) => Vec::new(),
@@ -1156,39 +1094,18 @@ mod tests {
         }
     }
 
-    /// Runtime assert for raw ids crossing the wire (`ActionKind(k)` /
-    /// `FilterKind(k)` / rule-defined kinds). Wrong-side *consts* are already a
-    /// rustc error at the `On` signature.
+    /// The constructor type pins the side: `Filter::KINDS` is all `is_filter`
+    /// and `Action::KINDS` is all `!is_filter`. (The old `check_kind_variant`
+    /// runtime assert is gone -- a wrong-side *const* is now a rustc error at
+    /// the constructor signature.)
     #[test]
     fn kind_variant_agreement() {
-        const FILTER_OK: &[FilterKind] = &[FilterKind::PaySplitAdd];
-        const ACTION_OK: &[ActionKind] = &[ActionKind::TurnEnd];
-        // Raw-id smuggle: the typed consts cannot land here, but
-        // `FilterKind(TriggerKind::engine(45))` can. The cheap runtime assert
-        // still fires.
-        const FILTER_BAD: &[FilterKind] = &[FilterKind(TriggerKind::engine(45))]; // TurnEnd
-        const ACTION_BAD: &[ActionKind] = &[ActionKind(TriggerKind::engine(55))]; // PaySplitAdd
-        const ACTION_MIXED: &[ActionKind] =
-            &[ActionKind::TurnEnd, ActionKind(TriggerKind::engine(55))];
-        let filter_ok = On::Filter(FILTER_OK, "", None, fbody);
-        assert!(filter_ok.check_kind_variant().is_ok());
-        let action_ok = On::Action(ACTION_OK, "", "", None, body);
-        assert!(action_ok.check_kind_variant().is_ok());
-        let filter_bad = On::Filter(FILTER_BAD, "", None, fbody);
-        assert_eq!(
-            filter_bad.check_kind_variant(),
-            Err(TriggerKind::TurnEnd)
-        );
-        let action_bad = On::Action(ACTION_BAD, "", "", None, body);
-        assert_eq!(
-            action_bad.check_kind_variant(),
-            Err(TriggerKind::PaySplitAdd)
-        );
-        let mixed = On::Action(ACTION_MIXED, "", "", None, body);
-        assert_eq!(
-            mixed.check_kind_variant(),
-            Err(TriggerKind::PaySplitAdd)
-        );
+        for k in Filter::KINDS {
+            assert!(k.kind.is_filter(), "Filter::{} must be is_filter", k.name);
+        }
+        for k in Action::KINDS {
+            assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
+        }
     }
 
     #[test]

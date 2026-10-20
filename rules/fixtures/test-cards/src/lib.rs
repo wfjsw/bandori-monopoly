@@ -4,7 +4,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On, PayAddValue, PlanValue};
 
 /// Plays another card (in another module) in the middle of its own effect.
 const RELAY: CardDef = CardDef::new("TEST:relay", &[On::Play("", "", None, relay)]);
@@ -32,7 +32,7 @@ const STUNNER: CardDef = CardDef::new("TEST:stunner", &[On::Play("", "", None, s
 /// Models 「a counter's stun landed mid-turn」 without opening a new main move.
 const STUN_SELF_MOVER: CardDef = CardDef::new(
     "TEST:stun_self_mover",
-    &[On::Action(&[ActionKind::MoveBefore], "actor == owner && card.placed", "", None, stun_self)],
+    &[On::Action(Action::MoveBefore("actor == owner && card.placed", "", None, stun_self))],
 );
 /// Placed on the first other player's field; guards that player against every
 /// abnormal effect (C# `IAbnormalGuard`).
@@ -40,7 +40,7 @@ const GUARD: CardDef = CardDef::new(
     "TEST:guard",
     &[
         On::Play("", "", None, guard_play),
-        On::FilterValue(&[FilterKind::AbnormalGuard], "", None, FilterBody::Gate(guard)),
+        On::Filter(Filter::AbnormalGuard("", None, guard)),
     ],
 );
 
@@ -54,7 +54,7 @@ const SHIELD: CardDef = CardDef::new(
     "TEST:shield",
     &[
         On::Play("", "", None, shield_play),
-        On::FilterValue(&[FilterKind::ImmuneAll], "", None, FilterBody::Gate(shield)),
+        On::Filter(Filter::ImmuneAll("", None, shield)),
     ],
 );
 
@@ -135,7 +135,7 @@ const CRYSTAL: CardDef = CardDef::new(
     "TEST:named-counter",
     &[
         On::Play("", "", None, crystal_play),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystal_changed_guard), crystal_changed),
+        On::Action(Action::CounterChanged("", "", Some(crystal_changed_guard), crystal_changed)),
     ],
 );
 
@@ -374,7 +374,7 @@ fn deny(player_id: i32) -> card_sdk::Asked {
 /// (ceil10(1500/2)); wired as a per-share stage it would charge 500 each.
 const TOTAL_CUT: CardDef = CardDef::new(
     "TEST:totalCut",
-    &[On::Filter(&[FilterKind::PayCombinedAdd], "", Some(total_cut_yes), total_cut)],
+    &[On::Filter(Filter::PayCombinedAdd("", Some(total_cut_yes), total_cut))],
 );
 
 fn total_cut_yes(_player_id: i32) -> bool {
@@ -396,7 +396,7 @@ fn total_cut(player_id: i32, value: i32) -> i32 {
 /// nothing.
 const DEAD_PAY: CardDef = CardDef::new(
     "TEST:deadPay",
-    &[On::Action(&[ActionKind::BankruptBefore], "", "", Some(dead_pay_yes), dead_pay)],
+    &[On::Action(Action::BankruptBefore("", "", Some(dead_pay_yes), dead_pay))],
 );
 
 fn dead_pay_yes(player_id: i32) -> bool {
@@ -436,7 +436,7 @@ const PAY_ADD_ANY: CardDef = CardDef::new(
     "TEST:payAddAny",
     &[
         On::Play("", "", None, pay_add_any_play),
-        On::Filter(&[FilterKind::PaySplitAdd], "", Some(total_cut_yes), pay_add_any)],
+        On::Filter(Filter::PaySplitAdd("", Some(total_cut_yes), pay_add_any))],
 );
 
 fn pay_add_any_play(player_id: i32) -> card_sdk::Asked {
@@ -445,13 +445,13 @@ fn pay_add_any_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn pay_add_any(player_id: i32, value: i32) -> i32 {
-    let out = value + 100;
+fn pay_add_any(player_id: i32, mut v: PayAddValue) -> PayAddValue {
+    let out = v.value + 100;
     ctx::log(
         player_id,
-        &Msg::new(key!("pay_add_any_done")).i("n", value as i64),
+        &Msg::new(key!("pay_add_any_done")).i("n", v.value as i64),
     );
-    out
+    PayAddValue { value: out, ..v }
 }
 
 /// A 「不[触发结算]」 **teleport move** (`SETTLE-STAGES.md` §6 M6a / ruling R2):
@@ -486,20 +486,20 @@ fn tele_nosettle(player_id: i32) -> card_sdk::Asked {
 /// reversal, not a flip-flop loop. Placed like `TEST:totalCut`.
 const PAY_OVERCUT: CardDef = CardDef::new(
     "TEST:payOvercut",
-    &[On::Filter(&[FilterKind::PaySplitAdd], "", Some(total_cut_yes), pay_overcut)],
+    &[On::Filter(Filter::PaySplitAdd("", Some(total_cut_yes), pay_overcut))],
 );
 
-fn pay_overcut(player_id: i32, value: i32) -> i32 {
-    if value == 1000 {
+fn pay_overcut(player_id: i32, v: PayAddValue) -> PayAddValue {
+    if v.value == 1000 {
         ctx::log(
             player_id,
             &Msg::new(key!("pay_overcut_done"))
-                .i("from", value as i64)
+                .i("from", v.value as i64)
                 .i("to", -500),
         );
-        -500
+        PayAddValue { value: -500, ..v }
     } else {
-        value
+        v
     }
 }
 
@@ -571,7 +571,7 @@ const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
         On::Play("", "", None, fire_roll_play),
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, FilterBody::Plan(fire_roll_plan)),
+        On::Filter(Filter::DiceRollPlan("", None, fire_roll_plan)),
     ],
 );
 
@@ -657,7 +657,7 @@ const PRE_HOOK: CardDef = CardDef::new(
     "TEST:preHook",
     &[
         On::Play("", "", None, pre_hook_place),
-        On::Filter(&[FilterKind::PaySplitAdd], "false", Some(pre_hook_guard), pre_hook_body,),
+        On::Filter(Filter::PaySplitAdd("false", Some(pre_hook_guard), pre_hook_body)),
     ],
 );
 
@@ -671,9 +671,9 @@ fn pre_hook_guard(_player_id: i32) -> bool {
     true
 }
 
-fn pre_hook_body(player_id: i32, value: i32) -> i32 {
+fn pre_hook_body(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     ctx::log(player_id, &Msg::new(key!("pre_hook_ran")));
-    value
+    PayAddValue { value: v.value, ..v }
 }
 
 // v49 (docs/GUARDS.md §4.2c): `On::Gate` / `On::AtEnd` / `On::RollPlan` /
@@ -687,7 +687,7 @@ const PRE_GATE: CardDef = CardDef::new(
     "TEST:preGate",
     &[
         On::Play("", "", None, pre_gate_place),
-        On::FilterValue(&[FilterKind::ImmuneAll], "false", None, FilterBody::Gate(pre_gate_body)),
+        On::Filter(Filter::ImmuneAll("false", None, pre_gate_body)),
     ],
 );
 
@@ -708,7 +708,7 @@ const PRE_ROLLPLAN: CardDef = CardDef::new(
     "TEST:preRollPlan",
     &[
         On::Play("", "", None, pre_rollplan_place),
-        On::FilterValue(&[FilterKind::DiceRollPlan], "false", None, FilterBody::Plan(pre_rollplan_body)),
+        On::Filter(Filter::DiceRollPlan("false", None, pre_rollplan_body)),
     ],
 );
 
@@ -734,7 +734,7 @@ const PRE_ATEMD: CardDef = CardDef::new(
     "TEST:preAtEnd",
     &[
         On::Play("", "", None, pre_at_end_place),
-        On::Action(&[ActionKind::AtEnd], "false", "", None, pre_at_end_body),
+        On::Action(Action::AtEnd("false", "", None, pre_at_end_body)),
     ],
 );
 
@@ -773,7 +773,7 @@ const PASS_TELE: CardDef = CardDef::new(
     "TEST:pass_tele",
     &[
         On::Play("", "", None, pass_tele_place),
-        On::Action(&[ActionKind::PassTile], "", "", Some(pass_tele_guard), pass_tele_body),
+        On::Action(Action::PassTile("", "", Some(pass_tele_guard), pass_tele_body)),
     ],
 );
 
@@ -820,7 +820,7 @@ const TILE_HOOK: CardDef = CardDef::new(
     "TEST:tileHook",
     &[
         On::Play("", "", None, tile_hook_place),
-        On::Action(&[ActionKind::Settle], "", "", Some(tile_hook_yes), tile_hook),
+        On::Action(Action::Settle("", "", Some(tile_hook_yes), tile_hook)),
     ],
 );
 
@@ -872,7 +872,7 @@ const PASS_FLASH: CardDef = CardDef::new(
     "TEST:pass_flash",
     &[
         On::Play("", "", None, pass_flash_place),
-        On::Action(&[ActionKind::PassTile], "", "", Some(pass_flash_guard), pass_flash_body),
+        On::Action(Action::PassTile("", "", Some(pass_flash_guard), pass_flash_body)),
     ],
 );
 
@@ -905,12 +905,7 @@ const PASS_BEFORE_FLASH: CardDef = CardDef::new(
     "TEST:pass_before_flash",
     &[
         On::Play("", "", None, pass_before_flash_place),
-        On::Action(
-            &[ActionKind::PassBefore],
-            "", "",
-            Some(pass_before_flash_guard),
-            pass_before_flash_body,
-        ),
+        On::Action(Action::PassBefore("", "", Some(pass_before_flash_guard), pass_before_flash_body)),
     ],
 );
 
@@ -1001,7 +996,7 @@ fn roll_then_pay(player_id: i32) -> card_sdk::Asked {
 /// must not dispatch it twice (two headers for one body).
 const DECK_ONCE: CardDef = CardDef::new(
     "TEST:deckOnce",
-    &[On::Action(&[ActionKind::DeckBeforeGame], "", "", None, deck_once)],
+    &[On::Action(Action::DeckBeforeGame("", "", None, deck_once))],
 );
 
 fn deck_once(player_id: i32) -> card_sdk::Asked {
@@ -1016,8 +1011,8 @@ const CLOCK_HOOK: CardDef = CardDef::new(
     "TEST:clockHook",
     &[
         On::Play("", "", None, clock_hook_play),
-        On::Filter(&[FilterKind::TurnBonusTime], "", None, clock_bonus),
-        On::Filter(&[FilterKind::TurnBaseTime], "", None, clock_base),
+        On::Filter(Filter::TurnBonusTime("", None, clock_bonus)),
+        On::Filter(Filter::TurnBaseTime("", None, clock_base)),
     ],
 );
 
@@ -1066,12 +1061,7 @@ fn read_host_read(player_id: i32) -> card_sdk::Asked {
 /// engine's work stack must run the chain on a small thread stack.
 const SETTLE_NEST: CardDef = CardDef::new(
     "TEST:settleNest",
-    &[On::Action(
-        &[ActionKind::SettleBody],
-        "actor == owner && card.placed && card.counter('crystals') > 0", "",
-        None,
-        settle_nest,
-    )],
+    &[On::Action(Action::SettleBody("actor == owner && card.placed && card.counter('crystals') > 0", "", None, settle_nest))],
 );
 
 fn settle_nest(player_id: i32) -> card_sdk::Asked {
@@ -1094,7 +1084,7 @@ fn settle_nest(player_id: i32) -> card_sdk::Asked {
 /// runs exactly once and the sibling is not re-run.
 const SETTLE_TAIL: CardDef = CardDef::new(
     "TEST:settleTail",
-    &[On::Action(&[ActionKind::SettleBody], "actor == owner && card.placed", "", None, settle_tail)],
+    &[On::Action(Action::SettleBody("actor == owner && card.placed", "", None, settle_tail))],
 );
 
 fn settle_tail(player_id: i32) -> card_sdk::Asked {
@@ -1114,7 +1104,7 @@ fn settle_tail(player_id: i32) -> card_sdk::Asked {
 /// Sibling hook on SettleBody -- must run once per settle, not again on resume.
 const SETTLE_SIB: CardDef = CardDef::new(
     "TEST:settleSib",
-    &[On::Action(&[ActionKind::SettleBody], "actor == owner && card.placed", "", None, settle_sib)],
+    &[On::Action(Action::SettleBody("actor == owner && card.placed", "", None, settle_sib))],
 );
 
 fn settle_sib(player_id: i32) -> card_sdk::Asked {
@@ -1137,8 +1127,8 @@ const SILENT_PAIR: CardDef = CardDef::new(
     "TEST:silentPair",
     &[
         On::Play("", "", None, silent_pair_place),
-        On::Action(&[ActionKind::Settle], "", "", Some(silent_hook_yes), silent_pair_book),
-        On::Action(&[ActionKind::Settle], "", "", Some(silent_hook_yes), silent_pair_flash),
+        On::Action(Action::Settle("", "", Some(silent_hook_yes), silent_pair_book)),
+        On::Action(Action::Settle("", "", Some(silent_hook_yes), silent_pair_flash)),
     ],
 )
 .silent(&[1]);
@@ -1147,7 +1137,7 @@ const SILENT_NEST: CardDef = CardDef::new(
     "TEST:silentNest",
     &[
         On::Play("", "", None, silent_nest_place),
-        On::Action(&[ActionKind::Settle], "", "", Some(silent_hook_yes), silent_nest_body),
+        On::Action(Action::Settle("", "", Some(silent_hook_yes), silent_nest_body)),
     ],
 )
 .silent(&[1]);
@@ -1156,7 +1146,7 @@ const SILENT_PAY: CardDef = CardDef::new(
     "TEST:silentPay",
     &[
         On::Play("", "", None, silent_pay_place),
-        On::Action(&[ActionKind::Settle], "", "", Some(silent_hook_yes), silent_pay_body),
+        On::Action(Action::Settle("", "", Some(silent_hook_yes), silent_pay_body)),
     ],
 )
 .silent(&[1]);
@@ -1218,8 +1208,8 @@ const SILENT_QUIET: CardDef = CardDef::new(
     "TEST:silentQuiet",
     &[
         On::Play("", "", None, silent_quiet_place),
-        On::Action(&[ActionKind::Settle], "", "", Some(silent_hook_yes), quiet_noop),
-        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, quiet_log),
+        On::Action(Action::Settle("", "", Some(silent_hook_yes), quiet_noop)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, "", None, quiet_log)),
     ],
 )
 .quiet_when_empty(&[1, 2]);
@@ -1250,7 +1240,7 @@ const SILENT_ASK: CardDef = CardDef::new(
     "TEST:silentAsk",
     &[
         On::Play("", "", None, silent_ask_place),
-        On::Action(&[ActionKind::Settle], "", "", Some(silent_hook_yes), silent_ask_body),
+        On::Action(Action::Settle("", "", Some(silent_hook_yes), silent_ask_body)),
     ],
 );
 
@@ -1394,6 +1384,31 @@ fn flash_inner(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Downstream custom **filter** kind fixture: registers
+/// `bandori_std::kind::Filters::MyRewrite` (a ruleset-ns filter declared via
+/// `filter_kinds!`). Proves the declaration → registration → dispatch path for
+/// a rule-defined filter. No game semantics.
+const CUSTOM_FILTER: CardDef = CardDef::new(
+    "TEST:customFilter",
+    &[
+        On::Play("", "", None, custom_filter_play),
+        On::Filter(bandori_std::kind::Filters::MyRewrite("", None, my_rewrite)),
+    ],
+);
+
+fn custom_filter_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:customFilter", &Msg::new(key!("custom_filter_note")));
+    Ok(())
+}
+
+fn my_rewrite(_player_id: i32, v: PlanValue) -> PlanValue {
+    PlanValue {
+        min_roll: Some(1),
+        ..v
+    }
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1403,5 +1418,6 @@ card_sdk::ruleset!(&[
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
-    FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER
+    FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
+    CUSTOM_FILTER
 ]);

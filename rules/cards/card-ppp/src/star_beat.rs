@@ -9,7 +9,7 @@
 //! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
 use card_sdk::abi::MoveKind;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",
@@ -18,12 +18,7 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         // the offer exists only with a layer banked and a buildable owned
         // tile within 5. Layer is CEL (`slot`); the near-buildable scan is
         // residual (owned ∩ dist ≤ 5 ∩ can_build_on).
-        On::Action(
-            &[card_sdk::abi::ActionKind::SettleAfter],
-            "actor == owner && slot('star_beat.layers') > 0", "",
-            Some(has_near_buildable),
-            after_settle,
-        ),
+        On::Action(Action::SettleAfter("actor == owner && slot('star_beat.layers') > 0", "", Some(has_near_buildable), after_settle)),
         On::Play("", "", Some(cant_play), play),
     ],
 )

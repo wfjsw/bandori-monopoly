@@ -45,24 +45,23 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s[3].0, kind("Action"));
     assert_eq!(s[3].1, vec!["reshuffled".to_string()], "Reshuffled");
 
-    // j11 (ABI v78): Play / Action(TurnEnd, Targeted) /
-    //   Action(PaySplitChooseBefore) / FilterFlag(PaySplitChoose) / Action(CounterChanged)
-    //   -- the old combined Effect arm moved to the interactive pre-stage.
+    // j11 (ABI v93 one-kind-per-entry): Play / Action(TurnEnd) / Action(Targeted) /
+    //   Action(PaySplitChooseBefore) / Filter(PaySplitChoose) / Action(CounterChanged)
+    //   -- the old combined TurnEnd+Targeted arm is two entries; the Effect arm
+    //   moved to the interactive pre-stage.
     let s = shape("Mujica:#J11");
-    assert_eq!(s.len(), 5, "j11 entries: {s:?}");
+    assert_eq!(s.len(), 6, "j11 entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Action"));
-    assert_eq!(
-        s[1].1,
-        vec!["turnEnd".to_string(), "targeted".to_string()],
-        "TurnEnd, Targeted"
-    );
+    assert_eq!(s[1].1, vec!["turnEnd".to_string()], "TurnEnd");
     assert_eq!(s[2].0, kind("Action"));
-    assert_eq!(s[2].1, vec!["paySplitChooseBefore".to_string()], "PaySplitChooseBefore");
-    assert_eq!(s[3].0, kind("Filter"));
-    assert_eq!(s[3].1, vec!["paySplitChoose".to_string()], "PaySplitChoose");
-    assert_eq!(s[4].0, kind("Action"));
-    assert_eq!(s[4].1, vec!["counterChanged".to_string()], "CounterChanged");
+    assert_eq!(s[2].1, vec!["targeted".to_string()], "Targeted");
+    assert_eq!(s[3].0, kind("Action"));
+    assert_eq!(s[3].1, vec!["paySplitChooseBefore".to_string()], "PaySplitChooseBefore");
+    assert_eq!(s[4].0, kind("Filter"));
+    assert_eq!(s[4].1, vec!["paySplitChoose".to_string()], "PaySplitChoose");
+    assert_eq!(s[5].0, kind("Action"));
+    assert_eq!(s[5].1, vec!["counterChanged".to_string()], "CounterChanged");
 
     // fever: Play / Filter(PaySplitAdd) / Action(TurnStart)
     let s = shape("通用:[衍生]FEVER!");

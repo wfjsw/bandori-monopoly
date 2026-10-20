@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "Sumimi:Here the world";
 
@@ -91,9 +91,9 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
             counteract,
         ),
         // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-        On::Action(&[ActionKind::Drew], "actor == owner && card.placed && slot('here_held_len') <= 0", "", None, drew),
+        On::Action(Action::Drew("actor == owner && card.placed && slot('here_held_len') <= 0", "", None, drew)),
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed && slot('here_held_len') > 0", "", None, turn_start),
+        On::Action(Action::TurnStart("actor == owner && card.placed && slot('here_held_len') > 0", "", None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Here the world"#)

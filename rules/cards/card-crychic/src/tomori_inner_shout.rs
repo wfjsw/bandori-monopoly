@@ -12,7 +12,7 @@
 //! re-declare 「想要成为人类」's X for money, then a MyGO placement + pull skill.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 use crate::want_human::SLOT_X;
 
@@ -22,18 +22,13 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // 规则书（3）: 「你位于此卡前后5格内时可在时机合适时消耗1火罐…」 -- the
         // offer exists only within 5 of this card and with a fire to spend.
         // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
-        On::Action(
-            &[card_sdk::abi::ActionKind::SettleBefore],
-            "actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(owner), card.tile) <= 5", "",
-            Some(not_latched),
-            pull,
-        ),
+        On::Action(Action::SettleBefore("actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(owner), card.tile) <= 5", "", Some(not_latched), pull)),
         // Once-per-move latch drop (the redirect re-raises `settleBefore` at the
         // destination; see `pull`).
-        On::Action(&[card_sdk::abi::ActionKind::MoveResolved], "", "", None, clear_latch),
+        On::Action(Action::MoveResolved("", "", None, clear_latch)),
         // 高松灯（MyGO!!!!!）(2): 「在此技能影响下的支付价格变为原本的一半」 -- the
         // mover's payments on the pulled settle.
-        On::Filter(&[card_sdk::abi::FilterKind::PaySplitMul], "", Some(half), on_pay),
+        On::Filter(Filter::PaySplitMul("", Some(half), on_pay)),
         // （2）「乐队技能的（2）效果发动时展示此卡并将其洗入抽牌堆」 lives in the
         // band skill's (2) body (`skill-groups/src/crychic.rs`), not here: the
         // band effect is what moves the card, and by a separate empty-piles hook

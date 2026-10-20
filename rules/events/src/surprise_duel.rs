@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, FilterBody, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};
 
@@ -23,13 +23,8 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
-        On::FilterValue(
-            &[FilterKind::DiceRollPlan],
-            "",
-            Some(on_plan_others),
-            FilterBody::Plan(on_plan),
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], "", "", None, on_turn_start),
+        On::Filter(Filter::DiceRollPlan("", Some(on_plan_others), on_plan)),
+        On::Action(Action::TurnStartBefore("", "", None, on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

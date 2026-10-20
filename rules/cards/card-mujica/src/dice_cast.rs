@@ -9,7 +9,7 @@
 use bandori_std::state_key;
 use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// Once-per-turn placement latch. `cast` is reached from both `play` and the
 /// played card's own `counteract` follow-up (`a_played_cards_own_counteract_runs_once`)
@@ -34,7 +34,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         ),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Action(&[ActionKind::TurnEndAfter], "actor == owner && card.placed", "", None, turn_end),
+        On::Action(Action::TurnEndAfter("actor == owner && card.placed", "", None, turn_end)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

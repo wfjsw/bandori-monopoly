@@ -9,7 +9,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 const ID: &str = "Mujica:#J11";
 
@@ -19,19 +19,15 @@ pub const J11: CardDef = CardDef::new(
         On::Play("", "", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
         // reactions, not [反击]s.
-        On::Action(
-            &[ActionKind::TurnEnd, ActionKind::Targeted],
-            "card.placed", "",
-            None,
-            counteract,
-        ),
+        On::Action(Action::TurnEnd("card.placed", "", None, counteract)),
+        On::Action(Action::Targeted("card.placed", "", None, counteract)),
         // C# `CardJ11.PaySplitChoose` interactive arm: `ask_yes` → `charge` →
         // `set_pay_amount(0)`. Rides `PaySplitChooseBefore` (v78), restoring the
         // rulebook PaySplitChoose position (its own entry; the TurnEnd/Targeted
         // dispatcher is separate). The pure stun cancel stays on FilterFlag.
-        On::Action(&[ActionKind::PaySplitChooseBefore], "card.placed", "", None, pay_choose_ask),
-        On::FilterFlag(&[FilterKind::PaySplitChoose], "card.placed", None, pay_choose_cancel),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(Action::PaySplitChooseBefore("card.placed", "", None, pay_choose_ask)),
+        On::Filter(Filter::PaySplitChoose("card.placed", None, pay_choose_cancel)),
+        On::Action(Action::CounterChanged("", "", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

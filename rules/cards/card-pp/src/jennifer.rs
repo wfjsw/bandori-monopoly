@@ -16,7 +16,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 pub const JENNIFER: CardDef = CardDef::new(
@@ -24,12 +24,7 @@ pub const JENNIFER: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(cant_play), jennifer),
         // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
-        On::Action(
-            &[ActionKind::PassTile],
-            "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')", "",
-            None,
-            pass_tile,
-        ),
+        On::Action(Action::PassTile("card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')", "", None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"找回珍妮弗"#)

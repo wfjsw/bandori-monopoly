@@ -749,7 +749,19 @@ use std::borrow::Cow;
 ///      / `World.recorded_roll` / `TriggerBuy` sentinels become `Option`);
 ///      older saves are refused (replays ride archived engine bundles).
 /// RECORD_VERSION unchanged (the record codec does not carry kind ids).
-pub const ABI_VERSION: i32 = 92;
+/// v93: **typed filter/action registration DSL**. `On::FilterFlag` /
+///      `On::FilterValue` / `FilterBody` die; every filter registration is
+///      `On::Filter(FilterEntry)` built by the `filter_kinds!` constructors
+///      (`Filter::DiceRollPlan(pre, guard, body)`), every action is
+///      `On::Action(ActionEntry)` from `action_kinds!`. One kind per entry --
+///      multi-kind lists are split. `FilterEntry.body` is a type-erased
+///      `*const ()` cast back only inside `payload::drive_*` (one per shape).
+///      Downstream rulesets declare custom kinds with the same macros
+///      (`bandori_std::kind::{Actions, Filters}`). `check_kind_variant` is
+///      deleted -- the constructor type pins the side. Source-only for the
+///      wire: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
+///      unchanged.
+pub const ABI_VERSION: i32 = 93;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

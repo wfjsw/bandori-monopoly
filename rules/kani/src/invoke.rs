@@ -160,16 +160,16 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
         On::Play(_, _, _, f)
         | On::Counteract(_, _, _, _, f)
-        | On::Action(_, _, _, _, f)
         | On::Settle(_, _, f)
         | On::Mortgage(_, _, f)
         | On::Redeem(_, _, f)
         | On::Buy(_, _, f)
         | On::Build(_, _, f)
         | On::Message(_, _, _, f) => *f,
+        On::Action(e) => e.body,
         // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
         // through `filter_*_idx` / direct trampolines instead.
-        On::Filter(..) | On::FilterFlag(..) | On::FilterValue(..) => {
+        On::Filter(..) => {
             fail_no_kind("Filter (use filter_idx)")
         }
     }
@@ -303,28 +303,26 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
         let hit = match (ktag, on) {
             (KindTag::Play, On::Play(..)) => true,
             (KindTag::Counteract, On::Counteract(..)) => true,
-            (KindTag::Action, On::Action(kinds, ..)) => {
+            (KindTag::Action, On::Action(e)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
+                    || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            (KindTag::Filter, On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
+            (KindTag::Filter, On::Filter(e)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
+                    || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            // Gates are `On::FilterValue(..., FilterBody::Gate)` only; the
-            // pure-decision `On::FilterFlag` (PaySplitChoose / PayCombinedCancel)
-            // is not a gate.
-            (KindTag::Gate, On::FilterValue(kinds, _, _, card_sdk::FilterBody::Gate(..))) => {
+            // Gates are `FilterShape::Gate`; pure-decision flags are not.
+            (KindTag::Gate, On::Filter(e)) if e.shape == card_sdk::FilterShape::Gate => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
+                    || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            (KindTag::AtEnd, On::Action(kinds, ..)) => {
+            (KindTag::AtEnd, On::Action(e)) => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
+                    || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            (KindTag::DiceRollPlan, On::FilterValue(kinds, _, _, card_sdk::FilterBody::Plan(..))) => {
+            (KindTag::DiceRollPlan, On::Filter(e)) if e.shape == card_sdk::FilterShape::Payload => {
                 hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_trigger(), hook_name)
+                    || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
             (KindTag::Settle, On::Settle(..)) => true,
             (KindTag::Mortgage, On::Mortgage(..)) => true,
@@ -487,31 +485,8 @@ pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
 pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::ActionKind, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if let On::Action(kinds, _, _, _, _) = on {
-            // Zero-loop kind match (`iter().any` over a short slice unrolls
-            // to the global bound under CBMC).
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k2) = kinds.get(2) {
-                if k2 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k3) = kinds.get(3) {
-                if k3 == want {
-                    hit = true;
-                }
-            }
-            if hit {
+        if let On::Action(e) = on {
+            if e.kind == want {
                 return entry_idx(idx, i, player);
             }
         }
@@ -520,7 +495,7 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::ActionKind, player: i
 }
 
 /// First `On::Filter` of card `idx` matching `want`; returns the transformed
-/// value (v74 pure body). **Integer-only** kind match.
+/// value (v74 pure body). **Integer-only** kind match. Value shape only.
 #[inline(always)]
 pub fn filter_kind_only_idx(
     idx: usize,
@@ -530,19 +505,10 @@ pub fn filter_kind_only_idx(
 ) -> i32 {
     let card = by_idx(idx);
     for on in card.on.iter() {
-        if let On::Filter(kinds, _, _, run) = on {
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if hit {
+        if let On::Filter(e) = on {
+            if e.kind == want && e.shape == card_sdk::FilterShape::Value {
+                // SAFETY: Value-shape body is `fn(i32, i32) -> i32` (kinds.rs).
+                let run: fn(i32, i32) -> i32 = unsafe { core::mem::transmute(e.body) };
                 return run(player, value);
             }
         }
@@ -550,8 +516,8 @@ pub fn filter_kind_only_idx(
     fail_no_kind("Filter")
 }
 
-/// First `On::FilterFlag` of card `idx` matching `want` (true = keep).
-/// Pure-decision only (PaySplitChoose / PayCombinedCancel); gates moved to
+/// First flag-shape `On::Filter` of card `idx` matching `want` (true = keep).
+/// Pure-decision only (PaySplitChoose / PayCombinedCancel); gates go to
 /// [`filter_gate_kind_only_idx`].
 #[inline(always)]
 pub fn filter_flag_kind_only_idx(
@@ -562,19 +528,10 @@ pub fn filter_flag_kind_only_idx(
 ) -> bool {
     let card = by_idx(idx);
     for on in card.on.iter() {
-        if let On::FilterFlag(kinds, _, _, run) = on {
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if hit {
+        if let On::Filter(e) = on {
+            if e.kind == want && e.shape == card_sdk::FilterShape::Flag {
+                // SAFETY: Flag-shape body is `fn(i32, i32) -> bool`.
+                let run: fn(i32, i32) -> bool = unsafe { core::mem::transmute(e.body) };
                 return run(player, value);
             }
         }
@@ -582,8 +539,8 @@ pub fn filter_flag_kind_only_idx(
     fail_no_kind("FilterFlag")
 }
 
-/// First `On::FilterValue(..., FilterBody::Gate)` of card `idx` matching
-/// `want`. Returns the rewritten [`card_sdk::GateValue`].
+/// First gate-shape `On::Filter` of card `idx` matching `want`. Returns the
+/// rewritten [`card_sdk::GateValue`].
 #[inline(always)]
 pub fn filter_gate_kind_only_idx(
     idx: usize,
@@ -593,19 +550,11 @@ pub fn filter_gate_kind_only_idx(
 ) -> card_sdk::GateValue {
     let card = by_idx(idx);
     for on in card.on.iter() {
-        if let On::FilterValue(kinds, _, _, card_sdk::FilterBody::Gate(run)) = on {
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if hit {
+        if let On::Filter(e) = on {
+            if e.kind == want && e.shape == card_sdk::FilterShape::Gate {
+                // SAFETY: Gate body is `fn(i32, GateValue) -> GateValue`.
+                let run: fn(i32, card_sdk::GateValue) -> card_sdk::GateValue =
+                    unsafe { core::mem::transmute(e.body) };
                 return run(player, value);
             }
         }
@@ -613,8 +562,8 @@ pub fn filter_gate_kind_only_idx(
     fail_no_kind("Gate")
 }
 
-/// First `On::FilterValue(..., FilterBody::Plan)` of card `idx` matching
-/// `want`. Returns the rewritten [`card_sdk::PlanValue`].
+/// First plan-payload `On::Filter` of card `idx` matching `want`. Returns the
+/// rewritten [`card_sdk::PlanValue`].
 #[inline(always)]
 pub fn filter_plan_kind_only_idx(
     idx: usize,
@@ -624,19 +573,11 @@ pub fn filter_plan_kind_only_idx(
 ) -> card_sdk::PlanValue {
     let card = by_idx(idx);
     for on in card.on.iter() {
-        if let On::FilterValue(kinds, _, _, card_sdk::FilterBody::Plan(run)) = on {
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if hit {
+        if let On::Filter(e) = on {
+            if e.kind == want && e.shape == card_sdk::FilterShape::Payload {
+                // SAFETY: Plan payload body is `fn(i32, PlanValue) -> PlanValue`.
+                let run: fn(i32, card_sdk::PlanValue) -> card_sdk::PlanValue =
+                    unsafe { core::mem::transmute(e.body) };
                 return run(player, value);
             }
         }
@@ -763,6 +704,15 @@ fn hook_kind_matches<K: Copy>(
         }
     }
     hit
+}
+
+/// Single-kind form of [`hook_kind_matches`] (Phase 3: one kind per entry).
+#[inline(always)]
+fn hook_name_matches(kind: card_sdk::abi::TriggerKind, hook_name: &str) -> bool {
+    match hook_kind_parse(hook_name) {
+        Some(want) => kind == want,
+        None => false,
+    }
 }
 
 /// Short name → wire [`card_sdk::abi::TriggerKind`]. `None` for `""` or an

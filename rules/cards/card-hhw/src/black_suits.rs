@@ -14,7 +14,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, MarkFilter};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
 /// (C# `H.AddMark(..., "黑衣人的补给", ...)`).
@@ -27,12 +27,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // and the owner's own pass are the condition; the crystal mark count is
         // the residual guard. `ActionKind::Pass` (not `PassTile`) matches the
         // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki_other.rs`).
-        On::Action(
-            &[ActionKind::Pass],
-            "card.placed && actor == owner && tile.id == tile_named('弦卷集团')", "",
-            Some(pass_tile_guard),
-            pass_tile,
-        ),
+        On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", "", Some(pass_tile_guard), pass_tile)),
         // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
         // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
         // `PassBefore` is the category; the owner's own pass of CiRCLE is the

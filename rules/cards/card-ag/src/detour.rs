@@ -11,7 +11,7 @@
 use card_sdk::abi::{prop, ChainKind, ActionKind, Dice, FilterKind};
 use card_sdk::ctx::plan;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
@@ -23,11 +23,11 @@ pub const DETOUR: CardDef = CardDef::new(
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
-        On::FilterValue(&[FilterKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, FilterBody::Plan(next_roll)),
+        On::Filter(Filter::DiceRollPlan("slot('detour_next_roll') != 0", None, next_roll)),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
-        On::Action(&[ActionKind::DiceRollAfter], "slot('detour_next_roll') != 0", "", None, consume_next_roll),
-        On::Action(&[ActionKind::AtEnd], "", "", None, clear_no_reward),
+        On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", "", None, consume_next_roll)),
+        On::Action(Action::AtEnd("", "", None, clear_no_reward)),
     ],
 )
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()

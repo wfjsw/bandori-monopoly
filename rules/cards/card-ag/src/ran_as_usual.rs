@@ -11,7 +11,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const RAN_AS_USUAL: CardDef = CardDef::new(
     "AG:(兰) 像往常一样",
@@ -38,7 +38,7 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         // The body-top applicability checks are the condition / residual guard
         // now: a seat still in the game (`owner.out == 0`) that actually took
         // an abnormal effect this turn (`at_end_something_to_undo`).
-        On::Action(&[ActionKind::AtEnd], "owner.out == 0", "", Some(at_end_something_to_undo), at_end),
+        On::Action(Action::AtEnd("owner.out == 0", "", Some(at_end_something_to_undo), at_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"像往常一样"#)

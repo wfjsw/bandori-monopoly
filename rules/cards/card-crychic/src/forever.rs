@@ -12,7 +12,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const FOREVER: CardDef = CardDef::new(
     "CRYCHIC:如果能一直持续下去...",
@@ -22,18 +22,11 @@ pub const FOREVER: CardDef = CardDef::new(
         // continuous condition, so the check runs at every point a hand size
         // moves (draw, discard-from-hand, play-from-hand) and at the turn
         // boundaries as a backstop. `Drew` alone only sees draws.
-        On::Action(
-            &[
-                ActionKind::Drew,
-                ActionKind::DiscardAfter,
-                ActionKind::CardPlayed,
-                ActionKind::TurnEndBefore,
-                ActionKind::TurnEnd,
-            ],
-            "card.placed && owner.hand >= 7", "",
-            None,
-            on_drew
-        ),
+        On::Action(Action::Drew("card.placed && owner.hand >= 7", "", None, on_drew)),
+        On::Action(Action::DiscardAfter("card.placed && owner.hand >= 7", "", None, on_drew)),
+        On::Action(Action::CardPlayed("card.placed && owner.hand >= 7", "", None, on_drew)),
+        On::Action(Action::TurnEndBefore("card.placed && owner.hand >= 7", "", None, on_drew)),
+        On::Action(Action::TurnEnd("card.placed && owner.hand >= 7", "", None, on_drew)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"如果能一直持续下去..."#)

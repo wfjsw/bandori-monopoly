@@ -215,7 +215,7 @@ pub enum Call {
     },
     /// Scheduled turn-end callback (`On::Action(&[AtEnd])`).
     AtEnd { card: i32, player_id: i32 },
-    /// Movement routine (`On::FilterValue(&[DiceRollPlan], …, FilterBody::Plan(…))`), called while the walk
+    /// Movement routine (`On::Filter(Filter::DiceRollPlan(…))`), called while the walk
     /// is being planned.
     DiceRollPlan { card: i32, player_id: i32 },
     /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the
@@ -1393,7 +1393,7 @@ impl Ruleset {
             Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             // v75: AtEnd / DiceRollPlan are ordinary kind-keyed entries
-            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan], …, FilterBody::Plan(…))`).
+            // (`On::Action(&[AtEnd])` / `On::Filter(Filter::DiceRollPlan(…))`).
             Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
             Call::DiceRollPlan { .. } => info.hook_entry(crate::TriggerKind::DiceRollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),

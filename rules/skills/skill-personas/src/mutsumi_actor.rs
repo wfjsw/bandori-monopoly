@@ -16,7 +16,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// Turns since the last hand play. A play resets it.
 const QUIET: &str = "skill.mutsumiActor.quiet";
@@ -31,14 +31,9 @@ const OVERLAID: &str = "skill.mutsumiActor.overlaid";
 pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
     "skill:若叶睦:天生的演员",
     &[
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            "actor == owner && slot('skillState') != 2", "",
-            None,
-            at_turn_start,
-        ),
-        On::Action(&[ActionKind::CardPlayed], card_sdk::pre::MINE, "", None, on_play),
-        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, at_turn_end),
+        On::Action(Action::TurnStartBefore("actor == owner && slot('skillState') != 2", "", None, at_turn_start)),
+        On::Action(Action::CardPlayed(card_sdk::pre::MINE, "", None, on_play)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, "", None, at_turn_end)),
     ],
 )
     .silent(&[1]);

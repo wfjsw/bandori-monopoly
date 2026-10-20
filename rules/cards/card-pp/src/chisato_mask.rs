@@ -17,13 +17,13 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
         On::Play("", "", None, chisato_mask),
-        On::Action(&[ActionKind::Reshuffled], "", "", Some(reshuffled_guard), reshuffled),
+        On::Action(Action::Reshuffled("", "", Some(reshuffled_guard), reshuffled)),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the

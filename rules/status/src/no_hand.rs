@@ -34,7 +34,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, FilterBody, GateValue, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The board-owned `noHand` rule. One instance on `BOARD_OWNER`, tile = -1`.
 /// Registered in [`crate::CARDS`]; `bind_tiles` places it.
@@ -43,12 +43,12 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
     &[
         // Turn-start fold (2 -> 1). See the placement note above for why this
         // is `TurnStart` and not `TurnStartBefore`.
-        On::Action(&[ActionKind::TurnStart], "", "", None, on_turn_start),
+        On::Action(Action::TurnStart("", "", None, on_turn_start)),
         // Turn-end clear (1 -> 0). `TurnEnd` is hook-only.
-        On::Action(&[ActionKind::TurnEnd], "", "", None, on_turn_end),
+        On::Action(Action::TurnEnd("", "", None, on_turn_end)),
         // 「不可使用手牌」 -- the play gate, **CEL-only**. No turn-skip: the
         // turn still runs; only hand-card plays are refused.
-        On::FilterValue(&[FilterKind::PlayGate], NO_HAND_HELD, None, FilterBody::Gate(refuse)),
+        On::Filter(Filter::PlayGate(NO_HAND_HELD, None, refuse)),
     ],
 )
     .board_role("status")

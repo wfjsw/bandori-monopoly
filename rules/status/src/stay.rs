@@ -34,7 +34,7 @@
 use bandori_std::kind::abnormal;
 use card_sdk::ctx::trigger;
 use card_sdk::abi::{ActionKind, FilterKind};
-use card_sdk::{CardDef, FilterBody, GateValue, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The board-owned [停留] rule. One instance on `BOARD_OWNER`, `tile = -1`.
 /// Registered in [`crate::CARDS`]; `bind_tiles` places it.
@@ -45,14 +45,14 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // already derived from the counter. This hook is the **clause**: a
         // card that wants to know 「受到[停留]时」 hears it here rather than
         // sniffing the grant site.
-        On::Action(&[ActionKind::Abnormal], "", "", Some(stay_landed), on_stay_landed),
+        On::Action(Action::Abnormal("", "", Some(stay_landed), on_stay_landed)),
         // 「处于该状态时[无法移动]」 + [不可阻挡] 「无视已存在的[停留]」
         // (rules.txt 47/48/51) -- the move gate, **CEL-only**: the condition is
         // the whole answer, so the host evaluates it natively in pure reads
         // (`Gate::Move` at turn start, the view's `can_roll_here`). Holding
         // another status (`unstoppable`) is why the vocabulary exposes
         // per-seat status functions.
-        On::FilterValue(&[FilterKind::MoveGate], STAY_HOLDS_MOVE, None, FilterBody::Gate(refuse)),
+        On::Filter(Filter::MoveGate(STAY_HOLDS_MOVE, None, refuse)),
     ],
 )
     .board_role("status")

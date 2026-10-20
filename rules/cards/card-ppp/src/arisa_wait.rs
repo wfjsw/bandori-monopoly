@@ -13,7 +13,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "PPP:（有咲）等等等一下";
 
@@ -21,7 +21,7 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
     "PPP:（有咲）等等等一下",
     &[
         On::Play("", "", None, arisa_wait),
-        On::Action(&[ActionKind::EventAfter], "", "", Some(event_after_guard), event_after),
+        On::Action(Action::EventAfter("", "", Some(event_after_guard), event_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"等等等一下"#)

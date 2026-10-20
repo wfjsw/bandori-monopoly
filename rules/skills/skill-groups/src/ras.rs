@@ -13,7 +13,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
 
 /// 「每回合可选择只获得第一次受到的[异常移动效果]」 -- 1 once one has landed.
 const TAKEN: &str = "skill.ras.taken";
@@ -25,31 +25,21 @@ pub const RAS: CardDef = CardDef::new(
     &[
         // Turn-start bookkeeping: clear the per-turn latch and drop a stale
         // landing memory. Silent -- the player never sees this as a clause.
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start_reset),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, at_turn_start_reset)),
         // （1）「每回合可选择只获得第一次受到的[异常移动效果]」 -- the drop of the
         // second+ hit belongs on `AbnormalGuard` (the declaration gate that can
         // refuse the effect); the `Abnormal` outcome hook is too late to cancel.
         // 「受到的」 is `target == owner` (the recipient), not `actor == owner`.
         // Pure decision (ABI v74): the one-shot latch is written by
         // [`mark_taken`] when the allowed effect actually lands.
-        On::FilterValue(
-            &[card_sdk::abi::FilterKind::AbnormalGuard],
-            "target == owner",
-            None,
-            FilterBody::Gate(on_abnormal),
-        ),
+        On::Filter(Filter::AbnormalGuard("target == owner", None, on_abnormal)),
         // One-shot latch for （1）: `Abnormal` reports what actually landed
         // (受到的), self-applied included. Paired with the pure gate above.
-        On::Action(&[ActionKind::Abnormal], "target == owner", "", None, mark_taken),
-        On::Action(&[ActionKind::Settle], card_sdk::pre::MINE, "", None, on_settle),
+        On::Action(Action::Abnormal("target == owner", "", None, mark_taken)),
+        On::Action(Action::Settle(card_sdk::pre::MINE, "", None, on_settle)),
         // （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
         // The remembered-tile scan is a derived read (docs/GUARDS.md §4.2).
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            card_sdk::pre::MINE, "",
-            Some(still_on_remembered),
-            at_turn_start_offer,
-        ),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", Some(still_on_remembered), at_turn_start_offer)),
     ],
 )
     .silent(&[0, 2, 3]);

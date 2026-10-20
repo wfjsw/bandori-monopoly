@@ -9,7 +9,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const RANA_FUNNY: CardDef = CardDef::new(
     "MyGO:（乐奈）有趣的女人",
@@ -18,12 +18,7 @@ pub const RANA_FUNNY: CardDef = CardDef::new(
         // 规则书: 「将此卡置于当前格子上，每当有人经过且未在其上[触发结算]时」
         // -- placed, a still-walking pass (not a teleport, not the walk's end)
         // of the card's own tile.
-        On::Action(
-            &[ActionKind::PassTile],
-            "card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id", "",
-            None,
-            pass_tile,
-        ),
+        On::Action(Action::PassTile("card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id", "", None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"有趣的女人"#)

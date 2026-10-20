@@ -22,7 +22,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const GROUP: &str = "skill.misakiOther.group";
 
@@ -30,17 +30,13 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
     "skill:奥泽美咲:另一个我",
     &[
         On::Play("", "", Some(can_use_exile), use_exile),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", "", None, on_pass),
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            "actor == owner && charge(owner) >= 1", "",
-            None,
-            at_turn_start,
-        ),
+        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
+        On::Action(Action::Pass("actor == owner && tile.id == tile_named('弦卷集团')", "", None, on_pass)),
+        On::Action(Action::TurnStartBefore("actor == owner && charge(owner) >= 1", "", None, at_turn_start)),
     ],
 )
-    .silent(&[1])
+    .silent(&[1, 2])
     // 「（初始0，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 

@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
@@ -20,9 +20,9 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
         On::Play("", "", None, play),
-        On::Action(&[ActionKind::TurnEnd], "card.placed", "", None, turn_end),
-        On::Filter(&[FilterKind::PaySplitMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(Action::TurnEnd("card.placed", "", None, turn_end)),
+        On::Filter(Filter::PaySplitMul("card.placed && pay_is_rent && target == owner", None, pay_mul)),
+        On::Action(Action::CounterChanged("", "", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Fire bird"#)

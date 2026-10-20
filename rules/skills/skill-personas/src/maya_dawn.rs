@@ -20,25 +20,15 @@ use alloc::string::String;
 
 use card_sdk::abi::{CardPile, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
-        On::Action(
-            &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')", "",
-            None,
-            at_start,
-        ),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", "", None, at_start)),
         // （2） replaces the draw, so it runs at the per-card **before** point.
-        On::Action(
-            &[ActionKind::DrewBefore],
-            "actor == owner && slot('ppFansUp') >= 1", "",
-            None,
-            on_draw,
-        ),
+        On::Action(Action::DrewBefore("actor == owner && slot('ppFansUp') >= 1", "", None, on_draw)),
     ],
 );
 

@@ -10,18 +10,18 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
     "MyGO:哪怕这旅程没有终点",
     &[
         On::Play("", "", None, endless_journey),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", "", None, turn_end),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", "", None, turn_end)),
         // （2）「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect
         // list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」 window. A
         // field card that replaces the body skips this entry.
-        On::Action(&[ActionKind::SettleBody], "actor == owner && move.main && card.placed", "", None, settle_body),
-        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(Action::SettleBody("actor == owner && move.main && card.placed", "", None, settle_body)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"哪怕这旅程没有终点"#)

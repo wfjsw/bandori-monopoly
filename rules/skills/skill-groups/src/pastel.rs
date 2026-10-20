@@ -14,8 +14,8 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use bandori_std::kind;
-use card_sdk::{key, CardDef, Msg, On};
+use bandori_std::kind::{self, Actions};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use crate::fans;
 
 const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
@@ -23,12 +23,12 @@ const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
 pub const PASTEL: CardDef = CardDef::new(
     ID,
     &[
-        On::Action(&[ActionKind::DeckAtGameStart], "", "", None, at_start),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
+        On::Action(Action::DeckAtGameStart("", "", None, at_start)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, at_turn_start)),
         // （2） overflow crystals. `FansFlip` is raised with the effect's X
         // before the dict writes, so `fans::down` is still the pre-flip count.
         // 「你」 is this card's owner (`actor == owner`).
-        On::Action(&[kind::FansFlip], "actor == owner", "", None, on_fans_flip),
+        On::Action(Actions::FansFlip("actor == owner", "", None, on_fans_flip)),
     ],
 );
 

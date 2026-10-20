@@ -7,12 +7,12 @@
 //! turn's money never drops, then stun + a band crystal after the turn.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use card_sdk::abi::ActionKind;
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",
-    &[On::Play("", "", None, debut_success), On::Action(&[ActionKind::AtEnd], "", "", None, at_end)],
+    &[On::Play("", "", None, debut_success), On::Action(Action::AtEnd("", "", None, at_end))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"初演大成功"#)
         .raw_name(r#"初演大成功"#)

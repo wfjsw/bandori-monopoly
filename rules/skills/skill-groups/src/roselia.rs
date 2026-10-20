@@ -11,7 +11,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{CardDef, On};
+use card_sdk::{Action, CardDef, Filter, On};
 
 const DONE: &str = "skill.roselia.first";
 
@@ -25,21 +25,11 @@ pub const ROSELIA: CardDef = CardDef::new(
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
         // The Live-House / one-shot split is residual (`is_live_house_for` is a
         // per-player colour, not CEL's tile-kind `is_venue`).
-        On::Filter(&[FilterKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
+        On::Filter(Filter::BuyMul("actor == owner && tile.id >= 0", Some(half_price_applies), half_price)),
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
-        On::Action(
-            &[ActionKind::Bought],
-            "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0", "",
-            Some(on_bought_applies),
-            on_bought,
-        ),
-        On::Action(
-            &[ActionKind::Bought],
-            "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0", "",
-            Some(on_live_bought_applies),
-            on_live_bought,
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", "", None, at_turn_start),
+        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0", "", Some(on_bought_applies), on_bought)),
+        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0", "", Some(on_live_bought_applies), on_live_bought)),
+        On::Action(Action::TurnStartBefore("actor == owner && slot('skill.roselia.first') != 0", "", None, at_turn_start)),
     ],
 )
     .silent(&[1]);

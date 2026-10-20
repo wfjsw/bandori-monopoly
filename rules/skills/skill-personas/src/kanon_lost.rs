@@ -15,9 +15,10 @@
 //! counter that a CiRCLE reward resets; 「下回合移动投掷改为1d20+1d4」 is the
 //! dice table being rewritten when it fires.
 
+use bandori_std::kind::Actions;
 use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 /// Turns since the last CiRCLE reward. Cleared on the reward.
 const SILENT: &str = "skill.kanonLost.silent";
@@ -27,12 +28,12 @@ pub const KANON_LOST: CardDef = CardDef::new(
     &[
         // (1) is a starting square: the before-match-start point decides start
         // positions.
-        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, at_start),
+        On::Action(Action::DeckBeforeGame("", "", None, at_start)),
         // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
         // dice, so there are not two faces to subtract.
-        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && plan.fixed_roll == null", "", None, on_roll),
-        On::Action(&[bandori_std::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, on_circle),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, at_turn_end),
+        On::Action(Action::DiceRollAfter("actor == owner && plan.fixed_roll == null", "", None, on_roll)),
+        On::Action(Actions::PassRewardAffected("actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, on_circle)),
+        On::Action(Action::TurnEnd("actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, at_turn_end)),
         // TODO(bug): possible engine issue — a `slot()` condition on a
         // FilterValue at DiceRollPlan did not observe a state write made
         // earlier in the same roll (seen while splitting eve_unify: the
@@ -42,7 +43,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // the roll). Verify whether the gate ever mis-fires here; if it does,
         // fix the condition evaluation snapshot (or move the gate into the
         // body) and re-run the kanon tests + a two-roll scenario.
-        On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, FilterBody::Plan(on_plan)),
+        On::Filter(Filter::DiceRollPlan("actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan)),
     ],
 )
     .silent(&[2, 3]);

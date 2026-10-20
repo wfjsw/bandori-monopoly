@@ -13,7 +13,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "Mujica:（海铃）";
 
@@ -27,20 +27,10 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(cant_play), umiri_card),
         // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-        On::Action(
-            &[ActionKind::TurnStart],
-            "card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1", "",
-            None,
-            turn_start,
-        ),
+        On::Action(Action::TurnStart("card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1", "", None, turn_start)),
         // 规则书（3）: the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
-        On::Action(
-            &[ActionKind::TurnEnd],
-            "card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1", "",
-            None,
-            turn_end,
-        ),
+        On::Action(Action::TurnEnd("card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1", "", None, turn_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

@@ -13,7 +13,7 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 
@@ -25,8 +25,9 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
         On::Play("", "", None, starry_night),
-        On::Action(&[ActionKind::DiceRollAfter, ActionKind::PassTile], "card.placed && card.counter('crystals') > 0", "", None, hook),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(Action::DiceRollAfter("card.placed && card.counter('crystals') > 0", "", None, hook)),
+        On::Action(Action::PassTile("card.placed && card.counter('crystals') > 0", "", None, hook)),
+        On::Action(Action::CounterChanged("", "", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"蝴蝶飞舞的星月夜"#)

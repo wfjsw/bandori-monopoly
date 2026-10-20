@@ -16,7 +16,7 @@
 //! The [特] discard hook banishes the accident when this card enters a discard.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use card_sdk::abi::ActionKind;
 use skill_groups::fans;
 
@@ -24,13 +24,13 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
         On::Play("", "", Some(cant_play), overlapping_voices),
-        On::Action(&[ActionKind::AtEnd], "", "", None, at_end),
+        On::Action(Action::AtEnd("", "", None, at_end)),
         // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的
         // [场地]上的"初次演出事故"（如果有）」 -- the own-card `Discarded`
         // dispatch (guerrilla / mygo): the hook fires when *this* card is the
         // one that entered the discard. Banishing the *other* card does not
         // re-enter this hook (the raise names the discarded card's id).
-        On::Action(&[ActionKind::Discarded], card_sdk::pre::MINE, "", None, on_discarded),
+        On::Action(Action::Discarded(card_sdk::pre::MINE, "", None, on_discarded)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"重叠的声音"#)

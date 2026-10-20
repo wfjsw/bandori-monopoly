@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const TRITONE: CardDef = CardDef::new(
     "Mor:迷茫之蝶们的三全音",
@@ -22,7 +22,7 @@ pub const TRITONE: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Action(&[ActionKind::TurnEnd], "", "", None, counteract),
+        On::Action(Action::TurnEnd("", "", None, counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫之蝶们的三全音"#)

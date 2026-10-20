@@ -24,17 +24,18 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const LISA_GODDESS: CardDef = CardDef::new(
     "skill:今井莉莎:慈爱女神",
     &[
         On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
+        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, "", None, on_pass)),
     ],
 )
-    .silent(&[1])
+    .silent(&[1, 2])
     // 「（初始2，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
 

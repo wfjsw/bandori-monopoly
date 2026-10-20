@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",
@@ -39,12 +39,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         // is a derived list (money + land + houses), residual (docs/GUARDS.md
         // §4.2). `Drawn` fires with the card already in hand (`wasm_rules.rs`
         // 「it is still in hand」), so 「手牌」 counts this card.
-        On::Action(
-            &[ActionKind::Drawn],
-            "trigger_card == card.id", "",
-            Some(assets_ready),
-            on_drawn,
-        ),
+        On::Action(Action::Drawn("trigger_card == card.id", "", Some(assets_ready), on_drawn)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

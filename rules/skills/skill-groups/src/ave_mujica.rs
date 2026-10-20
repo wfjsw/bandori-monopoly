@@ -19,7 +19,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{counter, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 /// Turns spent in 状态2. 「处于状态2的第三回合开始时」 reads this.
 const IN_TWO: &str = "skill.aveMujica.inTwo";
@@ -33,15 +33,15 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
         On::Play("", "", Some(can_halve), halve),
-        On::Action(&[ActionKind::TurnStartBefore], "slot('skillState') != 0", "", None, at_turn_start),
+        On::Action(Action::TurnStartBefore("slot('skillState') != 0", "", None, at_turn_start)),
         // Latch the declared figure for the PayAfter one-sided fixup. `Effect`
         // is the payment declaration (pre-PaySplitAdd); see `latch_orig`.
-        On::Action(&[ActionKind::Effect], "slot('skillState') == 2 && card.placed", "", None, latch_orig),
-        On::Filter(&[FilterKind::PaySplitMul], "slot('skillState') == 2 && card.placed", None, bend),
+        On::Action(Action::Effect("slot('skillState') == 2 && card.placed", "", None, latch_orig)),
+        On::Filter(Filter::PaySplitMul("slot('skillState') == 2 && card.placed", None, bend)),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
         // figure, so the counterpart's side is restored here.
-        On::Action(&[ActionKind::PayAfter], "slot('skillState') == 2 && card.placed", "", None, after_bend),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skillState') == 2", "", None, at_turn_end),
+        On::Action(Action::PayAfter("slot('skillState') == 2 && card.placed", "", None, after_bend)),
+        On::Action(Action::TurnEnd("actor == owner && slot('skillState') == 2", "", None, at_turn_end)),
     ],
 );
 

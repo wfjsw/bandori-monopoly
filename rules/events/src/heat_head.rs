@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, FilterBody, Msg, On, PlanValue, RollValue};
+use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue, RollValue};
 
 use crate::util::{expire, keep, roll};
 
@@ -23,21 +23,11 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
         // read on a BOARD_OWNER event instance).
-        On::FilterValue(
-            &[FilterKind::DiceRollPlan],
-            "",
-            None,
-            FilterBody::Plan(add_die),
-        ),
+        On::Filter(Filter::DiceRollPlan("", None, add_die)),
         // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
         // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
-        On::FilterValue(
-            &[FilterKind::DiceRollValue],
-            "",
-            None,
-            FilterBody::Roll(sub_die_filter),
-        ),
-        On::Action(&[ActionKind::AtEnd], "", "", None, phase_end),
+        On::Filter(Filter::DiceRollValue("", None, sub_die_filter)),
+        On::Action(Action::AtEnd("", "", None, phase_end)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

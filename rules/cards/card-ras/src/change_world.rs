@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
 
 pub const CHANGE_WORLD: CardDef = CardDef::new(
     "RAS:Change the world",
@@ -18,27 +18,12 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         On::Play("", "", Some(cant_play), play),
         // 规则书: 「期间每经过一个不属于你的livehouse格子」 -- the owner's main
         // walk this turn, over a buyable Live House the owner does not hold.
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner", "",
-            None,
-            pass_tile,
-        ),
+        On::Action(Action::PassTile("actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner", "", None, pass_tile)),
         // 「此地块的下一次收费」 -- the rent on *this* card's tile, with a
         // house count `n` to scale by. Tile match + houses are derived scans
         // (self_tile / houses_of), residual (docs/GUARDS.md §4.2).
-        On::Filter(
-            &[FilterKind::PaySplitAdd],
-            "card.placed && pay_is_rent && target == owner",
-            Some(on_card_tile_with_houses),
-            pay_choose,
-        ),
-        On::Action(
-            &[ActionKind::PayAfter],
-            "card.placed && pay_is_rent && target == owner", "",
-            Some(on_card_tile_with_houses),
-            pay_after,
-        ),
+        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner", Some(on_card_tile_with_houses), pay_choose)),
+        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", "", Some(on_card_tile_with_houses), pay_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Change the world"#)
@@ -154,14 +139,14 @@ fn on_card_tile_with_houses(_player_id: i32) -> bool {
 /// C# `CardChangeWorld.PaySplitAdd` -- when rent on the card's tile is paid to the
 /// card's owner, the rent grows by `50 * (Crystals + 1) * houses[Tile]`.
 /// Applicability is `on_card_tile_with_houses`.
-fn pay_choose(player_id: i32, value: i32) -> i32 {
+fn pay_choose(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     let tile = ctx::self_tile().unwrap_or(-1);
     let houses = ctx::houses_of(tile);
     // 规则书: 「此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数」
     // -- C# `Bonus() = 50 * (Crystals + 1) * houses[Tile]`, added to `p.amount`.
     let bonus = 50 * (ctx::crystals() + 1) * houses;
     if bonus <= 0 {
-        return value;
+        return PayAddValue { value: v.value, ..v };
     }
     ctx::log(
         player_id,
@@ -169,7 +154,7 @@ fn pay_choose(player_id: i32, value: i32) -> i32 {
             .player_id("who", player_id)
             .i("n", bonus as i64),
     );
-    value + bonus
+    PayAddValue { value: v.value + bonus, ..v }
 }
 
 /// C# `CardChangeWorld.PayAfter` -- the pay that carried the bonus discards the

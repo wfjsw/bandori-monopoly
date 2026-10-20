@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use card_sdk::abi::{FilterKind, MoveKind};
 use bandori_std::ctx::{plan, trigger};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, Filter, key, Msg, On};
 
 pub const TSUGU_YCM: CardDef = CardDef::new(
     "通用:@Tsugu ycm",
@@ -25,7 +25,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         // stage on the buy price, riding a `ctx::linger` instance for the turn
         // (`docs/PURCHASE.md`). The engine floors the stage at 0. The tile is
         // the hook's applicability (the residual guard).
-        On::Filter(&[FilterKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
+        On::Filter(Filter::BuyAdd(card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"@Tsugu ycm"#)

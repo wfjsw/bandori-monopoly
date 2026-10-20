@@ -29,7 +29,7 @@
 //! card half).
 use card_sdk::abi::{prop, text_slot, ActionKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词). Matches `game_core::engine::world::CIRCLE_MONEY`.
 pub const CIRCLE_MONEY: i32 = 2000;
@@ -38,7 +38,7 @@ pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
         On::Settle("", None, settle),
-        On::Action(&[ActionKind::PassTile], "", "", Some(pass_pays), on_pass),
+        On::Action(Action::PassTile("", "", Some(pass_pays), on_pass)),
     ],
 )
 .board_role("tile")

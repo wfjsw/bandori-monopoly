@@ -13,18 +13,13 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 pub const CHISATO_FRANK: CardDef = CardDef::new(
     "skill:白鹭千圣:保持坦率的你",
     &[
-        On::Action(
-            &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')", "",
-            None,
-            at_start,
-        ),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", "", None, at_start)),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
         // so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not the per-share
         // `paySplitChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
@@ -34,12 +29,7 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
         // Rides `PayCombinedAddBefore` (v78), restoring the rulebook PayCombinedAdd
         // position: the interactive `ask_number` + `set_pay_amount` sits
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
-        On::Action(
-            &[ActionKind::PayCombinedAddBefore],
-            "target == owner && value > 0 && slot('ppFansUp') >= 1", "",
-            Some(mine),
-            on_gain,
-        ),
+        On::Action(Action::PayCombinedAddBefore("target == owner && value > 0 && slot('ppFansUp') >= 1", "", Some(mine), on_gain)),
     ],
 );
 

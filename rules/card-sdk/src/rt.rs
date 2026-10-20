@@ -9,28 +9,7 @@ use crate::{CardDef, On};
 
 /// The card manifest, `postcard`-encoded (ABI v5 -- the guest hand-writes no
 /// JSON at all: messages and manifests both travel as serde bytes).
-///
-/// ABI v73: kind/variant agreement is enforced here at ruleset build --
-/// a `On::Filter` may only list filter kinds and a `On::Action` only
-/// non-filter kinds ([`crate::On::check_kind_variant`]).
 pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
-    for band in bands {
-        for c in band.iter() {
-            for (ei, o) in c.on.iter().enumerate() {
-                if let Err(kind) = o.check_kind_variant() {
-                    panic!(
-                        "ruleset build: {} entry {ei} kind {} does not match {} (see TriggerKind::is_filter)",
-                        c.id,
-                        kind.spelling(),
-                        match o.kind() {
-                            crate::abi::OnKind::Filter => "On::Filter",
-                            _ => "On::Action",
-                        }
-                    );
-                }
-            }
-        }
-    }
     let entries: Vec<ManifestEntry> = bands
         .iter()
         .flat_map(|band| band.iter())
@@ -198,10 +177,6 @@ pub fn on(
     };
     match (*o, op) {
         (On::Counteract(_, _, _, guard, _), export::OP_GUARD)
-        | (On::Action(_, _, _, guard, _), export::OP_GUARD)
-        | (On::Filter(_, _, guard, _), export::OP_GUARD)
-        | (On::FilterFlag(_, _, guard, _), export::OP_GUARD)
-        | (On::FilterValue(_, _, guard, _), export::OP_GUARD)
         | (On::Settle(_, guard, _), export::OP_GUARD)
         | (On::Mortgage(_, guard, _), export::OP_GUARD)
         | (On::Redeem(_, guard, _), export::OP_GUARD)
@@ -211,6 +186,14 @@ pub fn on(
             // G4-deleted residual: the condition alone decides, and the host
             // normally skips this call (`has_guard == false`). If it does ask,
             // the residual admits.
+            None => 1,
+            Some(g) => g(player_id) as i64,
+        },
+        (On::Action(e), export::OP_GUARD) => match e.guard {
+            None => 1,
+            Some(g) => g(player_id) as i64,
+        },
+        (On::Filter(e), export::OP_GUARD) => match e.guard {
             None => 1,
             Some(g) => g(player_id) as i64,
         },
@@ -228,40 +211,14 @@ pub fn on(
             },
             None => 0,
         },
-        // v74: pure Filter bodies. The host reads `trigger::value()` in,
-        // we return the transformed figure (or 0/1 for a flag), and the
-        // wrapper writes it back through the existing `set_*` imports so the
-        // raise site's `t.value` / `b.price` readback is unchanged.
-        (On::Filter(_, _, _, run), _) => {
-            let v_in = crate::ctx::trigger::value();
-            let v_out = {
-                let _p = crate::pure::enter();
-                run(player_id, v_in)
-            };
-            if v_out != v_in {
-                crate::ctx::trigger::set_pay_amount(v_out);
-                crate::ctx::trigger::set_price(v_out);
-                crate::ctx::trigger::set_move_roll(v_out);
-            }
-            0
-        }
-        (On::FilterFlag(_, _, _, run), _) => {
-            let keep = {
-                let _p = crate::pure::enter();
-                run(player_id, crate::ctx::trigger::value())
-            };
-            if !keep {
-                crate::ctx::trigger::set_cancelled();
-            }
-            0
-        }
-        (On::FilterValue(_, _, _, run), _) => {
-            run.run(player_id);
+        // Pure filter bodies: one `drive` per shape, which owns the type cast
+        // of `body` and the host IO. See `payload::drive_*`.
+        (On::Filter(e), _) => {
+            (e.drive)(player_id, e.body);
             0
         }
         (On::Counteract(_, _, _, _, run), _)
         | (On::Play(_, _, _, run), _)
-        | (On::Action(_, _, _, _, run), _)
         | (On::Settle(_, _, run), _)
         | (On::Mortgage(_, _, run), _)
         | (On::Redeem(_, _, run), _)
@@ -271,6 +228,10 @@ pub fn on(
             Ok(()) => 0,
             // Asked: the host reads the published question and re-runs us with
             // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.
+            Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+        },
+        (On::Action(e), _) => match (e.body)(player_id) {
+            Ok(()) => 0,
             Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
         },
     }

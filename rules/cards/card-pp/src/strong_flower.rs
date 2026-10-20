@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{plan, trigger};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "PP:可爱又强壮的花朵";
 
@@ -27,7 +27,7 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
     "PP:可爱又强壮的花朵",
     &[
         On::Play("", "", Some(cant_play), strong_flower),
-        On::Action(&[ActionKind::PassTile], "actor == owner", "", None, pass_tile),
+        On::Action(Action::PassTile("actor == owner", "", None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"可爱又强壮的花朵"#)

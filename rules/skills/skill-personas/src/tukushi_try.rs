@@ -15,7 +15,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 /// The paired player, or -1.
 const PARTNER: &str = "skill.tukushiTry.partner";
@@ -28,11 +28,12 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
         On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, at_start),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
-        On::Action(&[ActionKind::DiceRollAfter], "", "", Some(paired), on_roll),
-        On::Filter(&[FilterKind::PaySplitChoose], "", Some(paired), on_pay),
-        On::Action(&[card_sdk::abi::ActionKind::HouseAdded], "", "", Some(partner), on_built),
+        On::Action(Action::TurnStartBefore("", "", None, at_start)),
+        On::Action(Action::DeckAtGameStart("", "", None, at_start)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, "", None, on_pass)),
+        On::Action(Action::DiceRollAfter("", "", Some(paired), on_roll)),
+        On::Filter(Filter::PaySplitMul("", Some(paired), on_pay)),
+        On::Action(Action::HouseAdded("", "", Some(partner), on_built)),
     ],
 )
     // 「（初始1，上限2）」

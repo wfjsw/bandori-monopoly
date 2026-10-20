@@ -17,7 +17,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The named other player, or -1.
 const OTHER: &str = "skill.mutsumiCrychic.other";
@@ -28,12 +28,13 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
         On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, at_start),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
-        On::Action(&[ActionKind::DiceRollAfter], "", "", Some(other), latch),
+        On::Action(Action::TurnStartBefore("", "", None, at_start)),
+        On::Action(Action::DeckAtGameStart("", "", None, at_start)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, "", None, on_pass)),
+        On::Action(Action::DiceRollAfter("", "", Some(other), latch)),
     ],
 )
-    .silent(&[3])
+    .silent(&[4])
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 

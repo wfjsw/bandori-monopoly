@@ -11,7 +11,7 @@
 
 use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 const ID: &str = "HHW:（薰）怪盗hello happy";
 
@@ -19,36 +19,17 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
         On::Play("", "", Some(cant_play), play),
-        On::Action(
-            &[ActionKind::TurnEnd],
-            "actor == owner && card.placed", "",
-            None,
-            turn_end,
-        ),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", "", None, turn_end)),
         // 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下」 -- the
         // offer is about the *marked* player. The mark-match is a dynamic-key
         // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
-        On::Action(
-            &[ActionKind::PassPlayer],
-            "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", "",
-            Some(marked_here),
-            pass_player,
-        ),
+        On::Action(Action::PassPlayer("actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", "", Some(marked_here), pass_player)),
         // The body-top applicability checks are the condition now (C#
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
         // fixed roll yet.
-        On::FilterValue(&[FilterKind::DiceRollPlan],
-            "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null",
-            None,
-            FilterBody::Plan(roll_plan),
-        ),
-        On::Action(
-            &[ActionKind::CounterChanged],
-            "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", "",
-            Some(crystals_changed_guard),
-            on_crystals_changed,
-        ),
+        On::Filter(Filter::DiceRollPlan("card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null", None, roll_plan)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"怪盗hello happy"#)

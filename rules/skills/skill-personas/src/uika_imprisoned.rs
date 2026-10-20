@@ -20,7 +20,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 /// 「回忆地块」 -- the three the clause names.
 const MEMORY: [&str; 3] = ["小豆岛", "武道馆", "旧古河庭园"];
@@ -39,48 +39,23 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // -- the offer exists only while the memory latch stayed clear.
         // 状态2's cap write still has to run whenever state is 2, so the
         // residual is the disjunction. Dynamic latch, residual.
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            card_sdk::pre::MINE, "",
-            Some(state2_or_clean),
-            at_turn_start,
-        ),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", Some(state2_or_clean), at_turn_start)),
         // 状态1 「移动改为10+1d10」 -- only while this player is in 状态1.
-        On::FilterValue(
-            &[FilterKind::DiceRollPlan],
-            "actor == owner && slot('skillState') != 2",
-            None,
-            FilterBody::Plan(on_plan),
-        ),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
+        On::Filter(Filter::DiceRollPlan("actor == owner && slot('skillState') != 2", None, on_plan)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, "", None, on_pass)),
         // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
         // settle that marks the latch is the owner's own settle onto one of the
         // three named tiles. Both facts are CEL (`actor == owner` and the three
         // `tile_named` ids), so a reject runs no body (and so posts no flash).
-        On::Action(
-            &[ActionKind::Settle],
-            "actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))", "",
-            None,
-            on_settle,
-        ),
+        On::Action(Action::Settle("actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))", "", None, on_settle)),
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner && move.main && slot('skillState') == 2", "",
-            None,
-            on_pass_player,
-        ),
+        On::Action(Action::PassTile("actor == owner && move.main && slot('skillState') == 2", "", None, on_pass_player)),
         // 状态2 「每次成功收取后可选择在[触发结算]前额外移动1d6」.
         // 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」 -- the
         // 4-shot cap is `slot('skill.uikaImprisoned.bonus') < 4`.
-        On::Action(
-            &[ActionKind::SettleBefore],
-            "slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4", "",
-            None,
-            before_settle,
-        ),
+        On::Action(Action::SettleBefore("slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4", "", None, before_settle)),
     ],
 )
     .silent(&[2, 3])

@@ -7,7 +7,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, MoveKind};
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 
 const ID: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
 /// 「水母标记」.
@@ -23,12 +23,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // 「花音每次倒走时」 -- a backward walk that is not a teleport (C#
         // `m.Reverse && !m.Teleport`). `move.dir < 0` is the direction clause:
         // the body-top `move_dir() >= 0` early-out is the condition now.
-        On::Action(
-            &[ActionKind::Pass],
-            "actor == owner && move.kind != Teleport && move.dir < 0", "",
-            None,
-            on_pass,
-        ),
+        On::Action(Action::Pass("actor == owner && move.kind != Teleport && move.dir < 0", "", None, on_pass)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Wacha Mocha 啪嗒进行曲"#)

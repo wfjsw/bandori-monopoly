@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind, Seat};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, FilterBody, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};
 
@@ -22,13 +22,8 @@ pub const HALLUCINATION: CardDef = CardDef::new(
         On::Play("", "", None, play),
         // 「任何玩家进行投掷前」 -- every plan, so the category filter is the
         // whole applicability. `always` deleted (a no-op prefetch).
-        On::FilterValue(
-            &[FilterKind::DiceRollPlan],
-            "",
-            None,
-            FilterBody::Plan(on_plan),
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], "", "", None, on_turn_start),
+        On::Filter(Filter::DiceRollPlan("", None, on_plan)),
+        On::Action(Action::TurnStartBefore("", "", None, on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

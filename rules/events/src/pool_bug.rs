@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
 
@@ -18,8 +18,8 @@ pub const POOL_BUG: CardDef = CardDef::new(
     "event:卡池BUG",
     &[
         On::Play("", "", None, play),
-        On::Action(&[ActionKind::Event], "", "", Some(always), on_event),
-        On::Action(&[ActionKind::BuildBefore], "", "", Some(always), before_build),
+        On::Action(Action::Event("", "", Some(always), on_event)),
+        On::Action(Action::BuildBefore("", "", Some(always), before_build)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

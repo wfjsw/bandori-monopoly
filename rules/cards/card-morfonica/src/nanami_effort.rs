@@ -17,7 +17,7 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词 11) -- the default CiRCLE money reward. A
 /// `passRewardAffected` listener may replace it (Morfonica's cycle).
@@ -35,15 +35,10 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // or the placed (3) press (spend 1 crystal to fire the owner's (2)
         // skill). The gate admits whenever either branch is available.
         On::Play("", "", Some(cant_play), play),
-        On::Action(&[ActionKind::AtEnd], "", "", None, discard_down_to_five),
+        On::Action(Action::AtEnd("", "", None, discard_down_to_five)),
         // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- same CounterChanged
         // shape as AG:（摩卡）0.5倍速 / R:Fire bird.
-        On::Action(
-            &[ActionKind::CounterChanged],
-            "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "",
-            Some(crystals_changed_guard),
-            on_crystals_changed,
-        ),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"稍微努力了一下"#)

@@ -15,7 +15,7 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";
 
@@ -27,7 +27,8 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(cant_play), play),
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
-        On::Action(&[ActionKind::SettleBody, ActionKind::TurnEndAfter], "", "", Some(counteract_guard), counteract),
+        On::Action(Action::SettleBody("", "", Some(counteract_guard), counteract)),
+        On::Action(Action::TurnEndAfter("", "", Some(counteract_guard), counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Parking Space"#)

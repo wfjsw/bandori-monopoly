@@ -11,7 +11,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "skill:Hello, Happy World!:传播笑容";
 /// The recorded player, or -1. 「分别记录这两名玩家」 names two; `WHO2` is the
@@ -30,16 +30,11 @@ pub const HHW: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive `ask_yes` + `set_pay_amount` + state/crystal writes sit
         // immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(
-            &[ActionKind::PaySplitChooseBefore],
-            "actor == owner && target >= 0 && target != owner && pay_is_rent", "",
-            None,
-            on_pay_choose,
-        ),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && target >= 0 && target != owner && pay_is_rent", "", None, on_pay_choose)),
         // （2） a recorded player's rent collection, with a crystal to spend.
-        On::Action(&[ActionKind::PayAfter], card_sdk::pre::MINE, "", Some(after_pay_applies), after_pay),
+        On::Action(Action::PayAfter(card_sdk::pre::MINE, "", Some(after_pay_applies), after_pay)),
         // （3） a recorded amount to spend down.
-        On::Action(&[ActionKind::BuildBefore], card_sdk::pre::MINE, "", Some(has_saved), before_build),
+        On::Action(Action::BuildBefore(card_sdk::pre::MINE, "", Some(has_saved), before_build)),
     ],
 );
 

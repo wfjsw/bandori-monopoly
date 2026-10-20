@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
 
@@ -20,7 +20,7 @@ pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     "event:元祖！邦多利酱",
     &[
         On::Play("", "", None, play),
-        On::Action(&[ActionKind::TurnStartBefore], "", "", Some(always), on_turn_start),
+        On::Action(Action::TurnStartBefore("", "", Some(always), on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

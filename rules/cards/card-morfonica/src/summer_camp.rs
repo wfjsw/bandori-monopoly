@@ -8,7 +8,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, FilterBody, GateValue, Msg, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";
 
@@ -23,13 +23,8 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         // seat, and only against another player's card (C#
         // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
         // the targeting is not card-caused, so `by >= 0` is "there is a card".
-        On::FilterValue(
-            &[FilterKind::Untargetable],
-            "actor == owner && by >= 0 && by != owner",
-            None,
-            FilterBody::Gate(untargetable),
-        ),
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
+        On::Filter(Filter::Untargetable("actor == owner && by >= 0 && by != owner", None, untargetable)),
+        On::Action(Action::TurnStart("actor == owner && card.placed", "", None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"夏日合宿"#)

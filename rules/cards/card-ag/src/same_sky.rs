@@ -8,13 +8,13 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
-        On::Action(&[ActionKind::Drawn], "trigger_card == card.id", r#"抽出此卡"#, None, counteract),
-        On::Action(&[ActionKind::DeckAtGameStart], "", "", None, return_at_opening),
+        On::Action(Action::Drawn("trigger_card == card.id", r#"抽出此卡"#, None, counteract)),
+        On::Action(Action::DeckAtGameStart("", "", None, return_at_opening)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"朝同一片天空迈进"#)

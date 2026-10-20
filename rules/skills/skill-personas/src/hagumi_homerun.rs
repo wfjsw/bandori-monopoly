@@ -25,7 +25,7 @@
 
 use card_sdk::abi::{ActionKind, Dice, FilterKind, MarkFilter};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, FilterBody, Msg, On, PlanValue};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 /// The mark kind 「可乐饼」 parked on a tile.
 const ON_TILE: &str = "可乐饼";
@@ -35,23 +35,18 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Action(&[ActionKind::TurnEnd], "", "", None, at_turn_end),
+        On::Action(Action::TurnEnd("", "", None, at_turn_end)),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
-        On::Action(&[ActionKind::Pass], "", "", Some(on_pass_has_croquette), on_pass),
+        On::Action(Action::Pass("", "", Some(on_pass_has_croquette), on_pass)),
         // 「育美经过其他角色时」 -- the passer's step onto a tile another player
         // stands on (行动阶段 12 [经过]). The other player is read off the tile
         // (`passTile` has no `target`).
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner", "",
-            Some(passing_a_player),
-            on_pass_player,
-        ),
+        On::Action(Action::PassTile("actor == owner", "", Some(passing_a_player), on_pass_player)),
         // 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the skill button.
         On::Play("", "", Some(can_cash), cash),
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, FilterBody::Plan(on_plan)),
+        On::Filter(Filter::DiceRollPlan("", None, on_plan)),
     ],
 );
 

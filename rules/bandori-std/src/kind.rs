@@ -23,7 +23,8 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
+use card_sdk::{action_kinds, filter_kinds};
 
 /// Stable wire name of this ruleset's kind namespace. `KindNs::Ruleset` is
 /// keyed by it, so two rulesets cannot collide on the wire.
@@ -59,6 +60,30 @@ pub const FansFlip: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 10
 /// wire 21). Payload: value = 1, by_card. Distinct from `ActionKind::Abnormal`,
 /// which is the landing itself.
 pub const Exile: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 21));
+
+/// Registration constructors for this ruleset's action kinds.
+/// Ids are authored here (the consts above), never in `card-sdk` / `crates/`.
+action_kinds! {
+    on Actions;
+    ns KindNs::Ruleset(RULESET_KEY);
+    Exile @ EXILE_I32;
+    PassRewardAffected @ PASS_REWARD_AFFECTED;
+    ChargePaying @ CHARGE_PAYING;
+    FansFlip @ FANS_FLIP;
+}
+
+/// A rule-defined **filter** kind. Exists so the downstream
+/// `filter_kinds!` / `Filters::MyRewrite(...)` path is exercised end to end
+/// (declaration, registration, dispatch). No game semantics -- the fixture
+/// card in `rules/fixtures/test-cards` only proves it compiles and fires.
+/// Wire 1 in the `bandori` ruleset namespace (`"r:bandori:1"`).
+pub const MY_REWRITE: i32 = 1;
+
+filter_kinds! {
+    on Filters;
+    ns KindNs::Ruleset(RULESET_KEY);
+    MyRewrite @ MY_REWRITE => payload(card_sdk::PlanValue);
+}
 
 // ------------------------------------------------------- tile kind strings
 

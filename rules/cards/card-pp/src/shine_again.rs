@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 pub const SHINE_AGAIN: CardDef = CardDef::new(
@@ -37,18 +37,12 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
         // The pre's `money(owner) < value` still gates on the figure in flight.
-        On::Action(
-            &[ActionKind::PaySplitChooseBefore],
-            "actor == owner && card.placed && value > 0 && money(owner) < value",
-            r#"[拥有者][消耗]或[支付]并当前资金不够"#,
-            Some(has_unrecorded_color),
-            pay_choose,
-        ),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && money(owner) < value", r#"[拥有者][消耗]或[支付]并当前资金不够"#, Some(has_unrecorded_color), pay_choose)),
         // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
         //   turn-start offer is a stand-in for the C# action window.
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, offer_resonance),
+        On::Action(Action::TurnStart("actor == owner && card.placed", "", None, offer_resonance)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次闪耀"#)
