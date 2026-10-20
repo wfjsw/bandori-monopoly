@@ -120,21 +120,24 @@ pub async fn stream(
     // two servers' streams of the same member do not collide and a dead
     // process's keys expire on their own.
     let stream_key = format!("{}:{}", s.instance, crate::state::random_hex(4));
-    let (rx, back) = {
+    let (rx, back, spectating) = {
         let mut r = room.lock().unwrap();
         let back = r.stream_opened(member, &stream_key);
-        (r.tx.subscribe(), back)
+        (r.tx.subscribe(), back, r.is_spectator(member))
     };
     // Every (re)connect asks the engine to hand the seat back, not only when
     // presence says the member was away: presence is in another process's
     // stream too (or was dropped by a restart), so a seat put on 托管 would
     // otherwise remain on the AI. The engine ignores it for a seat not on AI.
-    // Room lock dropped: `member_back` is a worker round-trip.
+    // A spectator has no seat to hand back. Room lock dropped: `member_back`
+    // is a worker round-trip.
     let handle = room.lock().unwrap().match_handle();
     if let Some(m) = handle {
-        match m.member_back(member) {
-            Ok(()) => room.lock().unwrap().notify(),
-            Err(e) => eprintln!("member_back failed: {e}"),
+        if !spectating {
+            match m.member_back(member) {
+                Ok(()) => room.lock().unwrap().notify(),
+                Err(e) => eprintln!("member_back failed: {e}"),
+            }
         }
     } else if back {
         room.lock().unwrap().notify();

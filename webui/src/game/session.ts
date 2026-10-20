@@ -844,6 +844,11 @@ export function resumeSolo(): SoloSession | null {
 export class OnlineSession extends GameSession {
   readonly kind = "online";
   readonly id: string;
+  /**
+   * Watching, not seated: no hand, `view.playerId === -1`, every input locked.
+   * A spectator is anyone whose member id is not in `room.members`.
+   */
+  readonly spectator: boolean;
   private close: () => void;
   dissolved: Msg | null = null;
   /**
@@ -864,6 +869,9 @@ export class OnlineSession extends GameSession {
     this.id = room.id;
     this.room = room;
     this.you = you;
+    this.spectator = !room.members.some((m) => m.id === you);
+    // A watcher has no seat and no secrets to compute extras from.
+    if (this.spectator) this.readOnly = true;
     this.extras = new OnlineExtras(room.id, you);
     // Route the initial frame through `emitView` too, so extras kick off
     // before the first subscriber attaches (they get the merged view).
@@ -925,10 +933,14 @@ export class OnlineSession extends GameSession {
    * frame -- greying may be coarse and 托管 falls back to its policy table.
    */
   protected emitView(v: MatchView): void {
+    // A spectator's frame is already the public view; there is no seat to
+    // derive `playable` / `estCost` / `skills` / `aiAnswer` from.
+    if (this.spectator) return super.emitView(v);
     emitOnlineView(this.extras, v, (m) => super.emitView(m), () => this.view);
   }
 
   async act(cmd: Command): Promise<Msg | null> {
+    if (this.readOnly) return { k: "err.not_a_player" };
     const r = await api.act(this.id, cmd);
     return r.ok ? null : (r.error ?? { k: "err.unknown_act" });
   }

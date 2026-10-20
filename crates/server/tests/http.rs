@@ -377,6 +377,203 @@ async fn lobby_rules_match_the_original() {
     );
 }
 
+/// A spectator watches a live match: no seat, no hidden information, no input,
+/// no record download, and their presence never touches a seat.
+#[tokio::test]
+async fn spectators_watch_without_a_seat() {
+    let (base, server) = spawn(Duration::from_secs(20)).await;
+    let a = Client::new(&base, "Kasumi").await;
+    let w = Client::new(&base, "Watchera").await;
+
+    // A locked 3-seat room (host + two bots), so `full` and `playing` are both true.
+    let made = a
+        .ok(
+            "/api/rooms",
+            json!({ "name": "Watch me", "maxPlayers": 3, "password": "pw" }),
+        )
+        .await;
+    let id = made["room"]["id"].as_str().unwrap().to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+
+    // Still a seat join is refused while playing; spectate is not.
+    let (s, v) = w
+        .post(&format!("/api/rooms/{id}/join"), json!({ "password": "pw" }))
+        .await;
+    assert!(
+        s == StatusCode::CONFLICT && ["playing", "full"].contains(&v["reason"].as_str().unwrap())
+    );
+    // The password still gates a spectator.
+    let (s, v) = w
+        .post(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "password": "nope", "spectate": true }),
+        )
+        .await;
+    assert_eq!(
+        (s, v["reason"].as_str()),
+        (StatusCode::FORBIDDEN, Some("password"))
+    );
+
+    let joined = w
+        .ok(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "password": "pw", "spectate": true }),
+        )
+        .await;
+    let me = joined["you"].as_i64().unwrap();
+    let room = &joined["room"];
+    assert_eq!(room["playing"], true);
+    assert_eq!(room["members"].as_array().unwrap().len(), 3, "seats unchanged");
+    let spectators = room["spectators"].as_array().expect("spectators on the wire");
+    assert_eq!(spectators.len(), 1);
+    assert_eq!(spectators[0]["id"].as_i64(), Some(me));
+    assert_eq!(spectators[0]["player"], "Watchera");
+    assert!(
+        room["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|m| m["id"].as_i64() != Some(me)),
+        "a spectator is never a seat"
+    );
+
+    // The frame is the public view: no hand, no draw, no seat.
+    let (s, state) = w.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(state["you"].as_i64(), Some(me));
+    let frame = &state["match"];
+    assert_eq!(frame["playerId"].as_i64(), Some(-1), "no seat");
+    assert_eq!(frame["you"].as_i64(), Some(me));
+    assert_eq!(frame["hand"].as_array().map(Vec::len), Some(0));
+    assert_eq!(frame["handNotes"].as_array().map(Vec::len), Some(0));
+    assert_eq!(frame["draw"].as_array().map(Vec::len), Some(0));
+    assert!(frame.get("aiAnswer").is_none() || frame["aiAnswer"].is_null());
+    // Nothing hidden leaks into the serialized frame: no seat's hand contents
+    // appear anywhere in it (public hand counts are fine).
+    let raw = frame.to_string();
+    assert!(!raw.contains("\"hand\":[\""), "hand contents leaked: {raw}");
+
+    // SSE agrees, and the hello names the spectator.
+    let mut sse = w.stream(&id, None).await;
+    let hello = sse.next(Duration::from_secs(5)).await.unwrap();
+    assert_eq!(hello.event, "hello");
+    assert_eq!(hello.data["you"].as_i64(), Some(me));
+    let frames = sse
+        .until(Duration::from_secs(5), |f| f.event == "match")
+        .await;
+    let m = frames.iter().rev().find(|f| f.event == "match").unwrap();
+    assert_eq!(m.data["playerId"].as_i64(), Some(-1));
+    assert_eq!(m.data["hand"].as_array().map(Vec::len), Some(0));
+
+    // A spectator may not act, ready, start, or steer the room.
+    let path = format!("/api/rooms/{id}/act");
+    let (s, v) = w
+        .post(&path, json!({ "act": "roll" }))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    assert_eq!(v["error"]["k"], "err.not_a_player");
+    for (p, body) in [
+        ("/ready", json!({ "on": true })),
+        ("/start", json!({})),
+        ("/bots", json!({ "op": "add" })),
+    ] {
+        let (s, v) = w.post(&format!("/api/rooms/{id}{p}"), body).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST, "{p}: {v}");
+        assert_eq!(v["error"]["k"], "err.not_a_player", "{p}");
+    }
+
+    // The record reveals every hand: a spectator is never in the sealed set.
+    let (s, v) = w.get(&format!("/api/rooms/{id}/record")).await;
+    assert!(
+        s == StatusCode::CONFLICT || s == StatusCode::FORBIDDEN || s == StatusCode::NOT_FOUND,
+        "record for a spectator: {s} {v}"
+    );
+
+    // Leaving as a spectator never forfeits and never dissolves a live room.
+    w.ok(&format!("/api/rooms/{id}/leave"), json!({})).await;
+    let (_, room) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(room["room"]["playing"], true, "room still playing");
+    // `spectators` is omitted on the wire while empty (skip_serializing_if).
+    assert!(
+        room["room"]["spectators"].as_array().map(Vec::len).unwrap_or(0) == 0,
+        "spectator gone: {}",
+        room["room"]["spectators"]
+    );
+    assert!(server.room(&id).is_some(), "room still alive");
+}
+
+/// Spectators do not feed the presence reaper: a live watcher never marks a
+/// seat `away`, and a silent one is dropped without touching the match.
+#[tokio::test]
+async fn spectator_presence_never_hands_a_seat_to_the_ai() {
+    let (base, _server) = spawn(Duration::from_secs(1)).await;
+    let a = Client::new(&base, "Kasumi").await;
+    let w = Client::new(&base, "Watcher").await;
+    let made = a.ok("/api/rooms", json!({ "maxPlayers": 3 })).await;
+    let id = made["room"]["id"].as_str().unwrap().to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+
+    let joined = w
+        .ok(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "spectate": true }),
+        )
+        .await;
+    let me = joined["you"].as_i64().unwrap();
+    // An open stream keeps the watcher present; the seats must stay put.
+    let _sse = w.stream(&id, None).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let (_, state) = a.get(&format!("/api/rooms/{id}/state")).await;
+    let players = state["match"]["state"]["players"].as_array().unwrap();
+    assert!(
+        players.iter().all(|p| p["ai"] != true || p["member"] != Value::from(me)),
+        "spectator id never became a seat"
+    );
+    assert!(
+        players.iter().all(|p| !p["left"].as_bool().unwrap_or(false)),
+        "no seat was left/forfeited by spectator presence"
+    );
+    let room = &state["room"];
+    assert_eq!(
+        room["spectators"].as_array().map(Vec::len),
+        Some(1),
+        "still watching"
+    );
+}
+
+/// Only-spectators-left dissolves: a room with no seats has nothing to watch.
+#[tokio::test]
+async fn a_room_with_only_spectators_dissolves() {
+    let (base, server) = spawn(Duration::from_secs(20)).await;
+    let a = Client::new(&base, "Host").await;
+    let w = Client::new(&base, "Watcher").await;
+    let id = a.ok("/api/rooms", json!({})).await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    w.ok(&format!("/api/rooms/{id}/join"), json!({ "spectate": true }))
+        .await;
+    let mut sse = w.stream(&id, None).await;
+    // The spectator leaving does not dissolve a room that still has a player.
+    a.ok(&format!("/api/rooms/{id}/leave"), json!({})).await;
+    // With no seats left the room goes, and the watcher is told.
+    sse.until(Duration::from_secs(5), |f| f.event == "dissolve")
+        .await;
+    assert!(server.room(&id).is_none(), "empty of players -> gone");
+}
+
 #[tokio::test]
 async fn host_leaving_hands_over_and_last_human_dissolves() {
     let (base, server) = spawn(Duration::from_secs(20)).await;
@@ -552,7 +749,7 @@ async fn a_match_over_http_and_sse() {
         (s, v["error"]["k"].as_str()),
         (StatusCode::BAD_REQUEST, Some("err.roll_first"))
     );
-    a.ok(&path, json!({ "act": "diceRollBefore" })).await;
+    a.ok(&path, json!({ "act": "roll" })).await;
     sse.until(Duration::from_secs(10), |f| {
         f.event == "event"
             && f.data["type"] == "diceRollBefore"
@@ -750,6 +947,7 @@ async fn a_restart_restores_the_room_and_its_match() {
             weights: Default::default(),
             clock: Default::default(),
             members: vec![member],
+            spectators: vec![],
             fair: None,
         },
         password: "pw".into(),

@@ -2,6 +2,11 @@
 .info b { font-size: 21px; }
 .spacer { flex: 1; }
 .warn { color: var(--tag-red); }
+.tagWatching { height: 28px; line-height: 28px; padding: 0 12px; border-radius: 14px; background: var(--teal); color: #fff; font-size: 13px; font-weight: 700; }
+.spectators { display: inline-flex; align-items: center; gap: 8px; color: var(--sub); font-size: 14px; min-width: 0; }
+.spectators i { width: 18px; height: 18px; flex: none; }
+.spectator { max-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.spectator small { color: var(--pink); }
 .mode { height: 36px; line-height: 36px; padding: 0 18px; border-radius: 18px; background: var(--teal); color: #fff; font-weight: 700; font-size: 16px; }
 .ranked { background: var(--purple); }
 

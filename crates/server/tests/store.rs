@@ -177,6 +177,7 @@ fn dummy_store_is_shareable_across_handles() {
         weights: Default::default(),
         clock: Default::default(),
         members: vec![],
+        spectators: vec![],
         fair: None,
     };
     a.room_put(&server::store::RoomRecord {
