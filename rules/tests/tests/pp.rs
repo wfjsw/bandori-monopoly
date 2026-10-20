@@ -310,6 +310,37 @@ fn seeyou_echo_ignores_gate() {
     t.give(0, &["PP:[衍生]共鸣", "PP:[衍生]明天见"]);
     assert!(t.play(0, "PP:[衍生]明天见").is_ok(), "echo bypasses the gate");
     accept_echo(&mut t);
+    assert!(!t.hand(0).contains(&"PP:[衍生]明天见".to_string()), "spent");
+    assert!(!t.hand(0).contains(&"PP:[衍生]共鸣".to_string()), "共鸣 paid");
+    assert_eq!(fans(&t, 0), (5, 0), "effect ran");
+}
+
+/// Gate holds (up <= down): played without 共鸣, resolves and is spent.
+#[test]
+fn seeyou_gate_holds_plays_free() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 1, 3);
+    t.give(0, &["PP:[衍生]明天见"]);
+    t.play(0, "PP:[衍生]明天见").unwrap();
+    drain(&mut t);
+    assert_eq!(fans(&t, 0), (4, 0));
+    assert!(!t.hand(0).contains(&"PP:[衍生]明天见".to_string()), "spent");
+}
+
+/// 「才可使用」: gate fails and 共鸣 is declined -> not played, card stays in hand.
+#[test]
+fn seeyou_declined_echo_keeps_card_in_hand() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 3, 1);
+    t.give(0, &["PP:[衍生]共鸣", "PP:[衍生]明天见"]);
+    assert!(t.play(0, "PP:[衍生]明天见").is_ok());
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let hand = t.hand(0);
+    assert!(hand.contains(&"PP:[衍生]明天见".to_string()), "kept: {hand:?}");
+    assert!(hand.contains(&"PP:[衍生]共鸣".to_string()), "共鸣 unspent: {hand:?}");
+    assert_eq!(fans(&t, 0), (3, 1), "no effect");
 }
 
 // ============================================================ PP:不要背负期待
