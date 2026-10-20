@@ -758,5 +758,10 @@
   "results.chargeUsed": "消耗充能",
   "rotate.hint": "请将手机横过来玩",
   "rotate.why": "棋盘需要横屏才能完整显示",
-  "rotate.force": "直接旋转画面"
+  "rotate.force": "直接旋转画面",
+  "install.hint": "添加到主屏幕",
+  "install.why": "从主屏幕启动可全屏游玩，体验更好",
+  "install.action": "添加到主屏幕",
+  "install.steps": "Safari：点底部分享按钮，选择「添加到主屏幕」",
+  "install.override": "继续用浏览器玩"
 }

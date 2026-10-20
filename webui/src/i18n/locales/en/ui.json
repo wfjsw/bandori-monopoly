@@ -758,5 +758,10 @@
   "results.chargeUsed": "Charge used",
   "rotate.hint": "Turn your phone sideways to play",
   "rotate.why": "The board needs a landscape screen",
-  "rotate.force": "Rotate the screen for me"
+  "rotate.force": "Rotate the screen for me",
+  "install.hint": "Add to your home screen",
+  "install.why": "Launching from the home screen plays full screen",
+  "install.action": "Add to home screen",
+  "install.steps": "Safari: tap the share button, then “Add to Home Screen”",
+  "install.override": "Keep playing in the browser"
 }
