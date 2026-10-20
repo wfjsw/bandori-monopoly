@@ -77,7 +77,7 @@
    pill with the text instead of letting the text spill out of a fixed-height pill. */
 .tag { display: inline-block; font-size: 12px; line-height: 1.25; padding: 0 0.42em; border-radius: 999px; white-space: nowrap; background: var(--blue); color: #fff; font-weight: 700; }
 .red { background: var(--tag-red); }
-.kind { display: inline-block; font-size: 13px; line-height: 1.7; padding: 0 0.77em; border-radius: 999px; white-space: nowrap; color: #fff; font-weight: 700; }
+.kind { display: inline-block; font-size: 13px; line-height: 1.35; padding: 0 0.55em; border-radius: 999px; white-space: nowrap; color: #fff; font-weight: 700; }
 .k0 { background: var(--pink); }
 .k1 { background: var(--teal); }
 .k2 { background: var(--pink-light); }
