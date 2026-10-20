@@ -31,7 +31,12 @@ repository = ""
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-wasmi = "2"
+# wasmi's default set enables `wat`, which pulls the WAT *text* parser (`wat` +
+# `wast` + `wasm_encoder`) into every consumer. Card modules are binary only
+# (`/assets/rules/*.wasm` -> `Module::new` on bytes) and the tree has no `.wat`
+# fixtures, so that is dead weight in the browser glue -- roughly a tenth of the
+# release wasm. Everything else is exactly wasmi's default feature set.
+wasmi = { version = "2", default-features = false, features = ["stable", "std", "validate", "memory64", "auto-dispatch"] }
 sha2 = "0.10"
 card-sdk = { path = "rules/card-sdk" }
 bitflags = { version = "2", default-features = false }
