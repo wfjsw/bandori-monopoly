@@ -25,12 +25,14 @@ pub const THANKS_PARTY: CardDef =
 
 fn thanks_party(player_id: i32) -> card_sdk::Asked {
     let why = Msg::new(key!("thanks_party_why"));
-    // 规则书[手]: 「所有其他玩家可选择[消耗]500资金」
+    // 规则书[手]: 「所有其他玩家可选择[消耗]500资金」 -- **every** other player may
+    // choose. There is no printed cash gate: a player under 500 still gets the
+    // offer, and accepting runs the shortfall path (same reading as
+    // LOY-SOUL-01's un-capped 「1到5次」). C# skipped `money < 500` seats; that
+    // narrowing is not in the text. Out-of-the-game seats are not 「其他玩家」.
     let mut payers: Vec<i32> = Vec::new();
     for p in ctx::others(player_id) {
-        // Only players who can actually put 500 on the table are asked (C#
-        // `where H.CanPay(num2) && H.State.seats[num2].money >= 500`).
-        if !rules_status::can_pay(p) || ctx::money_of(p) < 500 {
+        if !rules_status::can_pay(p) {
             continue;
         }
         let title = Msg::new(key!("thanks_party_join_title"));

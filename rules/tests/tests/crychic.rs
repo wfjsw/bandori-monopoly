@@ -1151,6 +1151,12 @@ fn tomori_shout_pulls_to_the_controllers_own_tile_with_settle() {
     assert!(paid < full, "half-pay bend: paid {paid} vs full {full}");
 }
 
+// LOY-TOMORI-03 「最早拥有的格子」 is unpinned: (3) only runs for a MyGO-band
+// player (`ctx::in_group(…, "MyGO!!!!!")`), and the harness has no band setter
+// -- 高松灯（CRYCHIC）is the card's exclusive and is CRYCHIC band, so the (3)
+// placement path is unreachable from a test today. The fallback itself is
+// documented at the `TODO(规则书)` in `tomori_inner_shout.rs`.
+
 #[test]
 fn crychic_band_2_spares_the_field_copy_but_sweeps_other_crychic_cards() {
     // 规则书（2）: 「此卡不会被你乐队技能的（2）效果移除」 -- also on the field.
