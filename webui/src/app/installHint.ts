@@ -6,7 +6,8 @@ import { PHONE_QUERY } from "./router";
 // InstallHint.tsx). Phones only, and only while the page is still a browser
 // tab: an installed PWA already runs `display-mode: standalone` (or the iOS
 // home-screen shell) and needs no nudge. An explicit override records the
-// choice so the cover never comes back in this browser profile.
+// choice so the cover never comes back in this tab -- sessionStorage, so a
+// later visit gets the nudge again.
 //
 // The decision itself is pure (installGate.ts); this file only gathers the
 // browser facts and keeps the dismiss flag.
@@ -56,18 +57,18 @@ export function isPhoneDevice(): boolean {
 /** Has the user overridden the install cover ("continue in the browser")? */
 export function isInstallHintDismissed(): boolean {
   try {
-    return localStorage.getItem(DISMISS_KEY) === "1";
+    return sessionStorage.getItem(DISMISS_KEY) === "1";
   } catch {
     return true;
   }
 }
 
-/** The override: never show the install cover again in this browser profile. */
+/** The override: never show the install cover again in this tab. */
 export function dismissInstallHint(): void {
   try {
-    localStorage.setItem(DISMISS_KEY, "1");
+    sessionStorage.setItem(DISMISS_KEY, "1");
   } catch {
-    // Private mode: still hide it for this page's lifetime.
+    // Storage refused (private mode / quota): still hide it for this page.
   }
   version++;
   emit();
