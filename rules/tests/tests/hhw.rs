@@ -338,6 +338,45 @@ fn black_clothes_supply_is_a_counter_on_passing_circle() {
     drain(&mut t);
 }
 
+#[test]
+fn black_clothes_supply_removes_a_crystal_after_passing_the_group_tile() {
+    // 规则书: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。」
+    let group = tile("弦卷集团");
+    let mut t = vanilla2();
+    t.give(0, &["HHW:黑衣人的补给"]);
+    t.set_pos(0, 58);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    t.counteract(0, "HHW:黑衣人的补给").unwrap();
+    drain(&mut t);
+    let crystals = |t: &Table, tl: usize| {
+        t.marks_on(tl).iter().filter(|m| m.kind == "黑衣人的补给").count()
+    };
+    assert_eq!(crystals(&t, group), 1, "crystal parked on 弦卷集团");
+    assert!(t.on_field(0, "HHW:黑衣人的补给"), "stand-in placed: {:?}", t.field_ids(0));
+    // P0 already rolled (the counteract walk). P1 must roll before `end`, and
+    // `dice` *extends* the queue -- so only load faces a roll will consume,
+    // or the next walk picks up the stale one first.
+    t.end(0).unwrap();
+    drain(&mut t);
+    roll_then_end(&mut t, 1);
+    t.begin_turn(0);
+    t.set_pos(0, group.wrapping_sub(2));
+    assert_eq!(t.dice_left(), 0, "no stale loaded faces before the walk");
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        group + 1,
+        "walk of 3 from {} stepped over 弦卷集团 ({})",
+        group.wrapping_sub(2),
+        group
+    );
+    assert_eq!(crystals(&t, group), 0, "crystal removed after passing; events {:?}", t.recent_keys(12));
+    assert!(t.marks().iter().all(|m| m.kind != "黑衣人的补给"), "no stray crystals elsewhere");
+}
+
 // ----- HHW:梦幻的回礼
 
 #[test]
