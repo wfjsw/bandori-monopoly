@@ -147,6 +147,70 @@ function rustFlagList() {
   return flags;
 }
 
+// ---------------------------------------------------------------- wasm trim
+
+/**
+ * Drop the `name` custom section (function-name table) from a wasm module.
+ *
+ * The release `glue_bg.wasm` carries ~1.2 MB of symbol names -- about a sixth
+ * of its bytes and an eighth of its gzip. They only make a rustc backtrace
+ * readable; the browser engine surfaces failures as `JsError` strings from the
+ * glue, so nothing on the page needs them. Dev keeps its names (that is what
+ * makes a debug panic readable).
+ *
+ * This is deliberately *not* rustc's `-Cstrip=symbols`: that also removes the
+ * `target_features` section, whose `multivalue` entry is what `wasm-bindgen`
+ * keys on to emit the multi-value return ABI. Without it the CLI falls back to
+ * the stack-pointer ABI -- every returning export grows a
+ * `__wbindgen_add_to_stack_pointer` round-trip through a DataView, and the
+ * generated `glue.js` grows by a third. Strip only `name`; leave `producers`
+ * and `target_features` exactly as rustc wrote them.
+ *
+ * Deterministic (pure function of the input bytes), so the engine-bundle hash
+ * stays rebuildable (`docs/REPLAY.md` §9).
+ */
+function stripNameSection(bytes) {
+  const out = [bytes.subarray(0, 8)];
+  let i = 8;
+  let removed = 0;
+  while (i < bytes.length) {
+    const start = i;
+    const id = bytes[i++];
+    // LEB128 body size.
+    let size = 0;
+    let shift = 0;
+    for (;;) {
+      const b = bytes[i++];
+      size |= (b & 0x7f) << shift;
+      if ((b & 0x80) === 0) break;
+      shift += 7;
+    }
+    const bodyStart = i;
+    i += size;
+    let drop = false;
+    if (id === 0) {
+      // Custom section body starts with its name, itself LEB128-prefixed.
+      let j = bodyStart;
+      let nlen = 0;
+      shift = 0;
+      for (;;) {
+        const b = bytes[j++];
+        nlen |= (b & 0x7f) << shift;
+        if ((b & 0x80) === 0) break;
+        shift += 7;
+      }
+      const name = bytes.subarray(j, j + nlen);
+      if (name.length === 4 && name[0] === 0x6e && name[1] === 0x61
+          && name[2] === 0x6d && name[3] === 0x65) {
+        drop = true;
+      }
+    }
+    if (drop) removed += i - start;
+    else out.push(bytes.subarray(start, i));
+  }
+  return { bytes: Buffer.concat(out.map(Buffer.from)), removed };
+}
+
 // ---------------------------------------------------------------- main
 
 // `docs/SERVER.md`: production / `prebuild` → the release engine (no cheats);
@@ -186,13 +250,24 @@ execFileSync("cargo", ["build", "-p", "web-glue", "--target", "wasm32-unknown-un
 });
 run("wasm-bindgen", "--target", "web", "--out-dir", "webui/src/wasm", "--out-name", "glue",
     join(profileDir, "web_glue.wasm"));
-console.log(`webui/src/wasm/glue_bg.wasm: ${statSync(join(ROOT, "webui", "src", "wasm", "glue_bg.wasm")).size} bytes`);
+const wasmDir = join(ROOT, "webui", "src", "wasm");
+const bgPath = join(wasmDir, "glue_bg.wasm");
+if (release) {
+  // Release only: see `stripNameSection`. Dev keeps its names for backtraces.
+  const before = readFileSync(bgPath);
+  const { bytes, removed } = stripNameSection(before);
+  writeFileSync(bgPath, bytes);
+  console.log(
+    `webui/src/wasm/glue_bg.wasm: ${bytes.length} bytes (name section stripped, -${removed})`,
+  );
+} else {
+  console.log(`webui/src/wasm/glue_bg.wasm: ${statSync(bgPath).size} bytes`);
+}
 
 // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9): the webui
 // passes this to `set_glue_sha` at boot so a record names the bundle that
 // wrote it, and `tools/archive-engine.mjs` hashes the same two files.
-const wasmDir = join(ROOT, "webui", "src", "wasm");
-const gsha = glueSha256(readFileSync(join(wasmDir, "glue.js")), readFileSync(join(wasmDir, "glue_bg.wasm")));
+const gsha = glueSha256(readFileSync(join(wasmDir, "glue.js")), readFileSync(bgPath));
 const prov = provenance();
 if (prov.dirty) {
   console.log(`NOTE: working tree is dirty (${prov.dirtyPaths.length} input paths) --`);

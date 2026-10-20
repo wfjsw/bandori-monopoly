@@ -2677,7 +2677,6 @@ dependencies = [
  "wasmi_core",
  "wasmi_ir",
  "wasmparser 0.228.0",
- "wat",
 ]
 
 [[package]]

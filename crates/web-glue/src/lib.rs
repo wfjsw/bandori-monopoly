@@ -871,7 +871,11 @@ impl SoloMatch {
         let m = self.m.inner();
         let state = m.state();
         let player_id = state.player_of(member);
-        let extra = m.view_extra(member);
+        // Typed twin of `view_extra`: same fields, without building an
+        // intermediate `serde_json::Value` and cloning its members back out
+        // just to re-embed them here. `view()` is the per-dirty-tick hot path
+        // (one call per human seat plus one per advanced bot).
+        let extra = m.view_extra_typed(member);
         json(&serde_json::json!({
             "state": state,
             "hand": m.hand_of(member),
@@ -879,11 +883,11 @@ impl SoloMatch {
             "draw": m.draw_of(member),
             "you": member,
             "playerId": player_id,
-            "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
-            "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
-            "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
+            "aiAnswer": extra.ai_answer,
+            "playable": extra.playable,
+            "estCost": extra.est_cost,
             "tileQuotes": m.tile_quotes(member),
-            "skills": extra.get("skills").cloned().unwrap_or(serde_json::Value::Null),
+            "skills": extra.skills,
         }))
     }
 
@@ -1042,7 +1046,7 @@ impl ReplayMatch {
             }));
         }
         let player_id = state.player_of(member);
-        let extra = m.view_extra(member);
+        let extra = m.view_extra_typed(member);
         json(&serde_json::json!({
             "state": state,
             "hand": m.hand_of(member),
@@ -1050,11 +1054,11 @@ impl ReplayMatch {
             "draw": m.draw_of(member),
             "you": member,
             "playerId": player_id,
-            "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
-            "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
-            "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
+            "aiAnswer": extra.ai_answer,
+            "playable": extra.playable,
+            "estCost": extra.est_cost,
             "tileQuotes": m.tile_quotes(member),
-            "skills": extra.get("skills").cloned().unwrap_or(serde_json::Value::Null),
+            "skills": extra.skills,
         }))
     }
 
