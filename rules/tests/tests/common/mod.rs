@@ -1003,6 +1003,12 @@ impl Table {
         self.state(who, bandori_std::state_key::CHARGE)
     }
 
+    /// A standing tile prop (`World::tile_prop`). Used to read per-player
+    /// overrides such as `colorFor:<p>`.
+    pub fn tile_prop(&self, tile: usize, key: &str) -> i32 {
+        self.m.world().tile_prop(tile as i32, key)
+    }
+
     pub fn token(&self, who: usize, name: &str) -> i32 {
         self.m.world().st.players[who].token(name)
     }

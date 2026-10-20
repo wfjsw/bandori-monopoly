@@ -476,6 +476,44 @@ fn t10_ringing_bloom() {
     );
 }
 
+/// 规则书 (2): 「房屋数视为与你房屋数最多的格子等同」 -- 「视为」 is **continuous**.
+/// A real build past the snapshot must raise the counted max.
+#[test]
+fn t10b_ringing_bloom_tracks_a_later_build() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "白金燐子");
+    t.begin_turn(0);
+    let t1 = tile("购物中心");
+    let t2 = tile("天文馆");
+    t.own(0, &[t1, t2]);
+    t.set_houses(t1, 2);
+    t.set_houses(t2, 0);
+    t.give_play(0, "R:（燐子）Ringing Bloom").unwrap();
+    drain(&mut t);
+    // Raise the max to 3 *after* the card is in play -- through the engine, so
+    // `HouseAdded` fires and the 「视为」 view recomputes. Land on t1 and take
+    // the settle's build prompt (2 -> 3).
+    t.set_money(0, 30_000);
+    t.set_pos(0, t1.wrapping_sub(1));
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    t.build(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.houses(t1), 3, "one real build landed");
+    until_turn(&mut t, 1);
+    // P1 pays on t2 -- with the view tracking 3, the rent is R(t2,3)/2.
+    t.set_pos(1, t2 - 1);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let expected = rent(t2, 3) / 2;
+    let paid = 10_000 - t.money(1);
+    assert_eq!(
+        paid, expected,
+        "the 「视为」 max tracks a build past the snapshot (want R(天文馆,3)/2)"
+    );
+}
+
 // =====================================================================
 // T11. Fire bird plus HHW band (1) doubling
 // =====================================================================

@@ -1809,6 +1809,85 @@ fn aya_exclusive_places_and_recycles() {
     assert!(t.hand(0).contains(&"通用:GREAT".to_string()));
 }
 
+/// 规则书[持续]（1）: 「如果[拥有者]的资金数是所有存活玩家中最少则[拥有者]
+/// [消耗]或[支付]时将金额降低X（最低0）；X为100」 -- the owner pays, and the
+/// shave lands as a `PaySplitAdd` amount modifier.
+#[test]
+fn aya_longing_shaves_the_poorest_owners_payment_by_100() {
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.give_play(0, "PP:[丸山彩]憧憬的前方").unwrap();
+    drain(&mut t);
+    // P1 owns a high-rent tile; P0 is the poorest and walks onto it.
+    t.set_owner(deed, Some(1));
+    t.set_houses(deed, 1);
+    t.set_money(0, 10000);
+    t.set_money(1, 15_000);
+    let before = t.money(0);
+    t.begin_turn(0);
+    t.set_pos(0, (deed + 59) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let paid = before - t.money(0);
+    assert!(paid > 0, "rent was paid: {}", paid);
+    // X = 100 (no fans) -- the shave is exactly 100 off the un-shaved rent.
+    // Compare against the same landing with no card.
+    let mut b = Table::vanilla(2);
+    b.set_owner(deed, Some(1));
+    b.set_houses(deed, 1);
+    b.set_money(0, 10000);
+    b.set_money(1, 15_000);
+    let bbefore = b.money(0);
+    b.begin_turn(0);
+    b.set_pos(0, (deed + 59) % 60);
+    b.dice(&[1]);
+    b.roll(0).unwrap();
+    drain(&mut b);
+    let full = bbefore - b.money(0);
+    assert!(full > 0, "baseline rent is positive");
+    assert_eq!(paid, full - 100, "X=100 shaved off a {full} rent");
+}
+
+/// 「[拥有者][消耗]或[支付]时」 -- only the owner's own payments shave. A
+/// payment **to** the owner is not the owner's [支付].
+#[test]
+fn aya_longing_does_not_shave_a_payment_to_the_owner() {
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.give_play(0, "PP:[丸山彩]憧憬的前方").unwrap();
+    drain(&mut t);
+    // P0 (owner) holds the deed; P1 is the poorest and walks onto it.
+    t.set_owner(deed, Some(0));
+    t.set_houses(deed, 1);
+    t.set_money(0, 15_000);
+    t.set_money(1, 10_000);
+    let before = t.money(1);
+    t.begin_turn(1);
+    t.set_pos(1, (deed + 59) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let paid = before - t.money(1);
+    assert!(paid > 0, "rent was paid: {}", paid);
+    // Baseline with no card.
+    let mut b = Table::vanilla(2);
+    b.set_owner(deed, Some(0));
+    b.set_houses(deed, 1);
+    b.set_money(0, 15_000);
+    b.set_money(1, 10_000);
+    let bbefore = b.money(1);
+    b.begin_turn(1);
+    b.set_pos(1, (deed + 59) % 60);
+    b.dice(&[1]);
+    b.roll(1).unwrap();
+    drain(&mut b);
+    let full = bbefore - b.money(1);
+    assert_eq!(paid, full, "the owner's card does not shave someone else's rent");
+}
+
 /// 规则书: 「将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。」(白鹭千圣 exclusive)
 #[test]
 fn chiasa_exclusive_places_and_splits_2000() {
