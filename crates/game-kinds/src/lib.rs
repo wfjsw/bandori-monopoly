@@ -20,6 +20,10 @@
 
 #![no_std]
 
+pub mod vocab;
+
+pub use vocab::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
+
 /// One live engine trigger kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EngineKind {

@@ -2218,7 +2218,7 @@ pub fn trig_pay_is_rent<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_move_kind<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().trigger().mv.map_or(-1, |m| m.kind as i32))
+    Ok(c.st().wr().trigger().mv.map_or(-1, |m| m.kind.as_i32()))
 }
 
 pub fn trig_move_resolve<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {

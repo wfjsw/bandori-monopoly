@@ -2249,7 +2249,7 @@ pub mod plan {
     /// [`MoveKind::Teleport`] jumps to its destination (with `set_teleport_to`
     /// naming it, or the roll deriving it -- 「视为 [传送]（只触发终点）」).
     pub fn set_kind(kind: MoveKind) {
-        unsafe { sys::set_kind(kind as i32) }
+        unsafe { sys::set_kind(kind.as_i32()) }
     }
 
     /// Clamp the final face up to this, after the counteractions.

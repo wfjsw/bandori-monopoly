@@ -1259,34 +1259,9 @@ impl PromptKind {
 }
 
 /// How the player gets there -- a move is exactly one of these (walk the path
-/// vs jump to the destination). Mirrors `game_core::engine::move_ctx::MoveKind`.
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum MoveKind {
-    /// The player steps along the board, tile by tile.
-    #[default]
-    Walk = 0,
-    /// The player jumps straight to the destination. 「视为 [传送]（只触发终点）」
-    /// is this kind with the destination derived from the roll instead of named.
-    Teleport = 1,
-}
-
-impl MoveKind {
-    pub fn from_i32(v: i32) -> Option<Self> {
-        match v {
-            0 => Some(Self::Walk),
-            1 => Some(Self::Teleport),
-            _ => None,
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Walk => "walk",
-            Self::Teleport => "teleport",
-        }
-    }
-}
+/// vs jump to the destination). One definition in `game-kinds`, shared with the
+/// engine; re-exported here so guest call sites keep their path.
+pub use game_kinds::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
 
 bitflags::bitflags! {
     /// What a move resolves as it goes -- the settle axis, its own category

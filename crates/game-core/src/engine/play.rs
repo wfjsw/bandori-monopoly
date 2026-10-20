@@ -1423,11 +1423,11 @@ impl Cx<'_> {
     fn roll_tables(&mut self, m: &Move) -> i32 {
         let mut total = 0;
         for t in m.base.iter().chain(m.dice.iter()) {
-            if t.sides <= 0 {
-                total += t.count;
+            if t.dice.sides <= 0 {
+                total += t.dice.count;
             } else {
-                for _ in 0..t.count.max(0) {
-                    total += self.w.rng.d(t.sides.max(1));
+                for _ in 0..t.dice.count.max(0) {
+                    total += self.w.rng.d(t.dice.sides.max(1));
                 }
             }
         }

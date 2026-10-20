@@ -3,6 +3,8 @@ name = "game-kinds"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Data-only engine trigger-kind table. Engine vocabulary, defined in crates/."
+description = "Data-only engine trigger-kind table and shared wire vocabulary. Engine vocabulary, defined in crates/."
 
 [dependencies]
+# `no_std`-capable derive only: `MoveKind` / `Dice` ride `MoveCtx` saves.
+serde = { workspace = true, features = ["derive"] }

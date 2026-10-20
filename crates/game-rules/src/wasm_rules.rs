@@ -6683,10 +6683,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     // A card-driven `roll` raise has no move payload (`mv: None`); its face
     // remains on `value` and the writeback reads it from there.
     let mv = t.mv.as_ref().map(|m| TriggerMove {
-        kind: match m.kind {
-            game_core::engine::MoveKind::Walk => card_sdk::abi::MoveKind::Walk,
-            game_core::engine::MoveKind::Teleport => card_sdk::abi::MoveKind::Teleport,
-        },
+        kind: m.kind,
         resolve: m.resolve,
         tags: m.tags.clone(),
         // Mirror of `Trigger::main`.

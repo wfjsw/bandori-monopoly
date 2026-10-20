@@ -6,28 +6,15 @@
 
 use serde::{Deserialize, Serialize};
 
+use game_kinds::Dice;
+
 use crate::msg::Msg;
 use crate::state::MovePlan;
 
-/// How the player gets there: exactly one per move -- a walk that travels a
-/// [路径], or a teleport to its destination. Mirrors `card_sdk::abi::MoveKind`
-/// bit-for-bit.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MoveKind {
-    #[default]
-    Walk,
-    Teleport,
-}
-
-impl MoveKind {
-    pub fn from_i32(v: i32) -> Option<Self> {
-        match v {
-            0 => Some(Self::Walk),
-            1 => Some(Self::Teleport),
-            _ => None,
-        }
-    }
-}
+// `MoveKind` lives in `game-kinds` -- one definition shared with the guest
+// (`card-sdk`) and the host. Re-exported here so engine call sites keep their
+// path.
+pub use game_kinds::MoveKind;
 
 // Settling is not its own axis beside [`MoveKind`]: the kind already says
 // *where* resolution happens -- a walk resolves the route it travels and its
@@ -37,14 +24,13 @@ impl MoveKind {
 
 /// One term the movement rolls into its total (the `base` / `dice` tables).
 ///
-/// `count`d`sides`, summed. **`sides == 0` is a flat `count`** -- that is how a
-/// 「+2 to the roll」 effect is expressed, instead of a separate `bonus` field;
-/// the roll total is just the sum of the terms. `why` is the log's parenthetical
-/// for this term.
+/// `dice.count`d`dice.sides`, summed. **`sides == 0` is a flat `count`** --
+/// that is how a 「+2 to the roll」 effect is expressed, instead of a separate
+/// `bonus` field; the roll total is just the sum of the terms. `why` is the
+/// log's parenthetical for this term.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Roll {
-    pub count: i32,
-    pub sides: i32,
+    pub dice: Dice,
     pub why: String,
 }
 
@@ -52,16 +38,31 @@ impl Roll {
     /// `count`d`sides` (or a flat `count` when `sides == 0`).
     pub fn new(count: i32, sides: i32, why: impl Into<String>) -> Self {
         Self {
-            count,
-            sides,
+            dice: Dice { count, sides },
             why: why.into(),
         }
     }
 
+    /// `count`d`sides` (or a flat `count` when `sides == 0`).
+    pub fn from_dice(dice: Dice, why: impl Into<String>) -> Self {
+        Self {
+            dice,
+            why: why.into(),
+        }
+    }
+
+    pub fn count(&self) -> i32 {
+        self.dice.count
+    }
+
+    pub fn sides(&self) -> i32 {
+        self.dice.sides
+    }
+
     /// The value this term contributes.
     pub fn value(&self, faces: &[i32]) -> i32 {
-        if self.sides <= 0 {
-            self.count
+        if self.dice.sides <= 0 {
+            self.dice.count
         } else {
             faces.iter().sum()
         }
@@ -225,8 +226,7 @@ impl Default for MoveCtx {
             teleport_to: -1,
             resolve: true,
             base: vec![Roll {
-                count: 1,
-                sides: 20,
+                dice: Dice { count: 1, sides: 20 },
                 why: String::new(),
             }],
             dice: Vec::new(),

@@ -35,36 +35,9 @@ pub enum Dest {
 
 /// Which way a move travels along the board loop (turn order).
 ///
-/// Replaces the ±1 `move_dir` integer: forward and backward are the only two
-/// directions a walk has, so they are two variants, not a sign bit. The guest
-/// ABI and CEL still see `1` / `-1` (see [`Dir::as_i32`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Dir {
-    /// 「前进」 -- towards higher tile indices (the guest / CEL `1`).
-    #[default]
-    Forward,
-    /// 「后退」 -- towards lower tile indices (the guest / CEL `-1`).
-    Backward,
-}
-
-impl Dir {
-    /// The guest / CEL encoding: `1` forward, `-1` backward.
-    pub const fn as_i32(self) -> i32 {
-        match self {
-            Dir::Forward => 1,
-            Dir::Backward => -1,
-        }
-    }
-
-    /// Decode the guest / CEL encoding (`1` / `-1`; anything else reads forward).
-    pub fn from_i32(v: i32) -> Self {
-        if v < 0 {
-            Dir::Backward
-        } else {
-            Dir::Forward
-        }
-    }
-}
+/// Lives in `game-kinds` -- one definition shared with the guest. Re-exported
+/// here so engine call sites keep their path.
+pub use game_kinds::Dir;
 
 /// The move that caused a trigger. [`Trigger::mv`] is `None` when no
 /// move caused it -- a play, a turn-flow raise, a buy, a card's own activation.
@@ -114,34 +87,9 @@ pub struct TriggerPay {
     pub is_rent: bool,
 }
 
-/// Where a purchase's money goes. `-1` on the wire means the bank; that is a
-/// real payee, not "absent", so it gets a variant of its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Payee {
-    /// The bank (guest / wire `-1`).
-    Bank,
-    /// A seat.
-    Seat(i32),
-}
-
-impl Payee {
-    /// The guest / wire encoding: `-1` for the bank, else the seat.
-    pub fn as_i32(self) -> i32 {
-        match self {
-            Payee::Bank => -1,
-            Payee::Seat(n) => n,
-        }
-    }
-
-    /// Decode the guest / wire encoding (`-1` = bank).
-    pub fn from_i32(v: i32) -> Self {
-        if v < 0 {
-            Payee::Bank
-        } else {
-            Payee::Seat(v)
-        }
-    }
-}
+/// Where a purchase's money goes. Lives in `game-kinds` -- one definition
+/// shared with the guest. Re-exported here so engine call sites keep their path.
+pub use game_kinds::{Payee, Seat, Tile};
 
 /// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on every
 /// other kind.

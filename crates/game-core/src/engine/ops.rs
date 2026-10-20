@@ -92,22 +92,18 @@ impl World {
     pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.turn.plan.base.clear();
         if count > 0 && sides >= 0 {
-            self.turn.plan.base.push(crate::engine::move_ctx::Roll {
-                count,
-                sides,
-                why: why.to_string(),
-            });
+            self.turn.plan.base.push(crate::engine::move_ctx::Roll::new(
+                count, sides, why,
+            ));
         }
     }
     /// Add one more die group to the starting dice (3d20 = three of
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
     pub fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
-            self.turn.plan.base.push(crate::engine::move_ctx::Roll {
-                count,
-                sides,
-                why: why.to_string(),
-            });
+            self.turn.plan.base.push(crate::engine::move_ctx::Roll::new(
+                count, sides, why,
+            ));
         }
     }
     /// Drop every extra die another effect added. A rewrite that
@@ -120,11 +116,9 @@ impl World {
     /// is a `0`-sided term: `add_extra_dice(n, 0, why)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
-            self.turn.plan.dice.push(crate::engine::move_ctx::Roll {
-                count,
-                sides,
-                why: why.to_string(),
-            });
+            self.turn.plan.dice.push(crate::engine::move_ctx::Roll::new(
+                count, sides, why,
+            ));
         }
     }
 
@@ -500,23 +494,23 @@ impl World {
             let mut lo = 0;
             let mut hi = 0;
             for t in plan.base.iter().chain(plan.dice.iter()) {
-                if t.sides <= 0 {
-                    lo += t.count;
-                    hi += t.count;
+                if t.dice.sides <= 0 {
+                    lo += t.dice.count;
+                    hi += t.dice.count;
                 } else {
-                    lo += t.count.max(0);
-                    hi += t.count.max(0) * t.sides.max(1);
+                    lo += t.dice.count.max(0);
+                    hi += t.dice.count.max(0) * t.dice.sides.max(1);
                 }
             }
             return if self.turn.extreme == Extreme::Max { hi } else { lo };
         }
         let mut total = 0;
         for t in plan.base.iter().chain(plan.dice.iter()) {
-            if t.sides <= 0 {
-                total += t.count;
+            if t.dice.sides <= 0 {
+                total += t.dice.count;
             } else {
-                for _ in 0..t.count.max(0) {
-                    total += self.rng.d(t.sides.max(1));
+                for _ in 0..t.dice.count.max(0) {
+                    total += self.rng.d(t.dice.sides.max(1));
                 }
             }
         }
