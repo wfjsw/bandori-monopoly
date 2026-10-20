@@ -179,11 +179,14 @@ fn j11_action_half_decays_on_turn_end() {
 
 /// Custom bandori-std kind ids stay Action (non-filter) so `On::Action` may
 /// list them. `ChargePaying` is NOT a filter (its 「可」 opt-in prompts).
+/// The three universal raises (`markerSpent` / `cardUsed` / `houseAdded`) are
+/// engine kinds and likewise non-filter.
 #[test]
 fn custom_kind_filter_classification() {
+    use card_sdk::abi::ActionKind;
     assert!(!rk::PassRewardAffected.is_filter());
-    assert!(!rk::FireSpent.is_filter());
-    assert!(!rk::SkillUsed.is_filter());
-    assert!(!rk::HouseAdded.is_filter());
+    assert!(!ActionKind::MarkerSpent.is_filter());
+    assert!(!ActionKind::CardUsed.is_filter());
+    assert!(!ActionKind::HouseAdded.is_filter());
     assert!(!rk::ChargePaying.is_filter());
 }

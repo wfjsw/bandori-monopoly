@@ -54,7 +54,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
         On::Action(
-            &[bandori_std::kind::SkillUsed],
+            &[card_sdk::abi::ActionKind::CardUsed],
             "actor != owner && trigger_card != 0 && charge(owner) >= 1", "",
             Some(on_skill_applies),
             on_skill,

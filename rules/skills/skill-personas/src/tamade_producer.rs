@@ -29,7 +29,7 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         // that arm dead (and skipped the builtThis reset), so the second build
         // paid full price.
         On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
-        On::Action(&[bandori_std::kind::HouseAdded], card_sdk::pre::MINE, "", None, on_built),
+        On::Action(&[card_sdk::abi::ActionKind::HouseAdded], card_sdk::pre::MINE, "", None, on_built),
         On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, at_turn_end),
     ],
 )

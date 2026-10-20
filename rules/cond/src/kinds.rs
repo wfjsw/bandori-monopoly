@@ -68,12 +68,15 @@ pub mod trig {
     pub const SettleBody: i64 = 64;
     /// ChainKind::Effect -- 「被…效果影响」.
     pub const Effect: i64 = 72;
-    /// Ruleset namespace (bandori-std::kind::FireSpent). CEL `(1 << 32) | 73`.
-    pub const FireSpent: i64 = (1 << 32) | 73;
-    /// Ruleset namespace (bandori-std::kind::SkillUsed). CEL `(1 << 32) | 74`.
-    pub const SkillUsed: i64 = (1 << 32) | 74;
-    /// Ruleset namespace (bandori-std::kind::HouseAdded). CEL `(1 << 32) | 75`.
-    pub const HouseAdded: i64 = (1 << 32) | 75;
+    /// Engine namespace (`ActionKind::MarkerSpent`). Any named-counter spend
+    /// commits. CEL `73`.
+    pub const MarkerSpent: i64 = 73;
+    /// Engine namespace (`ActionKind::CardUsed`). A field card's `On::Play`
+    /// runs. CEL `74`.
+    pub const CardUsed: i64 = 74;
+    /// Engine namespace (`ActionKind::HouseAdded`). A deed's house count is
+    /// written. CEL `75`.
+    pub const HouseAdded: i64 = 75;
     /// v43: the move head / move-tail pair (`SETTLE-STAGES.md` §7).
     pub const MoveBefore: i64 = 90;
     pub const MoveAfter: i64 = 91;
@@ -144,8 +147,8 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("LeaveAfter", trig::LeaveAfter),
         ("SettleBody", trig::SettleBody),
         ("Effect", trig::Effect),
-        ("FireSpent", trig::FireSpent),
-        ("SkillUsed", trig::SkillUsed),
+        ("MarkerSpent", trig::MarkerSpent),
+        ("CardUsed", trig::CardUsed),
         ("HouseAdded", trig::HouseAdded),
         ("MoveBefore", trig::MoveBefore),
         ("MoveAfter", trig::MoveAfter),

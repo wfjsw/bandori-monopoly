@@ -31,7 +31,7 @@ pub const TAKI_CRYCHIC: CardDef = CardDef::new(
     &[
         On::Action(&[ActionKind::TurnStartBefore], "actor == owner && slot('skill.takiCrychic.armed') == 0", "", None, at_turn_start),
         On::Action(&[ActionKind::DiceRollAfter], "", "", None, on_roll),
-        On::Action(&[bandori_std::kind::SkillUsed], card_sdk::pre::MINE, "", None, on_skill_used),
+        On::Action(&[card_sdk::abi::ActionKind::CardUsed], card_sdk::pre::MINE, "", None, on_skill_used),
     ],
 )
     .silent(&[0, 2]);

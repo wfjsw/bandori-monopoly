@@ -23,7 +23,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // `skillUsed` kind (a counter to a counter is answered there), so both
         // selectors are declared.
         On::Counteract(
-            &[ChainKind::Counteracted, ChainKind::Card, bandori_std::kind::SkillUsed.as_trigger()],
+            &[ChainKind::Counteracted, ChainKind::Card, card_sdk::abi::ActionKind::CardUsed.as_trigger()],
             "target == owner && actor != owner",
             r#"有玩家对你使用[反击]后"#,
             None,

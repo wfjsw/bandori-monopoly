@@ -510,6 +510,9 @@ use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 ///      `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
 ///      `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
 ///      `tile_attr` only. SAVE_VERSION unchanged.
+///      (Superseded in v90: the three *universal* raises of that batch --
+///      marker-spend commit, field-card activation, house-count write -- moved
+///      to the engine namespace as `markerSpent` / `cardUsed` / `houseAdded`.)
 /// v71: **money rounds once after add/mul** (user ruling 2026-10-15,
 ///      OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
 ///      `paySplitAdd` / `paySplitMul` / `payCombined*` / `set_pay_factor`) transform the
@@ -718,8 +721,16 @@ use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 ///      `OnKind::Filter` / `OnKind::Action` as authoritative for ruleset
 ///      kinds. Host masks are per-namespace (a second `u128` for ruleset
 ///      ids); a ruleset id outside `0..128` is a load error.
-///      SAVE_VERSION unchanged (kinds are not in `Saved`).
-///      RECORD_VERSION unchanged (the record codec does not carry kind ids).
+/// Three universal raises that Phase 1 still spelled as ruleset ids are
+/// engine kinds, same numbers: **`markerSpent` (73)** any named-counter
+/// spend commits; **`cardUsed` (74)** a field card's `On::Play` runs;
+/// **`houseAdded` (75)** a deed's house count is written. The bandori
+/// spellings `FireSpent` / `SkillUsed` / `HouseAdded` and
+/// `"r:bandori:73/74/75"` are gone. What remains in `KindNs::Ruleset` is
+/// genuinely ruleset vocabulary: `Exile` (21), `PassRewardAffected` (26),
+/// `ChargePaying` (78), `FansFlip` (107).
+/// SAVE_VERSION unchanged (kinds are not in `Saved`).
+/// RECORD_VERSION unchanged (the record codec does not carry kind ids).
 pub const ABI_VERSION: i32 = 90;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
@@ -1761,6 +1772,21 @@ impl ActionKind {
     /// reconstruct this declaration; PayAfter reports a settled money move.
     pub const Effect: Self = Self(TriggerKind::Effect);
 
+    /// Action / Counteraction window. Any named-counter spend just committed
+    /// (`spend_marker`). Payload: `name` / `value`. Fire-pot is one name of
+    /// many. A listener may emit effects.
+    pub const MarkerSpent: Self = Self(TriggerKind::MarkerSpent);
+
+    /// Action / Counteraction window. A field card's `On::Play` entry is about
+    /// to run (a card living on the player's field rather than in hand).
+    /// Payload: `card` / `cards` / `by_card`. A counteraction may negate the
+    /// press. Dual-role: also a counteraction-window selector.
+    pub const CardUsed: Self = Self(TriggerKind::CardUsed);
+
+    /// Action / Counteraction window. A deed's house count has just been
+    /// written. Payload: `tile` / `value`. A listener may emit effects.
+    pub const HouseAdded: Self = Self(TriggerKind::HouseAdded);
+
     /// Action. A named on-card counter on a placed instance has just been written.
     /// Payload: card = the instance whose count moved, player_id = its owner,
     /// value = the signed change applied, name = the counter name.
@@ -2284,6 +2310,19 @@ impl TriggerKind {
     /// `effect`
     pub const Effect: Self = Self::engine(72);
 
+    /// `markerSpent` -- any named-counter spend just committed (`spend_marker`).
+    /// Payload: `name` / `value`. Fire-pot is one name of many.
+    pub const MarkerSpent: Self = Self::engine(73);
+
+    /// `cardUsed` -- a field card's `On::Play` entry is about to run (a card
+    /// living on the player's field rather than in hand). Payload: `card` /
+    /// `cards` / `by_card`.
+    pub const CardUsed: Self = Self::engine(74);
+
+    /// `houseAdded` -- a deed's house count has just been written.
+    /// Payload: `tile` / `value`.
+    pub const HouseAdded: Self = Self::engine(75);
+
     /// `counterChanged`
     pub const CounterChanged: Self = Self::engine(76);
 
@@ -2550,6 +2589,9 @@ impl TriggerKind {
                 70 => "untargetable",
                 71 => "redirect",
                 72 => "effect",
+                73 => "markerSpent",
+                74 => "cardUsed",
+                75 => "houseAdded",
                 76 => "counterChanged",
                 77 => "drewBefore",
                 // 94 was "flipEffect" -- retired in v83, never reuse.
@@ -2677,6 +2719,9 @@ impl TriggerKind {
             "untargetable" => Self::engine(70),
             "redirect" => Self::engine(71),
             "effect" => Self::engine(72),
+            "markerSpent" => Self::engine(73),
+            "cardUsed" => Self::engine(74),
+            "houseAdded" => Self::engine(75),
             "counterChanged" => Self::engine(76),
             "drewBefore" => Self::engine(77),
             // "flipEffect" retired in v83 (id 94 never reuse).
@@ -2749,9 +2794,6 @@ fn ruleset_wire(key: &str, id: i32) -> &'static str {
     match (key, id) {
         ("bandori", 21) => "r:bandori:21",
         ("bandori", 26) => "r:bandori:26",
-        ("bandori", 73) => "r:bandori:73",
-        ("bandori", 74) => "r:bandori:74",
-        ("bandori", 75) => "r:bandori:75",
         ("bandori", 78) => "r:bandori:78",
         ("bandori", 107) => "r:bandori:107",
         _ => "",
@@ -2775,12 +2817,11 @@ const GATE_CODES: &[i32] = &[68, 69, 70, 71, 79, 95, 96, 97, 98, 108, 109];
 const CHAIN_CODES: &[i32] = &[
     1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 22, 23, 24,
     25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-    47, 64, 72, 90, 91, 92, 93,
+    47, 64, 72, 73, 74, 75, 90, 91, 92, 93,
 ];
-/// Ruleset-namespace ids that are also [反击] links (21 / 26 / 73 / 74 / 75 /
-/// 78). The engine dispatches them by opaque id; the names live in
-/// `bandori-std::kind`.
-const CUSTOM_LINKS: &[i32] = &[21, 26, 73, 74, 75, 78];
+/// Ruleset-namespace ids that are also [反击] links (21 / 26 / 78). The engine
+/// dispatches them by opaque id; the names live in `bandori-std::kind`.
+const CUSTOM_LINKS: &[i32] = &[21, 26, 78];
 
 /// Which vocabulary an event kind belongs to.
 ///

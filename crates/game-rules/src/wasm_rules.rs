@@ -4465,13 +4465,13 @@ impl<M: CardModules> RulesBridge<M> {
             // kind 73 (`fireSpent`, wire-stable; `TODO(ABI) ABI-MARKER-SPENT`
             // rename to `MarkerSpent` when card bodies can follow). Name is payload.
             for (player_id, n, name) in after.marker_spent_log {
-                self.raise_core(cx, "r:bandori:73", player_id, |t| {
+                self.raise_core(cx, "markerSpent", player_id, |t| {
                     t.value = n;
                     t.name = Some(name.clone());
                 })?;
             }
             for (player_id, tile, nth) in after.house_log {
-                self.raise_core(cx, "r:bandori:75", player_id, |t| {
+                self.raise_core(cx, "houseAdded", player_id, |t| {
                     t.tile = tile;
                     t.value = nth;
                 })?;
@@ -5709,7 +5709,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // scope's `_hand` table are stale from here.
                     memo.on_declaration();
                     let mut link =
-                        CoreTrigger::new(if uid >= 0 { "r:bandori:74" } else { "card" }, cursor);
+                        CoreTrigger::new(if uid >= 0 { "cardUsed" } else { "card" }, cursor);
                     if uid >= 0 {
                         link.cards = vec![id.clone()];
                     }
@@ -9275,9 +9275,9 @@ mod tests {
             "turnBonusTime",
             "turnBaseTime",
             // v28 post-commit points (what a committed effect did)
-            "r:bandori:73",
-            "r:bandori:74",
-            "r:bandori:75",
+            "markerSpent",
+            "cardUsed",
+            "houseAdded",
             // v50: named counter writes
             "counterChanged",
             "r:bandori:78",

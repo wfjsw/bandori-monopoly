@@ -32,7 +32,7 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
         On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
         On::Action(&[ActionKind::DiceRollAfter], "", "", Some(paired), on_roll),
         On::Filter(&[FilterKind::PaySplitChoose], "", Some(paired), on_pay),
-        On::Action(&[bandori_std::kind::HouseAdded], "", "", Some(partner), on_built),
+        On::Action(&[card_sdk::abi::ActionKind::HouseAdded], "", "", Some(partner), on_built),
     ],
 )
     // 「（初始1，上限2）」

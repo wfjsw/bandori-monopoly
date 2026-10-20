@@ -7,6 +7,13 @@
 //! kind is declared on its typed side -- today every one is an action kind (an
 //! event-reaction listener).
 //!
+//! Only four kinds are genuinely ruleset-emitted (raised from `rules/` with
+//! this game's vocabulary): `Exile` (21), `PassRewardAffected` (26),
+//! `ChargePaying` (78), `FansFlip` (107). The three universal raises this file
+//! used to declare -- marker-spend commit, field-card activation, house-count
+//! write -- moved to the engine namespace in ABI v90 as `markerSpent` /
+//! `cardUsed` / `houseAdded` (`card_sdk::abi::ActionKind::MarkerSpent` etc.).
+//!
 //! A future rule-defined filter kind must declare
 //! `FilterKind::ruleset(RULESET_KEY, id)` here and also register that id as a
 //! filter in the trigger-kind filter test, so the typed sets keep mirroring
@@ -26,12 +33,6 @@ pub const RULESET_KEY: &str = "bandori";
 
 /// Pass-reward half of the pass reward. Wire 26.
 pub const PASS_REWARD_AFFECTED: i32 = 26;
-/// After a fire-pot charge spend commits. Wire 73.
-pub const FIRE_SPENT: i32 = 73;
-/// After a skill press. Wire 74.
-pub const SKILL_USED: i32 = 74;
-/// After a house count is written. Wire 75.
-pub const HOUSE_ADDED: i32 = 75;
 /// Before one charge spend commits. Wire 78.
 pub const CHARGE_PAYING: i32 = 78;
 /// After the fan-flip request is known, before the dict writes. Wire 107.
@@ -44,17 +45,6 @@ pub const EXILE_I32: i32 = 21;
 /// 1 = card). A counteraction may cancel and rewrite the reward.
 /// Dual-role: also a counteraction-window selector.
 pub const PassRewardAffected: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 26));
-/// Action / Counteraction window. A fire-pot charge spend just committed.
-/// Payload: player_id, value = how many pots. A listener may emit effects.
-pub const FireSpent: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 73));
-/// Action / Counteraction window. A skill press is about to run its body.
-/// Payload: card = the skill id, cards = that id, by_card = its player.
-/// A counteraction may negate the press. Dual-role: also a counteraction-window
-/// selector.
-pub const SkillUsed: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 74));
-/// Action / Counteraction window. A house count has just been written.
-/// Payload: tile, value = the house count. A listener may emit effects.
-pub const HouseAdded: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 75));
 /// Action / Counteraction window. Before one charge spend commits, so a
 /// listener may substitute the cost. Payload: player_id, value = the cost.
 /// May prompt; not a pure filter. Dual-role: also a counteraction-window
@@ -65,9 +55,9 @@ pub const ChargePaying: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY
 /// value = the intended flip count.
 pub const FansFlip: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 107));
 /// Action / Counteraction window. 「任意玩家获得[除外]…时」 -- an exile layer
-/// has been granted by any path (the engine's post-commit raise; wire 21).
-/// Payload: value = 1, by_card. Distinct from `ActionKind::Abnormal`, which is
-/// the landing itself.
+/// has been granted by any path (the ruleset's post-commit `raise_after`;
+/// wire 21). Payload: value = 1, by_card. Distinct from `ActionKind::Abnormal`,
+/// which is the landing itself.
 pub const Exile: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 21));
 
 // ------------------------------------------------------- tile kind strings

@@ -178,10 +178,10 @@ fn chain_kinds_and_counters_have_locale_text() {
         for k in [
             "diceRollPlan",
             "playGate",
+            "markerSpent",
+            "cardUsed",
+            "houseAdded",
             "r:bandori:26",
-            "r:bandori:73",
-            "r:bandori:74",
-            "r:bandori:75",
             "r:bandori:78",
             "r:bandori:107",
         ] {

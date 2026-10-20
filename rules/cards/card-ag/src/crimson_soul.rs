@@ -45,7 +45,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
             None,
             pay_choose,
         ),
-        On::Action(&[bandori_std::kind::SkillUsed], "", "", Some(skill_used_guard), skill_used),
+        On::Action(&[card_sdk::abi::ActionKind::CardUsed], "", "", Some(skill_used_guard), skill_used),
         On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )
