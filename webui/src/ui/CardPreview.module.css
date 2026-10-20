@@ -28,7 +28,7 @@
 .note { margin-top: 4px; font-size: 12px; color: var(--sub); }
 
 /* Tag chips (local copy of Card's, so this module never imports Card). */
-.tagChip { display: inline-block; font-size: 12px; line-height: 18px; padding: 0 7px; border-radius: 9px; background: var(--blue); color: #fff; font-weight: 700; }
+.tagChip { display: inline-block; font-size: 12px; line-height: 1.5; padding: 0 0.58em; border-radius: 999px; white-space: nowrap; background: var(--blue); color: #fff; font-weight: 700; }
 .tagRed { background: var(--tag-red); }
 
 /* The shared host: pinned beside the hovered card inside the stage. */
@@ -48,4 +48,14 @@
 }
 .stand .text { max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .stand .art { border-bottom-width: 6px; }
-.stand .title { font-size: 19px; }
+.stand .title { font-size: 19px; }.stand .text { font-size: 15px; line-height: 1.65; }
+.stand .title { font-size: 20px; }
+.stand .note { font-size: 13px; }
+.stand .tagChip { font-size: 13px; }
+.stand .pill { font-size: 15px; }
+/* Phone canvas: the browser's minimum font size floors small text, so at 15px
+   and 20px design both land on the same on-screen size and the long effect text
+   read larger than the name. Push the name well clear of the floor and let the
+   body sit at the lowest size the floor allows. */
+:global(:root[data-compact]) .stand .title { font-size: 28px; line-height: 1.25; }
+:global(:root[data-compact]) .stand .text { font-size: 12px; line-height: 1.6; }
