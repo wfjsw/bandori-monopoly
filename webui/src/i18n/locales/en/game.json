@@ -103,6 +103,7 @@
   "err.join.password": "Wrong room password",
   "err.join.playing": "The room is in a match -- come back when it finishes",
   "err.join.rejoin": "Could not rejoin the match (it ended, or the host started a new room)",
+  "err.join.spectators": "Too many watchers in this room -- try again later",
   "err.join.version": "Your game version differs from the host's -- update to the same version",
   "err.left_match": "You already left this match",
   "err.mortgage_after_roll": "After rolling you may only mortgage when you stopped to buy or build",

@@ -64,7 +64,10 @@ export function DeckAdjust({ sess }: { sess: GameSession }) {
     const leave = async () => {
       if (!(await ask(tr("select.leaveTitle"), tr("select.leaveAsk"), tr("select.leave")))) return;
       endSession();
-      navigate(sess.kind === "solo" ? { name: "menu" } : { name: "lobby" });
+      // Match Board.tsx's exit: a replay goes back to the replay list, not the
+      // online lobby.
+      if (sess.kind === "replay") navigate({ name: "replay" });
+      else navigate(sess.kind === "solo" ? { name: "menu" } : { name: "lobby" });
     };
     return (
       <>

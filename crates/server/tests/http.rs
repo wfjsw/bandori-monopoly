@@ -591,6 +591,44 @@ async fn a_spectator_can_take_a_free_seat() {
     assert_ne!(v["error"]["k"], "err.not_a_player");
 }
 
+/// Watchers are capped so one room cannot inflate every `room` frame without
+/// bound (`game_core::net::MAX_SPECTATORS`).
+#[tokio::test]
+async fn spectators_are_capped() {
+    use game_core::net::MAX_SPECTATORS;
+    let (base, _) = spawn(Duration::from_secs(20)).await;
+    let a = Client::new(&base, "Host").await;
+    let id = a.ok("/api/rooms", json!({})).await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut watchers = Vec::new();
+    for i in 0..MAX_SPECTATORS {
+        let w = Client::new(&base, &format!("W{i}")).await;
+        w.ok(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "spectate": true }),
+        )
+        .await;
+        watchers.push(w);
+    }
+    let overflow = Client::new(&base, "OneTooMany").await;
+    let (s, v) = overflow
+        .post(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "spectate": true }),
+        )
+        .await;
+    assert_eq!(
+        (s, v["reason"].as_str()),
+        (StatusCode::CONFLICT, Some("spectators"))
+    );
+    assert_eq!(v["error"]["k"], "err.join.spectators");
+    // The cap is watchers only: a seat is still free for a player.
+    let b = Client::new(&base, "Player").await;
+    b.ok(&format!("/api/rooms/{id}/join"), json!({})).await;
+}
+
 /// Spectators do not feed the presence reaper: a live watcher never marks a
 /// seat `away`, and a silent one is dropped without touching the match.
 #[tokio::test]

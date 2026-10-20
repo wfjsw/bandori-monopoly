@@ -51,14 +51,17 @@ export function useOnline(id: string): OnlineSession | null {
   // room -- and again whenever the room shows a new commitment (the slot the
   // server rolls after every match). No window, no wait: a nonce that never
   // arrives is simply absent from the derived seed.
+  // `seated` is in the deps because a spectator who later takes a free seat
+  // (`join` upgrades in place) becomes a human the seed must cover.
   const commit = sess?.room?.fair?.commit ?? "";
+  const seated = !!sess && !sess.spectator && !!sess.room?.members.some((m) => m.id === sess.you);
   useEffect(() => {
     const r = sess?.room;
     if (!r || !commit || r.playing) return;
     const me = r.members.find((m) => m.id === sess!.you);
     if (!me || me.bot) return;
     submitRoomNonce(r.id, commit);
-  }, [sess, commit]);
+  }, [sess, commit, seated]);
 
   useEffect(() => {
     if (sess?.dissolved) {
@@ -107,7 +110,9 @@ export function Room({ id }: { id: string }) {
   const takeSeat = async () => {
     const res = await api.join(r.id, "", false);
     if (!res.ok) return toast(fmtMsg(res.error!), "error");
-    // The SSE `room` frame flips the session out of spectator mode.
+    // Apply the reply now: the SSE `room` frame would get there eventually,
+    // but a reconnecting stream must not leave us locked in watcher mode.
+    sess.adoptSeat(res.data!.room, res.data!.you);
   };
   const start = async () => {
     const res = await api.start(r.id, armed);

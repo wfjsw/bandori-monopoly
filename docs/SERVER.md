@@ -448,7 +448,9 @@ no seat, no secrets, no input.
   `GET …/record` stays 403 `err.record.forbidden` -- the sealed record reveals
   every hand and the deck order.
 * **Seats.** Spectators are excluded from `maxPlayers`, from the match's
-  participants at `start`, and from the fair nonce window.
+  participants at `start`, and from the fair nonce window. At most
+  `MAX_SPECTATORS` (32) watchers per room; the next one is rejected with
+  `spectators` / `err.join.spectators`.
 * **Presence.** A spectator is never marked `away` and never hands a seat to
   the AI. A stale one is simply removed from the room. Leaving never forfeits
   (`act: "leave"` is skipped for them).

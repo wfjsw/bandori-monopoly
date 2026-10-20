@@ -973,6 +973,21 @@ export class OnlineSession extends GameSession {
     }
     if (!this.dissolved) void api.leave(this.id);
   }
+
+  /**
+   * Apply a join reply that took a free seat: the SSE `room` frame is the
+   * usual path, but a reconnecting stream must not leave the client locked in
+   * watcher mode after the server has already seated us.
+   */
+  adoptSeat(room: RoomInfo, you: number): void {
+    this.room = room;
+    this.you = you;
+    if (this.spectator) {
+      this.spectator = false;
+      this.readOnly = false;
+    }
+    this.emitOther();
+  }
 }
 
 export function startOnline(room: RoomInfo, you: number, view: MatchView | null = null): OnlineSession {

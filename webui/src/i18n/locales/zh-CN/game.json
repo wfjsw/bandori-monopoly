@@ -103,6 +103,7 @@
   "err.join.password": "房间密码不对",
   "err.join.playing": "房间正在对局中，等这一局结束再来吧",
   "err.join.rejoin": "回不到原来的对局了（这局已经结束，或者房主重新开了房间）",
+  "err.join.spectators": "观战席满了，等会儿再来吧",
   "err.join.version": "你和房主的游戏版本不一样，更新到同一版本再试",
   "err.left_match": "你已经离开了这局",
   "err.mortgage_after_roll": "掷骰之后只有停下来要买地 / 加盖房屋时才能抵押",
