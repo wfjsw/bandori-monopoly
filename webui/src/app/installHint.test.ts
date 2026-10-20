@@ -3,7 +3,7 @@
 // browser tab (never a desktop or tablet -- "not standalone" is true there
 // too, so the phone gate is the only thing holding it back), in either
 // orientation, it must sit in front of the rotate cover rather than beside
-// it, and the user's override must be able to clear it for good. These
+// it, and the user's override must be able to clear it. These
 // checks pin that decision table so a broader trigger cannot leak the
 // prompt onto desktops or tablets.
 import { strict as assert } from "node:assert";
@@ -30,7 +30,7 @@ test("install cover: never inside an installed PWA", () => {
   assert.equal(showInstallHint({ ...phoneTab, standalone: true }), false);
 });
 
-test("install cover: the override clears it for good", () => {
+test("install cover: the override clears it", () => {
   assert.equal(showInstallHint({ ...phoneTab, dismissed: true }), false);
 });
 
