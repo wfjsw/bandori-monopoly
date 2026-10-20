@@ -17,7 +17,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use skill_groups::fans;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -26,16 +26,29 @@ pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
         On::Play("", "", None, aya_longing),
-        // ABI v74 Pattern E: the body is interactive (共鸣 prompts + a second
-        // amount rewrite) so it cannot be a pure Filter. It rides
-        // `ActionKind::Effect` -- the payment declaration, whose `t.value` the
-        // engine still folds (PayAfter is too late). Both shaves stay in one
-        // body so the X-then-1500 order is unchanged.
-        // TODO(规则书): the shaves land at Effect (before PaySplitAdd/PaySplitMul) rather
-        //   than at the old PaySplitAdd stage, so a sibling PaySplitAdd modifier now sees
-        //   the already-shaved figure. Same result when no other add/mul
-        //   modifier touches the payment.
-        On::Action(&[ActionKind::Effect], "actor == owner && value > 0", r#"[消耗]或[支付]"#, None, pay_add),
+        // 规则书[持续]（1）: the passive X shave is a pure amount modifier, so it
+        // rides `PaySplitAdd` (支付阶段 2) where it belongs and composes with
+        // sibling add modifiers. No prompt, so no purity problem.
+        On::Filter(
+            &[FilterKind::PaySplitAdd],
+            "card.placed",
+            None,
+            shave_x_filter,
+        ),
+        // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500」 -- the
+        // 共鸣 cost makes this half interactive (`try_resonance` prompts), so it
+        // cannot be a pure Filter and stays on `ActionKind::Effect` (the payment
+        // declaration, whose `t.value` the engine still folds; PayAfter is too
+        // late). Subtraction of non-negative amounts under a final floor is
+        // order-independent, so the X-then-1500 reading is preserved.
+        //
+        // TODO(规则书): only the interactive half is still off-stage. It lands at
+        //   Effect (before PaySplitAdd/PaySplitMul), so a sibling add/mul
+        //   modifier sees the 1500 already gone. Fixing that needs a
+        //   `PaySplitAddBefore` interactive pre-stage (the shape
+        //   `PaySplitChooseBefore` / `PayCombinedAddBefore` already use) -- there
+        //   is no writable stage between PaySplitAdd and PaySplitMul today.
+        On::Action(&[ActionKind::Effect], "actor == owner && value > 0", r#"[消耗]或[支付]"#, None, pay_res),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)
@@ -105,23 +118,29 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardAyaLonging.PaySplitAdd` -- while the owner is
-/// the poorest alive player, every [消耗]/[支付] drops by X (floor 0).
-fn pay_add(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && value > 0` is the pre; `poorest` is a derived-list
-    // residual (every alive player's money).
-    if !poorest(player_id) {
-        return Ok(());
+/// 规则书[持续]（1）: while the owner is the poorest alive player, every
+/// [消耗]/[支付] drops by X (floor 0). Pure `PaySplitAdd` Filter -- returns the
+/// new figure, the host folds it into the leg amount.
+fn shave_x_filter(player_id: i32, value: i32) -> i32 {
+    // 「[拥有者][消耗]或[支付]时」 -- the owner is the payer/spender.
+    if value <= 0 || trigger::player_id() != player_id || !poorest(player_id) {
+        return value;
     }
     let x = shave_x(player_id);
-    let amount = trigger::value();
-    trigger::set_pay_amount((amount - x).max(0));
+    let out = (value - x).max(0);
     ctx::log(
         player_id,
         &Msg::new(key!("aya_longing_shave")).i("n", x as i64),
     );
-    // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 --
-    // on top of the X shave above, floored at 0.
+    out
+}
+
+/// 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 --
+/// the 共鸣 cost is interactive, so this half stays an Action.
+fn pay_res(player_id: i32) -> card_sdk::Asked {
+    if trigger::value() <= 0 {
+        return Ok(());
+    }
     if crate::resonance::try_resonance(player_id)? {
         trigger::set_pay_amount((trigger::value() - 1500).max(0));
     }
@@ -137,6 +156,12 @@ pub fn aya_longing_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_add_kani(player_id: i32) -> card_sdk::Asked {
-    pay_add(player_id)
+pub fn shave_x_filter_kani(player_id: i32, value: i32) -> i32 {
+    shave_x_filter(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_res_kani(player_id: i32) -> card_sdk::Asked {
+    pay_res(player_id)
 }
