@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { designBox } from "../app/stageScale.ts";
 import { useLatestRef } from "./latest.ts";
+import { scrollFollowStep, shouldPinToBottom, type ScrollFollow } from "./pure.ts";
 
 type ElementLike = RefObject<HTMLElement | null> | (() => HTMLElement | null | undefined);
 
@@ -68,22 +69,35 @@ export function useScrollFollow(
   enabled = true,
 ): void {
   const live = useLatestRef({ ref, enabled });
-  const atEnd = useRef(true);
-  const bound = useRef<HTMLElement | null>(null);
+  const state = useRef<ScrollFollow>({ atEnd: true, pinned: null });
   const wasOn = useRef(enabled);
-  useEffect(() => {
+  // Layout, not passive: the jump must land before the paint that would show
+  // the new line at the old position.
+  useLayoutEffect(() => {
     const { ref: r, enabled: on } = live.current;
     const el = r.current;
-    if (el && bound.current !== el) {
-      bound.current = el;
-      // A hidden pane (display: none) has no height; its events say nothing.
-      el.addEventListener("scroll", () => {
-        if (el.clientHeight > 0) atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 2;
+    const onScroll = () => {
+      if (!el) return;
+      state.current = scrollFollowStep(state.current, {
+        scrollTop: el.scrollTop,
+        gap: el.scrollHeight - el.scrollTop - el.clientHeight,
+        visible: el.clientHeight > 0,
       });
-    }
-    if (on && !wasOn.current) atEnd.current = true; // re-enabled: jump to the end
+    };
+    el?.addEventListener("scroll", onScroll, { passive: true });
+    if (on && !wasOn.current) state.current = { atEnd: true, pinned: null }; // re-enabled: jump to the end
     wasOn.current = on;
-    if (on && el && atEnd.current) el.scrollTop = el.scrollHeight;
+    // Reaching the end counts even if the tail arrived mid-gesture and the last
+    // `scroll` measured the gap against taller content than the one they
+    // stopped on. A hidden pane has no gap to measure -- don't let its zeros
+    // re-arm a follow the user had scrolled away from.
+    const visible = el != null && el.clientHeight > 0;
+    const gap = el && visible ? el.scrollHeight - el.scrollTop - el.clientHeight : Infinity;
+    if (el && shouldPinToBottom(state.current, gap, on)) {
+      el.scrollTop = el.scrollHeight;
+      state.current = { atEnd: true, pinned: el.scrollTop };
+    }
+    return () => el?.removeEventListener("scroll", onScroll);
     // `inputs` is the caller's dep list (constant length).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...inputs, enabled, live]);
