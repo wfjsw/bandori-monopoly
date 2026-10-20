@@ -2403,7 +2403,7 @@ pub fn trig_effect_kind<C: HostCtx>(c: &mut C, i: i32) -> Result<i64, HostErr> {
         let t = c.st().wr().trigger();
         t.effects
             .get(i.max(0) as usize)
-            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind).as_cel_i64())
+            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64())
     })
 }
 

@@ -21,7 +21,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     panic!(
                         "ruleset build: {} entry {ei} kind {} does not match {} (see TriggerKind::is_filter)",
                         c.id,
-                        kind.as_str(),
+                        kind.spelling(),
                         match o.kind() {
                             crate::abi::OnKind::Filter => "On::Filter",
                             _ => "On::Action",

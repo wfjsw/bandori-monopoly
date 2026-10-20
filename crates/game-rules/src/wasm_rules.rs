@@ -2065,7 +2065,7 @@ impl CardWorld for Run {
     }
     fn declare_trigger_effect(&mut self, kind: i64, target: i32, from: i32, tile: i32, value: i32) {
         self.trigger.declare(game_core::engine::rules::Effect {
-            kind: card_sdk::abi::TriggerKind::from_cel_i64(kind).as_str(),
+            kind: card_sdk::abi::TriggerKind::from_cel_i64(kind).spelling().into_owned(),
             target,
             from,
             tile,
@@ -3772,7 +3772,7 @@ impl<M: CardModules> RulesBridge<M> {
             deal_mortgaged,
         } => {
             let tk = card_sdk::abi::TriggerKind::from_cel_i64(kind);
-            let kind = tk.as_str();
+            let kind = tk.spelling();
             let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
             let t = self.raise_core(cx, kind, player_id, |t| {
                 t.value = value;
@@ -4013,7 +4013,7 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = n;
                     t.by_card = Some(call.player_id());
                     t.effects.push(game_core::engine::rules::Effect {
-                        kind: "drawOut",
+                        kind: "drawOut".into(),
                         target: player_id,
                         from: call.player_id(),
                         tile: -1,
@@ -4501,8 +4501,7 @@ impl<M: CardModules> RulesBridge<M> {
             // that name rather than at each grant site, so a layer granted by
             // *any* path still runs.
             for (player_id, name, value) in after.named_raise_log {
-                let wire: &'static str = Box::leak(name.into_boxed_str());
-                self.raise_core(cx, wire, player_id, |t| {
+                self.raise_core(cx, name, player_id, |t| {
                     t.value = value;
                     t.by_card = by;
                 })?;
@@ -4523,7 +4522,7 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = to;
                     t.by_card = by;
                     t.effects.push(game_core::engine::rules::Effect {
-                        kind: "state",
+                        kind: "state".into(),
                         target: who,
                         from: by.unwrap_or(-1),
                         tile: -1,
@@ -4564,7 +4563,7 @@ impl<M: CardModules> RulesBridge<M> {
         // This is most raises even with cards in play, and every raise for a
         // kind nobody listens to. Nothing could have rewritten `t`, so the
         // write-back below is a no-op and is safe to skip with it.
-        if !self.ruleset.declares(trigger_kind(t.kind)) {
+        if !self.ruleset.declares(trigger_kind(t.kind.as_str())) {
             return Ok(());
         }
         // The module's view of the trigger. `move_roll` is the guest-visible
@@ -4592,7 +4591,7 @@ impl<M: CardModules> RulesBridge<M> {
         // the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
         // `drawn` also name a card on `t.card`, and must not re-run it here.
         let own = t.card.clone().unwrap_or_default();
-        let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
+        let own_play = matches!(trigger_kind(t.kind.as_str()), TriggerKind::Card | TriggerKind::Event);
         if own_play && !own.is_empty() {
             if let Some(idx) = self
                 .ruleset
@@ -4615,7 +4614,7 @@ impl<M: CardModules> RulesBridge<M> {
         // seat after the timing's player around the table; counters settle
         // newest-first before the timing they answer (see
         // `hand_counteractions`). Not at hook-only points.
-        if !is_hook_only(t.kind) {
+        if !is_hook_only(t.kind.as_str()) {
             self.hand_counteractions(cx, t, &mut trigger, 0)?;
         }
         // (3) Field-card (`Fx`) hooks: at a hook-point kind, every *placed* card
@@ -4897,7 +4896,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// One world copy; stable job list so a suspension can resume without
     /// re-walking a world the nested settle already changed.
     fn collect_hook_jobs(&self, cx: &Cx, t: &CoreTrigger) -> Vec<HookJob> {
-        let kind = trigger_kind(t.kind);
+        let kind = trigger_kind(t.kind.as_str());
         let mut jobs = Vec::new();
         if is_game_start_kind(kind) || is_own_card_kind(kind) {
             // These walks are short and do not nest settles in practice;
@@ -5207,7 +5206,7 @@ impl<M: CardModules> RulesBridge<M> {
             let declared = self.raise_core(cx, "effect", by, |t| {
                 on(t);
                 t.effects.push(game_core::engine::rules::Effect {
-                    kind: "abnormal",
+                    kind: "abnormal".into(),
                     target: player_id,
                     from: -1,
                     tile: -1,
@@ -5395,7 +5394,7 @@ impl<M: CardModules> RulesBridge<M> {
             t.card = Some(card.to_string());
             t.by_card = Some(by);
             t.effects.push(game_core::engine::rules::Effect {
-                kind: "target",
+                kind: "target".into(),
                 target: p,
                 from: -1,
                 tile,
@@ -5420,7 +5419,7 @@ impl<M: CardModules> RulesBridge<M> {
     fn raise_core(
         &self,
         cx: &mut Cx,
-        kind: &'static str,
+        kind: impl Into<String>,
         player_id: i32,
         set: impl FnOnce(&mut CoreTrigger),
     ) -> Flow<CoreTrigger> {
@@ -5761,7 +5760,7 @@ impl<M: CardModules> RulesBridge<M> {
                         let mut origin = Msg::new("log.chain_link")
                             .n("n", 1)
                             .card("card", l1_id.clone())
-                            .text("kind", l.kind.as_str())
+                            .text("kind", l.kind.spelling())
                             .player_id("who", l.player_id)
                             .i("value", l.value as i64)
                             .text("src", src)
@@ -5797,7 +5796,7 @@ impl<M: CardModules> RulesBridge<M> {
                             .effects
                             .iter()
                             .map(|e| {
-                                let mut m = Msg::new("fx").text("kind", e.kind).i("value", e.value as i64);
+                                let mut m = Msg::new("fx").text("kind", e.kind.clone()).i("value", e.value as i64);
                                 if e.target >= 0 {
                                     m = m.player_id("target", e.target);
                                 }
@@ -6676,7 +6675,7 @@ impl<M: CardModules> RulesBridge<M> {
 /// may rewrite; the engine reads it back.
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
-        trigger_kind(t.kind),
+        trigger_kind(t.kind.as_str()),
         TriggerKind::DiceRollResult | TriggerKind::DiceRollBefore | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue
     );
     // Only a move trigger carries a roll; `paid`/`settle` carry value as an
@@ -6711,7 +6710,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         deal_mortgaged: b.deal_mortgaged,
     });
     Trigger {
-        kind: trigger_kind(t.kind),
+        kind: trigger_kind(t.kind.as_str()),
         player_id: t.player_id,
         target: t.target,
         tile: t.tile,
@@ -7398,7 +7397,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind).as_cel_i64())
+            .map(|e| crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64())
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -7905,7 +7904,7 @@ impl ProbeMemo {
 /// `ask.counteract.detail` remains the fallback for the long tail of kinds -- and
 /// for prompts already on the wire, so old replays keep rendecycle.
 fn describe_trigger(t: &Trigger) -> Msg {
-    let effect_kind = t.effects.first().map(|e| e.kind).unwrap_or("");
+    let effect_kind = t.effects.first().map(|e| e.kind.as_str()).unwrap_or("");
     let card = t.card.as_deref().unwrap_or("");
     let mut m = match t.kind {
         // A play (L1) or a declared counter -- both are `card` links.
@@ -8759,7 +8758,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             return self.counteract_orig(cx, t);
         }
         let from_resume = true;
-        if !self.ruleset.declares(trigger_kind(t.kind)) {
+        if !self.ruleset.declares(trigger_kind(t.kind.as_str())) {
             return Ok(());
         }
         let mut own_done = false;
@@ -8780,7 +8779,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         };
 
         let own = t.card.clone().unwrap_or_default();
-        let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
+        let own_play = matches!(trigger_kind(t.kind.as_str()), TriggerKind::Card | TriggerKind::Event);
         if !own_done && own_play && !own.is_empty() {
             if let Some(idx) = self
                 .ruleset
@@ -8823,7 +8822,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 }
             }
             None => {
-                if !is_hook_only(t.kind) {
+                if !is_hook_only(t.kind.as_str()) {
                     // A suspend inside `hand_counteractions` / `resolve_jobs`
                     // parks a HandResume (see `resolve_jobs`).
                     self.hand_counteractions(cx, t, &mut trigger, 0)?;

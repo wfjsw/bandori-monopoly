@@ -165,7 +165,7 @@ fn chain_kinds_and_counters_have_locale_text() {
     for loc in ["zh-CN", "en"] {
         let (ui, game) = (load(loc, "ui"), load(loc, "game"));
         for id in 1..=400 {
-            let k = game_rules::TriggerKind::engine(id).as_str();
+            let k = game_rules::TriggerKind::engine(id).spelling();
             if k.is_empty() {
                 continue;
             }

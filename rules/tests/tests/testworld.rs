@@ -339,7 +339,7 @@ impl CardWorld for TestWorld {
     }
     fn declare_trigger_effect(&mut self, kind: i64, target: i32, from: i32, tile: i32, value: i32) {
         self.trigger.declare(game_core::engine::rules::Effect {
-            kind: card_sdk::abi::TriggerKind::from_cel_i64(kind).as_str(),
+            kind: card_sdk::abi::TriggerKind::from_cel_i64(kind).spelling().into_owned(),
             target,
             from,
             tile,

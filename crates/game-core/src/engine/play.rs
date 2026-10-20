@@ -3204,7 +3204,7 @@ impl Cx<'_> {
                 @p TriggerPay::new(rent),
                 tile = p.tile.map_or(-1, |t| t as i32),
                 effects = vec![super::rules::Effect {
-                    kind: "pay",
+                    kind: "pay".into(),
                     target: to.map_or(-1, |t| t as i32),
                     from: payer,
                     tile: p.tile.map_or(-1, |t| t as i32),

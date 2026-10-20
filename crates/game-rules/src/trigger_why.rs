@@ -203,7 +203,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         // raise point still says what it is until it gets a phrase.
         other => Msg::new("log.why.generic")
             .player_id("who", who)
-            .msg("kind", kind_name(other.as_str())),
+            .msg("kind", kind_name(other.spelling().as_ref())),
     }
 }
 

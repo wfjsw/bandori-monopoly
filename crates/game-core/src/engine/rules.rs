@@ -261,7 +261,7 @@ pub enum Negation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Effect {
     /// What it does -- the raise site's kind name (`"pay"`, `"target"`, and friends).
-    pub kind: &'static str,
+    pub kind: String,
     /// The seat it is aimed at (-1 for none).
     pub target: i32,
     /// The other party, where the effect has one. A payment touches both its
@@ -285,7 +285,7 @@ pub struct Effect {
 /// LIFO over the closed chain; see `game-rules`' `hand_counteractions`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trigger {
-    pub kind: &'static str,
+    pub kind: String,
     pub player_id: i32,
     pub target: i32,
     pub tile: i32,
@@ -345,9 +345,9 @@ pub struct Trigger {
 }
 
 impl Trigger {
-    pub fn new(kind: &'static str, player_id: usize) -> Self {
+    pub fn new(kind: impl Into<String>, player_id: usize) -> Self {
         Self {
-            kind,
+            kind: kind.into(),
             player_id: player_id as i32,
             target: player_id as i32,
             tile: -1,

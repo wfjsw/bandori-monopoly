@@ -189,7 +189,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind).as_cel_i64())
+            .map(|e| crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64())
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -1216,7 +1216,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         .effects
         .iter()
         .map(|e| ChainLink {
-            kind: crate::TriggerKind::from_str(e.kind).as_cel_i64(),
+            kind: crate::TriggerKind::from_str(e.kind.as_str()).as_cel_i64(),
             from: e.from as i64,
             hits: e.target as i64,
         })

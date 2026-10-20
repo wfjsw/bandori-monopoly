@@ -736,7 +736,7 @@ impl KindMask {
         if !(0..128).contains(&k.id) {
             return Err(format!(
                 "trigger kind {} (id {}) outside 0..128 mask range",
-                k.as_str(),
+                k.spelling(),
                 k.id
             ));
         }
@@ -931,7 +931,7 @@ impl RulesetBuilder {
                                 "{} entry {ei}: {} lists trigger {} which is filter={} (see TriggerKind::is_filter)",
                                 c.id,
                                 if want_filter { "On::Filter" } else { "On::Action" },
-                                tk.as_str(),
+                                tk.spelling(),
                                 tk.is_filter(),
                             )));
                         }

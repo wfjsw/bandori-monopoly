@@ -1,10 +1,12 @@
 //! Kind constants as they are written inside conditions.
 //!
-//! The values mirror the host wire enums (`card-sdk::abi::{TriggerKind,
-//! ChainKind, ActionKind, MoveKind}`) so a host can pass its raw value through
-//! without a translation table. This crate stays free of `card-sdk` /
-//! `game-core` types on purpose (G1 is an isolated module); when the host
-//! wires it up (G2) it fills these `i64`s from `TriggerKind::as_cel_i64`.
+//! This crate authors **neither** kind table. The engine spellings / ids live
+//! in `game-kinds` (owned by `crates/`); the ruleset spellings live in
+//! `bandori-std::kind`. The constants here **mirror** those owning tables so a
+//! host can pass its raw CEL value through without a translation table. This
+//! crate stays free of `card-sdk` / `game-core` types on purpose (G1 is an
+//! isolated module); when the host wires it up (G2) it fills these `i64`s from
+//! `TriggerKind::as_cel_i64`.
 //!
 //! CEL keeps a single `i64` kind -- a bit field (ABI v90): engine = `id`;
 //! ruleset = `(1 << 32) | id`. Conditions compile inside one ruleset, so the

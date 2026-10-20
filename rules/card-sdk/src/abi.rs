@@ -3,7 +3,9 @@
 //! refuses rulesets built against a different version.
 
 #[cfg(target_arch = "wasm32")]
-use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
+use alloc::{boxed::Box, borrow::Cow, format, string::String, string::ToString, vec::Vec};
+#[cfg(not(target_arch = "wasm32"))]
+use std::borrow::Cow;
 
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
@@ -666,7 +668,7 @@ use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 ///      takes `&'static [ActionKind]`, `On::Filter*` takes `&'static [FilterKind]`,
 ///      so a wrong-side kind const is a rustc error rather than a ruleset-build
 ///      failure. `TriggerKind` remains the single declaration source of truth
-///      (all consts, `as_str`/`from_str`, `is_filter`); the typed sets mirror it
+///      (all consts, `spelling`/`from_str`, `is_filter`); the typed sets mirror it
 ///      exactly. `ChainKind` remains the [`TriggerKind`] alias for
 ///      `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
 ///      same name tables, no id renumbering. Source-only: ABI_VERSION remains 85.
@@ -1457,7 +1459,7 @@ impl<'de> serde::Deserialize<'de> for KindNs {
 /// Engine-generic kinds are named associated constants that serialize to
 /// camelCase wire names; ruleset-declared kinds are opaque ids in a named
 /// [`KindNs::Ruleset`] that serialize as `"r:{key}:{id}"` (e.g. `"r:bandori:21"`).
-/// `as_str` and `from_str` map those two spellings. `is_filter` is the side
+/// `spelling` and `from_str` map those two spellings. `is_filter` is the side
 /// declaration for engine ids; the host treats `OnKind::Filter` /
 /// `OnKind::Action` as authoritative for ruleset kinds (see [`Self::is_filter`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -1877,8 +1879,8 @@ impl ActionKind {
     /// CEL single-int encoding. See [`TriggerKind::as_cel_i64`].
     pub const fn as_cel_i64(self) -> i64 { self.0.as_cel_i64() }
 
-    /// Wire name (camelCase generic, or `"r:{id}"` for a ruleset-declared id).
-    pub fn as_str(self) -> &'static str { self.as_trigger().as_str() }
+    /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
+    pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
 
     /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
     /// const is always `false` and a `FilterKind` const always `true`; a raw
@@ -2076,8 +2078,8 @@ impl FilterKind {
     /// CEL single-int encoding. See [`TriggerKind::as_cel_i64`].
     pub const fn as_cel_i64(self) -> i64 { self.0.as_cel_i64() }
 
-    /// Wire name (camelCase generic, or `"r:{id}"` for a ruleset-declared id).
-    pub fn as_str(self) -> &'static str { self.as_trigger().as_str() }
+    /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
+    pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
 
     /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
     /// const is always `false` and a `FilterKind` const always `true`; a raw
@@ -2462,174 +2464,31 @@ impl TriggerKind {
     /// decision gates (pure yes/no or target/reason folds).
     /// A filter entry may only list these; an action entry only non-filter kinds.
     ///
-    /// For [`KindNs::Engine`] this is the side declaration the typed views,
-    /// ruleset-build validation, and the host all read. For
-    /// [`KindNs::Ruleset`] it answers `false`: a rule-defined kind's side is
-    /// not in this table. The host must treat [`OnKind::Filter`] /
-    /// [`OnKind::Action`] as authoritative for rule-defined kinds (a later
-    /// phase emits a registration table).
+    /// For [`KindNs::Engine`] this reads the side declaration from
+    /// `game_kinds` (the table `crates/` owns). For [`KindNs::Ruleset`] it
+    /// answers `false`: a rule-defined kind's side is not in this table. The
+    /// host must treat [`OnKind::Filter`] / [`OnKind::Action`] as authoritative
+    /// for rule-defined kinds (a later phase emits a registration table).
     pub const fn is_filter(self) -> bool {
         if !matches!(self.ns, KindNs::Engine) {
             return false;
         }
-        matches!(
-            self.id,
-            102 // DiceRollValue
-                | 52 // PaySplitChoose
-                | 55 // PaySplitAdd
-                | 56 // PaySplitMul
-                | 57 // PaySplitAt
-                | 67 // DiceRollPlan
-                // Marker spend-substitution (id 78, name is payload) is NOT a
-                // filter: its 「可」 opt-in prompts, and Filter bodies cannot.
-                // It remains on On::Action (see docs/CARDS.md).
-                | 80 // BuyAdd
-                | 81 // BuyMul
-                | 82 // BuySet
-                | 83 // BuyAssign
-                | 84 // PayCombinedAdd
-                | 85 // PayCombinedMul
-                | 86 // PayCombinedCancel
-                | 99 // TurnBonusTime
-                | 100 // TurnBaseTime
-                // Decision gates (v77): pure yes/no or target/reason folds.
-                | 68 // AbnormalGuard
-                | 69 // ImmuneAll
-                | 70 // Untargetable
-                | 71 // Redirect
-                | 79 // BuyGate
-                | 95 // ActGate
-                | 96 // PayGate
-                | 97 // MoveGate
-                | 98 // ExclusiveUse
-                | 101 // PlayGate
-                | 108 // OnBoardGate
-                | 109 // TargetableGate
-        )
+        game_kinds::is_filter(self.id)
     }
 
-    /// The trigger-kind wire string.
+    /// The trigger-kind wire spelling.
     ///
-    /// Engine kinds keep their camelCase spelling; a ruleset-declared id is
-    /// `"r:{key}:{id}"` (e.g. `"r:bandori:21"`). An unregistered id reads as
-    /// `""` (no `Box::leak` in `no_std`).
-    pub fn as_str(self) -> &'static str {
+    /// Engine kinds keep their camelCase spelling from the `game_kinds` table;
+    /// a ruleset-declared id is `"r:{key}:{id}"` (e.g. `"r:bandori:21"`),
+    /// formatted -- no table. An unregistered engine id reads as `""`.
+    pub fn spelling(self) -> Cow<'static, str> {
         match self.ns {
-            KindNs::Ruleset(key) => ruleset_wire(key, self.id),
-            KindNs::Engine => match self.id {
-                0 => "",
-                1 => "diceRollBefore",
-                2 => "diceRollResult",
-                3 => "turnStart",
-                4 => "pass",
-                5 => "passPlayer",
-                6 => "settleBefore",
-                7 => "settle",
-                8 => "mortgage",
-                9 => "pay",
-                10 => "paid",
-                11 => "bankrupt",
-                12 => "card",
-                13 => "event",
-                14 => "abnormal",
-                15 => "target",
-                // 16 was "stop" -- retired in v84, never reuse.
-                // 17 was "teleport" -- retired in v84, never reuse.
-                // 18 was "skillTeleport" -- retired in v85, never reuse.
-                // 19 was the second abnormal kind -- retired in v84, never reuse.
-                // 20 was the first abnormal kind -- retired in v84, never reuse.
-                // 21 is ruleset-declared (KindNs::Ruleset), not an engine id.
-                // 22 was the third abnormal kind -- retired in v84, never reuse.
-                23 => "state",
-                24 => "counteracted",
-                25 => "drawOut",
-                27 => "twoCards",
-                28 => "turnStartBefore",
-                29 => "passBefore",
-                30 => "mortgageBefore",
-                31 => "bankruptBefore",
-                32 => "cardAfter",
-                33 => "eventAfter",
-                34 => "settleAfter",
-                35 => "buyBefore",
-                36 => "buyAfter",
-                37 => "buildBefore",
-                38 => "buildAfter",
-                39 => "discardBefore",
-                40 => "discardAfter",
-                41 => "endTurnBefore",
-                42 => "endTurnAfter",
-                43 => "leaveBefore",
-                44 => "leaveAfter",
-                45 => "turnEnd",
-                46 => "drawn",
-                47 => "passTile",
-                48 => "payAfter",
-                49 => "diceRollAfter",
-                50 => "cardPlayed",
-                51 => "targeted",
-                52 => "paySplitChoose",
-                53 => "turnEndBefore",
-                54 => "turnEndAfter",
-                55 => "paySplitAdd",
-                56 => "paySplitMul",
-                57 => "paySplitAt",
-                58 => "discarded",
-                59 => "deckBeforeGame",
-                60 => "deckAtGameStart",
-                61 => "drew",
-                62 => "reshuffled",
-                63 => "bought",
-                64 => "settleBody",
-                65 => "beforeOut",
-                66 => "teleported",
-                67 => "diceRollPlan",
-                68 => "abnormalGuard",
-                69 => "immuneAll",
-                70 => "untargetable",
-                71 => "redirect",
-                72 => "effect",
-                73 => "markerSpent",
-                74 => "cardUsed",
-                75 => "houseAdded",
-                76 => "counterChanged",
-                77 => "drewBefore",
-                // 94 was "flipEffect" -- retired in v83, never reuse.
-                79 => "buyGate",
-                80 => "buyAdd",
-                81 => "buyMul",
-                82 => "buySet",
-                83 => "buyAssign",
-                84 => "payCombinedAdd",
-                85 => "payCombinedMul",
-                86 => "payCombinedCancel",
-                87 => "tileResolved",
-                88 => "moveResolved",
-                89 => "bankruptResolved",
-                90 => "moveBefore",
-                91 => "moveAfter",
-                92 => "markerSpend",
-                93 => "markerGain",
-                95 => "actGate",
-                96 => "payGate",
-                97 => "moveGate",
-                98 => "exclusiveUse",
-                99 => "turnBonusTime",
-                100 => "turnBaseTime",
-                101 => "playGate",
-                102 => "diceRollValue",
-                103 => "atEnd",
-                // 104 was "flipAfter" -- retired in v83, never reuse.
-                105 => "paySplitChooseBefore",
-                106 => "payCombinedAddBefore",
-                108 => "onBoardGate",
-                109 => "targetableGate",
-                _ => "",
-            },
+            KindNs::Ruleset(key) => Cow::Owned(format!("r:{key}:{}", self.id)),
+            KindNs::Engine => Cow::Borrowed(game_kinds::wire(self.id)),
         }
     }
 
-    /// Inverse of [`Self::as_str`]. Generic camelCase names and
+    /// Inverse of [`Self::spelling`]. Generic camelCase names and
     /// `"r:{key}:{id}"` parse; anything else is [`Self::None`].
     /// A bare decimal `"21"` is **not** accepted -- only the real spelling.
     pub fn from_str(s: &str) -> Self {
@@ -2647,203 +2506,11 @@ impl TriggerKind {
             }
             return Self::None;
         }
-        match s {
-            "diceRollBefore" => Self::engine(1),
-            "diceRollResult" => Self::engine(2),
-            "turnStart" => Self::engine(3),
-            "pass" => Self::engine(4),
-            "passPlayer" => Self::engine(5),
-            "settleBefore" => Self::engine(6),
-            "settle" => Self::engine(7),
-            "mortgage" => Self::engine(8),
-            "pay" => Self::engine(9),
-            "paid" => Self::engine(10),
-            "bankrupt" => Self::engine(11),
-            "card" => Self::engine(12),
-            "event" => Self::engine(13),
-            "abnormal" => Self::engine(14),
-            "target" => Self::engine(15),
-            // "stop" retired in v84 (id 16 never reuse).
-            // "teleport" retired in v84 (id 17 never reuse).
-            // "skillTeleport" retired in v85 (id 18 never reuse).
-            // second abnormal kind retired in v84 (id 19 never reuse).
-            // first abnormal kind retired in v84 (id 20 never reuse).
-            // id 21 is ruleset-declared; "r:bandori:21" / bare "21" accept it.
-            // third abnormal kind retired in v84 (id 22 never reuse).
-            "state" => Self::engine(23),
-            "counteracted" => Self::engine(24),
-            "drawOut" => Self::engine(25),
-            "twoCards" => Self::engine(27),
-            "turnStartBefore" => Self::engine(28),
-            "passBefore" => Self::engine(29),
-            "mortgageBefore" => Self::engine(30),
-            "bankruptBefore" => Self::engine(31),
-            "cardAfter" => Self::engine(32),
-            "eventAfter" => Self::engine(33),
-            "settleAfter" => Self::engine(34),
-            "buyBefore" => Self::engine(35),
-            "buyAfter" => Self::engine(36),
-            "buildBefore" => Self::engine(37),
-            "buildAfter" => Self::engine(38),
-            "discardBefore" => Self::engine(39),
-            "discardAfter" => Self::engine(40),
-            "endTurnBefore" => Self::engine(41),
-            "endTurnAfter" => Self::engine(42),
-            "leaveBefore" => Self::engine(43),
-            "leaveAfter" => Self::engine(44),
-            "turnEnd" => Self::engine(45),
-            "drawn" => Self::engine(46),
-            "passTile" => Self::engine(47),
-            "payAfter" => Self::engine(48),
-            "diceRollAfter" => Self::engine(49),
-            "cardPlayed" => Self::engine(50),
-            "targeted" => Self::engine(51),
-            "paySplitChoose" => Self::engine(52),
-            "turnEndBefore" => Self::engine(53),
-            "turnEndAfter" => Self::engine(54),
-            "paySplitAdd" => Self::engine(55),
-            "paySplitMul" => Self::engine(56),
-            "paySplitAt" => Self::engine(57),
-            "discarded" => Self::engine(58),
-            "deckBeforeGame" => Self::engine(59),
-            "deckAtGameStart" => Self::engine(60),
-            "drew" => Self::engine(61),
-            "reshuffled" => Self::engine(62),
-            "bought" => Self::engine(63),
-            "settleBody" => Self::engine(64),
-            "beforeOut" => Self::engine(65),
-            "teleported" => Self::engine(66),
-            "diceRollPlan" => Self::engine(67),
-            "abnormalGuard" => Self::engine(68),
-            "immuneAll" => Self::engine(69),
-            "untargetable" => Self::engine(70),
-            "redirect" => Self::engine(71),
-            "effect" => Self::engine(72),
-            "markerSpent" => Self::engine(73),
-            "cardUsed" => Self::engine(74),
-            "houseAdded" => Self::engine(75),
-            "counterChanged" => Self::engine(76),
-            "drewBefore" => Self::engine(77),
-            // "flipEffect" retired in v83 (id 94 never reuse).
-            "buyGate" => Self::engine(79),
-            "buyAdd" => Self::engine(80),
-            "buyMul" => Self::engine(81),
-            "buySet" => Self::engine(82),
-            "buyAssign" => Self::engine(83),
-            "payCombinedAdd" => Self::engine(84),
-            "payCombinedMul" => Self::engine(85),
-            "payCombinedCancel" => Self::engine(86),
-            "tileResolved" => Self::engine(87),
-            "moveResolved" => Self::engine(88),
-            "bankruptResolved" => Self::engine(89),
-            "moveBefore" => Self::engine(90),
-            "moveAfter" => Self::engine(91),
-            "markerSpend" => Self::engine(92),
-            "markerGain" => Self::engine(93),
-            "actGate" => Self::engine(95),
-            "payGate" => Self::engine(96),
-            "moveGate" => Self::engine(97),
-            "exclusiveUse" => Self::engine(98),
-            "turnBonusTime" => Self::engine(99),
-            "turnBaseTime" => Self::engine(100),
-            "playGate" => Self::engine(101),
-            "diceRollValue" => Self::engine(102),
-            "atEnd" => Self::engine(103),
-            // "flipAfter" retired in v83 (id 104 never reuse).
-            "paySplitChooseBefore" => Self::engine(105),
-            "payCombinedAddBefore" => Self::engine(106),
-            "onBoardGate" => Self::engine(108),
-            "targetableGate" => Self::engine(109),
-            _ => Self::None,
+        match game_kinds::from_wire(s) {
+            Some(id) => Self::engine(id),
+            None => Self::None,
         }
     }
-
-    /// Which of the three vocabularies this event belongs to.
-    ///
-    /// Custom (ruleset-declared) ids default to [`EventRole::Hook`]; codes the
-    /// engine raises as [反击] links are listed by number in `CUSTOM_LINKS`.
-    pub const fn role(self) -> EventRole {
-        match self.ns {
-            KindNs::Engine => {
-                if list_has(GATE_CODES, self.id) {
-                    EventRole::Gate
-                } else if list_has(CHAIN_CODES, self.id) {
-                    EventRole::Link
-                } else {
-                    EventRole::Hook
-                }
-            }
-            KindNs::Ruleset(_) => {
-                if list_has(CUSTOM_LINKS, self.id) {
-                    EventRole::Link
-                } else {
-                    EventRole::Hook
-                }
-            }
-        }
-    }
-}
-
-/// Wire spelling for the known ruleset-declared ids (`"r:{key}:{id}"`).
-///
-/// `as_str` returns `&'static str`, so the handful of `(key, id)` pairs the
-/// tree knows about get a table here rather than formatting. An unknown
-/// ruleset id reads as `""`, matching today's behaviour for unregistered ids.
-/// (Not `const fn` -- `str` cannot be matched at compile time.)
-fn ruleset_wire(key: &str, id: i32) -> &'static str {
-    match (key, id) {
-        ("bandori", 21) => "r:bandori:21",
-        ("bandori", 26) => "r:bandori:26",
-        ("bandori", 78) => "r:bandori:78",
-        ("bandori", 107) => "r:bandori:107",
-        _ => "",
-    }
-}
-const fn list_has(list: &[i32], v: i32) -> bool {
-    let mut i = 0;
-    while i < list.len() {
-        if list[i] == v {
-            return true;
-        }
-        i += 1;
-    }
-    false
-}
-
-/// Generic gate codes (see [`FilterKind`] docs). Engine-namespace ids.
-const GATE_CODES: &[i32] = &[68, 69, 70, 71, 79, 95, 96, 97, 98, 108, 109];
-/// Generic chain-link codes (see [`ChainKind`] docs). Engine-namespace ids.
-/// (Retired ids stay listed so the numbering hole stays visible.)
-const CHAIN_CODES: &[i32] = &[
-    1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 22, 23, 24,
-    25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-    47, 64, 72, 73, 74, 75, 90, 91, 92, 93,
-];
-/// Ruleset-namespace ids that are also [反击] links (21 / 26 / 78). The engine
-/// dispatches them by opaque id; the names live in `bandori-std::kind`.
-const CUSTOM_LINKS: &[i32] = &[21, 26, 78];
-
-/// Which vocabulary an event kind belongs to.
-///
-/// [`TriggerKind`] is the *wire* id space: every event the engine raises, and
-/// what crosses the guest boundary. Cards declare against one of the three
-/// typed views ([`ChainKind`] / [`ActionKind`] / [`FilterKind`] over
-/// [`TriggerKind`]); the `On` variant says what the event is for:
-///
-/// * [`ChainKind`] -- a chain link answers it, so a [反击] window opens.
-/// * [`ActionKind`] -- a field-card (`Fx`) settlement point; placed cards run
-///   automatically, no window.
-/// * [`FilterKind`] -- a question posed to placed cards at declaration or at
-///   resolution (`may this effect name S?` / `does anything land on S?`).
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EventRole {
-    /// Opens a [反击] window -- a chain link can answer it.
-    Link = 0,
-    /// Field-card hook only -- no window.
-    Hook = 1,
-    /// A query to placed cards -- no window.
-    Gate = 2,
 }
 
 pub fn pack(ptr: u32, len: u32) -> i64 {
@@ -3134,7 +2801,7 @@ mod tests {
     /// (`move.kind == Teleport && move.by_skill`).
     #[test]
     fn skill_teleport_id_18_is_retired_forever() {
-        assert_eq!(TriggerKind::engine(18).as_str(), "", "id 18 must remain unnamed");
+        assert_eq!(TriggerKind::engine(18).spelling(), "", "id 18 must remain unnamed");
         assert_eq!(
             TriggerKind::from_str("skillTeleport"),
             TriggerKind::None,
@@ -3143,7 +2810,7 @@ mod tests {
         // Nearby ids: "teleport" (id 17) retired in v84, and live ids keep
         // working.
         assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
-        assert_eq!(TriggerKind::MoveAfter.as_str(), "moveAfter");
+        assert_eq!(TriggerKind::MoveAfter.spelling(), "moveAfter");
     }
 
     /// ABI v90: the two namespaces pack into one CEL int without collision
@@ -3158,8 +2825,8 @@ mod tests {
             TriggerKind::from_cel_i64((1 << 32) | 21),
             TriggerKind::ruleset("bandori", 21)
         );
-        assert_eq!(TriggerKind::ruleset("bandori", 21).as_str(), "r:bandori:21");
-        assert_eq!(TriggerKind::ruleset("bandori", 107).as_str(), "r:bandori:107");
+        assert_eq!(TriggerKind::ruleset("bandori", 21).spelling(), "r:bandori:21");
+        assert_eq!(TriggerKind::ruleset("bandori", 107).spelling(), "r:bandori:107");
         assert_eq!(
             TriggerKind::from_str("r:bandori:21"),
             TriggerKind::ruleset("bandori", 21)

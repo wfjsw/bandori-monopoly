@@ -1006,7 +1006,7 @@ mod tests {
             TriggerKind::Untargetable,
             TriggerKind::Redirect,
         ] {
-            assert!(k.is_filter(), "expected filter kind {:?}", k.as_str());
+            assert!(k.is_filter(), "expected filter kind {:?}", k.spelling());
         }
         for k in [
             TriggerKind::TurnStart,
@@ -1020,7 +1020,7 @@ mod tests {
             TriggerKind::DrewBefore,
             TriggerKind::ruleset("bandori", 78), // marker spend-substitution (name is payload); prompts, remains Action
         ] {
-            assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
+            assert!(!k.is_filter(), "expected action kind {:?}", k.spelling());
         }
     }
 
@@ -1104,7 +1104,7 @@ mod tests {
         ];
         for (name, k) in action {
             // `None`'s wire name is "" (unset); every other const has a wire name.
-            let wire = k.as_trigger().as_str();
+            let wire = k.as_trigger().spelling();
             if *name != "None" {
                 assert!(!wire.is_empty(), "ActionKind::{name} has empty wire name");
             }
@@ -1144,7 +1144,7 @@ mod tests {
         ];
         assert_eq!(filter.len(), 27);
         for (name, k) in filter {
-            assert!(!k.as_trigger().as_str().is_empty(), "FilterKind::{name}");
+            assert!(!k.as_trigger().spelling().is_empty(), "FilterKind::{name}");
             assert!(
                 k.as_trigger().is_filter(),
                 "FilterKind::{name} must be is_filter()"
@@ -1212,25 +1212,25 @@ mod tests {
     fn trigger_kind_ids() {
         // TriggerKind ids are opaque; pin the retired wire names and holes.
         // FlipEffect = 94 / FlipAfter = 104 retired in v83 -- never reuse.
-        assert_eq!(TriggerKind::engine(94).as_str(), "");
-        assert_eq!(TriggerKind::engine(104).as_str(), "");
+        assert_eq!(TriggerKind::engine(94).spelling(), "");
+        assert_eq!(TriggerKind::engine(104).spelling(), "");
         assert_eq!(TriggerKind::from_str("flipEffect"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("flipAfter"), TriggerKind::None);
         // Ids 16 / 17 / 19 / 20 / 22 (retired abnormal / force kinds) retired in
         // v84 -- never reuse.
-        assert_eq!(TriggerKind::engine(16).as_str(), "");
-        assert_eq!(TriggerKind::engine(17).as_str(), "");
-        assert_eq!(TriggerKind::engine(19).as_str(), "");
-        assert_eq!(TriggerKind::engine(20).as_str(), "");
-        assert_eq!(TriggerKind::engine(22).as_str(), "");
+        assert_eq!(TriggerKind::engine(16).spelling(), "");
+        assert_eq!(TriggerKind::engine(17).spelling(), "");
+        assert_eq!(TriggerKind::engine(19).spelling(), "");
+        assert_eq!(TriggerKind::engine(20).spelling(), "");
+        assert_eq!(TriggerKind::engine(22).spelling(), "");
         assert_eq!(TriggerKind::from_str("stop"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("retiredAb19"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("retiredAb20"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("forced"), TriggerKind::None);
         // Live neighbours still round-trip.
-        assert_eq!(TriggerKind::from_str("drewBefore").as_str(), "drewBefore");
-        assert_eq!(TriggerKind::from_str("atEnd").as_str(), "atEnd");
-        assert_eq!(TriggerKind::from_str("paySplitChooseBefore").as_str(), "paySplitChooseBefore");
+        assert_eq!(TriggerKind::from_str("drewBefore").spelling(), "drewBefore");
+        assert_eq!(TriggerKind::from_str("atEnd").spelling(), "atEnd");
+        assert_eq!(TriggerKind::from_str("paySplitChooseBefore").spelling(), "paySplitChooseBefore");
     }
 }
