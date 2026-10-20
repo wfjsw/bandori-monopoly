@@ -9035,60 +9035,11 @@ fn source_group(world: &game_core::engine::World, uid: i32) -> LookupGroup {
 /// so the hand counteraction window opens at them. The valid-option-first pre-scan
 /// skips the whole cycle when no seat holds a card that answers, which is the
 /// common case on a `passTile` (it runs on every tile walked).
+///
+/// The flag itself is data: engine rows in `game_kinds`, ruleset rows declared
+/// by the ruleset and read at load (`kind_flags`). The engine names no id.
 fn is_hook_only(kind: &str) -> bool {
-    let t = trigger_kind(kind);
-    // Ruleset kinds (bandori ChargePaying 78 / FansFlip 107) are hook-only too;
-    // they cannot be `matches!` patterns (the constructor is not a const path).
-    if t == TriggerKind::ruleset("bandori", 78) || t == TriggerKind::ruleset("bandori", 107) {
-        return true;
-    }
-    matches!(
-        t,
-        TriggerKind::TurnEnd
-            | TriggerKind::Drawn
-            | TriggerKind::PayAfter
-            | TriggerKind::DiceRollAfter
-            | TriggerKind::DiceRollValue
-            | TriggerKind::AtEnd
-            | TriggerKind::PaySplitChooseBefore
-            | TriggerKind::PayCombinedAddBefore
-            | TriggerKind::CardPlayed
-            | TriggerKind::Targeted
-            | TriggerKind::PaySplitChoose
-            | TriggerKind::TurnEndBefore
-            | TriggerKind::TurnEndAfter
-            | TriggerKind::PaySplitAdd
-            | TriggerKind::PaySplitMul
-            | TriggerKind::PaySplitAt
-            | TriggerKind::Discarded
-            | TriggerKind::DeckBeforeGame
-            | TriggerKind::DeckAtGameStart
-            | TriggerKind::Drew
-            | TriggerKind::DrewBefore
-            | TriggerKind::Reshuffled
-            | TriggerKind::Bought
-            | TriggerKind::BeforeOut
-            | TriggerKind::Teleported
-            | TriggerKind::DiceRollPlan
-            | TriggerKind::AbnormalGuard
-            | TriggerKind::ImmuneAll
-            | TriggerKind::Untargetable
-            | TriggerKind::ActGate
-            | TriggerKind::PayGate
-            | TriggerKind::MoveGate
-            | TriggerKind::ExclusiveUse
-            | TriggerKind::TurnBonusTime
-            | TriggerKind::TurnBaseTime
-            | TriggerKind::Redirect
-            | TriggerKind::CounterChanged
-            // v78: the buy filter stages are pure folds -- no counteraction
-            // window (`TriggerKind::is_filter`).
-            | TriggerKind::BuyGate
-            | TriggerKind::BuyAdd
-            | TriggerKind::BuyMul
-            | TriggerKind::BuySet
-            | TriggerKind::BuyAssign
-    )
+    crate::kind_flags::hook_only(trigger_kind(kind))
 }
 
 /// Kinds that run on a fresh instance of one card (named on `t.card`) rather
@@ -9258,6 +9209,8 @@ mod tests {
             "drew",
             "reshuffled",
             "bought",
+            // Ruleset spellings, as opaque parse examples (the engine never
+            // switches on these ids).
             "r:bandori:26",
             "settleBody",
             "beforeOut",

@@ -718,46 +718,49 @@ pub(crate) struct Inner {
     gates: [Vec<(i32, i32)>; GATE_KINDS.len()],
 }
 
-/// Two-namespace 128-bit kind mask. Engine ids use `1u128 << id` in `engine`;
-/// ruleset ids use the same shift in `ruleset`. A kind outside `0..128` is a
-/// load error (a sparse fallback is a later change) -- never silently dropped.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Two-namespace kind mask. Engine ids use `1u128 << id` in `engine` (and a
+/// kind outside `0..128` is a load error -- never silently dropped). Ruleset
+/// kinds are opaque tokens: an insertion-ordered set of [`TriggerKind`]s, no
+/// id-as-bit and no range check.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KindMask {
     /// [`card_sdk::abi::KindNs::Engine`] ids.
     pub engine: u128,
-    /// [`card_sdk::abi::KindNs::Ruleset`] ids.
-    pub ruleset: u128,
+    /// [`card_sdk::abi::KindNs::Ruleset`] kinds, insertion order, de-duplicated.
+    ruleset: Vec<crate::TriggerKind>,
 }
 
 impl KindMask {
-    /// Set the bit for `k`. `Err` when the id is outside the mask range.
+    /// Record `k`. Engine ids outside `0..128` are a load error; ruleset kinds
+    /// have no range check (they are opaque).
     pub fn insert(&mut self, k: crate::TriggerKind) -> Result<(), String> {
         use card_sdk::abi::KindNs;
-        if !(0..128).contains(&k.id) {
-            return Err(format!(
-                "trigger kind {} (id {}) outside 0..128 mask range",
-                k.spelling(),
-                k.id
-            ));
-        }
-        let bit = 1u128 << k.id;
         match k.ns {
-            KindNs::Engine => self.engine |= bit,
-            KindNs::Ruleset(_) => self.ruleset |= bit,
+            KindNs::Engine => {
+                if !(0..128).contains(&k.id) {
+                    return Err(format!(
+                        "trigger kind {} (id {}) outside 0..128 mask range",
+                        k.spelling(),
+                        k.id
+                    ));
+                }
+                self.engine |= 1u128 << k.id;
+            }
+            KindNs::Ruleset(_) => {
+                if !self.ruleset.contains(&k) {
+                    self.ruleset.push(k);
+                }
+            }
         }
         Ok(())
     }
 
-    /// Does this mask contain `k`? Out-of-range ids are never present.
+    /// Does this mask contain `k`?
     pub fn contains(&self, k: crate::TriggerKind) -> bool {
         use card_sdk::abi::KindNs;
-        if !(0..128).contains(&k.id) {
-            return false;
-        }
-        let bit = 1u128 << k.id;
         match k.ns {
-            KindNs::Engine => self.engine & bit != 0,
-            KindNs::Ruleset(_) => self.ruleset & bit != 0,
+            KindNs::Engine => (0..128).contains(&k.id) && (self.engine & (1u128 << k.id)) != 0,
+            KindNs::Ruleset(_) => self.ruleset.contains(&k),
         }
     }
 }
@@ -2772,6 +2775,20 @@ fn inspect(
         let defs: Vec<crate::tile_class::ClassDef> =
             postcard::from_bytes(&bytes).unwrap_or_default();
         crate::tile_class::set_class_defs(defs);
+    }
+    // Ruleset-kind flags (hook-only) -- optional; absent means every ruleset
+    // kind opens a counteraction window.
+    if has_func(&inst, &mut store, export::KIND_FLAGS) {
+        set_fuel(&mut store, METADATA_FUEL).map_err(load)?;
+        let packed = inst
+            .get_typed_func::<(), i64>(&mut store, export::KIND_FLAGS)
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(|e| load(format!("{}: {e}", export::KIND_FLAGS)))?;
+        let (ptr, len) = abi::unpack(packed);
+        let bytes =
+            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        let flags: Vec<(i32, bool)> = postcard::from_bytes(&bytes).unwrap_or_default();
+        crate::kind_flags::set_kind_flags(flags);
     }
     Ok((module, cards, meta))
 }

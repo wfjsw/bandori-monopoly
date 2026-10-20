@@ -849,6 +849,10 @@ pub mod export {
     /// Absent on older modules (the host then has an empty class table and
     /// only the generic `class*` props answer `tile_in`).
     pub const CLASS_DEFS: &str = "ruleset_class_defs";
+    /// `() -> i64` packed postcard of the ruleset's kind hook-only flags
+    /// (`Vec<(i32, bool)>`: ruleset kind id, hook-only). Absent on older
+    /// modules (the host then treats every ruleset kind as opening a window).
+    pub const KIND_FLAGS: &str = "ruleset_kind_flags";
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the

@@ -85,6 +85,7 @@ impl NativeIndex {
 impl NativeRulesHandle {
     pub fn new() -> Self {
         tile_class::set_class_defs(bandori_std::kind::class_defs());
+        game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
         let mut cards = Vec::new();
         let mut pre: Vec<Vec<Option<game_rules::CompiledPre>>> = Vec::new();
         let mut by_id = HashMap::new();

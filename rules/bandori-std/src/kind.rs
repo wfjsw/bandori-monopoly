@@ -93,6 +93,22 @@ pub fn class_defs() -> Vec<(String, bool, Vec<i32>)> {
     ]
 }
 
+/// Which ruleset kinds open a counteraction window (`false`) vs. are
+/// field-card hooks only (`true`).
+///
+/// `ChargePaying` / `FansFlip` are hook-only: no hand counteraction window
+/// opens at them. `Exile` / `PassRewardAffected` are [反击] windows.
+/// The host never names these ids -- it reads this declaration at load
+/// (`ruleset_kind_flags`, same path as [`class_defs`]).
+pub fn kind_hook_only() -> Vec<(i32, bool)> {
+    vec![
+        (EXILE_I32, false),
+        (PASS_REWARD_AFFECTED, false),
+        (CHARGE_PAYING, true),
+        (FANS_FLIP, true),
+    ]
+}
+
 /// Abnormal-effect kind names (「异常效果」). The ids are the frozen webui
 /// wire values of `card_sdk::abi::AbKind`; the readable names live here so
 /// `card-sdk` / `crates/` carry no game status vocabulary.

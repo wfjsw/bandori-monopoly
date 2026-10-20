@@ -36,6 +36,8 @@ pub mod roster;
 pub mod native_shims;
 /// THE ruleset class registration for `tile_in` (ABI v56).
 pub mod tile_class;
+/// Ruleset-declared kind flags (hook-only) read at load.
+pub mod kind_flags;
 mod wasm_rules;
 mod world;
 
@@ -50,6 +52,7 @@ pub use cond_pre::{
     PRECOMPILED_CONDS_VERSION,
 };
 pub use game_core::msg::Msg;
+pub use kind_flags::{hook_only, set_kind_flags};
 pub use host::{
     Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,
     HostState, KindMask, Outcome, Prompt, PromptOption, RuleError, RulesHandle, MAX_NESTING,

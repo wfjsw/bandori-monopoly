@@ -473,3 +473,19 @@ pub fn encode_class_defs() -> i64 {
 pub extern "C" fn ruleset_class_defs() -> i64 {
     encode_class_defs()
 }
+
+/// Ruleset-kind hook-only flags packed for the host (see [`kind::kind_hook_only`]).
+pub fn encode_kind_flags() -> i64 {
+    let flags = kind::kind_hook_only();
+    let bytes = postcard::to_allocvec(&flags).unwrap_or_default();
+    let len = bytes.len() as u64;
+    let ptr = alloc::boxed::Box::leak(bytes.into_boxed_slice()).as_mut_ptr() as u64;
+    ((ptr << 32) | len) as i64
+}
+
+/// Guest export: which ruleset kinds are hook-only (no counteraction window).
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn ruleset_kind_flags() -> i64 {
+    encode_kind_flags()
+}
