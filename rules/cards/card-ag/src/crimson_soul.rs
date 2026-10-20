@@ -25,7 +25,7 @@ const ID: &str = "AG:绯红之魂";
 pub const CRIMSON_SOUL: CardDef = CardDef::new(
     "AG:绯红之魂",
     &[
-        // TODO(规则书) NEGATION-AUDIT V2: no activation cost. The
+        // NEGATION-AUDIT V2 (settled): no activation cost. The
         // 「[消耗]1到5次500资金」 is effect content (rulebook L13-14), so there
         // is no `money >= 500` play gate -- an unaffordable in-body payment
         // takes the Q1 shortfall path. C# `CardCrimsonSoul.WhyNot` had one.

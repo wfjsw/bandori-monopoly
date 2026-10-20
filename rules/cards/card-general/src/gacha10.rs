@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const GACHA10: CardDef = CardDef::new(
     "通用:10次招募（1回限定）",
-    // TODO(规则书) NEGATION-AUDIT V2: no activation cost. The 「[消耗]1500资金」
+    // NEGATION-AUDIT V2 (settled): no activation cost. The 「[消耗]1500资金」
     // is effect content (rulebook L13-14), so there is no `money >= 1500` play
     // gate -- an unaffordable in-body payment takes the Q1 shortfall path
     // (mortgage, then bankruptcy). C# `CardGacha10.WhyNot` had one.

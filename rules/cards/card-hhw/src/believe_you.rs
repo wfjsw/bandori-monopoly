@@ -25,7 +25,7 @@ pub const BELIEVE_YOU: CardDef =
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBelieveYou.WhyNot`: refuses without another hand card / 800 money
-    // / a living rival. TODO(规则书) NEGATION-AUDIT V2: the **money** half is gone -- the
+    // / a living rival. NEGATION-AUDIT V2 (settled): the **money** half is gone -- the
     // 「消耗800资金」 is effect content, not an activation cost.
     // 规则书: 「至少有另一张手牌时可发动」 -- a real [限] on hand count, kept.
     let others_in_hand = ctx::cards_in(player_id, CardPile::Hand)

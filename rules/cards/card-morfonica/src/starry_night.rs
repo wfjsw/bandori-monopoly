@@ -20,7 +20,7 @@ const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 pub const STARRY_NIGHT: CardDef = CardDef::new(
     "Mor:蝴蝶飞舞的星月夜",
     &[
-        // TODO(规则书) NEGATION-AUDIT V2: no activation cost. The 「支付X次1000
+        // NEGATION-AUDIT V2 (settled): no activation cost. The 「支付X次1000
         // 的资金」 is effect content (rulebook L13-14), so there is no
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
