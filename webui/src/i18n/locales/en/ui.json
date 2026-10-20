@@ -348,7 +348,6 @@
   "deck.title": "Presets and decks",
   "deckPick.deckWindow": "Deck window",
   "deckPick.heading": "Build a 10-card starting deck for \"{{char}}\"",
-  "deckPick.hint": "Click a card to add or remove it (double-tap on touch); hover or tap to preview",
   "deckPick.picks": "Picked",
   "deckPick.presetAuto": "Auto-picked",
   "deckPick.presetCustom": "From the design sheet",

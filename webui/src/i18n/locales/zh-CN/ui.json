@@ -348,7 +348,6 @@
   "deck.title": "预组与卡组",
   "deckPick.deckWindow": "选卡时间",
   "deckPick.heading": "为「{{char}}」组初始卡组（10 张）",
-  "deckPick.hint": "点卡牌加入或移出（触屏双击）；悬停或点按预览",
   "deckPick.picks": "已选角色",
   "deckPick.presetAuto": "自动配的",
   "deckPick.presetCustom": "设计表定的",
