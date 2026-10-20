@@ -632,11 +632,11 @@ pub struct World {
     /// host-board match's `save()` is byte-identical to a pre-field save.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board: Option<Vec<crate::data::TileData>>,
-    /// v78: host-supplied recorded roll for a Filter body. `i32::MIN` = none.
+    /// v78: host-supplied recorded roll for a Filter body. `None` = none.
     /// The host pre-rolls into the recorded RNG stream before a DiceRollPlan /
     /// DiceRollValue Filter raise so the body can read it without calling `roll`.
-    #[serde(default = "no_recorded_roll")]
-    pub recorded_roll: i32,
+    #[serde(default)]
+    pub recorded_roll: Option<i32>,
     pub ask_seq: i32,
     pub signals: Vec<Signal>,
     /// Turn-end callbacks waiting for their turn end.
@@ -736,8 +736,6 @@ impl PartialEq for SharedFlash {
     }
 }
 
-fn no_recorded_roll() -> i32 { i32::MIN }
-
 impl World {
     /// Assemble a world around an already-built [`Rng`]: which stream the
     /// match runs on is the caller's choice (`Match::new` legacy xoshiro vs
@@ -761,7 +759,7 @@ impl World {
             rule_param_bonus: Default::default(),
             rule_params: Default::default(),
             board: None,
-            recorded_roll: i32::MIN,
+            recorded_roll: None,
             ask_seq: 0,
             signals: vec![],
             scheduled: vec![],

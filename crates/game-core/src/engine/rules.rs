@@ -105,9 +105,9 @@ pub struct TriggerBuy {
     pub price: i32,
     /// Ownership after the deal. `None` = the deal keeps its default (the
     /// buyer). A `BuyAssign` hook rewrites it with `set_deal_owner`.
-    pub deal_owner: Option<i32>,
-    /// Houses after the deal (default: as standing, unless a hook razes).
-    pub deal_houses: i32,
+    pub deal_owner: Option<Payee>,
+    /// Houses after the deal. `None` = as standing, unless a hook razes.
+    pub deal_houses: Option<i32>,
     /// Mortgage after the deal (default: cleared, except a Force buy keeps
     /// `FORCE_STAYS_MORTGAGED`).
     pub deal_mortgaged: bool,
@@ -126,15 +126,15 @@ impl TriggerBuy {
             seller: Payee::from_i32(seller),
             price,
             deal_owner: None,
-            deal_houses: 0,
+            deal_houses: None,
             deal_mortgaged: false,
         }
     }
 
     /// Attach the deal snapshot a `BuyAssign` window may rewrite.
-    pub fn deal(mut self, owner: i32, houses: i32, mortgaged: bool) -> Self {
+    pub fn deal(mut self, owner: Payee, houses: i32, mortgaged: bool) -> Self {
         self.deal_owner = Some(owner);
-        self.deal_houses = houses;
+        self.deal_houses = Some(houses);
         self.deal_mortgaged = mortgaged;
         self
     }

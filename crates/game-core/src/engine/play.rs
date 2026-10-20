@@ -8,6 +8,7 @@
 
 use super::cx::{Ask, Cx, Flow, Halt};
 pub(crate) use super::move_ctx::MoveCtx as Move;
+use game_kinds::{Payee, Seat, Tile};
 use super::move_ctx::MoveKind;
 use super::rules::{raise, Dest, Trigger, TriggerBuy, TriggerPay};
 use super::world::{Extreme, Signal, WalkSeg, START_HAND, START_MONEY};
@@ -76,7 +77,7 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     if plan.kind != before.kind {
         m.kind = plan.kind;
     }
-    if plan.teleport_to != before.teleport_to && plan.teleport_to >= 0 {
+    if plan.teleport_to != before.teleport_to && plan.teleport_to.is_some() {
         m.teleport_to = plan.teleport_to;
     }
     if plan.resolve != before.resolve {
@@ -94,20 +95,20 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     if plan.signed != before.signed {
         m.signed = plan.signed;
     }
-    if plan.steps != before.steps && plan.steps >= 0 {
+    if plan.steps != before.steps && plan.steps.is_some() {
         m.steps = plan.steps;
     }
     if plan.extra_steps != before.extra_steps {
         m.extra_steps = plan.extra_steps;
     }
-    if plan.start != before.start && plan.start >= 0 {
+    if plan.start != before.start && plan.start.is_some() {
         m.start = plan.start;
         m.start_why = plan.start_why.clone();
     }
     if plan.reverse != before.reverse {
         m.reverse = plan.reverse;
     }
-    if plan.stop_at != before.stop_at && plan.stop_at >= 0 {
+    if plan.stop_at != before.stop_at && plan.stop_at.is_some() {
         m.stop_at = plan.stop_at;
     }
     if plan.parity != before.parity && plan.parity >= 0 {
@@ -739,7 +740,7 @@ impl Cx<'_> {
             );
             // The move did not run: drop the one-shot `teleport_to` the body
             // wrote for it (see `main_move`) so it cannot shape a later move.
-            self.w.turn.plan.teleport_to = -1;
+            self.w.turn.plan.teleport_to = None;
             return Ok(());
         }
         if as_main {
@@ -748,8 +749,8 @@ impl Cx<'_> {
         plan.player_id = i;
         // A substitution (hallucination 「上一名玩家代替进行此次投掷」) writes
         // `roller` through `plan::set_roller`; otherwise the mover rolls.
-        if plan.roller == Move::ROLLER_UNSET {
-            plan.roller = i;
+        if plan.roller.is_none() {
+            plan.roller = Some(Seat(i as i32));
         }
         plan.main = as_main;
         // Only the turn player's *main* move drives the stage machine; a card
@@ -758,20 +759,20 @@ impl Cx<'_> {
         if as_main {
             self.w.st.step = stage::MOVE;
         }
-        if plan.teleport_to >= 0 {
-            let to = plan.teleport_to as usize;
+        if plan.teleport_to.is_some() {
+            let to = plan.teleport_to.unwrap().0 as usize;
             let resolve = plan.resolve;
             let why = plan.why.clone();
             // One-shot: see `main_move`. A `card_move` that teleported must not
             // leave the destination on the shared turn plan for a later move.
-            self.w.turn.plan.teleport_to = -1;
+            self.w.turn.plan.teleport_to = None;
             // Carry the skill-source tag onto the shared plan so `teleport_as`
             // stamps it on the raise payload, then clear it (one-shot).
             self.w.turn.plan.by_skill = plan.by_skill;
             self.teleport_as(i, to, resolve, why, as_main)?;
             self.w.turn.plan.by_skill = false;
         } else {
-            if plan.steps < 0 {
+            if plan.steps.is_none() {
                 // No fixed step count: roll it now, with the same raise points.
                 self.w.turn.plan = plan.clone();
                 // `settle_redirect` is engine-set on `card_settle_move` only;
@@ -781,11 +782,11 @@ impl Cx<'_> {
                 plan = self.w.turn.plan.clone();
                 // A `rollPlan` body may have rewritten this move as a teleport
                 // (same branch `main_move` takes for the turn's main move).
-                if plan.teleport_to >= 0 {
-                    let to = plan.teleport_to as usize;
+                if plan.teleport_to.is_some() {
+                    let to = plan.teleport_to.unwrap().0 as usize;
                     let resolve = plan.resolve;
                     let why = plan.why.clone();
-                    self.w.turn.plan.teleport_to = -1;
+                    self.w.turn.plan.teleport_to = None;
                     self.w.turn.plan.by_skill = plan.by_skill;
                     self.teleport_as(i, to, resolve, why, as_main)?;
                     self.w.turn.plan.by_skill = false;
@@ -809,7 +810,7 @@ impl Cx<'_> {
                         plan.roll = steps.max(0);
                     }
                     if !plan.signed {
-                        plan.roll = plan.roll.max(plan.min_roll);
+                        if let Some(mr) = plan.min_roll { plan.roll = plan.roll.max(mr); };
                     }
                     // A `rollAfter` / `diceRollResult` body may have cleared resolve
                     // on the turn plan (`plan::set_resolve(false)`, e.g.
@@ -823,13 +824,13 @@ impl Cx<'_> {
                     }
                 }
             }
-            if plan.teleport_to < 0 && !plan.cancelled && !self.out(i) {
+            if plan.teleport_to.is_none() && !plan.cancelled && !self.out(i) {
                 self.walk(&mut plan)?;
             }
         }
         // One-shot: see `main_move`. A mid-move hook write (or a walk that
         // ignored one) must not shape a later move in this turn.
-        self.w.turn.plan.teleport_to = -1;
+        self.w.turn.plan.teleport_to = None;
         self.w.turn.plan.by_skill = false;
         // Record the walked length: `lastWalk` is written from `total`.
         if as_main {
@@ -955,12 +956,12 @@ impl Cx<'_> {
         m.player_id = player_id;
         m.main = main;
         m.kind = MoveKind::Teleport;
-        m.teleport_to = tile as i32;
+        m.teleport_to = Some(Tile(tile as i32));
         m.from = tile as i32;
         m.to = tile as i32;
-        m.steps = 0;
+        m.steps = Some(0);
         m.extra_steps = 0;
-        m.start = tile as i32;
+        m.start = Some(Tile(tile as i32));
         m
     }
 
@@ -1111,16 +1112,18 @@ impl Cx<'_> {
             player_id,
             tile = tile as i32,
             @b TriggerBuy::new(purchase::BuyKind::Acquire, from as i32, price).deal(
-                deal.owner_after,
+                Payee::from_i32(deal.owner_after),
                 deal.houses_after,
                 deal.mortgaged_after,
             )
         )?;
         if let Some(b) = at.buy {
             if let Some(o) = b.deal_owner {
-                deal.owner_after = o;
+                deal.owner_after = o.as_i32();
             }
-            deal.houses_after = b.deal_houses;
+            if let Some(h) = b.deal_houses {
+                deal.houses_after = h;
+            }
             deal.mortgaged_after = b.deal_mortgaged;
         }
         purchase::assign_deed(&mut self.w, tile, deal.owner_after, deal.houses_after, deal.mortgaged_after);
@@ -1231,7 +1234,7 @@ impl Cx<'_> {
         // shaped carries over.
         let mut m = self.w.turn.plan.clone();
         m.player_id = i;
-        m.roller = roller;
+        m.roller = Some(Seat(roller as i32));
         m.main = true;
         m.from = 0;
         m.to = 0;
@@ -1276,17 +1279,17 @@ impl Cx<'_> {
             // behind -- must not turn a later move in the same turn into a
             // teleport (two_donuts' settle hook writes it for the owner while
             // the turn player still has a main move to take).
-            if m.teleport_to >= 0 {
+            if m.teleport_to.is_some() {
                 // A `rollPlan` body -- or a Play body before the roll
                 // (kanon_march 「视为本次主要移动」, lisa_goddess 「将此次移动变为
                 // 传送」, ras 「下一次主要移动可变为传送至…」) -- rewrote this
                 // move as a teleport: the destination is the plan's, and no dice
                 // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
                 // …那格」 writes it from a `DiceRollPlan` hook.
-                let to = m.teleport_to as usize;
+                let to = m.teleport_to.unwrap().0 as usize;
                 let resolve = m.resolve;
                 let why = m.why.clone();
-                self.w.turn.plan.teleport_to = -1;
+                self.w.turn.plan.teleport_to = None;
                 // `m.main` is true here (the turn's main move); pass it so the
                 // raise payload's `move.main` discriminates.
                 self.teleport_as(i, to, resolve, why, m.main)?;
@@ -1318,7 +1321,7 @@ impl Cx<'_> {
                 // to the final face after the counteractions, so a card that
                 // pushes the roll down still respects the floor.
                 if !m.signed {
-                    m.roll = m.roll.max(m.min_roll);
+                    if let Some(mr) = m.min_roll { m.roll = m.roll.max(mr); };
                 }
                 // A `rollAfter` / `diceRollResult` body may have cleared resolve on
                 // the turn plan (`plan::set_resolve(false)`, e.g. 不要背负期待's
@@ -1348,7 +1351,7 @@ impl Cx<'_> {
                 let immobile = !exempt && !self.w.gate_open(self.rules, super::Gate::Move, i);
                 if immobile {
                     m.roll = 0;
-                    m.steps = 0;
+                    m.steps = Some(0);
                     m.resolve = false;
                 }
                 self.walk(&mut m)?;
@@ -1357,7 +1360,7 @@ impl Cx<'_> {
             // `DiceRollAfter` floor, saki_crychic's `SettleBefore` nudge): this
             // move is over and the write must not shape the next one. Same for
             // the skill-source tag.
-            self.w.turn.plan.teleport_to = -1;
+            self.w.turn.plan.teleport_to = None;
             self.w.turn.plan.by_skill = false;
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
             // 玩家按行动顺序依次触发结算」:
@@ -1375,7 +1378,7 @@ impl Cx<'_> {
                 }
                 let mut fm = m.clone();
                 fm.player_id = fi;
-                fm.roller = fi;
+                fm.roller = Some(Seat(fi as i32));
                 fm.main = false;
                 fm.followers.clear();
                 fm.path.clear();
@@ -1386,8 +1389,8 @@ impl Cx<'_> {
                 fm.cancelled = false;
                 fm.from = 0;
                 fm.to = 0;
-                if fm.teleport_to >= 0 {
-                    let to = fm.teleport_to as usize;
+                if fm.teleport_to.is_some() {
+                    let to = fm.teleport_to.unwrap().0 as usize;
                     let resolve = fm.resolve;
                     let why = fm.why.clone();
                     self.teleport(fi, to, resolve, why)?;
@@ -1465,9 +1468,9 @@ impl Cx<'_> {
         // there with no landing effect.
         // `m.from` is the move start either way -- the [pass] the start square reward's
         // 「[move start]不为the start square」 clause reads it.
-        if m.start >= 0 {
-            self.w.st.players[i].pos = m.start;
-            m.from = m.start;
+        if let Some(start) = m.start {
+            self.w.st.players[i].pos = start.0;
+            m.from = start.0;
         } else {
             m.from = self.w.st.players[i].pos;
         }
@@ -1496,7 +1499,7 @@ impl Cx<'_> {
         // base distance and Total/Remaining include existing extra steps.
         // A post-roll skill can preview its landing and extend this move
         // without rolling again or dropping an earlier movement modifier.
-        let base_steps = if m.steps >= 0 { m.steps } else { m.roll };
+        let base_steps = m.steps.unwrap_or(m.roll);
         m.total = base_steps.max(0) + m.extra_steps.max(0);
         m.remaining = m.total;
         let t = raise!(self, "moveBefore", i, @m m, tile = m.from, value = base_steps)?;
@@ -1508,7 +1511,7 @@ impl Cx<'_> {
         fold_plan_delta(m, &plan_before, &self.w.turn.plan);
         // Base distance: a stored step count overrides the roll
         // (`steps = if m.steps >= 0 { m.steps } else { m.roll }`).
-        let steps = if m.steps >= 0 { m.steps } else { m.roll };
+        let steps = m.steps.unwrap_or(m.roll);
         // Snapshot the log-line fields: the loop below writes `m.total` /
         // `m.remaining` / `m.path`, so the closure must not borrow `m`.
         let (main, roller, why, dir, resolve) = (m.main, m.roller, m.why.clone(), m.dir(), m.resolve);
@@ -1516,7 +1519,8 @@ impl Cx<'_> {
             let base = if main {
                 Msg::new("log.roll").opt(
                     "by",
-                    (roller != i).then(|| Msg::new("log.part.rolled_by").player_id("who", roller)),
+                    (roller != Some(Seat(i as i32)))
+                        .then(|| Msg::new("log.part.rolled_by").player_id("who", roller.map(|r| r.0).unwrap_or(i as i32))),
                 )
             } else {
                 Msg::new(if dir < 0 {
@@ -1640,13 +1644,13 @@ impl Cx<'_> {
             }
             // 「强制停下」. A hook writes the *plan* (`plan::set_stop_at`),
             // and the walk runs on its own `Move`; pull that write in and stop here.
-            if self.w.turn.plan.stop_at >= 0 {
+            if self.w.turn.plan.stop_at.is_some() {
                 m.stop_at = self.w.turn.plan.stop_at;
             }
             if self.w.turn.plan.resolve != m.resolve {
                 m.resolve = self.w.turn.plan.resolve;
             }
-            if m.stop_at >= 0 && next == m.stop_at {
+            if m.stop_at == Some(Tile(next)) {
                 m.stopped = true;
                 break;
             }
@@ -1720,7 +1724,7 @@ impl Cx<'_> {
         m.main = main;
         m.resolve = resolve;
         m.kind = MoveKind::Teleport;
-        m.teleport_to = to as i32;
+        m.teleport_to = Some(Tile(to as i32));
         m.from = from;
         m.path = vec![to as i32];
         m.total = 1;
@@ -1738,8 +1742,8 @@ impl Cx<'_> {
             return Ok(());
         }
         fold_plan_delta(&mut m, &plan_before, &self.w.turn.plan);
-        let to = if m.teleport_to >= 0 {
-            m.teleport_to as usize
+        let to = if m.teleport_to.is_some() {
+            m.teleport_to.unwrap().0 as usize
         } else {
             to
         };
@@ -2458,16 +2462,18 @@ impl Cx<'_> {
                 i,
                 tile = t as i32,
                 @b TriggerBuy::new(purchase::BuyKind::Force, owner as i32, price).deal(
-                    deal.owner_after,
+                    Payee::from_i32(deal.owner_after),
                     deal.houses_after,
                     deal.mortgaged_after,
                 )
             )?;
             if let Some(b) = at.buy {
                 if let Some(o) = b.deal_owner {
-                    deal.owner_after = o;
+                    deal.owner_after = o.as_i32();
                 }
-                deal.houses_after = b.deal_houses;
+                if let Some(h) = b.deal_houses {
+                    deal.houses_after = h;
+                }
                 deal.mortgaged_after = b.deal_mortgaged;
             }
             purchase::assign_deed(
@@ -2764,16 +2770,18 @@ impl Cx<'_> {
             i,
             tile = t as i32,
             @b TriggerBuy::new(kind, deal.seller, price).deal(
-                deal.owner_after,
+                Payee::from_i32(deal.owner_after),
                 deal.houses_after,
                 deal.mortgaged_after,
             )
         )?;
         if let Some(b) = at.buy {
             if let Some(o) = b.deal_owner {
-                deal.owner_after = o;
+                deal.owner_after = o.as_i32();
             }
-            deal.houses_after = b.deal_houses;
+            if let Some(h) = b.deal_houses {
+                deal.houses_after = h;
+            }
             deal.mortgaged_after = b.deal_mortgaged;
         }
         purchase::assign_deed(
@@ -4166,16 +4174,18 @@ impl Cx<'_> {
             b,
             tile = t as i32,
             @b TriggerBuy::new(purchase::BuyKind::Auction, -1, bid).deal(
-                deal.owner_after,
+                Payee::from_i32(deal.owner_after),
                 deal.houses_after,
                 deal.mortgaged_after,
             )
         )?;
         if let Some(b) = at.buy {
             if let Some(o) = b.deal_owner {
-                deal.owner_after = o;
+                deal.owner_after = o.as_i32();
             }
-            deal.houses_after = b.deal_houses;
+            if let Some(h) = b.deal_houses {
+                deal.houses_after = h;
+            }
             deal.mortgaged_after = b.deal_mortgaged;
         }
         purchase::assign_deed(

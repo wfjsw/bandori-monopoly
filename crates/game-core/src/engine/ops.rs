@@ -33,8 +33,8 @@ impl World {
     pub fn set_signed(&mut self, on: bool) {
         self.turn.plan.signed = on;
     }
-    /// Force the walk to stop here; `-1` clears.
-    pub fn set_stop_at(&mut self, tile: i32) {
+    /// Force the walk to stop here; `None` clears.
+    pub fn set_stop_at(&mut self, tile: Option<game_kinds::Tile>) {
         self.turn.plan.stop_at = tile;
     }
     /// Restrict the walk to odd/even tiles; `-1` either.
@@ -58,8 +58,9 @@ impl World {
     }
     /// The walk cannot build where it lands.
 
-    /// Clamp the final face up to this after the counteractions.
-    pub fn set_min_roll(&mut self, n: i32) {
+    /// Clamp the final face up to this after the counteractions. `None` = no
+    /// floor.
+    pub fn set_min_roll(&mut self, n: Option<i32>) {
         self.turn.plan.min_roll = n;
     }
     /// Extra steps added to the walk (it grows as it runs).
@@ -70,17 +71,17 @@ impl World {
     /// Passing the start square pays nothing on this walk.
 
     /// The tile the walk begins on instead of where the player stands
-    /// (`-1` = the player's own tile). `why` names the effect on the log line.
-    pub fn set_start(&mut self, tile: i32, why: &str) {
+    /// (`None` = the player's own tile). `why` names the effect on the log line.
+    pub fn set_start(&mut self, tile: Option<game_kinds::Tile>, why: &str) {
         self.turn.plan.start = tile;
         self.turn.plan.start_why = why.to_string();
     }
-    /// The movement is a teleport to this tile (`-1` = a walk).
+    /// The movement is a teleport to this tile (`None` = a walk / clear).
     /// `card_move` branches on this.
-    pub fn set_teleport_to(&mut self, tile: i32) {
+    pub fn set_teleport_to(&mut self, tile: Option<game_kinds::Tile>) {
         self.turn.plan.teleport_to = tile;
         // Naming a destination makes it a teleport.
-        self.turn.plan.kind = if tile >= 0 {
+        self.turn.plan.kind = if tile.is_some() {
             super::move_ctx::MoveKind::Teleport
         } else {
             super::move_ctx::MoveKind::Walk
@@ -179,7 +180,7 @@ impl World {
     }
 
     /// Where the walk is forced to stop, or -1.
-    pub fn move_stop_at(&self) -> i32 {
+    pub fn move_stop_at(&self) -> Option<game_kinds::Tile> {
         self.turn.plan.stop_at
     }
     /// -1 either, 0 even, 1 odd.

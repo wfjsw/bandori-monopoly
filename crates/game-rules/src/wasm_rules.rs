@@ -2080,12 +2080,12 @@ impl CardWorld for Run {
             b.price = v;
         }
     }
-    fn set_trigger_deal_owner(&mut self, v: i32) {
+    fn set_trigger_deal_owner(&mut self, v: Option<game_kinds::Payee>) {
         if let Some(b) = &mut self.trigger.buy {
-            b.deal_owner = Some(v);
+            b.deal_owner = v;
         }
     }
-    fn set_trigger_deal_houses(&mut self, v: i32) {
+    fn set_trigger_deal_houses(&mut self, v: Option<i32>) {
         if let Some(b) = &mut self.trigger.buy {
             b.deal_houses = v;
         }
@@ -2187,13 +2187,13 @@ impl CardWorld for Run {
             self.outcome_plan("log.outcome.plan_steps", -1, v, "");
         }
     }
-    fn set_roller(&mut self, v: i32) {
+    fn set_roller(&mut self, v: Option<game_kinds::Seat>) {
         self.stamp_skill_source();
         // `plan::set_roller` -- the stand-in roller for 「上一名玩家代替进行此次
         // 投掷」. `MoveCtx::roller` rides `TurnCtx.plan`, so `main_move`'s
         // post-`rollPlan` re-clone picks it up.
-        if v >= 0 {
-            self.world.turn.plan.roller = v as usize;
+        if v.is_some() {
+            self.world.turn.plan.roller = v;
         }
     }
     fn set_reverse(&mut self, v: bool) {
@@ -2204,12 +2204,12 @@ impl CardWorld for Run {
         self.stamp_skill_source();
         self.world.set_signed(v);
     }
-    fn set_stop_at(&mut self, v: i32) {
+    fn set_stop_at(&mut self, v: Option<game_kinds::Tile>) {
         self.stamp_skill_source();
         let was = self.world.move_stop_at();
         self.world.set_stop_at(v);
         if v != was {
-            self.outcome_plan("log.outcome.plan_stop", v, 0, "");
+            self.outcome_plan("log.outcome.plan_stop", v.map(|t| t.0).unwrap_or(-1), 0, "");
         }
     }
     fn set_parity(&mut self, v: i32) {
@@ -2235,13 +2235,13 @@ impl CardWorld for Run {
         self.stamp_skill_source();
         self.world.set_tag(key, v);
     }
-    fn recorded_roll(&self) -> i32 {
+    fn recorded_roll(&self) -> Option<i32> {
         self.world.recorded_roll
     }
     fn move_tag(&self, key: &str) -> i32 {
         self.world.move_tag(key)
     }
-    fn set_min_roll(&mut self, v: i32) {
+    fn set_min_roll(&mut self, v: Option<i32>) {
         self.stamp_skill_source();
         self.world.set_min_roll(v);
     }
@@ -2292,15 +2292,15 @@ impl CardWorld for Run {
         self.world.set_more_steps(v);
     }
 
-    fn set_teleport_to(&mut self, v: i32) {
+    fn set_teleport_to(&mut self, v: Option<game_kinds::Tile>) {
         self.stamp_skill_source();
         self.world.set_teleport_to(v);
-        self.outcome_plan("log.outcome.plan_teleport", v, 0, "");
+        self.outcome_plan("log.outcome.plan_teleport", v.map(|t| t.0).unwrap_or(-1), 0, "");
     }
-    fn set_start(&mut self, v: i32, why: &str) {
+    fn set_start(&mut self, v: Option<game_kinds::Tile>, why: &str) {
         self.stamp_skill_source();
         self.world.set_start(v, why);
-        self.outcome_plan("log.outcome.plan_start", v, 0, why);
+        self.outcome_plan("log.outcome.plan_start", v.map(|t| t.0).unwrap_or(-1), 0, why);
     }
     fn clear_dice(&mut self) {
         self.stamp_skill_source();
@@ -2322,7 +2322,7 @@ impl CardWorld for Run {
     fn move_stopped(&self) -> bool {
         self.world.move_stopped()
     }
-    fn move_stop_at(&self) -> i32 {
+    fn move_stop_at(&self) -> Option<game_kinds::Tile> {
         self.world.move_stop_at()
     }
     fn move_parity(&self) -> i32 {
@@ -2814,7 +2814,7 @@ impl<M: CardModules> RulesBridge<M> {
             // faces) while `recorded_roll` is still deterministic per raise.
             let mut w = cx.world_copy();
             let mut peek = w.rng.clone();
-            w.recorded_roll = peek.d(6) as i32;
+            w.recorded_roll = Some(peek.d(6) as i32);
             cx.swap_world(w);
         }
         self.drive_inner(cx, call, card_id, uid, trigger, true)
@@ -3503,7 +3503,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // The gate refused the move: drop the one-shot `teleport_to`
                 // the body wrote for it so it cannot shape a later move.
                 let mut w = cx.world_copy();
-                w.turn.plan.teleport_to = -1;
+                w.turn.plan.teleport_to = None;
                 cx.swap_world(w);
             }
             return Ok(allowed as i32);
@@ -3783,17 +3783,23 @@ impl<M: CardModules> RulesBridge<M> {
                         value,
                     );
                     if deal_owner != i32::MIN {
-                        b = b.deal(deal_owner, deal_houses, deal_mortgaged != 0);
+                        b = b.deal(
+                            game_kinds::Payee::from_i32(deal_owner),
+                            deal_houses,
+                            deal_mortgaged != 0,
+                        );
                     }
                     t.buy = Some(b);
                 }
             })?;
             let cancelled = t.is_cancelled();
             if is_deal {
+                // Flatten boundary: `Option<Payee>` / `Option<i32>` -> wire
+                // (`i32::MIN` = no rewrite) for the packed answer.
                 let (o, h, m) = match t.buy {
                     Some(b) => (
-                        b.deal_owner.unwrap_or(deal_owner),
-                        b.deal_houses,
+                        b.deal_owner.map(|p| p.as_i32()).unwrap_or(deal_owner),
+                        b.deal_houses.unwrap_or(deal_houses),
                         b.deal_mortgaged,
                     ),
                     None => (deal_owner, deal_houses, deal_mortgaged != 0),
@@ -7975,8 +7981,8 @@ fn buy_trigger(
                 .unwrap_or(card_sdk::abi::BuyKind::Land),
             seller: game_core::engine::rules::Payee::from_i32(q.seller),
             price,
-            deal_owner: Some(q.player as i32),
-            deal_houses: st.houses.get(t).copied().unwrap_or(0),
+            deal_owner: Some(game_kinds::Payee::Seat(game_kinds::Seat(q.player as i32))),
+            deal_houses: Some(st.houses.get(t).copied().unwrap_or(0)),
             deal_mortgaged: st.mortgaged.get(t).copied().unwrap_or(false),
         }),
         ..Trigger::default()
@@ -8420,8 +8426,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         .unwrap_or(card_sdk::abi::BuyKind::Land),
                     seller: game_core::engine::rules::Payee::from_i32(-1),
                     price: 0,
-                    deal_owner: Some(player_id as i32),
-                    deal_houses: st.houses.get(tile).copied().unwrap_or(0),
+                    deal_owner: Some(game_kinds::Payee::Seat(game_kinds::Seat(player_id as i32))),
+                    deal_houses: Some(st.houses.get(tile).copied().unwrap_or(0)),
                     deal_mortgaged: false,
                 });
             },

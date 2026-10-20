@@ -5489,8 +5489,8 @@ impl CardWorld for NullWorld {
         0
     }
     fn set_trigger_price(&mut self, _: i32) {}
-    fn set_trigger_deal_owner(&mut self, _: i32) {}
-    fn set_trigger_deal_houses(&mut self, _: i32) {}
+    fn set_trigger_deal_owner(&mut self, _: Option<game_kinds::Payee>) {}
+    fn set_trigger_deal_houses(&mut self, _: Option<i32>) {}
     fn set_trigger_deal_mortgaged(&mut self, _: i32) {}
     fn set_trigger_reason(&mut self, _: &str) {}
     fn tile_group(&self, _: i32) -> i32 {

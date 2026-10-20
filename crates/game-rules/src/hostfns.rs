@@ -1309,17 +1309,19 @@ pub fn raise<C: HostCtx>(
     let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
     let trig = c.st().wr().trigger();
     let tile = trig.tile;
+    // Flatten boundary: `Option<Payee>` / `Option<i32>` <-> wire `i32`
+    // (`i32::MIN` = no rewrite) on `HostRequest::Raise`.
     let (deal_owner, deal_houses, deal_mortgaged) = if is_deal {
         match trig.buy {
             Some(b) => (
-                b.deal_owner.unwrap_or(i32::MIN),
-                b.deal_houses,
+                b.deal_owner.map(|p| p.as_i32()).unwrap_or(i32::MIN),
+                b.deal_houses.unwrap_or(i32::MIN),
                 b.deal_mortgaged as i32,
             ),
-            None => (i32::MIN, 0, 0),
+            None => (i32::MIN, i32::MIN, 0),
         }
     } else {
-        (i32::MIN, 0, 0)
+        (i32::MIN, i32::MIN, 0)
     };
     let req = HostRequest::Raise {
         player_id,
@@ -1335,9 +1337,12 @@ pub fn raise<C: HostCtx>(
         let (_cancelled, o, h, m) = unpack_deal(packed);
         let st = c.st_mut();
         if o != i32::MIN {
-            st.w().set_trigger_deal_owner(o);
+            st.w()
+                .set_trigger_deal_owner(Some(game_kinds::Payee::from_i32(o)));
         }
-        st.w().set_trigger_deal_houses(h);
+        if h != i32::MIN {
+            st.w().set_trigger_deal_houses(Some(h));
+        }
         st.w().set_trigger_deal_mortgaged(m as i32);
     }
     Ok(packed)
@@ -2305,26 +2310,37 @@ pub fn trig_set_price<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
     Ok(())
 }
 
+/// Flatten boundary: `Option<Payee>` <-> wire `i32` (`-1` = bank / unset).
 pub fn trig_deal_owner<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st()
         .wr()
         .trigger()
         .buy
         .and_then(|b| b.deal_owner)
+        .map(|p| p.as_i32())
         .unwrap_or(-1))
 }
 
 pub fn trig_set_deal_owner<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_deal_owner(v);
+    // Flatten boundary: wire `i32` -> `Option<Payee>`.
+    c.st_mut()
+        .w()
+        .set_trigger_deal_owner(Some(game_kinds::Payee::from_i32(v)));
     Ok(())
 }
 
+/// Flatten boundary: `Option<i32>` <-> wire `i32` (`0` when unset).
 pub fn trig_deal_houses<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().trigger().buy.map_or(0, |b| b.deal_houses))
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .buy
+        .and_then(|b| b.deal_houses)
+        .unwrap_or(0))
 }
 
 pub fn trig_set_deal_houses<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_deal_houses(v);
+    c.st_mut().w().set_trigger_deal_houses(Some(v));
     Ok(())
 }
 
@@ -2643,7 +2659,10 @@ pub fn add_marker_max<C: HostCtx>(
 }
 
 pub fn set_roller<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_roller(v);
+    // Flatten boundary: wire `i32` -> typed. Negative = no claim.
+    c.st_mut()
+        .w()
+        .set_roller(if v >= 0 { Some(game_kinds::Seat(v)) } else { None });
     Ok(())
 }
 
@@ -2663,7 +2682,10 @@ pub fn set_signed<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
 }
 
 pub fn set_stop_at<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_stop_at(v);
+    // Flatten boundary: wire `i32` -> `Option<Tile>`. Negative = clear.
+    c.st_mut()
+        .w()
+        .set_stop_at(if v >= 0 { Some(game_kinds::Tile(v)) } else { None });
     Ok(())
 }
 
@@ -2698,14 +2720,20 @@ pub fn set_trigger_cancelled<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
 }
 
 pub fn set_teleport_to<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_teleport_to(v);
+    // Flatten boundary: wire `i32` -> `Option<Tile>`. Negative = walk / clear.
+    c.st_mut()
+        .w()
+        .set_teleport_to(if v >= 0 { Some(game_kinds::Tile(v)) } else { None });
     Ok(())
 }
 
 pub fn set_start<C: HostCtx>(c: &mut C, t: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let why = guest_str(c, p, n)?;
-            c.st_mut().w().set_start(t, &why);
-            Ok(())
+    let why = guest_str(c, p, n)?;
+    // Flatten boundary: wire `i32` -> `Option<Tile>`. Negative = own tile.
+    c.st_mut()
+        .w()
+        .set_start(if t >= 0 { Some(game_kinds::Tile(t)) } else { None }, &why);
+    Ok(())
 }
 
 pub fn set_base_dice<C: HostCtx>(c: &mut C, count: i32, sides: i32, p: i32, n: i32) -> Result<(), HostErr> {
@@ -2741,14 +2769,16 @@ pub fn set_tag_id<C: HostCtx>(c: &mut C, key_id: i32, v: i32) -> Result<(), Host
     Ok(())
 }
 
-/// v78: host-supplied recorded roll (`i32::MIN` when none). The host fills
-/// this before a Filter raise that would have rolled dice.
+/// v78: host-supplied recorded roll (wire `i32::MIN` when none). The host
+/// fills this before a Filter raise that would have rolled dice.
+/// Flatten boundary: `Option<i32>` <-> wire `i32`.
 pub fn recorded_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().recorded_roll())
+    Ok(c.st().wr().recorded_roll().unwrap_or(i32::MIN))
 }
 
 pub fn set_min_roll<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_min_roll(v);
+    // Flatten boundary: wire `i32` -> `Option<i32>`. `0` = no floor.
+    c.st_mut().w().set_min_roll(if v > 0 { Some(v) } else { None });
     Ok(())
 }
 
@@ -2810,7 +2840,8 @@ pub fn set_more_steps<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
 }
 
 pub fn move_stop_at<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().move_stop_at())
+    // Flatten boundary: `Option<Tile>` -> wire `i32` (`-1` = none).
+    Ok(c.st().wr().move_stop_at().map(|t| t.0).unwrap_or(-1))
 }
 
 pub fn move_stopped<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {

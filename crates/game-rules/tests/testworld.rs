@@ -366,12 +366,12 @@ impl CardWorld for TestWorld {
             b.price = v;
         }
     }
-    fn set_trigger_deal_owner(&mut self, v: i32) {
+    fn set_trigger_deal_owner(&mut self, v: Option<game_kinds::Payee>) {
         if let Some(b) = &mut self.trigger.buy {
-            b.deal_owner = Some(v);
+            b.deal_owner = v;
         }
     }
-    fn set_trigger_deal_houses(&mut self, v: i32) {
+    fn set_trigger_deal_houses(&mut self, v: Option<i32>) {
         if let Some(b) = &mut self.trigger.buy {
             b.deal_houses = v;
         }
