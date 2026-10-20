@@ -73,7 +73,7 @@ A tag with no item is a backlog bug — file it.
 | `rules/cards/card-morfonica` | 2 | CH-07, MOVE-13 |
 | `rules/cards/card-mujica` | 8 | CH-05, CH-09, LOW-03, NYAMU-01, SKILL-04, LOW-04 |
 | `rules/cards/card-mygo` | 4 | CH-07, CRYSTAL-02, LOY-ANON-01 |
-| `rules/cards/card-pp` | 6 | AYA-GRANT-01, AYA-LONG-01, LOY-DREAM-01, ABI-07, ABI-10 |
+| `rules/cards/card-pp` | 6 | AYA-LONG-01 **closed**, LOY-DREAM-01, ABI-07, ABI-10 |
 | `rules/cards/card-ppp` | 1 | CRYSTAL-06 |
 | `rules/cards/card-ras` | 8 | ABI-01, ABI-03, CH-05, CH-11, LOY-GUERRILLA-01, MONEY-04 |
 | `rules/cards/card-roselia` | 5 | CH-07, LISA-BOND-01, NFO-CANCEL-01, CRYSTAL-08, MONEY-04 |
@@ -1838,16 +1838,22 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **locations**: `rules/status/src/exile.rs:47-49`
 - **capability**: Untargetable / on-board gate kinds (today `MatchPlayer::status_gates`).
 
-## AYA-GRANT-01 — PP (1) skill-attachment grant fires the wrong (2) — **high**
-- **kind**: implementation bug
-- **class**: B
-- **severity**: **high** (a granted skill runs someone else's body)
-- **suggested batch**: skills: PP
-- **locations**: `rules/skills/skill-personas/src/aya_with.rs:13-16`
-- **rulebook**: 「获得X的（2）技能」.
-- **current**: `H.ReplaceSkill` shape is not built — a non-P◇P player pressing
-  this card presses 丸山彩's own (2).
-- **capability**: skill-attachment grant that swaps the (2) body.
+## AYA-GRANT-01 — PP (1) skill-attachment grant fires the wrong (2)
+- **status**: **not a bug** (2026-10-20, `batch3b-aya-grant`) — closed as **D**.
+- **was**: the in-source note claimed a non-P◇P player pressing the granted
+  skill runs 「丸山彩's own (2), which is the wrong clause」, and asked for an
+  `H.ReplaceSkill` shape.
+- **why it is not a bug**: the clause names the character — 「所有非Pastel✽Palettes
+  玩家获得**丸山彩**的（2）技能」 — so the grantee running 丸山彩's (2) **is** the
+  rulebook text. `H.ReplaceSkill` is C# machinery for reaching that clause (it
+  replaces the (2) slot); we place the skill rule on the grantee's field, which
+  is the same clause by a different mechanism. C# is not a spec. Each of
+  `chisato_frank` / `eve_unify` likewise places its own named skill
+  (「获得白鹭千圣的（2）技能」 / 「获得若宫伊芙的（2）技能」).
+- **pinned**: `aya_with_grants_ayaa_2_to_non_pp_players` (the non-P◇P seat gets
+  丸山彩's (2); a different P◇P seat does not, and keeps her own),
+  `aya_flip_all_pp_clause2_crystal` (the grantee runs 丸山彩's (2) body).
+- **action taken**: the in-source note is rewritten as a settled reading.
 
 ## AYA-POOL-01 — 「将Y个…变正」 pool-of-Y vs per-seat remaining-Y
 - **kind**: rulebook divergence
@@ -2711,7 +2717,7 @@ several A/C.)*
 | HostRequest handlers / reply sentinels | ABI-04, ABI-09, HOST-05 | (HOST-06/07/08/13 fixed) |
 | crystal/marker accounting | CRYSTAL-02/05/06/07/08, STA-01 **closed**, STA-04 **closed**, HAG-01, HARU-SOYO-FX, MONEY-07, **DONUT-VOID-01**, **ABI-MARKER-SPENT** | 1 high via CH-07 |
 | draw/discard pipeline | ABI-07, ABI-08, DRAW-OUT-01, CH-13 fixed | |
-| skills: PP | **AYA-GRANT-01 (high)**, AYA-POOL-01 | 1 high B |
+| skills: PP | AYA-GRANT-01 **closed (not a bug)**, AYA-POOL-01 | 0 |
 | skills: Roselia / CRYCHIC | SKILL-05, SKILL-07, TOMORI-BIND-01 | |
 | skills: Mujica | SKILL-04, CH-08, NYAMU-01 | |
 | skills: CiRCLE / sumimi / HHW | SKILL-06, SKILL-10, STA-03, CRYSTAL-05/06, SETTLE-01 reverse | |
@@ -2735,7 +2741,7 @@ STA-01 / STA-04 dropped out of batch 6 (closed 2026-10-18).
 4. ~~**high-A money** (MONEY-03, CRYSTAL-03, SETTLE-02, SETTLE-03)~~ **fixed** (SETTLE-02 closed in the 2026-10-17 audit)
 5. ~~**high-A host ABI: reply sentinels + quote==charge** (HOST-06, HOST-07, HOST-08)~~ **fixed**
 6. **high-B unblockers** — the live ones, in this order
-   - **AYA-GRANT-01** skill-attachment grant (a granted (2) runs the wrong body — highest new item)
+   - ~~**AYA-GRANT-01** skill-attachment grant~~ **closed 2026-10-20 -- not a bug; the clause names the character**
    - **CH-05 play-history + nested PlayCtx** (unblocks Mortis, Mana Champion, dice_cast counters)
    - **HOST-01 HostRequest nested-settle write journal** (unblocks inline equivalence)
    - ~~**STA-01 / STA-04** status grant-verb enforcement~~ **closed 2026-10-18**

@@ -1467,6 +1467,35 @@ fn jennifer_owner_flip_clause2_crystal() {
     assert_eq!(band_xtal(&t, 1), 1, "clause (2): owner flip X=1 > 0 downs");
 }
 
+/// 规则书（1）: 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- the
+/// grant attaches **丸山彩's** (2) to each non-P◇P player. The clause names the
+/// character, so the grantee running 丸山彩's (2) is the rulebook text, not a
+/// mis-dispatch (AYA-GRANT-01 settled).
+#[test]
+fn aya_with_grants_ayaa_2_to_non_pp_players() {
+    let mut t = Table::new(&["丸山彩", "户山香澄", "白鹭千圣"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    assert!(
+        t.on_field(1, "skill:丸山彩:With~"),
+        "the non-P◇P seat gained 丸山彩's (2): {:?}",
+        t.field_ids(1)
+    );
+    // P0 is 丸山彩 herself -- her own bound skill is the same id, so what
+    // matters is that a *different* P◇P seat did not get it.
+    assert!(
+        !t.on_field(2, "skill:丸山彩:With~"),
+        "the other P◇P seat is not a grantee: {:?}",
+        t.field_ids(2)
+    );
+    assert!(
+        t.on_field(2, "skill:白鹭千圣:保持坦率的你"),
+        "白鹭千圣 keeps her own (2): {:?}",
+        t.field_ids(2)
+    );
+}
+
 /// aya's (2) on a **non-PP** user is 「将所有Pastel✽Palettes角色的1个反面
 /// [P✽P粉丝]变正」 -- X=1 per PP seat even when they hold 0 face-downs, so
 /// each pays the overflow crystal to that seat's band card.

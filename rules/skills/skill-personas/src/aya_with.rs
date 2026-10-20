@@ -10,10 +10,17 @@
 //!
 //! Every Pastel✽Palettes character's (1) opens the same way -- 「游戏开始后获得
 //! 5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得X的（2）技能」 -- and only
-//! the granted skill differs. The fan half is here; the *grant* half is a skill
-//! attachment (「获得X的（2）技能」), which is the `H.ReplaceSkill` shape and is
-//! not built -- see the TODO below. Until it is, a non-P◇P player pressing this
-//! card is pressing 丸山彩's own (2), which is the wrong clause.
+//! the granted skill differs. The fan half is here; the grant half attaches the
+//! named skill to each non-P◇P player.
+//!
+//! AYA-GRANT-01 (settled 2026-10-20): the clause names the character -- here
+//! 「获得丸山彩的（2）技能」 -- so the grantee **does** run 丸山彩's (2). That is
+//! the rulebook text, not a mis-dispatch. C# reached it via `H.ReplaceSkill`
+//! (replace the (2) slot); we place the skill rule on the grantee's field
+//! instead, which is the same clause with a different mechanism. C# is not a
+//! spec. `aya_flip_all_pp_clause2_crystal` pins the grantee running 丸山彩's
+//! (2). Each of `chisato_frank` / `eve_unify` likewise places its own named
+//! skill.
 //!
 //! （2）'s 「分摊前」 is the figure *before* any split-pay divides it -- so the
 //! cut applies to the whole, and the split happens afterwards.
