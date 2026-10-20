@@ -97,8 +97,8 @@ export const CardFace = memo(function CardFace({ id, size = "mini", width, on, f
 });
 
 /** An empty deck slot (pink with a star). */
-export function EmptySlot({ size = "strip", star, width }: { size?: CardFaceProps["size"]; star: string; width?: number }) {
-  return <div className={cx(s.face, s[size], s.empty)} style={width != null ? { ["--card-w" as string]: `${width}px` } : undefined}><img src={star} alt="" /></div>;
+export function EmptySlot({ size = "strip", star, width, className }: { size?: CardFaceProps["size"]; star: string; width?: number; className?: string }) {
+  return <div className={cx(s.face, s[size], s.empty, className)} style={width != null ? { ["--card-w" as string]: `${width}px` } : undefined}><img src={star} alt="" /></div>;
 }
 
 export interface CardAction {

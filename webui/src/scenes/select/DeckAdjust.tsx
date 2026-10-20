@@ -260,7 +260,7 @@ function Adjust({ sess, view, at, auto, me, c }: {
             <div className={s.stripCards}>
               {Array.from({ length: SIZE }, (_, k) => (buffer[k]
                 ? <InspectCard key={k} id={buffer[k]} size="strip" className={s.stripCard} onClick={cardTap(buffer[k])} title={tr("deck.remove")} />
-                : <EmptySlot key={k} star={sceneImg("star5")} />))}
+                : <EmptySlot key={k} className={s.stripCard} star={sceneImg("star5")} />))}
             </div>
             <div className={s.hint}>{tr("deckPick.hint")}</div>
           </div>
