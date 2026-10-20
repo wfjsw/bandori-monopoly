@@ -77,8 +77,8 @@
 /* Card.module's classes are hashed, so reach the face's parts by position:
    1 art, 2 colour line, 3 title. Art and line keep their size; only the title
    yields (two lines, clipped), so every image is the same size. */
-.stripCards > .stripCard > * { flex: none; }
-.stripCards > .stripCard > :nth-child(1) { width: 100%; aspect-ratio: 4 / 3; }
+.stripCards > .stripCard > *:not(:only-child) { flex: none; }
+.stripCards > .stripCard > :nth-child(1):not(:only-child) { width: 100%; aspect-ratio: 4 / 3; }
 .stripCards > .stripCard > :nth-child(3) { font-size: 15px; line-height: 1.25; padding: 3px 1px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 2.6em; }
 .hint { margin-top: 6px; font-size: 13px; color: var(--sub); }
 
