@@ -82,7 +82,7 @@
 /* The title is drawn at 4x and scaled back to 1/4: browsers floor the *used* font
    size (design size x the stage's fit scale) at a minimum, so a plain 10px
    label never got smaller on a phone. A transform is not subject to the floor. */
-.stripCards > .stripCard > :nth-child(3) { width: 400%; transform: scale(0.25); transform-origin: 0 0; font-size: 48px; line-height: 1.25; padding: 12px 4px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 2.9em; box-sizing: border-box; }
+.stripCards > .stripCard > :nth-child(3) { width: 400%; transform: scale(0.25); transform-origin: 0 0; font-size: 52px; line-height: 1.25; padding: 12px 4px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 2.9em; box-sizing: border-box; }
 .hint { margin-top: 6px; font-size: 13px; color: var(--sub); }
 
 .pool { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; gap: 12px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; }
