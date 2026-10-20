@@ -88,7 +88,6 @@
 .pool { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; gap: 12px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; }
 .poolHead { flex: none; display: flex; align-items: center; justify-content: space-between; }
 .poolHead button { min-width: 104px; }
-.poolHead > small { color: var(--sub); }
 .grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 164px); gap: 12px 10px; align-content: start; padding: 4px; }
 .kind { position: absolute; left: 10px; top: 10px; font-size: 12px; line-height: 1.7; }
 

@@ -273,7 +273,6 @@ function Adjust({ sess, view, at, auto, me, c }: {
                 count={(l) => pool.filter((x) => matches(x, FILTERS.find((f) => filterLabel(f) === l) ?? "all")).length}
                 onPick={(l) => setFilter(FILTERS.find((f) => filterLabel(f) === l) ?? "all")}
               />
-              <small>{tr("deckPick.poolHint")}</small>
             </div>
             <div className={s.grid}>
               {pool.filter((x) => matches(x, filter)).map((x) => {

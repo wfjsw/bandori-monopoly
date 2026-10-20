@@ -350,7 +350,6 @@
   "deckPick.heading": "为「{{char}}」组初始卡组（10 张）",
   "deckPick.hint": "点卡牌加入或移出（触屏双击）；悬停或点按预览",
   "deckPick.picks": "已选角色",
-  "deckPick.poolHint": "点卡牌加入 / 移出（触屏双击），右侧看效果",
   "deckPick.presetAuto": "自动配的",
   "deckPick.presetCustom": "设计表定的",
   "deckPick.reset": "重置",
