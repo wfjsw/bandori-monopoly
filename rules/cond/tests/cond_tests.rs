@@ -8,7 +8,7 @@ use rules_cond::{
 
 fn win() -> WindowCtx {
     WindowCtx {
-        kind: 0,
+        kind: String::new(),
         actor: 1,
         target: -1,
         tile: TileSnap {
@@ -35,12 +35,12 @@ fn win() -> WindowCtx {
         abnormal: false,
         chain: vec![
             ChainLink {
-                kind: rules_cond::trig::Pay,
+                kind: rules_cond::trig::Pay.to_string(),
                 from: 1,
                 hits: 0,
             },
             ChainLink {
-                kind: rules_cond::trig::Effect,
+                kind: rules_cond::trig::Effect.to_string(),
                 from: 2,
                 hits: -1,
             },
@@ -179,10 +179,10 @@ fn int_division_allowed() {
 fn kind_is_a_window_variable() {
     let c = compile("kind == DiceRollResult && move.roll < 6 || kind != DiceRollResult && value >= 500").unwrap();
     let mut w = win();
-    w.kind = rules_cond::trig::DiceRollResult;
+    w.kind = rules_cond::trig::DiceRollResult.to_string();
     w.mv.roll = Some(3);
     assert!(c.eval(&w, &cand(0)));
-    w.kind = rules_cond::trig::DiceRollResult + 1;
+    w.kind = "turnStart".to_string();
     w.value = 100;
     assert!(!c.eval(&w, &cand(0)));
 }
@@ -191,7 +191,7 @@ fn kind_is_a_window_variable() {
 fn trigger_kind_is_an_alias() {
     let c = compile("trigger.kind == DiceRollResult").unwrap();
     let mut w = win();
-    w.kind = rules_cond::trig::DiceRollResult;
+    w.kind = rules_cond::trig::DiceRollResult.to_string();
     assert!(c.eval(&w, &cand(0)));
 }
 

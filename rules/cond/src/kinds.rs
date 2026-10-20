@@ -2,92 +2,92 @@
 //!
 //! This crate authors **neither** kind table. The engine spellings / ids live
 //! in `game-kinds` (owned by `crates/`); the ruleset spellings live in
-//! `bandori-std::kind`. The constants here **mirror** those owning tables so a
-//! host can pass its raw CEL value through without a translation table. This
-//! crate stays free of `card-sdk` / `game-core` types on purpose (G1 is an
-//! isolated module); when the host wires it up (G2) it fills these `i64`s from
-//! `TriggerKind::as_cel_i64`.
+//! `bandori-std::kind`. The constants here **mirror** those owning tables as
+//! the canonical wire **spellings** (`TriggerKind::spelling`). CEL `kind` is a
+//! string; a bare ident binds the spelling, and a string literal is the same
+//! spelling.
 //!
-//! CEL keeps a single `i64` kind -- a bit field (ABI v90): engine = `id`;
-//! ruleset = `(1 << 32) | id`. Conditions compile inside one ruleset, so the
-//! ns bit separates engine from rule-defined kinds there; the `KindNs` string
-//! key is what prevents cross-ruleset collision on the wire.
+//! The IR bakes every spelling to `id_of(spelling)` (see `VarTy::Str`), so the
+//! CEL string and the IR hash are the same identity. `move.kind` stays an
+//! `int` -- [`mv`] is a closed engine enum with no namespace problem.
 //!
-//! CEL spells them as bare identifiers: `move.kind == Walk`,
-//! `effect.has(Pay)`. They are bound as int constants at compile time
-//! (unknown-var check) and at eval time (the window scope).
+//! CEL spells kinds as bare identifiers: `kind == Exile`,
+//! `effect.has(Pay)`. String literals also work: `kind == "r:bandori:21"`.
+//! They are bound as string constants at compile time (unknown-var check) and
+//! at eval time (the window scope).
 //!
-//! `Teleport` is a [`MoveKind`] only (the old TriggerKind 17 was retired in
+//! `Teleport` is a [`mv`] value only (the old TriggerKind 17 was retired in
 //! ABI v84). Write `move.kind == Teleport`.
 
-/// Trigger / chain / hook kind values (CEL packing; see module docs).
+/// Trigger / chain / hook kind spellings (the wire identity).
 #[allow(non_upper_case_globals)]
 pub mod trig {
-    pub const DiceRollBefore: i64 = 1;
-    pub const DiceRollValue: i64 = 102;
-    pub const DiceRollResult: i64 = 2;
-    pub const TurnStart: i64 = 3;
-    pub const Pass: i64 = 4;
-    pub const PassPlayer: i64 = 5;
-    pub const SettleBefore: i64 = 6;
-    pub const Settle: i64 = 7;
-    pub const Mortgage: i64 = 8;
-    pub const Pay: i64 = 9;
-    pub const Paid: i64 = 10;
-    pub const Bankrupt: i64 = 11;
-    pub const Card: i64 = 12;
-    pub const Event: i64 = 13;
-    pub const Abnormal: i64 = 14;
-    pub const Target: i64 = 15;
+    pub const DiceRollBefore: &str = "diceRollBefore";
+    pub const DiceRollValue: &str = "diceRollValue";
+    pub const DiceRollResult: &str = "diceRollResult";
+    pub const TurnStart: &str = "turnStart";
+    pub const Pass: &str = "pass";
+    pub const PassPlayer: &str = "passPlayer";
+    pub const SettleBefore: &str = "settleBefore";
+    pub const Settle: &str = "settle";
+    pub const Mortgage: &str = "mortgage";
+    pub const Pay: &str = "pay";
+    pub const Paid: &str = "paid";
+    pub const Bankrupt: &str = "bankrupt";
+    pub const Card: &str = "card";
+    pub const Event: &str = "event";
+    pub const Abnormal: &str = "abnormal";
+    pub const Target: &str = "target";
     // 16 / 17 / 19 / 20 / 22 retired in ABI v84 (Stop / Teleport / Stun /
     // Stay / Forced); 18 (SkillTeleport) retired in ABI v85 -- never reuse.
-    /// Ruleset namespace (bandori-std::kind::Exile). CEL `(1 << 32) | 21`.
-    pub const Exile: i64 = (1 << 32) | 21;
-    pub const State: i64 = 23;
-    pub const Counteracted: i64 = 24;
-    pub const DrawOut: i64 = 25;
-    /// Ruleset namespace (bandori-std::kind::PassRewardAffected). CEL `(1 << 32) | 26`.
-    pub const PassRewardAffected: i64 = (1 << 32) | 26;
-    pub const TwoCards: i64 = 27;
-    pub const TurnStartBefore: i64 = 28;
-    pub const PassBefore: i64 = 29;
-    pub const MortgageBefore: i64 = 30;
-    pub const BankruptBefore: i64 = 31;
-    pub const CardAfter: i64 = 32;
-    pub const EventAfter: i64 = 33;
-    pub const SettleAfter: i64 = 34;
-    pub const BuyBefore: i64 = 35;
-    pub const BuyAfter: i64 = 36;
-    pub const BuildBefore: i64 = 37;
-    pub const BuildAfter: i64 = 38;
-    pub const DiscardBefore: i64 = 39;
-    pub const DiscardAfter: i64 = 40;
-    pub const EndTurnBefore: i64 = 41;
-    pub const EndTurnAfter: i64 = 42;
-    pub const LeaveBefore: i64 = 43;
-    pub const LeaveAfter: i64 = 44;
+    /// Ruleset namespace (bandori-std::kind::Exile).
+    pub const Exile: &str = "r:bandori:21";
+    pub const State: &str = "state";
+    pub const Counteracted: &str = "counteracted";
+    pub const DrawOut: &str = "drawOut";
+    /// Ruleset namespace (bandori-std::kind::PassRewardAffected).
+    pub const PassRewardAffected: &str = "r:bandori:26";
+    pub const TwoCards: &str = "twoCards";
+    pub const TurnStartBefore: &str = "turnStartBefore";
+    pub const PassBefore: &str = "passBefore";
+    pub const MortgageBefore: &str = "mortgageBefore";
+    pub const BankruptBefore: &str = "bankruptBefore";
+    pub const CardAfter: &str = "cardAfter";
+    pub const EventAfter: &str = "eventAfter";
+    pub const SettleAfter: &str = "settleAfter";
+    pub const BuyBefore: &str = "buyBefore";
+    pub const BuyAfter: &str = "buyAfter";
+    pub const BuildBefore: &str = "buildBefore";
+    pub const BuildAfter: &str = "buildAfter";
+    pub const DiscardBefore: &str = "discardBefore";
+    pub const DiscardAfter: &str = "discardAfter";
+    pub const EndTurnBefore: &str = "endTurnBefore";
+    pub const EndTurnAfter: &str = "endTurnAfter";
+    pub const LeaveBefore: &str = "leaveBefore";
+    pub const LeaveAfter: &str = "leaveAfter";
     /// ChainKind::SettleBody (the settle body is its own chain link).
-    pub const SettleBody: i64 = 64;
+    pub const SettleBody: &str = "settleBody";
     /// ChainKind::Effect -- 「被…效果影响」.
-    pub const Effect: i64 = 72;
+    pub const Effect: &str = "effect";
     /// Engine namespace (`ActionKind::MarkerSpent`). Any named-counter spend
-    /// commits. CEL `73`.
-    pub const MarkerSpent: i64 = 73;
+    /// commits.
+    pub const MarkerSpent: &str = "markerSpent";
     /// Engine namespace (`ActionKind::CardUsed`). A field card's `On::Play`
-    /// runs. CEL `74`.
-    pub const CardUsed: i64 = 74;
+    /// runs.
+    pub const CardUsed: &str = "cardUsed";
     /// Engine namespace (`ActionKind::HouseAdded`). A deed's house count is
-    /// written. CEL `75`.
-    pub const HouseAdded: i64 = 75;
+    /// written.
+    pub const HouseAdded: &str = "houseAdded";
     /// v43: the move head / move-tail pair (`SETTLE-STAGES.md` §7).
-    pub const MoveBefore: i64 = 90;
-    pub const MoveAfter: i64 = 91;
+    pub const MoveBefore: &str = "moveBefore";
+    pub const MoveAfter: &str = "moveAfter";
     /// 「将X个反面[P㏄P粉丝]变正」 (bandori-std::kind::FansFlip).
-    /// Ruleset namespace. CEL `(1 << 32) | 107`.
-    pub const FansFlip: i64 = (1 << 32) | 107;
+    /// Ruleset namespace.
+    pub const FansFlip: &str = "r:bandori:107";
 }
 
 /// MoveKind values. `Walk` / `Teleport` are what `move.kind ==` compares.
+/// These stay `int` constants -- `move.kind` is a closed engine enum.
 #[allow(non_upper_case_globals)]
 pub mod mv {
     pub const Walk: i64 = 0;
@@ -96,11 +96,13 @@ pub mod mv {
 
 // TELEPORT_TRIGGER (TriggerKind 17) retired in ABI v84 -- never reuse.
 
-/// (CEL name, value) for every int constant a condition may reference.
+/// (CEL name, spelling) for every **string** constant a condition may
+/// reference -- the trigger / chain / hook kinds.
 ///
-/// This is the unknown-var allow-list for bare identifiers that are not
-/// context variables, and the table the eval scope binds.
-pub fn constants() -> &'static [(&'static str, i64)] {
+/// This is half the unknown-var allow-list for bare identifiers that are not
+/// context variables, and half the table the eval scope binds (as CEL
+/// strings). See [`int_constants`] for the move-kind ints.
+pub fn str_constants() -> &'static [(&'static str, &'static str)] {
     &[
         ("DiceRollBefore", trig::DiceRollBefore),
         ("DiceRollResult", trig::DiceRollResult),
@@ -118,10 +120,6 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("Event", trig::Event),
         ("Abnormal", trig::Abnormal),
         ("Target", trig::Target),
-        // `Teleport` is MoveKind (1) only -- TriggerKind 17 retired in v84.
-        ("Teleport", mv::Teleport),
-        ("Walk", mv::Walk),
-        // "SkillTeleport" retired in ABI v85 (id 18 never reuse).
         ("Exile", trig::Exile),
         ("State", trig::State),
         ("Counteracted", trig::Counteracted),
@@ -156,4 +154,21 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("MoveAfter", trig::MoveAfter),
         ("FansFlip", trig::FansFlip),
     ]
+}
+
+/// (CEL name, value) for every **int** constant a condition may reference.
+/// The move-kind pair; `move.kind == Walk` / `move.kind == Teleport`.
+pub fn int_constants() -> &'static [(&'static str, i64)] {
+    &[
+        // `Teleport` is MoveKind (1) only -- TriggerKind 17 retired in v84.
+        ("Teleport", mv::Teleport),
+        ("Walk", mv::Walk),
+    ]
+}
+
+/// Every bare identifier a condition may reference that is not a context
+/// variable (kind spellings plus the move-kind ints).
+pub fn ident_known(name: &str) -> bool {
+    str_constants().iter().any(|(n, _)| *n == name)
+        || int_constants().iter().any(|(n, _)| *n == name)
 }

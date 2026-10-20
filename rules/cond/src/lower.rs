@@ -109,7 +109,14 @@ fn lower_ident(name: &str, nodes: &mut Vec<Node>) -> Result<u16, CondError> {
     if let Some((idx, _)) = by_flat(name) {
         return push(nodes, Node::leaf_var(idx));
     }
-    if let Some((_, v)) = kinds::constants().iter().find(|(n, _)| *n == name) {
+    // Kind spellings bake to `id_of(spelling)` -- the same hash a `VarTy::Str`
+    // scalar holds and the same hash a string literal bakes to. Eq compares
+    // hashes; no string pool.
+    if let Some((_, s)) = kinds::str_constants().iter().find(|(n, _)| *n == name) {
+        return push(nodes, Node::leaf_const_int(id_of(s)));
+    }
+    // Move-kind ints stay raw i64.
+    if let Some((_, v)) = kinds::int_constants().iter().find(|(n, _)| *n == name) {
         return push(nodes, Node::leaf_const_int(*v));
     }
     Err(CondError::UnknownVar(name.to_string()))

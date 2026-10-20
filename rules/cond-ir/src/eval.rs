@@ -221,6 +221,12 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
 pub fn values_eq(a: Val, b: Val) -> bool {
     match (a, b) {
         (Val::Int(x), Val::Int(y)) => x == y,
+        // Str is `id_of(spelling)`; string-literal nodes bake to `ConstInt` of
+        // the same hash, so `Str(h) == Int(h)` is how `kind == Exile` /
+        // `kind == "r:bandori:21"` agree.
+        (Val::Str(x), Val::Str(y)) | (Val::Str(x), Val::Int(y)) | (Val::Int(x), Val::Str(y)) => {
+            x == y
+        }
         (Val::Bool(x), Val::Bool(y)) => x == y,
         (Val::Null, Val::Null) => true,
         (Val::List(x), Val::List(y)) => x == y,

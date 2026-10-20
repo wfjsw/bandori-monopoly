@@ -20,8 +20,10 @@
 /// indices (`-1` = no tile). `slot` / `tok` are the candidate's latches.
 pub trait CondView {
     // -- window / trigger ---------------------------------------------------
-    /// Trigger kind wire value (`kind` / `trigger.kind`).
-    fn kind(&self) -> i64;
+    /// Trigger kind wire **spelling** (`kind` / `trigger.kind`): engine
+    /// camelCase or `"r:{key}:{id}"`. CEL `kind` is a string.
+    /// `Cow` because a ruleset spelling is formatted (`"r:{key}:{id}"`).
+    fn kind(&self) -> std::borrow::Cow<'_, str>;
     /// Trigger actor seat (`actor`), `-1` = none.
     fn actor(&self) -> i64;
     /// Trigger target seat (`target`), `-1` = none.
@@ -61,8 +63,10 @@ pub trait CondView {
     fn turn_key(&self) -> i64;
     /// Effect-chain length (`effect.count` / `chain.count`).
     fn chain_count(&self) -> i64;
-    /// Chain link kinds, in order.
-    fn chain_kinds(&self) -> Vec<i64>;
+    /// Chain link kind **spellings**, in order. The IR `SetId::ChainKinds`
+    /// bitset stores `id_of(spelling)` of each (a 128-bit set keyed by the
+    /// same hash string literals bake to).
+    fn chain_kinds(&self) -> Vec<String>;
     /// Chain link `hits` seats, in order.
     fn chain_hits(&self) -> Vec<i64>;
     /// The trigger's card id hash (`trigger_card`), same encoding as

@@ -19,8 +19,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ChainLink {
-    /// Trigger / chain kind wire value (see [`crate::kinds`]).
-    pub kind: i64,
+    /// Trigger / chain kind wire **spelling** (see [`crate::kinds`]).
+    pub kind: String,
     /// Seat the link comes from (`-1` = none).
     pub from: i64,
     /// Seat the link hits (`-1` = none / not seat-scoped).
@@ -125,9 +125,10 @@ impl Default for MoveSnap {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowCtx {
-    /// Trigger / chain kind wire value of this window (see [`crate::kinds`]);
-    /// `kind` in conditions (`trigger.kind` is an alias).
-    pub kind: i64,
+    /// Trigger / chain kind wire **spelling** of this window (see
+    /// [`crate::kinds`]); `kind` in conditions (`trigger.kind` is an alias).
+    /// CEL `kind` is a string.
+    pub kind: String,
     /// Trigger actor seat (`-1` = none).
     pub actor: i64,
     /// Trigger target seat (`-1` = none).

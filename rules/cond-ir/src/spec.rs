@@ -284,6 +284,10 @@ pub fn spec_eq(a: Val, b: Val) -> Val {
     match (a, b) {
         (Val::Err, _) | (_, Val::Err) => Val::Err,
         (Val::Int(x), Val::Int(y)) => Val::Bool(x == y),
+        // Hash-baked strings: `Str(h)` equals `Int(h)` (string-literal nodes).
+        (Val::Str(x), Val::Str(y)) | (Val::Str(x), Val::Int(y)) | (Val::Int(x), Val::Str(y)) => {
+            Val::Bool(x == y)
+        }
         (Val::Bool(x), Val::Bool(y)) => Val::Bool(x == y),
         (Val::Null, Val::Null) => Val::Bool(true),
         (Val::List(x), Val::List(y)) => Val::Bool(x == y),
