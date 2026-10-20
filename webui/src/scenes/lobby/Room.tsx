@@ -103,6 +103,12 @@ export function Room({ id }: { id: string }) {
     endSession();
     navigate({ name: "lobby" });
   };
+  /** Take a free seat without leaving first (`join` upgrades in place). */
+  const takeSeat = async () => {
+    const res = await api.join(r.id, "", false);
+    if (!res.ok) return toast(fmtMsg(res.error!), "error");
+    // The SSE `room` frame flips the session out of spectator mode.
+  };
   const start = async () => {
     const res = await api.start(r.id, armed);
     if (res.ok) return;
@@ -208,8 +214,11 @@ export function Room({ id }: { id: string }) {
         )}
         <Btn size="big" icon="logout" onClick={leave}>{tr("room.leave")}</Btn>
         {r.playing ? <Btn kind="pink" size="big" className={s.main} onClick={() => navigate({ name: "play", id })}>{tr("room.backToMatch")}</Btn>
-          : spectating ? <Btn kind="white" size="big" className={s.main} disabled>{tr("room.watching")}</Btn>
-          : isHost ? <Btn kind="pink" size="big" className={s.main} onClick={start}>{armed ? tr("room.forceStart") : tr("solo.start")}</Btn>
+          : spectating
+            ? (r.members.length < r.maxPlayers
+              ? <Btn kind="pink" size="big" className={s.main} onClick={takeSeat}>{tr("lobby.join")}</Btn>
+              : <Btn kind="white" size="big" className={s.main} disabled>{tr("room.watching")}</Btn>)
+            : isHost ? <Btn kind="pink" size="big" className={s.main} onClick={start}>{armed ? tr("room.forceStart") : tr("solo.start")}</Btn>
           : <Btn kind={me?.ready ? "white" : "pink"} size="big" className={s.main} onClick={async () => report(await api.ready(r.id, !me?.ready))}>{me?.ready ? tr("room.cancelReady") : tr("room.ready")}</Btn>}
       </div>
     </>

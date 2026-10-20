@@ -452,9 +452,12 @@ no seat, no secrets, no input.
 * **Presence.** A spectator is never marked `away` and never hands a seat to
   the AI. A stale one is simply removed from the room. Leaving never forfeits
   (`act: "leave"` is skipped for them).
-* **Lifetime.** A room dissolves when no **seats** remain, even if spectators
-  are still watching -- there is nothing left to watch. They receive
-  `dissolve` like everyone else.
+* **Lifetime.** A room dissolves when no **human seats** remain
+  (`humans() == 0` -- a bot-only roster does not keep a room alive), even if
+  spectators are still watching. They receive `dissolve` like everyone else.
+* **Taking a seat.** `join` with `spectate: false` upgrades a spectator in
+  place (same member id, same token) once a seat is free. The password and
+  version were already checked when they joined to watch.
 
 ## Match records
 

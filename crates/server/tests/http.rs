@@ -508,6 +508,89 @@ async fn spectators_watch_without_a_seat() {
     assert!(server.room(&id).is_some(), "room still alive");
 }
 
+/// A spectator may take a free seat in place -- same member id, same token --
+/// once the match is over and the room has room.
+#[tokio::test]
+async fn a_spectator_can_take_a_free_seat() {
+    let (base, _) = spawn(Duration::from_secs(20)).await;
+    let a = Client::new(&base, "Host").await;
+    let w = Client::new(&base, "Watcher").await;
+    let id = a
+        .ok("/api/rooms", json!({ "maxPlayers": 3 }))
+        .await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+
+    let joined = w
+        .ok(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "spectate": true }),
+        )
+        .await;
+    assert!(joined["room"]["spectators"].as_array().is_some());
+
+    // While the match runs there is no seat to take.
+    let (s, v) = w
+        .post(&format!("/api/rooms/{id}/join"), json!({ "spectate": false }))
+        .await;
+    assert_eq!(
+        (s, v["reason"].as_str()),
+        (StatusCode::CONFLICT, Some("playing"))
+    );
+
+    // In a lobby room (not playing) the upgrade is immediate.
+    let id2 = a
+        .ok("/api/rooms", json!({ "maxPlayers": 2 }))
+        .await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let j2 = w
+        .ok(
+            &format!("/api/rooms/{id2}/join"),
+            json!({ "spectate": true }),
+        )
+        .await;
+    let me2 = j2["you"].as_i64().unwrap();
+    assert_eq!(j2["room"]["spectators"].as_array().unwrap().len(), 1);
+    // Upgrade in place: same id, moves from spectators to members.
+    let up = w
+        .ok(
+            &format!("/api/rooms/{id2}/join"),
+            json!({ "spectate": false }),
+        )
+        .await;
+    assert_eq!(up["you"].as_i64(), Some(me2), "member id is kept");
+    let room = &up["room"];
+    assert!(
+        room["spectators"].as_array().map(Vec::len).unwrap_or(0) == 0,
+        "no longer a spectator"
+    );
+    assert!(
+        room["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"].as_i64() == Some(me2)),
+        "now a seat"
+    );
+    // And they are a seat again: `act` no longer answers `err.not_a_player`
+    // (a lobby has no match, so it answers `err.room.no_match` instead).
+    let (s, v) = w
+        .post(&format!("/api/rooms/{id2}/act"), json!({ "act": "roll" }))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    assert_ne!(v["error"]["k"], "err.not_a_player");
+}
+
 /// Spectators do not feed the presence reaper: a live watcher never marks a
 /// seat `away`, and a silent one is dropped without touching the match.
 #[tokio::test]

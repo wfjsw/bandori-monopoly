@@ -51,7 +51,7 @@ export function model(v: MatchView): Model {
 }
 
 /** A zeroed seat, for the spectator perspective (no `me` in the state). */
-function blankPlayer(): MatchPlayer {
+export function blankPlayer(): MatchPlayer {
   return {
     member: 0,
     player: "",

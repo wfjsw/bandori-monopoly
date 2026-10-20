@@ -867,7 +867,10 @@ impl Room {
     ///
     /// `spectate` joins as a watcher: no seat, so `playing` and `full` do not
     /// apply (that is the point), but the password still does. Spectators never
-    /// take host and never contribute a fair nonce.
+    /// take host and never contribute a fair nonce. A spectator who asks for a
+    /// seat (`spectate: false`) **upgrades in place** -- same member id, same
+    /// token -- once one is free; they already passed the password when they
+    /// sat down to watch.
     pub fn join(
         &mut self,
         who: NewMember,
@@ -875,11 +878,21 @@ impl Room {
         version: &str,
         spectate: bool,
     ) -> ApiResult<i32> {
-        if let Some(m) = self.member_of(who.token) {
-            return Ok(m);
+        let existing = self.member_of(who.token);
+        // A seat asking to spectate stays seated; only a watcher can move up.
+        let upgrading = existing.is_some_and(|m| self.is_spectator(m)) && !spectate;
+        if let Some(m) = existing {
+            if !upgrading {
+                return Ok(m);
+            }
         }
-        if !version.is_empty() && version != net::VERSION {
-            return Err(ApiError::reject(net::reject::VERSION));
+        if !upgrading {
+            if !version.is_empty() && version != net::VERSION {
+                return Err(ApiError::reject(net::reject::VERSION));
+            }
+            if self.info.locked && password != self.password {
+                return Err(ApiError::reject(net::reject::PASSWORD));
+            }
         }
         if !spectate {
             if self.info.playing {
@@ -889,8 +902,24 @@ impl Room {
                 return Err(ApiError::reject(net::reject::FULL));
             }
         }
-        if self.info.locked && password != self.password {
-            return Err(ApiError::reject(net::reject::PASSWORD));
+        if upgrading {
+            let id = existing.expect("upgrading implies existing");
+            self.info.spectators.retain(|s| s.id != id);
+            let host = self.humans() == 0;
+            self.info.members.push(RoomMember {
+                id,
+                player: net::clean_name(who.player),
+                persona: who.persona.into(),
+                cn_id: who.cn_id.into(),
+                ready: false,
+                host,
+                bot: false,
+                away: false,
+                mentality: Default::default(),
+            });
+            self.persist();
+            self.notify();
+            return Ok(id);
         }
         let id = self.next_member;
         self.next_member += 1;

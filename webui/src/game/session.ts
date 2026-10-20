@@ -846,9 +846,10 @@ export class OnlineSession extends GameSession {
   readonly id: string;
   /**
    * Watching, not seated: no hand, `view.playerId === -1`, every input locked.
-   * A spectator is anyone whose member id is not in `room.members`.
+   * A spectator is anyone whose member id is not in `room.members`. Flips to
+   * `false` if they later take a free seat (`join` upgrades in place).
    */
-  readonly spectator: boolean;
+  spectator: boolean;
   private close: () => void;
   dissolved: Msg | null = null;
   /**
@@ -879,6 +880,13 @@ export class OnlineSession extends GameSession {
     this.close = openStream(room.id, {
       room: (r) => {
         this.room = r;
+        // A spectator who took a free seat is now a player: unlock the inputs
+        // and let the next frame derive extras from the seat view.
+        const seated = r.members.some((m) => m.id === this.you);
+        if (this.spectator && seated) {
+          this.spectator = false;
+          this.readOnly = false;
+        }
         this.emitOther();
       },
       match: (v) => this.emitView(v),
@@ -951,6 +959,9 @@ export class OnlineSession extends GameSession {
    * version by the caller (Board); no-op on a stale ack.
    */
   async animDone(seq: number): Promise<void> {
+    // A watcher has no seat whose turn-clock hold to release; don't spam the
+    // endpoint (it would answer `err.not_a_player`) on every frame.
+    if (this.readOnly) return;
     await api.animDone(this.id, seq);
   }
 
