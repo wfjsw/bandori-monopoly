@@ -1259,6 +1259,51 @@ fn soyo_char_initial_fire_is_one() {
     assert_eq!(t.charge(0), 1, "starts with 1 fire");
 }
 
+/// 规则书（2）: 「持续至你的下回合开始」 -- the `colorFor:<p>` re-colour ends at
+/// the player's next turn start, not for the rest of the game.
+#[test]
+fn soyo_recolour_expires_at_next_turn_start() {
+    let agent = tile("主要街道");
+    let mut t = Table::new(&["长崎素世", "高松灯"]);
+    t.clean();
+    t.set_fire(0, 1, 1);
+    t.begin_turn(0);
+    drain(&mut t);
+    let key = "colorFor:0".to_string();
+    assert_eq!(t.tile_prop(agent, &key), 0, "no recolour before the settle");
+    // Roll onto the agent tile; the (2) offer fires on DiceRollAfter.
+    t.set_pos(0, agent.wrapping_sub(2));
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    // Accept the (2) offer (「移动掷骰后可消耗一个火罐」).
+    for _ in 0..16 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if format!("{:?}", p.title).contains("soyo_clear") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    drain(&mut t);
+    assert_ne!(t.tile_prop(agent, &key), 0, "recoloured at the settle");
+    // End P0's turn, then P1's, back to P0's turn start.
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    t.end(1).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.tile_prop(agent, &key),
+        0,
+        "expired at the player's next turn start"
+    );
+}
+
 // ---------------------------------------------------------------- 椎名立希 决定练习日的会议
 
 #[test]
