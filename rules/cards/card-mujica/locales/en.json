@@ -29,7 +29,7 @@
   "heart_rain_why": "Heart Rain",
   "j11_ask_pay": "About to pay {{money}}: discard #J11 to [Stun] yourself and everyone within 1 tile, cancelling the payment?",
   "j11_ask_targeted": "Targeted by another player's card: discard #J11 to [Stun] yourself and everyone within 1 tile?",
-  "j11_decayed": "\"#J11\" ran out of miracle crystals and left the field",
+  "j11_decayed": "\"#J11\" ran out of miracle crystals and went to the discard pile",
   "j11_fired": "{{who}} discarded #J11: [Stun] on themselves and everyone within 1 tile",
   "j11_note": "Miracle crystals (may discard when about to lose money / is targeted, to [Stun] self and neighbours within 1 tile)",
   "j11_placed": "{{who}} placed \"#J11\" on the field",
