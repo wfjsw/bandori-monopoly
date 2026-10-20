@@ -97,25 +97,25 @@ fn two_in_one_matches_the_pair_defs() {
 // I2 -- value <= declared max 「在任意时刻」
 // =====================================================================
 
-/// A gain never lands above the cap (「不能超过持有上限」).
+/// A gain never lands above the cap (「不能超过持有上限」). The kernel
+/// (`bandori_std::fire::gain`) polices this -- the engine is a dumb store.
 #[test]
 fn i2_gain_never_exceeds_max() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 1, 3);
-    let got = t
-        .m
-        .world_mut()
-        .gain_marker(0, "charge", 10);
+    let got = t.gain_fire(0, 10);
     assert_eq!(got, 2, "room under cap 3 from 1 is 2");
-    assert!(t.charge(0) <= 3, "I2: {} <= 3", t.charge(0));
+    assert_eq!(t.charge(0), 3, "I2: value is the actual");
 }
 
-/// A cap drop pulls the value under the new ceiling (I2 「在任意时刻」).
+/// A cap drop pulls the value under the new ceiling (I2 「在任意时刻」). The
+/// pull-under is the kernel's (`fire::pull_under_cap`); `add_marker_max` only
+/// moves the stored ceiling.
 #[test]
 fn i2_cap_drop_pulls_value_under() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 5, 5);
-    t.m.world_mut().add_marker_max(0, "charge", -3);
+    t.adjust_fire_cap(0, -3);
     assert!(t.charge(0) <= 2, "value pulled under the new cap of 2");
 }
 
@@ -130,10 +130,7 @@ fn kernel_actuals_overflow_shape() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 1, 1);
     let before = t.p(0).money;
-    let got = t
-        .m
-        .world_mut()
-        .gain_marker(0, "charge", 2);
+    let got = t.gain_fire(0, 2);
     let missed = 2 - got;
     assert_eq!(got, 0, "cap 1/1 refused the grant");
     assert_eq!(missed, 2, "both pots missed");
@@ -194,10 +191,7 @@ fn fire_regime_fill_drain_burn() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 1, 4);
     // fill_to_cap: 1 -> 4.
-    let got = t
-        .m
-        .world_mut()
-        .gain_marker(0, "charge", 3);
+    let got = t.gain_fire(0, 3);
     assert_eq!(got, 3, "fill_to_cap lands the room under the cap");
     assert_eq!(t.charge(0), 4);
     // drain 1 / burn_all: the spend path is `fire::regime::{drain,burn_all}` →

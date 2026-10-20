@@ -16,9 +16,11 @@
 //!
 //! * **「技能指示物」** -- 火罐 is a named counter on the player, capped by
 //!   the character skill's 「持有上限」.
-//! * **「在任意时刻，您持有的火罐数量不能超过持有上限」** -- I2. Gain is partial
-//!   (at most up to the cap); a cap change pulls the value down; the kernel
-//!   never lets a write land above the declared max.
+//! * **「在任意时刻，您持有的火罐数量不能超过持有上限」** -- I2. This kernel
+//!   polices the cap (the engine stores the advertised `max` for display but
+//!   does **not** clamp to it). Gain is partial (at most up to the cap); a cap
+//!   change pulls the value down; the kernel never lets a write land above the
+//!   declared max.
 //! * **Gain** logs one 效果适用 entry (`log.gain_charge`): which effect, why,
 //!   how many landed, the new count and cap.
 //! * **Spend** opens the `markerSpend` [反击] window **before** the pots move
@@ -72,7 +74,9 @@ pub const TEMP_KEY: &str = "tempFire";
 // ------------------------------------------------------------- pure policy
 
 /// Gain `n`, at most up to the cap; returns how many landed. This is the
-/// host's clause (「不能超过持有上限」).
+/// kernel's clause (「在任意时刻，您持有的火罐数量不能超过持有上限」). The
+/// engine stores the advertised cap but does not police it -- this is the
+/// arithmetic.
 pub fn gain_clamped(have: i32, cap: i32, n: i32) -> i32 {
     if n <= 0 || cap <= 0 {
         return 0;
@@ -117,7 +121,9 @@ fn face_bounds(skill: &str) -> (i32, i32) {
 
 /// Write the face's 「（初始N，上限M）」.
 ///
-/// The cap is written **only when unset** (0), so a later [`adjust_cap`]
+/// The `state_set_bounds` write is the **advertisement** (the UI shows
+/// 「3/5」 from it); the engine stores it and does not police it. The cap is
+/// written **only when unset** (0), so a later [`adjust_cap`]
 /// (「火罐上限加1」) survives the per-turn re-hook. Initial is created at
 /// `DeckAtGameStart` only (where 「初始N」 belongs).
 ///
@@ -136,6 +142,7 @@ pub fn declare(player_id: i32, initial: i32, cap: i32) {
 /// 「获得其初始火罐」 overlay). Pulls the value under the new cap (I2).
 pub fn redeclare(player_id: i32, initial: i32, cap: i32) -> i32 {
     let cap = cap.max(0);
+    // Advertisement: the stored ceiling the UI reads back.
     state::set_bounds(player_id, KEY, 0, cap);
     let have = get(player_id);
     let want = pull_under_cap(initial, cap);
@@ -194,9 +201,11 @@ pub fn end_overlay(player_id: i32) -> i32 {
 /// Gain `n` pots, at most up to the cap. Logs the gain. Returns how many
 /// landed (actuals -- `Sumimi:一人两个甜甜圈` converts the rest to 500资金).
 ///
-/// Opens `markerGain` before the pots move (host verb, unchanged window).
-/// The window payload is the **requested** `n` (today's shape); the host
-/// clamps under the declared cap (I2) and returns the actual.
+/// 「在任意时刻，您持有的火罐数量不能超过持有上限」 -- this kernel does the
+/// arithmetic (`gain_clamped`); the engine stores the advertised cap but does
+/// **not** police it. Opens `markerGain` before the pots move (host verb,
+/// unchanged window). The window payload is the **actual** `want` (what will
+/// land); a cancelled window moves nothing.
 pub fn gain(
     player_id: i32,
     n: i32,
@@ -205,11 +214,28 @@ pub fn gain(
     if n <= 0 {
         return Ok(0);
     }
-    // I2 / 「不能超过持有上限」: the host verb opens `markerGain` with the
-    // requested `n` (today's window payload), then applies the storage
-    // bounds and returns the actual. `max == 0` (no declaration) refuses in
-    // the host verb (an undeclared resource cannot be gained).
-    crate::ctx::gain_charge(player_id, n, why)
+    // I2: clamp here, not in the engine. `max == 0` (no declaration) refuses
+    // (an undeclared resource cannot be gained).
+    let have = get(player_id);
+    let cap = max(player_id);
+    let want = gain_clamped(have, cap, n);
+    if want <= 0 {
+        // Refuse before the write (and before the window): nothing would
+        // move. Narrate -- 「不能超过持有上限」.
+        ctx::log(
+            player_id,
+            &Msg::new("log.gain_charge_capped")
+                .player_id("who", player_id)
+                .msg("why", why)
+                .i("charge", have as i64)
+                .i("max", cap as i64),
+        );
+        return Ok(0);
+    }
+    // Window payload is the actual `want` (the amount that will land);
+    // a cancelled window writes nothing. The host verb is a dumb add and
+    // logs `log.gain_charge` with the actual.
+    crate::ctx::gain_charge(player_id, want, why)
 }
 
 /// Spend `n` pots. `ChargePaying` runs first (spend substitution 「以代替此次
@@ -245,10 +271,17 @@ pub fn spend(
     Ok(true)
 }
 
-/// Move the cap by `n`; pulls the value down under the new ceiling (I2).
-/// Returns the new cap.
+/// Move the cap by `n`; pulls the value down under the new ceiling (I2
+/// 「在任意时刻」). The host verb only moves the advertised ceiling -- the
+/// pull-under is this kernel's job. Returns the new cap.
 pub fn adjust_cap(player_id: i32, n: i32) -> i32 {
-    crate::ctx::add_charge_max(player_id, n)
+    let cap = crate::ctx::add_charge_max(player_id, n);
+    let have = get(player_id);
+    let want = pull_under_cap(have, cap);
+    if have != want {
+        state::set(player_id, KEY, want);
+    }
+    cap
 }
 
 /// Backwards-compatible alias of [`adjust_cap`] (the old `add_max` name).

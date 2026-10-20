@@ -1734,7 +1734,8 @@ pub fn card_move(player_id: i32) -> bool {
 // wire key; writers open the generic `markerGain` / `markerSpend` windows.
 
 /// Dumb add of `n` to the named counter; returns how many landed. Opens
-/// `markerGain` first. `max == 0` means "no declaration" and refuses.
+/// `markerGain` first. No cap policy: the rules-layer kernel clamps and
+/// narrates.
 pub fn gain_marker(player_id: i32, name: &str, n: i32, why: &Msg) -> Result<i32, Prompt> {
     let (np, nl) = s(name);
     let (p, l) = mj(why);
@@ -1749,8 +1750,8 @@ pub fn spend_marker(player_id: i32, name: &str, n: i32, why: &Msg) -> Result<i32
     asked(unsafe { sys::spend_marker(player_id, np, nl, n, p, l) })
 }
 
-/// Raise (or lower) the named counter's cap; returns the new cap. Pulls the
-/// value under the new ceiling.
+/// Raise (or lower) the named counter's advertised cap; returns the new cap.
+/// Storage-only: the pull-under is the rules-layer kernel's job.
 pub fn add_marker_max(player_id: i32, name: &str, n: i32) -> i32 {
     let (np, nl) = s(name);
     unsafe { sys::add_marker_max(player_id, np, nl, n) }

@@ -1068,8 +1068,8 @@ pub trait CardWorld: Clone + 'static {
     fn turn_main_steps(&self) -> i32 {
         0
     }
-    /// Move a named counter's cap; returns the new cap. Dumb storage fold
-    /// (pulls the value under the new ceiling). The name is data.
+    /// Move a named counter's advertised cap; returns the new cap. Storage
+    /// only -- the pull-under is the rules-layer kernel's job. The name is data.
     fn add_marker_max(&mut self, player: i32, name: &str, n: i32) -> i32;
     /// Make `id` the running card for a nested `play_card`: a **fresh** instance
     /// a fresh instance, with a fresh `Dest`. The uid goes to -1 rather than being

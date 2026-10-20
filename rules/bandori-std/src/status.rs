@@ -103,9 +103,12 @@ pub mod stay {
         if n == 0 {
             return;
         }
-        state::add(player_id, state_key::STAY, n);
+        // Declare the floor + wear-off **before** the write: a first write
+        // to a key with `flags == 0` would otherwise skip `NEVER_NEGATIVE`
+        // and a negative `n` could land at -1 (the fuzz's `stay=-1`).
         state::set_flags(player_id, state_key::STAY, LAYER_FLAGS);
         state::set_expires(player_id, state_key::STAY, state::TURN_END);
+        state::add(player_id, state_key::STAY, n);
         if n > 0 {
             ctx::raise_after(player_id, RAISE_STAY, 1);
             log_grant(source_of(player_id), player_id, RAISE_STAY);
@@ -189,9 +192,12 @@ pub mod stun {
         if n == 0 {
             return;
         }
-        state::add(player_id, state_key::STUN, n);
+        // Declare the floor + wear-off **before** the write: a first write
+        // to a key with `flags == 0` would otherwise skip `NEVER_NEGATIVE`
+        // and a negative `n` could land at -1 (the fuzz's `stay=-1`).
         state::set_flags(player_id, state_key::STUN, LAYER_FLAGS);
         state::set_expires(player_id, state_key::STUN, state::TURN_END);
+        state::add(player_id, state_key::STUN, n);
         if n > 0 {
             ctx::raise_after(player_id, RAISE_STUN, 1);
             log_grant(source_of(player_id), player_id, RAISE_STUN);
@@ -208,9 +214,12 @@ pub mod stun {
         if n == 0 {
             return;
         }
-        state::add(player_id, state_key::STUN_START, n);
+        // Declare the floor + wear-off **before** the write: a first write
+        // to a key with `flags == 0` would otherwise skip `NEVER_NEGATIVE`
+        // and a negative `n` could land at -1 (the fuzz's `stay=-1`).
         state::set_flags(player_id, state_key::STUN_START, LAYER_FLAGS);
         state::set_expires(player_id, state_key::STUN_START, state::TURN_START);
+        state::add(player_id, state_key::STUN_START, n);
     }
 
     /// [晕眩]'s contribution to the generic move gate. [不可阻挡] cancels the
@@ -278,20 +287,19 @@ pub mod exile {
             return false;
         }
         let before = get(player_id);
-        state::add(player_id, state_key::EXILE, n_layers);
+        // Declare the floor + wear-off **before** the write: a first write
+        // to a key with `flags == 0` would otherwise skip `NEVER_NEGATIVE`
+        // and a negative `n` could land at -1 (the fuzz's `stay=-1`).
         state::set_flags(player_id, state_key::EXILE, LAYER_FLAGS);
         state::set_expires(player_id, state_key::EXILE, state::TURN_START);
+        state::add(player_id, state_key::EXILE, n_layers);
         if get(player_id) <= before {
             return false; // cancelled / no-op write
         }
-        state::set(player_id, state_key::EXILE_TO, to);
         state::set_flags(player_id, state_key::EXILE_TO, state_flag::ENGINE_OWNED);
+        state::set(player_id, state_key::EXILE_TO, to);
+        state::set_flags(player_id, state_key::EXILE_HOLD, LAYER_FLAGS);
         state::set(player_id, state_key::EXILE_HOLD, if hold { 1 } else { 0 });
-        state::set_flags(
-            player_id,
-            state_key::EXILE_HOLD,
-            LAYER_FLAGS,
-        );
         ctx::raise_after(player_id, RAISE_EXILE, 1);
         log_grant(source_of(player_id), player_id, RAISE_EXILE);
         true
@@ -307,8 +315,8 @@ pub mod exile {
         }
         if n < 0 {
             let left = (get(player_id) + n).max(0);
-            state::set(player_id, state_key::EXILE, left);
             state::set_flags(player_id, state_key::EXILE, LAYER_FLAGS);
+            state::set(player_id, state_key::EXILE, left);
             if left == 0 {
                 clear_markers(player_id);
             }
@@ -341,20 +349,14 @@ pub mod exile {
     /// Forget `exileTo` / `exileMain` / `exileHold` without touching the layer
     /// count (the tick-out path already has `exile == 0`).
     fn clear_markers(player_id: i32) {
-        state::set(player_id, state_key::EXILE_TO, -1);
+        // Declarations first (see the `stay::add` note): never write a key
+        // before its floor is on.
         state::set_flags(player_id, state_key::EXILE_TO, state_flag::ENGINE_OWNED);
+        state::set(player_id, state_key::EXILE_TO, -1);
+        state::set_flags(player_id, state_key::EXILE_MAIN, LAYER_FLAGS);
         state::set(player_id, state_key::EXILE_MAIN, 0);
-        state::set_flags(
-            player_id,
-            state_key::EXILE_MAIN,
-            LAYER_FLAGS,
-        );
+        state::set_flags(player_id, state_key::EXILE_HOLD, LAYER_FLAGS);
         state::set(player_id, state_key::EXILE_HOLD, 0);
-        state::set_flags(
-            player_id,
-            state_key::EXILE_HOLD,
-            LAYER_FLAGS,
-        );
     }
 
     /// [除外]'s contribution to the generic move gate.

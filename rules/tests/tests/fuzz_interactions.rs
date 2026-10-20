@@ -17,6 +17,17 @@ use fuzz::drive::Trace;
 use fuzz::meta;
 use fuzz::{is_known, one_iter, Finding};
 
+// These tests drive full matches through the process-global `Arc<WasmRules>`
+// (`common::rules()`). Running them concurrently lets one test's card run
+// perturb another's -- which shows up as a phantom `negative state stay=-1`
+// on a fixed seed. Hold this lock for the body of every test in the file so
+// the suite is deterministic under `--test-threads=N`.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Default iterations -- the whole file should land in 1-2 minutes.
 /// Bump with `FUZZ_ITERS=…` for a long soak (2000 iters ≈ 2 min on this tree).
 const DEFAULT_ITERS: u32 = 900;
@@ -44,6 +55,7 @@ fn seed_for(i: u32) -> u64 {
 
 #[test]
 fn fuzz_interactions_invariants() {
+    let _s = serial();
     let n = iters();
     let t0 = Instant::now();
     let mut findings: Vec<Finding> = vec![];
@@ -114,6 +126,7 @@ fn fuzz_interactions_invariants() {
 
 #[test]
 fn fuzz_determinism() {
+    let _s = serial();
     let n = iters().min(6);
     for i in 0..n {
         let seed = seed_for(i) ^ 0xDE7;
@@ -142,6 +155,7 @@ fn fuzz_determinism() {
 
 #[test]
 fn fuzz_save_restore() {
+    let _s = serial();
     let n = iters().min(6);
     for i in 0..n {
         let seed = seed_for(i) ^ 0x5A7E;
@@ -174,6 +188,7 @@ fn fuzz_save_restore() {
 
 #[test]
 fn fuzz_meta_negation() {
+    let _s = serial();
     let n = iters().min(4);
     for i in 0..n {
         let seed = seed_for(i) ^ 0x4E6;
@@ -188,6 +203,7 @@ fn fuzz_meta_negation() {
 
 #[test]
 fn fuzz_meta_commutativity() {
+    let _s = serial();
     let n = iters().min(4);
     for i in 0..n {
         let seed = seed_for(i) ^ 0xC044;
@@ -202,6 +218,7 @@ fn fuzz_meta_commutativity() {
 
 #[test]
 fn fuzz_meta_monotonicity() {
+    let _s = serial();
     let n = iters().min(4);
     for i in 0..n {
         let seed = seed_for(i) ^ 0x3040;
@@ -216,6 +233,7 @@ fn fuzz_meta_monotonicity() {
 
 #[test]
 fn fuzz_meta_seat_rotation() {
+    let _s = serial();
     let n = iters().min(3);
     for i in 0..n {
         let seed = seed_for(i) ^ 0x5EA7;
@@ -234,6 +252,7 @@ fn fuzz_meta_seat_rotation() {
 /// is a safety cap that traps loudly. See `docs/ENGINE.md`.
 #[test]
 fn fuzz_money_depth_probe() {
+    let _s = serial();
     match meta::check_money_depth(seed_for(0) ^ 0x3E97) {
         Ok(report) => eprintln!("{report}"),
         Err(e) => eprintln!("probe could not nest 3 deep: {e}"),
@@ -250,6 +269,7 @@ fn fuzz_money_depth_probe() {
 /// owner.
 #[test]
 fn fuzz_meta_immunity() {
+    let _s = serial();
     let n = iters().min(4);
     for i in 0..n {
         let seed = seed_for(i) ^ 0x1777;
