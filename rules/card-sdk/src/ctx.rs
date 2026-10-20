@@ -2277,16 +2277,24 @@ pub mod plan {
         unsafe { sys::set_tag(p, l, value) }
     }
 
-    /// `set_tag` with the key as an intern id (v78). Used by the FilterValue
-    /// write-back so a pure body can name a tag without a `&str` on the wire.
+    /// `set_tag` with the key as an intern id (v78). Kept for host call sites
+    /// that still name a tag by intern id; payload write-back uses the string
+    /// form of [`Self::set_tag`].
     pub fn set_tag_id(key_id: i32, value: i32) {
         unsafe { sys::set_tag_id(key_id, value) }
     }
 
-    /// Host-supplied recorded roll (v78), or `FilterValue::UNCHANGED` when the
-    /// host did not pre-roll one for this raise.
-    pub fn recorded_roll() -> i32 {
-        unsafe { sys::recorded_roll() }
+    /// Host-supplied recorded roll (v78), or `None` when the host did not
+    /// pre-roll one for this raise.
+    pub fn recorded_roll() -> Option<i32> {
+        let v = unsafe { sys::recorded_roll() };
+        // Flatten boundary: the wasm import is `i32`; `i32::MIN` is the wire
+        // spelling of "no recorded roll".
+        if v == i32::MIN {
+            None
+        } else {
+            Some(v)
+        }
     }
 
     /// Passing CiRCLE pays nothing on this walk.

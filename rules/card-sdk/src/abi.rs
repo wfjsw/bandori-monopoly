@@ -732,7 +732,24 @@ use std::borrow::Cow;
 ///      `move.kind` stays `int` (`MoveKind` is a closed engine enum).
 /// SAVE_VERSION unchanged (kinds are not in `Saved`).
 /// RECORD_VERSION unchanged (the record codec does not carry kind ids).
-pub const ABI_VERSION: i32 = 91;
+/// v92: **idiomatic payloads + shared vocabulary**. `FilterValue` and its
+///      `UNCHANGED` sentinel are gone. Per-kind payloads in
+///      [`crate::payload`]: `GateValue` / `PlanValue` / `RollValue` /
+///      `DealValue` / `PayAddValue` / `RedirectValue`, one `FilterPayload`
+///      impl each. `On::FilterValue`'s body is a `FilterBody` arm (temporary
+///      adapter until the Phase 3 `FilterEntry` drive). Gates move off
+///      `On::FilterFlag` onto `FilterBody::Gate`; pure-decision
+///      (`PaySplitChoose` / `PayCombinedCancel`) stays `fn(i32,i32)->bool`.
+///      Intern-id tables (`TAG_FIRE_ROLL` / `TAG_PRE_ROLLPLAN` /
+///      `REASON_POPPIN_LOCKED`) die -- bodies carry `MsgKey` strings.
+///      Shared wire vocabulary lives in `game-kinds`: `Seat` / `Tile` /
+///      `Payee` / `Dice` / `MoveKind` / `Dir` / `MsgKey`, one definition on
+///      both sides of the hostcall. Flatten to `i32` only at the
+///      `hostfns.rs` wasm-import edge. **SAVE_VERSION 11 -> 12** (`MoveCtx`
+///      / `World.recorded_roll` / `TriggerBuy` sentinels become `Option`);
+///      older saves are refused (replays ride archived engine bundles).
+/// RECORD_VERSION unchanged (the record codec does not carry kind ids).
+pub const ABI_VERSION: i32 = 92;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -2650,76 +2667,10 @@ pub enum OnKind {
     Build = 13,
 }
 
-/// Small typed payload for [`crate::On::FilterValue`] (BuyAssign / DiceRollPlan).
-/// Unchanged fields keep their sentinel (`UNCHANGED`); the host applies only
-/// the fields the body rewrote. Pure: the body copies, tweaks, returns.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct FilterValue {
-    /// The integer being filtered (amount / price / roll / seconds / flip count).
-    pub value: i32,
-    /// BuyAssign: new owner (`UNCHANGED` / `-1` = bank / `>=0` = seat).
-    pub deal_owner: i32,
-    /// BuyAssign: house count (`UNCHANGED` keeps the deal's).
-    pub deal_houses: i32,
-    /// BuyAssign: mortgaged flag (`UNCHANGED` / 0 / 1).
-    pub deal_mortgaged: i32,
-    /// DiceRollPlan: who rolls (`UNCHANGED` / `-1` = the mover / `>=0` = stand-in).
-    pub roller: i32,
-    /// DiceRollPlan: base dice count / sides (sides 0 = a flat `count`).
-    pub base_count: i32,
-    pub base_sides: i32,
-    /// DiceRollPlan: extra dice count / sides.
-    pub extra_count: i32,
-    pub extra_sides: i32,
-    /// DiceRollPlan: step override (`UNCHANGED` keeps the roll; else exact count).
-    pub steps: i32,
-    /// DiceRollPlan: walk direction (`UNCHANGED` / 0 = forward / 1 = reverse).
-    pub reverse: i32,
-    /// DiceRollPlan: whether the move settles (`UNCHANGED` / 0 / 1).
-    pub resolve: i32,
-    /// DiceRollPlan: unsigned-roll floor.
-    pub min_roll: i32,
-    /// DiceRollPlan: pay / rent factor in milli (`UNCHANGED` / 0 = ×0 / 1000 = ×1).
-    pub pay_factor: i32,
-    pub rent_factor: i32,
-    /// DiceRollPlan: stop-at / settle-tile / teleport-to tile (`UNCHANGED`).
-    pub stop_at: i32,
-    pub settle_tile: i32,
-    pub teleport_to: i32,
-    /// DiceRollPlan: clear the dice table first (`UNCHANGED` / 0 / 1).
-    pub clear_dice: i32,
-    /// DiceRollPlan: `plan::set_tag("key", value)` -- the key is the creating
-    /// card's own tag name (see the body); `UNCHANGED` keeps the plan's.
-    pub tag: i32,
-    /// Pay pipeline: new payee (`UNCHANGED` / `-1` = bank / `>=0` = seat).
-    pub payee: i32,
-    /// DiceRollPlan: move kind (`UNCHANGED` / 0 = walk / 1 = teleport).
-    pub move_kind: i32,
-    /// DiceRollPlan: append this many base dice (`UNCHANGED` / count, sides).
-    pub add_base_count: i32,
-    pub add_base_sides: i32,
-    /// Gate: allow? (`UNCHANGED` / 0 = deny / 1 = allow). Prefer
-    /// [`crate::On::FilterFlag`] for a bare yes/no; this field is for a gate
-    /// that also rewrites `payee` / carries a reason.
-    pub allowed: i32,
-    /// Gate: denial reason message key (intern id, 0 = none). The host maps
-    /// the id back to the key for the UI.
-    pub reason: i32,
-    /// Host-supplied recorded roll (v78). The host pre-rolls dice into the
-    /// recorded RNG stream and exposes the face here, so a Filter body that
-    /// would have called `ctx::roll` (kaoru_thief's 1d2 direction, heat_head's
-    /// 1d6 cut) remains pure and replay-deterministic. `UNCHANGED` = no
-    /// recorded roll for this raise.
-    pub recorded_roll: i32,
-    /// `plan::set_tag` key as an intern id (v78; 0 = none). Write-back calls
-    /// `plan::set_tag_id(key, tag)`.
-    pub tag_key: i32,
-}
-
-impl FilterValue {
-    /// Sentinel: leave the host's current field alone.
-    pub const UNCHANGED: i32 = i32::MIN;
-}
+/// Filter payloads live in [`crate::payload`] -- one typed struct per kind
+/// family (`PlanValue` / `RollValue` / `DealValue` / `GateValue` /
+/// `PayAddValue` / `RedirectValue`). The 28-field `FilterValue` bag and its
+/// `UNCHANGED` sentinel are gone (ABI v92).
 
 impl OnKind {
     pub fn from_i32(v: i32) -> Option<Self> {

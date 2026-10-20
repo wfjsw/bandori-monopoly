@@ -41,6 +41,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 pub mod abi;
+pub mod payload;
 pub mod meta;
 pub mod msg;
 
@@ -77,6 +78,11 @@ mod kani_alloc;
 pub mod native;
 
 pub use msg::Msg;
+pub use payload::{
+    DealValue, FilterBody, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue,
+};
+#[cfg(any(target_arch = "wasm32", feature = "guest"))]
+pub use payload::FilterPayload;
 
 /// The run stopped at a prompt: the host has published the question and will
 /// re-run this effect from the top with the answer plugged in (see the replay
@@ -676,11 +682,9 @@ pub enum On {
     ),
     /// **Boolean decision** (ABI v74). Body is `fn(player_id, value) -> bool`
     /// -- pure. `false` cancels / substitutes the pipeline stage.
-    /// Kinds: PayCombinedCancel (false = drop the command), PaySplitChoose
-    /// (false = cancel the payment), and the decision gates (AbnormalGuard /
-    /// ImmuneAll / Untargetable / Redirect / BuyGate / ActGate / PayGate /
-    /// MoveGate / ExclusiveUse / PlayGate / OnBoardGate / TargetableGate --
-    /// true = allowed).
+    /// Kinds: PayCombinedCancel (false = drop the command) and PaySplitChoose
+    /// (false = cancel the payment). The gates moved to
+    /// [`On::FilterValue`] with [`payload::GateValue`] (ABI v92).
     /// The generic marker spend-substitution window (`ChargePaying`, id 78;
     /// name is payload) is **not** here: its 「可」 opt-in prompts, so it remains
     /// `On::Action`. A PaySplitChoose that *also* rewrites the amount is split
@@ -691,15 +695,15 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32, value: i32) -> bool,
     ),
-    /// **Typed struct rewrite** (ABI v74). Body is
-    /// `fn(player_id, v: FilterValue) -> FilterValue` -- pure.
-    /// Kinds: BuyAssign (deal owner/houses/mortgaged) and DiceRollPlan
-    /// (move-plan shaping). See [`abi::FilterValue`].
+    /// **Typed payload rewrite** (ABI v75 / v92). Body is a [`payload::FilterBody`]
+    /// arm -- one typed struct per kind family. Pure: copy, tweak, return.
+    /// Kinds: BuyAssign (deal), DiceRollPlan (move plan), DiceRollValue (face),
+    /// Redirect / PaySplitAdd (payee), and the gates (`GateValue`).
     FilterValue(
         &'static [abi::FilterKind],
         &'static str,
         Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32, v: abi::FilterValue) -> abi::FilterValue,
+        payload::FilterBody,
     ),
     /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
     /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
