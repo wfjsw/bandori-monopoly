@@ -74,7 +74,12 @@
    everything by the same factor; the title is sized in design px to stay
    legible after that, and the empty slots share the exact same box. */
 .stripCards > .stripCard { padding: 4px; }
-.stripCards > .stripCard .title { font-size: 15px; line-height: 1.25; padding: 3px 1px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; flex: none; max-height: 2.9em; }
+/* Card.module's classes are hashed, so reach the face's parts by position:
+   1 art, 2 colour line, 3 title. Art and line keep their size; only the title
+   yields (two lines, clipped), so every image is the same size. */
+.stripCards > .stripCard > * { flex: none; }
+.stripCards > .stripCard > :nth-child(1) { width: 100%; aspect-ratio: 4 / 3; }
+.stripCards > .stripCard > :nth-child(3) { font-size: 15px; line-height: 1.25; padding: 3px 1px 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 2.6em; }
 .hint { margin-top: 6px; font-size: 13px; color: var(--sub); }
 
 .pool { flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; gap: 12px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; }
