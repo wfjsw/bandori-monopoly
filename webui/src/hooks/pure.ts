@@ -3,6 +3,7 @@
 //
 //   matchHotkey        -- the `useHotkeys` key matcher
 //   countdownLeft      -- the `useCountdown` / `usePerfCountdown` arithmetic
+//   scrollFollowStep   -- the `useScrollFollow` tail-tracking state machine
 //   canvasBox          -- the Live2D stand's portrait fit (Live2DPortrait.Draw)
 //   sameParams         -- the Live2D `params` change detector
 //   bannerDeadline     -- the AutoBanner's hide-at stamp
@@ -71,6 +72,60 @@ export function matchHotkey(hk: Hotkey, e: HotkeyEventLike): boolean {
 /** Milliseconds left until `deadline`, never negative. */
 export function countdownLeft(deadline: number, now: number): number {
   return Math.max(0, deadline - now);
+}
+
+// ---------------------------------------------------------------- scroll follow
+
+/**
+ * How many CSS px below the viewport still count as "at the end" of a scroller
+ * (`useScrollFollow`). Not 0: a wheel notch, a trackpad rest, a fractional
+ * `scrollTop` rounding, or one log line landing mid-gesture must not read as
+ * "the user scrolled up to read" -- that silently kills the follow and it only
+ * comes back when they move again. One and a bit log lines (14px / 1.55) is
+ * tight enough that scrolling up to re-read the last entry still opts out.
+ */
+export const END_SLACK = 32;
+
+/** `gap` is the px of content still below the viewport. Is the user at the end? */
+export function atScrollEnd(gap: number, slack: number = END_SLACK): boolean {
+  return gap <= slack;
+}
+
+/** The follow state `useScrollFollow` keeps between renders. */
+export interface ScrollFollow {
+  /** The user is at the end, so new content should re-pin them to the bottom. */
+  atEnd: boolean;
+  /** The `scrollTop` of our last programmatic pin (null when the user is
+   *  steering). Its asynchronous `scroll` echo is not a user scroll. */
+  pinned: number | null;
+}
+
+/**
+ * Fold one `scroll` event into the follow state.
+ *
+ * The echo of our own pin must not be read as the user scrolling away. That
+ * echo is dispatched asynchronously, so it routinely lands after more content
+ * has already been appended -- and then measures the gap of the *new* lines,
+ * not the pin. Left unchecked that gap flips `atEnd` off while the user is
+ * still sitting on the bottom, and the follow dies until they scroll again.
+ */
+export function scrollFollowStep(
+  s: ScrollFollow,
+  ev: { scrollTop: number; gap: number; visible: boolean },
+): ScrollFollow {
+  // A hidden pane (display: none) has no height; its events say nothing.
+  if (!ev.visible) return s;
+  if (s.pinned != null && ev.scrollTop === s.pinned) return { atEnd: true, pinned: s.pinned };
+  return { atEnd: atScrollEnd(ev.gap), pinned: null };
+}
+
+/**
+ * Should new content re-pin the scroller to its bottom? Yes while the user is
+ * at the end -- and also when they are only just short of it: the tail may
+ * have landed mid-gesture, after the last `scroll` already measured the gap.
+ */
+export function shouldPinToBottom(s: ScrollFollow, gap: number, enabled: boolean): boolean {
+  return enabled && (s.atEnd || atScrollEnd(gap));
 }
 
 // ---------------------------------------------------------------- banner
