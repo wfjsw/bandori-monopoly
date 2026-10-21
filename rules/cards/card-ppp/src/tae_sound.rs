@@ -15,7 +15,7 @@ pub const TAE_SOUND: CardDef =
         .raw_name(r#"（多惠）寻找更好的声音"#)
         .tags(&[])
         .text(r#"传送到“江户川乐器店”并获得一个[火罐]"#)
-        .cell(r#"B17"#)
+        // sheet cell B17
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"花园多惠"#)]));
 
 fn tae_sound(player_id: i32) -> card_sdk::Asked {

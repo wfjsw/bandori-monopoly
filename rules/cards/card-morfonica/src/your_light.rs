@@ -23,7 +23,7 @@ pub const YOUR_LIGHT: CardDef = CardDef::new(
         .raw_name(r#"你的光芒将照亮前路"#)
         .tags(&[])
         .text(r#"当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡，此次移动以“月之森女子学院”为起点（不触发起点地块效果）。"#)
-        .cell(r#"G4"#)
+        // sheet cell G4
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

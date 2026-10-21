@@ -51,7 +51,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         .raw_name(r#"黑衣人的补给"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。"#)
-        .cell(r#"F8"#)
+        // sheet cell F8
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

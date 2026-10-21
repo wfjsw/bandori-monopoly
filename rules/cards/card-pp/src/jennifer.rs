@@ -42,7 +42,7 @@ pub const JENNIFER: CardDef = CardDef::new(
 1. [使用者][支付][拥有者]400资金；
 2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
 3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#)
-        .cell(r#"D13"#)
+        // sheet cell D13
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Stand-in for C# `Card.User` (per-card Mem): the player who played the card,

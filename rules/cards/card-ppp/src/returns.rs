@@ -85,7 +85,7 @@ pub const RETURNS: CardDef = CardDef::new(
 （2）[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]。
 （3）使用因此卡获得的团卡的主动效果时需要支付1星星贴纸。
 （4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。"#)
-        .cell(r#"B5"#)
+        // sheet cell B5
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive

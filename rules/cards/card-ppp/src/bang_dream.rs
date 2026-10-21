@@ -18,7 +18,7 @@ pub const BANG_DREAM: CardDef =
         .tags(&[r#"手"#])
         .text(r#"[手]：
 为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房。"#)
-        .cell(r#"B7"#)
+        // sheet cell B7
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

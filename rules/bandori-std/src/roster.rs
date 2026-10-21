@@ -142,11 +142,9 @@ impl ToMetaRow for PersonaDef {
             ordinal: 0,
             id: alloc_string(self.name),
             name: alloc_string(self.name),
-            raw_name: String::new(),
             text: alloc_string(self.text),
             tags: Vec::new(),
             derived: false,
-            cell: String::new(),
             fields: Vec::from([
                 (alloc_string(meta_key::GROUP), alloc_string(self.group)),
                 (alloc_string(meta_key::SKILL), alloc_string(self.skill)),
@@ -236,11 +234,9 @@ impl ToMetaRow for GroupDef {
             ordinal: 0,
             id: alloc_string(self.name),
             name: alloc_string(self.name),
-            raw_name: String::new(),
             text: alloc_string(self.text),
             tags: Vec::new(),
             derived: false,
-            cell: String::new(),
             fields: Vec::from([
                 (alloc_string(meta_key::SKILL), alloc_string(self.skill)),
             ]),

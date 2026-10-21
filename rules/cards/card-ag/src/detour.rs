@@ -36,7 +36,7 @@ pub const DETOUR: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"(1)此卡可作为反击使用
 (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#)
-        .cell(r#"C9"#)
+        // sheet cell C9
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 /// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.

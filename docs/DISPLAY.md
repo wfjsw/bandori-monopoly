@@ -40,14 +40,14 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 
 ```json
 {
-  "cards":    { "<cardId>":      { "text": "...", "rawName": "...", "cell": "...",
+  "cards":    { "<cardId>":      { "text": "...", "rawName": "...",
                                    "counterReason": "..." } },
   "personas": { "<personaName>": { "display": "...", "text": "...", "color": "...",
                                    "variantTag": "...", "art": "...", "costume": "...",
                                    "cnId": "..." } },
   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
                                    "logo": "..." } },
-  "events":   { "<eventId>":     { "name": "...", "text": "...", "cell": "..." } }
+  "events":   { "<eventId>":     { "name": "...", "text": "..." } }
 }
 ```
 
@@ -66,7 +66,6 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 | --- | --- | --- | --- |
 | card | `text` | `CardMeta::text` | rule text |
 | card | `rawName` | `CardMeta::raw_name` | untrimmed sheet name |
-| card | `cell` | `CardMeta::cell` | sheet cell the row was lifted from |
 | card | `counterReason` | `On` reason field (`Counteract` / `Action` / `Play`) | 「…时」 clause the counteraction prompt shows; several entries join non-empty reasons with `\n` |
 | persona | `display` | `PersonaDef::display` | compact display label |
 | persona | `text` | `PersonaDef::text` | skill text |
@@ -81,7 +80,10 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 | group | `logo` | `GroupDef::logo` | logo id |
 | event | `name` | `CardMeta::name` | event name |
 | event | `text` | `CardMeta::text` | event rulebook body |
-| event | `cell` | `CardMeta::cell` | sheet cell the row was lifted from |
+
+The sheet cell a row was lifted from is **not** a field any more -- it is a
+`// sheet cell X` comment on the card impl. A row whose sheet name line is
+blank carries that cell as its `name` instead (`#J11`), so it is never lost.
 
 ## Split from the runtime roster
 

@@ -25,7 +25,7 @@ pub const POOL_BUG: CardDef = CardDef::new(
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"卡池BUG"#)
             .text(r#"将此卡放置于场地中央并将一张“[衍生]修复公告”背面朝上放置于事件牌堆顶部，下次触发事件时将此卡放入事件弃牌。此卡在场时不可在造价1500及以上的格子上加盖房屋。"#)
-            .cell(r#"A14"#)
+            // sheet cell A14
             .derived(false));
 
 fn always(_player_id: i32) -> bool {

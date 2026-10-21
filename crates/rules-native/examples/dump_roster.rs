@@ -14,9 +14,9 @@
 //! * No argument prints the rows to stdout.
 //!
 //! Display-only columns that live outside the engine structs (`counterReason`,
-//! card `rawName` / `cell`, persona `display` / `color` /
+//! card `rawName`, persona `display` / `color` /
 //! `variantTag` / `art` / `costume` / `cnId`, group `shortName` / `color` /
-//! `logo`, event `cell`) remain in `display.json` and are **not**
+//! `logo`) remain in `display.json` and are **not**
 //! printed here. Rule-body `text` IS printed: `card_text_mentions` searches it,
 //! so it is part of `CardData` / `PersonaData` / `GroupData` / `EventData`.
 

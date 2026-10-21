@@ -25,7 +25,7 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
         .raw_name(r#"（绯玛丽）如果并非没问题"#)
         .tags(&[r#"反击"#])
         .text(r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#)
-        .cell(r#"C15"#)
+        // sheet cell C15
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

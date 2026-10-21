@@ -21,7 +21,7 @@ pub const GACHA10: CardDef = CardDef::new(
         .tags(&[r#"手"#])
         .text(r#"[手]：
 [消耗]1500资金，抽1张卡。"#)
-        .cell(r#"A7"#)
+        // sheet cell A7
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn gacha10(player_id: i32) -> card_sdk::Asked {

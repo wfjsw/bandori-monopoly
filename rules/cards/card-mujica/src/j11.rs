@@ -34,11 +34,11 @@ pub const J11: CardDef = CardDef::new(
         On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
-        .name("")
+        // sheet cell J11 -- the name line is blank; `#J11` is the name.
+        .name("#J11")
         .raw_name("")
         .tags(&[])
         .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#)
-        .cell(r#"J11"#)
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

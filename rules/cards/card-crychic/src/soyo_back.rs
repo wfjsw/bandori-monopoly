@@ -25,7 +25,7 @@ pub const SOYO_BACK: CardDef = CardDef::new(
         .text(r#"（1）[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一 ：
 1. 将你的所有手牌放入弃牌堆，然后获得弃牌数*500的资金，抽1张卡，为你的一个格子付费加盖一间房屋，然后[移除]此卡；
 2. 获得1000资金并将此卡加入手牌 （2）[手] 获得500资金"#)
-        .cell(r#"M15"#)
+        // sheet cell M15
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"长崎素世（CRYCHIC）"#)]));
 
 const ID: &str = "CRYCHIC:（soyo）回到曾经";

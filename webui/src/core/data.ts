@@ -9,6 +9,7 @@ import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
 import { bandLogo, charArt } from "./assets";
+import { cardFaceTitle } from "./cardFace";
 import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile } from "./types";
 
 /** Build-exported presentation fields (empty entries omitted). */
@@ -168,7 +169,6 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       // build-time copy. Prefer it, but never blank a body the roster has.
       text: d.text ?? c.text ?? "",
       rawName: d.rawName ?? "",
-      cell: d.cell ?? "",
       ...(d.counterReason ? { counterReason: d.counterReason } : {}),
     };
   });
@@ -195,14 +195,13 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       logo: d.logo ?? "",
     };
   });
-  // Events: identity + game prose from the roster, `cell` from display.json.
+  // Events: identity + game prose from the roster, display from `display.json`.
   const events: EventData[] = roster.events.map((e) => {
     const d = display.events?.[e.id] ?? {};
     return {
       ...e,
       text: d.text ?? e.text ?? "",
       name: d.name ?? e.name ?? "",
-      cell: d.cell ?? "",
     };
   });
   const homeLines = j("home_lines.json").personas ?? [];
@@ -233,8 +232,8 @@ export function cardTitle(id: string): string {
   // A prompt can render before `load_data` has filled `D` (or during a module
   // hot-reload): never read through it unguarded, or the whole board blanks.
   if (!id || !D) return tr("common.unnamed");
-  const name = D.card(id)?.name;
-  if (name) return name;
+  const card = D.card(id);
+  if (card?.name) return card.name;
   // Skills use card-typed message arguments too, but their names live in the
   // roster's bands / characters. Match the engine's skill:<owner>:<skill> id.
   const skill = skillCard(id);
@@ -249,7 +248,11 @@ export function cardTitle(id: string): string {
     const t = D.tiles.find((x) => x.kind === id.slice(5));
     if (t) return t.name.replace(/\n/g, "");
   }
-  return tr("common.unnamed");
+  // A card row with no trimmed `name` is still titled -- `rawName` (the
+  // character-prefix cards); a blank sheet name line carries its cell handle
+  // in `name` already (`#J11`). Either way the 「效果适用」 header names the
+  // same card the card's own log lines do.
+  return cardFaceTitle(card, tr("common.unnamed"));
 }
 
 /** A `skill:<owner>:<skill>` id (the engine's band / character skill stand-in,

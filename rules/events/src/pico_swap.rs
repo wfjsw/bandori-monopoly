@@ -15,7 +15,7 @@ pub const PICO_SWAP: CardDef = CardDef::new("event:PICO灵魂交换", &[On::Play
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"PICO灵魂交换"#)
             .text(r#"所有未[除外]玩家[传送]到行动顺序的下一位未[除外]玩家的位置（不触发场地效果，例：第一位行动的玩家[传送]到第二位行动的玩家的位置并以此类推，最后行动的玩家[传送]到第一位行动的玩家的位置）"#)
-            .cell(r#"A7"#)
+            // sheet cell A7
             .derived(false));
 
 /// 规则书: 「所有未[除外]玩家[传送]到行动顺序的下一位未[除外]玩家的位置」 --

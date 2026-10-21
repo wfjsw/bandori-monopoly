@@ -18,7 +18,7 @@ pub const BACKSTAGE_TOUR: CardDef =
         .raw_name(r#"出发！后台之旅！"#)
         .tags(&[])
         .text(r#"看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金"#)
-        .cell(r#"F4"#)
+        // sheet cell F4
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

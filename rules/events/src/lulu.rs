@@ -12,7 +12,7 @@ pub const LULU: CardDef = CardDef::new("event:很噜的感觉", &[On::Play("", "
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"很噜的感觉"#)
             .text(r#"所有玩家可选择[传送]至快餐店（不触发场地效果），如果选择[传送]需支付500资金并喊出“噜噜噜！”（只要玩家嗓子允许，必须喊出“噜噜噜！”）"#)
-            .cell(r#"A4"#)
+            // sheet cell A4
             .derived(false));
 
 /// 规则书: 「所有玩家可选择[传送]至快餐店（不触发场地效果）」 -- each player in

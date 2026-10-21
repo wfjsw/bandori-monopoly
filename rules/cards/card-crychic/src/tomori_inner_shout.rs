@@ -45,7 +45,7 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         .raw_name(r#"（灯）内心的呐喊"#)
         .tags(&[])
         .text(r#"（1）打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得两个X差值*120的资金。（2）此卡不会被你乐队技能的（2）效果移除，乐队技能的（2）效果发动时展示此卡并将其洗入抽牌堆。（3）若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上，你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的（2）技能。"#)
-        .cell(r#"M13"#)
+        // sheet cell M13
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"高松灯（CRYCHIC）"#)]));
 
 fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {

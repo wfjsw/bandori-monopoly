@@ -29,7 +29,7 @@ pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
 （2）[共鸣]无视此卡的[特]效果（1）。
 [手]：
 将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#)
-        .cell(r#"D6"#)
+        // sheet cell D6
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

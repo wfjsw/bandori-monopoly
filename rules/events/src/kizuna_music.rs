@@ -13,7 +13,7 @@ pub const KIZUNA_MUSIC: CardDef = CardDef::new("event:Kizuna Music", &[On::Play(
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"Kizuna Music"#)
             .text(r#"触发此卡的玩家投掷X+1d20并所有玩家依次[传送]到投掷结果mod60所对应的格子并获得1层[除外]，X为所有玩家卡组里卡名为歌名的卡数量的总数"#)
-            .cell(r#"A23"#)
+            // sheet cell A23
             .derived(false));
 
 /// 「X为所有玩家卡组里卡名为歌名的卡数量的总数」 -- every song-title card in

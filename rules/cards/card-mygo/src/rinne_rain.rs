@@ -26,7 +26,7 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         .raw_name(r#"轮符雨"#)
         .tags(&[])
         .text(r#"使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]"#)
-        .cell(r#"I4"#)
+        // sheet cell I4
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn rinne_rain(player_id: i32) -> card_sdk::Asked {

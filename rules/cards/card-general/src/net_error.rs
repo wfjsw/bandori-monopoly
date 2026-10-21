@@ -26,7 +26,7 @@ pub const NET_ERROR: CardDef = CardDef::new(
 1. 手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]；
 2. 手卡的[手]效果且没有[指定]目标则抵消其所有的效果；
 3. 事件卡的效果手牌则则抵消其所有的效果。"#)
-        .cell(r#"A10"#)
+        // sheet cell A10
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn can_counteract(player_id: i32) -> bool {

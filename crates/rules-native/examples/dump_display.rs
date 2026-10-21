@@ -11,14 +11,14 @@
 //!
 //! ```json
 //! {
-//!   "cards":    { "<cardId>":      { "text": "...", "rawName": "...", "cell": "...",
+//!   "cards":    { "<cardId>":      { "text": "...", "rawName": "...",
 //!                                     "counterReason": "..." } },
 //!   "personas": { "<personaName>": { "display": "...", "text": "...", "color": "...",
 //!                                     "variantTag": "...", "art": "...", "costume": "...",
 //!                                     "cnId": "..." } },
 //!   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
 //!                                     "logo": "..." } },
-//!   "events":   { "<eventId>":     { "name": "...", "text": "...", "cell": "..." } }
+//!   "events":   { "<eventId>":     { "name": "...", "text": "..." } }
 //! }
 //! ```
 //!
@@ -121,7 +121,6 @@ fn cards_map() -> JsonMap {
             let mut row = JsonMap::new();
             insert_str(&mut row, "text", meta.text);
             insert_str(&mut row, "rawName", meta.raw_name);
-            insert_str(&mut row, "cell", meta.cell);
             insert_str(&mut row, "counterReason", &counter_reason(card));
             map.insert(card.id.to_string(), Value::Object(row));
         }
@@ -153,7 +152,6 @@ fn events_map() -> JsonMap {
         let mut row = JsonMap::new();
         insert_str(&mut row, "name", meta.name);
         insert_str(&mut row, "text", meta.text);
-        insert_str(&mut row, "cell", meta.cell);
         map.insert(bare.to_string(), Value::Object(row));
     }
     map

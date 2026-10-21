@@ -36,7 +36,7 @@ pub const RANGER: CardDef = CardDef::new(
 3. 数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡；
 4. 数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；
 5.数量至少为6则抽1张卡。"#)
-        .cell(r#"D14"#)
+        // sheet cell D14
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).

@@ -28,7 +28,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"(1) 将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。
 (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。"#)
-        .cell(r#"C7"#)
+        // sheet cell C7
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

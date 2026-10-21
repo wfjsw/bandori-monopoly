@@ -60,7 +60,7 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
 （3）此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作随后进入弃卡区：
 1. 每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；
 2. 每个双色效果为将自己的所有反面[P✽P粉丝]变正。"#)
-        .cell(r#"D15"#)
+        // sheet cell D15
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn trainee_guide(player_id: i32) -> card_sdk::Asked {

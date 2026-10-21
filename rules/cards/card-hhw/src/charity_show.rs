@@ -59,7 +59,7 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         .raw_name(r#"爱心义演"#)
         .tags(&[])
         .text(r#"打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）"#)
-        .cell(r#"F12"#)
+        // sheet cell F12
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

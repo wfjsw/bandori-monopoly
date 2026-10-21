@@ -50,7 +50,7 @@ pub const CLEAR_CP: CardDef = CardDef::new(
         .text(r#"（1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
 [手]：
 在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。"#)
-        .cell(r#"A8"#)
+        // sheet cell A8
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 const ID: &str = "通用:该清CP了";

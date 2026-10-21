@@ -39,7 +39,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         .raw_name(r#"离心力，不为所动"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击]当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时，你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果"#)
-        .cell(r#"G10"#)
+        // sheet cell G10
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

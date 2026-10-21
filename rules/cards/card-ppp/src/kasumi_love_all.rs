@@ -37,7 +37,7 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
 将此卡放置在“星之鼓动山丘”上。
 [持续]：
 其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子[强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半。"#)
-        .cell(r#"B15"#)
+        // sheet cell B15
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"户山香澄"#)]));
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).

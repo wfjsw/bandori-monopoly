@@ -25,7 +25,7 @@ pub const FATE_TOGETHER: CardDef = CardDef::new(
         .raw_name(r#"一起演奏音乐的命运共同体"#)
         .tags(&[r#"手"#])
         .text(r#"（1）[手] 直到你的下回合开始，每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。（2）若此卡打出后（1）效果未产生作用，将此卡返回手牌（不触发乐队技能的（3）效果）。"#)
-        .cell(r#"M9"#)
+        // sheet cell M9
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 const ID: &str = "CRYCHIC:一起演奏音乐的命运共同体";

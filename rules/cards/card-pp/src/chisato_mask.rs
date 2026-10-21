@@ -38,7 +38,7 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
 [持续]：
 （1）[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。
 （2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#)
-        .cell(r#"D18"#)
+        // sheet cell D18
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"白鹭千圣"#)]));
 
 fn chisato_mask(player_id: i32) -> card_sdk::Asked {

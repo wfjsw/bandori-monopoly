@@ -14,7 +14,7 @@ pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", "
         .raw_name(r#"曲奇时间"#)
         .tags(&[])
         .text(r#"将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。"#)
-        .cell(r#"E5"#)
+        // sheet cell E5
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// C# `CardCookieTime.WhyNot`: 「弃卡区没有卡」.

@@ -30,7 +30,7 @@ pub const FIX_NOTE: CardDef = CardDef::new(
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"修复公告"#)
             .text(r#"前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后将此卡移除。"#)
-            .cell(r#"A25"#)
+            // sheet cell A25
             .derived(true));
 
 fn always(_player_id: i32) -> bool {

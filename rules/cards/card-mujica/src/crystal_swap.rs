@@ -22,7 +22,7 @@ pub const CRYSTAL_SWAP: CardDef =
         .raw_name(r#"会被骗着买水晶的人"#)
         .tags(&[])
         .text(r#"将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上。"#)
-        .cell(r#"J13"#)
+        // sheet cell J13
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 /// One pool entry: a card instance on some player's field.

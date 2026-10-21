@@ -25,7 +25,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"Forbidden Moca"#)
             .text(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#)
-            .cell(r#"A20"#)
+            // sheet cell A20
             .derived(false));
 
 /// 规则书: 「直到你的下个回合结束…」 -- the event stays in play (「你的」 is the

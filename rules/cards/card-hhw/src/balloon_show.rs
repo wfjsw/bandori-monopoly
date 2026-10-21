@@ -15,7 +15,7 @@ pub const BALLOON_SHOW: CardDef =
         .raw_name(r#"热气球演出"#)
         .tags(&[])
         .text(r#"投掷4次3d20mod60并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动"#)
-        .cell(r#"F11"#)
+        // sheet cell F11
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardBalloonShow.WhyNot` = `H.MoveWhyNot(seat)`.

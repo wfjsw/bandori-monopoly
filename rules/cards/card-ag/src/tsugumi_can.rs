@@ -22,7 +22,7 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
         .raw_name(r#"（鸫）微小的『能做到』的事"#)
         .tags(&[r#"反击"#])
         .text(r#"打出此卡时，选择其中一个效果发动：（1）【反击】时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算，除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对无论是何种颜色的夕阳生效）（2）视为打出一张@Tsugu ycm"#)
-        .cell(r#"C16"#)
+        // sheet cell C16
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"羽泽鸫"#)]));
 
 /// 规则书（1）: the gate is 「这回合已经移动过了」 -- the same main-move latch the

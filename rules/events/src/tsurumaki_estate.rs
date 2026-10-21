@@ -15,7 +15,7 @@ pub const TSURUMAKI_ESTATE: CardDef =
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"弦卷集团地产开发"#)
             .text(r#"随机指定一个可购买格子（如果有）然后所有玩家进行竞价，出价最大的玩家支付选择数量的资金并获得该格子的地契"#)
-            .cell(r#"A3"#)
+            // sheet cell A3
             .derived(false));
 
 /// 规则书: 「随机指定一个可购买格子（如果有）」 -- one unowned buyable tile,

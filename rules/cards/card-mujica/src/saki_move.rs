@@ -13,7 +13,7 @@ pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play(""
         .raw_name(r#"祥，移动"#)
         .tags(&[])
         .text(r#"强制一名玩家向你选择的方向移动3格并[触发结算]（可在掷骰前选择自己以代替主要移动），触发结算时进行的支付价格减半"#)
-        .cell(r#"J4"#)
+        // sheet cell J4
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn saki_move(player_id: i32) -> card_sdk::Asked {

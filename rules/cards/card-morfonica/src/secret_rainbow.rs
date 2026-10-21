@@ -34,7 +34,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         .raw_name(r#"秘密与青春的虹彩"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。（2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#)
-        .cell(r#"G14"#)
+        // sheet cell G14
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 // ============ NORMALIZED GRADE ORDINALS ================================

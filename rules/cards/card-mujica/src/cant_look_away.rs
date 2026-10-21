@@ -35,7 +35,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         .raw_name(r#"无法将视线移开"#)
         .tags(&[r#"反击"#])
         .text(r#"使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动"#)
-        .cell(r#"J7"#)
+        // sheet cell J7
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

@@ -32,7 +32,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
         .raw_name(r#"（纱夜）弹奏弹奏弹奏，继续弹奏"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。"#)
-        .cell(r#"E10"#)
+        // sheet cell E10
         .fields(&[("group", r#"Roselia"#), ("owner", r#"冰川纱夜"#)]));
 
 fn counter_only(_player_id: i32) -> Option<Msg> {

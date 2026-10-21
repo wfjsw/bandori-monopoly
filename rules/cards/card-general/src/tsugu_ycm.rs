@@ -37,7 +37,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
 2. 结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并不[结算]，且可选择购买任意无主的[可购买格子]；
 3. 结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）；
 4. 结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。"#)
-        .cell(r#"A2"#)
+        // sheet cell A2
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 /// 「购买格子时」 -- the `BuyAdd` hook's applicability: there is a tile being

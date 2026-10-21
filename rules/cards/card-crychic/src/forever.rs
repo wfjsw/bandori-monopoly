@@ -41,7 +41,7 @@ pub const FOREVER: CardDef = CardDef::new(
         .tags(&[r#"手"#, r#"持续"#])
         .text(r#"（1）[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。
 （2）[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。"#)
-        .cell(r#"M8"#)
+        // sheet cell M8
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 const ID: &str = "CRYCHIC:如果能一直持续下去...";

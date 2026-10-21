@@ -23,7 +23,7 @@ pub const SIGNPOST: CardDef = CardDef::new(
         .raw_name(r#"向着未来的路标"#)
         .tags(&[])
         .text(r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#)
-        .cell(r#"B14"#)
+        // sheet cell B14
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
