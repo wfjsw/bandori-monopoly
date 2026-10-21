@@ -119,11 +119,9 @@ impl CardMeta {
             ordinal,
             id: id.to_string(),
             name: self.name.to_string(),
-            raw_name: String::new(),
             text: self.text.to_string(),
             tags: self.tags.iter().map(|s| (*s).to_string()).collect(),
             derived: self.derived,
-            cell: String::new(),
             fields: self
                 .fields
                 .iter()
@@ -156,15 +154,9 @@ pub struct MetaRow {
     /// Primary key: card id, or the row's `name` for name-keyed lists.
     pub id: String,
     pub name: String,
-    pub raw_name: String,
     pub text: String,
     pub tags: Vec<String>,
     pub derived: bool,
-    /// Vestigial. Display columns left `ruleset_metadata` at ABI v86 and the
-    /// sheet cell is now a comment on the card impl (an unnamed row *is* named
-    /// after its cell, `#J11`); this stays empty so the postcard field order
-    /// of `MetaRow` is unchanged. Do not populate.
-    pub cell: String,
     /// Game-specific string slots `(key, value)`.
     pub fields: Vec<(String, String)>,
     /// Game-specific string lists `(key, values)`.

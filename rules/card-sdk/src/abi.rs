@@ -702,7 +702,14 @@ use alloc::{string::String, vec::Vec};
 ///      `CardDef::gate_msgs` / `CardDef::exemption_prop` carry gate-refusal
 ///      i18n keys and the exempting prop key as data. `state::set_flags` +
 ///      `ctx::raise_after` are additive. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 89;
+/// v90: **`MetaRow` sheds its two dead display slots**. `raw_name` and `cell`
+///      have been empty since v86 moved display columns into
+///      `webui/src/generated/display.json`; nothing read them. Dropped from
+///      the postcard field order (a wire break -- that is the bump). The sheet
+///      cell is now a comment on the card impl, and a row with no sheet name
+///      is *named* after its cell (`#J11`) in `CardMeta::name`. SAVE_VERSION
+///      unchanged.
+pub const ABI_VERSION: i32 = 90;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
