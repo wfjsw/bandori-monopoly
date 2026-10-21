@@ -168,8 +168,13 @@ fn g02_half_speed_plus_expectations_floor_on_a_rent() {
     let tile = tile("弦卷豪宅");
     let rent = data().tiles[tile].rent[0];
     t.set_owner(tile, Some(1));
-    // 不要背负期待 (1) cuts the roll by 2 and 0.5倍速 halves the final move:
-    // roll 7 -> 5 -> 2 either way round, so start two tiles before `tile`.
+    // 不要背负期待 (1) cuts the roll by 2 and 0.5倍速 halves it, folding in
+    // placement order (0.5倍速 first here): 7 -> ceil(7/2)=4 -> 2, so start
+    // two tiles before `tile`. TODO(规则书) OPEN-ROLLRESHAPE-01: if 「最终结算」
+    // means *after* the additive −2 the answer is ceil(5/2)=3 instead and this
+    // landing moves by one. The two orders are not "either way round" -- they
+    // disagree -- and the card prints 向上取整, so a floor half is not a third
+    // option. Assertion left as-is pending the ruling.
     t.set_pos(0, (tile + 58) % 60);
     t.dice(&[7]);
     t.roll(0).unwrap();
