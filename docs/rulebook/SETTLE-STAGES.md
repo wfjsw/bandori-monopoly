@@ -195,6 +195,9 @@ dream_ahead (3), tomorrows_door (3), studio_storm (2), mark:cp). **M3 done**
 rana_parking (2) split per R4). **M4 done** (off `passPlayer` onto `passTile` /
 `ChainKind::PassTile`: kaoru_prince (1), sayo_thorns (1), sakiko_life 状态1,
 proud_light, miracle (2), uika_imprisoned 状态2, kokoro_practice (3);
+plus **kaoru_thief** 「经过该玩家时使自己强制停下」, a missed case found by the
+2026-10-21 wave 3 clause check and re-homed the same day -- it was still on
+`passPlayer`, so `move.remaining > 0` made the mid-walk stop inert (W3-KAORU-01).
 EXCLUDED want_to_grab (R5 pending) and no_breakup (R3 pending) — left with
 `TODO(规则书)` markers). **M5 done** (one_of_us on `tileResolved`). **M6a done**
 (a no-settle teleport fires `passTile` + `passPlayer` at its destination).
@@ -262,7 +265,10 @@ always true at `passPlayer`, so the force-stop never fires.
 
 Affected: `kaoru_prince` （1）, `sayo_thorns` （1）, `sakiko_life` 状态1,
 `kokoro_practice` （3）, `proud_light` [反击], `miracle` （2）,
-`want_to_grab` （2）, `uika_imprisoned` 状态2.
+`want_to_grab` （2）, `uika_imprisoned` 状态2, and `kaoru_thief`
+「经过该玩家时使自己强制停下」 (missed in the original sweep; found by the
+2026-10-21 wave 3 clause check and re-homed the same day -- same sharp shape as
+凑友希那, the body's `move.remaining > 0` was always false at `passPlayer`).
 Correct on `passPlayer`: `rana_parking` （3） 「重合」, and the genuine 重叠
 clauses (「移动终点触发[重叠]」 shaped).
 

@@ -316,7 +316,7 @@ happened.
 | level | kinds | when |
 |---|---|---|
 | Combined | `PayCombinedAdd` / `PayCombinedMul` / `PayCombinedCancel` (+ `PayCombinedAddBefore` prompt) | once per payment command, on the figure before any 「[分摊]」 divide |
-| Split | `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt` (+ `PaySplitChooseBefore` prompt) | on each settled leg/share (and once for a non-split payment) |
+| Split | `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt` (+ `PaySplitMulBefore` / `PaySplitChooseBefore` prompts) | on each settled leg/share (and once for a non-split payment) |
 
 ### Host application order
 
@@ -324,8 +324,8 @@ The host raises the pipeline stages in rulebook order and folds each stage's
 return before the next raise, within a stage in placement order:
 
 * pay: `effect` declaration → `payCombinedAddBefore` (Action) → `payCombinedAdd` →
-  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMul` →
-  `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
+  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMulBefore` (Action) →
+  `paySplitMul` → `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
 * roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window).
   `DiceRollAfter` is the one Action that may still roll and write the face

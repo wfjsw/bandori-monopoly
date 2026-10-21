@@ -164,6 +164,7 @@ fn typed_engine_consts_have_table_rows() {
         (106, "PayCombinedAddBefore"),
         (108, "OnBoardGate"),
         (109, "TargetableGate"),
+        (110, "PaySplitMulBefore"),
     ];
     for (id, name) in named {
         let row = game_kinds::row(*id).unwrap_or_else(|| panic!("{name} (id {id}) has no table row"));

@@ -261,7 +261,11 @@ any 「[分摊]」 divides it into shares: `payCombinedAdd` -> `payCombinedMul` 
 `payCombinedCancel`, composing (`PIPELINE-AUDIT` Q2). This is the 「分摊前」 figure
 of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)) and 「此次获得的分摊前数量
 增加Y×100」 (白鹭千圣 (2)); both hook `payCombinedAdd`. The per-share stages
-(`paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`) still run on each settled leg.
+(`paySplitAdd` / `paySplitMulBefore` / `paySplitMul` / `paySplitChoose` / `paySplitAt`)
+still run on each settled leg. `paySplitMulBefore` (v96) is the writable Action
+pre-stage between the `paySplitAdd` fold and the `paySplitMul` fold (规则书
+支付阶段 3 「支付计算后」); `paySplitChooseBefore` is the one before
+`paySplitChoose`.
 
 A single-pair payment's command total *is* its amount, so the same three stages
 run inside `money_inner` -- after the `effect` declaration (a counter still

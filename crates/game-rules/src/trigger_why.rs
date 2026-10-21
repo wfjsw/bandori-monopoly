@@ -102,6 +102,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::AtEnd
         | TriggerKind::PaySplitChooseBefore
         | TriggerKind::PayCombinedAddBefore
+        | TriggerKind::PaySplitMulBefore
         | TriggerKind::EndTurnBefore
         | TriggerKind::EndTurnAfter => Msg::new("log.why.turn_end").player_id("who", who),
         TriggerKind::DeckBeforeGame => Msg::new("log.why.deck_before").player_id("who", who),

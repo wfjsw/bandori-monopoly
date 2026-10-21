@@ -110,6 +110,7 @@
   "anim.chainKind.diceRollValue": "Roll result",
   "anim.chainKind.paySplitChooseBefore": "Before split-choose",
   "anim.chainKind.payCombinedAddBefore": "Before combined-add",
+  "anim.chainKind.paySplitMulBefore": "Before split-multiply",
   "anim.chainKind.atEnd": "At turn end",
   "anim.chainKind.diceRollPlan": "Roll plan",
   "anim.chainKind.settleAfter": "After settle",

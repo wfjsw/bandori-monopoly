@@ -780,7 +780,20 @@ use std::borrow::Cow;
 ///      `cards:<crate>.…` / `counter.*` locale entries. Source + display export
 ///      only: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
 ///      unchanged.
-pub const ABI_VERSION: i32 = 95;
+/// v96: **`PaySplitMulBefore` interactive pre-stage**. New Action kind
+///      `PaySplitMulBefore = 110` (wire `paySplitMulBefore`, hook-only like
+///      `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`). Raised
+///      per settled payment leg immediately before the pure `PaySplitMul`
+///      filter fold -- after the whole `paySplitAdd` fold, before
+///      `scale_settle_payment`. Payload: `player_id` = payer, `target` =
+///      payee, `value` = the PaySplitMul input, the pay flag, `tile`,
+///      `by_card`. The ask's `set_pay_amount` / `set_pay_target` fold into the
+///      running figure; a value change sets `modified` so the end-of-calc
+///      CeilTo-10 still fires. This is the writable stage between
+///      `PaySplitAdd` and `PaySplitMul` (规则书 支付阶段 3 「支付计算后」).
+///      Source-only for the wire: `ManifestOn` is unchanged. SAVE_VERSION /
+///      RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 96;
 
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
@@ -1897,6 +1910,14 @@ impl ActionKind {
     /// May prompt; the pure filter at PayCombinedAdd then applies.
     pub const PayCombinedAddBefore: Self = Self(TriggerKind::PayCombinedAddBefore);
 
+    /// Action. Interactive pre-stage immediately before the pure PaySplitMul
+    /// filter, per settled payment leg (after the whole PaySplitAdd fold).
+    /// Payload: player_id = payer, target = payee, value = the PaySplitMul
+    /// input, the pay flag, tile, by_card. May prompt; the pure filter at
+    /// PaySplitMul then applies. `set_pay_amount` / `set_pay_target` fold into
+    /// the running figure.
+    pub const PaySplitMulBefore: Self = Self(TriggerKind::PaySplitMulBefore);
+
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
     pub const fn engine(id: i32) -> Self { Self(TriggerKind::engine(id)) }
 
@@ -1946,8 +1967,9 @@ impl FilterKind {
     pub const PaySplitAdd: Self = Self(TriggerKind::PaySplitAdd);
 
     /// Filter. A settled payment leg's second amount modifier (支付阶段 4 on each
-    /// share, after PaySplitAdd). Payload: value = the running figure,
-    /// target = payee. No prompt. Body returns the new figure; the host folds it
+    /// share, after PaySplitAdd). Payload: value = the running figure
+    /// (the PaySplitMul input), target = payee. No prompt (use
+    /// PaySplitMulBefore). Body returns the new figure; the host folds it
     /// into the leg amount.
     pub const PaySplitMul: Self = Self(TriggerKind::PaySplitMul);
 
@@ -2445,6 +2467,9 @@ impl TriggerKind {
 
     /// `payCombinedAddBefore`
     pub const PayCombinedAddBefore: Self = Self::engine(106);
+
+    /// `paySplitMulBefore`
+    pub const PaySplitMulBefore: Self = Self::engine(110);
 
     /// `onBoardGate`
     pub const OnBoardGate: Self = Self::engine(108);

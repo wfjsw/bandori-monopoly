@@ -16,13 +16,22 @@
 //! body. Each step is an engine primitive -- `ctx::offer_buy` / `offer_build` /
 //! `pay_rent` / `offer_force_buy` -- so the body is citations and calls.
 //!
-//! TODO(规则书): 「每块地有标注的等级上限」 is `buildMax` (`TileData.rent.len() - 1`,
-//! 0 for RiNG).
+//! Two of the quoted clauses are enforced elsewhere; cite the live site rather
+//! than restating them here:
 //!
-//! Mortgage / redeem amounts and the deed-economics clauses live in
-//! [`crate::deed`] (规则书 基础规则 5–6). 「升级所[消耗]的资金不可通过[抵押]正在
-//! 升级的格子地契获得」 is enforced by the pay pipeline's optional-funding arm
-//! (`Cx::offer_mortgage_funds`'s `exclude`), not by a flag here.
+//! - 「每块地有标注的等级上限」 -- the cap is the tile's rent-table length
+//!   (`rent.len() - 1`; `prop::BUILD_MAX` is the same figure under its prop
+//!   name, `crates/game-core/src/state.rs`). The refusals live in the engine's
+//!   build gate (`crates/game-core/src/engine/ops.rs` `why_not_build_on`: no
+//!   upgrade row, a stamped `BUILD_MAX = 0`, or `houses >= rent.len() - 1`).
+//!   This body only offers; it does not re-check the cap. See [`crate::ring`]
+//!   for the `buildMax = 0` RiNG case (「所有RiNG不可升级」).
+//! - 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得」 -- enforced by
+//!   the pay pipeline's optional-funding arm (`Cx::offer_mortgage_funds`'s
+//!   `exclude`, `crates/game-core/src/engine/play.rs`), not by a flag here and
+//!   not by the `mortgage` body: the deed being built on is never offered in
+//!   the raise-funds prompt. [`crate::deed`] restates it beside the rest of the
+//!   deed-economics clauses (规则书 基础规则 5–6).
 
 use bandori_std::ctx;
 use card_sdk::abi::{prop, TriggerKind};
@@ -71,8 +80,8 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
     } else {
         // 规则书: 「如果格子地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行
         // 升级建造」 -- `H.OfferBuild`. 「如果格子地契已抵押则无效果」 is the
-        // build gate's. 「每块地有标注的等级上限」 is `buildMax`
-        // (`prop::BUILD_MAX`, rent.len() - 1).
+        // build gate's. 「每块地有标注的等级上限」 is checked in that same gate
+        // (see the module doc); this body only offers.
         let _ = ctx::prop(prop::BUILD_MAX);
         ctx::offer_build(player_id, at)?;
     }
