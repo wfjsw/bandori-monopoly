@@ -3,7 +3,7 @@
 //! 事件文本（`CardMeta` beside the rule body, id `协助CiRCLE重建`）:
 //! > 将此卡放置于场地中央，为其放置5个奇迹水晶，每次有人经过CiRCLE时移除一个，为0时放入事件弃牌，期间CiRCLE的[触发结算]改为选择获得2层[停留]或失去500资金（该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果），CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果
 
-use card_sdk::abi::{prop, text_slot, ActionKind};
+use card_sdk::abi::{prop, text_slot, ActionKind, Message, Target};
 use bandori_std::ctx::{self, trigger};
 use card_sdk::{Action, CardDef, Msg, On};
 
@@ -13,6 +13,11 @@ const ID: &str = "协助CiRCLE重建";
 
 /// 「CiRCLE咖啡厅」 -- inherits CiRCLE's original effects while the event is up.
 const CAFE: &str = "CiRCLE 咖啡厅";
+
+/// `tile:circle` -- the rule whose [经过] reward 「迁移至CiRCLE咖啡厅」. Named
+/// here only to address the cross-card message; this crate does not depend on
+/// `rules-tiles`.
+const CIRCLE_RULE: &str = "tile:circle";
 
 pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     "event:协助CiRCLE重建",
@@ -82,37 +87,54 @@ fn play(player_id: i32) -> card_sdk::Asked {
 fn on_pass(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
     if ctx::is_start(at) {
-        // Re-arm the veto the reward step just consumed, so the next pass of
-        // CiRCLE is silent too.
-        ctx::set_tile_prop(at, prop::NO_REWARD, 1);
         // 「移除一个」 -- `ctx::decay` burns one crystal of this instance.
         let left = ctx::decay()?;
         // 「为0时放入事件弃牌」
         if left <= 0 {
             expire(ID);
+            // Deliberately **not** re-arming `prop::NO_REWARD`. The veto lives
+            // on the `tile:circle` instance -- the source owns the arming, the
+            // reader is the tile -- so this instance dying does not take it
+            // with it, and a surviving arm would silently eat the next pass's
+            // reward. This pass is still suppressed: the reward step either
+            // already consumed the armed veto (it is collected first) or will
+            // consume it now (this handler is).
             ctx::log(
                 trigger::player_id(),
                 &Msg::new("log.event.rebuild_off").card("event", ID),
             );
+            return Ok(());
         }
+        // Re-arm the veto the reward step just consumed, so the next pass of
+        // CiRCLE is silent too.
+        ctx::set_tile_prop(at, prop::NO_REWARD, 1);
         return Ok(());
     }
     // 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」 -- the [经过]
     // reward is one of them. `tile:circle`'s own Pass entry only fires on
-    // CiRCLE, so the cafe's pass runs the same reward body here
-    // (`rules_tiles::circle::settle_reward`).
+    // CiRCLE, so the cafe's pass asks that card for the reward: the generic
+    // cross-card channel (`ctx::send` -> `On::Message("settleReward")`), and
+    // the body runs as `tile:circle` with its own windows. Not a call into
+    // another module -- see `docs/CARDS.md`.
     let who = trigger::player_id();
-    // TODO(ABI): Instead of directly settling this by calling CiRCLE's reward body,
-    // message the CiRCLE card to trigger its reward instead.
-    // In general, we should avoid directly calling the fn of other cards. 
-    // It should either be done with messaging the card.
-    // Actual tile swapping:
-    // As an API extension, also implement a mechanism to actually swap the tile  
-    // to what is desired (temporarily), so that other cards whose effect depends on the specific 
-    // tile also moves. Such swap should predates all hooks that changes settlement.
+    // TODO(ABI) tile swap: the re-home is still hand-rolled -- this handler
+    // stands in for 「CiRCLE原本的所有效果」 one clause at a time. A real
+    // temporary tile-rule swap would carry every effect, and any instance
+    // state bound to `tile:circle`, across in one move, applied before all
+    // hooks that change settlement. Filed as ABI-13.
     if who >= 0 {
         let landing = trigger::move_resolve() && trigger::move_remaining() <= 0;
-        rules_tiles::circle::settle_reward(who, landing)?;
+        ctx::send(
+            &Target::Board(CIRCLE_RULE.into()),
+            "settleReward",
+            &Message {
+                name: "settleReward".into(),
+                seat: who,
+                b: landing as i32,
+                tile: at,
+                ..Default::default()
+            },
+        )?;
     }
     Ok(())
 }
@@ -125,9 +147,13 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
 /// TODO(规则书): 「该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果」
 /// -- the engine runs hook instances in placement order, not by priority, so a
 /// replacement that claims the body first still wins (the `cancelled` bail).
-/// TODO(ABI): Consider swapping CiRCLE with a new tile that implements the desired settlement logic,
-/// but we must ensure that other cards that depends on CiRCLE (but does not change/override the
-/// CiRCLE's actual settlement) still function correctly (incl for example charge replenish).
+/// TODO(ABI) ABI-13: rather than replacing the settle body by hand, swap the
+/// CiRCLE square's tile-rule for one that implements this choice. The swap has
+/// to keep the square's **identity** (`tile_is(.., "circle")` / `is_start` /
+/// `guards::OWN_START`) -- that is what charge replenish keys on
+/// (`skill-personas`: 火罐 on 「[经过]CiRCLE」), and those effects are their
+/// own cards', not CiRCLE's, so they must stay put and must not ride the
+/// migration to 「CiRCLE咖啡厅」. See BACKLOG.md ABI-13.
 fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
     let who = trigger::player_id();

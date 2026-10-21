@@ -10,7 +10,10 @@
 //! Two entries. The **landing** half is `On::Settle` -- one draw, the
 //! 「[结算]是：抽取一张手卡」 clause. The **pass** half (「[经过]CiRCLE」) is
 //! `On::Action(&[ActionKind::PassTile], "")` -- [`settle_reward`], the reward
-//! choice. `docs/TILES.md`.
+//! choice. A third, `On::Message`, is the cross-card face of that same reward
+//! body: `event:协助CiRCLE重建` re-homes 「CiRCLE原本的所有效果」 onto
+//! 「CiRCLE咖啡厅」 and pays the reward by messaging this rule rather than
+//! reaching into its Rust. `docs/TILES.md`.
 //!
 //! Suppression is `prop::NO_REWARD` on *this* instance: a rule that
 //! 「无法获取[pass-reward]」 / 「[经过]CiRCLE时不获得[pass-reward]」 /
@@ -39,6 +42,11 @@ pub const CIRCLE: CardDef = CardDef::new(
     &[
         On::Settle("", None, settle),
         On::Action(Action::PassTile("", None, Some(pass_pays), on_pass)),
+        // The cross-card face of the same reward body. No `pass_pays` here:
+        // that residual is the [经过] arm's applicability (tile match, exile
+        // gate, 「[移动起点]不为CiRCLE」). A message is a card asking for the
+        // reward outright, and [`settle_reward`] carries its own suppression.
+        On::Message(&["settleReward"], "", None, on_message_settle_reward),
     ],
 )
 .board_role("tile")
@@ -107,8 +115,9 @@ fn settle(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[pass-reward]」 --
 /// the whole reward step (suppression, the choice, the `passRewardAffected`
-/// window, the payout). Also the body `event:协助CiRCLE重建` re-homes onto
-/// 「CiRCLE咖啡厅」 (「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅」).
+/// window, the payout). `event:协助CiRCLE重建` re-homes that step onto
+/// 「CiRCLE咖啡厅」 (「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅」) by messaging
+/// this rule (see [`on_message_settle_reward`]), not by calling in here.
 fn on_pass(_owner: i32) -> card_sdk::Asked {
     // The reward goes to the player who is passing, not to the owner of this
     // board-owned instance (that is `BOARD_OWNER`).
@@ -121,10 +130,35 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
     settle_reward(mover, landing)
 }
 
+/// Cross-card `"settleReward"` -- pay this square's [pass-reward] to `seat`.
+///
+/// 规则书: 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」. The
+/// event must not reach into this rule's Rust body: it messages the card, and
+/// the reward runs **as this instance**, with its own choice prompt, its own
+/// `passRewardAffected` window and its own `prop::NO_REWARD` read. That is the
+/// whole point of the channel (`docs/CARDS.md`) -- a card that wants another
+/// card's effect asks for it; it does not call that card's function.
+///
+/// Payload: `seat` = the player the reward is paid to; `b` = 1 when this is a
+/// landing on the square (「获得」 wording -- the landing also draws its own
+/// hand card from [`settle`]); `tile` = the square being paid for.
+fn on_message_settle_reward(_owner: i32) -> card_sdk::Asked {
+    let mover = ctx::message::seat();
+    if mover < 0 {
+        return Ok(());
+    }
+    let landing = ctx::message::b() != 0;
+    settle_reward(mover, landing)
+}
+
 /// The [pass-reward] step: 「[获得]2000资金或抽1张卡」, between the pick and the
 /// payout. `landing` selects the stop-on-the-start-square wording (the landing
 /// also draws its own hand card from [`settle`]).
-pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
+///
+/// Private on purpose: the only entry points are this rule's own `PassTile`
+/// arm and its `"settleReward"` message. Another card that wants the reward
+/// asks for it (`ctx::send`); it does not call across into this module.
+fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
     // The tile the reward is being paid for -- the mover's square. When
     // `event:协助CiRCLE重建` re-homes the reward onto 「CiRCLE咖啡厅」 this is
     // the cafe, not `self_tile` (the event instance sits on no tile).
@@ -138,8 +172,8 @@ pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
     // A walk-scoped / per-player veto on one of the mover's own field
     // instances is read but not consumed -- the source disarms it. The
     // `PassTile` entry's residual (`pass_pays`) already rejects this, so the
-    // prompt never appears on that path; this copy keeps the landing / event
-    // callers of `settle_reward` honest.
+    // prompt never appears on that path; this copy keeps the landing and the
+    // `"settleReward"` message honest.
     for (uid, _) in ctx::field_instances(mover) {
         if ctx::prop_at(uid, prop::NO_REWARD) > 0 {
             return Ok(());

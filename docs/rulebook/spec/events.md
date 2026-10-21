@@ -287,10 +287,17 @@ A discrepancy is a plain failing test. No `#[ignore]`.
 * **ID:** `E-circle-rebuild-05`
 * **Effect:** CiRCLE's original effects move to CiRCLE 咖啡厅 and override its
   own. (The [经过] reward rides that migration.)
-* **Status:** the reward-on-cafe half is exercised by the marina / walk
-  tests' +2000 CiRCLE 奖励; a dedicated migrate-and-override contract is
-  left as a follow-up (the quote is pinned).
-* **Executable:** partially `marina_box_spend_on_circle_pass_can_pay_1200`.
+* **Status:** the [经过] reward half is now pinned directly, and it runs as
+  `tile:circle` via the cross-card `"settleReward"` message rather than a call
+  into that module (`docs/CARDS.md`). The veto that suppresses the reward on
+  the real CiRCLE dies with the event. What is still open is the *rest* of
+  「所有效果」 riding along automatically -- that needs a real tile-rule swap,
+  BACKLOG **ABI-13**. A card keyed *on* CiRCLE (charge replenish) must not
+  ride the migration; see the constraint on ABI-13.
+* **Executable:** `circle_rebuild_pays_the_reward_on_a_cafe_pass`,
+  `circle_rebuild_moves_the_pass_reward_off_circle`,
+  `circle_rebuild_restores_the_reward_after_it_expires`,
+  `circle_rebuild_leaves_charge_replenish_on_the_real_circle`.
 
 ---
 

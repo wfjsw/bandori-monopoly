@@ -218,7 +218,9 @@ own / other / mortgaged) over those primitives. `tile:ring` is `tile:property`
 plus the dice-rent term. `tile:edogawa` is one draw. `tile:agent` is the
 「若…则…否则…」 branch (the 同色 set, the all-owned half-rent sweep, and one
 buy/build offer). `tile:circle` is the landing draw plus the [经过] reward
-(`circle::settle_reward`, shared with `event:协助CiRCLE重建`'s cafe re-home).
+(the reward body also answers the `"settleReward"` message, which is how
+`event:协助CiRCLE重建` re-homes it onto 「CiRCLE咖啡厅」 -- see
+[CARDS.md](CARDS.md) 「Cross-card messages」).
 That is the point: once the body is a rule instance, a card can swap it, stack
 another one next to it, or rewrite its props -- without the engine knowing the
 card's name.
@@ -599,9 +601,10 @@ board owner, and the engine's `land_at` is now the **built-in fallback** rather
 than the only path. Phase 3 landed the following (2026-10-06):
 
 * **The [经过] CiRCLE reward** is `tile:circle`'s **Pass entry** --
-  `On::Action(&[ActionKind::PassTile])` running `circle::settle_reward` (the body
-  itself: suppression, the choice, the `passRewardAffected (kind 26)` window, the payout).
-  `event:协助CiRCLE重建` re-homes the same function onto 「CiRCLE咖啡厅」.
+  `On::Action(&[ActionKind::PassTile])` running the reward body (suppression,
+  the choice, the `passRewardAffected (kind 26)` window, the payout).
+  `event:协助CiRCLE重建` re-homes that body onto 「CiRCLE咖啡厅」 by messaging
+  the card (`On::Message("settleReward")`), not by calling into the module.
   The hook dispatch visits `board_field` (tile-filtered, and only for kinds a
   `tile:*` rule declares), so board-owned instances hear `passTile` and the
   other hooks they declare. Suppression is `prop::NO_REWARD`; `plan::no_circle_reward`
