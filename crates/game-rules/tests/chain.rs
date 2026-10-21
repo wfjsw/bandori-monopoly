@@ -644,3 +644,66 @@ fn a_no_player_trigger_starts_at_the_turn_player() {
     assert_eq!(t.money(2), 10_000, "P2 untouched");
     assert!(events(&t, "probe_fired").is_empty(), "no probe ran");
 }
+
+/// The `{{trigger}}` a non-card chain line carries: a nested `log.why.*` phrase
+/// (never a raw wire kind, never blank).
+fn chain_trigger(t: &Table, r#type: &str) -> String {
+    let st = t.st();
+    let hits: Vec<_> = st
+        .events
+        .iter()
+        .filter(|e| e.r#type == r#type && e.value == 1)
+        .collect();
+    assert_eq!(hits.len(), 1, "exactly one {type} line for link 1: {hits:?}", type = r#type);
+    let msg = &hits[0].msg;
+    match msg.a.get("trigger") {
+        Some(Arg::Msg(m)) => {
+            assert!(
+                m.key().starts_with("log.why."),
+                "the trigger is a why phrase, not {m:?}"
+            );
+            assert_ne!(m.key(), "log.why.generic", "a pay timing has a real phrase: {m:?}");
+            m.key().to_string()
+        }
+        other => panic!("{type} line must carry a nested trigger Msg: {other:?}", type = r#type),
+    }
+}
+
+/// A timing with no card of its own (here: the rent pay under a chain) says
+/// what it is in the chain log -- 「（未命名）」 is not an answer. Both the
+/// announce and the settle name the same trigger.
+#[test]
+fn a_non_card_timing_names_itself_in_the_chain_log() {
+    let mut t = Table::vanilla(3);
+    let tl = tile("富士见坂");
+    let rent = data().tiles[tl].rent[0];
+    assert!(rent > 0, "rent = {rent}");
+    t.set_owner(tl, Some(1));
+    t.set_pos(0, tl - 1);
+    t.give(1, &["TEST:probe"]);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    // P0 holds nothing and is skipped; P1 answers the rent pay so the chain
+    // actually opens (a lone timing is not a chain and logs no link).
+    assert!(t.counteract_offered("TEST:probe"), "{}", t.dump_prompt());
+    t.counteract(1, "TEST:probe").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let announced = chain_trigger(&t, "chain");
+    let settled = chain_trigger(&t, "resolve");
+    assert_eq!(
+        announced, settled,
+        "the announce and the settle name the same trigger"
+    );
+    // And the counter's own link still names its card, not the trigger.
+    let st = t.st();
+    let l2: Vec<_> = st
+        .events
+        .iter()
+        .filter(|e| e.r#type == "chain" && e.value == 2)
+        .collect();
+    assert_eq!(l2.len(), 1, "the counter is link 2: {l2:?}");
+    assert_eq!(l2[0].msg.key(), "log.chain_link");
+    assert!(l2[0].card.ends_with("TEST:probe"), "link 2 is the probe: {:?}", l2[0].card);
+}
