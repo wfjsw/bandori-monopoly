@@ -1422,19 +1422,21 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 
 ## CRYSTAL-04 — NNM (2) 「获得x次经过CiRCLE时的资金奖励」 does not scale with the live reward
 - **kind**: implementation bug
-- **class**: A
+- **class**: **A — closed** (earlier batch, `fix: CRYSTAL-04 …`; the 2026-10-20
+  entry still described the bug and is corrected 2026-10-21)
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting / rent multipliers
-- **status**: **fixed** (this batch, `fix: CRYSTAL-04 …`) — each of the x
-  rewards now runs the money half of the CiRCLE reward step (`circleAffected`
-  between pick and payout), so Morfonica's 1000/1500/2000 cycle (and any other
-  listener) scales it. Test: `nnm_option2_gains_x_times_circle_money_reward`.
 - **locations**
-  - `rules/cards/card-morfonica/src/nanami_effort.rs:114` (hard-codes 2000)
-  - `rules/tests/tests/morfonica.rs:468` `nnm_option2_gains_x_times_circle_money_reward`
+  - `rules/cards/card-morfonica/src/nanami_effort.rs:162-170` —
+    `gain_circle_money` raises `PassRewardAffected` / `REWARD_MONEY` and pays the
+    live figure.
+  - `rules/tests/tests/morfonica.rs:468`
+    `nnm_option2_gains_x_times_circle_money_reward` (expects Morfonica's 1000).
 - **rulebook**: Sheet 2026-10-06 新卡组卡 G7 (2) 「获得x次经过CiRCLE时的资金奖励」 (was 「获得x*2000资金」); Morfonica rewrites the CiRCLE reward to 1000/1500/2000.
-- **current**: hard-coded 2000.
-- **expected**: query the live CiRCLE money reward (`circleAffected` listeners).
+- **was**: hard-coded 2000.
+- **now**: each of the x rewards runs the money half of the CiRCLE reward step
+  (`circleAffected` between pick and payout), so Morfonica's 1000/1500/2000 cycle
+  (and any other listener) scales it.
 
 ## CRYSTAL-05 — 育美标记 circle-tile case (C# only)
 - **kind**: rulebook divergence
@@ -2166,9 +2168,126 @@ payment bugs needed.
 Five large, previously unreviewed bodies reviewed clause-by-clause against
 `docs/rulebook/cards.json` (the same method as the 2026-10-18 waves 1–2):
 `card-morfonica/nanami_effort`, `card-hhw/kaoru_thief`, `card-ppp/tomorrows_door`,
-`card-sumimi/here_the_world`, `card-ag/one_of_us`. Findings are filed below as
-`W3-*` (or noted as already-filed). **~150 cards remain unreviewed at clause
-level** — keep taking slices.
+`card-sumimi/here_the_world`, `card-ag/one_of_us`. Full report:
+job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
+3 med B/C, 1 low A). Tomorrow's Door is clean (C-Q44 already filed).
+**~150 cards remain unreviewed at clause level** — keep taking slices.
+
+### W3-NANAMI-01 `Mor:（NNM）稍微努力了一下` — (3) press runs the skill button / clause （3）, not 「你的（2）技能」
+- **class**: C (what a waived （2） press does) with a clear wrong-clause defect
+- **severity**: high
+- **rule text**: 「（3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制」
+- **code**: `rules/cards/card-morfonica/src/nanami_effort.rs:237-259` — `use_skill`
+  spends 1 crystal then `ctx::play_card` on the first `skill:*` field card, which
+  runs `skill:广町七深:这是很普通的事吧？`'s **`On::Play`** = that skill's clause
+  **（3）** 「使用手中的角色标记，视为使用该角色的技能」
+  (`rules/skills/skill-personas/src/nanami_ordinary.rs:48,162-187`).
+- **gap**: The printed target is clause **（2）** 「当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记（当场上存活玩家数量大于等于3时：每种角色标记上限1，该技能对被动技能存在3回合CD）」. 「不受数量或轮数限制」 names exactly the two limits that exist only on （2） (mark cap + 3-turn CD), and neither is waived. The comment at `nanami_effort.rs:252-253` states the waiver is deliberately unimplemented. Tests only assert the crystal spend / (4) discard and `decline_all` the prompts.
+- **question**: see C-Q46.
+- **note**: Contrast `CRYCHIC:（灯）内心的呐喊`（3） 「使用一次高松灯（MyGO!!!!!）的（2）技能」, which implements *that* body directly (`tomori_inner_shout.rs:155-197`) rather than `play_card` on the skill.
+
+### W3-KAORU-01 `HHW:（薰）怪盗hello happy` — 「经过该玩家时」 is wired to end-tile 重叠, not mid-route [经过]
+- **class**: A (SETTLE-STAGES §4 M4 already settles 「经过其他玩家」 as mid-route `PassTile`)
+- **severity**: high
+- **rule text**: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。」
+- **code**: `rules/cards/card-hhw/src/kaoru_thief.rs:26,95-123` —
+  `On::Action(Action::PassPlayer(…))`. The engine's `passPlayer` is overlap at
+  move **end** only (`crates/game-core/src/engine/play.rs:1812-1834`).
+- **gap**: The body then `plan::set_stop_at` + `set_resolve(true)` — a mid-walk
+  force-stop — but `move.remaining > 0` is already false when `PassPlayer`
+  fires, so the printed optional stop-and-settle never engages during a walk
+  past the mark. `sakiko_life` / `uika_imprisoned` already migrated to
+  `PassTile` for exactly this clause shape.
+- **fix shape**: `Action::PassTile` + residual `players_on(tile)` contains the
+  marked player, then the existing ask / `abnormal::Stop` gate / `set_stop_at`.
+- **note**: the residual comment at `:92` is also inverted — `trigger::target()`
+  is the player being overlapped, not the mover.
+
+### W3-KAORU-02 `HHW:（薰）怪盗hello happy` — 「投掷1d2（前后）」 is a d6-peek parity, not a 1d2
+- **class**: B (die shape) + C (polarity)
+- **severity**: medium
+- **rule text**: 「主要移动改为投掷1d2（前后）和1d10（距离）进行结算。」
+- **code**: `rules/cards/card-hhw/src/kaoru_thief.rs:162-188` —
+  `reverse = v.recorded_roll.map(|dir| dir % 2 == 1)` over the host's generic
+  d6 peek.
+- **gap**: The sheet asks for two dice; distance (1d10) is correct, but direction
+  is a hidden d6 parity (faces 1–6, logged as the direction), not a rolled 1d2.
+  The TODO at `:168-171` claiming 「the host does not fill `recorded_roll` yet」
+  is **stale** — `wasm_rules.rs:2805-2818` pre-rolls `peek.d(6)` into
+  `recorded_roll` for every `DiceRollPlan` / `DiceRollValue` drive.
+- **capability**: a true `Dice { sides: 2 }` recorded face, or a card-side
+  `roll(1,2)` whose result becomes `reverse`.
+- **question**: polarity (face 1/2 vs odd/even) is C — see C-Q47.
+
+### W3-KAORU-03 `HHW:（薰）怪盗hello happy` — 「所有在薰所在格子的人」 excludes 薰 himself
+- **class**: C
+- **severity**: medium
+- **rule text**: 「此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。」
+- **code**: `rules/cards/card-hhw/src/kaoru_thief.rs:31` — filter pre
+  `turn_player != owner && pos(turn_player) == owner.pos && …`.
+- **gap**: 「所有」 reads as every piece sharing 薰's tile, including 薰. The
+  `!= owner` conjunct is an unprinted extra gate justified only by C#
+  `m.Seat != Seat`.
+- **question**: see C-Q48.
+
+### W3-HERE-01 `Sumimi:Here the world` — (2) completion discards this card; the sheet never says so
+- **class**: C
+- **severity**: medium
+- **rule text**: 「当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。」
+- **code**: `rules/cards/card-sumimi/src/here_the_world.rs:161-185` —
+  `ctx::set_dest(ctx::Dest::Graveyard)` after returning the held card
+  (comment: C# `H.Unplace(this, "discard", "结束了")`).
+- **gap**: Nothing prints a discard / unplace of Here the world. The discard is
+  load-bearing for a one-shot reading (the `slot('here_held_len') <= 0` guard on
+  `Drew` would otherwise re-arm (2) on the next draw) — which is exactly why it
+  needs a ruling rather than a silent C# carry.
+- **question**: see C-Q49.
+- **note**: neighbours already filed, not duplicated: **CH-13** (fixed),
+  **C-Q33** (capture vs auto-play).
+
+### W3-ONEOFUS-01 `AG:ONE OF US` — bankruptcy hand-over skips 「放置在该卡上」 and does real ownership, not 「视为拥有」
+- **class**: A (the printed two-step can be written today) + C (「视为拥有」 vs real owner change)
+- **severity**: medium
+- **rule text**: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
+- **code**: `rules/cards/card-ag/src/one_of_us.rs:262-291` — for each designated
+  tile still owned by the leaver, `ctx::set_owner(t, survivor)`. The comment at
+  `:258-261` admits the C# does not park the deeds on the card.
+- **gap**: Three printed details missing or altered: (1) 「将两张被指定地契放置在该卡上」
+  never happens; (2) 「视为拥有」 is usually a continuous view, the code rewrites
+  the real owner; (3) 「两张被指定地契」 is unconditional, the loop only moves
+  deeds the leaver still owns (a designated deed sold to a third party stays put).
+- **question**: see C-Q50.
+- **note**: income splitting (`lose_raw`/`gain_raw`, 「不受其他任何效果影响」)
+  already matches the sheet (TILE-01 t05 fixed).
+
+### W3-DISP-01 `.text()` line-break joins (display only)
+- **class**: A
+- **severity**: low
+- **locations**
+  - `rules/cards/card-morfonica/src/nanami_effort.rs:47-51` — sheet (3) breaks
+    before 「（2）技能」
+  - `rules/cards/card-ppp/src/tomorrows_door.rs:38-40` — sheet (2) breaks before
+    「（1）效果的序列」; sheet also uses blank lines between (1)(2)(3)
+  - `rules/cards/card-sumimi/src/here_the_world.rs:101` — sheet keeps （1） and
+    （2） on separate lines
+- **gap**: Non-whitespace wording is identical to `cards.json` on all five cards.
+  Only printed line structure differs, so the UI shows a denser paragraph.
+- **fix**: literal newline restore in the three `.text()` strings. No behaviour impact.
+
+### Wave 3 — already filed / already fixed (not duplicated)
+- **CRYSTAL-06 / C-Q35** (薰 charge/decay) — open, C, low.
+- **CH-13** (Here the world two-cards) — **fixed** 2026-10-13.
+- **C-Q33** (Here capture vs auto-play) — open question.
+- **C-Q44** (Door co-owned hill) — open question, `t22_hill_coownership` ignored.
+- NNM (2) 「hard-codes 2000」 — **stale claim, already fixed**. `gain_circle_money`
+  raises `PassRewardAffected` / `REWARD_MONEY` and pays the live figure (test
+  `nnm_option2_gains_x_times_circle_money_reward` expects Morfonica's 1000).
+  The CRYSTAL-04 bullet below is out of date on this point.
+- **MOVE-03 / C-Q6** multi-activation — not live on this card (NNM already has
+  one `On::Play` branching on `is_placed()`).
+- Entity resolution: every quoted tile / character / group / token / status on
+  these five cards resolves (`data/board.json`, roster, `is_shop` = group-10
+  deeds). No dangling names.
 
 ---
 
@@ -3029,6 +3148,44 @@ final one? Test `g29_maya_look_at_top_inside_the_draw_curve`
 (`rules/tests/tests/gap_res.rs:251`) is `#[ignore = "RULING: …"]` and asserts yes.
 Cross-ref `OPEN-春日影抽6`. Note the sheet-sync 2026-10-17 added 「且手牌不多于5张」
 to the [特] moment, which changes when the curve can start.
+
+**C-Q46 (W3-NANAMI-01, NNM (3) 「视为发动你的（2）技能」).** *(filed 2026-10-21)*
+`Mor:（NNM）稍微努力了一下`（3）: 「你可以移除一个奇迹水晶视为发动你的（2）技能，
+此次技能不受数量或轮数限制」. 广町七深's printed （2） is 「当有玩家在使用角色技能时，
+你可以支付一个火罐得到一个该角色的标记」 (cap 1 per mark type at ≥3 players, 3-turn
+CD on passive skills). (a) What does a **waived** （2） press do as a crystal
+activation — pay 1 [火罐] and gain a mark of a chosen character, waiving cap+CD?
+(b) Or is 「（2）技能」 loose wording for the character's skill button (clause （3）,
+spend a mark to borrow a skill), in which case 「不受数量或轮数限制」 has nothing
+to waive and the printed numbers are wrong? (c) Other. The code currently invokes
+（3） via `play_card` and waives nothing.
+
+**C-Q47 (W3-KAORU-02, 1d2 polarity).** *(fileed 2026-10-21)*
+`HHW:（薰）怪盗hello happy`「投掷1d2（前后）」: for the direction die, is 前/后
+**face 1 / face 2**, or **odd / even**? The port reads odd = reverse (the C# the
+module cites used `num == 2` = reverse). Separately the die is currently a d6
+parity, not a 1d2 — that half is class B (W3-KAORU-02).
+
+**C-Q48 (W3-KAORU-03, 「所有在薰所在格子的人」).** *(filed 2026-10-21)*
+Does 「所有在薰所在格子的人」 include 薰 himself? The port drops the owner
+(C# `m.Seat != Seat`). If 薰's own main move is also meant to become 1d2+1d10,
+the `turn_player != owner` conjunct is an unprinted extra gate. A plausible
+design reading is that the effect weirdifies *other* pieces standing with 薰.
+
+**C-Q49 (W3-HERE-01, Here the world end-of-hold).** *(filed 2026-10-21)*
+`Sumimi:Here the world`（2）: 「当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并
+使此卡使用者抽一张卡。」 Nothing prints that *this* card leaves play. The port
+discards it (C# `H.Unplace(this, "discard", "结束了")`). If it stayed, the
+`slot('here_held_len') <= 0` guard on `Drew` would re-arm (2) on the next draw.
+Does the card leave play on (2) completion, or stay and re-arm?
+
+**C-Q50 (W3-ONEOFUS-01, ONE OF US bankruptcy hand-over).** *(filed 2026-10-21)*
+`AG:ONE OF US`: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的
+游戏区，该方视为拥有此地契」. (a) Is 「视为拥有」 a **view** on top of the old
+owner, or a real ownership move? (b) Must **both** designated deeds move even if
+one was sold to a third party before the bankruptcy (the text says 「两张被指定地契」
+unconditionally)? (c) Does 「放置在该卡上」 have any mechanical consequence beyond
+the intermediate park / log shape?
 
 ---
 
