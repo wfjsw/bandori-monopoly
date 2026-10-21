@@ -1460,13 +1460,18 @@ impl<'de> serde::Deserialize<'de> for KindNs {
         }
         Ok(match Wire::deserialize(deserializer)? {
             Wire::Engine => KindNs::Engine,
-            Wire::Ruleset(key) => {
-                if key == "bandori" {
-                    KindNs::BANDORI
-                } else {
-                    KindNs::Ruleset(Box::leak(key.into_boxed_str()))
+            // Only declared ruleset keys construct a `KindNs`. An unknown key
+            // cannot be given a `&'static str` without leaking, and the host
+            // has no business inventing a namespace it was never told about.
+            // A second ruleset declares its key next to `BANDORI`.
+            Wire::Ruleset(key) => match key.as_str() {
+                "bandori" => KindNs::BANDORI,
+                other => {
+                    return Err(serde::de::Error::custom(format_args!(
+                        "unknown ruleset kind namespace {other:?}"
+                    )))
                 }
-            }
+            },
         })
     }
 }
@@ -2487,11 +2492,12 @@ impl TriggerKind {
             if let Some((key, id)) = rest.split_once(':') {
                 if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
                     let id = id.parse::<i32>().unwrap_or(0);
-                    return if key == "bandori" {
-                        Self::ruleset("bandori", id)
-                    } else {
-                        // Unknown ruleset key: leak once so the kind can compare.
-                        Self::ruleset(Box::leak(key.to_string().into_boxed_str()), id)
+                    // Only declared ruleset keys parse; an unknown namespace is
+                    // a miss rather than a leaked `&'static str` per call. A
+                    // second ruleset declares its key next to `BANDORI`.
+                    return match key {
+                        "bandori" => Self::ruleset("bandori", id),
+                        _ => Self::None,
                     };
                 }
             }
