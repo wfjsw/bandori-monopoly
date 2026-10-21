@@ -2187,21 +2187,23 @@ job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
 - **note**: Contrast `CRYCHIC:（灯）内心的呐喊`（3） 「使用一次高松灯（MyGO!!!!!）的（2）技能」, which implements *that* body directly (`tomori_inner_shout.rs:155-197`) rather than `play_card` on the skill.
 
 ### W3-KAORU-01 `HHW:（薰）怪盗hello happy` — 「经过该玩家时」 is wired to end-tile 重叠, not mid-route [经过]
-- **class**: A (SETTLE-STAGES §4 M4 already settles 「经过其他玩家」 as mid-route `PassTile`)
+- **class**: **A — closed 2026-10-21** (this batch)
 - **severity**: high
 - **rule text**: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。」
-- **code**: `rules/cards/card-hhw/src/kaoru_thief.rs:26,95-123` —
-  `On::Action(Action::PassPlayer(…))`. The engine's `passPlayer` is overlap at
+- **code**: `rules/cards/card-hhw/src/kaoru_thief.rs` — was
+  `On::Action(Action::PassPlayer(…))`; the engine's `passPlayer` is overlap at
   move **end** only (`crates/game-core/src/engine/play.rs:1812-1834`).
-- **gap**: The body then `plan::set_stop_at` + `set_resolve(true)` — a mid-walk
+- **was**: The body then `plan::set_stop_at` + `set_resolve(true)` — a mid-walk
   force-stop — but `move.remaining > 0` is already false when `PassPlayer`
-  fires, so the printed optional stop-and-settle never engages during a walk
-  past the mark. `sakiko_life` / `uika_imprisoned` already migrated to
-  `PassTile` for exactly this clause shape.
-- **fix shape**: `Action::PassTile` + residual `players_on(tile)` contains the
-  marked player, then the existing ask / `abnormal::Stop` gate / `set_stop_at`.
-- **note**: the residual comment at `:92` is also inverted — `trigger::target()`
-  is the player being overlapped, not the mover.
+  fires, so the printed optional stop-and-settle never engaged during a walk
+  past the mark. Same latent bug as the 凑友希那 case in SETTLE-STAGES §4 M4,
+  which the original sweep missed.
+- **now**: re-homed onto `Action::PassTile` (行动阶段 12 [经过], per path step)
+  with the mark-match as a board read (`player_pos(marked) == trigger::tile()` —
+  a `passTile` payload has no `target`). Residual comment un-inverted
+  (`trigger::target()` is the overlapped player, not the mover). Pinned by
+  `settle_stages.rs` `m4_kaoru_thief_force_stop_stops_on_the_marked_player`.
+  `SETTLE-STAGES.md` M4 lists the card.
 
 ### W3-KAORU-02 `HHW:（薰）怪盗hello happy` — 「投掷1d2（前后）」 is a d6-peek parity, not a 1d2
 - **class**: B (die shape) + C (polarity)
