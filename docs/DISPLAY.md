@@ -67,7 +67,7 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 | card | `text` | `CardMeta::text` | rule text |
 | card | `rawName` | `CardMeta::raw_name` | untrimmed sheet name |
 | card | `cell` | `CardMeta::cell` | sheet cell the row was lifted from |
-| card | `counterReason` | `On` reason field (`Counteract` / `Action` / `Play`) | 「…时」 clause the counteraction prompt shows; several entries join non-empty reasons with `\n` |
+| card | `counterReason` | `On` reason field (`Counteract` / `Action` / `Play`) | 「…时」 clause the counteraction prompt shows, as a **locale key** the client resolves (`cards:<crate>.…` / `counter.*`, ABI v94); several entries join their keys with `\n` |
 | persona | `display` | `PersonaDef::display` | compact display label |
 | persona | `text` | `PersonaDef::text` | skill text |
 | persona | `color` | `PersonaDef::color` | accent colour |

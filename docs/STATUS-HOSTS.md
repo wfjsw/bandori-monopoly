@@ -557,7 +557,7 @@ Phase C).
 
 `MatchPlayer.state` keys `stay`, `stun`, `stunStart`, `exile`, `exileTo`,
 `fire`, `handLimit` (and their `StateVar` shape). Trigger names
-`stay` / `stun` / `exile` / `fireSpent` / `markerSpend` stay.
+`stay` / `stun` / `exile` / `markerSpent` / `markerSpend` stay.
 ---
 
 ## 8. Status (2026-10-13)
@@ -578,11 +578,12 @@ Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
 
 ---
 
-## 9. Gates are CEL-only `On::FilterFlag` entries (ABI 58+)
+## 9. Gates are CEL-only `On::Filter(Filter::…)` entries (ABI 58+; typed DSL v93+)
 
 The act / pay / move gates are `gate_open` reads at
 policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
-`On::FilterFlag` entries (`TriggerKind::{ActGate, PayGate, MoveGate}`):
+`On::Filter(Filter::ActGate / PayGate / MoveGate)` entries (v93 typed
+registration; was `On::FilterFlag` before ABI 93):
 
 | host | gates | condition |
 |---|---|---|

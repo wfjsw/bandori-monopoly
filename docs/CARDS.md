@@ -72,15 +72,15 @@ final `On` set (ABI v93):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
-| `On::Play(pre, reason, gate, body)` | `fn(i32) -> Asked` | play from hand (`reason` = counterReason) | yes |
-| `On::Counteract(kinds, pre, reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`reason` = counterReason) | yes |
+| `On::Play(pre, counter_reason, gate, body)` | `fn(i32) -> Asked` | play from hand (`counter_reason` = `Option<MsgKey>`, the prompt's 「…时」 clause) | yes |
+| `On::Counteract(kinds, pre, counter_reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`counter_reason` = `Option<MsgKey>`) | yes |
 | `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
 | `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
 | `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
 | `On::Buy(pre, guard, body)` | `fn(i32) -> Asked` | a deed's buy / perform body (v80) | yes (`ctx::pay_buy`, `ctx::assign_deed`, `ctx::raise`, `ctx::log`) |
 | `On::Build(pre, guard, body)` | `fn(i32) -> Asked` | a deed's build / perform body (v80) | yes (`ctx::pay_build`, `ctx::raise`, `ctx::log`) |
-| `On::Action(ActionEntry)` | `fn(i32) -> Asked` | **event reaction** at one kind (`reason` = counterReason) | yes (`ctx::gain`, log, place, …) |
+| `On::Action(ActionEntry)` | `fn(i32) -> Asked` | **event reaction** at one kind (`counter_reason` = `Option<MsgKey>`) | yes (`ctx::gain`, log, place, …) |
 | `On::Filter(FilterEntry)` | shape-dependent, see below | **pure value / decision / gate / payload rewrite** at one kind | no (pure) |
 
 `On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` stay their own

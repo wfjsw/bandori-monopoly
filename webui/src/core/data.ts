@@ -276,8 +276,10 @@ export function cardText(id: string): string {
 }
 
 /** Why a [反击] card may be declared: its own trigger-condition clause
- *  (「…时」), from `generated/display.json` and kept on the card data
- *  (`counterReason`). Empty when the card carries no such clause. */
+ *  (「…时」), as one or more **locale keys** joined with `\n` (the client
+ *  resolves them at render -- `counter.*` / `cards:<crate>.…`). Empty when the
+ *  card carries no such clause. See `cardCounterReasonText` for the display
+ *  string. */
 export function cardCounterReason(id: string): string {
   if (!id || !D) return "";
   return D.card(id)?.counterReason ?? "";

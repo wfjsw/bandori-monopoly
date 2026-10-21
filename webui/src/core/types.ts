@@ -19,7 +19,8 @@ export interface TileData {
   color: string; tier: number; area: string; price: number; house: number; rent: number[]; note: string;
 }
 /** Merged card row: identity from `glue.roster_json()`, display from
- *  `generated/display.json` (including `counterReason`). */
+ *  `generated/display.json` (including `counterReason` -- a locale key the
+ *  client resolves, not display text). */
 export interface CardData {
   id: string; group: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string; cell: string;
