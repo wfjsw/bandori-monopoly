@@ -21,13 +21,18 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         On::Play("", None, Some(cant_play), play),
         On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, turn_end)),
         // 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下」 -- the
-        // offer is about the *marked* player. The mark-match is a dynamic-key
-        // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
-        On::Action(Action::PassPlayer("actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", None, Some(marked_here), pass_player)),
+        // offer is about the *marked* player. SETTLE-STAGES §4 M4: 「经过该玩家」
+        // is the mover's step onto a tile that player stands on (行动阶段 12
+        // [经过]) -- a mid-route `passTile`, NOT `passPlayer` (13 「[重叠]」,
+        // end-tile only). Riding `passPlayer` made `move.remaining > 0` false
+        // whenever the raise fired, so the mid-walk force-stop never engaged.
+        // The mark-match is a dynamic-key residual (the -1 unmarked sentinel is
+        // not CEL's `slot` missing=0).
+        On::Action(Action::PassTile("actor == owner && card.placed && move.main && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", None, Some(marked_on_tile), pass_marked)),
         // The body-top applicability checks are the condition now (C#
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
-        // fixed roll yet.
+        // fixed roll yet. (C#'s `m.Seat != Seat` is W3-KAORU-03, a ruling.)
         On::Filter(Filter::DiceRollPlan("card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null", None, roll_plan)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
@@ -89,15 +94,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算」
 /// -- C# `CardKaoruThief.PassSeat` -> `Stop` (MatchHost.cs:3834-3860).
-/// Residual guard for [`pass_player`]: the passer is the marked player.
+/// Residual guard for [`pass_marked`]: the marked player stands on the tile
+/// being passed. A `passTile` payload has **no** `target` (the other player is
+/// read off the board) -- `trigger::target()` would be meaningless here.
 /// `kaoru_thief_marked` uses -1 = unmarked (`slot()`'s missing = 0 does not
 /// match), so this stays out of CEL.
-fn marked_here(player_id: i32) -> bool {
+fn marked_on_tile(player_id: i32) -> bool {
     let marked = ctx::slot(player_id, "kaoru_thief_marked");
-    marked >= 0 && trigger::target() == marked
+    marked >= 0 && ctx::player_pos(marked) == trigger::tile()
 }
 
-fn pass_player(player_id: i32) -> card_sdk::Asked {
+fn pass_marked(player_id: i32) -> card_sdk::Asked {
     let marked = ctx::slot(player_id, "kaoru_thief_marked");
     // 规则书: 「可以选择在经过该玩家时使自己强制停下并触发结算」 -- C#
     // `H.AskYes(..., aiYes: false)` then `m.Stopped = true; m.Resolve = true`.
@@ -161,14 +168,14 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// the plan's `turn_player` (C# `m.Seat`).
 fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
     // 规则书: 「投掷1d2（前后）」 -- the host pre-rolls the direction face into
-    // `recorded_roll` (ABI v78) so this Filter stays pure. Odd face = reverse
-    // (task formula; C# was `m.Reverse = num == 2` -- face 2 only. Documented
-    // inversion: the sheet says 「前后」 as a 1d2, and the v78 convention is
-    // odd=reverse).
-    // TODO(规则书): the host does not fill `recorded_roll` yet, so the
-    //   direction stays `None` and the `kaoru_thief_rollplan` dir log is
-    //   skipped (no face). Once the host pre-rolls, `reverse` and the log
-    //   pick up the face. The 1d10 base is independent of that.
+    // `recorded_roll` (`wasm_rules.rs` peeks `d(6)` for every DiceRollPlan /
+    // DiceRollValue drive) so this Filter stays pure. Odd face = reverse
+    // (task formula; C# was `m.Reverse = num == 2` -- face 2 only).
+    // TODO(规则书) W3-KAORU-02: the printed die is a **1d2**, but the recorded
+    //   face is a d6 peek (faces 1-6, logged as the direction) and the
+    //   polarity (face 1/2 vs odd/even) is unruled -- see C-Q47. Closing the
+    //   die shape needs a true `Dice { sides: 2 }` recorded face or a card-side
+    //   `roll(1,2)` feeding `reverse`.
     let reverse = v.recorded_roll.map(|dir| dir % 2 == 1);
     if let Some(dir) = v.recorded_roll {
         let mover = ctx::turn_player();
@@ -207,8 +214,8 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pass_player_kani(player_id: i32) -> card_sdk::Asked {
-    pass_player(player_id)
+pub fn pass_marked_kani(player_id: i32) -> card_sdk::Asked {
+    pass_marked(player_id)
 }
 
 #[cfg(kani)]

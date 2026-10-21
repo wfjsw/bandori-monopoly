@@ -229,6 +229,64 @@ fn m4_kokoro_force_stop_stops_a_passer() {
     assert_eq!(t.charge(0), 0, "the pot was spent");
 }
 
+// 规则书 (HHW:（薰）怪盗hello happy): 「你本回合的移动阶段可以选择在经过该玩家时
+// 使自己强制停下并触发结算」. SETTLE-STAGES §4 M4: 「经过该玩家」 is the mover's
+// step onto the marked player's tile (行动阶段 12 [经过], mid-route `passTile`),
+// not the end-tile 重叠 (`passPlayer`). Before the re-home the clause sat on
+// `passPlayer`, where `move.remaining` is already 0 and the mid-walk stop never
+// engaged -- the same latent bug as the 凑友希那 case above (W3-KAORU-01).
+#[test]
+fn m4_kaoru_thief_force_stop_stops_on_the_marked_player() {
+    let mut t = Table::new(&["濑田薰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    // 「将此卡放置于场上…并向一名玩家场上放置一个怪盗标记」 -- plant the mark
+    // on P1 through the printed card (the offer is an ask_player; accept seat 0).
+    t.give(0, &["HHW:（薰）怪盗hello happy"]);
+    t.play(0, "HHW:（薰）怪盗hello happy").unwrap();
+    for _ in 0..8 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if p.kind == "player" || p.kind == "choice" || p.kind == "pick" {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    drain(&mut t);
+    // P1 stands mid-route on 薰's walk (start 7, die 5 -> passes 10, would land 12).
+    // They do not share a tile, so the 1d2+1d10 rewrite (W3-KAORU-03's clause)
+    // does not fire and the plain 1d10 walk is what we want.
+    t.set_pos(0, 7);
+    t.set_pos(1, 10);
+    t.dice(&[5]);
+    t.roll(0).unwrap();
+    // Accept the force-stop offer.
+    let mut offered = false;
+    while let Some(p) = t.prompt() {
+        if format!("{p:?}").contains("kaoru_thief_stop") {
+            offered = true;
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(
+        offered,
+        "「在经过该玩家时使自己强制停下」 offered mid-route: {:?}",
+        t.recent_keys(20)
+    );
+    assert_eq!(
+        t.pos(0),
+        10,
+        "stops on the marked player's tile, not the rolled dest 12: pos={}",
+        t.pos(0)
+    );
+}
+
 // =====================================================================
 // M6a / R2 -- a 「不[触发结算]」 teleport still fires [经过]/[重叠] at its
 // destination (专名词 9: the path is just the endpoint; B41 fires
