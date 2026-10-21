@@ -3,7 +3,7 @@
 import { useCardTileFocus, useHoverSeat, useSeatFocus } from "./hoverSeat";
 import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
@@ -71,8 +71,9 @@ export interface RollControl {
   onClick: () => void;
 }
 
-/** What a hovered tile marker says, and where (the wrap's own pixel space). */
-interface MarkTip { x: number; y: number; title: string; lines: string[] }
+/** What a hovered tile marker says, and where (the wrap's own pixel space).
+ *  `key` is the source pill's id: the tip is dropped when that pill goes away. */
+interface MarkTip { key: string; x: number; y: number; title: string; lines: string[] }
 
 /** Wide (fullwidth / CJK) glyph? Shared by the name metrics and the [指定]
  *  short-label cut. */
@@ -295,10 +296,37 @@ const TileFace = memo(function TileFace({
   );
 });
 
+/** One marker pill on a tile. The tip is mouseenter/mouseleave driven, but
+ *  React never fires mouseleave on unmount -- a mark that leaves the tile
+ *  mid-hover (spent, moved, or just pushed out of the slice shown) would leave
+ *  the tip stuck on screen with nothing left to hover -- so the pill drops its
+ *  own tip on the way out. */
+function MarkPill({ tipKey, className, style, label, title, lines, showTip, hideTip, dropTip }: {
+  tipKey: string;
+  className?: string;
+  style?: React.CSSProperties;
+  label: string;
+  title: string;
+  lines: string[];
+  showTip: (e: React.MouseEvent, key: string, title: string, lines: string[]) => void;
+  hideTip: () => void;
+  dropTip: (key: string) => void;
+}) {
+  useEffect(() => () => dropTip(tipKey), [tipKey, dropTip]);
+  return (
+    <span
+      className={className}
+      style={style}
+      onMouseEnter={(e) => showTip(e, tipKey, title, lines)}
+      onMouseLeave={hideTip}
+    >{label}</span>
+  );
+}
+
 /** One tile: its own memo boundary, so a marker hover, a zoom-less re-render
  *  or the turn timer leaves the 60 tiles alone. Everything it draws derives
  *  from the (per-snapshot) model, so the props are all stable values. */
-const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHover, showTip, hideTip, onTile }: {
+const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHover, showTip, hideTip, dropTip, onTile }: {
   i: number;
   m: Model;
   cellW: number;
@@ -307,8 +335,9 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   trail: boolean;
   dest: boolean;
   onHover: (i: number | null) => void;
-  showTip: (e: React.MouseEvent, title: string, lines: string[]) => void;
+  showTip: (e: React.MouseEvent, key: string, title: string, lines: string[]) => void;
   hideTip: () => void;
+  dropTip: (key: string) => void;
   onTile: (i: number) => void;
 }) {
   const S = m.S;
@@ -353,13 +382,18 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
             const { title, lines } = markTip(x);
             const ink = x.owner >= 0 && prefersDarkInk(m.colorOf(x.owner)) ? s.lightInk : undefined;
             return (
-              <span
+              <MarkPill
                 key={x.uid}
+                tipKey={String(x.uid)}
                 className={cx(s.markDesignate, ink)}
                 style={{ background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
-                onMouseEnter={(e) => showTip(e, title, lines)}
-                onMouseLeave={hideTip}
-              >{shortMarkName(cardTitle(x.card))}</span>
+                label={shortMarkName(cardTitle(x.card))}
+                title={title}
+                lines={lines}
+                showTip={showTip}
+                hideTip={hideTip}
+                dropTip={dropTip}
+              />
             );
           })}
           {designations.length > 1 && (
@@ -376,17 +410,31 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
             const { title, lines } = markTip(x);
             const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
             return (
-              <span
+              <MarkPill
                 key={x.uid}
+                tipKey={String(x.uid)}
                 className={cx(s.mark, cp && s.cp)}
                 style={cp ? undefined : { background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
-                onMouseEnter={(e) => showTip(e, title, lines)}
-                onMouseLeave={hideTip}
-              >{cp ? "CP" : (kindLabel.trim()[0] ?? "•")}</span>
+                label={cp ? "CP" : (kindLabel.trim()[0] ?? "•")}
+                title={title}
+                lines={lines}
+                showTip={showTip}
+                hideTip={hideTip}
+                dropTip={dropTip}
+              />
             );
           })}
           {embers > 0 && (
-            <span className={cx(s.mark, s.ember)} onMouseEnter={(e) => showTip(e, tr("board.embers", { n: embers }), [])} onMouseLeave={hideTip}>{embers}</span>
+            <MarkPill
+              tipKey={`embers:${i}`}
+              className={cx(s.mark, s.ember)}
+              label={String(embers)}
+              title={tr("board.embers", { n: embers })}
+              lines={[]}
+              showTip={showTip}
+              hideTip={hideTip}
+              dropTip={dropTip}
+            />
           )}
         </div>
       )}
@@ -438,13 +486,18 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
   // bounding box carries only the stage scale, and converting the marker's
   // screen box against it lands in the wrap's own pixel space (the window) at
   // any zoom.
-  const showTip = useCallback((e: React.MouseEvent, title: string, lines: string[]) => {
+  const showTip = useCallback((e: React.MouseEvent, key: string, title: string, lines: string[]) => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     const b = localRect(wrap, e.currentTarget as HTMLElement);
-    setTip({ x: b.left + b.width / 2, y: b.top, title, lines: lines.filter(Boolean) });
+    setTip({ key, x: b.left + b.width / 2, y: b.top, title, lines: lines.filter(Boolean) });
   }, [wrapRef]);
   const hideTip = useCallback(() => setTip(null), []);
+  // The pill that owns an open tip clears it when it unmounts (see MarkPill);
+  // mouseleave alone cannot, because React does not fire it on unmount.
+  const dropTip = useCallback((key: string) => {
+    setTip((t) => (t && t.key === key ? null : t));
+  }, []);
   // The tip is content-sized (`width: max-content`, max 220px) and the wrap
   // clips the panned board, so keep it inside the *window*: clamp x by its
   // measured width against the window's width and flip it below the marker
@@ -460,7 +513,7 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
       ref={wrapRef}
       tabIndex={0}
       onKeyDown={vp.onKeyDown}
-      onPointerDown={vp.onPointerDown}
+      onPointerDown={(e) => { hideTip(); vp.onPointerDown(e); }}
       onPointerMove={vp.onPointerMove}
       onPointerUp={vp.onPointerUp}
       onPointerCancel={vp.onPointerUp}
@@ -484,7 +537,7 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
         >
           <Center m={m} roll={roll} />
           {D.tiles.map((_, i) => (
-            <Tile key={i} i={i} m={m} cellW={vp.board.width / COLS} cellH={vp.board.height / ROWS} picked={pick.has(i)} trail={trail.has(i)} dest={i === dest} onHover={setHovered} showTip={showTip} hideTip={hideTip} onTile={onTile} />
+            <Tile key={i} i={i} m={m} cellW={vp.board.width / COLS} cellH={vp.board.height / ROWS} picked={pick.has(i)} trail={trail.has(i)} dest={i === dest} onHover={setHovered} showTip={showTip} hideTip={hideTip} dropTip={dropTip} onTile={onTile} />
           ))}
           <div className={s.tokens}>
             {S.players.map((x, i) => {
