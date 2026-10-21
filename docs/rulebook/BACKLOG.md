@@ -2189,9 +2189,28 @@ edit to `rules/cards` is invisible to it until that is re-run):
 - `cargo test -p game-kinds -p card-sdk --no-fail-fast` — green.
 - `cargo test -p game-rules --no-fail-fast` — green except
   `--test settle_depth`, which **stack-overflows on master too** (pre-existing,
-  not this batch). The name looks like the STACK-01 guard test; worth a look.
-- `cargo test -p ruleset-tests --no-fail-fast` — the two new payment
-  regressions and both M4 tests green; full-suite run below.
+  not this batch).
+- `cargo test -p ruleset-tests --no-fail-fast` — every target green except two
+  tests that **fail identically with master's code** in this same harness
+  (checked by `git checkout 41345b5c --` of the four changed rule files plus
+  `play.rs`, rebuild the wasm, re-run -- both still fail; restored after):
+  - `cross_status::s05_crychic_band_six_cards` — "P1 neither pays nor
+    receives: 9000 != 10000". The CRYCHIC band (1) 「无法获得或失去资金」 lock
+    (a `PaySplitChoose` cancel) does not void P1's leg of 登上武道馆. This is
+    **SETTLE-02 regressing** — the 2026-10-17 audit recorded it as fixed and
+    the test un-ignored/green. Re-open below.
+  - `gap_money::g02_half_speed_plus_expectations_floor_on_a_rent` — fails in
+    the **arrangement** assert ("landed on the rent tile: 32 != 29"), before
+    any money assertion. Movement/setup, not the payment pipeline.
+- `cargo check --workspace --all-targets` — clean (warnings only).
+
+**Pre-existing, not this batch** (verified above; filed so they are not lost):
+- **REOPEN SETTLE-02** — `s05_crychic_band_six_cards` red again.
+- **TEST-ARRANGE g02** — `g02_half_speed_plus_expectations_floor_on_a_rent`
+  stops at "landed on the rent tile: 32 != 29".
+- **settle_depth stack overflow** — `game-rules --test settle_depth` aborts
+  with a stack overflow on master too; the name suggests it is the STACK-01
+  guard, which the 2026-10-10 audit recorded as fixed. Worth a look.
 
 ## Wave 3 clause check (checking half)
 
