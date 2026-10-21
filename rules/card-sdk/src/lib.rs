@@ -907,197 +907,94 @@ impl On {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::abi::{ActionKind, FilterKind, TriggerKind};
+    use crate::abi::TriggerKind;
 
-    fn body(_: i32) -> Asked {
-        Ok(())
-    }
-    fn fbody(_p: i32, v: i32) -> i32 {
-        v
-    }
-
+    /// Docs list every filter-pipeline kind as `Filter::KINDS` and every
+    /// event / hook kind as `Action::KINDS`. Walk the registries the
+    /// `filter_kinds!` / `action_kinds!` macros emit -- the old hardcoded
+    /// const lists drifted every time a kind was added.
     #[test]
     fn is_filter_set_matches_docs() {
-        for k in [
-            TriggerKind::DiceRollValue,
-            TriggerKind::PaySplitChoose,
-            TriggerKind::PaySplitAdd,
-            TriggerKind::PaySplitMul,
-            TriggerKind::PaySplitAt,
-            TriggerKind::DiceRollPlan,
-            TriggerKind::BuyAdd,
-            TriggerKind::BuyMul,
-            TriggerKind::BuySet,
-            TriggerKind::BuyAssign,
-            TriggerKind::PayCombinedAdd,
-            TriggerKind::PayCombinedMul,
-            TriggerKind::PayCombinedCancel,
-            TriggerKind::TurnBonusTime,
-            TriggerKind::TurnBaseTime,
-            TriggerKind::DiceRollValue,
-            TriggerKind::BuyGate,
-            TriggerKind::AbnormalGuard,
-            TriggerKind::ActGate,
-            TriggerKind::PayGate,
-            TriggerKind::MoveGate,
-            TriggerKind::ExclusiveUse,
-            TriggerKind::PlayGate,
-            TriggerKind::OnBoardGate,
-            TriggerKind::TargetableGate,
-            TriggerKind::ImmuneAll,
-            TriggerKind::Untargetable,
-            TriggerKind::Redirect,
-        ] {
-            assert!(k.is_filter(), "expected filter kind {:?}", k.spelling());
+        for k in Filter::KINDS {
+            assert!(k.is_filter, "Filter::{} KindInfo.is_filter", k.name);
+            assert!(k.kind.is_filter(), "Filter::{} must be is_filter", k.name);
         }
-        for k in [
-            TriggerKind::TurnStart,
-            TriggerKind::TurnEnd,
-            TriggerKind::Pass,
-            TriggerKind::PayAfter,
-            TriggerKind::DiceRollAfter,
-            TriggerKind::DiceRollResult, // [反击] window, not a filter
-            TriggerKind::SettleBody,
-            TriggerKind::CounterChanged,
-            TriggerKind::DrewBefore,
-            TriggerKind::ruleset("bandori", 78), // marker spend-substitution (name is payload); prompts, remains Action
-        ] {
-            assert!(!k.is_filter(), "expected action kind {:?}", k.spelling());
+        for k in Action::KINDS {
+            assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
+            assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
         }
+        // Count pin: the docs name 27 filter kinds (the 10 gates + the
+        // modifier stages). Adding one means the docs table moves too.
+        assert_eq!(Filter::KINDS.len(), 27, "Filter::KINDS row count");
     }
 
     /// Pin the typed sides against `TriggerKind::is_filter()` (the single
-    /// declaration source of truth). Every ActionKind const id must be
-    /// `!is_filter()` and every FilterKind const id must be `is_filter()`.
+    /// declaration source of truth for **engine** kinds) and against the
+    /// registry's own `KindInfo::is_filter`. Walk `Filter::KINDS` /
+    /// `Action::KINDS` -- the macro table is the declaration, and every row
+    /// already references its `FilterKind::$name` / `ActionKind::$name` const,
+    /// so a wrong-side const fails here and at the constructor signature.
+    ///
+    /// Ruleset kinds (`bandori_std::kind::{Actions, Filters}`) are pinned in
+    /// `crates/game-rules/tests/kind_table_pin.rs` (this crate cannot see
+    /// them). `TriggerKind::is_filter()` answers `false` for every ruleset id
+    /// -- the registration's `KindInfo` / constructor type is authoritative
+    /// there.
     #[test]
     fn typed_kind_const_sides_match_is_filter() {
-        let action: &[(&str, ActionKind)] = &[
-            ("None", ActionKind::None),
-            ("DiceRollBefore", ActionKind::DiceRollBefore),
-            ("DiceRollResult", ActionKind::DiceRollResult),
-            ("TurnStart", ActionKind::TurnStart),
-            ("Pass", ActionKind::Pass),
-            ("PassPlayer", ActionKind::PassPlayer),
-            ("SettleBefore", ActionKind::SettleBefore),
-            ("Settle", ActionKind::Settle),
-            ("Mortgage", ActionKind::Mortgage),
-            ("Pay", ActionKind::Pay),
-            ("Paid", ActionKind::Paid),
-            ("Bankrupt", ActionKind::Bankrupt),
-            ("Card", ActionKind::Card),
-            ("Event", ActionKind::Event),
-            ("Abnormal", ActionKind::Abnormal),
-            ("Target", ActionKind::Target),
-            // Wire id 21 is a ruleset-declared kind
-            // (`bandori_std::kind`); this table lists only the
-            // engine-generic named consts.
-            ("State", ActionKind::State),
-            ("Counteracted", ActionKind::Counteracted),
-            ("DrawOut", ActionKind::DrawOut),
-            ("TwoCards", ActionKind::TwoCards),
-            ("TurnStartBefore", ActionKind::TurnStartBefore),
-            ("PassBefore", ActionKind::PassBefore),
-            ("MortgageBefore", ActionKind::MortgageBefore),
-            ("BankruptBefore", ActionKind::BankruptBefore),
-            ("CardAfter", ActionKind::CardAfter),
-            ("EventAfter", ActionKind::EventAfter),
-            ("SettleAfter", ActionKind::SettleAfter),
-            ("BuyBefore", ActionKind::BuyBefore),
-            ("BuyAfter", ActionKind::BuyAfter),
-            ("BuildBefore", ActionKind::BuildBefore),
-            ("BuildAfter", ActionKind::BuildAfter),
-            ("DiscardBefore", ActionKind::DiscardBefore),
-            ("DiscardAfter", ActionKind::DiscardAfter),
-            ("EndTurnBefore", ActionKind::EndTurnBefore),
-            ("EndTurnAfter", ActionKind::EndTurnAfter),
-            ("LeaveBefore", ActionKind::LeaveBefore),
-            ("LeaveAfter", ActionKind::LeaveAfter),
-            ("TurnEnd", ActionKind::TurnEnd),
-            ("Drawn", ActionKind::Drawn),
-            ("PassTile", ActionKind::PassTile),
-            ("PayAfter", ActionKind::PayAfter),
-            ("DiceRollAfter", ActionKind::DiceRollAfter),
-            ("CardPlayed", ActionKind::CardPlayed),
-            ("Targeted", ActionKind::Targeted),
-            ("TurnEndBefore", ActionKind::TurnEndBefore),
-            ("TurnEndAfter", ActionKind::TurnEndAfter),
-            ("Discarded", ActionKind::Discarded),
-            ("DeckBeforeGame", ActionKind::DeckBeforeGame),
-            ("DeckAtGameStart", ActionKind::DeckAtGameStart),
-            ("Drew", ActionKind::Drew),
-            ("Reshuffled", ActionKind::Reshuffled),
-            ("Bought", ActionKind::Bought),
-            ("SettleBody", ActionKind::SettleBody),
-            ("BeforeOut", ActionKind::BeforeOut),
-            ("Teleported", ActionKind::Teleported),
-            ("Effect", ActionKind::Effect),
-            ("CounterChanged", ActionKind::CounterChanged),
-            ("DrewBefore", ActionKind::DrewBefore),
-            ("TileResolved", ActionKind::TileResolved),
-            ("MoveResolved", ActionKind::MoveResolved),
-            ("BankruptResolved", ActionKind::BankruptResolved),
-            ("MoveBefore", ActionKind::MoveBefore),
-            ("MoveAfter", ActionKind::MoveAfter),
-            ("MarkerSpend", ActionKind::MarkerSpend),
-            ("MarkerGain", ActionKind::MarkerGain),
-            ("AtEnd", ActionKind::AtEnd),
-            ("PaySplitChooseBefore", ActionKind::PaySplitChooseBefore),
-            ("PayCombinedAddBefore", ActionKind::PayCombinedAddBefore),
-        ];
-        for (name, k) in action {
-            // `None`'s wire name is "" (unset); every other const has a wire name.
-            let wire = k.as_trigger().spelling();
-            if *name != "None" {
-                assert!(!wire.is_empty(), "ActionKind::{name} has empty wire name");
-            }
+        for k in Filter::KINDS {
+            assert!(k.is_filter, "Filter::{} KindInfo.is_filter", k.name);
             assert!(
-                !k.as_trigger().is_filter(),
-                "ActionKind::{name} must be !is_filter()"
+                k.kind.is_filter(),
+                "Filter::{} must be is_filter()",
+                k.name
+            );
+            assert!(
+                !k.spelling().is_empty(),
+                "Filter::{} has empty wire spelling",
+                k.name
+            );
+            assert_eq!(
+                k.wire,
+                game_kinds::wire(k.kind.id),
+                "Filter::{} wire row",
+                k.name
             );
         }
-        let filter: &[(&str, FilterKind)] = &[
-            ("PaySplitChoose", FilterKind::PaySplitChoose),
-            ("PaySplitAdd", FilterKind::PaySplitAdd),
-            ("PaySplitMul", FilterKind::PaySplitMul),
-            ("PaySplitAt", FilterKind::PaySplitAt),
-            ("DiceRollPlan", FilterKind::DiceRollPlan),
-            ("AbnormalGuard", FilterKind::AbnormalGuard),
-            ("ImmuneAll", FilterKind::ImmuneAll),
-            ("Untargetable", FilterKind::Untargetable),
-            ("Redirect", FilterKind::Redirect),
-            ("BuyGate", FilterKind::BuyGate),
-            ("BuyAdd", FilterKind::BuyAdd),
-            ("BuyMul", FilterKind::BuyMul),
-            ("BuySet", FilterKind::BuySet),
-            ("BuyAssign", FilterKind::BuyAssign),
-            ("PayCombinedAdd", FilterKind::PayCombinedAdd),
-            ("PayCombinedMul", FilterKind::PayCombinedMul),
-            ("PayCombinedCancel", FilterKind::PayCombinedCancel),
-            ("ActGate", FilterKind::ActGate),
-            ("PayGate", FilterKind::PayGate),
-            ("MoveGate", FilterKind::MoveGate),
-            ("ExclusiveUse", FilterKind::ExclusiveUse),
-            ("TurnBonusTime", FilterKind::TurnBonusTime),
-            ("TurnBaseTime", FilterKind::TurnBaseTime),
-            ("PlayGate", FilterKind::PlayGate),
-            ("OnBoardGate", FilterKind::OnBoardGate),
-            ("TargetableGate", FilterKind::TargetableGate),
-            ("DiceRollValue", FilterKind::DiceRollValue),
-        ];
-        assert_eq!(filter.len(), 27);
-        for (name, k) in filter {
-            assert!(!k.as_trigger().spelling().is_empty(), "FilterKind::{name}");
+        for k in Action::KINDS {
+            assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
             assert!(
-                k.as_trigger().is_filter(),
-                "FilterKind::{name} must be is_filter()"
+                !k.kind.is_filter(),
+                "Action::{} must be !is_filter()",
+                k.name
             );
+            // `None`'s wire name is "" (unset); every other const has one.
+            if k.name != "None" {
+                assert!(
+                    !k.spelling().is_empty(),
+                    "Action::{} has empty wire spelling",
+                    k.name
+                );
+            }
+            if k.name != "None" {
+                assert_eq!(
+                    k.wire,
+                    game_kinds::wire(k.kind.id),
+                    "Action::{} wire row",
+                    k.name
+                );
+            }
         }
     }
 
     /// The constructor type pins the side: `Filter::KINDS` is all `is_filter`
     /// and `Action::KINDS` is all `!is_filter`. (The old `check_kind_variant`
-    /// runtime assert is gone -- a wrong-side *const* is now a rustc error at
-    /// the constructor signature.)
+    /// runtime assert -- and its raw-id "smuggle" list-form setup, which built
+    /// `On::Filter(&[FilterKind(TriggerKind::engine(45))], …)` to prove the
+    /// runtime check fired -- are **deleted**. A wrong-side *const* is now a
+    /// rustc error at the constructor signature; a raw `FilterKind(t)` can
+    /// still be built, but nothing in the `On` DSL takes a bare list anymore,
+    /// so there is no call site to smuggle through.)
     #[test]
     fn kind_variant_agreement() {
         for k in Filter::KINDS {

@@ -32,9 +32,9 @@ fn split_cards_declare_filter_and_action_halves() {
         }
     };
 
-    // no_expectation (ABI v79): Play / FilterValue(DiceRollValue) /
+    // no_expectation (ABI v93): Play / Filter(DiceRollValue) /
     //   Filter(PaySplitAdd) / Action(Reshuffled). The roll shave + 0-step
-    //   no-settle clamp are one FilterValue (option C).
+    //   no-settle clamp are one Filter (option C).
     let s = shape("PP:不要背负期待");
     assert_eq!(s.len(), 4, "no_expectation entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
@@ -73,6 +73,53 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s[2].1, vec!["turnStart".to_string()], "TurnStart");
 }
 
+/// Manifest trigger spellings are the canonical wire strings: engine kinds
+/// stay camelCase, ruleset kinds are `"r:{key}:{id}"`. The old bare `"21"`
+/// and `"r:bandori:73/74/75"` spellings do not appear.
+#[test]
+fn manifest_spellings_are_namespaced_strings() {
+    let r = rules();
+    let triggers = |id: &str| -> Vec<String> {
+        let idx = r
+            .ruleset()
+            .card(id)
+            .unwrap_or_else(|| panic!("{id} loaded"));
+        let info = &r.ruleset().cards()[idx as usize];
+        info.on
+            .iter()
+            .flat_map(|o| o.triggers.clone())
+            .collect()
+    };
+    // embers registers `Actions::Exile` -- ruleset-ns spelling.
+    let t = triggers("event:火种燃尽之后会怎么样呢？");
+    assert!(
+        t.iter().any(|s| s == "r:bandori:21"),
+        "embers lists r:bandori:21, got {t:?}"
+    );
+    // A pure engine-kind card keeps camelCase.
+    let t = triggers("通用:[衍生]FEVER!");
+    assert!(
+        t.iter().any(|s| s == "paySplitAdd"),
+        "FEVER! lists paySplitAdd, got {t:?}"
+    );
+    // Retired spellings never appear. (`markerSpent` / `cardUsed` /
+    // `houseAdded` are the *current* engine spellings -- only the old
+    // ruleset-side names and `"r:bandori:73/74/75"` are dead.)
+    for id in ["event:火种燃尽之后会怎么样呢？", "通用:[衍生]FEVER!", "PP:不要背负期待", "Mujica:#J11"] {
+        let t = triggers(id);
+        for s in &t {
+            assert_ne!(s, "21", "{id} bare decimal");
+            assert_ne!(s, "73", "{id} bare decimal");
+            assert_ne!(s, "r:bandori:73", "{id} retired FireSpent spelling");
+            assert_ne!(s, "r:bandori:74", "{id} retired SkillUsed spelling");
+            assert_ne!(s, "r:bandori:75", "{id} retired HouseAdded spelling");
+            assert_ne!(s, "FireSpent", "{id}");
+            assert_ne!(s, "SkillUsed", "{id}");
+            assert_ne!(s, "HouseAdded", "{id}");
+        }
+    }
+}
+
 /// The shifted `.silent` index on no_expectation still points at the
 /// Reshuffled bookkeeping entry (now index 4 after the v74 Filter/Action split).
 #[test]
@@ -86,7 +133,7 @@ fn no_expectation_silent_index_follows_the_split() {
     assert_eq!(
         info.on[1].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 1 (FilterValue DiceRollValue) announces"
+        "entry 1 (Filter DiceRollValue) announces"
     );
     assert_eq!(
         info.on[2].presentation,
@@ -145,7 +192,7 @@ fn no_expectation_both_halves_fire() {
     while t.prompt().is_some() {
         let _ = t.answer(0, 0);
     }
-    // FilterValue half (DiceRollValue): face - 2.
+    // Filter half (DiceRollValue): face - 2.
     assert_eq!(t.pos(0), (face - 2) as usize, "DiceRollValue half shaves by 2");
 }
 
@@ -183,13 +230,40 @@ fn j11_action_half_decays_on_turn_end() {
 /// Custom bandori-std kind ids stay Action (non-filter) so `On::Action` may
 /// list them. `ChargePaying` is NOT a filter (its 「可」 opt-in prompts).
 /// The three universal raises (`markerSpent` / `cardUsed` / `houseAdded`) are
-/// engine kinds and likewise non-filter.
+/// engine kinds and likewise non-filter. `Filters::MyRewrite` is the ruleset
+/// filter fixture and IS a filter.
 #[test]
 fn custom_kind_filter_classification() {
-    use card_sdk::abi::ActionKind;
+    use card_sdk::abi::{ActionKind, KindNs};
     assert!(!rk::PassRewardAffected.is_filter());
     assert!(!ActionKind::MarkerSpent.is_filter());
     assert!(!ActionKind::CardUsed.is_filter());
     assert!(!ActionKind::HouseAdded.is_filter());
     assert!(!rk::ChargePaying.is_filter());
+    // The engine renames (v90): the old FireSpent / SkillUsed / HouseAdded
+    // spellings and `"r:bandori:73/74/75"` are gone.
+    assert_eq!(ActionKind::MarkerSpent.spelling(), "markerSpent");
+    assert_eq!(ActionKind::CardUsed.spelling(), "cardUsed");
+    assert_eq!(ActionKind::HouseAdded.spelling(), "houseAdded");
+    // Ruleset-ns: `Actions::Exile` is `KindNs::Ruleset`, spelled `r:bandori:21`.
+    assert_eq!(rk::Exile.0.ns, KindNs::Ruleset(rk::RULESET_KEY));
+    assert_eq!(rk::Exile.spelling(), "r:bandori:21");
+    let exile = rk::Actions::KINDS
+        .iter()
+        .find(|k| k.name == "Exile")
+        .expect("Actions::Exile");
+    assert_eq!(exile.kind.ns, KindNs::Ruleset(rk::RULESET_KEY));
+    assert!(!exile.is_filter, "Exile is an action kind");
+    // MyRewrite is the ruleset filter fixture (`r:bandori:1`).
+    let my = rk::Filters::KINDS
+        .iter()
+        .find(|k| k.name == "MyRewrite")
+        .expect("Filters::MyRewrite");
+    assert!(my.is_filter, "MyRewrite is a filter kind");
+    assert_eq!(my.kind.ns, KindNs::Ruleset(rk::RULESET_KEY));
+    assert_eq!(my.spelling(), "r:bandori:1");
+    // Trigger spellings on the manifest are the canonical strings.
+    assert_eq!(rk::PassRewardAffected.spelling(), "r:bandori:26");
+    assert_eq!(rk::ChargePaying.spelling(), "r:bandori:78");
+    assert_eq!(rk::FansFlip.spelling(), "r:bandori:107");
 }

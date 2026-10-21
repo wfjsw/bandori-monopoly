@@ -1486,13 +1486,16 @@ pub struct TriggerKind {
 pub struct ActionKind(pub TriggerKind);
 
 /// Filter-kind view of the shared wire ids: pure value transforms
-/// (`On::Filter` / `On::FilterFlag` / `On::FilterValue`).
+/// (`On::Filter(FilterEntry)`).
 ///
-/// Bodies cannot prompt or emit effects. The three entry shapes are
-/// `fn(i32, i32) -> i32`, `fn(i32, i32) -> bool`, and a struct rewrite. Bool
-/// polarity: gates answer true = allowed; cancel stages answer false = cancel.
-/// Ids are the same [`TriggerKind`] every kind view uses. Kind/variant agreement is
-/// a compile error: a filter entry takes these constants, never action kinds.
+/// Bodies cannot prompt or emit effects. The four shapes
+/// ([`crate::kinds::FilterShape`]) are `fn(i32, i32) -> i32` (value),
+/// `fn(i32, i32) -> bool` (flag), `fn(i32, GateValue) -> GateValue` (gate),
+/// and `fn(i32, P) -> P` for a typed payload family. Bool polarity: gates
+/// answer `Some(true)` = allowed; cancel stages answer `false` = cancel.
+/// Ids are the same [`TriggerKind`] every kind view uses. Kind/variant
+/// agreement is a compile error: a filter entry takes these constants (via
+/// the `filter_kinds!` constructors), never action kinds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct FilterKind(pub TriggerKind);
 
@@ -2633,12 +2636,12 @@ pub enum OnKind {
     /// does not modify the triggering value. Kinds must be non-filter
     /// (`TriggerKind::is_filter() == false`).
     Action = 3,
-    // 4 was `AtEnd`, folded into `Action(&[TriggerKind::AtEnd], …)` in v76.
+    // 4 was `AtEnd`, folded into `On::Action(Action::AtEnd(…))` in v76.
     // Wire id 4 is retired -- never reuse.
-    // 5 was `DiceRollPlan`, folded into `FilterValue(&[TriggerKind::DiceRollPlan], …)`
+    // 5 was `DiceRollPlan`, folded into `On::Filter(Filter::DiceRollPlan(…))`
     // in v76. Wire id 5 is retired -- never reuse.
-    // 6 was `Gate`, folded into `FilterFlag` / `FilterValue` at the gate kinds
-    // in v77. Wire id 6 is retired -- never reuse.
+    // 6 was `Gate`, folded into `On::Filter(Filter::ActGate(…))` etc. at the
+    // gate kinds in v77. Wire id 6 is retired -- never reuse.
     /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(pre, guard,
     /// body)`. Tile rules (`tile:*`) are one per board tile kind and this is what
     /// runs when that tile is 结算d, inside the settle chain (a
@@ -2660,11 +2663,12 @@ pub enum OnKind {
     /// v73: a rule's **redeem body** (`On::Redeem(pre, guard, body)`) --
     /// 规则书 基础规则 6. Same split as [`Self::Mortgage`].
     Redeem = 10,
-    /// v74: `On::Filter` / `On::FilterFlag` / `On::FilterValue` -- a **value
-    /// modifier** at those modifier [`FilterKind`]s (`TriggerKind::is_filter()`).
-    /// v75: the three shapes share this wire id (the host distinguishes by the
-    /// guest's return convention). Kinds must be filter kinds. Id 11, not 9
-    /// (9/10 are the v73 deed kinds).
+    /// v74: `On::Filter(FilterEntry)` -- a **pure value / decision / gate /
+    /// payload rewrite** at one modifier [`FilterKind`]
+    /// (`TriggerKind::is_filter()`). v93: one kind per entry, built by the
+    /// `filter_kinds!` constructors; the body shape is
+    /// [`crate::kinds::FilterShape`]. Id 11, not 9 (9/10 are the v73 deed
+    /// kinds).
     Filter = 11,
     /// v80: a rule's **buy body** (`On::Buy(pre, guard, body)`) -- what runs
     /// when the deed this rule instance governs is bought (settle offer,
@@ -2683,7 +2687,6 @@ pub enum OnKind {
 /// family (`PlanValue` / `RollValue` / `DealValue` / `GateValue` /
 /// `PayAddValue` / `RedirectValue`). The 28-field `FilterValue` bag and its
 /// `UNCHANGED` sentinel are gone (ABI v92).
-
 impl OnKind {
     pub fn from_i32(v: i32) -> Option<Self> {
         Some(match v {

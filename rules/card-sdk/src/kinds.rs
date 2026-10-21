@@ -24,6 +24,11 @@
 //! method calls) so `CardDef::new` stays `const fn` and `static CARDS` stays
 //! const-built.
 
+#[cfg(target_arch = "wasm32")]
+use alloc::borrow::Cow;
+#[cfg(not(target_arch = "wasm32"))]
+use std::borrow::Cow;
+
 use crate::abi::{ActionKind, FilterKind, TriggerKind};
 use crate::payload::{drive_flag, drive_payload, drive_value, FilterPayload};
 use crate::Asked;
@@ -48,7 +53,9 @@ pub enum FilterShape {
 pub struct KindInfo {
     /// PascalCase constructor name, e.g. `"DiceRollPlan"`.
     pub name: &'static str,
-    /// Wire spelling (`"diceRollPlan"` or `"r:bandori:21"`).
+    /// Engine wire spelling (`"diceRollPlan"`). Empty for ruleset rows --
+    /// those spell as `"r:{key}:{id}"` via [`Self::spelling`] /
+    /// [`TriggerKind::spelling`] (a `const` table cannot `format!`).
     pub wire: &'static str,
     /// The namespaced wire id.
     pub kind: TriggerKind,
@@ -56,6 +63,18 @@ pub struct KindInfo {
     pub is_filter: bool,
     /// Body shape (filters only; actions are `fn(i32) -> Asked`).
     pub shape: FilterShape,
+}
+
+impl KindInfo {
+    /// The wire spelling: the engine table's camelCase, or
+    /// `"r:{key}:{id}"` for a ruleset row.
+    pub fn spelling(&self) -> Cow<'static, str> {
+        if self.wire.is_empty() {
+            self.kind.spelling()
+        } else {
+            Cow::Borrowed(self.wire)
+        }
+    }
 }
 
 /// One filter registration: a pure value / decision / gate / payload rewrite
