@@ -1271,16 +1271,27 @@ pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
 }
 
 /// Pack a `DealValue` (BuyAssign) raise result into the single answer log
-/// slot: bit 0 = cancelled, bits 1-4 = houses, bit 5 = mortgaged, bits 6-31 =
-/// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
+/// slot: bit 0 = cancelled, bits 1-4 = houses + 1 (0 = unset, 1 = zero
+/// houses, … 15 = fourteen), bit 5 = mortgaged, bits 6-31 = owner + 2
+/// (0 = unset, 1 = bank / -1, 2+ = seat + 2).
+///
+/// `i32::MIN` on either field means "leave the deal's value alone" and packs
+/// as the unset code. Houses must therefore encode `0` (razed) distinctly
+/// from unset — the `+ 1` does that. Transient within one raise; nothing
+/// persists this packing.
 pub fn pack_deal(cancelled: bool, owner: i32, houses: i32, mortgaged: bool) -> i32 {
     let o = if owner == i32::MIN {
         0
     } else {
         (owner + 2).clamp(0, (1 << 26) - 1)
     };
+    let h = if houses == i32::MIN {
+        0
+    } else {
+        (houses + 1).clamp(1, 15)
+    };
     ((cancelled as i32) & 1)
-        | ((houses.clamp(0, 15) & 15) << 1)
+        | ((h & 15) << 1)
         | (((mortgaged as i32) & 1) << 5)
         | (o << 6)
 }
@@ -1288,7 +1299,8 @@ pub fn pack_deal(cancelled: bool, owner: i32, houses: i32, mortgaged: bool) -> i
 /// Inverse of [`pack_deal`].
 pub fn unpack_deal(v: i32) -> (bool, i32, i32, bool) {
     let cancelled = v & 1 != 0;
-    let houses = (v >> 1) & 15;
+    let h = (v >> 1) & 15;
+    let houses = if h == 0 { i32::MIN } else { h - 1 };
     let mortgaged = (v >> 5) & 1 != 0;
     let o = (v >> 6) & ((1 << 26) - 1);
     let owner = if o == 0 { i32::MIN } else { o - 2 };
@@ -3112,4 +3124,34 @@ pub fn join_redirect_target<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 pub fn set_join_used<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
     c.st_mut().w().set_trigger_join_used();
     Ok(())
+}
+
+#[cfg(test)]
+mod deal_tests {
+    use super::{pack_deal, unpack_deal};
+
+    /// `i32::MIN` means "leave the deal's field alone" and must survive the
+    /// pack/unpack round-trip as `i32::MIN` -- never as 0 (a raze) or -2.
+    #[test]
+    fn unset_fields_round_trip_as_unset() {
+        let (_, owner, houses, _) = unpack_deal(pack_deal(false, i32::MIN, i32::MIN, false));
+        assert_eq!(owner, i32::MIN, "unset owner must stay unset");
+        assert_eq!(houses, i32::MIN, "unset houses must stay unset, not 0");
+    }
+
+    /// A real 0 houses (razed) is a value and must not collapse into unset.
+    #[test]
+    fn zero_houses_is_not_unset() {
+        let (_, _, houses, _) = unpack_deal(pack_deal(false, i32::MIN, 0, false));
+        assert_eq!(houses, 0, "a raze must stay a raze");
+    }
+
+    #[test]
+    fn owner_and_houses_round_trip() {
+        for (owner, houses) in [(0i32, 0i32), (-1, 4), (3, 2), (7, 14)] {
+            let (c, o, h, m) = unpack_deal(pack_deal(true, owner, houses, true));
+            assert!(c && m);
+            assert_eq!((o, h), (owner, houses), "owner={owner} houses={houses}");
+        }
+    }
 }

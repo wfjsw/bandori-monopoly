@@ -3783,12 +3783,15 @@ impl<M: CardModules> RulesBridge<M> {
                         value,
                     );
                     if deal_owner != i32::MIN {
-                        b = b.deal(
-                            game_kinds::Payee::from_i32(deal_owner),
-                            deal_houses,
-                            deal_mortgaged != 0,
-                        );
+                        b.deal_owner = Some(game_kinds::Payee::from_i32(deal_owner));
                     }
+                    // Flatten boundary: `i32::MIN` on the wire means "leave the
+                    // deal's houses alone". `deal()` would store `Some(MIN)` and
+                    // the pack/unpack round-trip would clamp that to a raze.
+                    if deal_houses != i32::MIN {
+                        b.deal_houses = Some(deal_houses);
+                    }
+                    b.deal_mortgaged = deal_mortgaged != 0;
                     t.buy = Some(b);
                 }
             })?;
