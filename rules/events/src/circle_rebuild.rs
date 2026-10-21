@@ -102,6 +102,14 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
     // CiRCLE, so the cafe's pass runs the same reward body here
     // (`rules_tiles::circle::settle_reward`).
     let who = trigger::player_id();
+    // TODO(ABI): Instead of directly settling this by calling CiRCLE's reward body,
+    // message the CiRCLE card to trigger its reward instead.
+    // In general, we should avoid directly calling the fn of other cards. 
+    // It should either be done with messaging the card.
+    // Actual tile swapping:
+    // As an API extension, also implement a mechanism to actually swap the tile  
+    // to what is desired (temporarily), so that other cards whose effect depends on the specific 
+    // tile also moves. Such swap should predates all hooks that changes settlement.
     if who >= 0 {
         let landing = trigger::move_resolve() && trigger::move_remaining() <= 0;
         rules_tiles::circle::settle_reward(who, landing)?;
@@ -117,6 +125,9 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
 /// TODO(规则书): 「该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果」
 /// -- the engine runs hook instances in placement order, not by priority, so a
 /// replacement that claims the body first still wins (the `cancelled` bail).
+/// TODO(ABI): Consider swapping CiRCLE with a new tile that implements the desired settlement logic,
+/// but we must ensure that other cards that depends on CiRCLE (but does not change/override the
+/// CiRCLE's actual settlement) still function correctly (incl for example charge replenish).
 fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
     let who = trigger::player_id();
