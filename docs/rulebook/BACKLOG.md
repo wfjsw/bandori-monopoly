@@ -835,6 +835,53 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/card-sdk/src/abi.rs` property map (v30)
 - **capability**: tri-state tile prop (absent / clear / set) for mortgage-stays.
 
+## ABI-13 — temporary tile-rule swap (「效果迁移至…」 / 「视为与…交换位置」)
+- **kind**: ABI defect (missing capability)
+- **class**: B
+- **severity**: medium
+- **suggested batch**: host ABI: tile rules
+- **locations**
+  - `rules/events/src/circle_rebuild.rs` (`TODO(ABI) ABI-13` on `on_settle_body`
+    and the cafe branch of `on_pass`) — the live consumer
+  - `rules/cards/card-hhw/src/smile_parade.rs` (「那格视为与"弦卷集团"格子交换位置」)
+    -- the same shape, currently hand-rolled as `card_settle_at` +
+    `set_settle_as_agent` + `is_settle_redirect`
+  - `rules/tiles/src/lib.rs` module doc already promises the model: *"a card
+    that bends a tile attaches, **swaps** or retunes rule instances"*. Only
+    attach (`place_card_on`) and retune (`set_tile_prop`) exist.
+- **rulebook**: 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」
+  (协助CiRCLE重建); 「那格视为与"弦卷集团"格子交换位置」 (笑容大游行 (3)).
+- **current**: a card re-homes another tile's effects one clause at a time.
+  `event:协助CiRCLE重建` hand-suppresses the [经过] reward (`prop::NO_REWARD`),
+  re-implements the reward on the cafe by messaging `tile:circle`
+  (`"settleReward"`, landed), and replaces the two settle bodies by hook. Any
+  effect the migrating tile gains later, and any instance state bound to it,
+  does **not** ride along.
+- **capability**: a guest verb that rebinds which tile **rule instance**
+  governs a board square, temporarily, e.g. `ctx::tile_swap_rules(a, b)` /
+  `ctx::tile_set_rule(tile, rule_id)`, applied immediately (it must predate
+  every hook that changes settlement) and reversed when the swapping instance
+  expires.
+- **must keep (the charge-replenish constraint)**: the square's **identity**
+  is unchanged. `tile_is(tile.id, "circle")` / `ctx::is_start` /
+  `guards::OWN_START` keep reading the static board, so 「每次[经过]CiRCLE时
+  获得N个[火罐]」 (`skill-personas`: 千早爱音 / 白金燐子 / 冰川纱夜 / 慈爱女神 …)
+  still fires on the real CiRCLE and does **not** ride the migration to
+  「CiRCLE咖啡厅」. Those are their own cards' effects keyed *on* CiRCLE, not
+  CiRCLE's own effects, and the rulebook migrates only the latter.
+  Test: `circle_rebuild_leaves_charge_replenish_on_the_real_circle`.
+- **also keep**: tile text composition (`docs/TILES.md` 「Tile text」) resolves
+  a square's base text by `tile_rule_id(kind)` + `FieldCard::tile`; a swap has
+  to leave the composed text right (a replacement instance's `texts` should
+  win the slots it claims, as today). `prop::START` is stamped on `tile:circle`
+  and is a property of the **square**, not of the migrating effects -- it must
+  not travel with a swapped rule.
+- **save/replay**: a world write, not a state-shape change, so
+  `Match::save()` and the archived engine bundles stay valid
+  (`docs/rulebook/BACKLOG.md` replay-compat rule).
+- **unblocks**: a generic 「效果迁移至…」 / 「视为与…交换位置」 clause; 笑容大游行
+  would drop its hand-rolled settle-redirect pair.
+
 ## SKILL-01 — hook-guard dispatch does not see `skillBlock` (丸山彩 (2) under 初次演出事故)
 - **kind**: implementation bug
 - **class**: B (contained)
@@ -2570,6 +2617,30 @@ engine capabilities rather than rule-side bandaids. Three landed here.
 
 ## Landed
 
+### ENG-CARD-MESSAGE — `Target::Board` reaches tile rules; CiRCLE reward is messaged
+- `Target::Board(id)` / `Target::Uid(uid)` now resolve over **every** standing
+  board-owned rule on `BOARD_OWNER` (tile rules, marks, events, status hosts),
+  not just `mark_rule_instances()` (`crates/game-rules/src/hostfns.rs`
+  `resolve_receivers`). The id is what disambiguates; `Target::Board`'s shape
+  is unchanged so this is a strict superset. Docs: `docs/CARDS.md`
+  「Cross-card messages」.
+- **Consumer:** `event:协助CiRCLE重建` re-homes 「CiRCLE原本的所有效果」 onto
+  「CiRCLE咖啡厅」 by messaging `tile:circle` (`On::Message("settleReward")`)
+  instead of calling `rules_tiles::circle::settle_reward` across modules. The
+  reward body runs **as `tile:circle`** (its prompt, its `passRewardAffected`
+  window, its `prop::NO_REWARD` read) and is now private to that module.
+  `rules/events` no longer depends on `rules-tiles` -- the only production
+  card→card body call in `rules/*` is gone. Test:
+  `circle_rebuild_pays_the_reward_on_a_cafe_pass`.
+- Also fixed on the way: the rebuild event's `prop::NO_REWARD` arm lives on
+  the `tile:circle` instance (the source owns arming, the reader is the tile),
+  so expiring the event did not drop it and the **next** pass of CiRCLE was
+  silently unpaid. The event now declines to re-arm on the expiring pass
+  (order-independent: the reward step either already consumed the armed veto
+  or will). Test: `circle_rebuild_restores_the_reward_after_it_expires`.
+- The remaining half of the `TODO(ABI)` in `circle_rebuild.rs` -- a real
+  temporary tile-rule swap -- is **ABI-13**.
+
 ### ENG-REDIRECT — host-visible "this settle is a redirect" flag
 - `MoveCtx.settle_redirect: bool` (`crates/game-core/src/engine/move_ctx.rs`),
   set **only** in `card_settle_move` (`play.rs`) when the engine runs a
@@ -2627,6 +2698,17 @@ is the current home, and a second activation-cost card is the trigger to
 generalize.
 
 # Summary counts
+
+**2026-10-21 addendum — `circle_rebuild` TODO(ABI) sweep.** The two
+`TODO(ABI)` tags in `rules/events/src/circle_rebuild.rs` were filed and the
+tractable half landed. Card→card messaging already existed (`On::Message` /
+`ctx::send`, ABI v50) but only ever reached `mark:cp`; `Target::Board` now
+resolves any standing board-owned rule, and the rebuild event messages
+`tile:circle` for the re-homed [经过] reward instead of calling into
+`rules-tiles` (that crate dep is gone from `rules/events`). The stale
+`prop::NO_REWARD` arm that ate the first CiRCLE reward after the event expired
+is fixed. The tile-swap half is **ABI-13** (new, MEDIUM) -- a real capability
+gap, not a bug. Four tests added under `rules/tests/tests/events.rs`.
 
 **Recounted 2026-10-20** against master `b8e26436` after the card-rule TODO
 review. The 2026-10-10 figures (78 open from 144 TODOs + ~85 ignores) and the

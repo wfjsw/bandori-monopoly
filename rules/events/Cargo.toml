@@ -13,7 +13,3 @@ crate-type = ["rlib"]
 card-sdk = { path = "../card-sdk", features = ["guest"] }
 bandori-std = { path = "../bandori-std" }
 rules-status = { path = "../status" }
-# `event:协助CiRCLE重建` re-homes 「CiRCLE原本的所有效果」 onto the cafe --
-# the [经过] reward body lives in `rules-tiles` (`tile:circle::settle_reward`)
-# so both call sites share one implementation.
-rules-tiles = { path = "../tiles" }

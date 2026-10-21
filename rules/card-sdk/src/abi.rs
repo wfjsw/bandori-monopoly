@@ -1064,7 +1064,9 @@ pub enum Target {
     Uid(i32),
     /// The instance of card id `card` held by `player` (first field copy).
     Card { player: i32, card: String },
-    /// A standing board-owned pseudo card by id (`mark:cp`).
+    /// A standing board-owned rule by id: a tile rule (`tile:circle`), a mark
+    /// owner (`mark:cp`), an active event, a status host. All live in the one
+    /// `BOARD_OWNER` list; the id is what disambiguates.
     Board(String),
 }
 
