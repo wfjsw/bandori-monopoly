@@ -22,13 +22,20 @@ Sources (re-counted 2026-10-20 against master `b8e26436`):
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `rules/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
-**Current ABI: v89** (`rules/card-sdk/src/abi.rs` `ABI_VERSION`). The doc body
-still quotes v53–v85-era names in places; where a kind has since been renamed
+**Current ABI: v95** (`rules/card-sdk/src/abi.rs` `ABI_VERSION`) — the v89
+figure in the 2026-10-20 header was already stale. The doc body still quotes
+v53–v85-era names in places; where a kind has since been renamed
 (`HookKind`/`GateKind` → `ActionKind`/`FilterKind`; `MoveRoll` → `DiceRollResult`;
 the `Pay*` / `Roll*` families restructured; `ruleset-core` → `bandori-std`),
 treat the live name as canonical. ABI bumps since the 2026-10-17 audit:
 v86–87 (markers / fire declaration), v88 (Phase C batch 2 — status verbs into
-`bandori-std`), v89 (status-vocab-zero — opaque status keys).
+`bandori-std`), v89 (status-vocab-zero — opaque status keys), v90 (`MetaRow`
+display slots), v91 (namespaced `TriggerKind`), v92 (CEL `kind` is a string),
+v93 (typed payloads + `game-kinds` vocabulary), v94 (typed filter/action
+registration DSL), v95 (named-field `On` entries + `counter_reason` locale
+keys). **v96 is in flight on `gap-batch8-meda`**: `PaySplitMulBefore`
+(engine id 110), the writable interactive stage between `PaySplitAdd` and
+`PaySplitMul`.
 
 **Crate renames** — every path below is quoted in the new names:
 - `rules/skills/skill-characters/` → `rules/skills/skill-personas/`
@@ -921,14 +928,22 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 
 ## SKILL-07 — soyo 「持续至你的下回合开始」 recolour has no expiry
 - **kind**: implementation bug
-- **class**: A
+- **class**: **A — closed 2026-10-21** (`0ce220b1`, verified this batch)
 - **severity**: medium
 - **suggested batch**: skills: CRYCHIC / tiles
 - **locations**
-  - `rules/skills/skill-personas/src/soyo_clear.rs:85` (`colorFor:<p>` write does not expire)
+  - `rules/skills/skill-personas/src/soyo_clear.rs` — `COLOURED` remembers the
+    landing as `tile + 1`; `declare_cap` (on `TurnStartBefore` /
+    `DeckAtGameStart`, gated `trigger::player_id() == player_id`) expires the
+    `colorFor:<p>` prop and clears the slot. Both entries are on the card's
+    `silent` list: the expiry is bookkeeping, not a printed effect.
+  - pinned by `rules/tests/tests/mygo.rs` `soyo_recolour_expires_at_next_turn_start`.
 - **rulebook**: 「持续至你的下回合开始」.
-- **current**: write is permanent (matches the old behaviour, not the clause).
-- **expected**: prop expires at the player's next turn start.
+- **was**: the `colorFor:<p>` write was permanent.
+- **residual (already filed, not this item)**: 「若以此法单次免除了至少1500资金的
+  [支付]…」 attribution is **SKILL-06**'s provenance-tagged-spends capability
+  (`soyo_clear.rs` `TODO(规则书)[judgement]`). The penalty latch itself is wired
+  in `on_pass`.
 
 ## SKILL-08 — Rana parking 「你与其他玩家重合时」 never fires (suspected bug)
 - **kind**: implementation bug
@@ -1449,16 +1464,28 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **expected**: +2 extends an in-flight walk (engine mirrors plan writes onto the live move).
 
 ## CRYSTAL-08 — ringing_bloom (2) 「视为」 max is snapshotted, not continuous
-- **kind**: implementation bug
-- **class**: A
+- **kind**: implementation bug (rise half closed) + ABI defect (fall half)
+- **class**: A (rise, **closed 2026-10-21** in `0ce220b1`) / **B** (fall + disarm)
 - **severity**: medium
 - **suggested batch**: rent multipliers / HHW cards
 - **locations**
-  - `rules/cards/card-roselia/src/ringing_bloom.rs:87` (snapshot at play; no `houseAdded` refresh; no fall path)
-  - `:107` (（3） X = counted value — **C-Q36** if the user prefers real houses)
-  - `:114` (removal path other than discard leaves tile props armed)
+  - `rules/cards/card-roselia/src/ringing_bloom.rs` — `apply_view` recomputes the
+    counted max and the half-charge `RENT_FACTOR` set; `on_house_added` rides
+    `Action::HouseAdded` (engine kind 75) so the 「视为」 tracks a build past the
+    play snapshot. Pinned by `rules/tests/tests/cross_tiles.rs`
+    `t10b_ringing_bloom_tracks_a_later_build`.
+  - **still open (class B)**: the **fall** path. There is no `HouseRemoved`
+    kind, so a raze of the max tile (or a sale) leaves the view at the old max
+    until the next build. A removal path other than `pay_after`'s discard also
+    leaves the tile `RENT_FACTOR`s armed -- there is no general "instance left
+    the field" hook to disarm on.
+  - **still open (C-Q36)**: `pay_after`'s （3） `X` reads the **counted**
+    (`rent_houses_of`) value, not the standing houses. The sheet says
+    「房屋数」 without 「视为」; the reading taken is that (2) has already
+    redefined what 「房屋数」 means for this player's tiles. See C-Q36.
 - **rulebook**: (2) 「视为」 is continuous (tracks the max as houses move).
-- **expected**: track rises (and, if possible, falls) for the life of the card.
+- **expected**: track rises (done) and falls (needs a `HouseRemoved` kind or an
+  equivalent) for the life of the card.
 
 ## SKILL-10 — misaki_other 「额外视为CiRCLE」
 - **kind**: rulebook divergence + ABI defect
@@ -1755,8 +1782,20 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - Covered by ABI-09 / EVENT-03. Keep as one low batch: `lulu.rs:37` shout logged only; `ex_quest.rs:36` skin; `tsurumaki_estate.rs:37` sealed bid vs open auction.
 
 ## LOW-02 — property / upgrade book clauses that live elsewhere
-- `rules/tiles/src/property.rs:19` (「升级所[消耗]的资金不可通过[抵押]…」 enforced in `mortgage`), `:21` (「每块地有标注的等级上限」 = `buildMax`)
-- **class**: A (docs only) — cite the right site; no behaviour change.
+- **class**: A (docs only) — **closed 2026-10-21**. The module doc in
+  `rules/tiles/src/property.rs` now cites both live sites instead of restating
+  them (and the old `TODO(规则书)` is gone):
+  - 「每块地有标注的等级上限」 -- the cap is the rent-table length
+    (`rent.len() - 1`; `prop::BUILD_MAX` in `crates/game-core/src/state.rs`);
+    refusals live in `crates/game-core/src/engine/ops.rs` `why_not_build_on`
+    (no upgrade row / stamped `BUILD_MAX = 0` / `houses >= rent.len() - 1`).
+    `rules/tiles/src/ring.rs` is the `buildMax = 0` RiNG case.
+  - 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得」 -- enforced by
+    `Cx::offer_mortgage_funds`'s `exclude`
+    (`crates/game-core/src/engine/play.rs`), **not** by `mortgage` (the 2026-10-20
+    entry had that site wrong). Restated beside the deed-economics clauses in
+    `rules/tiles/src/deed.rs`.
+- no behaviour change.
 
 ## LOW-03 — `Mujica:#J11` has no rulebook entry
 - **kind**: rulebook gap
@@ -2086,6 +2125,50 @@ else in the 153-tag sweep already had a home (see the index above).
   the permanent name of the fire counter's spend raise and close this as D.
 - **cross-link**: MARKERS-LISA-01 (temp-pot spend provenance) — a
   `MarkerSpent` carrying `name` is the same wire shape that tag needs.
+
+---
+
+# Batch 2026-10-21 (`gap-batch8-meda`) — proposed-batch-8 sweep + wave 3 check
+
+Take from "Proposed batch order" item 8 (medium-A contained bugs). Most of that
+item turned out to be **already landed or reclassified**; the batch became an
+accuracy pass plus the one shared class-B capability that the two remaining
+payment bugs needed.
+
+## Closed this batch
+
+- **SKILL-07** — already fixed in `0ce220b1` (2026-10-20 tree, unnoticed by
+  that day's audit). Expiry verified: `soyo_clear.rs` `COLOURED` / `declare_cap`,
+  pinned by `mygo.rs` `soyo_recolour_expires_at_next_turn_start`. Residual
+  「以此法免除」 attribution stays under **SKILL-06**.
+- **CRYSTAL-08** (rise half) — already fixed in `0ce220b1`. `apply_view` +
+  `Action::HouseAdded` track a build past the play snapshot; pinned by
+  `cross_tiles.rs` `t10b_ringing_bloom_tracks_a_later_build`. Fall half and the
+  non-discard disarm are **class B** (no `HouseRemoved` kind); （3） X stays
+  **C-Q36**. Entry rewritten, not deleted.
+- **LOW-02** — docs only, this batch. `rules/tiles/src/property.rs` module doc
+  now cites both live sites (rent-table length / `why_not_build_on` for the
+  level cap; `Cx::offer_mortgage_funds`'s `exclude` for the upgrade-funding
+  bar). The 2026-10-20 entry had the second site wrong (`mortgage`).
+
+## Closed by the in-flight engine work (this branch)
+
+- **AYA-LONG-01** and **AVE-CLAW-01** — one shared root cause: the money
+  pipeline had no writable interactive stage between `paySplitAdd` and
+  `paySplitMul`. Both card bodies were latching / shaving at `Effect` (the
+  declaration) instead. **v96 `PaySplitMulBefore`** (engine id 110) is that
+  stage; `aya_longing.rs` (2) and `ave_mujica.rs` `latch_orig` move onto it.
+  The 2026-10-20 batch table listed both as class A; the code TODOs had already
+  reclassified them as B — correct, one ABI bump closes both.
+
+## Wave 3 clause check (checking half)
+
+Five large, previously unreviewed bodies reviewed clause-by-clause against
+`docs/rulebook/cards.json` (the same method as the 2026-10-18 waves 1–2):
+`card-morfonica/nanami_effort`, `card-hhw/kaoru_thief`, `card-ppp/tomorrows_door`,
+`card-sumimi/here_the_world`, `card-ag/one_of_us`. Findings are filed below as
+`W3-*` (or noted as already-filed). **~150 cards remain unreviewed at clause
+level** — keep taking slices.
 
 ---
 
@@ -2748,8 +2831,13 @@ STA-01 / STA-04 dropped out of batch 6 (closed 2026-10-18).
    - **CH-07 general 「视为此卡未生效」 observer** (C-Q5 first, then `CardWasted`)
 7. **C questions to the user** (all of §C below, now C-Q1..C-Q45, in one sitting).
    While waiting, continue on:
-8. **medium-A contained bugs** (SKILL-07 soyo expiry, CRYSTAL-08 ringing_bloom
-   continuous max, AYA-LONG-01, AVE-CLAW-01, NFO-CANCEL-01, LOW-02 docs)
+8. ~~**medium-A contained bugs** (SKILL-07 soyo expiry, CRYSTAL-08 ringing_bloom
+   continuous max, AYA-LONG-01, AVE-CLAW-01, NFO-CANCEL-01, LOW-02 docs)~~
+   **done 2026-10-21** — SKILL-07 / CRYSTAL-08 (rise) were already landed in
+   `0ce220b1` and are now verified + recorded; LOW-02 closed; AYA-LONG-01 +
+   AVE-CLAW-01 closed via v96 `PaySplitMulBefore` (they were class B in
+   disguise). **NFO-CANCEL-01 is still open and is class B** — `PayAfter` has
+   no "PaySplitAt ran" bit — so it moved to the medium-B pile (item 9).
 9. **medium-B ABI pile** (ABI-01..12, HOST-05 ask_money, STA-02/05, HAG-01,
    EVE-01, TOMORI-BIND-01, HARU-SOYO-FX, DRAW-OUT-01, FORCE-WRITE-01,
    **ABI-MARKER-SPENT**) — one ABI bump, many cards.
