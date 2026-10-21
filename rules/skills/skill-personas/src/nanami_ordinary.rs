@@ -45,17 +45,17 @@ fn cd_key(id: &str) -> alloc::string::String {
 pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, "", None, on_pass)),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
         // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
-        On::Action(Action::CardUsed("actor != owner && trigger_card != 0 && charge(owner) >= 1", "", Some(on_skill_applies), on_skill)),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, "", None, tick)),
+        On::Action(Action::CardUsed("actor != owner && trigger_card != 0 && charge(owner) >= 1", None, Some(on_skill_applies), on_skill)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, tick)),
     ],
 )
     .silent(&[1, 2])

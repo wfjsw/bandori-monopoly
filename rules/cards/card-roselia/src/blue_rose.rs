@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"蓝玫瑰的骄傲"#)
         .raw_name(r#"蓝玫瑰的骄傲"#)
         .tags(&[])

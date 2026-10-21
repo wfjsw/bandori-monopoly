@@ -15,8 +15,7 @@ pub const ORDINARY: CardDef = CardDef::new(
     "MyGO:普通与理所当然",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0",
-        r#"受到异常移动效果影响"#,
+        "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0", Some(key!("ordinary_when")),
         None,
         counteract,
     )],

@@ -34,8 +34,8 @@ const POOL: [&str; 4] = [
 pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
-        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", "", None, at_start)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, roll)),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", None, None, at_start)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, roll)),
     ],
 );
 

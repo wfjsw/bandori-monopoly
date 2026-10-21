@@ -15,7 +15,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 
-pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play("", "", None, same_dream)]).meta(&card_sdk::meta::CardMeta::new()
+pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play("", None, None, same_dream)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"同一个梦想"#)
         .raw_name(r#"同一个梦想"#)
         .tags(&[r#"手"#])

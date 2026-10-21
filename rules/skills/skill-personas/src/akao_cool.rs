@@ -24,7 +24,7 @@ use card_sdk::{CardDef, key, Msg, On};
 
 pub const AKAO_COOL: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
-    &[On::Action(Actions::PassRewardAffected(card_sdk::pre::MINE, "", None, on_circle))],
+    &[On::Action(Actions::PassRewardAffected(card_sdk::pre::MINE, None, None, on_circle))],
 ).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 /// Face-down cards this player has on the field.

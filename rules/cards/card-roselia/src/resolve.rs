@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", "", None, resolve)]).meta(&card_sdk::meta::CardMeta::new()
+pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", None, None, resolve)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"觉悟"#)
         .raw_name(r#"[衍生] 觉悟"#)
         .derived(true)

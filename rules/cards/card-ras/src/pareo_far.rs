@@ -20,7 +20,7 @@ use card_sdk::{key, CardDef, Msg, On};
 const PAREO: &str = "PAREO标记";
 
 pub const PAREO_FAR: CardDef =
-    CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play("", "", None, pareo_far)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play("", None, None, pareo_far)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"渐渐远去的你"#)
         .raw_name(r#"（PAREO）渐渐远去的你"#)
         .tags(&[])

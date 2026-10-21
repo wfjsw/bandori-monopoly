@@ -17,9 +17,9 @@ const FIX_NOTE: &str = "修复公告";
 pub const POOL_BUG: CardDef = CardDef::new(
     "event:卡池BUG",
     &[
-        On::Play("", "", None, play),
-        On::Action(Action::Event("", "", Some(always), on_event)),
-        On::Action(Action::BuildBefore("", "", Some(always), before_build)),
+        On::Play("", None, None, play),
+        On::Action(Action::Event("", None, Some(always), on_event)),
+        On::Action(Action::BuildBefore("", None, Some(always), before_build)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

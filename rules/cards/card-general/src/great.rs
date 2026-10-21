@@ -11,7 +11,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", "", None, great)]).meta(&card_sdk::meta::CardMeta::new()
+pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, None, great)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"GREAT"#)
         .raw_name(r#"GREAT"#)
         .tags(&[r#"手"#])

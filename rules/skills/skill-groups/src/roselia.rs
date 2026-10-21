@@ -27,9 +27,9 @@ pub const ROSELIA: CardDef = CardDef::new(
         // per-player colour, not CEL's tile-kind `is_venue`).
         On::Filter(Filter::BuyMul("actor == owner && tile.id >= 0", Some(half_price_applies), half_price)),
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
-        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0", "", Some(on_bought_applies), on_bought)),
-        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0", "", Some(on_live_bought_applies), on_live_bought)),
-        On::Action(Action::TurnStartBefore("actor == owner && slot('skill.roselia.first') != 0", "", None, at_turn_start)),
+        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0", None, Some(on_bought_applies), on_bought)),
+        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0", None, Some(on_live_bought_applies), on_live_bought)),
+        On::Action(Action::TurnStartBefore("actor == owner && slot('skill.roselia.first') != 0", None, None, at_turn_start)),
     ],
 )
     .silent(&[1]);

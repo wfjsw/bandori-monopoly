@@ -12,7 +12,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BANG_DREAM: CardDef =
-    CardDef::new("PPP:Bang Dream!", &[On::Play("", "", Some(cant_play), bang_dream)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("PPP:Bang Dream!", &[On::Play("", None, Some(cant_play), bang_dream)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Bang Dream!"#)
         .raw_name(r#"Bang Dream!"#)
         .tags(&[r#"手"#])

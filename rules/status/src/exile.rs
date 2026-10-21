@@ -51,16 +51,16 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // 「任意玩家获得[除外]…时」 -- the landing clause (already raised from
         // the engine's post-commit log as wire kind 21; this `Abnormal`
         // hook is the same moment from the abnormal path).
-        On::Action(Action::Abnormal("", "", Some(exile_landed), on_exile_landed)),
+        On::Action(Action::Abnormal("", None, Some(exile_landed), on_exile_landed)),
         // 「任意玩家获得[除外]…时」 (`bandori_std::kind::Exile`, wire 21) --
         // raised from the engine's post-commit abnormal log. Cards that mean
         // 「获得[除外]时」 listen here rather than at each grant site (memory:
         // *state clauses belong on events*).
-        On::Action(Actions::Exile("", "", None, on_exile_granted)),
+        On::Action(Actions::Exile("", None, None, on_exile_granted)),
         // 「玩家的每回合开始前移除一层」 / the duration-hold skip. Runs as a
         // field hook collected last among the `turnStartBefore` walk so
         // sibling hooks still see pre-tick state (`docs/STATUS-HOSTS.md` §4).
-        On::Action(Action::TurnStartBefore("", "", Some(turn_start_peels_or_holds), on_turn_start_before)),
+        On::Action(Action::TurnStartBefore("", None, Some(turn_start_peels_or_holds), on_turn_start_before)),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
         On::Filter(Filter::ActGate(EXILED, None, refuse)),

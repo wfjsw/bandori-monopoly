@@ -13,7 +13,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TAKI_SERIOUS: CardDef = CardDef::new(
     "MyGO:（立希）想认真去做",
-    &[On::Play("", "", Some(cant_play), taki_serious)],
+    &[On::Play("", None, Some(cant_play), taki_serious)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想认真去做"#)
         .raw_name(r#"（立希）想认真去做"#)

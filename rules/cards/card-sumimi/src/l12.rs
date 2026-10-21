@@ -16,8 +16,8 @@ use card_sdk::{Action, CardDef, key, Msg, On};
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
-        On::Play("", "", None, l12),
-        On::Action(Action::MarkerSpent("", "", Some(fire_spent_guard), fire_spent)),
+        On::Play("", None, None, l12),
+        On::Action(Action::MarkerSpent("", None, Some(fire_spent_guard), fire_spent)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()

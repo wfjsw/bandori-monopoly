@@ -20,8 +20,7 @@ pub const MANA_CHAMPION: CardDef = CardDef::new(
     "Sumimi:（真奈）歌唱大赛5连冠",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "by != owner && by >= 0 && effect.hits(owner)",
-        r#"你或你的格子即将受到来自你以外的效果影响"#,
+        "by != owner && by >= 0 && effect.hits(owner)", Some(key!("mana_champion_when")),
         None,
         counteract,
     )],

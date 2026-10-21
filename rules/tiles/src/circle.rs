@@ -38,7 +38,7 @@ pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
         On::Settle("", None, settle),
-        On::Action(Action::PassTile("", "", Some(pass_pays), on_pass)),
+        On::Action(Action::PassTile("", None, Some(pass_pays), on_pass)),
     ],
 )
 .board_role("tile")

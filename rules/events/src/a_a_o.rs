@@ -17,8 +17,8 @@ const DRAWER: &str = "drawer";
 pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
-        On::Play("", "", None, play),
-        On::Action(Action::AtEnd("", "", None, expire_at_end)),
+        On::Play("", None, None, play),
+        On::Action(Action::AtEnd("", None, None, expire_at_end)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

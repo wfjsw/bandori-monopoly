@@ -10,7 +10,7 @@ use card_sdk::abi::{roll_source, MoveKind};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const BALLOON_SHOW: CardDef =
-    CardDef::new("HHW:热气球演出", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("HHW:热气球演出", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"热气球演出"#)
         .raw_name(r#"热气球演出"#)
         .tags(&[])

@@ -19,15 +19,14 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         // first): the placement from hand (「可打出此卡」), or the later press
         // that spends a 火罐 on a kept die. The gate admits whenever either
         // branch is available.
-        On::Play("", "", Some(cant_play), play),
-        On::Action(Action::DiceRollAfter("actor == owner && card.placed", "", None, roll_after)),
+        On::Play("", None, Some(cant_play), play),
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, None, roll_after)),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::CHARGE` (「使用火罐进行掷骰」).
         On::Counteract(
             &[ChainKind::DiceRollBefore],
-            "actor == owner && roll_source == 1",
-            "",
+            "actor == owner && roll_source == 1", None,
             None,
             counter_fire,
         ),

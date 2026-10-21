@@ -17,12 +17,11 @@ pub const TRITONE: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Effect],
-            "actor == owner && effect.has(Pay) && value > 0",
-            r#"你将要失去或支付资金"#,
+            "actor == owner && effect.has(Pay) && value > 0", Some(key!("tritone_when")),
             None,
             counteract,
         ),
-        On::Action(Action::TurnEnd("", "", None, counteract)),
+        On::Action(Action::TurnEnd("", None, None, counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫之蝶们的三全音"#)

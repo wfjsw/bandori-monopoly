@@ -29,9 +29,9 @@ const USED: &str = "skill.takiCrychic.used";
 pub const TAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:椎名立希（CRYCHIC）:克服劣等感",
     &[
-        On::Action(Action::TurnStartBefore("actor == owner && slot('skill.takiCrychic.armed') == 0", "", None, at_turn_start)),
-        On::Action(Action::DiceRollAfter("", "", None, on_roll)),
-        On::Action(Action::CardUsed(card_sdk::pre::MINE, "", None, on_skill_used)),
+        On::Action(Action::TurnStartBefore("actor == owner && slot('skill.takiCrychic.armed') == 0", None, None, at_turn_start)),
+        On::Action(Action::DiceRollAfter("", None, None, on_roll)),
+        On::Action(Action::CardUsed(card_sdk::pre::MINE, None, None, on_skill_used)),
     ],
 )
     .silent(&[0, 2]);

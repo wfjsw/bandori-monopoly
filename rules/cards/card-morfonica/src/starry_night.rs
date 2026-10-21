@@ -24,10 +24,10 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // 的资金」 is effect content (rulebook L13-14), so there is no
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
-        On::Play("", "", None, starry_night),
-        On::Action(Action::DiceRollAfter("card.placed && card.counter('crystals') > 0", "", None, hook)),
-        On::Action(Action::PassTile("card.placed && card.counter('crystals') > 0", "", None, hook)),
-        On::Action(Action::CounterChanged("", "", Some(crystals_changed_guard), on_crystals_changed)),
+        On::Play("", None, None, starry_night),
+        On::Action(Action::DiceRollAfter("card.placed && card.counter('crystals') > 0", None, None, hook)),
+        On::Action(Action::PassTile("card.placed && card.counter('crystals') > 0", None, None, hook)),
+        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"蝴蝶飞舞的星月夜"#)

@@ -111,8 +111,8 @@ impl NativeRulesHandle {
                         },
                         has_guard: o.has_guard(),
                         messages: match o {
-                            On::Message(names, ..) => {
-                                names.iter().map(|s| String::from(*s)).collect()
+                            On::MessageBody(e) => {
+                                e.names.iter().map(|s| String::from(*s)).collect()
                             }
                             _ => Vec::new(),
                         },

@@ -55,13 +55,13 @@ const PENDING_Y: &str = "evePendingY";
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
-        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", "", None, at_start)),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", None, None, at_start)),
         // （2） 「投掷前」 -- ask + flips. Action: prompts allowed.
-        On::Action(Action::DiceRollBefore("actor == owner && slot('ppFansUp') >= 1", "", Some(roll_ok), on_before)),
+        On::Action(Action::DiceRollBefore("actor == owner && slot('ppFansUp') >= 1", None, Some(roll_ok), on_before)),
         // （2） 「为此次投掷结果增加Yd4」 -- pure dice-table append.
         On::Filter(Filter::DiceRollPlan("actor == owner", None, on_plan)),
         // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
-        On::Action(Action::DiceRollAfter("actor == owner", "", None, clear_pending)),
+        On::Action(Action::DiceRollAfter("actor == owner", None, None, clear_pending)),
     ],
 )
 // 2 (plan shape) and 3 (stash clear) are bookkeeping; 1 is the visible clause.

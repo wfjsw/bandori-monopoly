@@ -12,7 +12,7 @@ use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const AFTERGLOW: CardDef = CardDef::new(
     "skill:Afterglow:商店街的宠儿",
-    &[On::Action(Action::Bought(card_sdk::pre::MINE, "", None, on_bought))],
+    &[On::Action(Action::Bought(card_sdk::pre::MINE, None, None, on_bought))],
 );
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.

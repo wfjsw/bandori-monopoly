@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- the timing is
         // a counter used *against you*. The engine's counter link carries
         // `target` = the countered seat and `actor` = the counter's declarer
@@ -24,8 +24,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // selectors are declared.
         On::Counteract(
             &[ChainKind::Counteracted, ChainKind::Card, card_sdk::abi::ActionKind::CardUsed.as_trigger()],
-            "target == owner && actor != owner",
-            r#"有玩家对你使用[反击]后"#,
+            "target == owner && actor != owner", Some(key!("cant_look_away_when")),
             None,
             counteract,
         ),

@@ -16,7 +16,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const HINA_SOUND: CardDef = CardDef::new(
     "PP:[冰川日菜]会发出怎样的声音呢？",
-    &[On::Play("", "", None, hina_sound)],
+    &[On::Play("", None, None, hina_sound)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"会发出怎样的声音呢？"#)
         .raw_name(r#"[冰川日菜]会发出怎样的声音呢？"#)

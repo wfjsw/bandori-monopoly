@@ -1,7 +1,9 @@
 {
   "ako_dark_drawn": "played from outside the hand -- draw 1",
   "ako_dark_stun": "{{who}} takes a [Stun] layer (Ako's Dark Witch)",
+  "ako_dark_when": "when you are about to pay another player",
   "before_live_stop": "{{who}} will [force-stop] and settle on {{tile}} (Before the Live)",
+  "before_live_when": "when passing Edogawa Music",
   "blue_rose_gain": "Pride of the Blue Rose: 20% of Livehouse deed value {{n}}",
   "blue_rose_ring4": "{{who}} teleported to {{tile}} (Pride of the Blue Rose, no settle)",
   "blue_rose_teleport": "{{who}} teleported to {{tile}} (Pride of the Blue Rose)",
@@ -30,6 +32,7 @@
   "lisa_bond_ask_title": "Inevitable Bond",
   "lisa_bond_note": "{{who}}'s skills on them ignore the [nearest] limit",
   "lisa_bond_placed": "{{who}} put Inevitable Bond in {{them}}'s play area",
+  "lisa_bond_when": "when you teleport with a skill",
   "louder_up": "RiNG base multiplier +{{n}} (louder), now {{mult}}",
   "nfo_bump": "Spend 1 crystal to raise this gain by 300?",
   "nfo_bumped": "NFO: this gain +300",
@@ -52,6 +55,7 @@
   "own_stage_ask_title": "Choose Your Own Stage",
   "own_stage_no_settle": "{{who}} chose not to settle (Choose Your Own Stage)",
   "own_stage_settle": "{{who}} chose to settle (Choose Your Own Stage)",
+  "own_stage_when": "when hit by an abnormal-move effect other than [Exile]",
   "press_why": "Press",
   "resolve_why": "Resolve: banished (out of the game)",
   "ringing_bloom_done": "{{who}}'s {{tile}} collected rent; Ringing Bloom went to the discard pile",
@@ -65,6 +69,7 @@
   "sayo_play_plus_two": "+2 tiles → {{tile}}",
   "sayo_play_skill": "Playing this card counts as a use of {{card}}",
   "sayo_play_timing": "Counteract after your non-teleport main distance is determined, before moving",
+  "sayo_play_when": "when the timing is right",
   "sprechchor_why": "Sprechchor",
   "sprechchor_why_not": "only playable when the turn started on a Livehouse tile",
   "to_the_peak_ask_text": "Every Live House is owned: pay 1.5x build cost to raise a house on which one?",
@@ -78,5 +83,6 @@
   "to_the_peak_why": "To the Peak: 1.5x build cost",
   "trajectory_ask_text": "Which deed of {{who}} do you take? (Redeemed free; all houses demolished)",
   "trajectory_ask_title": "Trajectory",
-  "trajectory_take": "{{who}} took {{them}}'s {{tile}} (Trajectory: free redeem, houses demolished)"
+  "trajectory_take": "{{who}} took {{them}}'s {{tile}} (Trajectory: free redeem, houses demolished)",
+  "trajectory_when": "when a player goes [Bankrupt]"
 }

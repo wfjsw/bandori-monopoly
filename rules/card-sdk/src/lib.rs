@@ -81,6 +81,9 @@ pub mod kinds;
 
 pub use kinds::{Action, ActionEntry, Filter, FilterEntry, FilterShape, KindInfo};
 pub use msg::Msg;
+
+/// A locale key the client resolves (`key!` / `err.*` / `log.*` / `counter.*`).
+pub use abi::MsgKey;
 pub use payload::{
     DealValue, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue,
 };
@@ -118,8 +121,8 @@ pub mod rt;
 ///
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
-///     On::Play("", "", None, play),
-///     On::Action(Action::TurnEnd(pre::MINE, "", guard, tick)),
+///     On::Play("", None, None, play),
+///     On::Action(Action::TurnEnd(pre::MINE, None, guard, tick)),
 ///     On::Filter(Filter::ImmuneAll(pre::MINE, None, immune)),
 /// ]);
 /// ```
@@ -291,9 +294,9 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", "", None, use_skill),                                     // 0: flashes
-    ///     On::Action(Action::TurnStartBefore("", "", None, declare_cap)),         // 1: bookkeeping
-    ///     On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),         // 2: bookkeeping
+    ///     On::Play("", None, None, use_skill),                                     // 0: flashes
+    ///     On::Action(Action::TurnStartBefore("", None, None, declare_cap)),         // 1: bookkeeping
+    ///     On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),         // 2: bookkeeping
     /// ]).silent(&[1, 2]);
     /// ```
     pub const fn silent(self, entries: &'static [i32]) -> Self {
@@ -349,8 +352,8 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", "", None, use_skill),                 // 0: Auto
-    ///     On::Action(Action::TurnEnd("", "", None, tick)), // 1: Always (self-only)
+    ///     On::Play("", None, None, use_skill),                 // 0: Auto
+    ///     On::Action(Action::TurnEnd("", None, None, tick)), // 1: Always (self-only)
     /// ]).flash(&[(1, Flash::Always)]);
     /// ```
     pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
@@ -410,7 +413,7 @@ impl CardDef {
     /// use card_sdk::abi::text_slot;
     /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
     ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Action(Action::PassTile("", "", Some(pass_pays), on_pass)),      // 1
+    ///     On::Action(Action::PassTile("", None, Some(pass_pays), on_pass)),      // 1
     /// ]).texts(&[
     ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
     ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
@@ -605,10 +608,75 @@ impl CardDef {
     }
 }
 
+/// Play-from-hand entry ([`On::Play`]).
+#[derive(Clone, Copy)]
+pub struct PlayEntry {
+    /// Gate condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause).
+    pub counter_reason: Option<MsgKey>,
+    /// The gate (the old `On::CantPlay`): a pure query with no prompts,
+    /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
+    /// show. `None` for the gate itself means no gate.
+    pub why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
+/// [反击] entry ([`On::Counteract`]).
+#[derive(Clone, Copy)]
+pub struct CounteractEntry {
+    /// The chain links this [反击] answers.
+    pub links: &'static [abi::ChainKind],
+    /// The guard's condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause).
+    pub counter_reason: Option<MsgKey>,
+    /// Residual guard (docs/GUARDS.md §2/§4.3). `None` means G4 deleted it
+    /// because the condition alone decides.
+    pub guard: Option<fn(player_id: i32) -> bool>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
+/// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
+/// "Same shape as On::Settle" for all of them.
+#[derive(Clone, Copy)]
+pub struct RuleEntry {
+    /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// Residual guard. `None` = G4-deleted (condition-only entry).
+    pub guard: Option<fn(player_id: i32) -> bool>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
+/// Cross-card message entry ([`On::Message`]).
+#[derive(Clone, Copy)]
+pub struct MessageEntry {
+    /// Message names this card answers (`ctx::send`); empty = never dispatched.
+    pub names: &'static [&'static str],
+    /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// Residual guard. `None` = G4-deleted (condition-only entry).
+    pub guard: Option<fn(player_id: i32) -> bool>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
 /// One entry point of a card. The variant says what the
 /// entry is for, and its kind list is typed to match -- a counteraction can only be
 /// declared at a [`abi::ChainKind`], an event reaction at a [`abi::ActionKind`],
 /// a modifier/gate at a [`abi::FilterKind`]. An empty list is never dispatched.
+///
+/// Construction goes through the [`On::Play`] / [`On::Counteract`] / … `const fn`s
+/// (same spelling as the old tuple variants). Those cannot share a name with an
+/// enum variant, so the variants are the `*Body` arms holding a named-field
+/// entry ([`PlayEntry`] / [`CounteractEntry`] / [`RuleEntry`] /
+/// [`MessageEntry`] / [`ActionEntry`] / [`FilterEntry`]). Match on the
+/// `*Body` names and read named fields; declare with the const fns.
 ///
 /// WordPress `do_action` / `apply_filters` split (ABI v73):
 /// [`On::Action`] is an **event reaction** -- it may emit effects (`ctx::gain`,
@@ -627,34 +695,10 @@ impl CardDef {
 /// before the wasm guard is instantiated.
 #[derive(Clone, Copy)]
 pub enum On {
-    /// Play this card from hand. The first field is the gate's
-    /// condition (see the type doc). The second is `counterReason` -- the
-    /// human-readable 「…时」 clause the counteraction prompt shows for this
-    /// trigger (often `""` here). The third is the gate
-    /// (the old `On::CantPlay`): a pure query with no prompts,
-    /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
-    /// show. `None` for the gate itself means no gate. The fourth field is the
-    /// effect.
-    Play(
-        &'static str,
-        &'static str,
-        Option<fn(player_id: i32) -> Option<Msg>>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// A [反击] at these chain links: the guard decides whether the card is
-    /// offered in the hand window, then the effect resolves. Second field: the
-    /// guard's condition (see the type doc); third: `counterReason` -- the
-    /// human-readable 「…时」 clause the counteraction prompt shows for this
-    /// trigger; fourth: the residual guard -- a pure query, `Option`: `None`
-    /// means G4 deleted it because the condition alone decides
-    /// (docs/GUARDS.md §2/§4.3). Fifth: the effect.
-    Counteract(
-        &'static [abi::ChainKind],
-        &'static str,
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// Play this card from hand. Built by [`On::Play`].
+    PlayBody(PlayEntry),
+    /// A [反击] at a set of chain links. Built by [`On::Counteract`].
+    CounteractBody(CounteractEntry),
     /// An **event reaction** at one field-hook kind: runs automatically
     /// while the card is in play. Same body shape as [`On::Counteract`]. May
     /// emit effects; does not modify the triggering value. One kind per entry
@@ -679,32 +723,21 @@ pub enum On {
     /// Runs inside the settle chain: a counteraction to the settle link, or a
     /// field hook that replaces the body, shapes whether and how it runs. Same
     /// shape as [`On::Action`]; the condition sees the settling tile / actor.
-    Settle(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// Built by [`On::Settle`].
+    SettleBody(RuleEntry),
     /// The rule's **mortgage body** -- what runs when the deed this rule
     /// instance governs is [抵押]d (net `mortgage`, pay-pipeline raise-funds /
     /// optional funding, or a card-driven mortgage). Same shape as
     /// [`On::Settle`]. The body owns eligibility (规则书 基础规则 5: 「运营阶段
     /// 及需[支付]或[消耗]资金且资金不足时可以选择抵押拥有的地契」) and the
     /// payout amount; the engine keeps only the flag write + direct money move
-    /// via [`crate::ctx::apply_mortgage`].
-    Mortgage(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// via [`crate::ctx::apply_mortgage`]. Built by [`On::Mortgage`].
+    MortgageBody(RuleEntry),
     /// The rule's **redeem body** -- what runs when the deed is [赎回]d
     /// (规则书 基础规则 6: 「运营阶段可赎回拥有的地契」). Same shape as
     /// [`On::Mortgage`]; the engine keeps only the flag clear + direct money
-    /// move via [`crate::ctx::apply_redeem`].
-    Redeem(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// move via [`crate::ctx::apply_redeem`]. Built by [`On::Redeem`].
+    RedeemBody(RuleEntry),
     /// The rule's **buy body** -- what runs when the deed this rule instance
     /// governs is bought (settle offer, card-driven `ctx::buy`, agent branch,
     /// acquire / auction / card kinds). Same shape as [`On::Mortgage`]. The
@@ -712,32 +745,21 @@ pub enum On {
     /// deed write, log); the engine keeps the money pipeline and deed write as
     /// `ctx` primitives (`ctx::pay_buy`, `ctx::assign_deed`). Force-buy money
     /// remains a direct transfer outside effects (规则书 其他规则 6).
-    Buy(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// Built by [`On::Buy`].
+    BuyBody(RuleEntry),
     /// The rule's **build body** -- what runs when a house is built on the deed
     /// this rule instance governs (规则书 「可选择[消耗]…进行升级建造」). Same
     /// shape as [`On::Buy`]; the engine keeps the money pipeline and house
     /// write as `ctx` primitives (`ctx::pay_build`, `ctx::add_house`).
-    Build(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// A **cross-card message** this card answers (`ctx::send`). First field
-    /// is the list of message names it answers (empty is never dispatched).
+    /// Built by [`On::Build`].
+    BuildBody(RuleEntry),
+    /// A **cross-card message** this card answers (`ctx::send`). The names list
+    /// is the message names it answers (empty is never dispatched).
     /// Same condition / residual guard / body shape as [`On::Action`]. The
     /// handler reads the sender and payload from [`ctx::message`] and returns
     /// a reply value via `ctx::message::reply`. Handling a message does not
-    /// flash the card (internal plumbing).
-    Message(
-        &'static [&'static str],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// flash the card (internal plumbing). Built by [`On::Message`].
+    MessageBody(MessageEntry),
 }
 
 /// Condition-authoring sugar (docs/GUARDS.md §4.3). The strings are CEL; the
@@ -749,16 +771,130 @@ pub mod pre {
 }
 
 impl On {
+    /// Play this card from hand.
+    ///
+    /// `pre` is the gate's condition (see the type doc). `counter_reason` is
+    /// the 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause). `why_not` is the gate (the old `On::CantPlay`): a pure query
+    /// with no prompts, `None` = playable, `Some(why)` = blocked and `why` is
+    /// the reason to show. `None` for the gate itself means no gate. `body` is
+    /// the effect.
+    #[allow(non_snake_case)]
+    pub const fn Play(
+        pre: &'static str,
+        counter_reason: Option<MsgKey>,
+        why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::PlayBody(PlayEntry {
+            pre,
+            counter_reason,
+            why_not,
+            body,
+        })
+    }
+
+    /// A [反击] at these chain links: the guard decides whether the card is
+    /// offered in the hand window, then the effect resolves.
+    #[allow(non_snake_case)]
+    pub const fn Counteract(
+        links: &'static [abi::ChainKind],
+        pre: &'static str,
+        counter_reason: Option<MsgKey>,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::CounteractBody(CounteractEntry {
+            links,
+            pre,
+            counter_reason,
+            guard,
+            body,
+        })
+    }
+
+    /// The rule's **settle body** (`docs/TILES.md`).
+    #[allow(non_snake_case)]
+    pub const fn Settle(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::SettleBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **mortgage body**.
+    #[allow(non_snake_case)]
+    pub const fn Mortgage(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::MortgageBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **redeem body**.
+    #[allow(non_snake_case)]
+    pub const fn Redeem(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::RedeemBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **buy body**.
+    #[allow(non_snake_case)]
+    pub const fn Buy(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::BuyBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **build body**.
+    #[allow(non_snake_case)]
+    pub const fn Build(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::BuildBody(RuleEntry { pre, guard, body })
+    }
+
+    /// A **cross-card message** this card answers (`ctx::send`).
+    #[allow(non_snake_case)]
+    pub const fn Message(
+        names: &'static [&'static str],
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::MessageBody(MessageEntry {
+            names,
+            pre,
+            guard,
+            body,
+        })
+    }
+
     /// Replace the entry's condition string (docs/GUARDS.md §4.3). A const
     /// builder so a declaration can remain a one-liner:
     ///
     /// ```ignore
-    /// On::Counteract(&[ChainKind::DiceRollResult], "", r#"你将要失去或支付资金"#, Some(can_counteract), counteract).pre(pre::MINE)
+    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_pay")), Some(can_counteract), counteract).pre(pre::MINE)
     /// ```
     pub const fn pre(self, pre: &'static str) -> Self {
         match self {
-            On::Play(_, reason, g, r) => On::Play(pre, reason, g, r),
-            On::Counteract(k, _, reason, g, r) => On::Counteract(k, pre, reason, g, r),
+            On::PlayBody(mut e) => {
+                e.pre = pre;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.pre = pre;
+                On::CounteractBody(e)
+            }
             On::Action(mut e) => {
                 e.pre = pre;
                 On::Action(e)
@@ -767,12 +903,30 @@ impl On {
                 e.pre = pre;
                 On::Filter(e)
             }
-            On::Settle(_, g, r) => On::Settle(pre, g, r),
-            On::Mortgage(_, g, r) => On::Mortgage(pre, g, r),
-            On::Redeem(_, g, r) => On::Redeem(pre, g, r),
-            On::Buy(_, g, r) => On::Buy(pre, g, r),
-            On::Build(_, g, r) => On::Build(pre, g, r),
-            On::Message(n, _, g, r) => On::Message(n, pre, g, r),
+            On::SettleBody(mut e) => {
+                e.pre = pre;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.pre = pre;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.pre = pre;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.pre = pre;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.pre = pre;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.pre = pre;
+                On::MessageBody(e)
+            }
         }
     }
 
@@ -780,7 +934,10 @@ impl On {
     /// then skips the `OP_GUARD` instantiation entirely (`admits_pre`).
     pub const fn no_guard(self) -> Self {
         match self {
-            On::Counteract(k, pre, reason, _, r) => On::Counteract(k, pre, reason, None, r),
+            On::CounteractBody(mut e) => {
+                e.guard = None;
+                On::CounteractBody(e)
+            }
             On::Action(mut e) => {
                 e.guard = None;
                 On::Action(e)
@@ -789,12 +946,30 @@ impl On {
                 e.guard = None;
                 On::Filter(e)
             }
-            On::Settle(pre, _, r) => On::Settle(pre, None, r),
-            On::Mortgage(pre, _, r) => On::Mortgage(pre, None, r),
-            On::Redeem(pre, _, r) => On::Redeem(pre, None, r),
-            On::Buy(pre, _, r) => On::Buy(pre, None, r),
-            On::Build(pre, _, r) => On::Build(pre, None, r),
-            On::Message(n, pre, _, r) => On::Message(n, pre, None, r),
+            On::SettleBody(mut e) => {
+                e.guard = None;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.guard = None;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.guard = None;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.guard = None;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.guard = None;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.guard = None;
+                On::MessageBody(e)
+            }
             other => other,
         }
     }
@@ -804,14 +979,15 @@ impl On {
     /// signature -- use [`Self::has_guard`] for the host's skip-the-wasm test.
     pub const fn guard(&self) -> Option<fn(i32) -> bool> {
         match self {
-            On::Counteract(_, _, _, g, _)
-            | On::Settle(_, g, _)
-            | On::Mortgage(_, g, _)
-            | On::Redeem(_, g, _)
-            | On::Message(_, _, g, _) => *g,
+            On::CounteractBody(e) => e.guard,
+            On::SettleBody(e) => e.guard,
+            On::MortgageBody(e) => e.guard,
+            On::RedeemBody(e) => e.guard,
+            On::BuyBody(e) => e.guard,
+            On::BuildBody(e) => e.guard,
+            On::MessageBody(e) => e.guard,
             On::Action(e) => e.guard,
             On::Filter(e) => e.guard,
-            On::Buy(_, g, _) | On::Build(_, g, _) => *g,
             _ => None,
         }
     }
@@ -820,15 +996,16 @@ impl On {
     /// `false` = G4-deleted: the condition alone decides (`admits_pre`).
     pub const fn has_guard(&self) -> bool {
         match self {
-            On::Play(_, _, g, _) => g.is_some(),
-            On::Counteract(_, _, _, g, _)
-            | On::Settle(_, g, _)
-            | On::Mortgage(_, g, _)
-            | On::Redeem(_, g, _)
-            | On::Message(_, _, g, _) => g.is_some(),
+            On::PlayBody(e) => e.why_not.is_some(),
+            On::CounteractBody(e) => e.guard.is_some(),
+            On::SettleBody(e) => e.guard.is_some(),
+            On::MortgageBody(e) => e.guard.is_some(),
+            On::RedeemBody(e) => e.guard.is_some(),
+            On::BuyBody(e) => e.guard.is_some(),
+            On::BuildBody(e) => e.guard.is_some(),
+            On::MessageBody(e) => e.guard.is_some(),
             On::Action(e) => e.guard.is_some(),
             On::Filter(e) => e.guard.is_some(),
-            On::Buy(_, g, _) | On::Build(_, g, _) => g.is_some(),
         }
     }
 
@@ -836,40 +1013,43 @@ impl On {
     /// ruleset build (`docs/GUARDS.md` §4.3).
     pub const fn condition(&self) -> &'static str {
         match self {
-            On::Play(pre, _, _, _)
-            | On::Counteract(_, pre, _, _, _)
-            | On::Settle(pre, _, _)
-            | On::Mortgage(pre, _, _)
-            | On::Redeem(pre, _, _)
-            | On::Message(_, pre, _, _) => *pre,
+            On::PlayBody(e) => e.pre,
+            On::CounteractBody(e) => e.pre,
+            On::SettleBody(e) => e.pre,
+            On::MortgageBody(e) => e.pre,
+            On::RedeemBody(e) => e.pre,
+            On::BuyBody(e) => e.pre,
+            On::BuildBody(e) => e.pre,
+            On::MessageBody(e) => e.pre,
             On::Action(e) => e.pre,
             On::Filter(e) => e.pre,
-            On::Buy(pre, _, _) | On::Build(pre, _, _) => *pre,
         }
     }
 
-    /// The trigger's `counterReason` -- the human-readable 「…时」 clause the
-    /// counteraction prompt shows (`""` for entries that carry no clause).
-    pub const fn counter_reason(&self) -> &'static str {
+    /// The trigger's `counterReason` -- the 「…时」 clause the counteraction
+    /// prompt shows. A locale key the client resolves; `None` for entries that
+    /// carry no clause.
+    pub const fn counter_reason(&self) -> Option<MsgKey> {
         match self {
-            On::Counteract(_, _, reason, _, _) | On::Play(_, reason, _, _) => *reason,
+            On::PlayBody(e) => e.counter_reason,
+            On::CounteractBody(e) => e.counter_reason,
             On::Action(e) => e.counter_reason,
-            _ => "",
+            _ => None,
         }
     }
 
     pub const fn kind(&self) -> abi::OnKind {
         match self {
-            On::Play(..) => abi::OnKind::Play,
-            On::Counteract(..) => abi::OnKind::Counteract,
+            On::PlayBody(..) => abi::OnKind::Play,
+            On::CounteractBody(..) => abi::OnKind::Counteract,
             On::Action(..) => abi::OnKind::Action,
             On::Filter(..) => abi::OnKind::Filter,
-            On::Settle(..) => abi::OnKind::Settle,
-            On::Mortgage(..) => abi::OnKind::Mortgage,
-            On::Redeem(..) => abi::OnKind::Redeem,
-            On::Buy(..) => abi::OnKind::Buy,
-            On::Build(..) => abi::OnKind::Build,
-            On::Message(..) => abi::OnKind::Message,
+            On::SettleBody(..) => abi::OnKind::Settle,
+            On::MortgageBody(..) => abi::OnKind::Mortgage,
+            On::RedeemBody(..) => abi::OnKind::Redeem,
+            On::BuyBody(..) => abi::OnKind::Buy,
+            On::BuildBody(..) => abi::OnKind::Build,
+            On::MessageBody(..) => abi::OnKind::Message,
         }
     }
 
@@ -878,7 +1058,7 @@ impl On {
     /// `"r:{key}:{id}"`. `On::Action` / `On::Filter` are one kind each.
     pub fn triggers(&self) -> Vec<String> {
         match self {
-            On::Counteract(k, ..) => k.iter().map(|x| x.spelling().into_owned()).collect(),
+            On::CounteractBody(e) => e.links.iter().map(|x| x.spelling().into_owned()).collect(),
             On::Action(e) => {
                 let mut v = Vec::new();
                 v.push(e.kind.spelling().into_owned());
@@ -890,7 +1070,7 @@ impl On {
                 v
             }
             // Message names ride a separate manifest field; see `rt.rs`.
-            On::Message(..) => Vec::new(),
+            On::MessageBody(..) => Vec::new(),
             _ => Vec::new(),
         }
     }
@@ -898,7 +1078,7 @@ impl On {
     /// The message names this [`On::Message`] entry answers (empty otherwise).
     pub fn message_names(&self) -> Vec<&'static str> {
         match self {
-            On::Message(names, ..) => names.to_vec(),
+            On::MessageBody(e) => e.names.to_vec(),
             _ => Vec::new(),
         }
     }

@@ -17,8 +17,7 @@ pub const YOLO: CardDef = CardDef::new(
     // clause are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
-        "actor == owner && (move.roll != null || value >= 0)",
-        "",
+        "actor == owner && (move.roll != null || value >= 0)", None,
         None,
         counteract,
     )],

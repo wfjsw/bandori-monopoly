@@ -17,6 +17,7 @@
   "even_lost_not_placed": "This card is not in play.",
   "even_lost_note": "during the operations phase you may discard it to move as many tiles as your hand size this turn",
   "even_lost_placed": "“Even While Lost” is now on {{who}}'s field",
+  "even_lost_when": "when one of the other players' card effects hits you",
   "haneoka_cancel_ask": "about to pay {{money}}: put “The Incredible Girl of Haneoka” into the discard pile to cancel this payment?",
   "haneoka_cancel_title": "“{{card}}” cancels a payment",
   "haneoka_cancelled": "“{{card}}” went to the discard pile and cancelled a {{money}} payment",
@@ -30,6 +31,7 @@
   "hitoshizuku_pay": "Hitoshizuku: cost of the cleared effect",
   "hitoshizuku_self_gain": "Hitoshizuku: cleared your own effect",
   "meet_again_reroll": "re-rolled: +{{add}} (now {{total}}, the next player is {{dist}} tile(s) away)",
+  "meet_again_when": "after your move roll, while another player can be passed",
   "miracle_built": "Miracle: spent 1 [Miracle Crystal] instead of money",
   "miracle_crystals_moved": "{{who}} moved {{n}} miracle crystal(s) from the band skill onto “A Miracle Hard to Repeat”",
   "miracle_note": "miracle crystals: spend 1 instead of money when building; after passing every player once, collect the reward",
@@ -43,6 +45,7 @@
   "no_road_title": "No Road",
   "no_road_why_not_none": "there is no other player",
   "ordinary_log": "the next main move becomes {{n}} step(s) (Ordinary and Natural)",
+  "ordinary_when": "when you are hit by an abnormal-move effect",
   "rana_funny_crystal": "{{who}} passed without stopping; “The Interesting Woman” gains a miracle crystal",
   "rana_funny_note": "miracle crystals (passers-by who do not stop add 1; at 5 the next passer must choose)",
   "rana_funny_parfait": "{{who}} lost a Matcha Parfait (The Interesting Woman)",
@@ -71,7 +74,7 @@
   "tomori_no_longer_discarded": "{{who}} discarded their whole hand ({{n}} card(s)); “(Tomori) No Longer Lost” holds {{crystals}} [miracle crystal]s",
   "tomori_no_longer_note": "miracle crystals: spend 1 instead of fire when using a character skill",
   "tomori_no_longer_placed": "“(Tomori) No Longer Lost” is now on {{who}}'s field",
+  "tomori_no_longer_refilled": "Tomori refilled {{n}} crystals (not a skill-cost substitution)",
   "tomori_no_longer_refund": "Fire pots returned",
-  "tomori_no_longer_title": "No Longer Lost",
-  "tomori_no_longer_refilled": "Tomori refilled {{n}} crystals (not a skill-cost substitution)"
+  "tomori_no_longer_title": "No Longer Lost"
 }

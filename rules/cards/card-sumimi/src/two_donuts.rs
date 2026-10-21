@@ -25,11 +25,11 @@ use card_sdk::{Action, CardDef, key, Msg, On};
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
     &[
-        On::Play("", "", None, two_donuts),
+        On::Play("", None, None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
         // latch, the `move_dir` read) stay in the arms below.
-        On::Action(Action::PassTile("card.placed", "", None, fx)),
-        On::Action(Action::SettleAfter("card.placed", "", None, fx)),
+        On::Action(Action::PassTile("card.placed", None, None, fx)),
+        On::Action(Action::SettleAfter("card.placed", None, None, fx)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)

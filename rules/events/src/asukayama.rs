@@ -12,7 +12,7 @@ use crate::util::{all_players, roll};
 // TODO(规则书): the sheet's B12 lists a derived 「迷子的追逐」; the text does not
 // say drawing this event triggers it. The main clause only is implemented.
 
-pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play("", "", None, play)])
+pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"飞鸟山之战"#)
             .text(r#"所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，行动序列上在抽到此卡的玩家的上一位玩家获得2层回合开始时减少一层的[眩晕]，行动序列上在抽到此卡的玩家的下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家获得1层在回合开始时移除的[除外]"#)

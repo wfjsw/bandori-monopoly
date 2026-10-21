@@ -43,9 +43,9 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
     &[
         // Turn-start fold (2 -> 1). See the placement note above for why this
         // is `TurnStart` and not `TurnStartBefore`.
-        On::Action(Action::TurnStart("", "", None, on_turn_start)),
+        On::Action(Action::TurnStart("", None, None, on_turn_start)),
         // Turn-end clear (1 -> 0). `TurnEnd` is hook-only.
-        On::Action(Action::TurnEnd("", "", None, on_turn_end)),
+        On::Action(Action::TurnEnd("", None, None, on_turn_end)),
         // 「不可使用手牌」 -- the play gate, **CEL-only**. No turn-skip: the
         // turn still runs; only hand-card plays are refused.
         On::Filter(Filter::PlayGate(NO_HAND_HELD, None, refuse)),

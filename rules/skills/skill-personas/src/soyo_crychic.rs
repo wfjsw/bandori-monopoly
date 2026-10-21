@@ -39,7 +39,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive cancel (`ask_yes` + `set_pay_amount(0)` + state writes)
         // sits immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(Action::PaySplitChooseBefore("actor != owner && tile.owner == owner && value > 0", "", None, on_pay)),
+        On::Action(Action::PaySplitChooseBefore("actor != owner && tile.owner == owner && value > 0", None, None, on_pay)),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
         // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
@@ -48,7 +48,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // One-shot latch clear once the rewritten move has been taken. This is
         // a teleport plan, so `DiceRollAfter` never fires (no dice) -- `MoveAfter`
         // is the next event for both teleports and walks.
-        On::Action(Action::MoveAfter("actor == owner && slot('skill.soyoCrychic.armed') != 0", "", None, on_plan_after)),
+        On::Action(Action::MoveAfter("actor == owner && slot('skill.soyoCrychic.armed') != 0", None, None, on_plan_after)),
     ],
 );
 

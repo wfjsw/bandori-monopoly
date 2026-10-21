@@ -22,11 +22,11 @@ const USED: &str = "skill.takiMeeting.used";
 pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
-        On::Action(Action::Abnormal("", "", None, on_abnormal)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, reset)),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Abnormal("", None, None, on_abnormal)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, reset)),
     ],
 )
     .silent(&[1, 2, 4])

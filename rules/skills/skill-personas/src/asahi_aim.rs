@@ -33,8 +33,8 @@ pub const ASAHI_AIM: CardDef = CardDef::new(
         // （1）「非"旭汤澡堂"或任意"Live House"」 -- the tile is a real buy,
         // not the bathhouse. `is_live_house_for` is the per-player colour check
         // (not CEL's tile-kind `is_venue`), so it is the residual.
-        On::Action(Action::Bought("actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')", "", Some(not_live_house_for_me), on_bought)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", Some(owns_bath_with_lh), at_turn_start)),
+        On::Action(Action::Bought("actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')", None, Some(not_live_house_for_me), on_bought)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, Some(owns_bath_with_lh), at_turn_start)),
     ],
 );
 

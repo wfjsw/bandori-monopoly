@@ -15,8 +15,7 @@ pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner",
-        r#"受到[除外]以外的异常移动效果影响"#,
+        "target == owner", Some(key!("own_stage_when")),
         Some(can_counteract),
         counteract,
     )],

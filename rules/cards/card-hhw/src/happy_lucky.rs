@@ -11,7 +11,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const HAPPY_LUCKY: CardDef = CardDef::new(
     "HHW:Happy, Lucky, Smile, Yeah！",
-    &[On::Play("", "", Some(cant_play), play)],
+    &[On::Play("", None, Some(cant_play), play)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Happy, Lucky, Smile, Yeah！"#)
         .raw_name(r#"Happy, Lucky, Smile, Yeah！"#)

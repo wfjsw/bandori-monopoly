@@ -10,7 +10,7 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"尽力后的收获"#)
         .raw_name(r#"尽力后的收获"#)
         .tags(&[r#"手"#])

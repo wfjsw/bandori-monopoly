@@ -14,7 +14,7 @@ pub const GACHA10: CardDef = CardDef::new(
     // is effect content (rulebook L13-14), so there is no `money >= 1500` play
     // gate -- an unaffordable in-body payment takes the Q1 shortfall path
     // (mortgage, then bankruptcy). C# `CardGacha10.WhyNot` had one.
-    &[On::Play("", "", None, gacha10)],
+    &[On::Play("", None, None, gacha10)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1500)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"10次招募（1回限定）"#)
         .raw_name(r#"10次招募（1回限定）"#)

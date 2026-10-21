@@ -43,7 +43,7 @@ pub const STATUS_STUN: CardDef = CardDef::new(
     "status:stun",
     &[
         // 「受到[晕眩]时」 -- the landing clause, same shape as `status:stay`.
-        On::Action(Action::Abnormal("", "", Some(stun_landed), on_stun_landed)),
+        On::Action(Action::Abnormal("", None, Some(stun_landed), on_stun_landed)),
         // rules.txt 49: 「处于该状态时[无法移动]，无法使用[主动]技能和手卡的[手]
         // 效果，无法收付款」 -- three gates, **CEL-only**. `stunned` counts the
         // pending `stunStart` layer too (it already holds the gate).

@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"抓到了"#)
         .raw_name(r#"抓到了"#)
         .tags(&[])

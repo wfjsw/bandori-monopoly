@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"即使夕阳落山"#)
         .raw_name(r#"即使夕阳落山"#)
         .tags(&[r#"手"#, r#"限"#])

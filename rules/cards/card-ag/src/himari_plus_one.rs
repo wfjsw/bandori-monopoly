@@ -15,8 +15,7 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     // are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
-        "actor == owner && move.roll != null && move.roll < 6",
-        r#"你的一次掷骰小于6"#,
+        "actor == owner && move.roll != null && move.roll < 6", Some(key!("himari_plus_one_when")),
         None,
         counteract,
     )],

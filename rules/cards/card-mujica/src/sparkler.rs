@@ -15,12 +15,12 @@ const ID: &str = "Mujica:燃尽前的线香花火";
 pub const SPARKLER: CardDef = CardDef::new(
     "Mujica:燃尽前的线香花火",
     &[
-        On::Play("", "", None, sparkler),
+        On::Play("", None, None, sparkler),
         // C# `CardSparkler.TurnEndAfter` -> `Burn` -- a field hook on the card's own
         // turn end while it is in play (ABI v23 `TurnEndAfter`: after `TurnEnd`,
         // matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Action(Action::TurnEndAfter("actor == owner && card.placed", "", None, turn_end)),
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", "", Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::TurnEndAfter("actor == owner && card.placed", None, None, turn_end)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"燃尽前的线香花火"#)

@@ -9,7 +9,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SPRECHCHOR: CardDef =
-    CardDef::new("R:Sprechchor", &[On::Play("", "", Some(cant_play), sprechchor)])
+    CardDef::new("R:Sprechchor", &[On::Play("", None, Some(cant_play), sprechchor)])
         .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Sprechchor"#)
         .raw_name(r#"Sprechchor"#)

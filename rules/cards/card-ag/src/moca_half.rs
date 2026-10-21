@@ -16,11 +16,11 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
-        On::Play("", "", None, play),
-        On::Action(Action::TurnEnd("card.placed", "", None, turn_end)),
+        On::Play("", None, None, play),
+        On::Action(Action::TurnEnd("card.placed", None, None, turn_end)),
         On::Filter(Filter::DiceRollValue("actor == owner && move.main && card.placed", None, roll_half)),
         On::Filter(Filter::PaySplitMul("actor == owner && card.placed && value > 0", None, pay_mul)),
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)

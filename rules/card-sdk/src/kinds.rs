@@ -11,7 +11,7 @@
 //! ```ignore
 //! On::Filter(Filter::DiceRollPlan("", None, on_plan)),
 //! On::Filter(Filters::MyRewrite("", None, on_x)),   // ruleset custom kind
-//! On::Action(Action::TurnStart("", "turn", None, on_turn_start)),
+//! On::Action(Action::TurnStart("", Some("turn"), None, on_turn_start)),
 //! ```
 //!
 //! # The one unsafe corner
@@ -105,7 +105,9 @@ unsafe impl Sync for FilterEntry {}
 pub struct ActionEntry {
     pub kind: ActionKind,
     pub pre: &'static str,
-    pub counter_reason: &'static str,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause).
+    pub counter_reason: Option<crate::MsgKey>,
     pub guard: Option<fn(i32) -> bool>,
     pub body: fn(i32) -> Asked,
 }
@@ -171,7 +173,7 @@ pub const fn filter_payload<P: FilterPayload>(
 pub const fn action(
     kind: ActionKind,
     pre: &'static str,
-    counter_reason: &'static str,
+    counter_reason: Option<crate::MsgKey>,
     guard: Option<fn(i32) -> bool>,
     body: fn(i32) -> Asked,
 ) -> ActionEntry {
@@ -467,7 +469,7 @@ macro_rules! action_kinds {
                 /// Registration constructor. Body is `fn(i32) -> Asked`.
                 pub const fn $name(
                     pre: &'static str,
-                    counter_reason: &'static str,
+                    counter_reason: Option<$crate::MsgKey>,
                     guard: Option<fn(i32) -> bool>,
                     body: fn(i32) -> $crate::Asked,
                 ) -> $crate::kinds::ActionEntry {
@@ -489,7 +491,7 @@ macro_rules! action_kinds {
                 /// Registration constructor. Body is `fn(i32) -> Asked`.
                 pub const fn $name(
                     pre: &'static str,
-                    counter_reason: &'static str,
+                    counter_reason: Option<$crate::MsgKey>,
                     guard: Option<fn(i32) -> bool>,
                     body: fn(i32) -> $crate::Asked,
                 ) -> $crate::kinds::ActionEntry {
@@ -706,10 +708,10 @@ mod tests {
         fn act(_p: i32) -> Asked {
             Ok(())
         }
-        let a = Action::TurnStart(crate::pre::MINE, "turn", None, act);
+        let a = Action::TurnStart(crate::pre::MINE, Some("turn"), None, act);
         assert_eq!(a.kind, ActionKind::TurnStart);
         assert_eq!(a.pre, "actor == owner");
-        assert_eq!(a.counter_reason, "turn");
+        assert_eq!(a.counter_reason, Some("turn"));
     }
 
     #[test]

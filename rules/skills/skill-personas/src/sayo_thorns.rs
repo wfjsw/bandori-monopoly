@@ -31,21 +31,20 @@ const USED: &str = "skill.sayoThorns.used";
 pub const SAYO_THORNS: CardDef = CardDef::new(
     "skill:冰川纱夜:踏上荆棘之路的觉悟",
     &[
-        On::Play("", "", Some(cant_press), offer),
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, "", None, on_pass)),
+        On::Play("", None, Some(cant_press), offer),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].
-        On::Action(Action::PassTile("actor != owner && tile.id == owner.pos", "", None, on_passed)),
+        On::Action(Action::PassTile("actor != owner && tile.id == owner.pos", None, None, on_passed)),
         // （2）「将非[传送]的主要移动添加1或2格」 -- once per turn, only after a
         // non-teleport main move is determined. The category owns `MoveBefore`;
         // the residual is the any-band `skill_blocked`.
         On::Counteract(
             &[ChainKind::MoveBefore],
-            "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6",
-            "",
+            "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6", None,
             Some(can_offer),
             offer,
         ),

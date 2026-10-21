@@ -21,7 +21,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANGER: CardDef = CardDef::new(
     "PP:[衍生]魔法战队Pastel✽Ranger",
-    &[On::Play("", "", Some(cant_play), ranger)],
+    &[On::Play("", None, Some(cant_play), ranger)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 2000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"魔法战队Pastel✽Ranger"#)
         .raw_name(r#"[衍生]魔法战队Pastel✽Ranger"#)

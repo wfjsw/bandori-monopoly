@@ -23,11 +23,11 @@ const ID: &str = "HHW:（育美）";
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 规则书（1）: 「你经过育美标记时可在那格强制停下」 -- the offer exists
         // only when one of this player's 育美标记 sits on the tile. Mark count
         // is a derived scan, residual (docs/GUARDS.md §4.2).
-        On::Action(Action::PassTile("actor == owner && card.placed && move.kind != Teleport && tile.id >= 0", "", Some(has_mark_here), hook)),
+        On::Action(Action::PassTile("actor == owner && card.placed && move.kind != Teleport && tile.id >= 0", None, Some(has_mark_here), hook)),
         On::Counteract(
             &[ChainKind::EndTurnAfter],
             // 「你回合外」 is `actor != owner`. 「收到资金」 -- at least one gain
@@ -36,8 +36,7 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
             // every money-in whatever the cause (C# `H.GainR` covers 「获得」 and
             // payments landing in this player's favour alike), so a pure-hand
             // (2) sees the count too -- nothing needs to be placed.
-            "actor != owner && gains_this_turn(owner) > 0",
-            "",
+            "actor != owner && gains_this_turn(owner) > 0", None,
             None,
             counteract2,
         ),

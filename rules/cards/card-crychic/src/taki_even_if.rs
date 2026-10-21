@@ -14,8 +14,7 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
     "CRYCHIC:（立希）即便比不上...",
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
-        "actor == owner && move.roll != null",
-        r#"进入移动阶段"#,
+        "actor == owner && move.roll != null", Some(key!("taki_even_if_when")),
         None,
         counteract,
     )],

@@ -21,10 +21,10 @@ pub const MORFONICA: CardDef = CardDef::new(
     &[
         // （1）「一次性失去2000以上资金」 -- the size and direction of the pay
         // are the condition (`value` / `target`, docs/GUARDS.md §4.2).
-        On::Action(Action::PayAfter("actor == owner && value >= 2000 && target != owner", "", None, after_pay)),
+        On::Action(Action::PayAfter("actor == owner && value >= 2000 && target != owner", None, None, after_pay)),
         // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
         // half of the CiRCLE pick.
-        On::Action(Actions::PassRewardAffected("actor == owner && value == 0", "", None, on_circle)),
+        On::Action(Actions::PassRewardAffected("actor == owner && value == 0", None, None, on_circle)),
     ],
 );
 

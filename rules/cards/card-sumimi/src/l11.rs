@@ -12,8 +12,8 @@ use card_sdk::{Action, CardDef, key, Msg, On};
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
-        On::Play("", "", None, l11),
-        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", "", None, sweep)),
+        On::Play("", None, None, l11),
+        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", None, None, sweep)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

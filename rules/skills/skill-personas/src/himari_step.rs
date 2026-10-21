@@ -18,10 +18,10 @@ use super::ran_red::REST_TURNS;
 pub const HIMARI_STEP: CardDef = CardDef::new(
     "skill:上原绯玛丽:大家一起迈出新的一步",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
-        On::Action(Action::TurnEnd("", "", Some(afterglow), tick)),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
     ],
 ).silent(&[1, 2])
     // 「（初始1，上限1）」

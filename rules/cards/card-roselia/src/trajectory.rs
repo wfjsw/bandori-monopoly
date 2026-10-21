@@ -15,7 +15,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRAJECTORY: CardDef = CardDef::new(
     "R:轨迹",
-    &[On::Counteract(&[ChainKind::Bankrupt], "", r#"在场上有玩家破产"#, Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Bankrupt], "", Some(key!("trajectory_when")), Some(can_counteract), counteract)],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"轨迹"#)

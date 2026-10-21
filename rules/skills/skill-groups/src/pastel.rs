@@ -23,12 +23,12 @@ const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
 pub const PASTEL: CardDef = CardDef::new(
     ID,
     &[
-        On::Action(Action::DeckAtGameStart("", "", None, at_start)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, "", None, at_turn_start)),
+        On::Action(Action::DeckAtGameStart("", None, None, at_start)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start)),
         // （2） overflow crystals. `FansFlip` is raised with the effect's X
         // before the dict writes, so `fans::down` is still the pre-flip count.
         // 「你」 is this card's owner (`actor == owner`).
-        On::Action(Actions::FansFlip("actor == owner", "", None, on_fans_flip)),
+        On::Action(Actions::FansFlip("actor == owner", None, None, on_fans_flip)),
     ],
 );
 

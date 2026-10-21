@@ -18,8 +18,7 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         // 规则书[反击]: 「使用火罐进行移动掷骰后」 -- the [火罐] roll is
         // card-owned state: the card that armed one tagged the move
         // (`ctx::plan::set_tag("fireRoll", 1)`).
-        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
-        r#"使用火罐进行移动掷骰"#,
+        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0", Some(key!("misaki_card_when")),
         None,
         counteract,
     )],

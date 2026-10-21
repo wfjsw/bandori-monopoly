@@ -16,11 +16,11 @@ use card_sdk::{Action, CardDef, key, Msg, On};
 pub const THAT_DAY_RAIN: CardDef = CardDef::new(
     "MyGO:那天的雨",
     &[
-        On::Play("", "", None, that_day_rain),
+        On::Play("", None, None, that_day_rain),
         // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-        On::Action(Action::TurnStart("", "", Some(hook_guard), hook)),
-        On::Action(Action::TurnEnd("", "", Some(hook_guard), hook)),
-        On::Action(Action::CounterChanged("", "", Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::TurnStart("", None, Some(hook_guard), hook)),
+        On::Action(Action::TurnEnd("", None, Some(hook_guard), hook)),
+        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"那天的雨"#)

@@ -158,14 +158,14 @@ fn find_or_fail(id: &str) -> &'static card_sdk::CardDef {
 /// Entry body of `On` (the `fn(i32) -> Asked`).
 fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
-        On::Play(_, _, _, f)
-        | On::Counteract(_, _, _, _, f)
-        | On::Settle(_, _, f)
-        | On::Mortgage(_, _, f)
-        | On::Redeem(_, _, f)
-        | On::Buy(_, _, f)
-        | On::Build(_, _, f)
-        | On::Message(_, _, _, f) => *f,
+        On::PlayBody(card_sdk::PlayEntry { body: f, .. })
+        | On::CounteractBody(card_sdk::CounteractEntry { body: f, .. })
+        | On::SettleBody(card_sdk::RuleEntry { body: f, .. })
+        | On::MortgageBody(card_sdk::RuleEntry { body: f, .. })
+        | On::RedeemBody(card_sdk::RuleEntry { body: f, .. })
+        | On::BuyBody(card_sdk::RuleEntry { body: f, .. })
+        | On::BuildBody(card_sdk::RuleEntry { body: f, .. })
+        | On::MessageBody(card_sdk::MessageEntry { body: f, .. }) => *f,
         On::Action(e) => e.body,
         // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
         // through `filter_*_idx` / direct trampolines instead.
@@ -236,7 +236,7 @@ pub fn entry_idx(idx: usize, entry_index: usize, player: i32) -> Asked {
 pub fn play_idx(idx: usize, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if matches!(on, On::Play(..)) {
+        if matches!(on, On::PlayBody(..)) {
             return entry_idx(idx, i, player);
         }
     }
@@ -251,7 +251,7 @@ pub fn play_idx(idx: usize, player: i32) -> Asked {
 pub fn play_c<const IDX: usize>(player: i32) -> Asked {
     let card = by_idx(IDX);
     for (i, on) in card.on.iter().enumerate() {
-        if matches!(on, On::Play(..)) {
+        if matches!(on, On::PlayBody(..)) {
             #[cfg(kani)]
             {
                 return call_body_idx_c::<IDX>(i, player);
@@ -301,8 +301,8 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
     let ktag = kind_tag(kind);
     for (i, on) in card.on.iter().enumerate() {
         let hit = match (ktag, on) {
-            (KindTag::Play, On::Play(..)) => true,
-            (KindTag::Counteract, On::Counteract(..)) => true,
+            (KindTag::Play, On::PlayBody(..)) => true,
+            (KindTag::Counteract, On::CounteractBody(..)) => true,
             (KindTag::Action, On::Action(e)) => {
                 hook_name.is_empty() || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
@@ -319,12 +319,12 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
                 e.kind == card_sdk::abi::ActionKind::AtEnd
                     || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            (KindTag::Settle, On::Settle(..)) => true,
-            (KindTag::Mortgage, On::Mortgage(..)) => true,
-            (KindTag::Redeem, On::Redeem(..)) => true,
-            (KindTag::Buy, On::Buy(..)) => true,
-            (KindTag::Build, On::Build(..)) => true,
-            (KindTag::Message, On::Message(..)) => true,
+            (KindTag::Settle, On::SettleBody(..)) => true,
+            (KindTag::Mortgage, On::MortgageBody(..)) => true,
+            (KindTag::Redeem, On::RedeemBody(..)) => true,
+            (KindTag::Buy, On::BuyBody(..)) => true,
+            (KindTag::Build, On::BuildBody(..)) => true,
+            (KindTag::Message, On::MessageBody(..)) => true,
             _ => false,
         };
         if hit {

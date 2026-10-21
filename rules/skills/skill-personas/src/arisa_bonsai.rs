@@ -21,13 +21,13 @@ fn station() -> i32 {
 pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
-        On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", "", None, on_event)),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", None, None, on_event)),
         // （2）: the turn's main move walked past 流星堂 and did not end there,
         // and the pass latch is armed. The named tile must exist (residual).
-        On::Action(Action::TurnEnd("actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0", "", Some(station_exists), at_turn_end)),
-        On::Action(Action::Pass("actor == owner && tile.id == tile_named('流星堂')", "", None, on_pass)),
+        On::Action(Action::TurnEnd("actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0", None, Some(station_exists), at_turn_end)),
+        On::Action(Action::Pass("actor == owner && tile.id == tile_named('流星堂')", None, None, on_pass)),
     ],
 )
     .silent(&[0, 1])

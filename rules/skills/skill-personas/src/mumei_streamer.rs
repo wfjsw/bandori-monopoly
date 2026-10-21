@@ -31,23 +31,23 @@ const BUMP_X: &str = "skill.mumei.bumpX";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
         // mutating, so they ride `ActionKind::Effect` (the payment declaration,
         // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
-        On::Action(Action::Effect("target == owner && actor != owner && slot('skillState') != 2", "", None, on_pay_declare)),
+        On::Action(Action::Effect("target == owner && actor != owner && slot('skillState') != 2", None, None, on_pay_declare)),
         // 状态1（1）「并使那次支付的金额提高X*100」 -- pure amount reshape.
         On::Filter(Filter::PaySplitAdd("target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0", None, on_pay_add)),
         // Drop the one-shot latch once the payment is done (split legs all see
         // the same X).
-        On::Action(Action::PayAfter("actor == owner && slot('skill.mumei.bumpX') >= 0", "", None, clear_bump)),
-        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2", "", Some(fire_at_cap), at_turn_end)),
+        On::Action(Action::PayAfter("actor == owner && slot('skill.mumei.bumpX') >= 0", None, None, clear_bump)),
+        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2", None, Some(fire_at_cap), at_turn_end)),
         // 「你退出状态2后，被你翻面的卡自动翻回」 -- only while out of 状态2
         // with a non-empty flip list. Both are player-state reads (`skillState`
         // and the `skill.mumei.flipped` count), so the entry does not activate
         // (and so does not flash) when there is nothing to sweep.
-        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0", "", None, at_turn_end_exit)),
+        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0", None, None, at_turn_end_exit)),
     ],
 )
     .silent(&[0, 1, 4])

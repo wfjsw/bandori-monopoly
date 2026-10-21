@@ -24,8 +24,7 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     // guard (outside the CEL schema).
     &[On::Counteract(
         &[ChainKind::SettleBefore],
-        "actor == owner && move.main",
-        r#"主要移动结束时，[触发结算]前"#,
+        "actor == owner && move.main", Some(key!("my_own_problem_when")),
         Some(can_counteract),
         counteract,
     )],

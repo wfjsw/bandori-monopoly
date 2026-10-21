@@ -30,11 +30,11 @@ pub const HHW: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive `ask_yes` + `set_pay_amount` + state/crystal writes sit
         // immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(Action::PaySplitChooseBefore("actor == owner && target >= 0 && target != owner && pay_is_rent", "", None, on_pay_choose)),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && target >= 0 && target != owner && pay_is_rent", None, None, on_pay_choose)),
         // （2） a recorded player's rent collection, with a crystal to spend.
-        On::Action(Action::PayAfter(card_sdk::pre::MINE, "", Some(after_pay_applies), after_pay)),
+        On::Action(Action::PayAfter(card_sdk::pre::MINE, None, Some(after_pay_applies), after_pay)),
         // （3） a recorded amount to spend down.
-        On::Action(Action::BuildBefore(card_sdk::pre::MINE, "", Some(has_saved), before_build)),
+        On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, Some(has_saved), before_build)),
     ],
 );
 

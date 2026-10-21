@@ -21,8 +21,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
     // stays in the residual guard.
     &[On::Counteract(
         &[ChainKind::PassTile],
-        card_sdk::pre::MINE,
-        r#"你经过一名角色"#,
+        card_sdk::pre::MINE, Some(key!("proud_light_when")),
         Some(can_counteract),
         counteract,
     )],

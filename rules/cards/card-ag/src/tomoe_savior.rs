@@ -17,8 +17,7 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     // residual guard.
     &[On::Counteract(
         &[ChainKind::Mortgage],
-        "actor == owner || owner.money >= tile.price / 2",
-        r#"其他玩家抵押商店街地契"#,
+        "actor == owner || owner.money >= tile.price / 2", Some(key!("tomoe_savior_when")),
         Some(can_counteract),
         counteract,
     )],

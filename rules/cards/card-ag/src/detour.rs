@@ -16,18 +16,18 @@ use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
-        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", "", None, counteract),
+        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", None, None, counteract),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
         On::Filter(Filter::DiceRollPlan("slot('detour_next_roll') != 0", None, next_roll)),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
-        On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", "", None, consume_next_roll)),
-        On::Action(Action::AtEnd("", "", None, clear_no_reward)),
+        On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", None, None, consume_next_roll)),
+        On::Action(Action::AtEnd("", None, None, clear_no_reward)),
     ],
 )
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()

@@ -22,13 +22,12 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Paid],
-            "actor != owner && actor == neighbor(owner, -1) && value > 0",
-            r#"[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后"#,
+            "actor != owner && actor == neighbor(owner, -1) && value > 0", Some(key!("hold_hands_again_when")),
             None,
             counteract,
         ),
         On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_at)),
-        On::Action(Action::PayAfter("actor == owner && card.placed", "", None, pay_after)),
+        On::Action(Action::PayAfter("actor == owner && card.placed", None, None, pay_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次牵起手来"#)

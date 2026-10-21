@@ -14,7 +14,7 @@ use bandori_std::ctx;
 use skill_groups::fans;
 
 pub const TOGETHER_HERE: CardDef =
-    CardDef::new("PP:有你与我在这里共度", &[On::Play("", "", None, together_here)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("PP:有你与我在这里共度", &[On::Play("", None, None, together_here)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"有你与我在这里共度"#)
         .raw_name(r#"有你与我在这里共度"#)
         .tags(&[r#"手"#])

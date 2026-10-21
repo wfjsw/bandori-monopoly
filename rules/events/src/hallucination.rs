@@ -19,11 +19,11 @@ const TURNS: &str = "turns";
 pub const HALLUCINATION: CardDef = CardDef::new(
     "event:幻觉来了",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 「任何玩家进行投掷前」 -- every plan, so the category filter is the
         // whole applicability. `always` deleted (a no-op prefetch).
         On::Filter(Filter::DiceRollPlan("", None, on_plan)),
-        On::Action(Action::TurnStartBefore("", "", None, on_turn_start)),
+        On::Action(Action::TurnStartBefore("", None, None, on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

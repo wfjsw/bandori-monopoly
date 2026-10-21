@@ -9,7 +9,7 @@
 use bandori_std::ctx;
 use card_sdk::{CardDef, key, Msg, On};
 
-pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"曲奇时间"#)
         .raw_name(r#"曲奇时间"#)
         .tags(&[])

@@ -8,7 +8,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play("", "", None, rui_devil)]).meta(&card_sdk::meta::CardMeta::new()
+pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play("", None, None, rui_devil)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"正论恶魔"#)
         .raw_name(r#"（Rui）正论恶魔"#)
         .tags(&[])

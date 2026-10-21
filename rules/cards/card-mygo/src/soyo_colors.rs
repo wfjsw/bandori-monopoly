@@ -12,7 +12,7 @@ use card_sdk::{CardDef, ctx, Filter, key, Msg, On};
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",
     &[
-        On::Play("", "", Some(cant_play), soyo_colors),
+        On::Play("", None, Some(cant_play), soyo_colors),
         On::Filter(Filter::PaySplitMul("", Some(on_rent), half_again)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()

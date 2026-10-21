@@ -5,7 +5,9 @@ use crate::abi::{export, pack, ManifestEntry, ManifestOn, ManifestTileText};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::meta::{ordinal_of, MetaDoc, MetaRow, RosterSources};
-use crate::{CardDef, On};
+use crate::{
+    CardDef, CounteractEntry, MessageEntry, On, PlayEntry, RuleEntry,
+};
 
 /// The card manifest, `postcard`-encoded (ABI v5 -- the guest hand-writes no
 /// JSON at all: messages and manifests both travel as serde bytes).
@@ -32,7 +34,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     },
                     has_guard: o.has_guard(),
                     messages: match o {
-                        On::Message(names, ..) => names.iter().map(|s| String::from(*s)).collect(),
+                        On::MessageBody(e) => e.names.iter().map(|s| String::from(*s)).collect(),
                         _ => Vec::new(),
                     },
                     label: c
@@ -176,13 +178,16 @@ pub fn on(
         panic!("bad entry {entry} on card {idx}")
     };
     match (*o, op) {
-        (On::Counteract(_, _, _, guard, _), export::OP_GUARD)
-        | (On::Settle(_, guard, _), export::OP_GUARD)
-        | (On::Mortgage(_, guard, _), export::OP_GUARD)
-        | (On::Redeem(_, guard, _), export::OP_GUARD)
-        | (On::Buy(_, guard, _), export::OP_GUARD)
-        | (On::Build(_, guard, _), export::OP_GUARD)
-        | (On::Message(_, _, guard, _), export::OP_GUARD) => match guard {
+        (
+            On::CounteractBody(CounteractEntry { guard, .. })
+            | On::SettleBody(RuleEntry { guard, .. })
+            | On::MortgageBody(RuleEntry { guard, .. })
+            | On::RedeemBody(RuleEntry { guard, .. })
+            | On::BuyBody(RuleEntry { guard, .. })
+            | On::BuildBody(RuleEntry { guard, .. })
+            | On::MessageBody(MessageEntry { guard, .. }),
+            export::OP_GUARD,
+        ) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
             // normally skips this call (`has_guard == false`). If it does ask,
             // the residual admits.
@@ -197,7 +202,7 @@ pub fn on(
             None => 1,
             Some(g) => g(player_id) as i64,
         },
-        (On::Play(_, _, why, _), export::OP_GUARD) => match why {
+        (On::PlayBody(PlayEntry { why_not, .. }), export::OP_GUARD) => match why_not {
             Some(why) => match why(player_id) {
                 None => 0,
                 // Kani: the Play `why` reason is a `Msg`; serialising it allocates
@@ -217,14 +222,17 @@ pub fn on(
             (e.drive)(player_id, e.body);
             0
         }
-        (On::Counteract(_, _, _, _, run), _)
-        | (On::Play(_, _, _, run), _)
-        | (On::Settle(_, _, run), _)
-        | (On::Mortgage(_, _, run), _)
-        | (On::Redeem(_, _, run), _)
-        | (On::Buy(_, _, run), _)
-        | (On::Build(_, _, run), _)
-        | (On::Message(_, _, _, run), _) => match run(player_id) {
+        (
+            On::CounteractBody(CounteractEntry { body: run, .. })
+            | On::PlayBody(PlayEntry { body: run, .. })
+            | On::SettleBody(RuleEntry { body: run, .. })
+            | On::MortgageBody(RuleEntry { body: run, .. })
+            | On::RedeemBody(RuleEntry { body: run, .. })
+            | On::BuyBody(RuleEntry { body: run, .. })
+            | On::BuildBody(RuleEntry { body: run, .. })
+            | On::MessageBody(MessageEntry { body: run, .. }),
+            _,
+        ) => match run(player_id) {
             Ok(()) => 0,
             // Asked: the host reads the published question and re-runs us with
             // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.
@@ -326,7 +334,7 @@ macro_rules! ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", r#"你的一次掷骰小于6"#, Some(can_counteract), counteract)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_when")), Some(can_counteract), counteract)]);
 /// card_sdk::ruleset_card!(CARD);
 /// ```
 #[macro_export]
