@@ -22,8 +22,9 @@ Sources (re-counted 2026-10-20 against master `b8e26436`):
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `rules/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
-**Current ABI: v95** (`rules/card-sdk/src/abi.rs` `ABI_VERSION`) — the v89
-figure in the 2026-10-20 header was already stale. The doc body still quotes
+**Current ABI: v96** (`rules/card-sdk/src/abi.rs` `ABI_VERSION`) — the v89
+figure in the 2026-10-20 header was already stale (v90..v95 landed between
+audits and were never recorded here). The doc body still quotes
 v53–v85-era names in places; where a kind has since been renamed
 (`HookKind`/`GateKind` → `ActionKind`/`FilterKind`; `MoveRoll` → `DiceRollResult`;
 the `Pay*` / `Roll*` families restructured; `ruleset-core` → `bandori-std`),
@@ -2001,21 +2002,32 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 
 ## AYA-LONG-01 — payment shaves land at `Effect`, not `PaySplitAdd`
 - **kind**: implementation bug
-- **class**: A
+- **class**: **closed 2026-10-21** (v96 `PaySplitMulBefore`)
 - **severity**: medium
 - **suggested batch**: payment pipeline
-- **locations**: `rules/cards/card-pp/src/aya_longing.rs:34-37`
-- **current**: shaves land at `Effect` (before PaySplitAdd/PaySplitMul), so
-  sibling modifiers see the already-shaved figure.
+- **locations**: `rules/cards/card-pp/src/aya_longing.rs` -- (2) 「将金额降低1500
+  （最低0）」 rides `Action::PaySplitMulBefore`; (1) X stays a pure
+  `PaySplitAdd` filter above it.
+- **was**: the interactive half landed at `Effect` (the declaration), so sibling
+  add modifiers saw the 1500 already gone. The 2026-10-20 entry called this
+  class A; the code TODO had already reclassified it B -- correct, one shared
+  capability with AVE-CLAW-01.
+- **residual (`TODO(规则书)` in the body)**: local `.max(0)` per clause vs a
+  final floor after the whole add/sub stage is still unnamed by the book.
+  Pinned by `money.rs`
+  `aya_longing_1500_shave_lands_after_sibling_pay_split_add`.
 
 ## AVE-CLAW-01 — bend clawback latches the declared amount, not the `PaySplitMul` input
 - **kind**: implementation bug
-- **class**: A
+- **class**: **closed 2026-10-21** (v96 `PaySplitMulBefore`)
 - **severity**: medium
 - **suggested batch**: payment pipeline
-- **locations**: `rules/skills/skill-groups/src/ave_mujica.rs:101-105`
-- **current**: stores the *declared* amount; the old in-Filter latch saw the
-  `PaySplitMul` input.
+- **locations**: `rules/skills/skill-groups/src/ave_mujica.rs` -- `latch_orig`
+  rides `Action::PaySplitMulBefore`, so `ORIG` is the figure the 1.5x bend is
+  about to see (after any `PaySplitAdd` rewrite).
+- **was**: stored the *declared* amount, so whenever a `PaySplitAdd` also
+  rewrote the figure the clawback delta was against the wrong baseline.
+- **pinned by** `money.rs` `ave_mujica_clawback_uses_post_add_pay_split_mul_input`.
 
 ## LISA-BOND-01 — 「使用技能进行传送后」 names no stage number
 - **kind**: rulebook divergence
@@ -2153,15 +2165,33 @@ payment bugs needed.
   level cap; `Cx::offer_mortgage_funds`'s `exclude` for the upgrade-funding
   bar). The 2026-10-20 entry had the second site wrong (`mortgage`).
 
-## Closed by the in-flight engine work (this branch)
+## Closed by the engine work on this branch
 
 - **AYA-LONG-01** and **AVE-CLAW-01** — one shared root cause: the money
   pipeline had no writable interactive stage between `paySplitAdd` and
   `paySplitMul`. Both card bodies were latching / shaving at `Effect` (the
   declaration) instead. **v96 `PaySplitMulBefore`** (engine id 110) is that
-  stage; `aya_longing.rs` (2) and `ave_mujica.rs` `latch_orig` move onto it.
+  stage; `aya_longing.rs` (2) and `ave_mujica.rs` `latch_orig` moved onto it.
   The 2026-10-20 batch table listed both as class A; the code TODOs had already
-  reclassified them as B — correct, one ABI bump closes both.
+  reclassified them as B — correct, one ABI bump closes both. Pinned by
+  `money.rs` `aya_longing_1500_shave_lands_after_sibling_pay_split_add` and
+  `ave_mujica_clawback_uses_post_add_pay_split_mul_input`.
+- **W3-KAORU-01** (the wave-3 high) — `kaoru_thief` 「经过该玩家」 re-homed off
+  `passPlayer` onto `passTile`; pinned by
+  `settle_stages.rs` `m4_kaoru_thief_force_stop_stops_on_the_marked_player`.
+
+## Verification (2026-10-21)
+
+Run from `/home/monopoly/gap-batch8-meda-wt` after
+`node tools/build-ruleset.mjs` (ruleset-tests loads the card **wasm**; a Rust
+edit to `rules/cards` is invisible to it until that is re-run):
+
+- `cargo test -p game-kinds -p card-sdk --no-fail-fast` — green.
+- `cargo test -p game-rules --no-fail-fast` — green except
+  `--test settle_depth`, which **stack-overflows on master too** (pre-existing,
+  not this batch). The name looks like the STACK-01 guard test; worth a look.
+- `cargo test -p ruleset-tests --no-fail-fast` — the two new payment
+  regressions and both M4 tests green; full-suite run below.
 
 ## Wave 3 clause check (checking half)
 
@@ -2960,6 +2990,7 @@ STA-01 / STA-04 dropped out of batch 6 (closed 2026-10-18).
    disguise). **NFO-CANCEL-01 is still open and is class B** — `PayAfter` has
    no "PaySplitAt ran" bit — so it moved to the medium-B pile (item 9).
 9. **medium-B ABI pile** (ABI-01..12, HOST-05 ask_money, STA-02/05, HAG-01,
+   NFO-CANCEL-01 (moved here 2026-10-21),
    EVE-01, TOMORI-BIND-01, HARU-SOYO-FX, DRAW-OUT-01, FORCE-WRITE-01,
    **ABI-MARKER-SPENT**) — one ABI bump, many cards.
 10. **medium-C leftovers + events** (MONEY-01..08, MOVE-06..15, SETTLE-05..07,
