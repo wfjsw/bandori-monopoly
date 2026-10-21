@@ -5749,8 +5749,11 @@ impl<M: CardModules> RulesBridge<M> {
                     if chain.len() == 1 {
                         let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
                         // A timing with no card of its own (a roll, a payment,
-                        // a landing ...) says what it is: the trigger kind and
-                        // its particulars, for the client's origin tile.
+                        // a landing ...) says what it is: the log line names
+                        // the trigger itself via [`crate::trigger_reason`] --
+                        // never 「（未命名）」 -- and the same message carries
+                        // the kind and particulars for the client's origin
+                        // tile.
                         let l = &chain[0].link;
                         let src = match l.roll_source {
                             game_core::engine::rules::RollSource::Charge => "charge",
@@ -5758,14 +5761,18 @@ impl<M: CardModules> RulesBridge<M> {
                             game_core::engine::rules::RollSource::Skill => "skill",
                             _ => "",
                         };
-                        let mut origin = Msg::new("log.chain_link")
-                            .n("n", 1)
-                            .card("card", l1_id.clone())
-                            .text("kind", l.kind.as_str())
-                            .player_id("who", l.player_id)
-                            .i("value", l.value as i64)
-                            .text("src", src)
-                            .text("rent", if l.pay.as_ref().is_some_and(|p| p.is_rent) { "1" } else { "" });
+                        let mut origin = if l1_id.is_empty() {
+                            Msg::new("log.chain_link_trigger")
+                                .n("n", 1)
+                                .msg("trigger", crate::trigger_reason(l))
+                        } else {
+                            Msg::new("log.chain_link").n("n", 1).card("card", l1_id.clone())
+                        }
+                        .text("kind", l.kind.as_str())
+                        .player_id("who", l.player_id)
+                        .i("value", l.value as i64)
+                        .text("src", src)
+                        .text("rent", if l.pay.as_ref().is_some_and(|p| p.is_rent) { "1" } else { "" });
                         if l.tile >= 0 {
                             origin = origin.tile("tile", l.tile);
                         }
@@ -6132,14 +6139,16 @@ impl<M: CardModules> RulesBridge<M> {
         }
         if !order.is_empty() {
             let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
-            cx.log_event(
-                "resolve",
-                l1_seat,
-                Msg::new("log.chain_resolve_link").n("n", 1).card("card", l1_id.clone()),
-                -1,
-                &l1_id,
-                1,
-            );
+            // Same wording as the announce: a timing with no card of its own
+            // names the trigger, not 「（未命名）」.
+            let l1 = if l1_id.is_empty() {
+                Msg::new("log.chain_resolve_link_trigger")
+                    .n("n", 1)
+                    .msg("trigger", crate::trigger_reason(&chain[0].link))
+            } else {
+                Msg::new("log.chain_resolve_link").n("n", 1).card("card", l1_id.clone())
+            };
+            cx.log_event("resolve", l1_seat, l1, -1, &l1_id, 1);
         }
         Ok(())
     }
