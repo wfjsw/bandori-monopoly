@@ -923,6 +923,11 @@ impl World {
         if player < 0 || player as usize >= MAX_PLAYERS {
             return;
         }
+        let v = if self.key_never_negative(player, key) {
+            v.max(0)
+        } else {
+            v
+        };
         self.player_keys[player as usize].set(key, v);
         self.sync_fan_key(player, key);
     }
@@ -931,9 +936,38 @@ impl World {
         if player < 0 || player as usize >= MAX_PLAYERS {
             return 0;
         }
-        let v = self.player_keys[player as usize].add(key, delta);
+        let mut v = self.player_keys[player as usize].add(key, delta);
+        if self.key_never_negative(player, key) && v < 0 {
+            v = 0;
+            self.player_keys[player as usize].set(key, 0);
+        }
         self.sync_fan_key(player, key);
         v
+    }
+
+    /// [`state_flag::NEVER_NEGATIVE`] (bit 0) on `key`, as declared by
+    /// `state_set_flags`. Matches the engine's floor in `MatchPlayer::state_set`.
+    pub fn key_never_negative(&self, player: i32, key: NameId) -> bool {
+        self.key_flags(player, key) & 1 != 0
+    }
+
+    /// Flag byte declared for `key` (0 when none). Stored at `key + 0x1000`,
+    /// beside the MIN/MAX/EXPIRES derived columns.
+    pub fn key_flags(&self, player: i32, key: NameId) -> u8 {
+        if player < 0 || player as usize >= MAX_PLAYERS {
+            return 0;
+        }
+        let id = NameId(key.0.wrapping_add(0x1000));
+        self.player_keys[player as usize].get(id) as u8
+    }
+
+    /// Declare [`state_flag`] bits for `key` (hostfns `state_set_flags`).
+    pub fn key_set_flags(&mut self, player: i32, key: NameId, flags: u8) {
+        if player < 0 || player as usize >= MAX_PLAYERS {
+            return;
+        }
+        let id = NameId(key.0.wrapping_add(0x1000));
+        self.player_keys[player as usize].set(id, flags as i32);
     }
 
     /// Mirror a fan-key write into the pilot `fans_pos` / `fans_neg` views.

@@ -768,6 +768,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::state_set => arm_state_set(a),
                 Op::set_slot => arm_set_slot(a),
                 Op::state_add | Op::inc_slot => arm_state_add(a),
+                Op::state_set_flags => arm_state_set_flags(a),
+                Op::raise_after => arm_raise_after(a),
                 Op::tok_names => arm_tok_names(a),
 
         // ---- marks ----
@@ -2715,6 +2717,25 @@ pub fn arm_state_add(a: Args) -> i64 {
             let key = name_id(a1, a2);
             world::with_world_mut(|w| w.key_add(a0, key, a3)) as i64
         }
+}
+
+/// `state_set_flags(player, ptr, len, flags)` — declare [`state_flag`] bits
+/// for a key. `NEVER_NEGATIVE` (bit 0) floors later `state_set` / `state_add`
+/// writes at 0, matching the engine.
+pub fn arm_state_set_flags(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let key = name_id(a1, a2);
+    world::with_world_mut(|w| w.key_set_flags(a0, key, a3 as u8));
+    0
+}
+
+/// `raise_after(player, name_p, name_l, value)` — queue a post-commit raise.
+/// The body-only model does not run deferred listeners (same as
+/// `CardWorld::raise_after`'s default no-op); the call is accepted so guest
+/// bodies that queue one complete.
+pub fn arm_raise_after(a: Args) -> i64 {
+    let _ = a;
+    0
 }
 
 pub fn arm_state_get(a: Args) -> i64 {
