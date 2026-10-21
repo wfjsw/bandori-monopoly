@@ -264,19 +264,25 @@ fn m4_kaoru_thief_force_stop_stops_on_the_marked_player() {
     t.set_pos(1, 10);
     t.dice(&[5]);
     t.roll(0).unwrap();
-    // Accept the force-stop offer.
+    // Accept the force-stop offer. `ask_yes` options are bare `ask.yes` /
+    // `ask.no` and never name the asker, so match the message key in the dump
+    // (the same way `s08_sakiko_absorbs_statuses` does).
     let mut offered = false;
-    while let Some(p) = t.prompt() {
-        if format!("{p:?}").contains("kaoru_thief_stop") {
+    let mut last_dump = String::new();
+    while t.prompt().is_some() {
+        let dump = t.dump_prompt();
+        if dump.contains("kaoru_thief_stop") {
             offered = true;
-            let _ = t.answer_one(0);
+            let k = t.option("ask.yes").unwrap_or(0);
+            t.answer(0, k).unwrap();
         } else {
+            last_dump = dump;
             t.decline();
         }
     }
     assert!(
         offered,
-        "「在经过该玩家时使自己强制停下」 offered mid-route: {:?}",
+        "「在经过该玩家时使自己强制停下」 offered mid-route; last declined prompt: {last_dump}; keys: {:?}",
         t.recent_keys(20)
     );
     assert_eq!(
