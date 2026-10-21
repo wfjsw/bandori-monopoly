@@ -536,25 +536,36 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 ## SETTLE-02 — CRYCHIC band (1) at 6+ hand cards still lets money move
 - **status**: **fixed** (both halves) — (1) money lock: `lock_pay` / `force_card`
   scope to the skill owner (`你`), a payment between two other players is
-  untouched; `s05_crychic_band_six_cards` un-ignored, green. (2) play gate:
-  「无法从手中打出任何牌」 landed as a standing hand-play veto
-  `On::FilterFlag(&[FilterKind::PlayGate], "hand(actor) >= 6", None, refuse)`
-  (`rules/skills/skill-groups/src/crychic.rs:35-39`); the engine consults
-  `Gate::Play` on every hand play (`crates/game-core/src/engine/play.rs:4288-4291`).
-  Closed in the 2026-10-17 audit — the old "B split / `cantPlayHand` not
-  implemented" note was stale.
+  untouched. (2) play gate: 「无法从手中打出任何牌」 landed as a standing
+  hand-play veto `On::FilterFlag(&[FilterKind::PlayGate], "hand(actor) >= 6",
+  None, refuse)` (`rules/skills/skill-groups/src/crychic.rs:35-39`); the engine
+  consults `Gate::Play` on every hand play (`crates/game-core/src/engine/play.rs`).
+  **Re-opened and truly closed 2026-10-21**: the 2026-10-17 audit called this
+  "green / Confirmed" but `s05_crychic_band_six_cards` was red. The skill was
+  always on the right hook -- `FilterKind::PaySplitChoose` is `FilterShape::Flag`
+  and `drive_flag` correctly folds `false` to `set_cancelled()` -- but
+  `Cx::money_inner`'s settlement-stage loop folded only `t.value` / `t.target`
+  and **dropped the cancel**. Every other cancel point in that function
+  (`effect`, `pay`, `payCombinedCancel`) already honoured it. Fixed in
+  `crates/game-core/src/engine/play.rs` (the `paySplitChoose` arm now mirrors
+  `payCombinedCancel`: `payAfter` at 0 and `Paid::default()`).
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high
 - **suggested batch**: skills: Roselia / payment pipeline
 - **locations**
-  - `rules/tests/tests/cross_status.rs:165` `s05_crychic_band_six_cards` (un-ignored)
+  - `rules/tests/tests/cross_status.rs:165` `s05_crychic_band_six_cards`
   - `rules/skills/skill-groups/src/crychic.rs:35-39` (`FilterKind::PlayGate`), `:75-86` (`lock_pay` owner scope), `:203-214` (`force_card` owner scope)
+  - `crates/game-core/src/engine/play.rs` settlement-stage loop (the dropped cancel)
 - **rulebook**: CRYCHIC band (1) at 6+ hand cards blocks gain/loss and 「无法从手中打出任何牌」.
+  支付阶段 5 「支付时/无需失去资金/取消支付/更改目标」 (G-MONEY-14).
 - **was**: `lock_pay` zeroed **every** payment in the game (the empty pre +
   owner-hand guard fired on any money movement); no hand-play gate existed.
+  Then the Flag cancel was answered but ignored by the stage.
 - **expected**: no money gain/loss **for the skill owner** and no hand play
-  while the gate is up. **Confirmed.**
+  while the gate is up. **Confirmed 2026-10-21.**
+- **same hole, now live**: `Mujica:#J11` `pay_choose_cancel` (「p.cancel = true
+  when Me.Stunned」) was documented as dead for the same reason; it works now.
 
 ## SETTLE-03 — 丰川祥子 (1) does not absorb stays when passing another player
 - **kind**: implementation bug
@@ -2893,6 +2904,41 @@ engine capabilities rather than rule-side bandaids. Three landed here.
   or will). Test: `circle_rebuild_restores_the_reward_after_it_expires`.
 - The remaining half of the `TODO(ABI)` in `circle_rebuild.rs` -- a real
   temporary tile-rule swap -- is **ABI-13**.
+### SUITE-TRIO — three long-standing red tests, 2026-10-21
+Three tests that had been red on master, each a different hole. All three
+failed identically on `d70086ed` / `43f2efc9`, so none was an in-flight
+regression.
+
+- **`cross_status::s05_crychic_band_six_cards`** (SETTLE-02, reopened) —
+  `Cx::money_inner`'s settlement-stage loop folded only `t.value` / `t.target`
+  and **dropped `t.is_cancelled()`**, so a Flag-shaped `paySplitChoose` answer
+  of `false` (contract: "stops the payment", abi.rs; 规则书 支付阶段 5
+  「取消支付 / 无需失去资金」 G-MONEY-14) was ignored. Every other cancel
+  point in that function (`effect`, `pay`, `payCombinedCancel`) already
+  honoured it. Fixed in `crates/game-core/src/engine/play.rs` by mirroring
+  `payCombinedCancel`. Side effect: `Mujica:#J11`'s `pay_choose_cancel`
+  (stun cancel) was documented as dead and is now live.
+- **`gap_money::g02_half_speed_plus_expectations_floor_on_a_rent`** —
+  `RollValue`'s payload constructor read `trigger::value()` (the raise's
+  *original* face) rather than `trigger::move_roll()` (the running face after
+  `set_move_roll` rewrites). With two DiceRollValue modifiers the second
+  folded the original face and the last writer won: 7 → (−2) → 5, the ½ lost.
+  Fixed in `rules/card-sdk/src/payload.rs` to use the same
+  `move_roll().unwrap_or(value())` idiom the roll skills already use.
+  **Open ruling on the composition order** -- see `OPEN-ROLLRESHAPE-01` below;
+  the fix makes the two reshapes *fold* (previously one clobbered the other),
+  but which order they fold in is a separate question the card text does not
+  settle.
+- **`spec_card_general::fever_gain_boost`** — `通用:[衍生]FEVER!` stored its
+  C# `Card.User` Mem in the **per-player keyed-state map** (`fever_user`), so
+  playing it materialised a default-valued state key the
+  `C-GEN-fever-frame` allowlist correctly rejects. The Mem belongs on the
+  card instance (`FieldCard::props`, as `RAS:EXIST`'s `exist.used` does) and
+  is 1-based so seat 0 is representable. Fixed in
+  `rules/cards/card-general/src/fever.rs`; the frame is untouched and the
+  「放入[使用者]弃卡区」 routing still works. New test
+  `fever_user_mem_lands_on_the_placed_instance` pins the placement (the
+  owner==user case cannot tell a right write from a lost one).
 
 ### ENG-REDIRECT — host-visible "this settle is a redirect" flag
 - `MoveCtx.settle_redirect: bool` (`crates/game-core/src/engine/move_ctx.rs`),
@@ -2949,6 +2995,81 @@ real `card-sdk` mechanism, but it is an ABI shape change to the hook table, and
 three other verbs were landing in the same files. Deferred — the ruleset helper
 is the current home, and a second activation-cost card is the trigger to
 generalize.
+
+# Newly filed 2026-10-21 (suite-trio follow-up)
+
+## OPEN-ROLLRESHAPE-01 — order of two DiceRollValue reshapes (「最终结算」)
+- **kind**: rulebook ambiguity (needs a ruling)
+- **class**: C (open question) / B if the ruling changes the fold
+- **severity**: low (one step of movement, rare stack)
+- **suggested batch**: skills: AG / PP
+- **locations**
+  - `rules/cards/card-ag/src/moca_half.rs` `roll_half` (`TODO(规则书)` on the
+    composition)
+  - `rules/cards/card-pp/src/no_expectation.rs` `roll_shave`
+  - `rules/card-sdk/src/payload.rs` `RollValue` (the fold that made stacking
+    possible at all -- `SUITE-TRIO`)
+  - `rules/tests/tests/gap_money.rs:159` `g02_half_speed_plus_expectations_floor_on_a_rent`
+- **rulebook**
+  - `AG:（摩卡）0.5倍速` (2): 「此卡在场时，你的移动掷骰的**最终结算**/2（向上取整）」
+  - `PP:不要背负期待` (1): 「非回合开始时进行投掷的**投掷结果减少2**」
+  - `docs/rulebook/spec/cards/ag.md` `C-AG-half-speed-03` ruling: 「最终结算」
+    is **after additive modifiers**.
+- **the two readings**, for roll 7 starting at tile 27:
+  | reading | arithmetic | move | lands |
+  |---|---|---|---|
+  | half last (「最终结算」 after the additive −2) | 7 − 2 = 5, ceil(5/2) | **3** | 30 |
+  | half first (placement order, as implemented) | ceil(7/2) = 4, 4 − 2 | **2** | 29 |
+- **current**: implemented as placement order (half first) and the test pins
+  29. The test's own comment ("roll 7 -> 5 -> 2 either way round") is loose:
+  `5 -> 2` is a *floor* half while the card prints 向上取整, and "either way
+  round" is false -- the two orders give 2 and 3 respectively.
+- **why this is open, not a bug**: 「最终结算」 is not defined for a roll that
+  another effect has already reshaped. The spec ruling says "after additive
+  modifiers", which points at half-last (3); the engine's documented contract
+  (`moca_half.rs`, ABI v74) is "placement order among roll reshapes is
+  preserved", which points at half-first (2). Neither the card text nor the
+  rulebook body settles it. The C# port calls the half `DiceRollAfter`, but
+  the C# port is not a spec.
+- **what a ruling must say**: whether 「投掷结果减少2」 is an *additive
+  modifier* that 「最终结算」 follows (→ 3), or a same-stage reshape that runs
+  in placement order (→ 2). Also whether 「最终结果最小为0」 in the same
+  不要背负期待 clause applies before or after the half.
+- **until ruled**: keep placement order + the pinned 29; the composition now
+  *folds* rather than clobbering, which is strictly better than before.
+
+## STATE-INIT-01 — default-valued per-player slots materialised at placement
+- **kind**: implementation bug / observation-frame smell
+- **class**: A (mechanical), low severity
+- **suggested batch**: card-rule cleanup
+- **locations** (all write a per-player `set_slot` at play/placement whose
+  written value is `StateVar::default()`, or a 0-based player id that makes
+  seat 0 indistinguishable from unset)
+  - `rules/cards/card-pp/src/jennifer.rs:86` `set_slot(hit, SLOT_USER, player_id)`
+    -- same 0-based `Card.User` bug FEVER! just left behind; writes 0 onto the
+    *target's* state when the jennifer player is seat 0
+  - `rules/cards/card-ras/src/chuchu_music.rs:77-78` `SLOT_USER` (0-based) +
+    `SLOT_HITS = 0` (pure default init)
+  - `rules/cards/card-roselia/src/council_check.rs:108-109` `SLOT_GOT = 0`,
+    `SLOT_STOP = 0`
+  - `rules/cards/card-ras/src/layer_keep.rs:115` `SLOT_UNUSED = 0`
+  - `rules/cards/card-crychic/src/fate_together.rs:49` `SLOT_HIT = 0`
+- **was**: `通用:[衍生]FEVER!` had this and it was caught by
+  `C-GEN-fever-frame` (`spec_card_general::fever_gain_boost`). The frame is a
+  good detector; the other cards have no such frame so the smell is silent.
+- **expected**: a per-player key is written when it takes on meaning, not
+  pre-zeroed at placement. Per-card-instance Mem belongs on
+  `FieldCard::props` (`ctx::set_prop` after `place_card` -- `RAS:EXIST`'s
+  `exist.used`, and now FEVER!'s `fever.user`), not in the player's
+  keyed-state map. Player-id Mem slots are **1-based** (`player_id + 1`) so
+  seat 0 survives the default-0 read.
+- **done right already**: `Mujica:（海铃）` `umiri_card.rs:67`,
+  `Sumimi:Here the world` `here_the_world.rs:119`, `AG:One of us`
+  `one_of_us.rs:145` (1-based), `RAS:EXIST` `exist.rs:44` (instance prop).
+- **note**: several of these are observation-frame issues rather than
+  behaviour bugs -- the write is a no-op at 0. Still worth cleaning so a
+  future frame check does not trip, and so the 0-based `Card.User` cases
+  (jennifer, chuchu_music) get their seat-0 bug fixed.
 
 # Summary counts
 

@@ -131,12 +131,10 @@ fn pay_choose_ask(player_id: i32) -> card_sdk::Asked {
 /// Pure: no prompt (the interactive offer lives on the Effect arm of
 /// [`counteract`]).
 ///
-/// Note: the engine's `paySplitChoose` stage currently folds only `t.value` /
-/// `t.target` and ignores `set_cancelled()` (unlike the `effect` and `pay`
-/// windows). The live cancel for the accept path is still the Effect arm's
-/// `set_pay_amount(0)`; this flag is the non-interactive stun condition and
-/// becomes live as soon as the stage honours negation. Pre-existing stun is
-/// already refused earlier by `can_pay`.
+/// The `paySplitChoose` stage honours `set_cancelled()` (V5 `NEGATION-AUDIT`;
+/// 规则书 支付阶段 5 「取消支付」 G-MONEY-14): a `false` Flag answer stops the
+/// payment. Pre-existing stun is already refused earlier by `can_pay`; this
+/// covers stun laid on after the pay gate opened.
 fn pay_choose_cancel(player_id: i32, value: i32) -> bool {
     if trigger::player_id() != player_id || value <= 0 {
         return true;

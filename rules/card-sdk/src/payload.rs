@@ -308,7 +308,16 @@ impl FilterPayload for RollValue {
         #[cfg(any(target_arch = "wasm32", feature = "guest"))]
         {
             Self {
-                value: crate::ctx::trigger::value(),
+                // Running face, not the raise's original `value`. A move raise
+                // seeds `mv.roll = None` and puts the face on `trigger.value`;
+                // the first `set_move_roll` parks the rewrite on `mv.roll` and
+                // never touches `value`. Reading `value` would make every
+                // later DiceRollValue body fold the *original* face and the
+                // last writer win (`moca_half` x `no_expectation` composed
+                // 7 -> 5, dropping the half). Same idiom as the roll skills
+                // (`move_roll().unwrap_or(value())`).
+                value: crate::ctx::trigger::move_roll()
+                    .unwrap_or_else(|| crate::ctx::trigger::value()),
                 recorded_roll: crate::ctx::plan::recorded_roll(),
                 resolve: None,
             }

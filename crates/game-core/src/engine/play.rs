@@ -3357,6 +3357,31 @@ impl Cx<'_> {
                 @p TriggerPay::new(rent),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
+            // V5 (`NEGATION-AUDIT`) at the settlement stages: `paySplitChoose`
+            // is the Flag-shaped one -- a `false` Filter answer is folded to
+            // `set_cancelled()` by `drive_flag`, and that **stops the payment**
+            // (abi.rs `FilterKind::PaySplitChoose`: 「Body answers cancel: false
+            // stops the payment」). 规则书 支付阶段 5 「取消支付 / 无需失去资金」
+            // (G-MONEY-14, rulebook-doc.md:233) is exactly this row. The same
+            // flag is honoured by the `effect` declaration and the `pay`
+            // settlement window above/below; this stage used to fold only
+            // `t.value` / `t.target` and drop the cancel, so a CRYCHIC band-skill
+            // 「你无法获得或失去资金」 lock (or J11's stun cancel) was ignored.
+            // `payCombinedCancel` one level up already honours it; match that.
+            if kind == "paySplitChoose" && t.is_cancelled() {
+                raise!(
+                    self,
+                    "payAfter",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = 0,
+                    by_card = p.by_card,
+                    @p TriggerPay::new(rent),
+                    tile = p.tile.map_or(-1, |t| t as i32)
+                )?;
+                return Ok(Paid::default());
+            }
             if t.value != before {
                 modified = true;
             }
