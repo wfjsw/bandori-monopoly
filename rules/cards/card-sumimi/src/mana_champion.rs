@@ -31,7 +31,7 @@ pub const MANA_CHAMPION: CardDef = CardDef::new(
         .raw_name(r#"（真奈）歌唱大赛5连冠"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击]当你或你的格子即将受到来自你以外的效果影响时打出此卡，此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你。若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽一张卡。若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。"#)
-        .cell(r#"L10"#)
+        // sheet cell L10
         .fields(&[("group", r#"Sumimi"#), ("owner", r#"纯田真奈"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

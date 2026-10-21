@@ -34,7 +34,7 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         .raw_name(r#"梦幻的回礼"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。"#)
-        .cell(r#"F16"#)
+        // sheet cell F16
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living

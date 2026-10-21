@@ -32,7 +32,7 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
 [持续]：
 （1）任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。
 （2）事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。"#)
-        .cell(r#"B16"#)
+        // sheet cell B16
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"市谷有咲"#)]));
 
 fn arisa_wait(player_id: i32) -> card_sdk::Asked {

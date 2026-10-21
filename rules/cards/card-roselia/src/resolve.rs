@@ -16,7 +16,7 @@ pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", ""
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
         .text(r#"[特]：此卡[移除]时获得1000资金。
 [手]：[移除]此卡。"#)
-        .cell(r#"E17"#)
+        // sheet cell E17
         .fields(&[("group", r#"Roselia"#), ("owner", "")]))
     .quiet_when_empty(&[0]);
 

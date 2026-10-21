@@ -15,7 +15,7 @@ pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play("", "", None, 
         .tags(&[r#"手"#])
         .text(r#"[手]：
 获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]"#)
-        .cell(r#"B2"#)
+        // sheet cell B2
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 fn popipa(player_id: i32) -> card_sdk::Asked {

@@ -47,7 +47,7 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"（1）抽取游戏开始的2手牌前将此卡从卡组展示给所有玩家并放置在自身场上，游戏开始时[传送]到“东京外”获得3层[除外]
 （2）如果此卡拥有者的主要移动[经过]了“Bandori车站”则在触发结算前将行动终点改为“旭汤澡堂”，然后此卡[移除]"#)
-        .cell(r#"H13"#)
+        // sheet cell H13
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"朝日六花"#)]));
 
 /// C# `m.Tags["lockStation"]` -- the owner's main move passed Bandori车站.

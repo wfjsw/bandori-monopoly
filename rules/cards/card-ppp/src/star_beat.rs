@@ -34,7 +34,7 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         .text(r#"[手]：[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层”，然后进入移动阶段并选择以下操作之一：
 1. 获得2个星星贴纸，本回合的主要移动改为[传送]到(45×“资金数包含5的玩家数量+1”) mod 60格并结算；
 2. 本回合的主要移动改为移动(2×“资金数包含5的玩家数量+1”)d10格并结算。"#)
-        .cell(r#"B8"#)
+        // sheet cell B8
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.

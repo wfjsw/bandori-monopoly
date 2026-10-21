@@ -25,7 +25,7 @@ pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("",
 [指定][使用者]拥有的四个有房子的格子和[使用者]以外的所有玩家。将X设为“被[指定]格子的地契价格和建造已有房屋的造价之和”÷“[使用者]以外的[存活]玩家数量”向上取整10。依次进行以下操作：
 1. 删除所有被[指定]格子上的1栋房；
 2. 所有被[指定]的玩家[支付][使用者]X资金。"#)
-        .cell(r#"C5"#)
+        // sheet cell C5
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 /// Owned tiles with at least one house (C# `CardSunset.Built`).

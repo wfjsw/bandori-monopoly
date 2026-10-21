@@ -21,7 +21,7 @@ pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play("
 1. [移除]此卡；
 2. 将一张“FEVER!”加入弃卡区；
 3. [获得]3000资金。"#)
-        .cell(r#"A5"#)
+        // sheet cell A5
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn perfect(player_id: i32) -> card_sdk::Asked {

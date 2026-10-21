@@ -18,7 +18,7 @@ pub const SHOP_FRIENDS: CardDef =
         .raw_name(r#"商店街的青梅竹马"#)
         .tags(&[])
         .text(r#"投掷1d6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动"#)
-        .cell(r#"C4"#)
+        // sheet cell C4
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 /// C# `CardShopFriends.WhyNot` = `H.MoveWhyNot(seat)`.

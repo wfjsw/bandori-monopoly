@@ -23,7 +23,7 @@ pub const FIRST_LIVE_ACCIDENT: CardDef =
 将此卡放置在[使用者]的[场地]并将1张“重叠的声音”加入抽卡区并洗切，然后抽1张卡。
 [持续]：
 [拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。"#)
-        .cell(r#"D4"#)
+        // sheet cell D4
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn first_live_accident(player_id: i32) -> card_sdk::Asked {

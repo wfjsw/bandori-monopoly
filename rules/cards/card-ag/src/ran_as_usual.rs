@@ -46,7 +46,7 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"（1）此卡可以当反击使用
 （2）受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#)
-        .cell(r#"C6"#)
+        // sheet cell C6
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"美竹兰"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

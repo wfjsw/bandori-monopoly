@@ -16,7 +16,7 @@ pub const TOKO_SWAP: CardDef =
         .raw_name(r#"（toko）"#)
         .tags(&[])
         .text(r#"选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回"#)
-        .cell(r#"G8"#)
+        // sheet cell G8
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"桐谷透子"#)]));
 
 /// One swappable pair: `(mine, theirs)` -- both mortgaged, same colour group,

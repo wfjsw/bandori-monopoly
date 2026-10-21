@@ -12,7 +12,7 @@ pub const EX_QUEST: CardDef = CardDef::new("event:EX任务挑战", &[On::Play(""
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"EX任务挑战"#)
             .text(r#"抽出此卡的玩家投掷1d4并记录结果和26相加为X，然后所有玩家各自投掷3d20，结果至少为X的玩家可选择更换角色皮肤（技能相同）"#)
-            .cell(r#"A10"#)
+            // sheet cell A10
             .derived(false));
 
 /// 规则书: 「抽出此卡的玩家投掷1d4并记录结果和26相加为X」 -- X = 26 + 1d4

@@ -43,7 +43,7 @@ pub const FEVER: CardDef = CardDef::new(
 [持续]：
 （1）[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）。
 （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。"#)
-        .cell(r#"A6"#)
+        // sheet cell A6
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn fever(player_id: i32) -> card_sdk::Asked {

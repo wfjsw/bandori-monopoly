@@ -33,7 +33,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"超燃甩头"#)
             .text(r#"将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。"#)
-            .cell(r#"A18"#)
+            // sheet cell A18
             .derived(false));
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动

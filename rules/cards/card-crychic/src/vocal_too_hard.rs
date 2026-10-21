@@ -24,7 +24,7 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         .raw_name(r#"主唱太拼命了"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。"#)
-        .cell(r#"M10"#)
+        // sheet cell M10
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

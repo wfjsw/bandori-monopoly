@@ -15,7 +15,7 @@ pub const SMILE_PATROL: CardDef =
         .raw_name(r#"微笑巡逻队"#)
         .tags(&[])
         .text(r#"付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）"#)
-        .cell(r#"F6"#)
+        // sheet cell F6
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

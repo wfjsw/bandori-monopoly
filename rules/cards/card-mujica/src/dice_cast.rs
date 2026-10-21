@@ -42,7 +42,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         .raw_name(r#"骰子已经掷下"#)
         .tags(&[r#"反击"#])
         .text(r#"将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）"#)
-        .cell(r#"J6"#)
+        // sheet cell J6
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 /// C# `CardDiceCast.WhyNot` -- 「已经在场上了」 while the lock is yours.

@@ -13,7 +13,7 @@ pub const NOBLE_BLUE: CardDef =
         .raw_name(r#"高贵的微蓝"#)
         .tags(&[])
         .text(r#"当你位于一块地契价值大于等于2200的地块时，可以打出此卡，如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记，有标记时此地块不能被指定。"#)
-        .cell(r#"G11"#)
+        // sheet cell G11
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

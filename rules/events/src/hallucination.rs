@@ -29,7 +29,7 @@ pub const HALLUCINATION: CardDef = CardDef::new(
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"幻觉来了"#)
             .text(r#"将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。"#)
-            .cell(r#"A13"#)
+            // sheet cell A13
             .derived(false));
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌」

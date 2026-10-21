@@ -28,7 +28,7 @@ pub const YOLO: CardDef = CardDef::new(
         .raw_name(r#"Y.O.L.O"#)
         .tags(&[])
         .text(r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#)
-        .cell(r#"C3"#)
+        // sheet cell C3
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

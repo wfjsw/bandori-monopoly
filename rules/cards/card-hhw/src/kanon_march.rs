@@ -35,7 +35,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         .raw_name(r#"（花音）Wacha Mocha 啪嗒进行曲"#)
         .tags(&[])
         .text(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。"#)
-        .cell(r#"F13"#)
+        // sheet cell F13
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"松原花音"#)]));
 
 /// Combined gate: not yet placed (the placement branch), or placed with the

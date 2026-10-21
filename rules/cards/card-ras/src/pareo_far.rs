@@ -25,7 +25,7 @@ pub const PAREO_FAR: CardDef =
         .raw_name(r#"（PAREO）渐渐远去的你"#)
         .tags(&[])
         .text(r#"获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋"#)
-        .cell(r#"H15"#)
+        // sheet cell H15
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"鳰原令王那"#)]));
 
 fn pareo_far(player_id: i32) -> card_sdk::Asked {

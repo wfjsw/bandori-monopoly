@@ -18,7 +18,7 @@ pub const DOLL_GARDEN: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"使场上所有其他玩家选择其一执行：“进行一次移动掷骰并移动对应步数（不[触发结算]）”或“向你支付X*20资金，X为该玩家正常移动到你所在格子所需的移动数。” 无法移动的玩家只能选择向你支付。
 然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。"#)
-        .cell(r#"J12"#)
+        // sheet cell J12
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 /// C# `CardDollGarden.WhyNot` = `H.MoveWhyNot(seat)`.

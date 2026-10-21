@@ -20,7 +20,7 @@ pub const TOGETHER_HERE: CardDef =
         .tags(&[r#"手"#])
         .text(r#"[手]：
 将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。"#)
-        .cell(r#"D9"#)
+        // sheet cell D9
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn together_here(player_id: i32) -> card_sdk::Asked {

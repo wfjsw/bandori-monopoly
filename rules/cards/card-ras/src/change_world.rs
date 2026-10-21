@@ -45,7 +45,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         .raw_name(r#"Change the world"#)
         .tags(&[])
         .text(r#"将此卡放置于你的一个有房屋的livehouse格子上，你的本次移动掷骰变为3d20，期间每经过一个不属于你的livehouse格子，此卡获得一个奇迹水晶，此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数，触发后将该卡放入弃牌堆"#)
-        .cell(r#"H5"#)
+        // sheet cell H5
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 const ID: &str = "RAS:Change the world";

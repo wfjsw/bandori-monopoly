@@ -14,7 +14,7 @@ pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::P
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"一切不会结束"#)
             .text(r#"抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层在回合开始时移除的[除外]。"#)
-            .cell(r#"A28"#)
+            // sheet cell A28
             .derived(true));
 
 /// 规则书: 「抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG」 -- the

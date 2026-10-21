@@ -54,7 +54,7 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
 （2）获得x次经过CiRCLE时的资金奖励
 （3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制
 （4）当奇迹水晶耗尽时，将此卡置入弃牌堆"#)
-        .cell(r#"G7"#)
+        // sheet cell G7
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"广町七深"#)]));
 
 /// Combined gate: from hand the x-标记 body needs at least one 「角色标记:*」;

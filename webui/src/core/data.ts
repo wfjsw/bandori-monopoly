@@ -169,7 +169,6 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       // build-time copy. Prefer it, but never blank a body the roster has.
       text: d.text ?? c.text ?? "",
       rawName: d.rawName ?? "",
-      cell: d.cell ?? "",
       ...(d.counterReason ? { counterReason: d.counterReason } : {}),
     };
   });
@@ -196,14 +195,13 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       logo: d.logo ?? "",
     };
   });
-  // Events: identity + game prose from the roster, `cell` from display.json.
+  // Events: identity + game prose from the roster, display from `display.json`.
   const events: EventData[] = roster.events.map((e) => {
     const d = display.events?.[e.id] ?? {};
     return {
       ...e,
       text: d.text ?? e.text ?? "",
       name: d.name ?? e.name ?? "",
-      cell: d.cell ?? "",
     };
   });
   const homeLines = j("home_lines.json").personas ?? [];
@@ -251,8 +249,9 @@ export function cardTitle(id: string): string {
     if (t) return t.name.replace(/\n/g, "");
   }
   // A card row with no trimmed `name` is still titled -- `rawName` (the
-  // character-prefix cards) or the unnamed sheet cell as `#<cell>`, so the
-  // 「效果适用」 header names the same card the card's own log lines do.
+  // character-prefix cards); a blank sheet name line carries its cell handle
+  // in `name` already (`#J11`). Either way the 「效果适用」 header names the
+  // same card the card's own log lines do.
   return cardFaceTitle(card, tr("common.unnamed"));
 }
 

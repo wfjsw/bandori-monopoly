@@ -40,7 +40,7 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
 1. [强制停下]，此次移动变为[结算]；
 2. 如果[共鸣]则获得1500资金；
 3. 此卡放入[使用者]弃卡区。"#)
-        .cell(r#"D12"#)
+        // sheet cell D12
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

@@ -14,7 +14,7 @@ pub const DUI_BANG: CardDef = CardDef::new("event:对邦", &[On::Play("", "", No
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"对邦"#)
             .text(r#"所有人立刻进行一次1d20骰子拼点，所有点数最高者从所有点数最低者获得胜出点数x50的钱（例：最高点数18，最低点数16，则需支付 (18-16)x50=100）"#)
-            .cell(r#"A2"#)
+            // sheet cell A2
             .derived(false));
 
 /// 规则书: 「所有人立刻进行一次1d20骰子拼点」 -- one 1d20 per player, no

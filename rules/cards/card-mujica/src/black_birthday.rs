@@ -18,7 +18,7 @@ pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
         .raw_name(r#"黑色生日"#)
         .tags(&[])
         .text(r#"每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。"#)
-        .cell(r#"J14"#)
+        // sheet cell J14
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 /// C# `CardBlackBirthday.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.

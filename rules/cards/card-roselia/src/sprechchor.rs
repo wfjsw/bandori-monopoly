@@ -15,7 +15,7 @@ pub const SPRECHCHOR: CardDef =
         .raw_name(r#"Sprechchor"#)
         .tags(&[])
         .text(r#"在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目"#)
-        .cell(r#"E14"#)
+        // sheet cell E14
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// 规则书: 「在Livehouse地块开始回合时」 -- the **turn-start** square, not the

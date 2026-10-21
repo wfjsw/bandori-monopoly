@@ -16,7 +16,7 @@ pub const UIKA_FEARLESS: CardDef = CardDef::new(
         .raw_name(r#"（初华）我，无畏悲伤"#)
         .tags(&[])
         .text(r#"打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字"#)
-        .cell(r#"J8"#)
+        // sheet cell J8
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"三角初华"#)]));
 
 fn uika_fearless(player_id: i32) -> card_sdk::Asked {

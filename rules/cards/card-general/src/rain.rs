@@ -16,7 +16,7 @@ pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Pla
         .tags(&[r#"手"#])
         .text(r#"[手]：
 投掷2d2并记录结果为X。[指定]X名玩家（其中必须包括[使用者]），被[指定]的玩家获得一层[停留]。"#)
-        .cell(r#"A9"#)
+        // sheet cell A9
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn rain(player_id: i32) -> card_sdk::Asked {

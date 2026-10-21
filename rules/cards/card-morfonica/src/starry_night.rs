@@ -35,7 +35,7 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         .text(r#"（1） 支付X次1000的资金，将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]，此卡没有[奇迹水晶]时加入弃牌堆; 此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次
 （2）当其他角色的移动掷骰结果是偶数时可消耗1000资金并移除此卡的一个[奇迹水晶]，此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]。
 （3）此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金。"#)
-        .cell(r#"G5"#)
+        // sheet cell G5
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn starry_night(player_id: i32) -> card_sdk::Asked {

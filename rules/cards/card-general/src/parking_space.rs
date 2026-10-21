@@ -38,7 +38,7 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
 [持续]：
 （1）此卡所在格子的[结算]改为回合结束后获得一层[停留]。
 （2）位于此卡所在格子上的玩家无法使用角色及乐队技能。"#)
-        .cell(r#"A15"#)
+        // sheet cell A15
         .fields(&[("group", r#"通用"#), ("owner", r#"都筑诗船"#)]));
 
 /// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile

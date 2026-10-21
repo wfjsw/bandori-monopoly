@@ -14,7 +14,7 @@ pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", "",
         .raw_name(r#"（ykn）louder"#)
         .tags(&[])
         .text(r#"每次打出此卡时使ring的价格基础乘数+5"#)
-        .cell(r#"E2"#)
+        // sheet cell E2
         .fields(&[("group", r#"Roselia"#), ("owner", r#"凑友希那"#)]));
 
 fn louder(player_id: i32) -> card_sdk::Asked {

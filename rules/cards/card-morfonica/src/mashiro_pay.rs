@@ -26,7 +26,7 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
         .raw_name(r#"（小白）"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金"#)
-        .cell(r#"G9"#)
+        // sheet cell G9
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"仓田真白"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

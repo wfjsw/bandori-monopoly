@@ -29,17 +29,18 @@ use alloc::vec::Vec;
 /// ```ignore
 /// pub const CARD: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[...])
 ///     .meta(&CardMeta::new()
-///         .name("Sumimi不会解散哦")
+///         .name("Sumimi不会解散哦") // sheet cell B2
 ///         .raw_name("Sumimi不会解散哦")
 ///         .text("当你本回合未进行过抵押/赎回操作且…")
 ///         .tags(&["手"])
-///         .cell("B2")
 ///         .fields(&[("group", "Sumimi"), ("owner", "")]));
 /// ```
 #[derive(Clone, Copy)]
 pub struct CardMeta {
-    /// Display name (the `name` column). Empty = unnamed (the title falls back
-    /// to the id). Rides `MetaRow` into `ruleset_metadata`.
+    /// Display name (the `name` column). Empty = no trimmed title on the
+    /// sheet -- the face falls back to `raw_name`. A row whose name line is
+    /// blank is named after its sheet cell instead (`#J11`), which is what
+    /// this carries. Rides `MetaRow` into `ruleset_metadata`.
     pub name: &'static str,
     /// Untrimmed name as printed on the sheet (`rawName`). May carry the
     /// character prefix the display name drops. Display-only: exported to
@@ -52,9 +53,6 @@ pub struct CardMeta {
     pub tags: &'static [&'static str],
     /// Derived / token card (not in the physical deck pool).
     pub derived: bool,
-    /// Sheet cell this row was lifted from (`cell`). Display-only: exported to
-    /// `display.json`, not emitted on [`MetaRow`].
-    pub cell: &'static str,
     /// Game-specific string slots, `(key, value)`. This game's card-row keys
     /// are `band` and `owner` (`bandori_std::meta_key`). Missing key = empty.
     pub fields: &'static [(&'static str, &'static str)],
@@ -68,7 +66,6 @@ impl CardMeta {
             text: "",
             tags: &[],
             derived: false,
-            cell: "",
             fields: &[],
         }
     }
@@ -98,11 +95,6 @@ impl CardMeta {
         self
     }
 
-    pub const fn cell(mut self, cell: &'static str) -> Self {
-        self.cell = cell;
-        self
-    }
-
     pub const fn fields(mut self, fields: &'static [(&'static str, &'static str)]) -> Self {
         self.fields = fields;
         self
@@ -119,8 +111,8 @@ impl CardMeta {
 
     /// Wire form, tagged `kind = "card"`. `text` is emitted: the ruleset
     /// queries it at runtime (`card_text_mentions`, 「效果包含…」), so it is a
-    /// rule input as well as display. `raw_name` / `cell` are display-only and
-    /// remain on the def for `display.json` (`docs/DISPLAY.md`).
+    /// rule input as well as display. `raw_name` is display-only and remains
+    /// on the def for `display.json` (`docs/DISPLAY.md`).
     pub fn to_row(&self, id: &str, ordinal: i32) -> MetaRow {
         MetaRow {
             kind: "card".to_string(),
@@ -168,6 +160,10 @@ pub struct MetaRow {
     pub text: String,
     pub tags: Vec<String>,
     pub derived: bool,
+    /// Vestigial. Display columns left `ruleset_metadata` at ABI v86 and the
+    /// sheet cell is now a comment on the card impl (an unnamed row *is* named
+    /// after its cell, `#J11`); this stays empty so the postcard field order
+    /// of `MetaRow` is unchanged. Do not populate.
     pub cell: String,
     /// Game-specific string slots `(key, value)`.
     pub fields: Vec<(String, String)>,

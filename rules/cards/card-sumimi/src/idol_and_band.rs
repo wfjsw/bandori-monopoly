@@ -16,7 +16,7 @@ pub const IDOL_AND_BAND: CardDef = CardDef::new(
         .raw_name(r#"兼顾偶像与乐队"#)
         .tags(&[])
         .text(r#"当你本回合未进行过赎回操作时可打出，将你的资金重设为3000。（若你的资金为3000以上则无效果）"#)
-        .cell(r#"L2"#)
+        // sheet cell L2
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 /// 规则书: 「当你本回合未进行过赎回操作时可打出」 -- the redeem step records

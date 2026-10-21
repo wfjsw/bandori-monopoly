@@ -20,7 +20,7 @@ pub const BELIEVE_YOU: CardDef =
         .raw_name(r#"因为我一直相信着你"#)
         .tags(&[])
         .text(r#"至少有另一张手牌时可发动，消耗800资金，公开你的卡组与手牌，选择一名玩家，使其从你的手牌中选择一张放入弃牌堆，然后从你的卡组中选择两张加入你的手牌，重洗你的抽牌堆。"#)
-        .cell(r#"F2"#)
+        // sheet cell F2
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {

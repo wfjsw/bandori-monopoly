@@ -27,7 +27,7 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
         .raw_name(r#"（巴）商店街的救世主"#)
         .tags(&[r#"反击"#])
         .text(r#"【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回"#)
-        .cell(r#"C14"#)
+        // sheet cell C14
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"宇田川巴"#)]));
 
 /// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).

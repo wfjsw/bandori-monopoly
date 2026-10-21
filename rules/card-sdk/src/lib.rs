@@ -436,11 +436,10 @@ impl CardDef {
     /// use card_sdk::meta::CardMeta;
     /// pub const CARD: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[...])
     ///     .meta(&CardMeta::new()
-    ///         .name("Sumimi不会解散哦")
+    ///         .name("Sumimi不会解散哦") // sheet cell B2
     ///         .raw_name("Sumimi不会解散哦")
     ///         .text("...")
     ///         .tags(&["手"])
-    ///         .cell("B2")
     ///         .fields(&[("group", "Sumimi"), ("owner", "")]));
     /// ```
     pub const fn meta(self, meta: &'static crate::meta::CardMeta) -> Self {

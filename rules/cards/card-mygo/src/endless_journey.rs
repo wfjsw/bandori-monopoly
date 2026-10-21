@@ -28,7 +28,7 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
         .raw_name(r#"哪怕这旅程没有终点"#)
         .tags(&[r#"手"#, r#"持续"#])
         .text(r#"[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶，每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹水晶数量为0时，将此卡置入弃牌堆。（2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数"#)
-        .cell(r#"I14"#)
+        // sheet cell I14
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
 const ID: &str = "MyGO:哪怕这旅程没有终点";

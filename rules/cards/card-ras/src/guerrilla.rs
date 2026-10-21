@@ -40,7 +40,7 @@ pub const GUERRILLA: CardDef = CardDef::new(
 此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子，则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子。
 [手]：
 [反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后：传送至任意无主可购买的格子并[结算]，且必须购买。"#)
-        .cell(r#"H9"#)
+        // sheet cell H9
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 const ID: &str = "RAS:游击演出";

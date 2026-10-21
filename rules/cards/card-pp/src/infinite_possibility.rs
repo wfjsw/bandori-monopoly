@@ -34,7 +34,7 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
 [持续]：
 （1）[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个[奇迹水晶]。
 （2）[共鸣]交换[拥有者]的抽卡区和弃卡区。"#)
-        .cell(r#"D17"#)
+        // sheet cell D17
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"大和麻弥"#)]));
 
 // TODO(规则书): [特]「观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]

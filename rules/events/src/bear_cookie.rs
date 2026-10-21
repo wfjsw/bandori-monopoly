@@ -12,7 +12,7 @@ pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"发送熊饼表情"#)
             .text(r#"所有技能中含有火罐的玩家可选择补充X个火罐（不能超过上限），并支付X次1000资金。随后，将一张“[衍生]冲榜”背面朝上放置于事件牌堆顶部。"#)
-            .cell(r#"A11"#)
+            // sheet cell A11
             .derived(false));
 
 /// 「技能中含有火罐」 -- the player's character or band skill text mentions 「火罐」.
