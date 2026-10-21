@@ -1,5 +1,10 @@
 //! Ruleset-declared kind ids and kind/class strings (opaque to the engine).
 //!
+//! **Ownership rule.** This file authors ruleset kind ids. Engine kinds live
+//! in `crates/game-kinds`. Neither side inspects the other's ids -- each
+//! treats the other's kinds as opaque tokens. Never invent a kind id in the
+//! other namespace.
+//!
 //! The engine fires and dispatches by numeric id; the names of this game's
 //! raise points live here so the engine crates and card-sdk carry no game
 //! vocabulary. The values live in `KindNs::Ruleset(RULESET_KEY)` and cannot
@@ -14,10 +19,14 @@
 //! write -- moved to the engine namespace in ABI v90 as `markerSpent` /
 //! `cardUsed` / `houseAdded` (`card_sdk::abi::ActionKind::MarkerSpent` etc.).
 //!
-//! A future rule-defined filter kind must declare
-//! `FilterKind::ruleset(RULESET_KEY, id)` here and also register that id as a
-//! filter in the trigger-kind filter test, so the typed sets keep mirroring
-//! that test exactly. No rule-defined filter kinds exist yet.
+//! `Filters::MyRewrite` is a **fixture**, not game vocabulary: it exists so
+//! the downstream `filter_kinds!` / `Filters::MyRewrite(...)` path is
+//! exercised end to end (declaration, registration, dispatch). No game
+//! semantics -- the fixture card in `rules/fixtures/test-cards` only proves it
+//! compiles and fires. Wire `"r:bandori:1"`.
+//!
+//! A future rule-defined filter kind declares
+//! `FilterKind::ruleset(RULESET_KEY, id)` here via `filter_kinds!`.
 
 use alloc::string::String;
 use alloc::vec;

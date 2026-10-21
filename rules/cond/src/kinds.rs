@@ -1,20 +1,24 @@
 //! Kind constants as they are written inside conditions.
 //!
-//! This crate authors **neither** kind table. The engine spellings / ids live
-//! in `game-kinds` (owned by `crates/`); the ruleset spellings live in
-//! `bandori-std::kind`. The constants here **mirror** those owning tables as
-//! the canonical wire **spellings** (`TriggerKind::spelling`). CEL `kind` is a
-//! string; a bare ident binds the spelling, and a string literal is the same
-//! spelling.
+//! **Ownership rule.** This crate authors **neither** kind table. Engine
+//! kinds live in `crates/game-kinds` (owned by `crates/`); ruleset kinds live
+//! in `bandori-std::kind`. Neither side inspects the other's ids. The
+//! constants here **mirror** those owning tables as the canonical wire
+//! **spellings** (`TriggerKind::spelling`) -- they are strings, never ids.
+//!
+//! CEL `kind` is `VarTy::Str`: a bare ident binds the spelling, and a string
+//! literal is the same spelling. Constants below are `&str` spellings
+//! (`"turnStart"`, `"r:bandori:21"`). There is no int encoding of kinds at
+//! all.
 //!
 //! The IR bakes every spelling to `id_of(spelling)` (see `VarTy::Str`), so the
 //! CEL string and the IR hash are the same identity. `move.kind` stays an
 //! `int` -- [`mv`] is a closed engine enum with no namespace problem.
 //!
 //! CEL spells kinds as bare identifiers: `kind == Exile`,
-//! `effect.has(Pay)`. String literals also work: `kind == "r:bandori:21"`.
-//! They are bound as string constants at compile time (unknown-var check) and
-//! at eval time (the window scope).
+//! `effect.has(Pay)`. String literals also work: `kind == "r:bandori:21"` /
+//! `kind == "turnStart"`. They are bound as string constants at compile time
+//! (unknown-var check) and at eval time (the window scope).
 //!
 //! `Teleport` is a [`mv`] value only (the old TriggerKind 17 was retired in
 //! ABI v84). Write `move.kind == Teleport`.
