@@ -110,6 +110,7 @@
   "anim.chainKind.diceRollValue": "掷骰结果",
   "anim.chainKind.paySplitChooseBefore": "分摊支付选择前",
   "anim.chainKind.payCombinedAddBefore": "合并阶段前增减",
+  "anim.chainKind.paySplitMulBefore": "分摊支付乘算前",
   "anim.chainKind.atEnd": "回合结束时",
   "anim.chainKind.diceRollPlan": "掷骰计划",
   "anim.chainKind.settleAfter": "结算后",

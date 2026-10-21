@@ -3296,11 +3296,35 @@ impl Cx<'_> {
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
         for kind in ["paySplitAdd", "paySplitMul", "paySplitChoose", "paySplitAt"] {
-            // v78: interactive pre-stage. A prompt that used to live inside the
-            // PaySplitChoose Filter rides `paySplitChooseBefore` (an Action) so the prompt is
-            // at the rulebook position and the pure Filter still applies here.
-            // The ask's `set_pay_amount` / `set_pay_target` fold here just like
-            // any other stage's rewrite.
+            // v78 / v96: interactive pre-stages. A prompt that used to live
+            // inside a pure Filter rides the matching `*Before` Action so the
+            // prompt is at the rulebook position and the pure Filter still
+            // applies here. The ask's `set_pay_amount` / `set_pay_target` fold
+            // here just like any other stage's rewrite.
+            //
+            // `paySplitMulBefore` (v96) is the writable stage between the
+            // `paySplitAdd` fold and the `paySplitMul` fold (规则书 支付阶段 3
+            // 「支付计算后」): `value` is the PaySplitMul input.
+            if kind == "paySplitMul" {
+                let ask = raise!(
+                    self,
+                    "paySplitMulBefore",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = amount,
+                    by_card = p.by_card,
+                    @p TriggerPay::new(rent),
+                    tile = p.tile.map_or(-1, |t| t as i32)
+                )?;
+                if ask.value != amount {
+                    modified = true;
+                }
+                amount = ask.value;
+                if ask.target >= 0 {
+                    to = Some(ask.target as usize);
+                }
+            }
             if kind == "paySplitChoose" {
                 let ask = raise!(
                     self,

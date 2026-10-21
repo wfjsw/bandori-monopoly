@@ -1229,5 +1229,7 @@ mod tests {
         assert_eq!(TriggerKind::from_str("drewBefore").spelling(), "drewBefore");
         assert_eq!(TriggerKind::from_str("atEnd").spelling(), "atEnd");
         assert_eq!(TriggerKind::from_str("paySplitChooseBefore").spelling(), "paySplitChooseBefore");
+        assert_eq!(TriggerKind::from_str("paySplitMulBefore").spelling(), "paySplitMulBefore");
+        assert_eq!(TriggerKind::PaySplitMulBefore.id, 110);
     }
 }
