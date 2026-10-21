@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx;
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, Msg, On, RollValue};
 
 use crate::util::{expire_removed, keep};
 
@@ -14,18 +14,18 @@ const ID: &str = "Forbidden Moca";
 pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
         // deleted (a no-op prefetch); the `value` param is the face being
         // halved (effect), not applicability.
-        On::Filter(&[FilterKind::DiceRollValue], "", None, halve),
-        On::Action(&[ActionKind::AtEnd], "", "", None, expire),
+        On::Filter(Filter::DiceRollValue("", None, halve)),
+        On::Action(Action::AtEnd("", None, None, expire)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"Forbidden Moca"#)
             .text(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#)
-            .cell(r#"A20"#)
+            // sheet cell A20
             .derived(false));
 
 /// 规则书: 「直到你的下个回合结束…」 -- the event stays in play (「你的」 is the
@@ -45,12 +45,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// halved (integer division, floor). `DiceRollValue` is the face filter raised
 /// immediately before `DiceRollAfter` (`docs/CARDS.md`); the return is the new
 /// figure and the host folds it via `set_move_roll`.
-fn halve(_player_id: i32, value: i32) -> i32 {
-    if value <= 0 {
-        value
-    } else {
-        value / 2
-    }
+fn halve(_player_id: i32, v: RollValue) -> RollValue {
+    let value = if v.value <= 0 { v.value } else { v.value / 2 };
+    RollValue { value, ..v }
 }
 
 /// 规则书: 「在你的下个回合结束时永久移除此事件！」
@@ -58,6 +55,8 @@ fn expire(_player_id: i32) -> card_sdk::Asked {
     expire_removed(ID);
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
@@ -68,8 +67,8 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn halve_kani(player_id: i32, value: i32) -> i32 {
-    halve(player_id, value)
+pub fn halve_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
+    halve(player_id, v)
 }
 
 #[cfg(kani)]

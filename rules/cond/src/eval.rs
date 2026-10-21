@@ -169,6 +169,7 @@ fn cel_value(v: &vocab::Val) -> Value {
     match v {
         vocab::Val::Int(i) => Value::Int(*i),
         vocab::Val::Bool(b) => Value::Bool(*b),
+        vocab::Val::Str(s) => Value::String(Arc::new(s.clone())),
         vocab::Val::Null => Value::Null,
     }
 }
@@ -288,8 +289,12 @@ fn build_table_value(t: &Table) -> Value {
 /// Window half: kind constants, every VOCAB window scalar, and the window-side
 /// function tables. Built once per window (the amortised G1 saving).
 fn bind_window(ctx: &mut Context<'static, 'static>, view: &dyn CondView) {
-    // Kind constants (bare identifiers in conditions).
-    for (name, val) in kinds::constants() {
+    // Kind-spelling constants bind as CEL strings (`kind == Exile`).
+    for (name, spelling) in kinds::str_constants() {
+        ctx.add_variable_from_value(*name, Value::String(Arc::new((*spelling).to_string())));
+    }
+    // Move-kind ints stay ints (`move.kind == Walk`).
+    for (name, val) in kinds::int_constants() {
         ctx.add_variable_from_value(*name, Value::Int(*val));
     }
 

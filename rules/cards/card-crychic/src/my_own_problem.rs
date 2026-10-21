@@ -24,8 +24,7 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     // guard (outside the CEL schema).
     &[On::Counteract(
         &[ChainKind::SettleBefore],
-        "actor == owner && move.main",
-        r#"主要移动结束时，[触发结算]前"#,
+        "actor == owner && move.main", Some(key!("my_own_problem_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -34,7 +33,7 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
         .raw_name(r#"是我自己的问题"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击]（1）主要移动结束时，[触发结算]前打出此卡，使自己额外远离绝对距离最近的玩家一格（若距离最近的玩家在身前则向后移动，若与其他玩家重合则可选择任意方向）。（2）若受到[异常移动效果]影响，此卡不生效"#)
-        .cell(r#"M7"#)
+        // sheet cell M7
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.
@@ -135,6 +134,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

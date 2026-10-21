@@ -13,7 +13,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 const ID: &str = "Mor:再次牵起手来";
 
@@ -22,13 +22,12 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Paid],
-            "actor != owner && actor == neighbor(owner, -1) && value > 0",
-            r#"[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后"#,
+            "actor != owner && actor == neighbor(owner, -1) && value > 0", Some(key!("hold_hands_again_when")),
             None,
             counteract,
         ),
-        On::Filter(&[FilterKind::PaySplitAt], "actor == owner && card.placed && value > 0", None, pay_at),
-        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", "", None, pay_after),
+        On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_at)),
+        On::Action(Action::PayAfter("actor == owner && card.placed", None, None, pay_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次牵起手来"#)
@@ -38,7 +37,7 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
 [反击]当[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后将此卡放置在[使用者]的[场地]并[消耗]等量资金。
 [持续]：
 [消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区。"#)
-        .cell(r#"G12"#)
+        // sheet cell G12
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -87,7 +86,17 @@ fn pay_after(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn pay_at_kani(player_id: i32, value: i32) -> i32 {
@@ -98,10 +107,4 @@ pub fn pay_at_kani(player_id: i32, value: i32) -> i32 {
 #[inline(always)]
 pub fn pay_after_kani(player_id: i32) -> card_sdk::Asked {
     pay_after(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
 }

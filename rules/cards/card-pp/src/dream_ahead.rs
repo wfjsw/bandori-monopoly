@@ -25,7 +25,7 @@ use alloc::vec::Vec;
 use card_sdk::abi::{prop, CardPile, ActionKind, TriggerKind};
 use skill_groups::fans;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
@@ -43,24 +43,16 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         // Wired as a field-card `On::Action` at `TurnEndBefore` (skill-personas:
         // a field card answers settlement points automatically, no declaration)
         // so the buy still settles before the turn end's own effects.
-        On::Action(
-            &[ActionKind::TurnEndBefore],
-            "actor == owner && card.placed && card.counter('crystals') >= 3", r#"[拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]"#,
-            // No residual guard: the condition covers placed + ≥3 crystals and
+        On::Action(Action::TurnEndBefore("actor == owner && card.placed && card.counter('crystals') >= 3", Some(key!("dream_ahead_when")), // No residual guard: the condition covers placed + ≥3 crystals and
             // `buy_one` owns the "is there a tile" scan (one board walk per
             // turn-end instead of two).
-            None,
-            buy_one),
-        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, deck_before_game),
-        On::Action(&[ActionKind::Drew], "actor == owner && card.placed", "", None, drew),
+            None, buy_one)),
+        On::Action(Action::DeckBeforeGame("", None, None, deck_before_game)),
+        On::Action(Action::Drew("actor == owner && card.placed", None, None, drew)),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
-        On::Action(
-            &[ActionKind::SettleBody],
-            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner", "",
-            None,
-            settle_body),
+        On::Action(Action::SettleBody("card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner", None, None, settle_body)),
     ],
 )
 // 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous
@@ -77,7 +69,7 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
 （2）[拥有者]不可盖房且手卡上限数量减1。
 （3）[拥有者]以外的玩家在[拥有者]拥有的格子[结算]时额外[支付][拥有者]“[拥有者]拥有的[P✽P粉丝]数量”×X+MIN(X×30, 300)。
 （4）[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意[拥有者]所在格子前后3格以内的无主的[可购买格子]。"#)
-        .cell(r#"D10"#)
+        // sheet cell D10
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).
@@ -229,6 +221,10 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -253,4 +249,3 @@ pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
 pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
     settle_body(player_id)
 }
-

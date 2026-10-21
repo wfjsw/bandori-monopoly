@@ -10,11 +10,11 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const TEARS: CardDef = CardDef::new("event:泪水的含义", &[On::Play("", "", None, play)])
+pub const TEARS: CardDef = CardDef::new("event:泪水的含义", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"泪水的含义"#)
             .text(r#"所有玩家依次和行动序列里的下一位玩家进行比较：当前玩家和下一位玩家拥有同色地契则下一位玩家[支付]当前玩家700资金，否则当前玩家[支付]下一位玩家300资金。"#)
-            .cell(r#"A22"#)
+            // sheet cell A22
             .derived(false));
 
 /// 「同色」 -- the two players share a colour group on their deeds.
@@ -60,6 +60,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let _ = player_id;
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

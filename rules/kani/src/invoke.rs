@@ -158,18 +158,18 @@ fn find_or_fail(id: &str) -> &'static card_sdk::CardDef {
 /// Entry body of `On` (the `fn(i32) -> Asked`).
 fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
-        On::Play(_, _, _, f)
-        | On::Counteract(_, _, _, _, f)
-        | On::Action(_, _, _, _, f)
-        | On::Settle(_, _, f)
-        | On::Mortgage(_, _, f)
-        | On::Redeem(_, _, f)
-        | On::Buy(_, _, f)
-        | On::Build(_, _, f)
-        | On::Message(_, _, _, f) => *f,
+        On::PlayBody(card_sdk::PlayEntry { body: f, .. })
+        | On::CounteractBody(card_sdk::CounteractEntry { body: f, .. })
+        | On::SettleBody(card_sdk::RuleEntry { body: f, .. })
+        | On::MortgageBody(card_sdk::RuleEntry { body: f, .. })
+        | On::RedeemBody(card_sdk::RuleEntry { body: f, .. })
+        | On::BuyBody(card_sdk::RuleEntry { body: f, .. })
+        | On::BuildBody(card_sdk::RuleEntry { body: f, .. })
+        | On::MessageBody(card_sdk::MessageEntry { body: f, .. }) => *f,
+        On::Action(e) => e.body,
         // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
         // through `filter_*_idx` / direct trampolines instead.
-        On::Filter(..) | On::FilterFlag(..) | On::FilterValue(..) => {
+        On::Filter(..) => {
             fail_no_kind("Filter (use filter_idx)")
         }
     }
@@ -236,7 +236,7 @@ pub fn entry_idx(idx: usize, entry_index: usize, player: i32) -> Asked {
 pub fn play_idx(idx: usize, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if matches!(on, On::Play(..)) {
+        if matches!(on, On::PlayBody(..)) {
             return entry_idx(idx, i, player);
         }
     }
@@ -251,7 +251,7 @@ pub fn play_idx(idx: usize, player: i32) -> Asked {
 pub fn play_c<const IDX: usize>(player: i32) -> Asked {
     let card = by_idx(IDX);
     for (i, on) in card.on.iter().enumerate() {
-        if matches!(on, On::Play(..)) {
+        if matches!(on, On::PlayBody(..)) {
             #[cfg(kani)]
             {
                 return call_body_idx_c::<IDX>(i, player);
@@ -301,34 +301,30 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
     let ktag = kind_tag(kind);
     for (i, on) in card.on.iter().enumerate() {
         let hit = match (ktag, on) {
-            (KindTag::Play, On::Play(..)) => true,
-            (KindTag::Counteract, On::Counteract(..)) => true,
-            (KindTag::Action, On::Action(kinds, ..)) => {
-                hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+            (KindTag::Play, On::PlayBody(..)) => true,
+            (KindTag::Counteract, On::CounteractBody(..)) => true,
+            (KindTag::Action, On::Action(e)) => {
+                hook_name.is_empty() || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            (KindTag::Filter, On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
-                hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+            (KindTag::Filter, On::Filter(e)) => {
+                hook_name.is_empty() || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
-                hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+            // Category tags derive from `FilterShape` (the KINDS registry's
+            // `shape` column), not from ad-hoc variant names.
+            (KindTag::Gate, On::Filter(e)) => e.shape == card_sdk::FilterShape::Gate,
+            (KindTag::DiceRollPlan, On::Filter(e)) => {
+                e.kind == card_sdk::abi::FilterKind::DiceRollPlan
             }
-            (KindTag::AtEnd, On::Action(kinds, ..)) => {
-                hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
+            (KindTag::AtEnd, On::Action(e)) => {
+                e.kind == card_sdk::abi::ActionKind::AtEnd
+                    || hook_name_matches(e.kind.as_trigger(), hook_name)
             }
-            (KindTag::DiceRollPlan, On::FilterValue(kinds, ..)) => {
-                hook_name.is_empty()
-                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
-            }
-            (KindTag::Settle, On::Settle(..)) => true,
-            (KindTag::Mortgage, On::Mortgage(..)) => true,
-            (KindTag::Redeem, On::Redeem(..)) => true,
-            (KindTag::Buy, On::Buy(..)) => true,
-            (KindTag::Build, On::Build(..)) => true,
-            (KindTag::Message, On::Message(..)) => true,
+            (KindTag::Settle, On::SettleBody(..)) => true,
+            (KindTag::Mortgage, On::MortgageBody(..)) => true,
+            (KindTag::Redeem, On::RedeemBody(..)) => true,
+            (KindTag::Buy, On::BuyBody(..)) => true,
+            (KindTag::Build, On::BuildBody(..)) => true,
+            (KindTag::Message, On::MessageBody(..)) => true,
             _ => false,
         };
         if hit {
@@ -484,31 +480,8 @@ pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
 pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::ActionKind, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if let On::Action(kinds, _, _, _, _) = on {
-            // Zero-loop kind match (`iter().any` over a short slice unrolls
-            // to the global bound under CBMC).
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k2) = kinds.get(2) {
-                if k2 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k3) = kinds.get(3) {
-                if k3 == want {
-                    hit = true;
-                }
-            }
-            if hit {
+        if let On::Action(e) = on {
+            if e.kind == want {
                 return entry_idx(idx, i, player);
             }
         }
@@ -517,7 +490,8 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::ActionKind, player: i
 }
 
 /// First `On::Filter` of card `idx` matching `want`; returns the transformed
-/// value (v74 pure body). **Integer-only** kind match.
+/// value (pure body). **Integer-only** kind match, single kind per entry
+/// (`FilterEntry.kind`). Value shape only.
 #[inline(always)]
 pub fn filter_kind_only_idx(
     idx: usize,
@@ -527,27 +501,19 @@ pub fn filter_kind_only_idx(
 ) -> i32 {
     let card = by_idx(idx);
     for on in card.on.iter() {
-        if let On::Filter(kinds, _, _, run) = on {
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if hit {
-                return run(player, value);
+        if let On::Filter(e) = on {
+            if e.kind == want {
+                debug_assert_eq!(e.shape, card_sdk::FilterShape::Value);
+                return card_sdk::payload::pure_value(player, e.body, value);
             }
         }
     }
     fail_no_kind("Filter")
 }
 
-/// First `On::FilterFlag` of card `idx` matching `want` (true = keep).
+/// First flag-shape `On::Filter` of card `idx` matching `want` (true = keep).
+/// Pure-decision only (PaySplitChoose / PayCombinedCancel); gates go to
+/// [`filter_gate_kind_only_idx`].
 #[inline(always)]
 pub fn filter_flag_kind_only_idx(
     idx: usize,
@@ -557,24 +523,56 @@ pub fn filter_flag_kind_only_idx(
 ) -> bool {
     let card = by_idx(idx);
     for on in card.on.iter() {
-        if let On::FilterFlag(kinds, _, _, run) = on {
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == want {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == want {
-                    hit = true;
-                }
-            }
-            if hit {
-                return run(player, value);
+        if let On::Filter(e) = on {
+            if e.kind == want {
+                debug_assert_eq!(e.shape, card_sdk::FilterShape::Flag);
+                return card_sdk::payload::pure_flag(player, e.body, value);
             }
         }
     }
     fail_no_kind("FilterFlag")
+}
+
+/// First gate-shape `On::Filter` of card `idx` matching `want`. Returns the
+/// rewritten [`card_sdk::GateValue`].
+#[inline(always)]
+pub fn filter_gate_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::FilterKind,
+    player: i32,
+    value: card_sdk::GateValue,
+) -> card_sdk::GateValue {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::Filter(e) = on {
+            if e.kind == want {
+                debug_assert_eq!(e.shape, card_sdk::FilterShape::Gate);
+                return card_sdk::payload::pure_payload(player, e.body, value);
+            }
+        }
+    }
+    fail_no_kind("Gate")
+}
+
+/// First plan-payload `On::Filter` of card `idx` matching `want`. Returns the
+/// rewritten [`card_sdk::PlanValue`].
+#[inline(always)]
+pub fn filter_plan_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::FilterKind,
+    player: i32,
+    value: card_sdk::PlanValue,
+) -> card_sdk::PlanValue {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::Filter(e) = on {
+            if e.kind == want {
+                debug_assert_eq!(e.shape, card_sdk::FilterShape::Payload);
+                return card_sdk::payload::pure_payload(player, e.body, value);
+            }
+        }
+    }
+    fail_no_kind("DiceRollPlan")
 }
 
 /// Skill entry: alias of [`play_idx`].
@@ -656,42 +654,13 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-/// Match a kind list entry by its short name without `format!` (no String/UTF-8).
-///
-/// Parse `hook_name` to a [`card_sdk::abi::TriggerKind`] first (a `match` on
-/// literals that constant-folds when the caller passes `"PaySplitAdd"`), then
-/// an integer compare against `kinds`. Works for both [`card_sdk::abi::ActionKind`]
-/// and [`card_sdk::abi::FilterKind`] slices (same wire id space). The old
-/// `hook_kind_name(k) == hook_name` lowered to `memcmp` per arm (14 unwinds in
-/// the shave profile).
-fn hook_kind_matches<K: Copy>(kinds: &[K], id_of: fn(K) -> i32, hook_name: &str) -> bool {
-    let want = match hook_kind_parse(hook_name) {
-        Some(w) => w.as_i32(),
-        None => return false,
-    };
-    // Zero-loop (see `hook_kind_only_idx`).
-    let mut hit = false;
-    if let Some(&k0) = kinds.get(0) {
-        if id_of(k0) == want {
-            hit = true;
-        }
+/// Single-kind match (Phase 3: one kind per `FilterEntry` / `ActionEntry`).
+#[inline(always)]
+fn hook_name_matches(kind: card_sdk::abi::TriggerKind, hook_name: &str) -> bool {
+    match hook_kind_parse(hook_name) {
+        Some(want) => kind == want,
+        None => false,
     }
-    if let Some(&k1) = kinds.get(1) {
-        if id_of(k1) == want {
-            hit = true;
-        }
-    }
-    if let Some(&k2) = kinds.get(2) {
-        if id_of(k2) == want {
-            hit = true;
-        }
-    }
-    if let Some(&k3) = kinds.get(3) {
-        if id_of(k3) == want {
-            hit = true;
-        }
-    }
-    hit
 }
 
 /// Short name → wire [`card_sdk::abi::TriggerKind`]. `None` for `""` or an
@@ -724,8 +693,9 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
     const BUY_MUL: (u8, u64, u64) = tag_key_const("BuyMul");
     const BUY_SET: (u8, u64, u64) = tag_key_const("BuySet");
     const HOUSE_ADDED: (u8, u64, u64) = tag_key_const("HouseAdded");
+    const MARKER_SPENT: (u8, u64, u64) = tag_key_const("MarkerSpent");
+    const CARD_USED: (u8, u64, u64) = tag_key_const("CardUsed");
     const COUNTER_CHANGED: (u8, u64, u64) = tag_key_const("CounterChanged");
-    const FIRE_SPENT: (u8, u64, u64) = tag_key_const("FireSpent");
     const FANS_FLIP: (u8, u64, u64) = tag_key_const("FansFlip");
     const TELEPORTED: (u8, u64, u64) = tag_key_const("Teleported");
     const TARGETED: (u8, u64, u64) = tag_key_const("Targeted");
@@ -758,29 +728,33 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
         BUY_ADD => Some(T::BuyAdd),
         BUY_MUL => Some(T::BuyMul),
         BUY_SET => Some(T::BuySet),
-        HOUSE_ADDED => Some(bandori_std::kind::HouseAdded.as_trigger()),
+        HOUSE_ADDED => Some(T::HouseAdded),
+        MARKER_SPENT => Some(T::MarkerSpent),
+        CARD_USED => Some(T::CardUsed),
         COUNTER_CHANGED => Some(T::CounterChanged),
-        FIRE_SPENT => Some(bandori_std::kind::FireSpent.as_trigger()),
         FANS_FLIP => Some(bandori_std::kind::FansFlip.as_trigger()),
         TELEPORTED => Some(T::Teleported),
         TARGETED => Some(T::Targeted),
         PASS => Some(T::Pass),
         PASS_TILE => Some(T::PassTile),
         PASS_PLAYER => Some(T::PassPlayer),
-        EXILE => Some(T(21)), /* exile */
+        EXILE => Some(bandori_std::kind::Exile.as_trigger()),
         _ => None,
     }
 }
 
 fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
     use card_sdk::abi::TriggerKind as T;
-    if k.as_i32() == bandori_std::kind::HOUSE_ADDED {
+    if k == T::HouseAdded {
         return "HouseAdded";
     }
-    if k.as_i32() == bandori_std::kind::FIRE_SPENT {
-        return "FireSpent";
+    if k == T::MarkerSpent {
+        return "MarkerSpent";
     }
-    if k.as_i32() == bandori_std::kind::FANS_FLIP {
+    if k == T::CardUsed {
+        return "CardUsed";
+    }
+    if k == bandori_std::kind::FansFlip.as_trigger() {
         return "FansFlip";
     }
     match k {
@@ -814,7 +788,7 @@ fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
         T::Pass => "Pass",
         T::PassTile => "PassTile",
         T::PassPlayer => "PassPlayer",
-        T(21) => "Exile", /* exile */
+        _ if k == bandori_std::kind::Exile.as_trigger() => "Exile",
         _ => "",
     }
 }

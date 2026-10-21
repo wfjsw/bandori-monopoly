@@ -12,7 +12,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 const ID: &str = "skill:Sumimi:人气偶像组合";
 /// 「若你在一回合内从其他玩家处获得过资金」.
@@ -26,14 +26,14 @@ pub const SUMIMI: CardDef = CardDef::new(
         // when this player is the *payer*, which is the opposite of an inbound
         // charge; the raise's `actor` is `from`. Fire on every placed pay and
         // let the body keep the from/to filter.
-        On::Action(&[ActionKind::PayAfter], "card.placed", "", None, after_pay),
+        On::Action(Action::PayAfter("card.placed", None, None, after_pay)),
         // 「向其他人收费」 -- this player is the payee of a charge from another
         // seat. Again `MINE` is the payer side; `target == owner` is the charge.
-        On::Filter(&[FilterKind::PaySplitMul], "target == owner && card.placed", None, bend),
+        On::Filter(Filter::PaySplitMul("target == owner && card.placed", None, bend)),
         // Both halves of （1） live in the body: add when GOT, else clear.
         // The old `slot('skill.sumimi.got') == 0` guard only ever admitted the
         // clear branch (FINDINGS C-SUMIMI-band-01).
-        On::Action(&[ActionKind::TurnEndBefore], "actor == owner", "", None, at_turn_end),
+        On::Action(Action::TurnEndBefore("actor == owner", None, None, at_turn_end)),
     ],
 )
     .silent(&[0]);
@@ -107,6 +107,10 @@ bandori_std::roster::GroupDef::new(r#"Sumimi"#)
     .text(r#"（1）若你在一回合内从其他玩家处获得过资金，你的回合结束时为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶。（2）此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。（3）你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出。"#)
     .logo("")
     .shares_exclusives(true);
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

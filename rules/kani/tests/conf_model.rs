@@ -109,6 +109,8 @@ pub struct ConfWorld {
     pub discards: Vec<Vec<String>>,
     /// Keyed state (slots). Separate from held, matching the real engine.
     pub state: BTreeMap<(i32, String), i32>,
+    /// `state_flag` bits per key (`state_set_flags`). Bit 0 = NEVER_NEGATIVE.
+    pub state_flags: BTreeMap<(i32, String), u8>,
     /// Held / tokens.
     pub held: BTreeMap<(i32, String), i32>,
     pub dest: i32,
@@ -136,8 +138,10 @@ pub struct ConfWorld {
     pub buy_kind: i32,
     pub buy_seller: i32,
     pub buy_price: i32,
-    pub buy_deal_owner: i32,
-    pub buy_deal_houses: i32,
+    /// Ownership after the deal. `None` = the deal keeps its default (the buyer).
+    pub buy_deal_owner: Option<game_core::engine::rules::Payee>,
+    /// Houses after the deal. `None` = as standing.
+    pub buy_deal_houses: Option<i32>,
     pub buy_deal_mortgaged: bool,
     // ---- field instances (uid → tile) for `tile_at` / `set_tile_at` ----
     pub field_uid: Vec<i32>,
@@ -161,6 +165,7 @@ impl ConfWorld {
             decks: vec![Vec::new(); 4],
             discards: vec![Vec::new(); 4],
             state: BTreeMap::new(),
+            state_flags: BTreeMap::new(),
             held: BTreeMap::new(),
             dest: 0,
             trig_value: 0,
@@ -186,8 +191,8 @@ impl ConfWorld {
             buy_kind: 0,
             buy_seller: -1,
             buy_price: 0,
-            buy_deal_owner: -1,
-            buy_deal_houses: 0,
+            buy_deal_owner: None,
+            buy_deal_houses: None,
             buy_deal_mortgaged: false,
             field_uid: Vec::new(),
             field_tile: Vec::new(),
@@ -626,17 +631,43 @@ impl CardWorld for ConfWorld {
         None
     }
     fn state_set(&mut self, player_id: i32, key: &str, value: i32) -> i32 {
+        let value = if self
+            .state_flags
+            .get(&(player_id, key.to_string()))
+            .copied()
+            .unwrap_or(0)
+            & 1
+            != 0
+        {
+            value.max(0)
+        } else {
+            value
+        };
         self.state.insert((player_id, key.to_string()), value);
         self.events.push(format!("set_slot {player_id} {key} {value}"));
         value
     }
     fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
+        let floor = self
+            .state_flags
+            .get(&(player_id, key.to_string()))
+            .copied()
+            .unwrap_or(0)
+            & 1
+            != 0;
         let e = self.state.entry((player_id, key.to_string())).or_insert(0);
         *e = e.saturating_add(delta);
+        if floor {
+            *e = (*e).max(0);
+        }
         *e
     }
     fn state_set_bounds(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn state_set_expires(&mut self, _: i32, _: &str, _: Option<game_core::state::Tick>) {}
+    fn state_set_flags(&mut self, player_id: i32, key: &str, flags: u8) {
+        self.state_flags
+            .insert((player_id, key.to_string()), flags);
+    }
     fn tick_state(&mut self, _: i32, _: game_core::state::Tick) -> Vec<(String, i32)> {
         Vec::new()
     }
@@ -780,11 +811,7 @@ impl CardWorld for ConfWorld {
                 kind: BuyKind::from_i32(self.buy_kind).unwrap_or(BuyKind::Land),
                 seller: game_core::engine::rules::Payee::from_i32(self.buy_seller),
                 price: self.buy_price,
-                deal_owner: if self.buy_deal_owner >= 0 {
-                    Some(self.buy_deal_owner)
-                } else {
-                    None
-                },
+                deal_owner: self.buy_deal_owner,
                 deal_houses: self.buy_deal_houses,
                 deal_mortgaged: self.buy_deal_mortgaged,
             });
@@ -807,7 +834,7 @@ impl CardWorld for ConfWorld {
     fn set_trigger_spare(&mut self, _seat: i32) {}
     fn declare_trigger_effect(
         &mut self,
-        _kind: i32,
+        _kind: &str,
         _target: i32,
         _from: i32,
         _tile: i32,
@@ -821,11 +848,11 @@ impl CardWorld for ConfWorld {
         self.buy_price = v;
         self.buy_present = true;
     }
-    fn set_trigger_deal_owner(&mut self, v: i32) {
+    fn set_trigger_deal_owner(&mut self, v: Option<game_core::engine::rules::Payee>) {
         self.buy_deal_owner = v;
         self.buy_present = true;
     }
-    fn set_trigger_deal_houses(&mut self, v: i32) {
+    fn set_trigger_deal_houses(&mut self, v: Option<i32>) {
         self.buy_deal_houses = v;
         self.buy_present = true;
     }
@@ -1313,31 +1340,37 @@ fn op_teleport_to_matches_engine() {
     );
 }
 
+/// `gain_charge` was ABI-88 genericized to `gain_marker` (name-as-data).
+/// Same contract: clamped at `charge_max`, returns the amount gained.
 #[test]
-fn op_gain_charge_matches_engine() {
+fn op_gain_marker_matches_engine() {
     let _g = model_lock();
+    let (np, nl) = intern_str("charge");
     let (mp, ml) = intern_msg("conf.charge");
     diff_op(
-        "gain_charge",
+        "gain_marker",
         &[],
-        |c| game_rules::hostfns::gain_charge(c, 0, 2, mp, ml).unwrap() as i64,
-        [0, 2, mp, ml, 0, 0],
-        Op::gain_charge,
+        |c| game_rules::hostfns::gain_marker(c, 0, "charge", 2, mp, ml).unwrap() as i64,
+        [0, np, nl, 2, mp, ml],
+        Op::gain_marker,
     );
 }
 
+/// `give_stay` was ABI-88 genericized to `apply_abnormal(player, kind=STAY, n, to)`.
+/// Same contract: a stay layer appears and the grant is logged.
 #[test]
-fn op_give_stay_matches_engine() {
+fn op_apply_abnormal_stay_matches_engine() {
     let _g = model_lock();
+    // kind 1 = stay (bandori_std::kind::abnormal::Stay wire).
     diff_op(
-        "give_stay",
+        "apply_abnormal_stay",
         &[],
         |c| {
-            game_rules::hostfns::give_stay(c, 1, 2).unwrap();
+            game_rules::hostfns::apply_abnormal(c, 1, 1, 2, -1).unwrap();
             0
         },
-        [1, 2, 0, 0, 0, 0],
-        Op::give_stay,
+        [1, 1, 2, -1, 0, 0],
+        Op::apply_abnormal,
     );
 }
 
@@ -1688,16 +1721,16 @@ fn card_band_morfonica_conforms() {
 #[test]
 fn card_band_mujica_conforms() {
     let _g = model_lock();
-    // `Mujica:心の雨` -- player_pos / others / tile_forward / roll / give_stay /
-    // give_stun / gain. Dice use the shared mid-value formula.
+    // `Mujica:心の雨` -- player_pos / others / tile_forward / roll /
+    // apply_abnormal(stay/stun) / gain. Dice use the shared mid-value formula.
     diff_card("mujica", "Mujica:心の雨", &[], run_play);
 }
 
 #[test]
 fn card_band_mygo_conforms() {
     let _g = model_lock();
-    // `MyGO:轮符雨` -- give_stay + before_turn_end. The real engine runs
-    // `give_stay` through the abnormal [反击] gate; with empty answers
+    // `MyGO:轮符雨` -- stay grant + before_turn_end. The real engine runs
+    // the stay write through the abnormal [反击] gate; with empty answers
     // ConfInline answers 1 (allow) so both sides grant the stay. Pre-seeding
     // 0 would block the stay on the real side only (the model has no gate).
     diff_card("mygo", "MyGO:轮符雨", &[], run_play);
@@ -1891,8 +1924,8 @@ fn trig_conf() -> ConfWorld {
     w.buy_kind = 0;
     w.buy_seller = -1;
     w.buy_price = 2500;
-    w.buy_deal_owner = 2;
-    w.buy_deal_houses = 1;
+    w.buy_deal_owner = Some(game_core::engine::rules::Payee::from_i32(2));
+    w.buy_deal_houses = Some(1);
     w.buy_deal_mortgaged = true;
     w
 }
@@ -2111,8 +2144,8 @@ fn op_trig_buy_setters_match_engine() {
     let _g = model_lock();
     let mut conf = trig_conf();
     conf.buy_price = 100;
-    conf.buy_deal_owner = -1;
-    conf.buy_deal_houses = 0;
+    conf.buy_deal_owner = None;
+    conf.buy_deal_houses = None;
     conf.buy_deal_mortgaged = false;
     conf.move_roll = -1;
     let mut model = trig_model();

@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
-    &[On::Counteract(&[ChainKind::Effect], "", r#"你或你拥有的格子被其他玩家的卡效果影响"#, Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Effect], "", Some(key!("declare_war_when")), Some(can_counteract), counteract)],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"宣战布告"#)
@@ -21,7 +21,7 @@ pub const DECLARE_WAR: CardDef = CardDef::new(
         .tags(&[r#"手"#, r#"反击"#])
         .text(r#"[手]：
 [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。"#)
-        .cell(r#"C2"#)
+        // sheet cell C2
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 fn can_counteract(player_id: i32) -> bool {
@@ -80,6 +80,12 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     ctx::draw(player_id, 1)?;
     Ok(())
 }
+
+//
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

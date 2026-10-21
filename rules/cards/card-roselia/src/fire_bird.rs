@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
@@ -19,17 +19,17 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // is effect content (rulebook L13-14), so there is no `money >= 1600`
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::TurnEnd], "card.placed", "", None, turn_end),
-        On::Filter(&[FilterKind::PaySplitMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Play("", None, None, play),
+        On::Action(Action::TurnEnd("card.placed", None, None, turn_end)),
+        On::Filter(Filter::PaySplitMul("card.placed && pay_is_rent && target == owner", None, pay_mul)),
+        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Fire bird"#)
         .raw_name(r#"Fire bird"#)
         .tags(&[])
         .text(r#"支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶，自己场地上存在此卡时，每回合结束时失去400资金并移除1个奇迹水晶，自己的所有格子收费变成1.5倍，奇迹水晶耗尽时将此卡放入弃牌堆"#)
-        .cell(r#"E6"#)
+        // sheet cell E6
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 const ID: &str = "R:Fire bird";
@@ -145,6 +145,10 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

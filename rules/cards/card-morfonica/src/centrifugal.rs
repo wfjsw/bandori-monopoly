@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";
 
@@ -23,23 +23,22 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
             // the `target` effect entry, aimed at the owner, from another
             // player's card. 「第二次」 -- C# `H._targeted[seat] >= 2` --
             // `targeted_count(owner) >= 2` (a derived-list counter).
-            "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
-            r#"你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标"#,
+            "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2", Some(key!("centrifugal_when")),
             None,
             counteract,
         ),
         // The body-top `trigger::player_id() != player_id` early-out is
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
-        On::FilterFlag(&[FilterKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, turn_start),
+        On::Filter(Filter::ImmuneAll(card_sdk::pre::MINE, None, immune_all)),
+        On::Action(Action::TurnStart("actor == owner && card.placed", None, None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"离心力，不为所动"#)
         .raw_name(r#"离心力，不为所动"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击]当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时，你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果"#)
-        .cell(r#"G10"#)
+        // sheet cell G10
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -63,8 +62,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// targeting, before abnormals, and before card-driven payments, so this one
 /// hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`). The
 /// "only our own seat" check is the entry's condition (`pre::MINE`).
-fn immune_all(player_id: i32, _v: i32) -> bool {
-    false // deny
+fn immune_all(_player_id: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// `Fx.TurnStart` (C# `CardCentrifugal.TurnStart` -> `H.Unplace`): the immunity
@@ -81,10 +81,20 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn immune_all_kani(player_id: i32, v: i32) -> bool {
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn immune_all_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
     immune_all(player_id, v)
 }
 
@@ -92,10 +102,4 @@ pub fn immune_all_kani(player_id: i32, v: i32) -> bool {
 #[inline(always)]
 pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
     turn_start(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
 }

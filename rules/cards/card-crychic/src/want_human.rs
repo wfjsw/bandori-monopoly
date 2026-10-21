@@ -11,25 +11,22 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
-        On::Play("", "", None, want_human),
-        On::Action(
-            &[ActionKind::TurnStart, ActionKind::DiceRollAfter, ActionKind::TurnEnd],
-            "actor == owner && card.placed", "",
-            None,
-            counteract,
-        ),
+        On::Play("", None, None, want_human),
+        On::Action(Action::TurnStart("actor == owner && card.placed", None, None, counteract)),
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, None, counteract)),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想要成为人类"#)
         .raw_name(r#"想要成为人类"#)
         .tags(&[])
         .text(r#"（1）将此卡置于场上并从1-20间选择并声明X，将其写下。每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶。（2）[自动]若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部奇迹水晶并使你下次的移动掷骰结果额外增加20-X；若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶。"#)
-        .cell(r#"M2"#)
+        // sheet cell M2
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 /// Where the declared X is written down (C# `CardWantHuman.Mem["x"]`).
@@ -153,6 +150,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

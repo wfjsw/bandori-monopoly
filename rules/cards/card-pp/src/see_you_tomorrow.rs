@@ -18,7 +18,7 @@ use skill_groups::fans;
 
 pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
     "PP:[衍生]明天见",
-    &[On::Play("", "", Some(cant_play), see_you_tomorrow)],
+    &[On::Play("", None, Some(cant_play), see_you_tomorrow)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"明天见"#)
         .raw_name(r#"[衍生]明天见"#)
@@ -29,7 +29,7 @@ pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
 （2）[共鸣]无视此卡的[特]效果（1）。
 [手]：
 将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#)
-        .cell(r#"D6"#)
+        // sheet cell D6
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -76,6 +76,10 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

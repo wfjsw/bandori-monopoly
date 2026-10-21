@@ -11,13 +11,13 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const HAPPY_LUCKY: CardDef = CardDef::new(
     "HHW:Happy, Lucky, Smile, Yeah！",
-    &[On::Play("", "", Some(cant_play), play)],
+    &[On::Play("", None, Some(cant_play), play)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Happy, Lucky, Smile, Yeah！"#)
         .raw_name(r#"Happy, Lucky, Smile, Yeah！"#)
         .tags(&[])
         .text(r#"投掷1d4mod4，对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子（例：在弦卷豪宅骰到4则传送到商店街），视为你的主要移动。"#)
-        .cell(r#"F10"#)
+        // sheet cell F10
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardHappyLucky.WhyNot` = `H.MoveWhyNot(seat)`.
@@ -92,6 +92,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

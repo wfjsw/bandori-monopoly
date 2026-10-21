@@ -925,7 +925,7 @@ fn auction_off_01_at(user: i32, match_id: bool) {
     w.hand_n = 1;
     w.hand_pile[0] = crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0;
     // Drawn trigger kind (46) and the trigger card identity.
-    w.trig_kind = 46; // TriggerKind::Drawn
+    w.trig_kind = "drawn";
     w.trig_card = if match_id {
         crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0 as i32
     } else {

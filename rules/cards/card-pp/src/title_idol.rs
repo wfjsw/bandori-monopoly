@@ -14,7 +14,7 @@ use card_sdk::abi::counter;
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play("", "", None, title_idol)])
+pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play("", None, None, title_idol)])
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"TITLE IDOL"#)
         .raw_name(r#"TITLE IDOL"#)
@@ -23,7 +23,7 @@ pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play("", "",
 依次进行以下效果：
 1. 为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；
 2. 为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。"#)
-        .cell(r#"D11"#)
+        // sheet cell D11
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn title_idol(player_id: i32) -> card_sdk::Asked {
@@ -59,6 +59,10 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

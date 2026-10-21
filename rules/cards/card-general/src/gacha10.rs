@@ -14,14 +14,14 @@ pub const GACHA10: CardDef = CardDef::new(
     // is effect content (rulebook L13-14), so there is no `money >= 1500` play
     // gate -- an unaffordable in-body payment takes the Q1 shortfall path
     // (mortgage, then bankruptcy). C# `CardGacha10.WhyNot` had one.
-    &[On::Play("", "", None, gacha10)],
+    &[On::Play("", None, None, gacha10)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1500)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"10次招募（1回限定）"#)
         .raw_name(r#"10次招募（1回限定）"#)
         .tags(&[r#"手"#])
         .text(r#"[手]：
 [消耗]1500资金，抽1张卡。"#)
-        .cell(r#"A7"#)
+        // sheet cell A7
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn gacha10(player_id: i32) -> card_sdk::Asked {
@@ -34,6 +34,10 @@ fn gacha10(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

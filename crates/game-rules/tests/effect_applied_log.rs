@@ -210,7 +210,7 @@ fn every_listened_trigger_kind_has_a_real_why() {
     // engine-named why phrase -- they fall through to the generic fallback by
     // design. The ruleset supplies its own Msg when it raises them.
     for k in [21, 26, 73, 74, 75, 78] {
-        let t = Trigger::new(TriggerKind(k), 0);
+        let t = Trigger::new(TriggerKind::ruleset("bandori", k), 0);
         let why = trigger_reason(&t);
         assert_eq!(why.key(), "log.why.generic", "custom id {k} uses generic why");
     }

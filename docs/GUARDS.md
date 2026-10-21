@@ -19,15 +19,17 @@ only it can; nothing is rejected twice:
 
 | layer | owns | evaluated by |
 |---|---|---|
-| 0. category | the trigger / chain kind (`On::*` kind lists, `declares()`) | host dispatch |
+| 0. category | the trigger / chain kind (`On::*` kind, `declares()`) | host dispatch |
 | 1. condition | everything expressible in the CEL schema (§4.2) | host, natively |
 | 2. guard | only the residual the condition cannot express (§6) | wasm |
 
 So a guard **does not re-check the kind** the category filter already checked
 and **does not re-check a clause its condition states** — an authoring rule,
 not a language restriction (conditions and guards may still read `kind`, e.g.
-per-kind clauses on a multi-kind entry). A guard whose whole body
-moves into its condition is deleted (`None`). A multi-kind entry may still read
+per-kind clauses). `On::Counteract` still takes a list of `ChainKind` (a
+[反击] may answer several chain links); `On::Action` / `On::Filter` are **one
+kind per entry**. A guard whose whole body
+moves into its condition is deleted (`None`). An entry may still read
 the kind to *branch behaviour*, never to reject. Consequence: the condition is
 no longer an optional hint — it is part of the decision and must be evaluated
 at every call site of its guard (§4.4).
@@ -54,13 +56,13 @@ per-card probes.
 | hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Action` | cards, skills, events, tiles |
 | play gates | 97 of 201 `On::Play` (`None`×104) | `cant_play`×62 + `can_use`×19 + 16 one-offs | `On::Play(Some(..))` | cards |
 | skill usability | (in play gates) | `can_use` family ×35 | `On::Play` | skills/ |
-| gates / settle / rollplan | no guard fn (body only) | — | `On::FilterFlag`/`Settle`/`DiceRollPlan` | tiles, cards |
+| gates / settle / rollplan | no guard fn (body only) | — | `On::Filter(Filter::ActGate(..))`/`Settle`/`On::Filter(Filter::DiceRollPlan(..))` | tiles, cards |
 
 ### 2.1 Recurring patterns (50 counteract bodies; hot path)
 
 | pattern | guards | fully expressible | example |
 |---|---|---|---|
-| trigger kind | 44 | 44 (multi-kind arms stay as OR-lists) | `detour.rs:34` `kind == DiceRollValue` |
+| trigger kind | 44 | 44 (`On::Counteract` multi-kind arms stay as OR-lists; `On::Action` / `On::Filter` are one kind per entry) | `detour.rs:34` `kind == DiceRollValue` |
 | actor rel (self / other / any) | ~30 | 30 | `welcome_mujica.rs:67` `actor != owner` |
 | target rel (self / other / exists) | ~13 | 13 | `cant_look_away.rs:21` `target == owner && actor != owner` |
 | `by_card` rel | 6 | 6 | `riot.rs:21` `by != owner && effect.hits(owner)` |
@@ -140,7 +142,7 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind`, `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264); `plan.fixed_roll` from `TurnCtx.fixed_roll` |
+| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264); `plan.fixed_roll` from `TurnCtx.fixed_roll` |
 | window | `turn_player`, `turn_key` | `Cx` / `TurnCtx` |
 | candidate | `owner` (= `player_id` arg), `owner.money/fire/crystals/hand/pos/out/stay/stun/exile/no_hand`, `owner.character`, `owner.band`, `owner.tiles` (count). `owner.crystals` is the owner's **band** crystals (the band-skill field instance's `crystals`), not an on-card counter | `World`/`Player` |
 | candidate | `card.id`, `card.placed`, `card.cp` (legacy -- reads **crystals**, see §4.2b), `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
@@ -177,7 +179,7 @@ table (a separate game-vocab extension is not cheaper than this boundary note).
 | `aliases` | other CEL spellings that flatten to the same `flat` (`chain.count` for `effect.count`, `trigger.kind` for `kind`) |
 | `flat` | the flat identifier after the `root.field` rewrite (`move_main`) |
 | `scope` | `Window` / `Candidate` / `Func { arity, cand }` |
-| `ty` | `Int` / `Bool` / `OptInt` (binds `null` when `-1`) |
+| `ty` | `Int` / `Bool` / `OptInt` (binds `null` when `-1`) / `Str` (only `kind`) |
 | `get` | scalar fetch: `fn(&dyn CondView) -> i64` |
 | `fx` | function shape (`Fx::SeatInt` / `StrInt` / `IntHas` / `Neighbor` / …), including the hidden table the eager evaluator bakes |
 | `doc` | one line, mirrored in this table |
@@ -273,7 +275,7 @@ table. Adding a name never edits their bodies.
 
 ### 4.2c Window variables per entry kind (ABI v49)
 
-`On::FilterFlag` / `On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])` /
+`On::Filter(FilterEntry)` / `On::Action(ActionEntry)` /
 `On::Settle` / `On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` carry the same
 `pre` + residual-guard pair as `On::Action` (v49), so their conditions see the
 §4.2 schema. The window is built with `fill_window` from the **trigger / context
@@ -290,7 +292,7 @@ reading its default / sentinel):
 | `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
 | `Buy` / `Build` | a synthetic trigger (`kind = None`) on the perform: `actor` = the buyer / builder, `target` = the tile's owner, `tile` = the deed, `value` = the reason (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction); `buy.kind` is the [`BuyKind`] | `actor`, `target`, `tile.*`, `buy.kind`, `owner.*`, `turn_player`, `turn_key` | the body owns eligibility, the quote and the order of steps; `ctx::raise` / `ctx::pay_buy` / `ctx::pay_build` / `ctx::assign_deed` / `ctx::log` are the mechanism. Tile bodies do not flash |
 
-A `CounterChanged` hook (`On::Action(&[ActionKind::CounterChanged], …)`, wire
+A `CounterChanged` hook (`On::Action(Action::CounterChanged(…))`, wire
 names `counterChanged`|`crystalsChanged`|`cpChanged`) sees: `actor` = the
 owner of the instance whose counter changed (board-owned instances read
 `-1`), `target` = `-1` (not seat-scoped -- the counter lives on a card, not
@@ -317,8 +319,8 @@ residual wasm guard -- exactly the G3 split.
   declaration sites. Sugar consts `pre::MINE` (`actor == owner`) replaces the
   118 `mine` guards outright; the 19 `always` guards are deleted. The condition
   sits beside the (now residual) guard fn, and each clause lives in exactly one
-  of the two. **v49** extends the pair to `On::FilterFlag` /
-  `On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])` / `On::Settle` /
+  of the two. **v49** extends the pair to `On::Filter(FilterEntry)` /
+  `On::Action(ActionEntry)` / `On::Settle` /
   `On::Mortgage` / `On::Redeem` too (§4.2c): no entry kind is unguarded any
   more, and an entry whose condition rejects runs no body (and so emits no
   `card` flash).
@@ -333,8 +335,8 @@ residual wasm guard -- exactly the G3 split.
    per `top` trigger; evaluate per (card, seat). This is the 48 900-call path.
 2. `run_hook` (host.rs) / `drive_inner` guard step: before
    `self.store(...)`; window context per trigger, owner = card's player.
-   Since v49 this covers `On::FilterFlag` entries too (they share `hook_entries`).
-3. `run` (host.rs) for `On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])` /
+   Since v49 this covers `On::Filter(FilterEntry)` entries too (they share `hook_entries`).
+3. `run` (host.rs) for `On::Action(Action::AtEnd(…))` / `On::Filter(Filter::DiceRollPlan(…))` /
    `On::Settle` / `On::Mortgage` / `On::Redeem` (v49):
    the same category → condition → guard → body, before `on_body` / `OP_RUN`,
    so a rejecting entry never flashes.
@@ -651,7 +653,11 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 * `compile(src) -> Result<Cond, CondError>`: parse, unknown-var / unknown-fn
   check against the §4.2 schema, int-only lint (float / uint literals and
   `double()` rejected). `kind` (alias `trigger.kind`) is an ordinary window
-  variable — no language limit (user, 2026-10-07): a multi-kind entry may need
+  variable of type `VarTy::Str` — it compares wire spellings
+  (`"turnStart"`, `"r:bandori:21"`), not ints. A bare ident (`kind == Exile`)
+  binds the spelling constant; a string literal works too
+  (`kind == "turnStart"`). `move.kind` stays `int` (`MoveKind` is a closed
+  engine enum). No language limit (user, 2026-10-07): an entry may need
   per-kind clauses. Not restating the declared category is an authoring
   discipline for review / `precheck` (a warning at most), not a compile error.
   Dotted roots flatten (`owner.money` → `owner_money`); `effect.has(x)` /
@@ -687,8 +693,9 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 
 **G0 — surface.** `On::Counteract` / `On::Action` / `On::Play` (the guarded
 entries) carry a `pre: &'static str` condition immediately before the residual
-guard (`On::Counteract(kinds, pre, reason, guard, body)`, `On::Action(kinds, pre, reason, guard,
-body)`, `On::Play(pre, reason, gate, body)`); `""` = none. `On::pre(..)` is
+guard (`On::Counteract(kinds, pre, reason, guard, body)`,
+`On::Action(Action::Name(pre, reason, guard, body))`,
+`On::Play(pre, reason, gate, body)`); `""` = none. `On::pre(..)` is
 the const builder and `card_sdk::pre::MINE` (`actor == owner`) the sugar.
 `ManifestOn` gains `pre: Option<String>` (the CEL source) and `ABI_VERSION`
 goes **44 → 45**. `rt::manifest` serialises it (postcard; never
@@ -1060,11 +1067,11 @@ carry **no** residual guard (the load refuses one): the condition is the answer.
 ## Exclusive-use gate (ABI 60)
 
 A band skill may further restrict **which exclusive cards its members play**.
-The question is the CEL-only `On::FilterFlag` kind
-`TriggerKind::ExclusiveUse` / `FilterKind::ExclusiveUse` (wire name
-`exclusiveUse`), asked of the ruleset whenever an exclusive card is about to be
-played from hand. Same CEL-only rule as the status gates: the condition is the
-whole answer; a residual guard or a missing condition is refused at load.
+The question is the CEL-only `On::Filter(Filter::ExclusiveUse(...))` kind
+(wire name `exclusiveUse`), asked of the ruleset whenever an exclusive card is
+about to be played from hand. Same CEL-only rule as the status gates: the
+condition is the whole answer; a residual guard or a missing condition is
+refused at load.
 
 ### Window shape
 
@@ -1088,7 +1095,7 @@ further deny.
 ### Band-skill denial (the card)
 
 CRYCHIC's 「variants may not use the base character's exclusives」 is an
-`On::FilterFlag` entry on `skill:CRYCHIC:美好的往日幻影`
+`On::Filter(Filter::ExclusiveUse(...))` entry on `skill:CRYCHIC:美好的往日幻影`
 (`rules/skills/skill-bands/src/crychic.rs`):
 
 ```

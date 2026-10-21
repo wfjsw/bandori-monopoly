@@ -27,18 +27,13 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 pub const AYA_WITH: CardDef = CardDef::new(
     "skill:丸山彩:With~",
     &[
-        On::Action(
-            &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')", "",
-            None,
-            at_start,
-        ),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", None, None, at_start)),
         // 「此次支付的分摊前资金减少Y×100（最少0）」 -- the **pre-split** total
         // (「分摊前」), so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not
         // the per-share `paySplitChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
@@ -47,12 +42,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
         // Rides `PayCombinedAddBefore` (v78), restoring the rulebook PayCombinedAdd
         // position: the interactive `ask_number` + `set_pay_amount` sits
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
-        On::Action(
-            &[ActionKind::PayCombinedAddBefore],
-            "value > 0 && slot('ppFansUp') >= 1", "",
-            Some(mine),
-            on_pay,
-        ),
+        On::Action(Action::PayCombinedAddBefore("value > 0 && slot('ppFansUp') >= 1", None, Some(mine), on_pay)),
     ],
 );
 
@@ -159,15 +149,17 @@ fn flip_all_pp() -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
 #[cfg(kani)]
 #[inline(always)]
 pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
     at_start(player_id)
 }
 
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {

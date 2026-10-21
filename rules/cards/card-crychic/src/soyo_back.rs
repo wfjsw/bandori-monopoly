@@ -10,13 +10,13 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const SOYO_BACK: CardDef = CardDef::new(
     "CRYCHIC:（soyo）回到曾经",
     &[
-        On::Play("", "", None, soyo_back),
-        On::Action(&[ActionKind::Drawn], "trigger_card == card.id", "", None, on_drawn),
+        On::Play("", None, None, soyo_back),
+        On::Action(Action::Drawn("trigger_card == card.id", None, None, on_drawn)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回到曾经"#)
@@ -25,7 +25,7 @@ pub const SOYO_BACK: CardDef = CardDef::new(
         .text(r#"（1）[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一 ：
 1. 将你的所有手牌放入弃牌堆，然后获得弃牌数*500的资金，抽1张卡，为你的一个格子付费加盖一间房屋，然后[移除]此卡；
 2. 获得1000资金并将此卡加入手牌 （2）[手] 获得500资金"#)
-        .cell(r#"M15"#)
+        // sheet cell M15
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"长崎素世（CRYCHIC）"#)]));
 
 const ID: &str = "CRYCHIC:（soyo）回到曾经";
@@ -133,6 +133,10 @@ fn branch_keep(player_id: i32) -> card_sdk::Asked {
     // and is skipped so the draw's copy is the one kept.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

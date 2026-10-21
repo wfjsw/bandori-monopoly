@@ -140,7 +140,8 @@ impl CardInfo {
             .iter()
             .enumerate()
             .filter(|(_, o)| {
-                o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&t.as_i32()))
+                o.kind == kind as i32
+                && trigger.is_none_or(|t| o.triggers.iter().any(|s| s == &t.spelling()))
             })
             .map(|(i, _)| i as i32)
             .collect()
@@ -214,7 +215,7 @@ pub enum Call {
     },
     /// Scheduled turn-end callback (`On::Action(&[AtEnd])`).
     AtEnd { card: i32, player_id: i32 },
-    /// Movement routine (`On::FilterValue(&[DiceRollPlan])`), called while the walk
+    /// Movement routine (`On::Filter(Filter::DiceRollPlan(…))`), called while the walk
     /// is being planned.
     DiceRollPlan { card: i32, player_id: i32 },
     /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the
@@ -530,13 +531,14 @@ pub enum HostRequest {
     ///
     /// v78: when `kind` is a filter (`TriggerKind::is_filter`), the host folds
     /// the filter chain instead of opening a counteraction window. A
-    /// `FilterValue` kind (BuyAssign) carries the default deal in and answers
+    /// `DealValue` kind (BuyAssign) carries the default deal in and answers
     /// the packed rewritten deal (see `hostfns::pack_deal` / `unpack_deal`):
     /// bit 0 = cancelled, bits 1-4 = houses, bit 5 = mortgaged, bits 6-31 =
     /// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
     Raise {
         player_id: i32,
-        kind: i32,
+        /// Wire **spelling** (`TriggerKind::spelling`).
+        kind: String,
         value: i32,
         /// The tile the raise is about (`t.tile`) -- filter pres like
         /// `tile.id == tile_named('…')` read it.
@@ -697,17 +699,17 @@ pub(crate) struct Inner {
     by_id: HashMap<String, i32>,
     sha256: String,
     /// Bitset of every trigger kind any card declares, so `counteract` can skip the
-    /// whole bridge when nothing in the set listens. `TriggerKind` values fit in
-    /// 0..128, so this is one word and costs no allocation.
-    declared: u128,
+    /// whole bridge when nothing in the set listens. Engine ids and ruleset ids
+    /// each get their own `u128` word (ids fit in `0..128`).
+    declared: KindMask,
     /// Cached counteraction index (BOT-RESEARCH.md #1 / GUARDS.md G3): per-card
     /// bitmask of trigger kinds its `On::Counteract` entries answer. The offer
     /// loop tests one shift instead of scanning the entry table per probe.
-    counteract_mask: Vec<u128>,
+    counteract_mask: Vec<KindMask>,
     /// Per-card bitmask of trigger kinds its hook/gate entries answer. Same
     /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
     /// can never run at a kind.
-    hook_mask: Vec<u128>,
+    hook_mask: Vec<KindMask>,
     /// Roster metadata (ABI v63) gathered from every module's
     /// `ruleset_metadata`. Empty on pre-v63 / meta-less sets.
     metadata: card_sdk::meta::MetaDoc,
@@ -715,6 +717,53 @@ pub(crate) struct Inner {
     /// ExclusiveUse}`): per gate kind, the `(card, entry)` pairs whose
     /// condition closes it. Built once at load so a gate read walks only these.
     gates: [Vec<(i32, i32)>; GATE_KINDS.len()],
+}
+
+/// Two-namespace kind mask. Engine ids use `1u128 << id` in `engine` (and a
+/// kind outside `0..128` is a load error -- never silently dropped). Ruleset
+/// kinds are opaque tokens: an insertion-ordered set of [`TriggerKind`]s, no
+/// id-as-bit and no range check.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct KindMask {
+    /// [`card_sdk::abi::KindNs::Engine`] ids.
+    pub engine: u128,
+    /// [`card_sdk::abi::KindNs::Ruleset`] kinds, insertion order, de-duplicated.
+    ruleset: Vec<crate::TriggerKind>,
+}
+
+impl KindMask {
+    /// Record `k`. Engine ids outside `0..128` are a load error; ruleset kinds
+    /// have no range check (they are opaque).
+    pub fn insert(&mut self, k: crate::TriggerKind) -> Result<(), String> {
+        use card_sdk::abi::KindNs;
+        match k.ns {
+            KindNs::Engine => {
+                if !(0..128).contains(&k.id) {
+                    return Err(format!(
+                        "trigger kind {} (id {}) outside 0..128 mask range",
+                        k.spelling(),
+                        k.id
+                    ));
+                }
+                self.engine |= 1u128 << k.id;
+            }
+            KindNs::Ruleset(_) => {
+                if !self.ruleset.contains(&k) {
+                    self.ruleset.push(k);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Does this mask contain `k`?
+    pub fn contains(&self, k: crate::TriggerKind) -> bool {
+        use card_sdk::abi::KindNs;
+        match k.ns {
+            KindNs::Engine => (0..128).contains(&k.id) && (self.engine & (1u128 << k.id)) != 0,
+            KindNs::Ruleset(_) => self.ruleset.contains(&k),
+        }
+    }
 }
 
 /// The gate kinds answered natively from conditions alone (see
@@ -739,7 +788,9 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     let mut out = Vec::new();
     for (ci, c) in cards.iter().enumerate() {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_i32()) {
+            if o.kind == OnKind::Filter as i32
+                && o.triggers.iter().any(|s| s == &kind.spelling())
+            {
                 out.push((ci as i32, ei as i32));
             }
         }
@@ -756,7 +807,11 @@ pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
             if o.kind != OnKind::Filter as i32 {
                 continue;
             }
-            if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k.as_i32() == t)) {
+            if !o
+                .triggers
+                .iter()
+                .any(|t| GATE_KINDS.iter().any(|&k| &*k.spelling() == t.as_str()))
+            {
                 continue;
             }
             if o.has_guard || o.pre.is_none() {
@@ -860,39 +915,45 @@ impl RulesetBuilder {
                 return Err(RuleError::DuplicateCard(c.id.clone()));
             }
         }
-        let mut declared = 0u128;
+        let mut declared = KindMask::default();
         let mut counteract_mask = Vec::with_capacity(self.cards.len());
         let mut hook_mask = Vec::with_capacity(self.cards.len());
         for c in &self.cards {
-            let mut cm = 0u128;
-            let mut hm = 0u128;
+            let mut cm = KindMask::default();
+            let mut hm = KindMask::default();
             for (ei, o) in c.on.iter().enumerate() {
                 let ok = OnKind::from_i32(o.kind);
                 // ABI v73: kind/variant agreement -- a Filter may only list
                 // filter kinds and an Action only non-filter kinds.
+                // Ruleset kinds are exempt: `is_filter` answers false for them,
+                // so the host treats OnKind as authoritative (a later phase
+                // emits a registration table).
                 if matches!(ok, Some(OnKind::Action) | Some(OnKind::Filter)) {
                     let want_filter = ok == Some(OnKind::Filter);
-                    for &k in &o.triggers {
-                        if crate::TriggerKind::from_i32(k).is_filter() != want_filter {
+                    for s in &o.triggers {
+                        let tk = crate::TriggerKind::from_str(s);
+                        if tk.ns == card_sdk::abi::KindNs::Engine && tk.is_filter() != want_filter {
                             return Err(RuleError::Load(format!(
-                                "{} entry {ei}: {} lists trigger {k} which is filter={} (see TriggerKind::is_filter)",
+                                "{} entry {ei}: {} lists trigger {} which is filter={} (see TriggerKind::is_filter)",
                                 c.id,
                                 if want_filter { "On::Filter" } else { "On::Action" },
-                                crate::TriggerKind::from_i32(k).is_filter(),
+                                tk.spelling(),
+                                tk.is_filter(),
                             )));
                         }
                     }
                 }
-                for &k in &o.triggers {
-                    if (0..128).contains(&k) {
-                        declared |= 1u128 << k;
-                        match ok {
-                            Some(OnKind::Counteract) => cm |= 1u128 << k,
-                            Some(OnKind::Action) | Some(OnKind::Filter) => {
-                                hm |= 1u128 << k
-                            }
-                            _ => {}
+                for s in &o.triggers {
+                    let tk = crate::TriggerKind::from_str(s);
+                    declared.insert(tk).map_err(RuleError::Load)?;
+                    match ok {
+                        Some(OnKind::Counteract) => {
+                            cm.insert(tk).map_err(RuleError::Load)?;
                         }
+                        Some(OnKind::Action) | Some(OnKind::Filter) => {
+                            hm.insert(tk).map_err(RuleError::Load)?;
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -1163,8 +1224,7 @@ impl Ruleset {
     /// all when the answer is no -- with `StubRules`, or at a kind nothing
     /// listens to, that is every raise.
     pub fn declares(&self, kind: crate::TriggerKind) -> bool {
-        let v = kind.as_i32();
-        (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
+        self.inner.declared.contains(kind)
     }
 
     /// Does the **manifest** declare any buy hook at all (fix C,
@@ -1214,24 +1274,18 @@ impl Ruleset {
     /// never scans the entry table and never builds a `Run` for a card that
     /// cannot answer.
     pub fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
-        let v = kind.as_i32();
-        (0..128).contains(&v)
-            && self
-                .inner
-                .counteract_mask
-                .get(card as usize)
-                .is_some_and(|m| (m >> v) & 1 != 0)
+        self.inner
+            .counteract_mask
+            .get(card as usize)
+            .is_some_and(|m| m.contains(kind))
     }
 
     /// Hook/gate twin of [`Self::counteracts_to`].
     pub fn hooks_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
-        let v = kind.as_i32();
-        (0..128).contains(&v)
-            && self
-                .inner
-                .hook_mask
-                .get(card as usize)
-                .is_some_and(|m| (m >> v) & 1 != 0)
+        self.inner
+            .hook_mask
+            .get(card as usize)
+            .is_some_and(|m| m.contains(kind))
     }
 
     /// Handle for a card id from the roster, e.g. `"AG:Y.O.L.O"`.
@@ -1339,7 +1393,7 @@ impl Ruleset {
             Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             // v75: AtEnd / DiceRollPlan are ordinary kind-keyed entries
-            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])`).
+            // (`On::Action(&[AtEnd])` / `On::Filter(Filter::DiceRollPlan(…))`).
             Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
             Call::DiceRollPlan { .. } => info.hook_entry(crate::TriggerKind::DiceRollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),
@@ -2309,7 +2363,9 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let mut i = 0;
         while let Some(c) = self.card(i) {
             for (ei, o) in c.on.iter().enumerate() {
-                if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_i32()) {
+                if o.kind == OnKind::Filter as i32
+                    && o.triggers.iter().any(|s| s == &kind.spelling())
+                {
                     entries.push((i, ei as i32));
                 }
             }
@@ -2724,6 +2780,20 @@ fn inspect(
         let defs: Vec<crate::tile_class::ClassDef> =
             postcard::from_bytes(&bytes).unwrap_or_default();
         crate::tile_class::set_class_defs(defs);
+    }
+    // Ruleset-kind flags (hook-only) -- optional; absent means every ruleset
+    // kind opens a counteraction window.
+    if has_func(&inst, &mut store, export::KIND_FLAGS) {
+        set_fuel(&mut store, METADATA_FUEL).map_err(load)?;
+        let packed = inst
+            .get_typed_func::<(), i64>(&mut store, export::KIND_FLAGS)
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(|e| load(format!("{}: {e}", export::KIND_FLAGS)))?;
+        let (ptr, len) = abi::unpack(packed);
+        let bytes =
+            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        let flags: Vec<(i32, bool)> = postcard::from_bytes(&bytes).unwrap_or_default();
+        crate::kind_flags::set_kind_flags(flags);
     }
     Ok((module, cards, meta))
 }
@@ -3931,8 +4001,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "raise",
-        |mut c: C<W>, player_id: i32, kind: i32, value: i32| -> Result<i32, Error> {
-            hostfns::raise(&mut c, player_id, kind, value).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, kp: i32, kl: i32, value: i32| -> Result<i32, Error> {
+            let kind = hostfns::guest_str(&mut c, kp, kl).map_err(HostErr::into_err)?;
+            hostfns::raise(&mut c, player_id, &kind, value).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4499,8 +4570,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "trig_kind",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_kind(&mut c).map_err(HostErr::into_err)
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trig_kind(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4779,8 +4850,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "trig_effect_kind",
-        |mut c: C<W>, i: i32| -> Result<i32, Error> {
-            hostfns::trig_effect_kind(&mut c, i).map_err(HostErr::into_err)
+        |mut c: C<W>, i: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trig_effect_kind(&mut c, i, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4814,8 +4885,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "declare_effect",
-        |mut c: C<W>, kind: i32, target: i32, from: i32, tile: i32, value: i32| -> Result<(), Error> {
-            hostfns::declare_effect(&mut c, kind, target, from, tile, value).map_err(HostErr::into_err)
+        |mut c: C<W>, kp: i32, kl: i32, target: i32, from: i32, tile: i32, value: i32| -> Result<(), Error> {
+            let kind = hostfns::guest_str(&mut c, kp, kl).map_err(HostErr::into_err)?;
+            hostfns::declare_effect(&mut c, &kind, target, from, tile, value).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5412,13 +5484,13 @@ impl CardWorld for NullWorld {
     fn set_trigger_cancelled(&mut self) {}
     fn set_trigger_negate_effect(&mut self) {}
     fn set_trigger_spare(&mut self, _: i32) {}
-    fn declare_trigger_effect(&mut self, _: i32, _: i32, _: i32, _: i32, _: i32) {}
+    fn declare_trigger_effect(&mut self, _: &str, _: i32, _: i32, _: i32, _: i32) {}
     fn trig_card_is(&self, _: &str) -> i32 {
         0
     }
     fn set_trigger_price(&mut self, _: i32) {}
-    fn set_trigger_deal_owner(&mut self, _: i32) {}
-    fn set_trigger_deal_houses(&mut self, _: i32) {}
+    fn set_trigger_deal_owner(&mut self, _: Option<game_kinds::Payee>) {}
+    fn set_trigger_deal_houses(&mut self, _: Option<i32>) {}
     fn set_trigger_deal_mortgaged(&mut self, _: i32) {}
     fn set_trigger_reason(&mut self, _: &str) {}
     fn tile_group(&self, _: i32) -> i32 {
@@ -5526,7 +5598,7 @@ mod gate_tests {
     fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
         ManifestOn {
             kind: OnKind::Filter as i32,
-            triggers: vec![crate::TriggerKind::PayGate.as_i32() as i32],
+            triggers: vec![crate::TriggerKind::PayGate.spelling().into_owned()],
             pre: pre.map(str::to_string),
             has_guard,
             messages: vec![],

@@ -11,7 +11,7 @@
 //!
 //! whose flip face-down may cost 2 fire, flip face-up draws 1.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 
 const ID: &str = "Mujica:（喵梦）";
 /// `card_face_down` as of the last check, so a flip is a change.
@@ -20,8 +20,8 @@ const WAS_DOWN: &str = "nyamu.wasDown";
 pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
-        On::Play("", "", None, nyamu_card),
-        On::Action(&[card_sdk::abi::ActionKind::TurnEnd], "actor == owner && card.placed", "", None, watch_flips),
+        On::Play("", None, None, nyamu_card),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, watch_flips)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")
@@ -31,7 +31,7 @@ pub const NYAMU_CARD: CardDef = CardDef::new(
 （2）
 1. 每当此卡将从正面翻至背面时可选择失去2个火罐。
 2. 每当此卡将从背面翻至正面时此卡拥有者抽一张卡。"#)
-        .cell(r#"J15"#)
+        // sheet cell J15
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"祐天寺若麦"#)]));
 
 /// 「每当此卡将从背面翻至正面时此卡拥有者抽一张卡」.
@@ -64,6 +64,10 @@ fn nyamu_card(player_id: i32) -> card_sdk::Asked {
     // the face-down flag at the turn end (`Fx.Flipped` does not exist).
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

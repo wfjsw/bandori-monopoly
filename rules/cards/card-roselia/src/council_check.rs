@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ChainKind, ActionKind, MoveKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
     "R:学生会的检查",
@@ -20,31 +20,20 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::SettleBefore],
             // 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
-            "actor == owner && turn_player == owner && owned_within(owner, 3) > 0",
-            "",
+            "actor == owner && turn_player == owner && owned_within(owner, 3) > 0", None,
             None,
             counteract,
         ),
-        On::Action(
-            &[ActionKind::PassTile],
-            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", "",
-            None,
-            pass_tile,
-        ),
-        On::Action(
-            &[ActionKind::PayAfter],
-            "card.placed && pay_is_rent && target == owner", "",
-            None,
-            pay_after,
-        ),
-        On::Action(&[ActionKind::SettleAfter], "card.placed", "", None, settle_after),
+        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", None, None, pass_tile)),
+        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, None, pay_after)),
+        On::Action(Action::SettleAfter("card.placed", None, None, settle_after)),
     ],
 ).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"学生会的检查"#)
         .raw_name(r#"学生会的检查"#)
         .tags(&[])
         .text(r#"移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出，向抽牌堆中加入一张“觉悟”，本回合无法加盖房屋，但可支付那格一层房屋的建造价格一半将此卡放于那个格子上，使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算。因此卡强制停下的玩家的结算地租价格为原价格一半。若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金。"#)
-        .cell(r#"E3"#)
+        // sheet cell E3
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// C# `CardCouncilCheck.Near` -- own deeds within 3 tiles either way (`H.Dist`).
@@ -218,17 +207,15 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn settle_after_kani(player_id: i32) -> card_sdk::Asked {
-    settle_after(player_id)
 }
 
 #[cfg(kani)]
@@ -241,4 +228,10 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn pay_after_kani(player_id: i32) -> card_sdk::Asked {
     pay_after(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_after_kani(player_id: i32) -> card_sdk::Asked {
+    settle_after(player_id)
 }

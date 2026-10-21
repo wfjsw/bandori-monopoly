@@ -14,7 +14,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, MarkFilter};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
 /// (C# `H.AddMark(..., "黑衣人的补给", ...)`).
@@ -27,12 +27,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // and the owner's own pass are the condition; the crystal mark count is
         // the residual guard. `ActionKind::Pass` (not `PassTile`) matches the
         // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki_other.rs`).
-        On::Action(
-            &[ActionKind::Pass],
-            "card.placed && actor == owner && tile.id == tile_named('弦卷集团')", "",
-            Some(pass_tile_guard),
-            pass_tile,
-        ),
+        On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", None, Some(pass_tile_guard), pass_tile)),
         // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
         // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
         // `PassBefore` is the category; the owner's own pass of CiRCLE is the
@@ -40,8 +35,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // missing = -1 never equals a live `tile.id`).
         On::Counteract(
             &[ChainKind::PassBefore],
-            "actor == owner && tile.id == tile_named('CiRCLE')",
-            r#"经过“CiRCLE”格子（#1）"#,
+            "actor == owner && tile.id == tile_named('CiRCLE')", Some(key!("black_suits_when")),
             None,
             counteract,
         ),
@@ -51,7 +45,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         .raw_name(r#"黑衣人的补给"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。"#)
-        .cell(r#"F8"#)
+        // sheet cell F8
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -143,8 +137,11 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {

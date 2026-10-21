@@ -17,13 +17,13 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, Filter, key, Msg, On, PayAddValue};
 
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
-        On::Play("", "", Some(cant_play), anon_tokyo),
-        On::Filter(&[FilterKind::PaySplitAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
+        On::Play("", None, Some(cant_play), anon_tokyo),
+        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && value > 0", None, link_rent)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)
@@ -35,7 +35,7 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
 [指定][使用者]所在当格的任一相邻的[可购买格子]，根据使用者所在格子和被[指定]格子的状态依次进行以下操作：
 1. [使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半并在上述的两个格子间放置1个[奇迹水晶]（上限1），被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半；
 2. [使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]改为向前或后移动1格到被[指定]格子且[结算]。"#)
-        .cell(r#"I8"#)
+        // sheet cell I8
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"千早爱音"#)]));
 
 /// The field stand-in the `PaySplitAdd` rider hangs on (see [`link_rent`]).
@@ -170,10 +170,10 @@ fn link_guard(player_id: i32) -> bool {
 /// -- C# `AnonLinkFx.PaySplitAdd`: `p.IsRent && p.to == Seat && p.amount > 0`, then per
 /// link add `RentOf(linked) / 2` when `p.tile` is either end and the other end is
 /// owned by Player.
-fn link_rent(player_id: i32, value: i32) -> i32 {
+fn link_rent(player_id: i32, v: PayAddValue) -> PayAddValue {
     let tile = trigger::tile();
     if tile < 0 {
-        return value;
+        return v;
     }
     // The settled tile is one end of a link; the partner is the other end
     // (`TileMark.partner`, placed by `place_mark_pair`).
@@ -182,16 +182,16 @@ fn link_rent(player_id: i32, value: i32) -> i32 {
         &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
     );
     if other < 0 {
-        return value;
+        return v;
     }
     // C# `the other end is owned by Player`.
     if ctx::tile_owner(other) != player_id {
-        return value;
+        return v;
     }
     // 「被连接的其他格子收费的一半」 -- half of the linked tile's rent.
     let bonus = ctx::rent_of(other) / 2;
     if bonus <= 0 {
-        return value;
+        return v;
     }
     ctx::log(
         player_id,
@@ -199,8 +199,15 @@ fn link_rent(player_id: i32, value: i32) -> i32 {
             .tile("tile", other)
             .i("n", bonus as i64),
     );
-    value + bonus
+    PayAddValue {
+        value: v.value + bonus,
+        ..v
+    }
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
@@ -211,6 +218,6 @@ pub fn anon_tokyo_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn link_rent_kani(player_id: i32, value: i32) -> i32 {
-    link_rent(player_id, value)
+pub fn link_rent_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    link_rent(player_id, v)
 }

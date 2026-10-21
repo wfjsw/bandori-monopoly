@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
 
@@ -17,15 +17,15 @@ const FIX_NOTE: &str = "修复公告";
 pub const POOL_BUG: CardDef = CardDef::new(
     "event:卡池BUG",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::Event], "", "", Some(always), on_event),
-        On::Action(&[ActionKind::BuildBefore], "", "", Some(always), before_build),
+        On::Play("", None, None, play),
+        On::Action(Action::Event("", None, Some(always), on_event)),
+        On::Action(Action::BuildBefore("", None, Some(always), before_build)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"卡池BUG"#)
             .text(r#"将此卡放置于场地中央并将一张“[衍生]修复公告”背面朝上放置于事件牌堆顶部，下次触发事件时将此卡放入事件弃牌。此卡在场时不可在造价1500及以上的格子上加盖房屋。"#)
-            .cell(r#"A14"#)
+            // sheet cell A14
             .derived(false));
 
 fn always(_player_id: i32) -> bool {
@@ -78,6 +78,8 @@ fn before_build(_owner: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

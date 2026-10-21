@@ -9,12 +9,12 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const COURAGE_WINGS: CardDef =
-    CardDef::new("Mor:勇气展翅高飞之时", &[On::Play("", "", None, courage_wings)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("Mor:勇气展翅高飞之时", &[On::Play("", None, None, courage_wings)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"勇气展翅高飞之时"#)
         .raw_name(r#"勇气展翅高飞之时"#)
         .tags(&[])
         .text(r#"掷骰3d20，结果对应序号格子的所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半，若为地产商地块，获得1000资金"#)
-        .cell(r#"G6"#)
+        // sheet cell G6
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn courage_wings(player_id: i32) -> card_sdk::Asked {
@@ -56,6 +56,10 @@ fn courage_wings(player_id: i32) -> card_sdk::Asked {
     )?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

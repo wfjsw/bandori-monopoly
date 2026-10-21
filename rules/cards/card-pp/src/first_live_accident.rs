@@ -15,7 +15,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const FIRST_LIVE_ACCIDENT: CardDef =
-    CardDef::new("PP:初次演出事故", &[On::Play("", "", None, first_live_accident)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("PP:初次演出事故", &[On::Play("", None, None, first_live_accident)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"初次演出事故"#)
         .raw_name(r#"初次演出事故"#)
         .tags(&[r#"手"#, r#"持续"#])
@@ -23,7 +23,7 @@ pub const FIRST_LIVE_ACCIDENT: CardDef =
 将此卡放置在[使用者]的[场地]并将1张“重叠的声音”加入抽卡区并洗切，然后抽1张卡。
 [持续]：
 [拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。"#)
-        .cell(r#"D4"#)
+        // sheet cell D4
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn first_live_accident(player_id: i32) -> card_sdk::Asked {
@@ -50,6 +50,10 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     ctx::draw(player_id, 1)?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

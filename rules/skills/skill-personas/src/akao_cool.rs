@@ -17,13 +17,14 @@
 
 use alloc::string::String;
 
+use bandori_std::kind::Actions;
 use card_sdk::abi::CardPile;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, key, Msg, On};
 
 pub const AKAO_COOL: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
-    &[On::Action(&[bandori_std::kind::PassRewardAffected], card_sdk::pre::MINE, "", None, on_circle)],
+    &[On::Action(Actions::PassRewardAffected(card_sdk::pre::MINE, None, None, on_circle))],
 ).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 /// Face-down cards this player has on the field.
@@ -100,6 +101,10 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

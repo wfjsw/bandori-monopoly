@@ -9,12 +9,12 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"抓到了"#)
         .raw_name(r#"抓到了"#)
         .tags(&[])
         .text(r#"移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。"#)
-        .cell(r#"B9"#)
+        // sheet cell B9
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -72,6 +72,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::card_offer_build(player_id, &[ctx::player_pos(player_id)]);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

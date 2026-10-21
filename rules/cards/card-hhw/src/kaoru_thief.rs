@@ -9,53 +9,34 @@
 //! optional force-stop are in; the `H.AbnormalGate` wrapper around the stop
 //! stays a narrow TODO.
 
-use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 const ID: &str = "HHW:（薰）怪盗hello happy";
 
 pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
-        On::Play("", "", Some(cant_play), play),
-        On::Action(
-            &[ActionKind::TurnEnd],
-            "actor == owner && card.placed", "",
-            None,
-            turn_end,
-        ),
+        On::Play("", None, Some(cant_play), play),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, turn_end)),
         // 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下」 -- the
         // offer is about the *marked* player. The mark-match is a dynamic-key
         // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
-        On::Action(
-            &[ActionKind::PassPlayer],
-            "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", "",
-            Some(marked_here),
-            pass_player,
-        ),
+        On::Action(Action::PassPlayer("actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", None, Some(marked_here), pass_player)),
         // The body-top applicability checks are the condition now (C#
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
         // fixed roll yet.
-        On::FilterValue(&[FilterKind::DiceRollPlan], 
-            "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null",
-            None,
-            roll_plan,
-        ),
-        On::Action(
-            &[ActionKind::CounterChanged],
-            "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", "",
-            Some(crystals_changed_guard),
-            on_crystals_changed,
-        ),
+        On::Filter(Filter::DiceRollPlan("card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null", None, roll_plan)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"怪盗hello happy"#)
         .raw_name(r#"（薰）怪盗hello happy"#)
         .tags(&[])
         .text(r#"将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。"#)
-        .cell(r#"F5"#)
+        // sheet cell F5
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"濑田薰"#)]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -178,27 +159,18 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// fixed roll yet), the dice become 1d2 (direction) + 1d10 (distance).
 /// Applicability is the entry's condition; `mover` is
 /// the plan's `turn_player` (C# `m.Seat`).
-fn roll_plan(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
     // 规则书: 「投掷1d2（前后）」 -- the host pre-rolls the direction face into
     // `recorded_roll` (ABI v78) so this Filter stays pure. Odd face = reverse
     // (task formula; C# was `m.Reverse = num == 2` -- face 2 only. Documented
     // inversion: the sheet says 「前后」 as a 1d2, and the v78 convention is
     // odd=reverse).
     // TODO(规则书): the host does not fill `recorded_roll` yet, so the
-    //   direction stays `UNCHANGED` and the `kaoru_thief_rollplan` dir log is
+    //   direction stays `None` and the `kaoru_thief_rollplan` dir log is
     //   skipped (no face). Once the host pre-rolls, `reverse` and the log
     //   pick up the face. The 1d10 base is independent of that.
-    let dir = v.recorded_roll;
-    let reverse = if dir == card_sdk::abi::FilterValue::UNCHANGED {
-        card_sdk::abi::FilterValue::UNCHANGED
-    } else {
-        if dir % 2 == 1 {
-            1
-        } else {
-            0
-        }
-    };
-    if dir != card_sdk::abi::FilterValue::UNCHANGED {
+    let reverse = v.recorded_roll.map(|dir| dir % 2 == 1);
+    if let Some(dir) = v.recorded_roll {
         let mover = ctx::turn_player();
         ctx::log(
             mover,
@@ -208,28 +180,23 @@ fn roll_plan(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::F
         );
     }
     // 规则书: 「和1d10（距离）」 -- the face is *exactly* 1d10 (clear extra dice).
-    card_sdk::abi::FilterValue {
+    PlanValue {
         reverse,
-        clear_dice: 1,
-        base_count: 1,
-        base_sides: 10,
+        clear_dice: true,
+        base: Some(Dice { count: 1, sides: 10 }),
         ..v
     }
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
-}
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn pass_player_kani(player_id: i32) -> card_sdk::Asked {
-    pass_player(player_id)
 }
 
 #[cfg(kani)]
@@ -240,7 +207,13 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_plan_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+pub fn pass_player_kani(player_id: i32) -> card_sdk::Asked {
+    pass_player(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     roll_plan(player_id, v)
 }
 

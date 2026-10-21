@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
 
@@ -19,14 +19,14 @@ const TURNS: &str = "turns";
 pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     "event:元祖！邦多利酱",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::TurnStartBefore], "", "", Some(always), on_turn_start),
+        On::Play("", None, None, play),
+        On::Action(Action::TurnStartBefore("", None, Some(always), on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"元祖！邦多利酱"#)
             .text(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家的回合免费时间变为5秒，且回合恢复时间变为0秒。"#)
-            .cell(r#"A17"#)
+            // sheet cell A17
             .derived(false));
 
 fn always(_player_id: i32) -> bool {
@@ -76,6 +76,8 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

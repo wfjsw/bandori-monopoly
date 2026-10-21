@@ -10,6 +10,10 @@ pub enum VarTy {
     Bool,
     /// `-1` in the raw i64 means CEL `null`.
     OptInt,
+    /// A CEL string scalar. The IR stores `id_of(spelling)` in the slot (the
+    /// same FNV hash string literals bake to); `Eq` compares hashes. No heap,
+    /// no string pool -- the established `counter_name` / `counter_is` pattern.
+    Str,
 }
 
 /// Variable index. The discriminant is the `IrCtx` slot.
@@ -39,6 +43,7 @@ pub enum VarId {
     MoveKind,
     MoveRemaining,
     MoveMain,
+    MoveBySkill,
     MoveDir,
     EffectCount,
     Owner,
@@ -61,12 +66,12 @@ pub enum VarId {
     CardTile,
 }
 
-pub const SCALAR_COUNT: usize = 43;
+pub const SCALAR_COUNT: usize = 44;
 
 /// Flat identifier + type, in `VarId` order. Mirrors `vocab::VOCAB` scalars
 /// (Window + Candidate, non-Func).
 pub const VARS: &[(VarId, &str, VarTy)] = &[
-    (VarId::Kind, "kind", VarTy::Int),
+    (VarId::Kind, "kind", VarTy::Str),
     (VarId::Actor, "actor", VarTy::Int),
     (VarId::Target, "target", VarTy::Int),
     (VarId::Value, "value", VarTy::Int),
@@ -89,6 +94,7 @@ pub const VARS: &[(VarId, &str, VarTy)] = &[
     (VarId::MoveKind, "move_kind", VarTy::OptInt),
     (VarId::MoveRemaining, "move_remaining", VarTy::Int),
     (VarId::MoveMain, "move_main", VarTy::Bool),
+    (VarId::MoveBySkill, "move_by_skill", VarTy::Bool),
     (VarId::MoveDir, "move_dir", VarTy::Int),
     (VarId::EffectCount, "effect_count", VarTy::Int),
     (VarId::Owner, "owner", VarTy::Int),

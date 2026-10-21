@@ -11,21 +11,21 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use bandori_std::state_key; use card_sdk::abi::prop;
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
-        On::Play("", "", None, l12),
-        On::Action(&[bandori_std::kind::FireSpent], "", "", Some(fire_spent_guard), fire_spent),
+        On::Play("", None, None, l12),
+        On::Action(Action::MarkerSpent("", None, Some(fire_spent_guard), fire_spent)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()
-        .name("")
+        // sheet cell L12 -- the name line is blank; `#L12` is the name.
+        .name("#L12")
         .raw_name("")
         .tags(&[r#"手"#, r#"持续"#])
         .text(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#)
-        .cell(r#"L12"#)
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]))// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
 // property (C# `Card.HandLimitDelta`), continuous while this instance sits on
 // the field.
@@ -124,6 +124,10 @@ fn fire_spent(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

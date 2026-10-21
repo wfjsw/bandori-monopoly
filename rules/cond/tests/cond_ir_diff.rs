@@ -12,6 +12,7 @@ use rules_cond_ir::ctx::{FnId, IrCtx, SeatField, SetId};
 use rules_cond_ir::eval::values_cmp;
 use rules_cond_ir::nodes::{Kind, Node};
 use rules_cond_ir::vars::{VarId, VarTy, VARS};
+use rules_cond::vocab::Val as FillVal;
 use rules_cond_ir::{spec, Val};
 
 // ---------------------------------------------------------------------------
@@ -25,14 +26,27 @@ struct Fixture {
     ir: IrCtx,
 }
 
-fn boundary() -> [Val; 6] {
+fn boundary() -> [FillVal; 6] {
     [
-        Val::Int(i64::MIN),
-        Val::Int(-1),
-        Val::Int(0),
-        Val::Int(1),
-        Val::Int(i64::MAX),
-        Val::Null,
+        FillVal::Int(i64::MIN),
+        FillVal::Int(-1),
+        FillVal::Int(0),
+        FillVal::Int(1),
+        FillVal::Int(i64::MAX),
+        FillVal::Null,
+    ]
+}
+
+/// Boundary values for a `VarTy::Str` scalar: a few spellings plus the empty
+/// one. The IR stores `id_of(spelling)`; CEL compares the string.
+fn str_boundary() -> [FillVal; 6] {
+    [
+        FillVal::Str(String::new()),
+        FillVal::Str("pay".to_string()),
+        FillVal::Str("turnStart".to_string()),
+        FillVal::Str("r:bandori:21".to_string()),
+        FillVal::Str("diceRollResult".to_string()),
+        FillVal::Str("k0".to_string()),
     ]
 }
 
@@ -56,18 +70,23 @@ fn fixture_empty() -> Fixture {
     f
 }
 
-/// Fill a scalar into both sides, honouring OptInt/Bool typing.
-fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: Val) {
-    let raw = match v {
-        Val::Int(i) => i,
-        Val::Bool(b) => b as i64,
-        Val::Null => -1,
-        _ => 0,
+/// Fill a scalar into both sides, honouring OptInt/Bool/Str typing.
+/// `Str` scalars (`kind`) carry the **spelling** in `FillVal::Str`; the IR
+/// stores `id_of(spelling)` and the CEL snapshot stores the string.
+fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: FillVal) {
+    let raw = match &v {
+        FillVal::Int(i) => *i,
+        FillVal::Bool(b) => *b as i64,
+        FillVal::Str(s) => rules_cond_ir::ctx::id_of(s),
+        FillVal::Null => -1,
     };
-    f.ir.set_scalar_ty(id, ty, raw, matches!(v, Val::Null));
+    f.ir.set_scalar_ty(id, ty, raw, matches!(v, FillVal::Null));
     // Mirror into the cel snapshots by flat name.
     match id {
-        VarId::Kind => f.win.kind = raw,
+        VarId::Kind => f.win.kind = match &v {
+            FillVal::Str(s) => s.clone(),
+            _ => String::new(),
+        },
         VarId::Actor => f.win.actor = raw,
         VarId::Target => f.win.target = raw,
         VarId::Value => f.win.value = raw,
@@ -95,6 +114,7 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: Val) {
         VarId::MoveRemaining => f.win.mv.remaining = raw,
         VarId::MoveMain => f.win.mv.main = raw != 0,
         VarId::MoveDir => f.win.mv.dir = raw,
+        VarId::MoveBySkill => f.win.mv.by_skill = raw != 0,
         VarId::EffectCount => {
             // `effect_count` binds `win.chain.len()`. Grow/shrink the list and
             // keep the IR scalar in step (the raw boundary value is not a
@@ -102,7 +122,7 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: Val) {
             let n = raw.max(0).min(8) as usize;
             f.win.chain = (0..n)
                 .map(|i| rules_cond::ChainLink {
-                    kind: i as i64,
+                    kind: format!("kind{i}"),
                     from: 0,
                     hits: -1,
                 })
@@ -178,12 +198,12 @@ fn two_op_exprs(op: &str) -> Vec<String> {
 #[test]
 fn diff_operators_boundary_grid() {
     let mut f = fixture_empty();
-    set_scalar(&mut f, VarId::Actor, VarTy::Int, Val::Int(i64::MIN));
-    set_scalar(&mut f, VarId::Target, VarTy::Int, Val::Int(-1));
-    set_scalar(&mut f, VarId::Value, VarTy::Int, Val::Int(1));
-    set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, Val::Null);
-    set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, Val::Bool(true));
-    set_scalar(&mut f, VarId::PayIsRent, VarTy::Bool, Val::Bool(false));
+    set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(i64::MIN));
+    set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(-1));
+    set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(1));
+    set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, FillVal::Null);
+    set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(true));
+    set_scalar(&mut f, VarId::PayIsRent, VarTy::Bool, FillVal::Bool(false));
 
     // Also sweep the vars over the boundary grid in a second pass.
     let ops = [
@@ -253,7 +273,7 @@ fn diff_operators_boundary_grid() {
         "move_roll > 0",
         "card_placed && actor == owner",
         "value > 0 && actor == owner",
-        "kind == Teleport",
+        "move.kind == Teleport",
         "move_kind == Walk",
         "kind == DiceRollResult",
     ] {
@@ -273,31 +293,42 @@ fn diff_operators_boundary_grid() {
 #[test]
 fn diff_every_scalar_over_boundary() {
     for (idx, (_id, flat, ty)) in VARS.iter().enumerate() {
-        for v in boundary() {
+        let vals: Vec<FillVal> = if *ty == VarTy::Str {
+            str_boundary().to_vec()
+        } else {
+            boundary().to_vec()
+        };
+        for v in vals {
             let mut f = fixture_empty();
             // Give the partner vars some non-default values so comparisons bite.
-            set_scalar(&mut f, VarId::Actor, VarTy::Int, Val::Int(1));
-            set_scalar(&mut f, VarId::Value, VarTy::Int, Val::Int(1));
-            set_scalar(&mut f, VarId::Target, VarTy::Int, Val::Int(1));
-            set_scalar(&mut f, VarId::Owner, VarTy::Int, Val::Int(0));
-            set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, Val::Bool(true));
-            set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, Val::Int(3));
-            set_scalar(
-                &mut f,
-                id_at(idx).unwrap(),
-                *ty,
-                v,
-            );
-            let exprs = [
-                format!("{flat} == 1"),
-                format!("{flat} != 0"),
-                format!("{flat} > -1"),
-                format!("{flat} >= 0"),
-                format!("{flat} < 2"),
-                format!("{flat} <= 1"),
-                format!("{flat} == null"),
-                format!("!({flat} == 1)"),
-            ];
+            set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(1));
+            set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(1));
+            set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(1));
+            set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
+            set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(true));
+            set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, FillVal::Int(3));
+            set_scalar(&mut f, id_at(idx).unwrap(), *ty, v);
+            // String scalars only compare as strings; the int grid below is
+            // for Int/Bool/OptInt.
+            let exprs: Vec<String> = if *ty == VarTy::Str {
+                vec![
+                    format!("{flat} == \"pay\""),
+                    format!("{flat} != \"pay\""),
+                    format!("{flat} == \"turnStart\""),
+                    format!("{flat} != \"turnStart\""),
+                ]
+            } else {
+                vec![
+                    format!("{flat} == 1"),
+                    format!("{flat} != 0"),
+                    format!("{flat} > -1"),
+                    format!("{flat} >= 0"),
+                    format!("{flat} < 2"),
+                    format!("{flat} <= 1"),
+                    format!("{flat} == null"),
+                    format!("!({flat} == 1)"),
+                ]
+            };
             for e in exprs {
                 if compile(&e).is_err() {
                     continue;
@@ -349,8 +380,8 @@ fn diff_state_function() {
             ..rules_cond::PlayerSnap::default()
         },
     ];
-    set_scalar(&mut f, VarId::Owner, VarTy::Int, Val::Int(0));
-    set_scalar(&mut f, VarId::Actor, VarTy::Int, Val::Int(1));
+    set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
+    set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(1));
 
     for src in [
         "state(actor,'stay') > 0 && state(actor,'unstoppable') == 0",
@@ -423,37 +454,37 @@ fn diff_all_inventory_guards() {
         }
         // Default fixture.
         let mut f = fixture_empty();
-        set_scalar(&mut f, VarId::Actor, VarTy::Int, Val::Int(0));
-        set_scalar(&mut f, VarId::Owner, VarTy::Int, Val::Int(0));
-        set_scalar(&mut f, VarId::Value, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f, VarId::Target, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f, VarId::By, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f, VarId::TurnPlayer, VarTy::Int, Val::Int(0));
-        set_scalar(&mut f, VarId::TurnKey, VarTy::Int, Val::Int(7));
-        set_scalar(&mut f, VarId::Kind, VarTy::Int, Val::Int(9));
-        set_scalar(&mut f, VarId::CardId, VarTy::Int, Val::Int(42));
-        set_scalar(&mut f, VarId::TriggerCard, VarTy::Int, Val::Int(42));
-        set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, Val::Bool(true));
-        set_scalar(&mut f, VarId::MoveMain, VarTy::Bool, Val::Bool(true));
-        set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, Val::Int(3));
-        set_scalar(&mut f, VarId::MoveKind, VarTy::OptInt, Val::Int(0));
-        set_scalar(&mut f, VarId::PayIsRent, VarTy::Bool, Val::Bool(true));
-        set_scalar(&mut f, VarId::TileId, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f, VarId::TileOwner, VarTy::Int, Val::Int(0));
-        set_scalar(&mut f, VarId::TileHouses, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f, VarId::OwnerPos, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f, VarId::OwnerOut, VarTy::Int, Val::Int(0));
-        set_scalar(&mut f, VarId::OwnerMoney, VarTy::Int, Val::Int(500));
-        set_scalar(&mut f, VarId::OwnerHand, VarTy::Int, Val::Int(2));
-        set_scalar(&mut f, VarId::OwnerFire, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f, VarId::PlanFixedRoll, VarTy::OptInt, Val::Null);
+        set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::By, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::TurnPlayer, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::TurnKey, VarTy::Int, FillVal::Int(7));
+        set_scalar(&mut f, VarId::Kind, VarTy::Str, FillVal::Str("pay".to_string()));
+        set_scalar(&mut f, VarId::CardId, VarTy::Int, FillVal::Int(42));
+        set_scalar(&mut f, VarId::TriggerCard, VarTy::Int, FillVal::Int(42));
+        set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(true));
+        set_scalar(&mut f, VarId::MoveMain, VarTy::Bool, FillVal::Bool(true));
+        set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, FillVal::Int(3));
+        set_scalar(&mut f, VarId::MoveKind, VarTy::OptInt, FillVal::Int(0));
+        set_scalar(&mut f, VarId::PayIsRent, VarTy::Bool, FillVal::Bool(true));
+        set_scalar(&mut f, VarId::TileId, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::TileOwner, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::TileHouses, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::OwnerPos, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::OwnerOut, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::OwnerMoney, VarTy::Int, FillVal::Int(500));
+        set_scalar(&mut f, VarId::OwnerHand, VarTy::Int, FillVal::Int(2));
+        set_scalar(&mut f, VarId::OwnerFire, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::PlanFixedRoll, VarTy::OptInt, FillVal::Null);
         f.ir.set_insert(SetId::Circle, 1);
-        f.ir.set_insert(SetId::ChainKinds, 9);
+        f.ir.set_insert(SetId::ChainKinds, rules_cond_ir::ctx::id_of("pay"));
         // Mirror the function tables into the cel snapshot.
         f.win.tile_kinds = vec![String::new(), "circle".to_string()];
         f.win.tile_count = 2;
         f.win.chain = vec![rules_cond::ChainLink {
-            kind: 9,
+            kind: "pay".to_string(),
             from: 0,
             hits: -1,
         }];
@@ -483,10 +514,10 @@ fn diff_all_inventory_guards() {
 
         // A second fixture that flips several fields — more coverage per guard.
         let mut f2 = f.clone();
-        set_scalar(&mut f2, VarId::Actor, VarTy::Int, Val::Int(1));
-        set_scalar(&mut f2, VarId::Value, VarTy::Int, Val::Int(0));
-        set_scalar(&mut f2, VarId::CardPlaced, VarTy::Bool, Val::Bool(false));
-        set_scalar(&mut f2, VarId::MoveRoll, VarTy::OptInt, Val::Null);
+        set_scalar(&mut f2, VarId::Actor, VarTy::Int, FillVal::Int(1));
+        set_scalar(&mut f2, VarId::Value, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f2, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(false));
+        set_scalar(&mut f2, VarId::MoveRoll, VarTy::OptInt, FillVal::Null);
         assert_agree(src, &f2);
         agree += 1;
     }
@@ -562,21 +593,26 @@ fn diff_random_expression_trees() {
         }
         let mut f = fixture_empty();
         // Symbolic-ish fixture: vary a few fields per case.
-        set_scalar(&mut f, VarId::Actor, VarTy::Int, Val::Int(rng.below(4) as i64 - 1));
-        set_scalar(&mut f, VarId::Target, VarTy::Int, Val::Int(rng.below(4) as i64 - 1));
-        set_scalar(&mut f, VarId::Value, VarTy::Int, Val::Int(rng.next() as i64));
-        set_scalar(&mut f, VarId::Owner, VarTy::Int, Val::Int(0));
-        set_scalar(&mut f, VarId::Kind, VarTy::Int, Val::Int(rng.below(96) as i64));
-        set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, Val::Bool(rng.below(2) == 0));
+        set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(rng.below(4) as i64 - 1));
+        set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(rng.below(4) as i64 - 1));
+        set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(rng.next() as i64));
+        set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
+        set_scalar(
+            &mut f,
+            VarId::Kind,
+            VarTy::Str,
+            FillVal::Str(format!("k{}", rng.below(96))),
+        );
+        set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(rng.below(2) == 0));
         let roll = rng.below(3);
         set_scalar(
             &mut f,
             VarId::MoveRoll,
             VarTy::OptInt,
             if roll == 0 {
-                Val::Null
+                FillVal::Null
             } else {
-                Val::Int(roll as i64)
+                FillVal::Int(roll as i64)
             },
         );
         assert_agree(&expr, &f);

@@ -10,11 +10,11 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const DUI_BANG: CardDef = CardDef::new("event:对邦", &[On::Play("", "", None, play)])
+pub const DUI_BANG: CardDef = CardDef::new("event:对邦", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"对邦"#)
             .text(r#"所有人立刻进行一次1d20骰子拼点，所有点数最高者从所有点数最低者获得胜出点数x50的钱（例：最高点数18，最低点数16，则需支付 (18-16)x50=100）"#)
-            .cell(r#"A2"#)
+            // sheet cell A2
             .derived(false));
 
 /// 规则书: 「所有人立刻进行一次1d20骰子拼点」 -- one 1d20 per player, no
@@ -56,6 +56,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

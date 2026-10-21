@@ -11,12 +11,12 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"向着顶点"#)
         .raw_name(r#"向着顶点"#)
         .tags(&[])
         .text(r#"移动到下一个可被购买的livehouse格子，视为你的主要移动。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋。"#)
-        .cell(r#"E4"#)
+        // sheet cell E4
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`),
@@ -182,6 +182,10 @@ fn ceil_to(x: i64, unit: i64) -> i32 {
     }
     (((x + unit - 1) / unit) * unit) as i32
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

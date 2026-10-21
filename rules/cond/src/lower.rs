@@ -109,7 +109,14 @@ fn lower_ident(name: &str, nodes: &mut Vec<Node>) -> Result<u16, CondError> {
     if let Some((idx, _)) = by_flat(name) {
         return push(nodes, Node::leaf_var(idx));
     }
-    if let Some((_, v)) = kinds::constants().iter().find(|(n, _)| *n == name) {
+    // Kind spellings bake to `id_of(spelling)` -- the same hash a `VarTy::Str`
+    // scalar holds and the same hash a string literal bakes to. Eq compares
+    // hashes; no string pool.
+    if let Some((_, s)) = kinds::str_constants().iter().find(|(n, _)| *n == name) {
+        return push(nodes, Node::leaf_const_int(id_of(s)));
+    }
+    // Move-kind ints stay raw i64.
+    if let Some((_, v)) = kinds::int_constants().iter().find(|(n, _)| *n == name) {
         return push(nodes, Node::leaf_const_int(*v));
     }
     Err(CondError::UnknownVar(name.to_string()))
@@ -285,14 +292,15 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
         let Ok(text) = std::fs::read_to_string(&p) else {
             continue;
         };
+        // Phase 3 typed DSL: `On::Filter(Filter::Name(pre, …))` /
+        // `On::Action(Action::Name(pre, reason, …))` (and ruleset `Filters::` /
+        // `Actions::` namespaces). Retired `On::FilterFlag` / `On::FilterValue`
+        // are not recognized.
         for kind in [
             "Play",
             "Action",
             "Filter",
-            "FilterFlag",
-            "FilterValue",
             "Counteract",
-            "Gate",
             "Settle",
             "Mortgage",
             "Redeem",
@@ -304,7 +312,7 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
             let mut rest = text.as_str();
             while let Some(i) = rest.find(&pat) {
                 rest = &rest[i + pat.len()..];
-                if let Some(s) = pre_string(rest) {
+                if let Some(s) = on_pre_string(rest, kind == "Filter" || kind == "Action") {
                     if !s.is_empty() {
                         out.push(s);
                     }
@@ -314,15 +322,116 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
     }
 }
 
-/// After `On::Kind(`, the `pre` argument: skip an optional `&[...]` kind/name
-/// slice, then the first string literal (or `pre::MINE`).
+/// After `On::Kind(`, the `pre` argument.
+///
+/// `On::Filter` / `On::Action` take one nested ctor
+/// (`Ns::Name(pre, …)` / `Ns::Name(pre, counter_reason, …)`); `pre` is ctor
+/// arg 1 inside the inner parentheses. The namespace is whatever the ruleset
+/// named it (`Filter`/`Action` engine, `Filters`/`Actions`/… downstream).
+/// Everything else keeps the flat first-arg shape (no `&[kinds]` slice since
+/// the multi-kind lists are gone).
+fn on_pre_string(after: &str, nested: bool) -> Option<String> {
+    if nested {
+        let (open, _end) = find_ctor_call(after)?;
+        let inner = extract_parens(after, open)?;
+        let first = first_top_arg(inner)?;
+        return pre_string(first);
+    }
+    // Flat: skip an optional `&[...]` leftover, then first string / `pre::MINE`.
+    pre_string(after)
+}
+
+/// `Path::Ident(` at the head of `s`. Returns the index of `(`.
+fn find_ctor_call(s: &str) -> Option<(usize, usize)> {
+    let b = s.as_bytes();
+    let mut i = 0;
+    while i < b.len() && b[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    let mut name_end = 0;
+    loop {
+        let start = i;
+        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+            i += 1;
+        }
+        if i == start {
+            return None;
+        }
+        name_end = i;
+        let save = i;
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i + 1 < b.len() && b[i] == b':' && b[i + 1] == b':' {
+            i += 2;
+            continue;
+        }
+        i = save;
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i < b.len() && b[i] == b'(' {
+            return Some((i, name_end));
+        }
+        return None;
+    }
+}
+
+/// Text inside the balanced parens starting at `open`, excluding the parens.
+fn extract_parens(s: &str, open: usize) -> Option<&str> {
+    let b = s.as_bytes();
+    if open >= b.len() || b[open] != b'(' {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut j = open;
+    while j < b.len() {
+        if b[j] == b'(' {
+            depth += 1;
+        } else if b[j] == b')' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(&s[open + 1..j]);
+            }
+        }
+        j += 1;
+    }
+    None
+}
+
+/// First top-level comma-separated argument (nested `()`, `[]`, `{}`).
+fn first_top_arg(inner: &str) -> Option<&str> {
+    let mut depth = 0i32;
+    for (k, c) in inner.char_indices() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                let first = inner[..k].trim();
+                if !first.is_empty() {
+                    return Some(first);
+                }
+                // Leading comma / empty first arg: keep scanning.
+            }
+            _ => {}
+        }
+    }
+    let last = inner.trim();
+    if last.is_empty() {
+        None
+    } else {
+        Some(last)
+    }
+}
+
+/// The `pre` argument: a string literal, `pre::MINE`, or a known guard const.
 fn pre_string(s: &str) -> Option<String> {
     let b = s.as_bytes();
     let mut i = 0;
     while i < b.len() && b[i].is_ascii_whitespace() {
         i += 1;
     }
-    // Optional `&[ ... ]` kind / name slice.
+    // Optional `&[ ... ]` kind / name slice (legacy shape).
     if i < b.len() && b[i] == b'&' {
         i += 1;
         while i < b.len() && b[i].is_ascii_whitespace() {
@@ -346,14 +455,24 @@ fn pre_string(s: &str) -> Option<String> {
     }
     // `pre::MINE` sugar.
     let rest = &s[i..];
-    let rest = rest.trim_start().strip_prefix(',').map(|r| r.trim_start()).unwrap_or(rest.trim_start());
+    let rest = rest
+        .trim_start()
+        .strip_prefix(',')
+        .map(|r| r.trim_start())
+        .unwrap_or(rest.trim_start());
     if rest.starts_with("pre::MINE") {
         return Some("actor == owner".to_string());
     }
     // `bandori_std::guards::*` constant references — resolve to the literal.
     for (name, lit) in [
-        ("bandori_std::guards::OWN_START", "actor == owner && tile_is(tile.id, \"circle\")"),
-        ("bandori_std::guards::OWN_DEED", "actor == owner && tile_is(tile.id, \"ring\")"),
+        (
+            "bandori_std::guards::OWN_START",
+            "actor == owner && tile_is(tile.id, \"circle\")",
+        ),
+        (
+            "bandori_std::guards::OWN_DEED",
+            "actor == owner && tile_is(tile.id, \"ring\")",
+        ),
     ] {
         if rest.starts_with(name) {
             return Some(lit.to_string());

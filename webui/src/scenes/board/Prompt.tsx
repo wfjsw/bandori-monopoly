@@ -326,7 +326,15 @@ function CardPick({ p, carded, answer, auto }: {
   const [hover, setHover] = useState<number | null>(null);
   const focus = hover ?? picked;
   const focusId = focus === null ? null : (carded.find((c) => c.i === focus)?.id ?? null);
-  const reason = focusId ? cardCounterReason(focusId) : "";
+  // `counterReason` is one or more locale keys joined with `\n`; resolve at
+  // render (the display export carries keys, not baked strings).
+  const reason = focusId
+    ? cardCounterReason(focusId)
+        .split("\n")
+        .filter(Boolean)
+        .map((k) => fmtMsg({ k }))
+        .join("\n")
+    : "";
   // Enter confirms. Esc stays the sheet's retract -- ModalHost owns it and a
   // prompt never dismisses on Esc. `onControl: false` keeps Enter on a focused
   // card face for selecting that card.

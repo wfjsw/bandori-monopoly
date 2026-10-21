@@ -16,9 +16,9 @@
 //! gates the read and the CEL `slot('skill.soyoCrychic.armed')` condition, so
 //! the residual guard is gone.
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, FilterKind, MoveKind, Tile};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 /// The teleport is armed (0/1). Presence only -- the tile to teleport to rides
 /// in [`TILE`], so no value doubles as "nothing owed".
@@ -39,31 +39,16 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive cancel (`ask_yes` + `set_pay_amount(0)` + state writes)
         // sits immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(
-            &[ActionKind::PaySplitChooseBefore],
-            "actor != owner && tile.owner == owner && value > 0", "",
-            None,
-            on_pay,
-        ),
+        On::Action(Action::PaySplitChooseBefore("actor != owner && tile.owner == owner && value > 0", None, None, on_pay)),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
         // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
         // so the condition alone decides and no residual guard remains.
-        On::FilterValue(
-            &[FilterKind::DiceRollPlan],
-            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
-            None,
-            on_plan,
-        ),
+        On::Filter(Filter::DiceRollPlan("actor == owner && slot('skill.soyoCrychic.armed') != 0", None, on_plan)),
         // One-shot latch clear once the rewritten move has been taken. This is
         // a teleport plan, so `DiceRollAfter` never fires (no dice) -- `MoveAfter`
         // is the next event for both teleports and walks.
-        On::Action(
-            &[ActionKind::MoveAfter],
-            "actor == owner && slot('skill.soyoCrychic.armed') != 0", "",
-            None,
-            on_plan_after,
-        ),
+        On::Action(Action::MoveAfter("actor == owner && slot('skill.soyoCrychic.armed') != 0", None, None, on_plan_after)),
     ],
 );
 
@@ -95,14 +80,14 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 
 /// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan. The latch
 /// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`).
-/// Pure: the teleport rides `FilterValue.move_kind` / `teleport_to` / `resolve`.
+/// Pure: the teleport rides `PlanValue.move_kind` / `teleport_to` / `resolve`.
 /// The one-shot latch clear is [`on_plan_after`] on `MoveAfter` (teleports
 /// skip `DiceRollAfter`).
-fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     let t = state::get(player_id, TILE);
-    v.move_kind = 1; // teleport
-    v.teleport_to = t;
-    v.resolve = 1;
+    v.move_kind = Some(MoveKind::Teleport);
+    v.teleport_to = Some(Tile(t));
+    v.resolve = Some(true);
     ctx::log(
         player_id,
         &Msg::new(key!("soyo_crychic_moved")).tile("tile", t),
@@ -116,6 +101,8 @@ fn on_plan_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -125,7 +112,7 @@ pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     on_plan(player_id, v)
 }
 

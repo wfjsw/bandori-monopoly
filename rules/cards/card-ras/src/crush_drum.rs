@@ -13,7 +13,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const CRUSH_DRUM: CardDef = CardDef::new(
     "RAS:（MASKING）CRUSH ON THE DRUM!!!",
-    &[On::Play("", "", Some(cant_play), play)],
+    &[On::Play("", None, Some(cant_play), play)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"CRUSH ON THE DRUM!!!"#)
         .raw_name(r#"（MASKING）CRUSH ON THE DRUM!!!"#)
@@ -22,7 +22,7 @@ pub const CRUSH_DRUM: CardDef = CardDef::new(
 打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。
 [手]：
 移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数"#)
-        .cell(r#"H14"#)
+        // sheet cell H14
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"佐藤益木"#)]));
 
 /// C# `CardCrushDrum.WhyNot` = `H.MoveWhyNot(seat)`.
@@ -57,6 +57,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // dice-adding card" either.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

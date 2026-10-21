@@ -21,7 +21,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const UP: &str = "X";
 const DOWN: &str = "X标记(反)";
@@ -35,13 +35,13 @@ const RATE: &str = "skill.tsugushi.rate";
 pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     "skill:二叶筑紫:交给班长吧",
     &[
-        On::Play("", "", Some(can_cash), cash),
-        On::Action(&[ActionKind::TurnStartBefore], "", "", None, declare),
+        On::Play("", None, Some(can_cash), cash),
+        On::Action(Action::TurnStartBefore("", None, None, declare)),
         // （1）/（2） interactive redirects. Rides `PaySplitChooseBefore` (v78),
         // restoring the rulebook PaySplitChoose position: the offers sit immediately
         // before the pure `PaySplitChoose` filter stage (per leg on a split).
-        On::Action(&[ActionKind::PaySplitChooseBefore], "", "", Some(mine), on_gain),
-        On::Action(&[ActionKind::PaySplitChooseBefore], "", "", Some(other), on_theirs),
+        On::Action(Action::PaySplitChooseBefore("", None, Some(mine), on_gain)),
+        On::Action(Action::PaySplitChooseBefore("", None, Some(other), on_theirs)),
     ],
 ).silent(&[1]);
 
@@ -212,6 +212,8 @@ fn cash(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("tsugushi_done")));
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -7,20 +7,20 @@
 //! docs/rulebook/cards.json -- translated from the C# class and the card text.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
-        On::Play("", "", None, l11),
-        On::Action(&[card_sdk::abi::ActionKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') <= 0", "", None, sweep),
+        On::Play("", None, None, l11),
+        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", None, None, sweep)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
-        .name("")
+        // sheet cell L11 -- the name line is blank; `#L11` is the name.
+        .name("#L11")
         .raw_name("")
         .tags(&[])
         .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。"#)
-        .cell(r#"L11"#)
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 fn l11(player_id: i32) -> card_sdk::Asked {
@@ -48,6 +48,10 @@ fn sweep(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

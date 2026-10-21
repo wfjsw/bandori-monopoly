@@ -36,9 +36,12 @@
 extern crate alloc;
 
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+use alloc::string::String;
+#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 use alloc::vec::Vec;
 
 pub mod abi;
+pub mod payload;
 pub mod meta;
 pub mod msg;
 
@@ -74,7 +77,17 @@ mod kani_alloc;
 #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
 pub mod native;
 
+pub mod kinds;
+
+pub use kinds::{Action, ActionEntry, Filter, FilterEntry, FilterShape, KindInfo};
 pub use msg::Msg;
+
+/// A locale key the client resolves (`key!` / `err.*` / `log.*` / `counter.*`).
+pub use abi::MsgKey;
+pub use payload::{
+    DealValue, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue,
+};
+pub use payload::FilterPayload;
 
 /// The run stopped at a prompt: the host has published the question and will
 /// re-run this effect from the top with the answer plugged in (see the replay
@@ -108,9 +121,9 @@ pub mod rt;
 ///
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
-///     On::Play("", "", None, play),
-///     On::Action(&[ActionKind::TurnEnd], pre::MINE, "", guard, tick),
-///     On::FilterFlag(&[FilterKind::ImmuneAll], pre::MINE, None, immune),
+///     On::Play("", None, None, play),
+///     On::Action(Action::TurnEnd(pre::MINE, None, guard, tick)),
+///     On::Filter(Filter::ImmuneAll(pre::MINE, None, immune)),
 /// ]);
 /// ```
 ///
@@ -281,10 +294,10 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", "", None, use_skill),                                     // 0: flashes
-    ///     On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
-    ///              "", "", None, declare_cap),                                   // 1: bookkeeping
-    /// ]).silent(&[1]);
+    ///     On::Play("", None, None, use_skill),                                     // 0: flashes
+    ///     On::Action(Action::TurnStartBefore("", None, None, declare_cap)),         // 1: bookkeeping
+    ///     On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),         // 2: bookkeeping
+    /// ]).silent(&[1, 2]);
     /// ```
     pub const fn silent(self, entries: &'static [i32]) -> Self {
         Self {
@@ -339,8 +352,8 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", "", None, use_skill),                 // 0: Auto
-    ///     On::Action(&[ActionKind::TurnEnd], "", "", None, tick), // 1: Always (self-only)
+    ///     On::Play("", None, None, use_skill),                 // 0: Auto
+    ///     On::Action(Action::TurnEnd("", None, None, tick)), // 1: Always (self-only)
     /// ]).flash(&[(1, Flash::Always)]);
     /// ```
     pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
@@ -400,7 +413,7 @@ impl CardDef {
     /// use card_sdk::abi::text_slot;
     /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
     ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Action(&[ActionKind::PassTile], "", "", Some(pass_pays), on_pass),      // 1
+    ///     On::Action(Action::PassTile("", None, Some(pass_pays), on_pass)),      // 1
     /// ]).texts(&[
     ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
     ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
@@ -436,11 +449,10 @@ impl CardDef {
     /// use card_sdk::meta::CardMeta;
     /// pub const CARD: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[...])
     ///     .meta(&CardMeta::new()
-    ///         .name("Sumimi不会解散哦")
+    ///         .name("Sumimi不会解散哦") // sheet cell B2
     ///         .raw_name("Sumimi不会解散哦")
     ///         .text("...")
     ///         .tags(&["手"])
-    ///         .cell("B2")
     ///         .fields(&[("group", "Sumimi"), ("owner", "")]));
     /// ```
     pub const fn meta(self, meta: &'static crate::meta::CardMeta) -> Self {
@@ -595,10 +607,75 @@ impl CardDef {
     }
 }
 
+/// Play-from-hand entry ([`On::Play`]).
+#[derive(Clone, Copy)]
+pub struct PlayEntry {
+    /// Gate condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause).
+    pub counter_reason: Option<MsgKey>,
+    /// The gate (the old `On::CantPlay`): a pure query with no prompts,
+    /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
+    /// show. `None` for the gate itself means no gate.
+    pub why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
+/// [反击] entry ([`On::Counteract`]).
+#[derive(Clone, Copy)]
+pub struct CounteractEntry {
+    /// The chain links this [反击] answers.
+    pub links: &'static [abi::ChainKind],
+    /// The guard's condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause).
+    pub counter_reason: Option<MsgKey>,
+    /// Residual guard (docs/GUARDS.md §2/§4.3). `None` means G4 deleted it
+    /// because the condition alone decides.
+    pub guard: Option<fn(player_id: i32) -> bool>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
+/// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
+/// "Same shape as On::Settle" for all of them.
+#[derive(Clone, Copy)]
+pub struct RuleEntry {
+    /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// Residual guard. `None` = G4-deleted (condition-only entry).
+    pub guard: Option<fn(player_id: i32) -> bool>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
+/// Cross-card message entry ([`On::Message`]).
+#[derive(Clone, Copy)]
+pub struct MessageEntry {
+    /// Message names this card answers (`ctx::send`); empty = never dispatched.
+    pub names: &'static [&'static str],
+    /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
+    pub pre: &'static str,
+    /// Residual guard. `None` = G4-deleted (condition-only entry).
+    pub guard: Option<fn(player_id: i32) -> bool>,
+    /// The effect.
+    pub body: fn(player_id: i32) -> Asked,
+}
+
 /// One entry point of a card. The variant says what the
 /// entry is for, and its kind list is typed to match -- a counteraction can only be
 /// declared at a [`abi::ChainKind`], an event reaction at a [`abi::ActionKind`],
 /// a modifier/gate at a [`abi::FilterKind`]. An empty list is never dispatched.
+///
+/// Construction goes through the [`On::Play`] / [`On::Counteract`] / … `const fn`s
+/// (same spelling as the old tuple variants). Those cannot share a name with an
+/// enum variant, so the variants are the `*Body` arms holding a named-field
+/// entry ([`PlayEntry`] / [`CounteractEntry`] / [`RuleEntry`] /
+/// [`MessageEntry`] / [`ActionEntry`] / [`FilterEntry`]). Match on the
+/// `*Body` names and read named fields; declare with the const fns.
 ///
 /// WordPress `do_action` / `apply_filters` split (ABI v73):
 /// [`On::Action`] is an **event reaction** -- it may emit effects (`ctx::gain`,
@@ -617,88 +694,27 @@ impl CardDef {
 /// before the wasm guard is instantiated.
 #[derive(Clone, Copy)]
 pub enum On {
-    /// Play this card from hand. The first field is the gate's
-    /// condition (see the type doc). The second is `counterReason` -- the
-    /// human-readable 「…时」 clause the counteraction prompt shows for this
-    /// trigger (often `""` here). The third is the gate
-    /// (the old `On::CantPlay`): a pure query with no prompts,
-    /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
-    /// show. `None` for the gate itself means no gate. The fourth field is the
-    /// effect.
-    Play(
-        &'static str,
-        &'static str,
-        Option<fn(player_id: i32) -> Option<Msg>>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// A [反击] at these chain links: the guard decides whether the card is
-    /// offered in the hand window, then the effect resolves. Second field: the
-    /// guard's condition (see the type doc); third: `counterReason` -- the
-    /// human-readable 「…时」 clause the counteraction prompt shows for this
-    /// trigger; fourth: the residual guard -- a pure query, `Option`: `None`
-    /// means G4 deleted it because the condition alone decides
-    /// (docs/GUARDS.md §2/§4.3). Fifth: the effect.
-    Counteract(
-        &'static [abi::ChainKind],
-        &'static str,
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// An **event reaction** at these field-hook kinds: runs automatically
-    /// while the card is in play. Same shape as [`On::Counteract`]. May emit
-    /// effects; does not modify the triggering value. Kinds are
-    /// [`abi::ActionKind`] (non-filter: [`abi::TriggerKind::is_filter`] == false).
-    /// Third field: `counterReason` -- the human-readable 「…时」 clause the
-    /// counteraction prompt shows when this trigger is the [反击] window.
-    Action(
-        &'static [abi::ActionKind],
-        &'static str,
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// **Integer value transform** (ABI v74). Body is
-    /// `fn(player_id, value) -> i32` -- pure: no prompts, no `ctx::gain`,
-    /// no plan/deal writes. The host folds the return into the running figure
-    /// (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds).
-    /// Kinds are [`abi::FilterKind`] ([`abi::TriggerKind::is_filter`] == true)
-    /// whose payload is an integer: PaySplitAdd / PaySplitMul / PaySplitAt / PayCombinedAdd /
-    /// PayCombinedMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
-    /// DiceRollValue.
-    Filter(
-        &'static [abi::FilterKind],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32, value: i32) -> i32,
-    ),
-    /// **Boolean decision** (ABI v74). Body is `fn(player_id, value) -> bool`
-    /// -- pure. `false` cancels / substitutes the pipeline stage.
-    /// Kinds: PayCombinedCancel (false = drop the command), PaySplitChoose
-    /// (false = cancel the payment), and the decision gates (AbnormalGuard /
-    /// ImmuneAll / Untargetable / Redirect / BuyGate / ActGate / PayGate /
-    /// MoveGate / ExclusiveUse / PlayGate / OnBoardGate / TargetableGate --
-    /// true = allowed).
-    /// The generic marker spend-substitution window (`ChargePaying`, id 78;
-    /// name is payload) is **not** here: its 「可」 opt-in prompts, so it remains
-    /// `On::Action`. A PaySplitChoose that *also* rewrites the amount is split
-    /// into [`On::Filter`] (amount) plus this variant (cancel).
-    FilterFlag(
-        &'static [abi::FilterKind],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32, value: i32) -> bool,
-    ),
-    /// **Typed struct rewrite** (ABI v74). Body is
-    /// `fn(player_id, v: FilterValue) -> FilterValue` -- pure.
-    /// Kinds: BuyAssign (deal owner/houses/mortgaged) and DiceRollPlan
-    /// (move-plan shaping). See [`abi::FilterValue`].
-    FilterValue(
-        &'static [abi::FilterKind],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32, v: abi::FilterValue) -> abi::FilterValue,
-    ),
+    /// Play this card from hand. Built by [`On::Play`].
+    PlayBody(PlayEntry),
+    /// A [反击] at a set of chain links. Built by [`On::Counteract`].
+    CounteractBody(CounteractEntry),
+    /// An **event reaction** at one field-hook kind: runs automatically
+    /// while the card is in play. Same body shape as [`On::Counteract`]. May
+    /// emit effects; does not modify the triggering value. One kind per entry
+    /// -- a card that listens at two raises declares two entries. Built from
+    /// the `action_kinds!` constructors (`Action::TurnStart(pre, reason, guard, body)`).
+    Action(ActionEntry),
+    /// **Pure value / decision / gate / payload rewrite** at one filter kind.
+    /// Built from the `filter_kinds!` constructors
+    /// (`Filter::DiceRollPlan(pre, guard, body)`). The entry's [`FilterShape`]
+    /// names the body type:
+    /// - [`FilterShape::Value`] -- `fn(i32, i32) -> i32` scalar fold
+    /// - [`FilterShape::Flag`] -- `fn(i32, i32) -> bool` decision
+    /// - [`FilterShape::Gate`] -- `fn(i32, GateValue) -> GateValue`
+    /// - [`FilterShape::Payload`] -- `fn(i32, P) -> P` typed rewrite
+    ///
+    /// Pure: copy, tweak, return. No prompts, no `ctx::gain`.
+    Filter(FilterEntry),
     /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
     /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
     /// `CardDef` per tile kind and this is their body; the engine keeps
@@ -706,32 +722,21 @@ pub enum On {
     /// Runs inside the settle chain: a counteraction to the settle link, or a
     /// field hook that replaces the body, shapes whether and how it runs. Same
     /// shape as [`On::Action`]; the condition sees the settling tile / actor.
-    Settle(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// Built by [`On::Settle`].
+    SettleBody(RuleEntry),
     /// The rule's **mortgage body** -- what runs when the deed this rule
     /// instance governs is [抵押]d (net `mortgage`, pay-pipeline raise-funds /
     /// optional funding, or a card-driven mortgage). Same shape as
     /// [`On::Settle`]. The body owns eligibility (规则书 基础规则 5: 「运营阶段
     /// 及需[支付]或[消耗]资金且资金不足时可以选择抵押拥有的地契」) and the
     /// payout amount; the engine keeps only the flag write + direct money move
-    /// via [`crate::ctx::apply_mortgage`].
-    Mortgage(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// via [`crate::ctx::apply_mortgage`]. Built by [`On::Mortgage`].
+    MortgageBody(RuleEntry),
     /// The rule's **redeem body** -- what runs when the deed is [赎回]d
     /// (规则书 基础规则 6: 「运营阶段可赎回拥有的地契」). Same shape as
     /// [`On::Mortgage`]; the engine keeps only the flag clear + direct money
-    /// move via [`crate::ctx::apply_redeem`].
-    Redeem(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// move via [`crate::ctx::apply_redeem`]. Built by [`On::Redeem`].
+    RedeemBody(RuleEntry),
     /// The rule's **buy body** -- what runs when the deed this rule instance
     /// governs is bought (settle offer, card-driven `ctx::buy`, agent branch,
     /// acquire / auction / card kinds). Same shape as [`On::Mortgage`]. The
@@ -739,32 +744,21 @@ pub enum On {
     /// deed write, log); the engine keeps the money pipeline and deed write as
     /// `ctx` primitives (`ctx::pay_buy`, `ctx::assign_deed`). Force-buy money
     /// remains a direct transfer outside effects (规则书 其他规则 6).
-    Buy(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// Built by [`On::Buy`].
+    BuyBody(RuleEntry),
     /// The rule's **build body** -- what runs when a house is built on the deed
     /// this rule instance governs (规则书 「可选择[消耗]…进行升级建造」). Same
     /// shape as [`On::Buy`]; the engine keeps the money pipeline and house
     /// write as `ctx` primitives (`ctx::pay_build`, `ctx::add_house`).
-    Build(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// A **cross-card message** this card answers (`ctx::send`). First field
-    /// is the list of message names it answers (empty is never dispatched).
+    /// Built by [`On::Build`].
+    BuildBody(RuleEntry),
+    /// A **cross-card message** this card answers (`ctx::send`). The names list
+    /// is the message names it answers (empty is never dispatched).
     /// Same condition / residual guard / body shape as [`On::Action`]. The
     /// handler reads the sender and payload from [`ctx::message`] and returns
     /// a reply value via `ctx::message::reply`. Handling a message does not
-    /// flash the card (internal plumbing).
-    Message(
-        &'static [&'static str],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
+    /// flash the card (internal plumbing). Built by [`On::Message`].
+    MessageBody(MessageEntry),
 }
 
 /// Condition-authoring sugar (docs/GUARDS.md §4.3). The strings are CEL; the
@@ -776,26 +770,162 @@ pub mod pre {
 }
 
 impl On {
+    /// Play this card from hand.
+    ///
+    /// `pre` is the gate's condition (see the type doc). `counter_reason` is
+    /// the 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause). `why_not` is the gate (the old `On::CantPlay`): a pure query
+    /// with no prompts, `None` = playable, `Some(why)` = blocked and `why` is
+    /// the reason to show. `None` for the gate itself means no gate. `body` is
+    /// the effect.
+    #[allow(non_snake_case)]
+    pub const fn Play(
+        pre: &'static str,
+        counter_reason: Option<MsgKey>,
+        why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::PlayBody(PlayEntry {
+            pre,
+            counter_reason,
+            why_not,
+            body,
+        })
+    }
+
+    /// A [反击] at these chain links: the guard decides whether the card is
+    /// offered in the hand window, then the effect resolves.
+    #[allow(non_snake_case)]
+    pub const fn Counteract(
+        links: &'static [abi::ChainKind],
+        pre: &'static str,
+        counter_reason: Option<MsgKey>,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::CounteractBody(CounteractEntry {
+            links,
+            pre,
+            counter_reason,
+            guard,
+            body,
+        })
+    }
+
+    /// The rule's **settle body** (`docs/TILES.md`).
+    #[allow(non_snake_case)]
+    pub const fn Settle(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::SettleBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **mortgage body**.
+    #[allow(non_snake_case)]
+    pub const fn Mortgage(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::MortgageBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **redeem body**.
+    #[allow(non_snake_case)]
+    pub const fn Redeem(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::RedeemBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **buy body**.
+    #[allow(non_snake_case)]
+    pub const fn Buy(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::BuyBody(RuleEntry { pre, guard, body })
+    }
+
+    /// The rule's **build body**.
+    #[allow(non_snake_case)]
+    pub const fn Build(
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::BuildBody(RuleEntry { pre, guard, body })
+    }
+
+    /// A **cross-card message** this card answers (`ctx::send`).
+    #[allow(non_snake_case)]
+    pub const fn Message(
+        names: &'static [&'static str],
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::MessageBody(MessageEntry {
+            names,
+            pre,
+            guard,
+            body,
+        })
+    }
+
     /// Replace the entry's condition string (docs/GUARDS.md §4.3). A const
     /// builder so a declaration can remain a one-liner:
     ///
     /// ```ignore
-    /// On::Counteract(&[ChainKind::DiceRollResult], "", r#"你将要失去或支付资金"#, Some(can_counteract), counteract).pre(pre::MINE)
+    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_pay")), Some(can_counteract), counteract).pre(pre::MINE)
     /// ```
     pub const fn pre(self, pre: &'static str) -> Self {
         match self {
-            On::Play(_, reason, g, r) => On::Play(pre, reason, g, r),
-            On::Counteract(k, _, reason, g, r) => On::Counteract(k, pre, reason, g, r),
-            On::Action(k, _, reason, g, r) => On::Action(k, pre, reason, g, r),
-            On::Filter(k, _, g, r) => On::Filter(k, pre, g, r),
-            On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
-            On::FilterValue(k, _, g, r) => On::FilterValue(k, pre, g, r),
-            On::Settle(_, g, r) => On::Settle(pre, g, r),
-            On::Mortgage(_, g, r) => On::Mortgage(pre, g, r),
-            On::Redeem(_, g, r) => On::Redeem(pre, g, r),
-            On::Buy(_, g, r) => On::Buy(pre, g, r),
-            On::Build(_, g, r) => On::Build(pre, g, r),
-            On::Message(n, _, g, r) => On::Message(n, pre, g, r),
+            On::PlayBody(mut e) => {
+                e.pre = pre;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.pre = pre;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.pre = pre;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.pre = pre;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.pre = pre;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.pre = pre;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.pre = pre;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.pre = pre;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.pre = pre;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.pre = pre;
+                On::MessageBody(e)
+            }
         }
     }
 
@@ -803,17 +933,42 @@ impl On {
     /// then skips the `OP_GUARD` instantiation entirely (`admits_pre`).
     pub const fn no_guard(self) -> Self {
         match self {
-            On::Counteract(k, pre, reason, _, r) => On::Counteract(k, pre, reason, None, r),
-            On::Action(k, pre, reason, _, r) => On::Action(k, pre, reason, None, r),
-            On::Filter(k, pre, _, r) => On::Filter(k, pre, None, r),
-            On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
-            On::FilterValue(k, pre, _, r) => On::FilterValue(k, pre, None, r),
-            On::Settle(pre, _, r) => On::Settle(pre, None, r),
-            On::Mortgage(pre, _, r) => On::Mortgage(pre, None, r),
-            On::Redeem(pre, _, r) => On::Redeem(pre, None, r),
-            On::Buy(pre, _, r) => On::Buy(pre, None, r),
-            On::Build(pre, _, r) => On::Build(pre, None, r),
-            On::Message(n, pre, _, r) => On::Message(n, pre, None, r),
+            On::CounteractBody(mut e) => {
+                e.guard = None;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.guard = None;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.guard = None;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.guard = None;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.guard = None;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.guard = None;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.guard = None;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.guard = None;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.guard = None;
+                On::MessageBody(e)
+            }
             other => other,
         }
     }
@@ -823,17 +978,15 @@ impl On {
     /// signature -- use [`Self::has_guard`] for the host's skip-the-wasm test.
     pub const fn guard(&self) -> Option<fn(i32) -> bool> {
         match self {
-            On::Counteract(_, _, _, g, _)
-            | On::Action(_, _, _, g, _)
-            | On::Filter(_, _, g, _)
-            | On::FilterFlag(_, _, g, _)
-            | On::FilterValue(_, _, g, _)
-            | On::Settle(_, g, _)
-            | On::Mortgage(_, g, _)
-            | On::Redeem(_, g, _)
-            | On::Message(_, _, g, _) => *g,
-            On::Buy(_, g, _)
-            | On::Build(_, g, _) => *g,
+            On::CounteractBody(e) => e.guard,
+            On::SettleBody(e) => e.guard,
+            On::MortgageBody(e) => e.guard,
+            On::RedeemBody(e) => e.guard,
+            On::BuyBody(e) => e.guard,
+            On::BuildBody(e) => e.guard,
+            On::MessageBody(e) => e.guard,
+            On::Action(e) => e.guard,
+            On::Filter(e) => e.guard,
             _ => None,
         }
     }
@@ -842,18 +995,16 @@ impl On {
     /// `false` = G4-deleted: the condition alone decides (`admits_pre`).
     pub const fn has_guard(&self) -> bool {
         match self {
-            On::Play(_, _, g, _) => g.is_some(),
-            On::Counteract(_, _, _, g, _)
-            | On::Action(_, _, _, g, _)
-            | On::Filter(_, _, g, _)
-            | On::FilterFlag(_, _, g, _)
-            | On::FilterValue(_, _, g, _)
-            | On::Settle(_, g, _)
-            | On::Mortgage(_, g, _)
-            | On::Redeem(_, g, _)
-            | On::Message(_, _, g, _) => g.is_some(),
-            On::Buy(_, g, _)
-            | On::Build(_, g, _) => g.is_some(),
+            On::PlayBody(e) => e.why_not.is_some(),
+            On::CounteractBody(e) => e.guard.is_some(),
+            On::SettleBody(e) => e.guard.is_some(),
+            On::MortgageBody(e) => e.guard.is_some(),
+            On::RedeemBody(e) => e.guard.is_some(),
+            On::BuyBody(e) => e.guard.is_some(),
+            On::BuildBody(e) => e.guard.is_some(),
+            On::MessageBody(e) => e.guard.is_some(),
+            On::Action(e) => e.guard.is_some(),
+            On::Filter(e) => e.guard.is_some(),
         }
     }
 
@@ -861,94 +1012,64 @@ impl On {
     /// ruleset build (`docs/GUARDS.md` §4.3).
     pub const fn condition(&self) -> &'static str {
         match self {
-            On::Play(pre, _, _, _)
-            | On::Counteract(_, pre, _, _, _)
-            | On::Action(_, pre, _, _, _)
-            | On::Filter(_, pre, _, _)
-            | On::FilterFlag(_, pre, _, _)
-            | On::FilterValue(_, pre, _, _)
-            | On::Settle(pre, _, _)
-            | On::Mortgage(pre, _, _)
-            | On::Redeem(pre, _, _)
-            | On::Message(_, pre, _, _) => *pre,
-            On::Buy(pre, _, _)
-            | On::Build(pre, _, _) => *pre,
+            On::PlayBody(e) => e.pre,
+            On::CounteractBody(e) => e.pre,
+            On::SettleBody(e) => e.pre,
+            On::MortgageBody(e) => e.pre,
+            On::RedeemBody(e) => e.pre,
+            On::BuyBody(e) => e.pre,
+            On::BuildBody(e) => e.pre,
+            On::MessageBody(e) => e.pre,
+            On::Action(e) => e.pre,
+            On::Filter(e) => e.pre,
         }
     }
 
-    /// The trigger's `counterReason` -- the human-readable 「…时」 clause the
-    /// counteraction prompt shows (`""` for entries that carry no clause).
-    pub const fn counter_reason(&self) -> &'static str {
+    /// The trigger's `counterReason` -- the 「…时」 clause the counteraction
+    /// prompt shows. A locale key the client resolves; `None` for entries that
+    /// carry no clause.
+    pub const fn counter_reason(&self) -> Option<MsgKey> {
         match self {
-            On::Counteract(_, _, reason, _, _)
-            | On::Action(_, _, reason, _, _)
-            | On::Play(_, reason, _, _) => *reason,
-            _ => "",
+            On::PlayBody(e) => e.counter_reason,
+            On::CounteractBody(e) => e.counter_reason,
+            On::Action(e) => e.counter_reason,
+            _ => None,
         }
     }
 
     pub const fn kind(&self) -> abi::OnKind {
         match self {
-            On::Play(..) => abi::OnKind::Play,
-            On::Counteract(..) => abi::OnKind::Counteract,
+            On::PlayBody(..) => abi::OnKind::Play,
+            On::CounteractBody(..) => abi::OnKind::Counteract,
             On::Action(..) => abi::OnKind::Action,
             On::Filter(..) => abi::OnKind::Filter,
-            On::FilterFlag(..) => abi::OnKind::Filter,
-            On::FilterValue(..) => abi::OnKind::Filter,
-            On::Settle(..) => abi::OnKind::Settle,
-            On::Mortgage(..) => abi::OnKind::Mortgage,
-            On::Redeem(..) => abi::OnKind::Redeem,
-            On::Buy(..) => abi::OnKind::Buy,
-            On::Build(..) => abi::OnKind::Build,
-            On::Message(..) => abi::OnKind::Message,
+            On::SettleBody(..) => abi::OnKind::Settle,
+            On::MortgageBody(..) => abi::OnKind::Mortgage,
+            On::RedeemBody(..) => abi::OnKind::Redeem,
+            On::BuyBody(..) => abi::OnKind::Buy,
+            On::BuildBody(..) => abi::OnKind::Build,
+            On::MessageBody(..) => abi::OnKind::Message,
         }
     }
 
-    /// Kind/variant agreement (ABI v73): a [`On::Filter`] may only list filter
-    /// kinds and an [`On::Action`] only non-filter kinds. Wrong-side *consts*
-    /// are a rustc error at the signature; this cheap check still catches raw
-    /// ids (`ActionKind(i)` / rule-defined kinds) crossing the wire. Returns
-    /// the first mismatched kind code, or `Ok(())`.
-    pub fn check_kind_variant(&self) -> Result<(), i32> {
+    /// The wire **spellings** this entry answers (empty for non-trigger
+    /// entries): `TriggerKind::spelling` -- engine camelCase or
+    /// `"r:{key}:{id}"`. `On::Action` / `On::Filter` are one kind each.
+    pub fn triggers(&self) -> Vec<String> {
         match self {
-            On::Action(kinds, ..) => {
-                for k in *kinds {
-                    let code = k.as_i32();
-                    if abi::TriggerKind::from_i32(code).is_filter() {
-                        return Err(code);
-                    }
-                }
-                Ok(())
+            On::CounteractBody(e) => e.links.iter().map(|x| x.spelling().into_owned()).collect(),
+            On::Action(e) => {
+                let mut v = Vec::new();
+                v.push(e.kind.spelling().into_owned());
+                v
             }
-            On::Filter(kinds, ..)
-            | On::FilterFlag(kinds, ..)
-            | On::FilterValue(kinds, ..) => {
-                for k in *kinds {
-                    let code = k.as_i32();
-                    if !abi::TriggerKind::from_i32(code).is_filter() {
-                        return Err(code);
-                    }
-                }
-                Ok(())
+            On::Filter(e) => {
+                let mut v = Vec::new();
+                v.push(e.kind.spelling().into_owned());
+                v
             }
-            _ => Ok(()),
-        }
-    }
-
-    /// The wire values this entry answers (empty for non-trigger entries).
-    /// The three kind enums share [`abi::TriggerKind`]'s numbering, so this is
-    /// what the manifest carries.
-    pub fn triggers(&self) -> Vec<i32> {
-        match self {
-            On::Counteract(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::Action(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::Filter(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::FilterFlag(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::FilterValue(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            // Message names travel as the manifest's `triggers` string list
-            // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
-            // The names ride a separate manifest field; see `rt.rs`.
-            On::Message(..) => Vec::new(),
+            // Message names ride a separate manifest field; see `rt.rs`.
+            On::MessageBody(..) => Vec::new(),
             _ => Vec::new(),
         }
     }
@@ -956,7 +1077,7 @@ impl On {
     /// The message names this [`On::Message`] entry answers (empty otherwise).
     pub fn message_names(&self) -> Vec<&'static str> {
         match self {
-            On::Message(names, ..) => names.to_vec(),
+            On::MessageBody(e) => e.names.to_vec(),
             _ => Vec::new(),
         }
     }
@@ -965,224 +1086,102 @@ impl On {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::abi::{ActionKind, FilterKind, TriggerKind};
+    use crate::abi::TriggerKind;
 
-    fn body(_: i32) -> Asked {
-        Ok(())
-    }
-    fn fbody(_p: i32, v: i32) -> i32 {
-        v
-    }
-
+    /// Docs list every filter-pipeline kind as `Filter::KINDS` and every
+    /// event / hook kind as `Action::KINDS`. Walk the registries the
+    /// `filter_kinds!` / `action_kinds!` macros emit -- the old hardcoded
+    /// const lists drifted every time a kind was added.
     #[test]
     fn is_filter_set_matches_docs() {
-        for k in [
-            TriggerKind::DiceRollValue,
-            TriggerKind::PaySplitChoose,
-            TriggerKind::PaySplitAdd,
-            TriggerKind::PaySplitMul,
-            TriggerKind::PaySplitAt,
-            TriggerKind::DiceRollPlan,
-            TriggerKind::BuyAdd,
-            TriggerKind::BuyMul,
-            TriggerKind::BuySet,
-            TriggerKind::BuyAssign,
-            TriggerKind::PayCombinedAdd,
-            TriggerKind::PayCombinedMul,
-            TriggerKind::PayCombinedCancel,
-            TriggerKind::TurnBonusTime,
-            TriggerKind::TurnBaseTime,
-            TriggerKind::DiceRollValue,
-            TriggerKind::BuyGate,
-            TriggerKind::AbnormalGuard,
-            TriggerKind::ActGate,
-            TriggerKind::PayGate,
-            TriggerKind::MoveGate,
-            TriggerKind::ExclusiveUse,
-            TriggerKind::PlayGate,
-            TriggerKind::OnBoardGate,
-            TriggerKind::TargetableGate,
-            TriggerKind::ImmuneAll,
-            TriggerKind::Untargetable,
-            TriggerKind::Redirect,
-        ] {
-            assert!(k.is_filter(), "expected filter kind {:?}", k.as_str());
+        for k in Filter::KINDS {
+            assert!(k.is_filter, "Filter::{} KindInfo.is_filter", k.name);
+            assert!(k.kind.is_filter(), "Filter::{} must be is_filter", k.name);
         }
-        for k in [
-            TriggerKind::TurnStart,
-            TriggerKind::TurnEnd,
-            TriggerKind::Pass,
-            TriggerKind::PayAfter,
-            TriggerKind::DiceRollAfter,
-            TriggerKind::DiceRollResult, // [反击] window, not a filter
-            TriggerKind::SettleBody,
-            TriggerKind::CounterChanged,
-            TriggerKind::DrewBefore,
-            TriggerKind(78), // marker spend-substitution (name is payload); prompts, remains Action
-        ] {
-            assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
+        for k in Action::KINDS {
+            assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
+            assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
         }
+        // Count pin: the docs name 27 filter kinds (the 10 gates + the
+        // modifier stages). Adding one means the docs table moves too.
+        assert_eq!(Filter::KINDS.len(), 27, "Filter::KINDS row count");
     }
 
     /// Pin the typed sides against `TriggerKind::is_filter()` (the single
-    /// declaration source of truth). Every ActionKind const id must be
-    /// `!is_filter()` and every FilterKind const id must be `is_filter()`.
+    /// declaration source of truth for **engine** kinds) and against the
+    /// registry's own `KindInfo::is_filter`. Walk `Filter::KINDS` /
+    /// `Action::KINDS` -- the macro table is the declaration, and every row
+    /// already references its `FilterKind::$name` / `ActionKind::$name` const,
+    /// so a wrong-side const fails here and at the constructor signature.
+    ///
+    /// Ruleset kinds (`bandori_std::kind::{Actions, Filters}`) are pinned in
+    /// `crates/game-rules/tests/kind_table_pin.rs` (this crate cannot see
+    /// them). `TriggerKind::is_filter()` answers `false` for every ruleset id
+    /// -- the registration's `KindInfo` / constructor type is authoritative
+    /// there.
     #[test]
     fn typed_kind_const_sides_match_is_filter() {
-        let action: &[(&str, ActionKind)] = &[
-            ("None", ActionKind::None),
-            ("DiceRollBefore", ActionKind::DiceRollBefore),
-            ("DiceRollResult", ActionKind::DiceRollResult),
-            ("TurnStart", ActionKind::TurnStart),
-            ("Pass", ActionKind::Pass),
-            ("PassPlayer", ActionKind::PassPlayer),
-            ("SettleBefore", ActionKind::SettleBefore),
-            ("Settle", ActionKind::Settle),
-            ("Mortgage", ActionKind::Mortgage),
-            ("Pay", ActionKind::Pay),
-            ("Paid", ActionKind::Paid),
-            ("Bankrupt", ActionKind::Bankrupt),
-            ("Card", ActionKind::Card),
-            ("Event", ActionKind::Event),
-            ("Abnormal", ActionKind::Abnormal),
-            ("Target", ActionKind::Target),
-            // Wire id 21 is a ruleset-declared kind
-            // (`bandori_std::kind`); this table lists only the
-            // engine-generic named consts.
-            ("State", ActionKind::State),
-            ("Counteracted", ActionKind::Counteracted),
-            ("DrawOut", ActionKind::DrawOut),
-            ("TwoCards", ActionKind::TwoCards),
-            ("TurnStartBefore", ActionKind::TurnStartBefore),
-            ("PassBefore", ActionKind::PassBefore),
-            ("MortgageBefore", ActionKind::MortgageBefore),
-            ("BankruptBefore", ActionKind::BankruptBefore),
-            ("CardAfter", ActionKind::CardAfter),
-            ("EventAfter", ActionKind::EventAfter),
-            ("SettleAfter", ActionKind::SettleAfter),
-            ("BuyBefore", ActionKind::BuyBefore),
-            ("BuyAfter", ActionKind::BuyAfter),
-            ("BuildBefore", ActionKind::BuildBefore),
-            ("BuildAfter", ActionKind::BuildAfter),
-            ("DiscardBefore", ActionKind::DiscardBefore),
-            ("DiscardAfter", ActionKind::DiscardAfter),
-            ("EndTurnBefore", ActionKind::EndTurnBefore),
-            ("EndTurnAfter", ActionKind::EndTurnAfter),
-            ("LeaveBefore", ActionKind::LeaveBefore),
-            ("LeaveAfter", ActionKind::LeaveAfter),
-            ("TurnEnd", ActionKind::TurnEnd),
-            ("Drawn", ActionKind::Drawn),
-            ("PassTile", ActionKind::PassTile),
-            ("PayAfter", ActionKind::PayAfter),
-            ("DiceRollAfter", ActionKind::DiceRollAfter),
-            ("CardPlayed", ActionKind::CardPlayed),
-            ("Targeted", ActionKind::Targeted),
-            ("TurnEndBefore", ActionKind::TurnEndBefore),
-            ("TurnEndAfter", ActionKind::TurnEndAfter),
-            ("Discarded", ActionKind::Discarded),
-            ("DeckBeforeGame", ActionKind::DeckBeforeGame),
-            ("DeckAtGameStart", ActionKind::DeckAtGameStart),
-            ("Drew", ActionKind::Drew),
-            ("Reshuffled", ActionKind::Reshuffled),
-            ("Bought", ActionKind::Bought),
-            ("SettleBody", ActionKind::SettleBody),
-            ("BeforeOut", ActionKind::BeforeOut),
-            ("Teleported", ActionKind::Teleported),
-            ("Effect", ActionKind::Effect),
-            ("CounterChanged", ActionKind::CounterChanged),
-            ("DrewBefore", ActionKind::DrewBefore),
-            ("TileResolved", ActionKind::TileResolved),
-            ("MoveResolved", ActionKind::MoveResolved),
-            ("BankruptResolved", ActionKind::BankruptResolved),
-            ("MoveBefore", ActionKind::MoveBefore),
-            ("MoveAfter", ActionKind::MoveAfter),
-            ("MarkerSpend", ActionKind::MarkerSpend),
-            ("MarkerGain", ActionKind::MarkerGain),
-            ("AtEnd", ActionKind::AtEnd),
-            ("PaySplitChooseBefore", ActionKind::PaySplitChooseBefore),
-            ("PayCombinedAddBefore", ActionKind::PayCombinedAddBefore),
-        ];
-        for (name, k) in action {
-            // `None`'s wire name is "" (unset); every other const has a wire name.
-            let wire = k.as_trigger().as_str();
-            if *name != "None" {
-                assert!(!wire.is_empty(), "ActionKind::{name} has empty wire name");
-            }
+        for k in Filter::KINDS {
+            assert!(k.is_filter, "Filter::{} KindInfo.is_filter", k.name);
             assert!(
-                !k.as_trigger().is_filter(),
-                "ActionKind::{name} must be !is_filter()"
+                k.kind.is_filter(),
+                "Filter::{} must be is_filter()",
+                k.name
+            );
+            assert!(
+                !k.spelling().is_empty(),
+                "Filter::{} has empty wire spelling",
+                k.name
+            );
+            assert_eq!(
+                k.wire,
+                game_kinds::wire(k.kind.id),
+                "Filter::{} wire row",
+                k.name
             );
         }
-        let filter: &[(&str, FilterKind)] = &[
-            ("PaySplitChoose", FilterKind::PaySplitChoose),
-            ("PaySplitAdd", FilterKind::PaySplitAdd),
-            ("PaySplitMul", FilterKind::PaySplitMul),
-            ("PaySplitAt", FilterKind::PaySplitAt),
-            ("DiceRollPlan", FilterKind::DiceRollPlan),
-            ("AbnormalGuard", FilterKind::AbnormalGuard),
-            ("ImmuneAll", FilterKind::ImmuneAll),
-            ("Untargetable", FilterKind::Untargetable),
-            ("Redirect", FilterKind::Redirect),
-            ("BuyGate", FilterKind::BuyGate),
-            ("BuyAdd", FilterKind::BuyAdd),
-            ("BuyMul", FilterKind::BuyMul),
-            ("BuySet", FilterKind::BuySet),
-            ("BuyAssign", FilterKind::BuyAssign),
-            ("PayCombinedAdd", FilterKind::PayCombinedAdd),
-            ("PayCombinedMul", FilterKind::PayCombinedMul),
-            ("PayCombinedCancel", FilterKind::PayCombinedCancel),
-            ("ActGate", FilterKind::ActGate),
-            ("PayGate", FilterKind::PayGate),
-            ("MoveGate", FilterKind::MoveGate),
-            ("ExclusiveUse", FilterKind::ExclusiveUse),
-            ("TurnBonusTime", FilterKind::TurnBonusTime),
-            ("TurnBaseTime", FilterKind::TurnBaseTime),
-            ("PlayGate", FilterKind::PlayGate),
-            ("OnBoardGate", FilterKind::OnBoardGate),
-            ("TargetableGate", FilterKind::TargetableGate),
-            ("DiceRollValue", FilterKind::DiceRollValue),
-        ];
-        assert_eq!(filter.len(), 27);
-        for (name, k) in filter {
-            assert!(!k.as_trigger().as_str().is_empty(), "FilterKind::{name}");
+        for k in Action::KINDS {
+            assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
             assert!(
-                k.as_trigger().is_filter(),
-                "FilterKind::{name} must be is_filter()"
+                !k.kind.is_filter(),
+                "Action::{} must be !is_filter()",
+                k.name
             );
+            // `None`'s wire name is "" (unset); every other const has one.
+            if k.name != "None" {
+                assert!(
+                    !k.spelling().is_empty(),
+                    "Action::{} has empty wire spelling",
+                    k.name
+                );
+            }
+            if k.name != "None" {
+                assert_eq!(
+                    k.wire,
+                    game_kinds::wire(k.kind.id),
+                    "Action::{} wire row",
+                    k.name
+                );
+            }
         }
     }
 
-    /// Runtime assert for raw ids crossing the wire (`ActionKind(i)` /
-    /// `FilterKind(i)` / rule-defined kinds). Wrong-side *consts* are already a
-    /// rustc error at the `On` signature.
+    /// The constructor type pins the side: `Filter::KINDS` is all `is_filter`
+    /// and `Action::KINDS` is all `!is_filter`. (The old `check_kind_variant`
+    /// runtime assert -- and its raw-id "smuggle" list-form setup, which built
+    /// `On::Filter(&[FilterKind(TriggerKind::engine(45))], …)` to prove the
+    /// runtime check fired -- are **deleted**. A wrong-side *const* is now a
+    /// rustc error at the constructor signature; a raw `FilterKind(t)` can
+    /// still be built, but nothing in the `On` DSL takes a bare list anymore,
+    /// so there is no call site to smuggle through.)
     #[test]
     fn kind_variant_agreement() {
-        const FILTER_OK: &[FilterKind] = &[FilterKind::PaySplitAdd];
-        const ACTION_OK: &[ActionKind] = &[ActionKind::TurnEnd];
-        // Raw-id smuggle: the typed consts cannot land here, but `FilterKind(45)`
-        // can. The cheap runtime assert still fires.
-        const FILTER_BAD: &[FilterKind] = &[FilterKind(45)]; // TurnEnd
-        const ACTION_BAD: &[ActionKind] = &[ActionKind(55)]; // PaySplitAdd
-        const ACTION_MIXED: &[ActionKind] = &[ActionKind::TurnEnd, ActionKind(55)];
-        let filter_ok = On::Filter(FILTER_OK, "", None, fbody);
-        assert!(filter_ok.check_kind_variant().is_ok());
-        let action_ok = On::Action(ACTION_OK, "", "", None, body);
-        assert!(action_ok.check_kind_variant().is_ok());
-        let filter_bad = On::Filter(FILTER_BAD, "", None, fbody);
-        assert_eq!(
-            filter_bad.check_kind_variant(),
-            Err(TriggerKind::TurnEnd.as_i32())
-        );
-        let action_bad = On::Action(ACTION_BAD, "", "", None, body);
-        assert_eq!(
-            action_bad.check_kind_variant(),
-            Err(TriggerKind::PaySplitAdd.as_i32())
-        );
-        let mixed = On::Action(ACTION_MIXED, "", "", None, body);
-        assert_eq!(
-            mixed.check_kind_variant(),
-            Err(TriggerKind::PaySplitAdd.as_i32())
-        );
+        for k in Filter::KINDS {
+            assert!(k.kind.is_filter(), "Filter::{} must be is_filter", k.name);
+        }
+        for k in Action::KINDS {
+            assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
+        }
     }
 
     #[test]
@@ -1210,25 +1209,25 @@ mod tests {
     fn trigger_kind_ids() {
         // TriggerKind ids are opaque; pin the retired wire names and holes.
         // FlipEffect = 94 / FlipAfter = 104 retired in v83 -- never reuse.
-        assert_eq!(TriggerKind::from_i32(94).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(104).as_str(), "");
+        assert_eq!(TriggerKind::engine(94).spelling(), "");
+        assert_eq!(TriggerKind::engine(104).spelling(), "");
         assert_eq!(TriggerKind::from_str("flipEffect"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("flipAfter"), TriggerKind::None);
         // Ids 16 / 17 / 19 / 20 / 22 (retired abnormal / force kinds) retired in
         // v84 -- never reuse.
-        assert_eq!(TriggerKind::from_i32(16).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(17).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(19).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(20).as_str(), "");
-        assert_eq!(TriggerKind::from_i32(22).as_str(), "");
+        assert_eq!(TriggerKind::engine(16).spelling(), "");
+        assert_eq!(TriggerKind::engine(17).spelling(), "");
+        assert_eq!(TriggerKind::engine(19).spelling(), "");
+        assert_eq!(TriggerKind::engine(20).spelling(), "");
+        assert_eq!(TriggerKind::engine(22).spelling(), "");
         assert_eq!(TriggerKind::from_str("stop"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("retiredAb19"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("retiredAb20"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("forced"), TriggerKind::None);
         // Live neighbours still round-trip.
-        assert_eq!(TriggerKind::from_str("drewBefore").as_str(), "drewBefore");
-        assert_eq!(TriggerKind::from_str("atEnd").as_str(), "atEnd");
-        assert_eq!(TriggerKind::from_str("paySplitChooseBefore").as_str(), "paySplitChooseBefore");
+        assert_eq!(TriggerKind::from_str("drewBefore").spelling(), "drewBefore");
+        assert_eq!(TriggerKind::from_str("atEnd").spelling(), "atEnd");
+        assert_eq!(TriggerKind::from_str("paySplitChooseBefore").spelling(), "paySplitChooseBefore");
     }
 }

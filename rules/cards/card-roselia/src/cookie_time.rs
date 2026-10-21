@@ -7,14 +7,14 @@
 //! whole discard pile back into the deck and gain 500 per returned card.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, key, Msg, On};
 
-pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"曲奇时间"#)
         .raw_name(r#"曲奇时间"#)
         .tags(&[])
         .text(r#"将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。"#)
-        .cell(r#"E5"#)
+        // sheet cell E5
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// C# `CardCookieTime.WhyNot`: 「弃卡区没有卡」.
@@ -50,6 +50,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // and get the notification without any card-side raise.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

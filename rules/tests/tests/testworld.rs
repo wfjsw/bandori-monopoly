@@ -337,9 +337,9 @@ impl CardWorld for TestWorld {
     fn set_trigger_spare(&mut self, seat: i32) {
         self.trigger.spare(seat);
     }
-    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32) {
+    fn declare_trigger_effect(&mut self, kind: &str, target: i32, from: i32, tile: i32, value: i32) {
         self.trigger.declare(game_core::engine::rules::Effect {
-            kind: card_sdk::abi::TriggerKind::from_i32(kind).as_str(),
+            kind: kind.to_string(),
             target,
             from,
             tile,
@@ -354,12 +354,12 @@ impl CardWorld for TestWorld {
             b.price = v;
         }
     }
-    fn set_trigger_deal_owner(&mut self, v: i32) {
+    fn set_trigger_deal_owner(&mut self, v: Option<game_core::engine::rules::Payee>) {
         if let Some(b) = &mut self.trigger.buy {
-            b.deal_owner = Some(v);
+            b.deal_owner = v;
         }
     }
-    fn set_trigger_deal_houses(&mut self, v: i32) {
+    fn set_trigger_deal_houses(&mut self, v: Option<i32>) {
         if let Some(b) = &mut self.trigger.buy {
             b.deal_houses = v;
         }

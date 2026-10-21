@@ -16,11 +16,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
-        On::Play("", "", Some(can_go), go),
+        On::Play("", None, Some(can_go), go),
         On::Counteract(
             &[ChainKind::Effect],
-            "by != owner && by >= 0 && effect.hits(owner)",
-            r#"你被其他人的卡的效果影响"#,
+            "by != owner && by >= 0 && effect.hits(owner)", Some(key!("even_lost_when")),
             None,
             counteract,
         ),
@@ -30,7 +29,7 @@ pub const EVEN_LOST: CardDef = CardDef::new(
         .raw_name(r#"即使迷茫着"#)
         .tags(&[r#"反击"#, r#"持续"#])
         .text(r#"（1）[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。（2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。"#)
-        .cell(r#"I2"#)
+        // sheet cell I2
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -70,6 +69,10 @@ fn go(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

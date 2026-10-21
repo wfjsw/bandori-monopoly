@@ -11,23 +11,18 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
     "PPP:（香澄）大家我都喜欢哦",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时」 -- a
         // still-walking (non-teleport) pass by someone other than the owner.
         // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家
         // 在此卡所在格子[强制停下]」 -- the body only acts on a step onto this
         // card's own tile (`card.tile`, docs/GUARDS.md §4.2).
-        On::Action(
-            &[ActionKind::PassTile],
-            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0", "",
-            None,
-            pass_tile,
-        ),
+        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0", None, None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"大家我都喜欢哦"#)
@@ -37,7 +32,7 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
 将此卡放置在“星之鼓动山丘”上。
 [持续]：
 其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子[强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半。"#)
-        .cell(r#"B15"#)
+        // sheet cell B15
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"户山香澄"#)]));
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
@@ -101,6 +96,10 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

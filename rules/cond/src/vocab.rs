@@ -30,7 +30,7 @@ pub enum Scope {
     Func { arity: usize, cand: bool },
 }
 
-/// CEL type of a name. The schema is int-only; `Bool` binds a CEL bool and
+/// CEL type of a name. Scalars are ints / bools / one string (`kind`);
 /// `OptInt` binds `null` when the value is absent (`-1`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Ty {
@@ -38,11 +38,16 @@ pub enum Ty {
     Bool,
     /// `null` when the accessor returns `-1` (e.g. `move.roll` with no face).
     OptInt,
+    /// A CEL string (kind spellings). The IR stores `id_of(spelling)`.
+    Str,
 }
 
 /// How a scalar name is fetched from a [`CondView`]. The fn pointer *is* the
-/// binding: adding a name never touches `eval`'s body.
+/// binding: adding a name never touches `eval`'s body. `Str` names use
+/// [`StrGetter`] instead (see [`val_of`]).
 pub type Getter = fn(&dyn CondView) -> i64;
+/// String-scalar fetch (kind spellings).
+pub type StrGetter = fn(&dyn CondView) -> std::borrow::Cow<'_, str>;
 
 /// How a function name is served. Each variant names the CEL call shape and
 /// the hidden context variable the (eager) evaluator bakes from the view.
@@ -134,7 +139,10 @@ pub struct Name {
     pub scope: Scope,
     pub ty: Ty,
     /// Scalar fetch (`Scope::Window` / `Scope::Candidate`); zero for funcs.
+    /// Unused when `ty == Ty::Str` (see [`Self::get_str`]).
     pub get: Getter,
+    /// String-scalar fetch; only `kind` is `Ty::Str` today.
+    pub get_str: StrGetter,
     /// Function shape (`Scope::Func`); `Fx::Neighbor` unused otherwise.
     pub fx: Fx,
     /// One-line doc (kept in `docs/GUARDS.md`'s vocabulary table).
@@ -142,6 +150,7 @@ pub struct Name {
 }
 
 const NO_GET: Getter = |_| 0;
+const NO_GET_STR: StrGetter = |_| std::borrow::Cow::Borrowed("");
 const NO_FX: Fx = Fx::Neighbor;
 
 /// The vocabulary. **The** definition of every condition name.
@@ -152,10 +161,11 @@ pub const VOCAB: &[Name] = &[
         aliases: &["trigger.kind"],
         flat: "kind",
         scope: Scope::Window,
-        ty: Ty::Int,
-        get: |v| v.kind(),
+        ty: Ty::Str,
+        get: NO_GET,
+        get_str: |v| v.kind(),
         fx: NO_FX,
-        doc: "trigger kind wire value (`trigger.kind` is an alias)",
+        doc: "trigger kind wire spelling (`trigger.kind` is an alias)",
     },
     Name {
         cel: "actor",
@@ -164,6 +174,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.actor(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "trigger actor seat, -1 = none",
     },
@@ -174,6 +185,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.target(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "trigger target seat, -1 = none",
     },
@@ -184,6 +196,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.value(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the amount involved",
     },
@@ -194,6 +207,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.step(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "turn stage (0 = no turn)",
     },
@@ -204,6 +218,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.by(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "`by_card` owner seat, -1 = none",
     },
@@ -214,6 +229,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Bool,
         get: |v| v.pay_is_rent() as i64,
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "is this pay rent",
     },
@@ -224,6 +240,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.roll_source(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "where a roll came from, 0 = none (roll_source::NONE)",
     },
@@ -234,6 +251,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Bool,
         get: |v| v.abnormal() as i64,
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the AbnormalGate window",
     },
@@ -244,6 +262,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.turn_player(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "whose turn it is",
     },
@@ -254,6 +273,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.turn_key(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "once-per-turn key; compared against `slot(…)`",
     },
@@ -264,6 +284,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::OptInt,
         get: |v| v.plan_fixed_roll(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "this turn's fixed main-move roll; `null` when unset",
     },
@@ -274,6 +295,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.trigger_card(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the trigger's card id hash; comparable to `card.id`",
     },
@@ -284,6 +306,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.counter_name(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the trigger's counter / message name hash (`Trigger.name`); `counter_is('…')` is the string spelling",
     },
@@ -294,6 +317,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.tile_id(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the trigger's tile, -1 = none",
     },
@@ -304,6 +328,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.tile_owner(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "owning seat, -1 = unowned",
     },
@@ -314,6 +339,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.tile_houses(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "house count",
     },
@@ -324,6 +350,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.tile_mortgaged(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "1 = mortgaged",
     },
@@ -334,6 +361,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.tile_price(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "price",
     },
@@ -344,6 +372,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::OptInt,
         get: |v| v.move_roll(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "face shown; `null` when none",
     },
@@ -354,6 +383,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::OptInt,
         get: |v| v.move_kind(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "move kind; `null` when no move",
     },
@@ -364,6 +394,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.move_remaining(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "steps left",
     },
@@ -374,6 +405,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Bool,
         get: |v| v.move_main() as i64,
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "was this the turn's main move",
     },
@@ -384,6 +416,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Bool,
         get: |v| v.move_by_skill() as i64,
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the move was shaped or started by a skill",
     },
@@ -394,6 +427,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.move_dir(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "1 forward, -1 backward; 1 when no move",
     },
@@ -404,6 +438,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Window,
         ty: Ty::Int,
         get: |v| v.chain_count(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "effect-chain length (`chain.count` is an alias)",
     },
@@ -415,6 +450,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the candidate's owner seat",
     },
@@ -425,6 +461,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "same as `owner`",
     },
@@ -435,6 +472,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_money(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's money",
     },
@@ -445,6 +483,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_charge(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's fire pot",
     },
@@ -455,6 +494,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_group_pool("crystals"),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's band crystals (the band-skill pool, not on-card)",
     },
@@ -465,6 +505,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_hand(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's hand size",
     },
@@ -475,6 +516,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_pos(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's board position",
     },
@@ -485,6 +527,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_out(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "1 = the owner is out of the game",
     },
@@ -495,6 +538,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_stay(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's stay count",
     },
@@ -505,6 +549,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_stun(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's stun count",
     },
@@ -515,6 +560,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_exile(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's exile flag",
     },
@@ -525,6 +571,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_no_hand(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "1 = 「不可持有手牌」",
     },
@@ -535,6 +582,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_persona(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's character id hash",
     },
@@ -545,6 +593,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_group(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's band id hash",
     },
@@ -555,6 +604,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.owner_tiles(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the owner's owned-tile count",
     },
@@ -565,6 +615,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.card_id(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "candidate card id hash",
     },
@@ -575,6 +626,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Bool,
         get: |v| v.card_placed() as i64,
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "is the running instance in play",
     },
@@ -585,6 +637,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Candidate,
         ty: Ty::Int,
         get: |v| v.card_tile(),
+        get_str: NO_GET_STR,
         fx: NO_FX,
         doc: "the instance's tile; -1 = with its owner, -2 = not placed",
     },
@@ -596,6 +649,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: true },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::StrInt {
             var: "_slots",
             missing: 0,
@@ -610,6 +664,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: true },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::StrInt {
             var: "_toks",
             missing: 0,
@@ -624,6 +679,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::StrInt {
             var: "_move_tags",
             missing: 0,
@@ -638,6 +694,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: true },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::StrInt {
             var: "_card_counters",
             missing: 0,
@@ -652,6 +709,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::IntHas {
             var: "_counter_name",
             fill: |v| {
@@ -672,6 +730,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::StrInt {
             var: "_tile_ids",
             missing: -1,
@@ -687,6 +746,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::TileIs {
             var: "_tile_is",
             fill: |v| {
@@ -713,6 +773,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::TileAttr {
             var: "_tile_attr",
             fill: |v| {
@@ -736,6 +797,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 3, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::TileIn {
             var: "_tile_in",
             fill: |v| v.tile_in_rows(),
@@ -749,6 +811,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_money",
             field: |v, s| v.money(s),
@@ -762,6 +825,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_fire",
             field: |v, s| v.charge(s),
@@ -775,6 +839,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_crystals",
             field: |v, s| v.group_pool(s, "crystals"),
@@ -788,6 +853,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_hand",
             field: |v, s| v.hand(s),
@@ -801,6 +867,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_pos",
             field: |v, s| v.pos(s),
@@ -814,6 +881,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_persona",
             field: |v, s| v.persona(s),
@@ -827,6 +895,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_group",
             field: |v, s| v.group(s),
@@ -840,6 +909,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_tiles",
             field: |v, s| v.tiles(s),
@@ -853,6 +923,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatIntIs {
             var: "_character",
             field: |v, s| v.persona(s),
@@ -866,6 +937,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatIntIs {
             var: "_band",
             field: |v, s| v.group(s),
@@ -879,6 +951,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: true },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::IntHas {
             var: "_blocked",
             fill: |v| v.blocked_groups(),
@@ -892,6 +965,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::Neighbor,
         doc: "neighbor(p, delta) -> seat id, wrapping",
     },
@@ -902,9 +976,11 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::IntHas {
             var: "_chain_kinds",
-            fill: |v| v.chain_kinds(),
+            // Spellings -> `id_of` hashes (the IR `SetId::ChainKinds` keys).
+            fill: |v| v.chain_kinds().iter().map(|s| crate::id_of(s)).collect(),
         },
         doc: "effect.has(kind) / chain.has(kind)",
     },
@@ -915,6 +991,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::IntHas {
             var: "_hit_seats",
             fill: |v| v.chain_hits(),
@@ -929,6 +1006,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_gains",
             field: |v, s| v.gains_this_turn(s),
@@ -942,6 +1020,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_targeted",
             field: |v, s| v.targeted_count(s),
@@ -956,6 +1035,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatStrInt {
             var: "_state",
             fill: |v| v.state_table(),
@@ -970,6 +1050,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::IntPred {
             calc: |n| {
                 let mut x = n.unsigned_abs();
@@ -998,6 +1079,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::IntIntConst {
             var: "_tile_count",
             calc: |a, b, n| {
@@ -1017,6 +1099,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::BinInt {
             var: "_on_tile",
             fill: |v| {
@@ -1038,6 +1121,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::BinInt {
             var: "_next_dist",
             fill: |v| {
@@ -1059,6 +1143,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::BinInt {
             var: "_others_within",
             fill: |v| {
@@ -1080,6 +1165,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::BinInt {
             var: "_owned_within",
             fill: |v| {
@@ -1101,6 +1187,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::BinInt {
             var: "_on_path",
             fill: |v| {
@@ -1122,6 +1209,7 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
+        get_str: NO_GET_STR,
         fx: Fx::SeatInt {
             var: "_between",
             field: |v, s| v.between(s),
@@ -1201,6 +1289,8 @@ pub fn struct_roots() -> Vec<(&'static str, Vec<&'static str>)> {
 pub enum Val {
     Int(i64),
     Bool(bool),
+    /// A CEL string (kind spelling). The IR bakes this to `id_of`.
+    Str(String),
     Null,
 }
 
@@ -1239,6 +1329,7 @@ fn val_of(n: &Name, v: &dyn CondView) -> Val {
         Ty::Int => Val::Int((n.get)(v)),
         Ty::Bool => Val::Bool((n.get)(v) != 0),
         Ty::OptInt => opt((n.get)(v)),
+        Ty::Str => Val::Str((n.get_str)(v).to_string()),
     }
 }
 

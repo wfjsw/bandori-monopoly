@@ -16,7 +16,7 @@ use rules_cond::{compile, CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, T
 
 fn window() -> WindowCtx {
     WindowCtx {
-        kind: 0,
+        kind: String::new(),
         actor: 1,
         target: -1,
         tile: TileSnap {
@@ -42,8 +42,8 @@ fn window() -> WindowCtx {
         roll_source: 0,
         abnormal: false,
         chain: vec![
-            ChainLink { kind: rules_cond::trig::Pay, from: 1, hits: 0 },
-            ChainLink { kind: rules_cond::trig::Effect, from: 2, hits: -1 },
+            ChainLink { kind: rules_cond::trig::Pay.to_string(), from: 1, hits: 0 },
+            ChainLink { kind: rules_cond::trig::Effect.to_string(), from: 2, hits: -1 },
         ],
         turn_player: 1,
         turn_key: 7,

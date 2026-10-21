@@ -6,6 +6,7 @@
   "here_the_world_note": "holding one card (miracle crystals remain)",
   "here_the_world_placed": "\"Here the world\" was placed on {{who}}'s field (played by {{by}})",
   "here_the_world_returned": "the held card returned to {{who}}'s hand (Here the world)",
+  "here_the_world_when": "when someone plays two cards in the same turn",
   "idol_and_band_no_effect": "already at 3,000 or more — no effect",
   "idol_and_band_redeemed": "You have already redeemed this turn.",
   "idol_and_band_why": "money reset to 3,000 (Idol and Band)",
@@ -19,11 +20,13 @@
   "l12_taken": "{{card}} joined {{who}}'s hand (#L12)",
   "l12_title": "#L12",
   "mana_champion_log": "\"Singing Contest 5-Peat\": the others may play [Counter] cards for {{who}}",
+  "mana_champion_when": "when you or your tile is about to be hit by an effect from someone else",
   "no_breakup_ask": "[Teleport] to which tile? (money must end up with a repeated digit after settling, or you return and every effect is cancelled)",
   "no_breakup_mortgaged": "You have already mortgaged or redeemed this turn.",
   "no_breakup_moved": "{{who}} [teleported] to {{tile}} (Sumimi Won't Break Up)",
   "no_breakup_repeated": "your money has a repeated digit",
   "no_breakup_title": "Sumimi Won't Break Up",
+  "now_sumimi_when": "when the total money you lose between the start of your turn and the start of your next turn is about to exceed your tile's [toll]",
   "now_sumimi_why": "\"Now She's Sumimi's Kohane\": gain {{n}} money",
   "sweet_escape_ask": "[Teleport] to which tile and settle? (unowned tiles must be bought)",
   "sweet_escape_moved": "{{who}} [teleported] to {{tile}} (Sweet Escape)",
@@ -40,5 +43,6 @@
   "two_donuts_title": "Two Donuts Each",
   "two_donuts_yes": "[Teleport] and settle? (between your original tile and {{by}}'s end; you may decline)",
   "two_in_one_note": "swapped to the other character",
-  "two_in_one_swap": "{{who}} swapped to the other Sumimi character (Sumimi Is Two in One)"
+  "two_in_one_swap": "{{who}} swapped to the other Sumimi character (Sumimi Is Two in One)",
+  "two_in_one_when": "after your move roll"
 }

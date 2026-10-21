@@ -6,8 +6,8 @@
 //!
 //! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::abi::{FilterValue, FilterKind};
+use card_sdk::{CardDef, ctx, Filter, key, Msg, On, PayAddValue};
+use card_sdk::abi::{FilterKind, Payee, Seat};
 
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",
@@ -17,15 +17,10 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // live partner. The clause is residual (live exile count + the pay
         // shape); `card.placed` is the `pre`.
         //
-        // ABI v75: the payee rewrite is `FilterValue.payee` (the body returns
+        // ABI v75: the payee rewrite is `PayAddValue.payee` (the body returns
         // the new target; the wrapper calls `set_pay_target`). Pure.
-        On::FilterValue(
-            &[FilterKind::PaySplitAdd],
-            "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
-            Some(redirect_applies),
-            redirect,
-        ),
-        On::Play("", "", Some(cant_play), no_road),
+        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner", Some(redirect_applies), redirect)),
+        On::Play("", None, Some(cant_play), no_road),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -33,7 +28,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
         .raw_name(r#"无路矢"#)
         .tags(&[])
         .text(r#"指定场上自己以外的一位玩家所在格子，获得2层[除外]并在[除外]层数归0后[传送]至该格子，视为当回合的主要移动。[除外]期间本应获得的格子收入由此前指定的那名玩家获得。"#)
-        .cell(r#"I6"#)
+        // sheet cell I6
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
 /// 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `CardNoRoad.WhyNot`
@@ -143,14 +138,17 @@ fn redirect_applies(player_id: i32) -> bool {
 /// 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
 /// `NoRoadFx.RedirectReceiver`. Applicability is the `pre` +
 /// [`redirect_applies`]; this side only reroutes the pay target.
-/// Pure: the new payee rides `FilterValue.payee` (amount unchanged).
-fn redirect(player_id: i32, v: FilterValue) -> FilterValue {
+/// Pure: the new payee rides `PayAddValue.payee` (amount unchanged).
+fn redirect(player_id: i32, v: PayAddValue) -> PayAddValue {
     let who = ctx::slot(player_id, "noRoad.who");
     ctx::log(
         player_id,
         &Msg::new(key!("no_road_redirect")).player_id("who", who),
     );
-    FilterValue { payee: who, ..v }
+    PayAddValue {
+        payee: Some(Payee::Seat(Seat(who))),
+        ..v
+    }
 }
 
 // `exileMain` is honoured by the engine now (2026-10-06): `game-core`'s exile
@@ -159,15 +157,19 @@ fn redirect(player_id: i32, v: FilterValue) -> FilterValue {
 // 一次［主要移动］」 keeps the player from rolling as well (C#
 // `H.MoveWhyNot` / `_turnCtx.MainMoved`).
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
-    no_road(player_id)
+pub fn redirect_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    redirect(player_id, v)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn redirect_kani(player_id: i32, v: FilterValue) -> FilterValue {
-    redirect(player_id, v)
+pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
+    no_road(player_id)
 }

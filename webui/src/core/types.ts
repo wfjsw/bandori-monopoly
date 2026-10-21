@@ -3,7 +3,7 @@
 // Identity rows come from `glue.roster_json()` (`{id, group, name, owner,
 // derived, tags}` / `{name, group, skill, exclusiveCards, preset, variantOf}` /
 // `{name, skill, sharesExclusives}` / `{id, name, derived, text}`). Display
-// fields (`text`, `display`, `color`, `shortName`, `rawName`, `cell`, `logo`,
+// fields (`text`, `display`, `color`, `shortName`, `rawName`, `logo`,
 // `variantTag`, `costume`, `cnId`, `art`, ...) are merged on top from
 // `generated/display.json` and the `data/*.json` tables the page fetches
 // itself -- see `core/data.ts`. Tile `shortName` / `color` / `note` stay on
@@ -19,10 +19,11 @@ export interface TileData {
   color: string; tier: number; area: string; price: number; house: number; rent: number[]; note: string;
 }
 /** Merged card row: identity from `glue.roster_json()`, display from
- *  `generated/display.json` (including `counterReason`). */
+ *  `generated/display.json` (including `counterReason` -- a locale key the
+ *  client resolves, not display text). */
 export interface CardData {
   id: string; group: string; name: string; rawName: string; owner: string;
-  derived: boolean; tags: string[]; text: string; cell: string;
+  derived: boolean; tags: string[]; text: string;
   /** The [反击] card's trigger-condition clause (「…时」), from
    *  `generated/display.json`. Why the card is offered. */
   counterReason?: string;
@@ -45,16 +46,16 @@ export interface GroupData {
   /** Band-skill traits the deck rules read. */
   sharesExclusives?: boolean;
 }
-/** Merged event row: identity + game prose from `glue.roster_json()`, `cell`
- *  from `generated/display.json`. */
-export interface EventData { id: string; name: string; derived: boolean; text: string; cell: string }
+/** Merged event row: identity + game prose from `glue.roster_json()`, display
+ *  (`name` / `text`) from `generated/display.json`. */
+export interface EventData { id: string; name: string; derived: boolean; text: string }
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }
 
 /** `generated/display.json`: the build-exported presentation fields (empty
  *  fields omitted). Merged onto the identity roster in `core/data.ts`. */
 export interface DisplayFile {
   cards: Record<string, {
-    text?: string; rawName?: string; cell?: string; counterReason?: string;
+    text?: string; rawName?: string; counterReason?: string;
   }>;
   personas: Record<string, {
     display?: string; text?: string; color?: string; variantTag?: string;
@@ -65,7 +66,7 @@ export interface DisplayFile {
   }>;
   /** Event display chrome. Absent on a stale export; `dump_display` writes it. */
   events?: Record<string, {
-    name?: string; text?: string; cell?: string;
+    name?: string; text?: string;
   }>;
 }
 

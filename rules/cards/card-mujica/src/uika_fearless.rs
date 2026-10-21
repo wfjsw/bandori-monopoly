@@ -10,13 +10,13 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const UIKA_FEARLESS: CardDef = CardDef::new(
     "Mujica:（初华）我，无畏悲伤",
-    &[On::Play("", "", None, uika_fearless)],
+    &[On::Play("", None, None, uika_fearless)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"我，无畏悲伤"#)
         .raw_name(r#"（初华）我，无畏悲伤"#)
         .tags(&[])
         .text(r#"打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字"#)
-        .cell(r#"J8"#)
+        // sheet cell J8
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"三角初华"#)]));
 
 fn uika_fearless(player_id: i32) -> card_sdk::Asked {
@@ -80,6 +80,10 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

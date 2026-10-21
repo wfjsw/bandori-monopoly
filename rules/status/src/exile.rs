@@ -39,10 +39,10 @@
 //!   [主要移动] (`teleport_as(..., as_main = true)`), so the player cannot
 //!   also roll.
 
-use bandori_std::kind::abnormal;
+use bandori_std::kind::{abnormal, Actions};
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The board-owned [除外] rule. One instance on `BOARD_OWNER`, `tile = -1`.
 pub const STATUS_EXILE: CardDef = CardDef::new(
@@ -51,51 +51,39 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // 「任意玩家获得[除外]…时」 -- the landing clause (already raised from
         // the engine's post-commit log as wire kind 21; this `Abnormal`
         // hook is the same moment from the abnormal path).
-        On::Action(&[ActionKind::Abnormal], "", "", Some(exile_landed), on_exile_landed),
+        On::Action(Action::Abnormal("", None, Some(exile_landed), on_exile_landed)),
         // 「任意玩家获得[除外]…时」 (`bandori_std::kind::Exile`, wire 21) --
         // raised from the engine's post-commit abnormal log. Cards that mean
         // 「获得[除外]时」 listen here rather than at each grant site (memory:
         // *state clauses belong on events*).
-        On::Action(&[bandori_std::kind::Exile], "", "", None, on_exile_granted),
+        On::Action(Actions::Exile("", None, None, on_exile_granted)),
         // 「玩家的每回合开始前移除一层」 / the duration-hold skip. Runs as a
         // field hook collected last among the `turnStartBefore` walk so
         // sibling hooks still see pre-tick state (`docs/STATUS-HOSTS.md` §4).
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            "",
-            "",
-            Some(turn_start_peels_or_holds),
-            on_turn_start_before,
-        ),
+        On::Action(Action::TurnStartBefore("", None, Some(turn_start_peels_or_holds), on_turn_start_before)),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
-        On::FilterFlag(
-            &[FilterKind::ActGate, FilterKind::PayGate, FilterKind::MoveGate],
-            EXILED,
-            None,
-            refuse,
-        ),
+        On::Filter(Filter::ActGate(EXILED, None, refuse)),
+        On::Filter(Filter::PayGate(EXILED, None, refuse)),
+        On::Filter(Filter::MoveGate(EXILED, None, refuse)),
         // 「玩家棋子不失为存在于任何格子上」 + 「不能被[指定]」 -- the on-board
         // and targetable gates, **CEL-only**, same shape as the three above.
-        On::FilterFlag(
-            &[FilterKind::OnBoardGate, FilterKind::TargetableGate],
-            EXILED,
-            None,
-            refuse,
-        ),
+        On::Filter(Filter::OnBoardGate(EXILED, None, refuse)),
+        On::Filter(Filter::TargetableGate(EXILED, None, refuse)),
     ],
 )
     .board_role("status")
     // Play refusal when the piece is off board (`cannot_play` checks OnBoard
     // first). The turn is auto-skipped by `on_turn_start_before`'s own
     // `log.exiled_skip` / `log.exiled_skip_hold` lines, not by `gate_refusal_msg`.
-    .gate_msgs(&[(FilterKind::OnBoardGate.as_i32(), "err.play_exiled")]);
+    .gate_msgs(&[(FilterKind::OnBoardGate.gate_id(), "err.play_exiled")]);
 
 /// The condition under which [除外] closes the act, pay and move gates.
 pub const EXILED: &str = "state(actor,'exile') > 0";
 
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 fn exile_landed(_owner: i32) -> bool {
@@ -197,8 +185,9 @@ pub use bandori_std::status::exile::{
     blocks_act, blocks_move, blocks_on_board, blocks_pay, blocks_targeted, clear, get, hold, send,
 };
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_exile_landed_kani(player_id: i32) -> card_sdk::Asked {
@@ -219,12 +208,6 @@ pub fn on_turn_start_before_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, v: i32) -> bool {
-    refuse(owner, v)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn turn_start_peels_or_holds_kani(owner: i32) -> bool {
-    turn_start_peels_or_holds(owner)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

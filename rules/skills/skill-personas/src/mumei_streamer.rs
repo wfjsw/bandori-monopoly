@@ -19,7 +19,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
 
 /// Cards this skill flipped, so it can flip them back on exit.
 const FLIPPED: &str = "skill.mumei.flipped";
@@ -31,50 +31,26 @@ const BUMP_X: &str = "skill.mumei.bumpX";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
         // mutating, so they ride `ActionKind::Effect` (the payment declaration,
         // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
-        On::Action(
-            &[ActionKind::Effect],
-            "target == owner && actor != owner && slot('skillState') != 2", "",
-            None,
-            on_pay_declare,
-        ),
+        On::Action(Action::Effect("target == owner && actor != owner && slot('skillState') != 2", None, None, on_pay_declare)),
         // 状态1（1）「并使那次支付的金额提高X*100」 -- pure amount reshape.
-        On::Filter(
-            &[FilterKind::PaySplitAdd],
-            "target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0",
-            None,
-            on_pay_add,
-        ),
+        On::Filter(Filter::PaySplitAdd("target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0", None, on_pay_add)),
         // Drop the one-shot latch once the payment is done (split legs all see
         // the same X).
-        On::Action(
-            &[ActionKind::PayAfter],
-            "actor == owner && slot('skill.mumei.bumpX') >= 0", "",
-            None,
-            clear_bump,
-        ),
-        On::Action(
-            &[ActionKind::TurnEnd],
-            "actor == owner && slot('skillState') != 2", "",
-            Some(fire_at_cap),
-            at_turn_end,
-        ),
+        On::Action(Action::PayAfter("actor == owner && slot('skill.mumei.bumpX') >= 0", None, None, clear_bump)),
+        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2", None, Some(fire_at_cap), at_turn_end)),
         // 「你退出状态2后，被你翻面的卡自动翻回」 -- only while out of 状态2
         // with a non-empty flip list. Both are player-state reads (`skillState`
         // and the `skill.mumei.flipped` count), so the entry does not activate
         // (and so does not flash) when there is nothing to sweep.
-        On::Action(
-            &[ActionKind::TurnEnd],
-            "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0", "",
-            None,
-            at_turn_end_exit,
-        ),
+        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0", None, None, at_turn_end_exit)),
     ],
 )
-    .silent(&[0, 3])
+    .silent(&[0, 1, 4])
     // 「（初始0，上限5）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 5)]);
 
@@ -105,16 +81,16 @@ fn on_pay_declare(player_id: i32) -> card_sdk::Asked {
 
 /// 状态1（1）「并使那次支付的金额提高X*100，X为你拥有的火罐数」 -- pure amount
 /// reshape off the latched post-gain X. The log is allowed (not a mutation).
-fn on_pay_add(player_id: i32, value: i32) -> i32 {
+fn on_pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     let x = state::get(player_id, BUMP_X).max(0);
-    let out = value + x * 100;
+    let out = v.value + x * 100;
     if x > 0 {
         ctx::log(
             player_id,
             &Msg::new(key!("mumei_bump")).i("n", (x * 100) as i64),
         );
     }
-    out
+    PayAddValue { value: out, ..v }
 }
 
 /// Drop the one-shot [`BUMP_X`] latch once the payment has settled.
@@ -180,14 +156,14 @@ fn at_turn_end_exit(player_id: i32) -> card_sdk::Asked {
 //   no moment of its own to fire at. Taken to mean: whatever else clears
 //   `skillState` also un-flips, which is what `at_turn_end_exit` keys on.
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
     declare_cap(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]
@@ -197,8 +173,8 @@ pub fn on_pay_declare_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pay_add_kani(player_id: i32, value: i32) -> i32 {
-    on_pay_add(player_id, value)
+pub fn on_pay_add_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    on_pay_add(player_id, v)
 }
 
 #[cfg(kani)]
@@ -209,12 +185,12 @@ pub fn clear_bump_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn at_turn_end_exit_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_end_exit(player_id)
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_end(player_id)
+pub fn at_turn_end_exit_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end_exit(player_id)
 }

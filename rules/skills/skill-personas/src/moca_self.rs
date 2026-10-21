@@ -17,21 +17,22 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 use super::ran_red::REST_TURNS;
 
 pub const MOCA_SELF: CardDef = CardDef::new(
     "skill:青叶摩卡:我行我素",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
         // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…」 -- the
         // offer exists only for another seat, with a pot to spend. Fire is CEL.
-        On::Action(&[ActionKind::CardPlayed], "charge(owner) >= 1", "", Some(other_seat), on_card),
-        On::Action(&[bandori_std::kind::SkillUsed], "charge(owner) >= 1", "", Some(other_seat), on_skill),
+        On::Action(Action::CardPlayed("charge(owner) >= 1", None, Some(other_seat), on_card)),
+        On::Action(Action::CardUsed("charge(owner) >= 1", None, Some(other_seat), on_skill)),
     ],
-).silent(&[0])
+).silent(&[0, 1])
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
@@ -94,6 +95,10 @@ fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

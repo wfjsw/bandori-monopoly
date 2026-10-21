@@ -18,17 +18,12 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const MARINA_GIFTS: CardDef = CardDef::new(
     "skill:月岛麻里奈:礼物还有好多好多哟",
     // 「其他玩家经过CiRCLE时」 -- another player's pass onto CiRCLE.
-    &[On::Action(
-        &[ActionKind::Pass],
-        "actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")", "",
-        None,
-        on_pass,
-    )],
+    &[On::Action(Action::Pass("actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")", None, None, on_pass))],
 );
 
 /// The cost of the offer, named in the clause.
@@ -72,6 +67,10 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

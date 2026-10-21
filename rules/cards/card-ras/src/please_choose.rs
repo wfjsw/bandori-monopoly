@@ -14,13 +14,13 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
-    &[On::Counteract(&[ChainKind::Settle], "", r#"有玩家在livehouse格子上结算"#, Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Settle], "", Some(key!("please_choose_when")), Some(can_counteract), counteract)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"PLEASE CHOOSE"#)
         .raw_name(r#"PLEASE CHOOSE"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当有玩家在livehouse格子上结算时，使对方选择以下效果之一执行：（1）立即打出一张可将你指定为目标的牌并将你指定为目标（之一），（2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）"#)
-        .cell(r#"H7"#)
+        // sheet cell H7
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
@@ -105,6 +105,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // `BandBase.PassTile` fan-out (C# `H.EachOf(i, f => f.PassTile(m, to))`).
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

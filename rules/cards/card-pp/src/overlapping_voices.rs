@@ -16,21 +16,21 @@
 //! The [特] discard hook banishes the accident when this card enters a discard.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use card_sdk::abi::ActionKind;
 use skill_groups::fans;
 
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
-        On::Play("", "", Some(cant_play), overlapping_voices),
-        On::Action(&[ActionKind::AtEnd], "", "", None, at_end),
+        On::Play("", None, Some(cant_play), overlapping_voices),
+        On::Action(Action::AtEnd("", None, None, at_end)),
         // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的
         // [场地]上的"初次演出事故"（如果有）」 -- the own-card `Discarded`
         // dispatch (guerrilla / mygo): the hook fires when *this* card is the
         // one that entered the discard. Banishing the *other* card does not
         // re-enter this hook (the raise names the discarded card's id).
-        On::Action(&[ActionKind::Discarded], card_sdk::pre::MINE, "", None, on_discarded),
+        On::Action(Action::Discarded(card_sdk::pre::MINE, None, None, on_discarded)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"重叠的声音"#)
@@ -44,7 +44,7 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
 1. [移除]此卡和[使用者][场地]上的“初次演出事故”（如果有）；
 2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
 3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。"#)
-        .cell(r#"D5"#)
+        // sheet cell D5
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// C# `CardOverlappingVoices.WhyNot` = `H.MoveWhyNot(seat)`.
@@ -108,6 +108,10 @@ fn on_discarded(player_id: i32) -> card_sdk::Asked {
     banish_accident(player_id);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

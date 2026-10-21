@@ -11,7 +11,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{CardDef, On};
+use card_sdk::{Action, CardDef, Filter, On};
 
 const DONE: &str = "skill.roselia.first";
 
@@ -25,21 +25,11 @@ pub const ROSELIA: CardDef = CardDef::new(
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
         // The Live-House / one-shot split is residual (`is_live_house_for` is a
         // per-player colour, not CEL's tile-kind `is_venue`).
-        On::Filter(&[FilterKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
+        On::Filter(Filter::BuyMul("actor == owner && tile.id >= 0", Some(half_price_applies), half_price)),
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
-        On::Action(
-            &[ActionKind::Bought],
-            "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0", "",
-            Some(on_bought_applies),
-            on_bought,
-        ),
-        On::Action(
-            &[ActionKind::Bought],
-            "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0", "",
-            Some(on_live_bought_applies),
-            on_live_bought,
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", "", None, at_turn_start),
+        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0", None, Some(on_bought_applies), on_bought)),
+        On::Action(Action::Bought("actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0", None, Some(on_live_bought_applies), on_live_bought)),
+        On::Action(Action::TurnStartBefore("actor == owner && slot('skill.roselia.first') != 0", None, None, at_turn_start)),
     ],
 )
     .silent(&[1]);
@@ -125,17 +115,15 @@ bandori_std::roster::GroupDef::new(r#"Roselia"#)
     .text(r#"（1）本局游戏购买的第一个非Live House格子购买价格减半，在你拥有任意初始Live House格子前，那个格子对你视为Live House。（2）购买任何Live House格子的地契时购买价格减半"#)
     .logo(r#"005"#);
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn half_price_kani(player_id: i32, value: i32) -> i32 {
     half_price(player_id, value)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start(player_id)
 }
 
 #[cfg(kani)]
@@ -148,4 +136,10 @@ pub fn on_bought_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_live_bought_kani(player_id: i32) -> card_sdk::Asked {
     on_live_bought(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
 }

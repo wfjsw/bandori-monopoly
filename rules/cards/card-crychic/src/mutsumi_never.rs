@@ -21,7 +21,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MUTSUMI_NEVER: CardDef = CardDef::new(
     "CRYCHIC:（睦）从没有觉得...",
-    &[On::Play("", "", None, mutsumi_never)],
+    &[On::Play("", None, None, mutsumi_never)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"从没有觉得..."#)
         .raw_name(r#"（睦）从没有觉得..."#)
@@ -29,7 +29,7 @@ pub const MUTSUMI_NEVER: CardDef = CardDef::new(
         .text(r#"（1）打出此卡时，使用者可以选择（2）或（3）效果之一发动。
 （2）消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。
 （3）此卡[移除]并向抽牌堆中加入一张“表演的本能”，将手牌与弃牌堆全部放入抽牌堆并洗切，然后抽2张卡。你本回合的移动以“CiRCLE”为起点（不触发起点地块效果）"#)
-        .cell(r#"M12"#)
+        // sheet cell M12
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"若叶睦（CRYCHIC）"#)]));
 
 fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
@@ -123,6 +123,10 @@ fn branch_shuffle(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_start(0, "（睦）从没有觉得...");
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

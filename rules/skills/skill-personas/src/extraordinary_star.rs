@@ -25,7 +25,7 @@ use alloc::vec::Vec;
 
 use bandori_std::state_key; use card_sdk::abi::{Flash, ActionKind, MoveKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The tile the clause names.
 fn hill() -> i32 {
@@ -35,14 +35,15 @@ fn hill() -> i32 {
 pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     "skill:户山香澄:非凡之星",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         // （1） is 「其他玩家"星之鼓动山丘"上[结算]时」 -- who and where are the
         // hook's applicability (the residual guard), not its effect.
-        On::Action(&[ActionKind::Settle], "", "", Some(on_settle_applies), on_settle),
+        On::Action(Action::Settle("", None, Some(on_settle_applies), on_settle)),
     ],
 )
-.silent(&[1])
+.silent(&[1, 2])
 // （1） gains a [火罐] -- owner-self-only, but the rulebook describes it
 // happening and the player should see the clause fire. `Always` beats Auto.
 .flash(&[(2, Flash::Always)])
@@ -115,6 +116,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     ctx::card_move(player_id);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

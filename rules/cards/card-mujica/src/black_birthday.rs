@@ -11,14 +11,14 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
     "Mujica:黑色生日",
-    &[On::Play("", "", Some(cant_play), black_birthday)],
+    &[On::Play("", None, Some(cant_play), black_birthday)],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"黑色生日"#)
         .raw_name(r#"黑色生日"#)
         .tags(&[])
         .text(r#"每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。"#)
-        .cell(r#"J14"#)
+        // sheet cell J14
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 /// C# `CardBlackBirthday.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
@@ -63,6 +63,10 @@ fn black_birthday(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, latch, 0); // clear for a later play
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -20,7 +20,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The counter X. 「X初始为0」.
 const X: &str = "skill.yuriCrit.x";
@@ -28,7 +28,7 @@ const X: &str = "skill.yuriCrit.x";
 pub const YURI_CRIT: CardDef = CardDef::new(
     "skill:八潮瑠唯:正论暴击",
     &[
-        On::Action(&[ActionKind::TurnStartBefore], "", "", None, declare),
+        On::Action(Action::TurnStartBefore("", None, None, declare)),
         // 「当你即将获得或失去资金（在所有其他资金量改动效果生效后并结果不等于0）时」
         // -- the *final* figure after every modifier, which is what the `pay`
         // settlement hook carries (`ActionKind::Pay`, a non-filter kind whose
@@ -38,7 +38,7 @@ pub const YURI_CRIT: CardDef = CardDef::new(
         // paySplitAt (closer to 「在所有其他资金量改动效果生效后」 than the old
         // PaySplitChoose stage) and still sees a negative running figure for
         // 「无需失去资金」. PayAfter is too late to rewrite.
-        On::Action(&[ActionKind::Pay], "", "", Some(mine), on_pay),
+        On::Action(Action::Pay("", None, Some(mine), on_pay)),
     ],
 ).silent(&[0]);
 
@@ -112,6 +112,8 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 //   body was copied, so 「复制者」 has no reading that is both faithful and
 //   checkable. 「（抵押或赎回以外）」 carves out a class of resets the engine
 //   does not tag either.
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

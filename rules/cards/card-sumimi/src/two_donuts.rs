@@ -20,22 +20,23 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
     &[
-        On::Play("", "", None, two_donuts),
+        On::Play("", None, None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
         // latch, the `move_dir` read) stay in the arms below.
-        On::Action(&[ActionKind::PassTile, ActionKind::SettleAfter], "card.placed", "", None, fx),
+        On::Action(Action::PassTile("card.placed", None, None, fx)),
+        On::Action(Action::SettleAfter("card.placed", None, None, fx)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)
         .raw_name(r#"一人两个甜甜圈"#)
         .tags(&[])
         .text(r#"（1）获得[除外]直至你原本所在格子被其他玩家经过。（2）你原本所在格子被其他玩家经过时，可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家本次移动终点间的任一格并触发结算，之后你们各获得2火罐（超出上限的每个火罐转化为500资金）"#)
-        .cell(r#"L4"#)
+        // sheet cell L4
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 const ID: &str = "Sumimi:一人两个甜甜圈";
@@ -182,6 +183,10 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

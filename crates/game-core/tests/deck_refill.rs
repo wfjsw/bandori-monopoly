@@ -52,7 +52,7 @@ impl CardRules for Probe {
         if t.kind == "drewBefore" && self.cancel_draw {
             t.negate_activation();
         }
-        if matches!(t.kind, "reshuffled" | "drawn" | "drew") {
+        if matches!(t.kind.as_str(), "reshuffled" | "drawn" | "drew") {
             if t.kind != "reshuffled" {
                 assert!(
                     !cx.world_copy().hidden[0].draw.is_empty(),
@@ -60,7 +60,15 @@ impl CardRules for Probe {
                     t.kind
                 );
             }
-            self.seen.lock().unwrap().push(t.kind);
+            self.seen
+                .lock()
+                .unwrap()
+                .push(match t.kind.as_str() {
+                    "reshuffled" => "reshuffled",
+                    "drawn" => "drawn",
+                    "drew" => "drew",
+                    _ => unreachable!(),
+                });
         }
         Ok(())
     }

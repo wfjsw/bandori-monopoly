@@ -7,7 +7,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, MoveKind};
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 
 const ID: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
 /// 「水母标记」.
@@ -19,23 +19,18 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // One Play entry for both contexts (the engine dispatches only the
         // first): [场] placement from hand, or the ≥9-marker jump once placed.
         // The gate admits whenever either branch is available.
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // 「花音每次倒走时」 -- a backward walk that is not a teleport (C#
         // `m.Reverse && !m.Teleport`). `move.dir < 0` is the direction clause:
         // the body-top `move_dir() >= 0` early-out is the condition now.
-        On::Action(
-            &[ActionKind::Pass],
-            "actor == owner && move.kind != Teleport && move.dir < 0", "",
-            None,
-            on_pass,
-        ),
+        On::Action(Action::Pass("actor == owner && move.kind != Teleport && move.dir < 0", None, None, on_pass)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Wacha Mocha 啪嗒进行曲"#)
         .raw_name(r#"（花音）Wacha Mocha 啪嗒进行曲"#)
         .tags(&[])
         .text(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。"#)
-        .cell(r#"F13"#)
+        // sheet cell F13
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"松原花音"#)]));
 
 /// Combined gate: not yet placed (the placement branch), or placed with the
@@ -117,6 +112,10 @@ fn jump(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

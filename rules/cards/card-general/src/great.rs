@@ -11,7 +11,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", "", None, great)]).meta(&card_sdk::meta::CardMeta::new()
+pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, None, great)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"GREAT"#)
         .raw_name(r#"GREAT"#)
         .tags(&[r#"手"#])
@@ -20,7 +20,7 @@ pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", "", None,
 1. [移除]此卡；
 2. 将一张“PERFECT”加入抽卡区并洗切；
 3. [获得]2000资金。"#)
-        .cell(r#"A4"#)
+        // sheet cell A4
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn great(player_id: i32) -> card_sdk::Asked {
@@ -38,6 +38,10 @@ fn great(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, ctx::n(1, 2000), &Msg::new(key!("great_why")))?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

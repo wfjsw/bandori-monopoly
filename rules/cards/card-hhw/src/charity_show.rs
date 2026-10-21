@@ -13,7 +13,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 const ID: &str = "HHW:爱心义演";
 /// C# `CardKokoroCircle` -- the card that makes CiRCLE count as yours (rule:
@@ -32,34 +32,24 @@ const PROP_EXTRA: &str = "charity.extra";
 pub const CHARITY_SHOW: CardDef = CardDef::new(
     "HHW:爱心义演",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 规则书: 「本回合中向其他玩家支付时你的付款减半」 -- only payments to
         // other players, only on the armed turn (`charity.turn`). The turn-key
         // latch is an instance prop (residual).
-        On::Filter(
-            &[FilterKind::PaySplitMul],
-            "card.placed && actor == owner && target >= 0 && target != owner && value > 0",
-            Some(pay_applies),
-            pay_mul,
-        ),
+        On::Filter(Filter::PaySplitMul("card.placed && actor == owner && target >= 0 && target != owner && value > 0", Some(pay_applies), pay_mul)),
         // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
         // -- a dice (main) walk step onto a tile that counts as yours, first
         // time this turn. `mine` / the first-pass marker are residual.
-        On::Action(
-            &[ActionKind::PassTile],
-            "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0", "",
-            Some(pass_applies),
-            pass_tile,
-        ),
+        On::Action(Action::PassTile("card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0", None, Some(pass_applies), pass_tile)),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
-        On::Action(&[ActionKind::TurnEndAfter], "card.placed && actor == owner", "", None, turn_end_after),
+        On::Action(Action::TurnEndAfter("card.placed && actor == owner", None, None, turn_end_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"爱心义演"#)
         .raw_name(r#"爱心义演"#)
         .tags(&[])
         .text(r#"打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）"#)
-        .cell(r#"F12"#)
+        // sheet cell F12
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
@@ -188,17 +178,15 @@ fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn turn_end_after_kani(player_id: i32) -> card_sdk::Asked {
-    turn_end_after(player_id)
 }
 
 #[cfg(kani)]
@@ -211,4 +199,10 @@ pub fn pay_mul_kani(player_id: i32, value: i32) -> i32 {
 #[inline(always)]
 pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
     pass_tile(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_after_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end_after(player_id)
 }

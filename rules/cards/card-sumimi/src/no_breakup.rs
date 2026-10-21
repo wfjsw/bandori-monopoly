@@ -17,7 +17,7 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         // a play gate must not trade its specific refusal
         // (`no_breakup_repeated`) for the generic `err.play_pre` a pre-reject
         // surfaces (GUARDS.md §4.4).
-        "", "",
+        "", None,
         Some(cant_play),
         no_breakup,
     )],
@@ -26,7 +26,7 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         .raw_name(r#"Sumimi不会解散哦"#)
         .tags(&[])
         .text(r#"当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，进行一次可使你的资金变动为拥有相同数字的传送，视为你的主要移动；若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果"#)
-        .cell(r#"L3"#)
+        // sheet cell L3
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
@@ -137,6 +137,10 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
     //   digit. Left as-is pending the ruling.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

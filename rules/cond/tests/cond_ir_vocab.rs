@@ -27,6 +27,7 @@ fn ir_vars_match_vocab() {
             Ty::Int => VarTy::Int,
             Ty::Bool => VarTy::Bool,
             Ty::OptInt => VarTy::OptInt,
+            Ty::Str => VarTy::Str,
         };
         assert_eq!(ty, expect, "VARS[{i}] ({flat}) type mismatch");
     }

@@ -17,8 +17,7 @@ pub const YOLO: CardDef = CardDef::new(
     // clause are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
-        "actor == owner && (move.roll != null || value >= 0)",
-        "",
+        "actor == owner && (move.roll != null || value >= 0)", None,
         None,
         counteract,
     )],
@@ -28,7 +27,7 @@ pub const YOLO: CardDef = CardDef::new(
         .raw_name(r#"Y.O.L.O"#)
         .tags(&[])
         .text(r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#)
-        .cell(r#"C3"#)
+        // sheet cell C3
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -46,8 +45,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

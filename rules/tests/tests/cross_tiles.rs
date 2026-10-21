@@ -491,7 +491,7 @@ fn t10b_ringing_bloom_tracks_a_later_build() {
     t.give_play(0, "R:（燐子）Ringing Bloom").unwrap();
     drain(&mut t);
     // Raise the max to 3 *after* the card is in play -- through the engine, so
-    // `HouseAdded` fires and the 「视为」 view recomputes. Land on t1 and take
+    // `houseAdded` (engine kind 75) fires and the 「视为」 view recomputes. Land on t1 and take
     // the settle's build prompt (2 -> 3).
     t.set_money(0, 30_000);
     t.set_pos(0, t1.wrapping_sub(1));

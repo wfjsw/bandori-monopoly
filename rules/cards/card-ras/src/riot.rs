@@ -10,14 +10,13 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, CardPile};
-use card_sdk::{CardDef, On};
+use card_sdk::{CardDef, key, On};
 
 pub const RIOT: CardDef = CardDef::new(
     "RAS:R. I. O. T.",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "by >= 0 && by != owner && effect.hits(owner)",
-        r#"你被其他人的卡效果影响"#,
+        "by >= 0 && by != owner && effect.hits(owner)", Some(key!("riot_when")),
         None,
         counteract,
     )],
@@ -27,7 +26,7 @@ pub const RIOT: CardDef = CardDef::new(
         .raw_name(r#"R. I. O. T."#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当你被其他人的卡效果影响时打出此卡，所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。"#)
-        .cell(r#"H2"#)
+        // sheet cell H2
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -54,6 +53,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

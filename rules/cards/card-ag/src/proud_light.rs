@@ -21,8 +21,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
     // stays in the residual guard.
     &[On::Counteract(
         &[ChainKind::PassTile],
-        card_sdk::pre::MINE,
-        r#"你经过一名角色"#,
+        card_sdk::pre::MINE, Some(key!("proud_light_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -31,7 +30,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
         .raw_name(r#"刻入天穹傲岸的烈光"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。"#)
-        .cell(r#"C13"#)
+        // sheet cell C13
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).
@@ -76,6 +75,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

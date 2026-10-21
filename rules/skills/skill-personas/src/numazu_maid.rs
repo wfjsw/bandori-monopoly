@@ -13,7 +13,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 const PAREO: &str = "PAREO标记";
@@ -21,19 +21,14 @@ const PAREO: &str = "PAREO标记";
 pub const NUMAZU_MAID: CardDef = CardDef::new(
     "skill:鳰原令王那:梦幻可爱♪女仆",
     &[
-        On::Action(&[ActionKind::DeckAtGameStart], "", "", None, at_start),
+        On::Action(Action::DeckAtGameStart("", None, None, at_start)),
         // （2）「所有你拥有的格子中取最高值」 -- the offer exists only when some
         // deed carries a positive `build_cost × houses`. Derived scan, residual.
-        On::Action(
-            &[bandori_std::kind::HouseAdded],
-            "actor == owner && tok('PAREO标记') >= 1", "",
-            Some(has_house_product),
-            on_built,
-        ),
+        On::Action(Action::HouseAdded("actor == owner && tok('PAREO标记') >= 1", None, Some(has_house_product), on_built)),
         // （2）'s offer is also a press, so a card can run it out of turn
         // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
         // On::Play's gate is `Option<Msg>` (WhyNot), not a bool residual.
-        On::Play("tok('PAREO标记') >= 1", "", Some(offer_gate), offer),
+        On::Play("tok('PAREO标记') >= 1", None, Some(offer_gate), offer),
     ],
 );
 
@@ -134,6 +129,8 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -143,12 +140,12 @@ pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn offer_kani(player_id: i32) -> card_sdk::Asked {
-    offer(player_id)
+pub fn on_built_kani(player_id: i32) -> card_sdk::Asked {
+    on_built(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_built_kani(player_id: i32) -> card_sdk::Asked {
-    on_built(player_id)
+pub fn offer_kani(player_id: i32) -> card_sdk::Asked {
+    offer(player_id)
 }

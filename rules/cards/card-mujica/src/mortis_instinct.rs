@@ -10,13 +10,13 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     "Mujica:（睦/mortis）表演的本能",
-    &[On::Play("", "", None, play), On::Counteract(&[], "", r#"此卡复制[反击]卡时可在符合条件时打出"#, Some(can_counteract), counteract)],
+    &[On::Play("", None, None, play), On::Counteract(&[], "", Some(key!("mortis_instinct_when")), Some(can_counteract), counteract)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"表演的本能"#)
         .raw_name(r#"（睦/mortis）表演的本能"#)
         .tags(&[r#"反击"#])
         .text(r#"此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）"#)
-        .cell(r#"J2"#)
+        // sheet cell J2
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"若叶睦"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
@@ -51,6 +51,10 @@ fn run(player_id: i32) {
         &Msg::new(key!("mortis_instinct_nothing")).player_id("who", player_id),
     );
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -6,26 +6,26 @@
 //!
 //! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
-use card_sdk::abi::{FilterValue, FilterKind};
+use card_sdk::abi::{FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, DealValue, Filter, key, Msg, On};
 
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
     "PPP:迷宫般的仓库",
     &[
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).
-        On::Filter(&[FilterKind::BuySet], card_sdk::pre::MINE, None, free_buy),
-        On::FilterValue(&[FilterKind::BuyAssign], card_sdk::pre::MINE, None, raze),
+        On::Filter(Filter::BuySet(card_sdk::pre::MINE, None, free_buy)),
+        On::Filter(Filter::BuyAssign(card_sdk::pre::MINE, None, raze)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 6000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷宫般的仓库"#)
         .raw_name(r#"迷宫般的仓库"#)
         .tags(&[])
         .text(r#"位于“流星堂”前后5格内时，可打出此卡，投掷1d10，从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地，视为你的主要移动且本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋。如果[经过]“流星堂”则[强制停下]且[消耗]6000资金"#)
-        .cell(r#"B10"#)
+        // sheet cell B10
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// 「本回合购买格子不[消耗]资金」 -- `BuySet` is the free / fixed stage
@@ -39,11 +39,11 @@ fn free_buy(_player_id: i32, value: i32) -> i32 {
 
 /// 「如果购买则拆除那个格子上的所有房屋」 -- `BuyAssign` rewrites the deal's
 /// post-commit house count (`docs/PURCHASE.md`).
-fn raze(_player_id: i32, mut v: FilterValue) -> FilterValue {
+fn raze(_player_id: i32, mut v: DealValue) -> DealValue {
     if trigger::tile() < 0 {
         return v;
     }
-    v.deal_houses = 0;
+    v.houses = Some(0);
     v
 }
 
@@ -137,6 +137,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -152,6 +156,6 @@ pub fn free_buy_kani(player_id: i32, value: i32) -> i32 {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn raze_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn raze_kani(player_id: i32, v: card_sdk::DealValue) -> card_sdk::DealValue {
     raze(player_id, v)
 }

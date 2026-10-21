@@ -25,8 +25,7 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         // charges no rent (the settle offers a forced purchase instead), so it
         // does not open this. 「将本格上的房屋转移到…」 -- the tile must have
         // houses to transfer (C# `H.State.houses[t.Tile] > 0`).
-        "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
-        r#"在属于你的格子上结算"#,
+        "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0", Some(key!("hey_kids_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -36,7 +35,7 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         .raw_name(r#"狂乱Hey Kids!!"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 在属于你的格子上结算时，打出此卡，将本次结算改为：将本格上的房屋转移到属于你的可建造格子上。转移的房屋与目标格子中，至少一方数量为1，且每个目标格子至多获得1层房屋。转移时，消耗的房屋造价等于获得的房屋总造价，超出的部分作为现金获得；随后，你失去“转移后各格房屋造价总和－获得房屋数量×500”的资金。"#)
-        .cell(r#"H4"#)
+        // sheet cell H4
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
@@ -156,6 +155,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

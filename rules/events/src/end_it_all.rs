@@ -40,11 +40,11 @@ const NON_DERIVED: &[&str] = &[
     "火种燃尽之后会怎么样呢？",
 ];
 
-pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play("", "", None, play)])
+pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"让我来结束一切"#)
             .text(r#"触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上，此卡在场上则[衍生]让我来结束一切不会被[衍生]迷子的追逐放置在事件牌堆顶部"#)
-            .cell(r#"A27"#)
+            // sheet cell A27
             .derived(true));
 
 /// 规则书: 「触发事件的玩家从所有非衍生事件中选择3个移除」 -- the drawer picks
@@ -93,6 +93,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // keeps, `lost_chase.rs` guards.
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

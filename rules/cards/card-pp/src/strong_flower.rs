@@ -19,15 +19,15 @@ use alloc::vec::Vec;
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{plan, trigger};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "PP:可爱又强壮的花朵";
 
 pub const STRONG_FLOWER: CardDef = CardDef::new(
     "PP:可爱又强壮的花朵",
     &[
-        On::Play("", "", Some(cant_play), strong_flower),
-        On::Action(&[ActionKind::PassTile], "actor == owner", "", None, pass_tile),
+        On::Play("", None, Some(cant_play), strong_flower),
+        On::Action(Action::PassTile("actor == owner", None, None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"可爱又强壮的花朵"#)
@@ -40,7 +40,7 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
 1. [强制停下]，此次移动变为[结算]；
 2. 如果[共鸣]则获得1500资金；
 3. 此卡放入[使用者]弃卡区。"#)
-        .cell(r#"D12"#)
+        // sheet cell D12
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -110,6 +110,10 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

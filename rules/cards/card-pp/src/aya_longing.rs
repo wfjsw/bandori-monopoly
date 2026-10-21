@@ -20,21 +20,16 @@ use alloc::vec::Vec;
 use card_sdk::abi::{ActionKind, FilterKind};
 use skill_groups::fans;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
 
 pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
-        On::Play("", "", None, aya_longing),
+        On::Play("", None, None, aya_longing),
         // 规则书[持续]（1）: the passive X shave is a pure amount modifier, so it
         // rides `PaySplitAdd` (支付阶段 2) where it belongs and composes with
         // sibling add modifiers. No prompt, so no purity problem.
-        On::Filter(
-            &[FilterKind::PaySplitAdd],
-            "card.placed",
-            None,
-            shave_x_filter,
-        ),
+        On::Filter(Filter::PaySplitAdd("card.placed", None, shave_x_filter)),
         // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500」 -- the
         // 共鸣 cost makes this half interactive (`try_resonance` prompts), so it
         // cannot be a pure Filter and stays on `ActionKind::Effect` (the payment
@@ -48,7 +43,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         //   `PaySplitAddBefore` interactive pre-stage (the shape
         //   `PaySplitChooseBefore` / `PayCombinedAddBefore` already use) -- there
         //   is no writable stage between PaySplitAdd and PaySplitMul today.
-        On::Action(&[ActionKind::Effect], "actor == owner && value > 0", r#"[消耗]或[支付]"#, None, pay_res),
+        On::Action(Action::Effect("actor == owner && value > 0", Some(key!("aya_longing_when")), None, pay_res)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)
@@ -59,7 +54,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
 [持续]：
 （1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
 （2）[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。"#)
-        .cell(r#"D16"#)
+        // sheet cell D16
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
@@ -121,18 +116,18 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
 /// 规则书[持续]（1）: while the owner is the poorest alive player, every
 /// [消耗]/[支付] drops by X (floor 0). Pure `PaySplitAdd` Filter -- returns the
 /// new figure, the host folds it into the leg amount.
-fn shave_x_filter(player_id: i32, value: i32) -> i32 {
+fn shave_x_filter(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     // 「[拥有者][消耗]或[支付]时」 -- the owner is the payer/spender.
-    if value <= 0 || trigger::player_id() != player_id || !poorest(player_id) {
-        return value;
+    if v.value <= 0 || trigger::player_id() != player_id || !poorest(player_id) {
+        return PayAddValue { value: v.value, ..v };
     }
     let x = shave_x(player_id);
-    let out = (value - x).max(0);
+    let out = (v.value - x).max(0);
     ctx::log(
         player_id,
         &Msg::new(key!("aya_longing_shave")).i("n", x as i64),
     );
-    out
+    PayAddValue { value: out, ..v }
 }
 
 /// 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 --
@@ -147,6 +142,10 @@ fn pay_res(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -156,8 +155,8 @@ pub fn aya_longing_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn shave_x_filter_kani(player_id: i32, value: i32) -> i32 {
-    shave_x_filter(player_id, value)
+pub fn shave_x_filter_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    shave_x_filter(player_id, v)
 }
 
 #[cfg(kani)]

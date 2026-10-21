@@ -8,7 +8,9 @@
 //   text           -- `webui/src/generated/display.json` (authored in Rust rule
 //                     code, exported at build; empty fields omitted)
 //   counterReason  -- `webui/src/generated/display.json` (same export; only
-//                     [反击] cards carry the field)
+//                     [反击] cards carry the field). Since ABI v94 the field
+//                     is a **locale key** (`cards:<crate>.…` / `counter.*`);
+//                     the clause check resolves it via `zh-CN` locales.
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -29,6 +31,39 @@ const fixture = JSON.parse(
 const display = JSON.parse(
   readFileSync(new URL("../generated/display.json", import.meta.url), "utf-8"),
 ) as { cards: Record<string, { text?: string; counterReason?: string }> };
+
+function readJson(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(new URL(path, import.meta.url), "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+/** Resolve one locale key against the zh-CN bundles (cards + game). */
+function resolveKey(key: string): string {
+  const game = readJson("../i18n/locales/zh-CN/game.json") as Record<string, string>;
+  if (key in game) return game[key];
+  if (key.startsWith("cards:")) {
+    const rest = key.slice("cards:".length);
+    const dot = rest.indexOf(".");
+    if (dot > 0) {
+      const ns = rest.slice(0, dot);
+      const k = rest.slice(dot + 1);
+      // Static stub first; the built card-locale bundle (build-ruleset) second.
+      const stub = readJson("../i18n/locales/zh-CN/cards.json") as Record<
+        string,
+        Record<string, string>
+      >;
+      const built = readJson("../../public/assets/i18n/cards-zh-CN.json") as Record<
+        string,
+        Record<string, string>
+      >;
+      return stub[ns]?.[k] ?? built[ns]?.[k] ?? key;
+    }
+  }
+  return key;
+}
 
 const reasonById = new Map(
   Object.entries(display.cards)
@@ -56,7 +91,7 @@ const cards: CardRow[] = [...byId.values()];
 const displayReady = Object.keys(display.cards).length > 0;
 
 test("every [反击] card names its trigger-condition clause", () => {
-  // Every `counterReason` row must carry a non-empty reason (the prompt's
+  // Every `counterReason` row must carry a non-empty key (the prompt's
   // "why this card may be declared").
   const emptyReason = [...reasonById.entries()].filter(([, r]) => !r.trim()).map(([id]) => id);
   assert.deepEqual(emptyReason, [], "each counterReason must be non-empty");
@@ -77,13 +112,24 @@ test("a counterReason is a clause of the card's own prose, not a new sentence", 
     // build export lands (slice 1 / tools).
     return;
   }
-  // The field is extracted from / hand-written against `text`; it must appear
-  // there (punctuation and the 「当…时」 wrapper may be stripped off).
+  // The field is a locale key; its zh-CN text is extracted from / hand-written
+  // against `text` and must appear there (punctuation and the 「当…时」 wrapper
+  // may be stripped off). Skip rows whose key does not resolve (locales not
+  // built yet in this checkout).
   const off = cards
     .filter((c) => reasonById.get(c.id))
     .filter((c) => {
+      const keys = reasonById
+        .get(c.id)!
+        .split("\n")
+        .filter(Boolean);
+      const resolved = keys.map(resolveKey).join("\n");
+      if (resolved.includes("cards:") || resolved === keys.join("\n")) {
+        // unresolved key -- locales bundle not built; don't fail the clause check
+        return false;
+      }
       const t = c.text.replace(/【/g, "[").replace(/】/g, "]");
-      const r = reasonById.get(c.id)!.replace(/【/g, "[").replace(/】/g, "]");
+      const r = resolved.replace(/【/g, "[").replace(/】/g, "]");
       return !t.includes(r.replace(/^(任意时刻当|任意时刻|当)/, "").replace(/时$/, ""));
     })
     .map((c) => c.id);

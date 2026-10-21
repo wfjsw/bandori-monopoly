@@ -21,7 +21,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANGER: CardDef = CardDef::new(
     "PP:[衍生]魔法战队Pastel✽Ranger",
-    &[On::Play("", "", Some(cant_play), ranger)],
+    &[On::Play("", None, Some(cant_play), ranger)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 2000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"魔法战队Pastel✽Ranger"#)
         .raw_name(r#"[衍生]魔法战队Pastel✽Ranger"#)
@@ -36,7 +36,7 @@ pub const RANGER: CardDef = CardDef::new(
 3. 数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡；
 4. 数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；
 5.数量至少为6则抽1张卡。"#)
-        .cell(r#"D14"#)
+        // sheet cell D14
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
@@ -106,6 +106,10 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

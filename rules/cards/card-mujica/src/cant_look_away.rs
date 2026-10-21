@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- the timing is
         // a counter used *against you*. The engine's counter link carries
         // `target` = the countered seat and `actor` = the counter's declarer
@@ -23,9 +23,8 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // `skillUsed` kind (a counter to a counter is answered there), so both
         // selectors are declared.
         On::Counteract(
-            &[ChainKind::Counteracted, ChainKind::Card, bandori_std::kind::SkillUsed.as_trigger()],
-            "target == owner && actor != owner",
-            r#"有玩家对你使用[反击]后"#,
+            &[ChainKind::Counteracted, ChainKind::Card, card_sdk::abi::ActionKind::CardUsed.as_trigger()],
+            "target == owner && actor != owner", Some(key!("cant_look_away_when")),
             None,
             counteract,
         ),
@@ -35,7 +34,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         .raw_name(r#"无法将视线移开"#)
         .tags(&[r#"反击"#])
         .text(r#"使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动"#)
-        .cell(r#"J7"#)
+        // sheet cell J7
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
@@ -110,6 +109,10 @@ fn run(player_id: i32) -> card_sdk::Asked {
     // self walk on one's own turn consumes the main move.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

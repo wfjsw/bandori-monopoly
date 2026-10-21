@@ -8,13 +8,13 @@
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", "", None, louder)])
+pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, None, louder)])
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"louder"#)
         .raw_name(r#"（ykn）louder"#)
         .tags(&[])
         .text(r#"每次打出此卡时使ring的价格基础乘数+5"#)
-        .cell(r#"E2"#)
+        // sheet cell E2
         .fields(&[("group", r#"Roselia"#), ("owner", r#"凑友希那"#)]));
 
 fn louder(player_id: i32) -> card_sdk::Asked {
@@ -25,6 +25,10 @@ fn louder(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -768,6 +768,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::state_set => arm_state_set(a),
                 Op::set_slot => arm_set_slot(a),
                 Op::state_add | Op::inc_slot => arm_state_add(a),
+                Op::state_set_flags => arm_state_set_flags(a),
+                Op::raise_after => arm_raise_after(a),
                 Op::tok_names => arm_tok_names(a),
 
         // ---- marks ----
@@ -815,7 +817,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| w.play_doubled = a0);
             0
         }
-                Op::apply_abnormal => arm_apply_abnormal(a),
+        Op::apply_abnormal => arm_apply_abnormal(a),
         // The stay move-latch is turn-flow; the kani world has no skip_move
         // field (the model records the layer write only). Protocol-level.
         Op::skip_main_move | Op::clear_move_skip => 0,
@@ -2284,11 +2286,12 @@ pub fn arm_players_on_count(a: Args) -> i64 {
 /// instances whose owner == `player_id` run `on_fans_flip_kani`. Cancelled /
 /// aborted (`0`) leaves the caller's counters untouched.
 pub fn arm_raise(a: Args) -> i64 {
-    let [player_id, kind, value, ..] = a;
+    let [player_id, kp, kl, value, ..] = a;
     // Nested trigger (matches `wasm_rules::raise_core`): save the outer
     // payload, install the raise's, run listeners, restore. `arm_trig_value`
     // answers `pay_amount` (the hostfns `trigger().value` twin); `trig_value`
     // is the ir_fill / fixture view of the same number.
+    let kind_sp: &'static str = crate::intern::resolve_str(name_id(kp, kl));
     let saved = world::with_world(|w| {
         (
             w.trig_kind,
@@ -2299,7 +2302,7 @@ pub fn arm_raise(a: Args) -> i64 {
         )
     });
     world::with_world_mut(|w| {
-        w.trig_kind = kind;
+        w.trig_kind = kind_sp;
         w.trig_player = player_id;
         w.trig_value = value;
         w.pay_amount = value;
@@ -2308,7 +2311,7 @@ pub fn arm_raise(a: Args) -> i64 {
     let mut settled = 1i64;
     #[cfg(all(kani, feature = "skills-groups"))]
     {
-        if kind == bandori_std::kind::FANS_FLIP {
+        if kind_sp == "r:bandori:107" {
             settled = arm_raise_fans_flip(player_id, value);
         }
     }
@@ -2716,6 +2719,25 @@ pub fn arm_state_add(a: Args) -> i64 {
         }
 }
 
+/// `state_set_flags(player, ptr, len, flags)` — declare [`state_flag`] bits
+/// for a key. `NEVER_NEGATIVE` (bit 0) floors later `state_set` / `state_add`
+/// writes at 0, matching the engine.
+pub fn arm_state_set_flags(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let key = name_id(a1, a2);
+    world::with_world_mut(|w| w.key_set_flags(a0, key, a3 as u8));
+    0
+}
+
+/// `raise_after(player, name_p, name_l, value)` — queue a post-commit raise.
+/// The body-only model does not run deferred listeners (same as
+/// `CardWorld::raise_after`'s default no-op); the call is accepted so guest
+/// bodies that queue one complete.
+pub fn arm_raise_after(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
 pub fn arm_state_get(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
@@ -2998,9 +3020,19 @@ pub fn arm_tok_names(a: Args) -> i64 {
     0
 }
 
+/// `trigger::kind()` — two-call out-buffer: write the spelling bytes.
 pub fn arm_trig_kind(a: Args) -> i64 {
-    let _ = a;
-    world::with_world(|w| w.trig_kind) as i64
+    let [p, n, ..] = a;
+    let sp = world::with_world(|w| w.trig_kind);
+    let bytes = sp.as_bytes();
+    if p == 0 {
+        return bytes.len() as i64;
+    }
+    if n < bytes.len() as i32 {
+        return bytes.len() as i64;
+    }
+    card_sdk::native::write(p, bytes);
+    bytes.len() as i64
 }
 
 pub fn arm_trig_move_main(a: Args) -> i64 {
@@ -3013,9 +3045,23 @@ pub fn arm_trig_move_roll(a: Args) -> i64 {
     world::with_world(|w| w.move_snap.roll) as i64
 }
 
+/// `trigger::name()` — two-call out-buffer writing the interned name bytes.
 pub fn arm_trig_name(a: Args) -> i64 {
-    let _ = a;
-    world::with_world(|w| w.counter_name) as i64
+    let [p, n, ..] = a;
+    let id = world::with_world(|w| w.counter_name);
+    let bytes: &[u8] = if id == 0 {
+        &b""[..]
+    } else {
+        crate::intern::resolve(crate::intern::NameId(id as u16))
+    };
+    if p == 0 {
+        return bytes.len() as i64;
+    }
+    if n < bytes.len() as i32 {
+        return bytes.len() as i64;
+    }
+    card_sdk::native::write(p, bytes);
+    bytes.len() as i64
 }
 
 pub fn arm_trig_player(a: Args) -> i64 {

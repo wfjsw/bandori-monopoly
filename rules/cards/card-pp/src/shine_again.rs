@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 pub const SHINE_AGAIN: CardDef = CardDef::new(
@@ -29,7 +29,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- the hand play. The
         // [共鸣] branch (2) is offered from the `PaySplitChoose` hook below, not as a
         // second `Play` entry (its `is_placed` gate was blocking this play).
-        On::Play("", "", None, shine_again),
+        On::Play("", None, None, shine_again),
         // 规则书[持续]（1）: 「[拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡
         // 未记录且[拥有者]拥有同色地契的颜色」 -- the offer exists only while
         // short on cash and with an unrecorded owned colour to name. The money
@@ -37,18 +37,12 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
         // The pre's `money(owner) < value` still gates on the figure in flight.
-        On::Action(
-            &[ActionKind::PaySplitChooseBefore],
-            "actor == owner && card.placed && value > 0 && money(owner) < value",
-            r#"[拥有者][消耗]或[支付]并当前资金不够"#,
-            Some(has_unrecorded_color),
-            pay_choose,
-        ),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && money(owner) < value", Some(key!("shine_again_when")), Some(has_unrecorded_color), pay_choose)),
         // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
         //   turn-start offer is a stand-in for the C# action window.
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", "", None, offer_resonance),
+        On::Action(Action::TurnStart("actor == owner && card.placed", None, None, offer_resonance)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次闪耀"#)
@@ -61,7 +55,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
 [持续]：
 （1）[反击][拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡未记录且[拥有者]拥有同色地契的颜色，[拥有者][获得]“[拥有者]拥有的1个同色地契的购买价格”÷5的资金和1个正面[P✽P粉丝]。
 （2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。"#)
-        .cell(r#"D2"#)
+        // sheet cell D2
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset of the
@@ -220,6 +214,10 @@ fn record(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -229,13 +227,12 @@ pub fn shine_again_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn offer_resonance_kani(player_id: i32) -> card_sdk::Asked {
-    offer_resonance(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
 pub fn pay_choose_kani(player_id: i32) -> card_sdk::Asked {
     pay_choose(player_id)
 }
 
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_resonance_kani(player_id: i32) -> card_sdk::Asked {
+    offer_resonance(player_id)
+}

@@ -17,8 +17,7 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     // residual guard.
     &[On::Counteract(
         &[ChainKind::Mortgage],
-        "actor == owner || owner.money >= tile.price / 2",
-        r#"其他玩家抵押商店街地契"#,
+        "actor == owner || owner.money >= tile.price / 2", Some(key!("tomoe_savior_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -27,7 +26,7 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
         .raw_name(r#"（巴）商店街的救世主"#)
         .tags(&[r#"反击"#])
         .text(r#"【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回"#)
-        .cell(r#"C14"#)
+        // sheet cell C14
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"宇田川巴"#)]));
 
 /// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
@@ -103,8 +102,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

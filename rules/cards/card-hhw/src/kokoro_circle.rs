@@ -7,28 +7,28 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 
 pub const KOKORO_CIRCLE: CardDef = CardDef::new(
     "HHW:（kkr）前往笑容集结的地方！",
     &[
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
         // -- 行动阶段 15 (`SETTLE-STAGES.md` §4 M3): 「视为格子的收款」 is an
         // entry in the tile's settle effect list, not an after-hook. A field
         // card that replaces the body skips this entry. `docs/TILES.md` names
         // the long-term home as a collect rule instance on CiRCLE; the
         // `settleBody` hook is the same list entry for now.
-        On::Action(&[ActionKind::SettleBody], "", "", None, settle_body),
+        On::Action(Action::SettleBody("", None, None, settle_body)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 10000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"前往笑容集结的地方！"#)
         .raw_name(r#"（kkr）前往笑容集结的地方！"#)
         .tags(&[])
         .text(r#"支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款"#)
-        .cell(r#"F7"#)
+        // sheet cell F7
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"弦卷心"#)]));
 
 fn cant_play(_player_id: i32) -> Option<Msg> {
@@ -124,6 +124,10 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

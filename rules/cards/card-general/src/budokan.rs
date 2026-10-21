@@ -8,7 +8,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play("", "", None, budokan)])
+pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play("", None, None, budokan)])
     // 规则书: 「[指定][使用者]以外的所有玩家」 -- `Card.Def.Targeting`, so
     // 网络链接异常 「取消其对目标之一的[指定]」 sees the designations.
     .props(&[(card_sdk::abi::prop::DESIGNATES, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -17,7 +17,7 @@ pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play("
         .tags(&[r#"手"#])
         .text(r#"[手]：
 将X设为2000÷“[使用者]以外的[存活]玩家数量”向上取整10，Y设为[存活]玩家数量减1。[指定][使用者]以外的所有玩家，被[指定]的玩家[支付][使用者]X资金。"#)
-        .cell(r#"A3"#)
+        // sheet cell A3
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn budokan(player_id: i32) -> card_sdk::Asked {
@@ -43,6 +43,10 @@ fn budokan(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「Y设为[存活]玩家数量减1」 -- Y is defined but unused in the passage.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

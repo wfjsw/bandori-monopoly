@@ -1572,7 +1572,7 @@ pub fn embers_03_settle_costs_ten_per_copy() {
     w.pos[3] = 40;
     w.trig_player = 0;
     w.trig_tile = 10;
-    w.trig_kind = 64; // TriggerKind::SettleBody
+    w.trig_kind = "settleBody";
     w.trig_cancelled = false;
     {
         world::reset_world(w);
@@ -1610,7 +1610,7 @@ pub fn embers_04_clear_on_exile_blocked() {
     // (Index 3 is SettleBody — off-by-one left this proof vacuous on the
     // clear-on-exile path; class B.)
     world::with_world_mut(|w| {
-        w.trig_kind = 21;
+        w.trig_kind = "r:bandori:21"; // Exile
         w.trig_player = 0;
     });
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 4, 0));

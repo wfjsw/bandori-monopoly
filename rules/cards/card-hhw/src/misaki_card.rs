@@ -18,8 +18,7 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         // 规则书[反击]: 「使用火罐进行移动掷骰后」 -- the [火罐] roll is
         // card-owned state: the card that armed one tagged the move
         // (`ctx::plan::set_tag("fireRoll", 1)`).
-        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
-        r#"使用火罐进行移动掷骰"#,
+        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0", Some(key!("misaki_card_when")),
         None,
         counteract,
     )],
@@ -28,7 +27,7 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         .raw_name(r#"（美咲）"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。"#)
-        .cell(r#"F15"#)
+        // sheet cell F15
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"奥泽美咲"#)]));
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
@@ -106,8 +105,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

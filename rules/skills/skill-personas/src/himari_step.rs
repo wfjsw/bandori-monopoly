@@ -11,18 +11,19 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 use super::ran_red::REST_TURNS;
 
 pub const HIMARI_STEP: CardDef = CardDef::new(
     "skill:上原绯玛丽:大家一起迈出新的一步",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
     ],
-).silent(&[1])
+).silent(&[1, 2])
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
@@ -71,6 +72,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("himari_step_set")));
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

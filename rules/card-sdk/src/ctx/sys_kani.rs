@@ -575,8 +575,8 @@ pub fn raise_bought(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::raise_bought, [player_id, tile, 0, 0, 0, 0])
 }
 
-pub fn raise(player_id: i32, kind: i32, value: i32) -> i32 {
-    kani_host::call_i32(Op::raise, [player_id, kind, value, 0, 0, 0])
+pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32) -> i32 {
+    kani_host::call_i32(Op::raise, [player_id, kind_p, kind_l, value, 0, 0])
 }
 
 pub fn gain_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32 {
@@ -675,8 +675,8 @@ pub fn ask(kind: i32, player_id: i32, title_ptr: i32, title_len: i32, text_ptr: 
     kani_host::call_i32(Op::ask, [kind, player_id, title_ptr, title_len, text_ptr, text_len])
 }
 
-pub fn trig_kind() -> i32 {
-    kani_host::call_i32(Op::trig_kind, [0, 0, 0, 0, 0, 0])
+pub fn trig_kind(p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::trig_kind, [p, n, 0, 0, 0, 0])
 }
 
 pub fn trig_player() -> i32 {
@@ -851,8 +851,8 @@ pub fn trig_effect_count() -> i32 {
     kani_host::call_i32(Op::trig_effect_count, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn trig_effect_kind(i: i32) -> i32 {
-    kani_host::call_i32(Op::trig_effect_kind, [i, 0, 0, 0, 0, 0])
+pub fn trig_effect_kind(i: i32, p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::trig_effect_kind, [i, p, n, 0, 0, 0])
 }
 
 pub fn trig_effect_target(i: i32) -> i32 {
@@ -871,8 +871,8 @@ pub fn trig_effect_value(i: i32) -> i32 {
     kani_host::call_i32(Op::trig_effect_value, [i, 0, 0, 0, 0, 0])
 }
 
-pub fn declare_effect(kind: i32, target: i32, from: i32, tile: i32, value: i32) {
-    kani_host::call_unit(Op::declare_effect, [kind, target, from, tile, value, 0]);
+pub fn declare_effect(kind_p: i32, kind_l: i32, target: i32, from: i32, tile: i32, value: i32) {
+    kani_host::call_unit(Op::declare_effect, [kind_p, kind_l, target, from, tile, value]);
 }
 
 pub fn trig_card_is(ptr: i32, len: i32) -> i32 {

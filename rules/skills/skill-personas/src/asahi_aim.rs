@@ -18,7 +18,7 @@ use alloc::string::String;
 
 use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const DONE: &str = "skill.asahiAim.first";
 
@@ -33,13 +33,8 @@ pub const ASAHI_AIM: CardDef = CardDef::new(
         // （1）「非"旭汤澡堂"或任意"Live House"」 -- the tile is a real buy,
         // not the bathhouse. `is_live_house_for` is the per-player colour check
         // (not CEL's tile-kind `is_venue`), so it is the residual.
-        On::Action(
-            &[ActionKind::Bought],
-            "actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')", "",
-            Some(not_live_house_for_me),
-            on_bought,
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", Some(owns_bath_with_lh), at_turn_start),
+        On::Action(Action::Bought("actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')", None, Some(not_live_house_for_me), on_bought)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, Some(owns_bath_with_lh), at_turn_start)),
     ],
 );
 
@@ -91,15 +86,19 @@ fn is_initial_livehouse(t: i32) -> bool {
     ctx::is_buyable(t) && ctx::tile_group(t) == 6
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start(player_id)
-}
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_bought_kani(player_id: i32) -> card_sdk::Asked {
     on_bought(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
 }

@@ -20,8 +20,7 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         // (> 0); that is not a money loss and must not open this window.
         // `value > 0` also covers C# `!t.Pay.cancel` -- a payment an earlier
         // counteraction already reduced to 0 reads as `value() == 0`.
-        "chain_has(Pay) && actor == owner && value > 0",
-        r#"你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]"#,
+        "chain_has(Pay) && actor == owner && value > 0", Some(key!("now_sumimi_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -30,7 +29,7 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         .raw_name(r#"现在她是Sumimi的小初啦"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）"#)
-        .cell(r#"L5"#)
+        // sheet cell L5
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 /// C# `TileData.kind == "ring"` -- `ctx::is_deed` (ABI v9) reads the board's
@@ -88,6 +87,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

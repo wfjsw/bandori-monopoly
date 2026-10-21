@@ -15,8 +15,7 @@ pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner",
-        r#"受到[除外]以外的异常移动效果影响"#,
+        "target == owner", Some(key!("own_stage_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -25,7 +24,7 @@ pub const OWN_STAGE: CardDef = CardDef::new(
         .raw_name(r#"选择自己的舞台"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算"#)
-        .cell(r#"E9"#)
+        // sheet cell E9
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// The [异常移动效果] this chain link declared, as its `AbKind`.
@@ -78,8 +77,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

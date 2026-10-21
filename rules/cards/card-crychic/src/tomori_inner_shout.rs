@@ -12,7 +12,7 @@
 //! re-declare 「想要成为人类」's X for money, then a MyGO placement + pull skill.
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 use crate::want_human::SLOT_X;
 
@@ -22,30 +22,25 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // 规则书（3）: 「你位于此卡前后5格内时可在时机合适时消耗1火罐…」 -- the
         // offer exists only within 5 of this card and with a fire to spend.
         // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
-        On::Action(
-            &[card_sdk::abi::ActionKind::SettleBefore],
-            "actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(owner), card.tile) <= 5", "",
-            Some(not_latched),
-            pull,
-        ),
+        On::Action(Action::SettleBefore("actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(owner), card.tile) <= 5", None, Some(not_latched), pull)),
         // Once-per-move latch drop (the redirect re-raises `settleBefore` at the
         // destination; see `pull`).
-        On::Action(&[card_sdk::abi::ActionKind::MoveResolved], "", "", None, clear_latch),
+        On::Action(Action::MoveResolved("", None, None, clear_latch)),
         // 高松灯（MyGO!!!!!）(2): 「在此技能影响下的支付价格变为原本的一半」 -- the
         // mover's payments on the pulled settle.
-        On::Filter(&[card_sdk::abi::FilterKind::PaySplitMul], "", Some(half), on_pay),
+        On::Filter(Filter::PaySplitMul("", Some(half), on_pay)),
         // （2）「乐队技能的（2）效果发动时展示此卡并将其洗入抽牌堆」 lives in the
         // band skill's (2) body (`skill-groups/src/crychic.rs`), not here: the
         // band effect is what moves the card, and by a separate empty-piles hook
         // the deck has already been refilled so the proxy never fires.
-        On::Play("", "", None, tomori_inner_shout),
+        On::Play("", None, None, tomori_inner_shout),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"内心的呐喊"#)
         .raw_name(r#"（灯）内心的呐喊"#)
         .tags(&[])
         .text(r#"（1）打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得两个X差值*120的资金。（2）此卡不会被你乐队技能的（2）效果移除，乐队技能的（2）效果发动时展示此卡并将其洗入抽牌堆。（3）若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上，你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的（2）技能。"#)
-        .cell(r#"M13"#)
+        // sheet cell M13
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"高松灯（CRYCHIC）"#)]));
 
 fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
@@ -201,17 +196,31 @@ fn pull(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn tomori_inner_shout_kani(player_id: i32) -> card_sdk::Asked {
-    tomori_inner_shout(player_id)
-}
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
-
 #[cfg(kani)]
 #[inline(always)]
 pub fn pull_kani(player_id: i32) -> card_sdk::Asked {
     pull(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_latch_kani(player_id: i32) -> card_sdk::Asked {
+    clear_latch(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
+    on_pay(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn tomori_inner_shout_kani(player_id: i32) -> card_sdk::Asked {
+    tomori_inner_shout(player_id)
 }

@@ -160,20 +160,44 @@ fn neighbor_is_living_seat() {
 }
 
 /// stay / stun / exile are distinct (`key::STAY` / `STUN` / `EXILE`).
+///
+/// ABI 88 retired the named `give_*` / `*_of` verbs: status layers are
+/// generic state latches. Grant with `state_set`, read with `state_get`
+/// (the retired `stay_of` / `stun_of` / `exile_of`). `exileTo` is its own
+/// key, not an alias of the three layer counters.
 #[test]
 fn stay_stun_exile_are_distinct() {
     let _g = model_lock();
     install(base());
-    rules_kani::host::dispatch(Op::give_stay, [0, 1, 0, 0, 0, 0]);
-    rules_kani::host::dispatch(Op::give_stun, [0, 2, 0, 0, 0, 0]);
-    rules_kani::host::dispatch(Op::give_exile, [0, 3, 5, 0, 0, 0]);
-    assert_eq!(rules_kani::host::dispatch(Op::stay_of, [0, 0, 0, 0, 0, 0]), 1);
-    assert_eq!(rules_kani::host::dispatch(Op::stun_of, [0, 0, 0, 0, 0, 0]), 2);
-    assert_eq!(rules_kani::host::dispatch(Op::exile_of, [0, 0, 0, 0, 0, 0]), 3);
+    let stay = card_sdk::native::intern(b"stay");
+    let stun = card_sdk::native::intern(b"stun");
+    let exile = card_sdk::native::intern(b"exile");
+    let exile_to = card_sdk::native::intern(b"exileTo");
+    // state_set(player, ptr, len, field=0 VALUE, v).
+    rules_kani::host::dispatch(Op::state_set, [0, stay.0, stay.1, 0, 1, 0]);
+    rules_kani::host::dispatch(Op::state_set, [0, stun.0, stun.1, 0, 2, 0]);
+    rules_kani::host::dispatch(Op::state_set, [0, exile.0, exile.1, 0, 3, 0]);
+    rules_kani::host::dispatch(Op::state_set, [0, exile_to.0, exile_to.1, 0, 5, 0]);
+    // state_get(player, ptr, len, field=0 VALUE).
     assert_eq!(
-        kworld::with_world(|w| w.exile_to[0]),
+        rules_kani::host::dispatch(Op::state_get, [0, stay.0, stay.1, 0, 0, 0]),
+        1,
+        "stay layers under key::STAY"
+    );
+    assert_eq!(
+        rules_kani::host::dispatch(Op::state_get, [0, stun.0, stun.1, 0, 0, 0]),
+        2,
+        "stun layers under key::STUN"
+    );
+    assert_eq!(
+        rules_kani::host::dispatch(Op::state_get, [0, exile.0, exile.1, 0, 0, 0]),
+        3,
+        "exile layers under key::EXILE"
+    );
+    assert_eq!(
+        rules_kani::host::dispatch(Op::state_get, [0, exile_to.0, exile_to.1, 0, 0, 0]),
         5,
-        "give_exile stores EXILE_TO"
+        "exileTo is a distinct key from the three layer counters"
     );
 }
 
@@ -208,19 +232,21 @@ fn add_counter_clamps_to_max() {
     assert_eq!(got, 0, "floor at 0");
 }
 
-/// `gain_charge` clamps at `charge_max` and returns the amount gained.
+/// `gain_marker` (ABI 88's `gain_charge`) clamps at `charge_max` and returns
+/// the amount gained. Wire: (player, name_p, name_l, n, why_p, why_l).
 #[test]
-fn gain_charge_clamps_at_cap() {
+fn gain_marker_clamps_at_cap() {
     let _g = model_lock();
     let mut w = base();
     w.charge[0] = 2;
     w.charge_max[0] = 3;
     install(w);
-    let got = rules_kani::host::dispatch(Op::gain_charge, [0, 5, 0, 0, 0, 0]);
+    let (np, nl) = card_sdk::native::intern(b"charge");
+    let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 5, 0, 0]);
     assert_eq!(got, 1, "only (cap-was) is gained");
     assert_eq!(kworld::with_world(|w| w.charge[0]), 3);
     // at cap → 0
-    let got = rules_kani::host::dispatch(Op::gain_charge, [0, 5, 0, 0, 0, 0]);
+    let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 5, 0, 0]);
     assert_eq!(got, 0, "at cap gains nothing");
 }
 

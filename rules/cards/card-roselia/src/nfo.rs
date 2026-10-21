@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 pub const NFO: CardDef = CardDef::new(
     "R:NFO",
@@ -21,8 +21,8 @@ pub const NFO: CardDef = CardDef::new(
         // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
         // live in a Filter. Whole offer on `ActionKind::Effect` (payment
         // declaration; `t.value` folds there).
-        On::Action(&[card_sdk::abi::ActionKind::Effect], "", "", Some(gain_guard), gain_bump),
-        On::Play("", "", None, play),
+        On::Action(Action::Effect("", None, Some(gain_guard), gain_bump)),
+        On::Play("", None, None, play),
         // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
         // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
@@ -34,21 +34,16 @@ pub const NFO: CardDef = CardDef::new(
         //   zeroed payments too and carries no "PaySplitAt ran" bit, and a Filter
         //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
         //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
-        On::Filter(
-            &[FilterKind::PaySplitAt],
-            "actor == owner && card.placed && value > 0",
-            None,
-            pay_shave,
-        ),
-        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", "", None, pay_unplace),
-        On::Action(&[ActionKind::AtEnd], "", "", None, at_end),
+        On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_shave)),
+        On::Action(Action::PayAfter("actor == owner && card.placed", None, None, pay_unplace)),
+        On::Action(Action::AtEnd("", None, None, at_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)
         .raw_name(r#"NFO"#)
         .tags(&[])
         .text(r#"投掷1d6并在回合结束后获得一层[停留]。若投掷结果为1，获得1500资金；若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]；若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆；若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出；若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300；若结果为6，依次获得结果1-5的全部效果。（若结果严格大于6，则从1开始重新计数）"#)
-        .cell(r#"E7"#)
+        // sheet cell E7
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 const ID: &str = "R:NFO";
@@ -299,6 +294,10 @@ fn gain_bump(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("nfo_bumped")));
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -19,14 +19,15 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const RINKO_1CM: CardDef = CardDef::new(
     "skill:白金燐子:即使1cm也要前进",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
     ],
 )
     // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate
@@ -36,7 +37,7 @@ pub const RINKO_1CM: CardDef = CardDef::new(
         (bandori_std::fire::FIRE_INITIAL, 3), (bandori_std::fire::FIRE_CAP, 3),
         (bandori_std::prop::PLAYABLE_STUNNED, 1),
     ])
-    .silent(&[1]);
+    .silent(&[1, 2]);
 
 /// 「初始3，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -95,6 +96,8 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

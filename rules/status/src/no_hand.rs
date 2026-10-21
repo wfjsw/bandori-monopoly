@@ -34,7 +34,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The board-owned `noHand` rule. One instance on `BOARD_OWNER`, tile = -1`.
 /// Registered in [`crate::CARDS`]; `bind_tiles` places it.
@@ -43,22 +43,23 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
     &[
         // Turn-start fold (2 -> 1). See the placement note above for why this
         // is `TurnStart` and not `TurnStartBefore`.
-        On::Action(&[ActionKind::TurnStart], "", "", None, on_turn_start),
+        On::Action(Action::TurnStart("", None, None, on_turn_start)),
         // Turn-end clear (1 -> 0). `TurnEnd` is hook-only.
-        On::Action(&[ActionKind::TurnEnd], "", "", None, on_turn_end),
+        On::Action(Action::TurnEnd("", None, None, on_turn_end)),
         // 「不可使用手牌」 -- the play gate, **CEL-only**. No turn-skip: the
         // turn still runs; only hand-card plays are refused.
-        On::FilterFlag(&[FilterKind::PlayGate], NO_HAND_HELD, None, refuse),
+        On::Filter(Filter::PlayGate(NO_HAND_HELD, None, refuse)),
     ],
 )
     .board_role("status")
-    .gate_msgs(&[(FilterKind::PlayGate.as_i32(), "err.play_no_hand")]);
+    .gate_msgs(&[(FilterKind::PlayGate.gate_id(), "err.play_no_hand")]);
 
 /// The condition under which `noHand` closes the play gate.
 pub const NO_HAND_HELD: &str = "state(actor,'noHand') > 0";
 
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// Turn-start fold (2 -> 1). Returns the new value.
@@ -129,4 +130,25 @@ pub fn add(player_id: i32, n: i32) {
 
 pub fn get(player_id: i32) -> i32 {
     card_sdk::ctx::state::get(player_id, KEY)
+}
+
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

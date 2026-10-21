@@ -15,8 +15,7 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     // are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
-        "actor == owner && move.roll != null && move.roll < 6",
-        r#"你的一次掷骰小于6"#,
+        "actor == owner && move.roll != null && move.roll < 6", Some(key!("himari_plus_one_when")),
         None,
         counteract,
     )],
@@ -25,7 +24,7 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
         .raw_name(r#"（绯玛丽）如果并非没问题"#)
         .tags(&[r#"反击"#])
         .text(r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#)
-        .cell(r#"C15"#)
+        // sheet cell C15
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -44,8 +43,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

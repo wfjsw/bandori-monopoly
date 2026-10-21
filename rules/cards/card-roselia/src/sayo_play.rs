@@ -18,12 +18,11 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::MoveBefore],
-            "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
-            r#"时机合适"#,
+            "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key", Some(key!("sayo_play_when")),
             Some(can_counteract),
             counteract,
         ),
-        On::Play("", "", Some(counter_only), no_play),
+        On::Play("", None, Some(counter_only), no_play),
     ],
 )
 .props(&[(prop::COUNTERACT_GROUP, 1)])
@@ -32,7 +31,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
         .raw_name(r#"（纱夜）弹奏弹奏弹奏，继续弹奏"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。"#)
-        .cell(r#"E10"#)
+        // sheet cell E10
         .fields(&[("group", r#"Roselia"#), ("owner", r#"冰川纱夜"#)]));
 
 fn counter_only(_player_id: i32) -> Option<Msg> {
@@ -82,15 +81,19 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn no_play_kani(player_id: i32) -> card_sdk::Asked {
-    no_play(player_id)
-}
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn no_play_kani(player_id: i32) -> card_sdk::Asked {
+    no_play(player_id)
 }

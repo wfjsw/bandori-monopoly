@@ -17,13 +17,13 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
-        On::Play("", "", None, chisato_mask),
-        On::Action(&[ActionKind::Reshuffled], "", "", Some(reshuffled_guard), reshuffled),
+        On::Play("", None, None, chisato_mask),
+        On::Action(Action::Reshuffled("", None, Some(reshuffled_guard), reshuffled)),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
@@ -38,7 +38,7 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
 [持续]：
 （1）[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。
 （2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#)
-        .cell(r#"D18"#)
+        // sheet cell D18
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"白鹭千圣"#)]));
 
 fn chisato_mask(player_id: i32) -> card_sdk::Asked {
@@ -118,6 +118,10 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

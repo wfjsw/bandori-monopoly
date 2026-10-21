@@ -31,7 +31,7 @@
 use bandori_std::kind::abnormal;
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
-use card_sdk::{CardDef, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The state key this host owns (frozen webui wire).
 pub const KEY: &str = "stun";
@@ -43,14 +43,15 @@ pub const STATUS_STUN: CardDef = CardDef::new(
     "status:stun",
     &[
         // 「受到[晕眩]时」 -- the landing clause, same shape as `status:stay`.
-        On::Action(&[ActionKind::Abnormal], "", "", Some(stun_landed), on_stun_landed),
+        On::Action(Action::Abnormal("", None, Some(stun_landed), on_stun_landed)),
         // rules.txt 49: 「处于该状态时[无法移动]，无法使用[主动]技能和手卡的[手]
         // 效果，无法收付款」 -- three gates, **CEL-only**. `stunned` counts the
         // pending `stunStart` layer too (it already holds the gate).
         // 「不可阻挡」 does **not** cancel this layer's move block (it only
         // 「无视」s the stay half).
-        On::FilterFlag(&[FilterKind::ActGate, FilterKind::PayGate], STUNNED, None, refuse),
-        On::FilterFlag(&[FilterKind::MoveGate], STUNNED, None, refuse),
+        On::Filter(Filter::ActGate(STUNNED, None, refuse)),
+        On::Filter(Filter::PayGate(STUNNED, None, refuse)),
+        On::Filter(Filter::MoveGate(STUNNED, None, refuse)),
     ],
 )
     .board_role("status")
@@ -59,8 +60,8 @@ pub const STATUS_STUN: CardDef = CardDef::new(
     // are **different frozen keys** on the same gate. `gate_msgs` is the play
     // path; `gate_skip_msgs` is the skip path. Host `gate_refusal_msg` reads
     // the play table; the turn-skip site should read the skip table.
-    .gate_msgs(&[(FilterKind::ActGate.as_i32(), "err.play_stunned")])
-    .gate_skip_msgs(&[(FilterKind::ActGate.as_i32(), "log.stunned_skip")])
+    .gate_msgs(&[(FilterKind::ActGate.gate_id(), "err.play_stunned")])
+    .gate_skip_msgs(&[(FilterKind::ActGate.gate_id(), "log.stunned_skip")])
     // 「（此卡可在眩晕时打出）」 cards name this prop; the engine skips the
     // act-gate check for them (`CardRules::card_act_exemption`).
     .exemption_prop(bandori_std::prop::PLAYABLE_STUNNED);
@@ -68,8 +69,9 @@ pub const STATUS_STUN: CardDef = CardDef::new(
 /// The condition under which [晕眩] closes the act, pay and move gates.
 pub const STUNNED: &str = "state(actor,'stun') + state(actor,'stunStart') > 0";
 
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 fn stun_landed(_owner: i32) -> bool {
@@ -90,8 +92,9 @@ pub use bandori_std::status::stun::{
     add, add_start, blocks_act, blocks_move, blocks_on_board, blocks_pay, clear, get,
 };
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_stun_landed_kani(player_id: i32) -> card_sdk::Asked {
@@ -100,6 +103,6 @@ pub fn on_stun_landed_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, v: i32) -> bool {
-    refuse(owner, v)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

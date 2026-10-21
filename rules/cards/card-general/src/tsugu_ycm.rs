@@ -15,17 +15,17 @@ use alloc::vec::Vec;
 use card_sdk::abi::{FilterKind, MoveKind};
 use bandori_std::ctx::{plan, trigger};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, Filter, key, Msg, On};
 
 pub const TSUGU_YCM: CardDef = CardDef::new(
     "通用:@Tsugu ycm",
     &[
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // （3）「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- a `BuyAdd`
         // stage on the buy price, riding a `ctx::linger` instance for the turn
         // (`docs/PURCHASE.md`). The engine floors the stage at 0. The tile is
         // the hook's applicability (the residual guard).
-        On::Filter(&[FilterKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
+        On::Filter(Filter::BuyAdd(card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"@Tsugu ycm"#)
@@ -37,7 +37,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
 2. 结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并不[结算]，且可选择购买任意无主的[可购买格子]；
 3. 结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）；
 4. 结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。"#)
-        .cell(r#"A2"#)
+        // sheet cell A2
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 /// 「购买格子时」 -- the `BuyAdd` hook's applicability: there is a tile being
@@ -174,6 +174,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -15,8 +15,7 @@ pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
     &[On::Counteract(
         &[bandori_std::kind::PassRewardAffected.as_trigger()],
-        card_sdk::pre::MINE,
-        r#"[使用者][经过]#1格子且#1格子受到其他效果影响"#,
+        card_sdk::pre::MINE, Some(key!("marina_work_when")),
         None,
         counteract,
     )],
@@ -26,7 +25,7 @@ pub const MARINA_WORK: CardDef = CardDef::new(
         .tags(&[r#"手"#, r#"反击"#])
         .text(r#"[手]：
 [反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。"#)
-        .cell(r#"A14"#)
+        // sheet cell A14
         .fields(&[("group", r#"通用"#), ("owner", r#"月岛麻里奈"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -45,8 +44,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

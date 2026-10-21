@@ -23,8 +23,7 @@ pub const LISA_BOND: CardDef = CardDef::new(
     // the move-end point every movement case raises.
     &[On::Counteract(
         &[ChainKind::MoveAfter],
-        "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0",
-        r#"你使用技能进行传送"#,
+        "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0", Some(key!("lisa_bond_when")),
         None,
         counteract,
     )],
@@ -33,7 +32,7 @@ pub const LISA_BOND: CardDef = CardDef::new(
         .raw_name(r#"必然的联系（莉莎）"#)
         .tags(&[r#"反击"#])
         .text(r#"【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。"#)
-        .cell(r#"E16"#)
+        // sheet cell E16
         .fields(&[("group", r#"Roselia"#), ("owner", r#"今井莉莎"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -76,8 +75,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

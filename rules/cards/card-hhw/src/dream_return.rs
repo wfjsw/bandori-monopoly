@@ -24,8 +24,7 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         // `stunned()` counts `stun + stunStart`, and `stunStart` is not in the
         // CEL schema -- `owner.stun == 0` would wrongly admit a stunStart seat.
         // The rent-table `Targets` loop is engine logic.
-        "pay_is_rent && actor >= 0 && actor != owner && target != owner",
-        r#"在场上其他玩家即将被不属于你的格子收费"#,
+        "pay_is_rent && actor >= 0 && actor != owner && target != owner", Some(key!("dream_return_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -34,7 +33,7 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         .raw_name(r#"梦幻的回礼"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。"#)
-        .cell(r#"F16"#)
+        // sheet cell F16
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
@@ -119,8 +118,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

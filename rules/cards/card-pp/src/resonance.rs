@@ -28,7 +28,7 @@ pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]).meta(&card
         .tags(&[r#"特"#, r#"衍生"#])
         .text(r#"[特]：
 拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。"#)
-        .cell(r#"D8"#)
+        // sheet cell D8
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Offer the [共鸣] cost. Returns whether the player paid it, which is the
