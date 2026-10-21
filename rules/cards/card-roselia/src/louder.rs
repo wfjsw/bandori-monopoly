@@ -8,7 +8,7 @@
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", "", None, louder)])
+pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, None, louder)])
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"louder"#)
         .raw_name(r#"（ykn）louder"#)
@@ -25,6 +25,10 @@ fn louder(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

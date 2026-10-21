@@ -46,6 +46,11 @@ pub use vars::{VarId, VarTy, SCALAR_COUNT};
 pub enum Val {
     Int(i64),
     Bool(bool),
+    /// A kind-spelling scalar: the payload is `id_of(spelling)`. Only `Eq` /
+    /// `Ne` compare it (against another `Str` hash or an `Int` with the same
+    /// payload -- the hash-baked string-literal form). Arithmetic and ordering
+    /// are `Err`, matching CEL's type error on `kind + 1`.
+    Str(i64),
     Null,
     /// Fixed-capacity int list (max 8) — no heap.
     List(ListBuf),

@@ -17,8 +17,7 @@ pub const YOLO: CardDef = CardDef::new(
     // clause are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
-        "actor == owner && (move.roll != null || value >= 0)",
-        "",
+        "actor == owner && (move.roll != null || value >= 0)", None,
         None,
         counteract,
     )],
@@ -46,8 +45,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

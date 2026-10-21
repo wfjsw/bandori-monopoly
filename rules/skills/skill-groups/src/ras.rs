@@ -13,7 +13,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
 
 /// 「每回合可选择只获得第一次受到的[异常移动效果]」 -- 1 once one has landed.
 const TAKEN: &str = "skill.ras.taken";
@@ -25,31 +25,21 @@ pub const RAS: CardDef = CardDef::new(
     &[
         // Turn-start bookkeeping: clear the per-turn latch and drop a stale
         // landing memory. Silent -- the player never sees this as a clause.
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start_reset),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start_reset)),
         // （1）「每回合可选择只获得第一次受到的[异常移动效果]」 -- the drop of the
         // second+ hit belongs on `AbnormalGuard` (the declaration gate that can
         // refuse the effect); the `Abnormal` outcome hook is too late to cancel.
         // 「受到的」 is `target == owner` (the recipient), not `actor == owner`.
         // Pure decision (ABI v74): the one-shot latch is written by
         // [`mark_taken`] when the allowed effect actually lands.
-        On::FilterFlag(
-            &[card_sdk::abi::FilterKind::AbnormalGuard],
-            "target == owner",
-            None,
-            on_abnormal,
-        ),
+        On::Filter(Filter::AbnormalGuard("target == owner", None, on_abnormal)),
         // One-shot latch for （1）: `Abnormal` reports what actually landed
         // (受到的), self-applied included. Paired with the pure gate above.
-        On::Action(&[ActionKind::Abnormal], "target == owner", "", None, mark_taken),
-        On::Action(&[ActionKind::Settle], card_sdk::pre::MINE, "", None, on_settle),
+        On::Action(Action::Abnormal("target == owner", None, None, mark_taken)),
+        On::Action(Action::Settle(card_sdk::pre::MINE, None, None, on_settle)),
         // （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
         // The remembered-tile scan is a derived read (docs/GUARDS.md §4.2).
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            card_sdk::pre::MINE, "",
-            Some(still_on_remembered),
-            at_turn_start_offer,
-        ),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, Some(still_on_remembered), at_turn_start_offer)),
     ],
 )
     .silent(&[0, 2, 3]);
@@ -122,8 +112,12 @@ fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
 /// pure; `state::set` is refuse_if_filter'd).
 /// TODO(规则书): 「可选择」 -- the claim is automatic (no decline window for
 ///   the first hit). Same discrepancy as `m09_ras_band_first_abnormal_only`.
-fn on_abnormal(player_id: i32, _v: i32) -> bool {
-    state::get(player_id, TAKEN) == 0
+fn on_abnormal(player_id: i32, mut g: GateValue) -> GateValue {
+    // Allow (leave the host's answer) on the first hit; deny the rest.
+    if state::get(player_id, TAKEN) != 0 {
+        g.allowed = Some(false);
+    }
+    g
 }
 
 /// One-shot latch for （1）: the allowed abnormal actually landed (「受到的」).
@@ -158,6 +152,10 @@ bandori_std::roster::GroupDef::new(r#"RAISE A SUILEN"#)
     .text(r#"（1）每回合可选择只获得第一次受到的[异常移动效果]。（2）因该技能以外的效果在livehouse格子[触发结算]时，若你的下回合开始时仍在那个格子上，你的下一次主要移动可变为传送至你拥有的一个livehouse格子。"#)
     .logo(r#"018"#);
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -167,21 +165,7 @@ pub fn at_turn_start_reset_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
-    on_settle(player_id)
-}
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start_offer(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_abnormal_kani(player_id: i32, v: i32) -> bool {
+pub fn on_abnormal_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
     on_abnormal(player_id, v)
 }
 
@@ -189,4 +173,16 @@ pub fn on_abnormal_kani(player_id: i32, v: i32) -> bool {
 #[inline(always)]
 pub fn mark_taken_kani(player_id: i32) -> card_sdk::Asked {
     mark_taken(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
+    on_settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start_offer(player_id)
 }

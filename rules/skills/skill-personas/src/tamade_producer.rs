@@ -13,7 +13,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// Did this player's own build commit last turn?
 const BUILT_LAST: &str = "skill.tamade.builtLast";
@@ -28,9 +28,9 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         // must still enter the body; gating the hook on `builtLast == 0` left
         // that arm dead (and skipped the builtThis reset), so the second build
         // paid full price.
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
-        On::Action(&[bandori_std::kind::HouseAdded], card_sdk::pre::MINE, "", None, on_built),
-        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, at_turn_end),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start)),
+        On::Action(Action::HouseAdded(card_sdk::pre::MINE, None, None, on_built)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, at_turn_end)),
     ],
 )
     .silent(&[1, 2]);
@@ -60,6 +60,8 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, BUILT_THIS, 0);
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

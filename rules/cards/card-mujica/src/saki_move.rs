@@ -8,7 +8,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play("", "", None, saki_move)]).meta(&card_sdk::meta::CardMeta::new()
+pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play("", None, None, saki_move)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"祥，移动"#)
         .raw_name(r#"祥，移动"#)
         .tags(&[])
@@ -77,6 +77,10 @@ fn saki_move(player_id: i32) -> card_sdk::Asked {
     // move and choosing another player does not.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

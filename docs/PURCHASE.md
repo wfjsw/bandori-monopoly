@@ -16,7 +16,8 @@ live in `rules/tiles/src/deed.rs` + `On::Mortgage` / `On::Redeem` (ABI v73).
 **2026-10-16 (later): the perform sequence lives in `On::Buy` / `On::Build`**
 (ABI v80). The tile body owns eligibility, the quote and the order of steps,
 calling generic mechanism primitives: `ctx::raise` (filter fold for `BuyGate`
-FilterFlag / `BuyAssign` FilterValue, action chain for `buyBefore` / `bought` /
+/ `BuyAssign` gates and payloads -- typed `Filter::` kinds since ABI 94, not
+the old `FilterFlag` / `FilterValue` bags -- action chain for `buyBefore` / `bought` /
 `buyAfter` / `buildBefore` / `houseAdded` / `buildAfter`), `ctx::pay_buy` /
 `ctx::pay_build` through `Cx::money` (so paySplitAdd/paySplitMul/payCombined and
 allow_mortgage funding prompts behave identically), `ctx::assign_deed`

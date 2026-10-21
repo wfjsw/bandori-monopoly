@@ -8,7 +8,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const UNSTOPPABLE: CardDef =
-    CardDef::new("RAS:UNSTOPPABLE", &[On::Play("", "", Some(cant_play), unstoppable)])
+    CardDef::new("RAS:UNSTOPPABLE", &[On::Play("", None, Some(cant_play), unstoppable)])
         .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"UNSTOPPABLE"#)
         .raw_name(r#"UNSTOPPABLE"#)
@@ -58,6 +58,10 @@ fn unstoppable(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

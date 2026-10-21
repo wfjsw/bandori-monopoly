@@ -5,31 +5,13 @@ use crate::abi::{export, pack, ManifestEntry, ManifestOn, ManifestTileText};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::meta::{ordinal_of, MetaDoc, MetaRow, RosterSources};
-use crate::{CardDef, On};
+use crate::{
+    CardDef, CounteractEntry, MessageEntry, On, PlayEntry, RuleEntry,
+};
 
 /// The card manifest, `postcard`-encoded (ABI v5 -- the guest hand-writes no
 /// JSON at all: messages and manifests both travel as serde bytes).
-///
-/// ABI v73: kind/variant agreement is enforced here at ruleset build --
-/// a `On::Filter` may only list filter kinds and a `On::Action` only
-/// non-filter kinds ([`crate::On::check_kind_variant`]).
 pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
-    for band in bands {
-        for c in band.iter() {
-            for (ei, o) in c.on.iter().enumerate() {
-                if let Err(code) = o.check_kind_variant() {
-                    panic!(
-                        "ruleset build: {} entry {ei} kind {code} does not match {} (see TriggerKind::is_filter)",
-                        c.id,
-                        match o.kind() {
-                            crate::abi::OnKind::Filter => "On::Filter",
-                            _ => "On::Action",
-                        }
-                    );
-                }
-            }
-        }
-    }
     let entries: Vec<ManifestEntry> = bands
         .iter()
         .flat_map(|band| band.iter())
@@ -52,7 +34,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     },
                     has_guard: o.has_guard(),
                     messages: match o {
-                        On::Message(names, ..) => names.iter().map(|s| String::from(*s)).collect(),
+                        On::MessageBody(e) => e.names.iter().map(|s| String::from(*s)).collect(),
                         _ => Vec::new(),
                     },
                     label: c
@@ -196,24 +178,31 @@ pub fn on(
         panic!("bad entry {entry} on card {idx}")
     };
     match (*o, op) {
-        (On::Counteract(_, _, _, guard, _), export::OP_GUARD)
-        | (On::Action(_, _, _, guard, _), export::OP_GUARD)
-        | (On::Filter(_, _, guard, _), export::OP_GUARD)
-        | (On::FilterFlag(_, _, guard, _), export::OP_GUARD)
-        | (On::FilterValue(_, _, guard, _), export::OP_GUARD)
-        | (On::Settle(_, guard, _), export::OP_GUARD)
-        | (On::Mortgage(_, guard, _), export::OP_GUARD)
-        | (On::Redeem(_, guard, _), export::OP_GUARD)
-        | (On::Buy(_, guard, _), export::OP_GUARD)
-        | (On::Build(_, guard, _), export::OP_GUARD)
-        | (On::Message(_, _, guard, _), export::OP_GUARD) => match guard {
+        (
+            On::CounteractBody(CounteractEntry { guard, .. })
+            | On::SettleBody(RuleEntry { guard, .. })
+            | On::MortgageBody(RuleEntry { guard, .. })
+            | On::RedeemBody(RuleEntry { guard, .. })
+            | On::BuyBody(RuleEntry { guard, .. })
+            | On::BuildBody(RuleEntry { guard, .. })
+            | On::MessageBody(MessageEntry { guard, .. }),
+            export::OP_GUARD,
+        ) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
             // normally skips this call (`has_guard == false`). If it does ask,
             // the residual admits.
             None => 1,
             Some(g) => g(player_id) as i64,
         },
-        (On::Play(_, _, why, _), export::OP_GUARD) => match why {
+        (On::Action(e), export::OP_GUARD) => match e.guard {
+            None => 1,
+            Some(g) => g(player_id) as i64,
+        },
+        (On::Filter(e), export::OP_GUARD) => match e.guard {
+            None => 1,
+            Some(g) => g(player_id) as i64,
+        },
+        (On::PlayBody(PlayEntry { why_not, .. }), export::OP_GUARD) => match why_not {
             Some(why) => match why(player_id) {
                 None => 0,
                 // Kani: the Play `why` reason is a `Msg`; serialising it allocates
@@ -227,245 +216,32 @@ pub fn on(
             },
             None => 0,
         },
-        // v74: pure Filter bodies. The host reads `trigger::value()` in,
-        // we return the transformed figure (or 0/1 for a flag), and the
-        // wrapper writes it back through the existing `set_*` imports so the
-        // raise site's `t.value` / `b.price` readback is unchanged.
-        (On::Filter(_, _, _, run), _) => {
-            let v_in = crate::ctx::trigger::value();
-            let v_out = {
-                let _p = crate::pure::enter();
-                run(player_id, v_in)
-            };
-            if v_out != v_in {
-                crate::ctx::trigger::set_pay_amount(v_out);
-                crate::ctx::trigger::set_price(v_out);
-                crate::ctx::trigger::set_move_roll(v_out);
-            }
+        // Pure filter bodies: one `drive` per shape, which owns the type cast
+        // of `body` and the host IO. See `payload::drive_*`.
+        (On::Filter(e), _) => {
+            (e.drive)(player_id, e.body);
             0
         }
-        (On::FilterFlag(_, _, _, run), _) => {
-            let keep = {
-                let _p = crate::pure::enter();
-                run(player_id, crate::ctx::trigger::value())
-            };
-            if !keep {
-                crate::ctx::trigger::set_cancelled();
-            }
-            0
-        }
-        (On::FilterValue(_, _, _, run), _) => {
-            let input = read_filter_value();
-            let out = {
-                let _p = crate::pure::enter();
-                run(player_id, input)
-            };
-            write_filter_value(input, out);
-            0
-        }
-        (On::Counteract(_, _, _, _, run), _)
-        | (On::Play(_, _, _, run), _)
-        | (On::Action(_, _, _, _, run), _)
-        | (On::Settle(_, _, run), _)
-        | (On::Mortgage(_, _, run), _)
-        | (On::Redeem(_, _, run), _)
-        | (On::Buy(_, _, run), _)
-        | (On::Build(_, _, run), _)
-        | (On::Message(_, _, _, run), _) => match run(player_id) {
+        (
+            On::CounteractBody(CounteractEntry { body: run, .. })
+            | On::PlayBody(PlayEntry { body: run, .. })
+            | On::SettleBody(RuleEntry { body: run, .. })
+            | On::MortgageBody(RuleEntry { body: run, .. })
+            | On::RedeemBody(RuleEntry { body: run, .. })
+            | On::BuyBody(RuleEntry { body: run, .. })
+            | On::BuildBody(RuleEntry { body: run, .. })
+            | On::MessageBody(MessageEntry { body: run, .. }),
+            _,
+        ) => match run(player_id) {
             Ok(()) => 0,
             // Asked: the host reads the published question and re-runs us with
             // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.
             Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
         },
-    }
-}
-
-/// Snapshot the fields a [`crate::abi::FilterValue`] body may rewrite.
-/// Fields with no cheap getter start as `UNCHANGED`.
-fn read_filter_value() -> crate::abi::FilterValue {
-    use crate::abi::FilterValue;
-    use crate::ctx;
-    FilterValue {
-        value: ctx::trigger::value(),
-        deal_owner: ctx::trigger::deal_owner(),
-        deal_houses: ctx::trigger::deal_houses(),
-        deal_mortgaged: if ctx::trigger::deal_mortgaged() { 1 } else { 0 },
-        roller: FilterValue::UNCHANGED,
-        base_count: FilterValue::UNCHANGED,
-        base_sides: FilterValue::UNCHANGED,
-        extra_count: FilterValue::UNCHANGED,
-        extra_sides: FilterValue::UNCHANGED,
-        steps: ctx::plan::steps(),
-        reverse: FilterValue::UNCHANGED,
-        resolve: if ctx::plan::resolve() { 1 } else { 0 },
-        min_roll: FilterValue::UNCHANGED,
-        pay_factor: FilterValue::UNCHANGED,
-        rent_factor: FilterValue::UNCHANGED,
-        stop_at: ctx::plan::stop_at(),
-        settle_tile: FilterValue::UNCHANGED,
-        teleport_to: FilterValue::UNCHANGED,
-        clear_dice: FilterValue::UNCHANGED,
-        tag: FilterValue::UNCHANGED,
-        payee: ctx::trigger::target(),
-        move_kind: FilterValue::UNCHANGED,
-        add_base_count: FilterValue::UNCHANGED,
-        add_base_sides: FilterValue::UNCHANGED,
-        allowed: FilterValue::UNCHANGED,
-        reason: 0,
-        recorded_roll: crate::ctx::plan::recorded_roll(),
-        tag_key: 0,
-    }
-}
-
-/// Stable intern ids for [`crate::abi::FilterValue::tag_key`] (v78).
-///
-/// The host's `set_tag_id` stores the id's decimal spelling as the tag key,
-/// which would break `move.tag('fireRoll')`. Write-back therefore resolves
-/// these known ids here and calls the string form of `plan::set_tag`.
-/// Mapping (hardcoded so the id is stable across intern arenas):
-///
-/// | id | tag key |
-/// |----|---------|
-/// | 1  | `fireRoll` |
-/// | 2  | `preRollPlan` |
-///
-/// Unknown ids fall through to `set_tag_id` for forward compatibility.
-const TAG_FIRE_ROLL: i32 = 1;
-const TAG_PRE_ROLLPLAN: i32 = 2;
-
-fn tag_key_name(key: i32) -> Option<&'static str> {
-    match key {
-        TAG_FIRE_ROLL => Some("fireRoll"),
-        TAG_PRE_ROLLPLAN => Some("preRollPlan"),
-        _ => None,
-    }
-}
-
-/// Stable intern ids for [`crate::abi::FilterValue::reason`] (v78).
-/// Mapping (hardcoded so the id is stable across intern arenas):
-///
-/// | id | message key |
-/// |----|-------------|
-/// | 1  | `poppin_locked` |
-const REASON_POPPIN_LOCKED: i32 = 1;
-
-fn reason_key_name(key: i32) -> Option<&'static str> {
-    match key {
-        // Same string `key!("poppin_locked")` expands to in skill-groups.
-        REASON_POPPIN_LOCKED => Some("cards:skill-groups.poppin_locked"),
-        _ => None,
-    }
-}
-
-/// Apply a [`crate::abi::FilterValue`] the body returned. Only fields the
-/// body left non-`UNCHANGED` **and** actually changed from the input snapshot
-/// are written -- the snapshot pre-fills cheap getters so a body can read
-/// them, and a straight copy must not write them back (that would zero a
-/// DiceRollPlan face whose `value` snapshot was 0).
-fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue) {
-    use crate::abi::FilterValue;
-    use crate::ctx;
-    const U: i32 = FilterValue::UNCHANGED;
-    let changed = |got: i32, was: i32| got != U && got != was;
-    if changed(v.value, input.value) {
-        ctx::trigger::set_pay_amount(v.value);
-        ctx::trigger::set_price(v.value);
-        ctx::trigger::set_move_roll(v.value);
-    }
-    if changed(v.deal_owner, input.deal_owner) {
-        ctx::trigger::set_deal_owner(v.deal_owner);
-    }
-    if changed(v.deal_houses, input.deal_houses) {
-        ctx::trigger::set_deal_houses(v.deal_houses);
-    }
-    if changed(v.deal_mortgaged, input.deal_mortgaged) {
-        ctx::trigger::set_deal_mortgaged(v.deal_mortgaged != 0);
-    }
-    if changed(v.roller, input.roller) {
-        ctx::plan::set_roller(v.roller);
-    }
-    if v.base_count != U || v.base_sides != U {
-        if v.base_count != input.base_count || v.base_sides != input.base_sides {
-            // set_base_dice takes both; fill the other from the snapshot's current
-            // value when the body left it unchanged (0 sides = flat count).
-            let (c, s) = (v.base_count, v.base_sides);
-            ctx::plan::set_base_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
-        }
-    }
-    if v.extra_count != U || v.extra_sides != U {
-        if v.extra_count != input.extra_count || v.extra_sides != input.extra_sides {
-            let (c, s) = (v.extra_count, v.extra_sides);
-            ctx::plan::add_extra_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
-        }
-    }
-    if changed(v.steps, input.steps) {
-        ctx::plan::set_steps(v.steps);
-    }
-    if changed(v.reverse, input.reverse) {
-        ctx::plan::set_reverse(v.reverse != 0);
-    }
-    if changed(v.resolve, input.resolve) {
-        ctx::plan::set_resolve(v.resolve != 0);
-    }
-    if changed(v.min_roll, input.min_roll) {
-        ctx::plan::set_min_roll(v.min_roll);
-    }
-    if changed(v.pay_factor, input.pay_factor) {
-        ctx::plan::set_pay_factor(v.pay_factor);
-    }
-    if changed(v.rent_factor, input.rent_factor) {
-        ctx::plan::set_rent_factor(v.rent_factor);
-    }
-    if changed(v.stop_at, input.stop_at) {
-        ctx::plan::set_stop_at(v.stop_at);
-    }
-    if changed(v.settle_tile, input.settle_tile) {
-        ctx::plan::set_settle_tile(v.settle_tile);
-    }
-    if changed(v.teleport_to, input.teleport_to) {
-        ctx::plan::set_teleport_to(v.teleport_to);
-    }
-    if changed(v.clear_dice, input.clear_dice) && v.clear_dice != 0 {
-        ctx::plan::clear_dice();
-    }
-    if changed(v.payee, input.payee) {
-        ctx::trigger::set_pay_target(v.payee);
-    }
-    if changed(v.move_kind, input.move_kind) {
-        let k = if v.move_kind == 1 {
-            crate::abi::MoveKind::Teleport
-        } else {
-            crate::abi::MoveKind::Walk
-        };
-        ctx::plan::set_kind(k);
-    }
-    if changed(v.add_base_count, input.add_base_count)
-        || changed(v.add_base_sides, input.add_base_sides)
-    {
-        let (c, s) = (v.add_base_count, v.add_base_sides);
-        ctx::plan::add_base_dice(
-            if c == U { 0 } else { c },
-            if s == U { 0 } else { s },
-            "filter",
-        );
-    }
-    if changed(v.allowed, input.allowed) && v.allowed == 0 {
-        ctx::trigger::set_cancelled();
-    }
-    if v.tag_key != 0 && changed(v.tag, input.tag) {
-        match tag_key_name(v.tag_key) {
-            // Known keys: the string form so `move.tag('fireRoll')` matches.
-            Some(name) => ctx::plan::set_tag(name, v.tag),
-            None => ctx::plan::set_tag_id(v.tag_key, v.tag),
-        }
-    }
-    // Gate denial reason (v78). Intern id -> message key; `set_reason` is the
-    // host import the UI reads. Unknown ids are dropped (the log still carries
-    // the card's own key).
-    if changed(v.reason, input.reason) && v.reason != 0 {
-        if let Some(name) = reason_key_name(v.reason) {
-            ctx::trigger::set_reason(name);
-        }
+        (On::Action(e), _) => match (e.body)(player_id) {
+            Ok(()) => 0,
+            Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+        },
     }
 }
 
@@ -558,7 +334,7 @@ macro_rules! ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", r#"你的一次掷骰小于6"#, Some(can_counteract), counteract)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_when")), Some(can_counteract), counteract)]);
 /// card_sdk::ruleset_card!(CARD);
 /// ```
 #[macro_export]

@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const THANKS_PARTY: CardDef =
-    CardDef::new("通用:CiRCLE THANKS PARTY!", &[On::Play("", "", None, thanks_party)])
+    CardDef::new("通用:CiRCLE THANKS PARTY!", &[On::Play("", None, None, thanks_party)])
         .props(&[(card_sdk::abi::prop::EST_COST, 500)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"CiRCLE THANKS PARTY!"#)
         .raw_name(r#"CiRCLE THANKS PARTY!"#)
@@ -80,6 +80,10 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

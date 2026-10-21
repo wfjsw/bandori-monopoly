@@ -134,9 +134,9 @@ pub struct TriggerBuy {
     /// The price the buyer would be charged.
     pub price: i32,
     /// Ownership after the deal. `None` = the deal keeps its default (the buyer).
-    pub deal_owner: Option<i32>,
-    /// Houses after the deal.
-    pub deal_houses: i32,
+    pub deal_owner: Option<game_kinds::Payee>,
+    /// Houses after the deal. `None` = as standing.
+    pub deal_houses: Option<i32>,
     /// Mortgage after the deal.
     pub deal_mortgaged: bool,
 }
@@ -1023,18 +1023,18 @@ pub trait CardWorld: Clone + 'static {
     /// Take one recipient out of settlement; the effect still settles for the rest.
     fn set_trigger_spare(&mut self, seat: i32);
     /// Append a declared effect to the current chain link, naming its recipient
-    /// now -- at declaration, not at settlement. `kind` is a `TriggerKind` wire
-    /// value.
-    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32);
+    /// now -- at declaration, not at settlement. `kind` is the `TriggerKind`
+    /// wire **spelling**.
+    fn declare_trigger_effect(&mut self, kind: &str, target: i32, from: i32, tile: i32, value: i32);
     /// `t.Card == id` -- is this trigger about that card?
     fn trig_card_is(&self, id: &str) -> i32;
     /// `t.Buy.Price` -- rewrite the quoted price (the `BuyAdd` / `BuyMul` /
     /// `BuySet` stages). Also the generic `set_price` on a buy trigger.
     fn set_trigger_price(&mut self, v: i32);
     /// `t.Buy.DealOwner` -- rewrite the deal's post-commit owner (`BuyAssign`).
-    fn set_trigger_deal_owner(&mut self, v: i32);
+    fn set_trigger_deal_owner(&mut self, v: Option<game_kinds::Payee>);
     /// `t.Buy.DealHouses` -- rewrite the deal's post-commit house count.
-    fn set_trigger_deal_houses(&mut self, v: i32);
+    fn set_trigger_deal_houses(&mut self, v: Option<i32>);
     /// `t.Buy.DealMortgaged` -- rewrite the deal's post-commit mortgage flag.
     fn set_trigger_deal_mortgaged(&mut self, v: i32);
     /// A `BuyGate` refusal's reason key, shown instead of a bare cancel.
@@ -1155,31 +1155,31 @@ pub trait CardWorld: Clone + 'static {
     /// 「上一名玩家代替进行此次投掷」 (幻觉来了) -- attribute the roll to another
     /// seat. Shown on the log line as 「by」; the move still belongs to the
     /// original player (and 「影响投掷的效果服从于原本进行投掷的玩家」).
-    fn set_roller(&mut self, _v: i32) {}
+    fn set_roller(&mut self, _v: Option<game_kinds::Seat>) {}
     /// Walk backwards.
     fn set_reverse(&mut self, _v: bool) {}
     /// A negative roll walks backwards instead of clamping to 0.
     fn set_signed(&mut self, _v: bool) {}
-    /// Force the walk to stop on this tile; -1 clears.
-    fn set_stop_at(&mut self, _v: i32) {}
+    /// Force the walk to stop on this tile; `None` clears.
+    fn set_stop_at(&mut self, _v: Option<game_kinds::Tile>) {}
     /// Only odd (1) / even (0) tiles count; -1 either.
     fn set_parity(&mut self, _v: i32) {}
     /// Settle where the walk lands. Clear it for 「不触发结算」.
     fn set_resolve(&mut self, _v: bool) {}
     /// How the move gets there (0 = walk, 1 = teleport).
     fn set_kind(&mut self, _v: i32) {}
-    /// The teleport's destination; -1 derives it from the roll.
-    fn set_teleport_to(&mut self, _v: i32) {}
+    /// The teleport's destination; `None` derives it from the roll.
+    fn set_teleport_to(&mut self, _v: Option<game_kinds::Tile>) {}
     /// Did the walk stop before its full length? The walk loop sets it.
     fn move_stopped(&self) -> bool {
         false
     }
-    /// The tile the walk begins on instead of the player's own; -1 for the player.
-    fn set_start(&mut self, _v: i32, _why: &str) {}
+    /// The tile the walk begins on instead of the player's own; `None` for the player.
+    fn set_start(&mut self, _v: Option<game_kinds::Tile>, _why: &str) {}
     /// Extra steps added mid-walk (the walk grows as it runs).
     fn set_extra_steps(&mut self, _v: i32) {}
     /// Floor applied to the final face (unsigned rolls only).
-    fn set_min_roll(&mut self, _v: i32) {}
+    fn set_min_roll(&mut self, _v: Option<i32>) {}
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
     fn set_no_buy(&mut self, _v: bool) {}
     /// The landing cannot be built on.
@@ -1219,16 +1219,16 @@ pub trait CardWorld: Clone + 'static {
     fn set_more_steps(&mut self, _v: i32) {}
     /// Card-owned per-move state (charge-roll counters etc.).
     fn set_tag(&mut self, _key: &str, _v: i32) {}
-    /// v78: host-supplied recorded roll for a Filter body (`i32::MIN` = none).
-    fn recorded_roll(&self) -> i32 {
-        i32::MIN
+    /// v78: host-supplied recorded roll for a Filter body (`None` = none).
+    fn recorded_roll(&self) -> Option<i32> {
+        None
     }
     fn move_tag(&self, _key: &str) -> i32 {
         0
     }
-    /// Where the walk is forced to stop, or -1.
-    fn move_stop_at(&self) -> i32 {
-        -1
+    /// Where the walk is forced to stop, or `None`.
+    fn move_stop_at(&self) -> Option<game_kinds::Tile> {
+        None
     }
     /// Parity: -1 either, 0 even, 1 odd.
     fn move_parity(&self) -> i32 {

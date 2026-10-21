@@ -11,16 +11,16 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
 
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "PPP:（沙绫）总有一天要给这片天空命名",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::PassTile], "actor == owner && card.placed", "", None, pass_tile),
-        On::Action(&[ActionKind::TurnEndAfter], "card.placed && slot('saaya_sky_passed') != 0", "", None, turn_end_after),
+        On::Play("", None, None, play),
+        On::Action(Action::PassTile("actor == owner && card.placed", None, None, pass_tile)),
+        On::Action(Action::TurnEndAfter("card.placed && slot('saaya_sky_passed') != 0", None, None, turn_end_after)),
     ],
 ).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"总有一天要给这片天空命名"#)
@@ -86,6 +86,10 @@ fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

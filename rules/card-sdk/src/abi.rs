@@ -3,7 +3,9 @@
 //! refuses rulesets built against a different version.
 
 #[cfg(target_arch = "wasm32")]
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, borrow::Cow, format, string::String, string::ToString, vec::Vec};
+#[cfg(not(target_arch = "wasm32"))]
+use std::borrow::Cow;
 
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
@@ -510,6 +512,9 @@ use alloc::{string::String, vec::Vec};
 ///      `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
 ///      `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
 ///      `tile_attr` only. SAVE_VERSION unchanged.
+///      (Superseded in v90: the three *universal* raises of that batch --
+///      marker-spend commit, field-card activation, house-count write -- moved
+///      to the engine namespace as `markerSpent` / `cardUsed` / `houseAdded`.)
 /// v71: **money rounds once after add/mul** (user ruling 2026-10-15,
 ///      OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
 ///      `paySplitAdd` / `paySplitMul` / `payCombined*` / `set_pay_factor`) transform the
@@ -663,7 +668,7 @@ use alloc::{string::String, vec::Vec};
 ///      takes `&'static [ActionKind]`, `On::Filter*` takes `&'static [FilterKind]`,
 ///      so a wrong-side kind const is a rustc error rather than a ruleset-build
 ///      failure. `TriggerKind` remains the single declaration source of truth
-///      (all consts, `as_str`/`from_str`, `is_filter`); the typed sets mirror it
+///      (all consts, `spelling`/`from_str`, `is_filter`); the typed sets mirror it
 ///      exactly. `ChainKind` remains the [`TriggerKind`] alias for
 ///      `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
 ///      same name tables, no id renumbering. Source-only: ABI_VERSION remains 85.
@@ -702,6 +707,7 @@ use alloc::{string::String, vec::Vec};
 ///      `CardDef::gate_msgs` / `CardDef::exemption_prop` carry gate-refusal
 ///      i18n keys and the exempting prop key as data. `state::set_flags` +
 ///      `ctx::raise_after` are additive. SAVE_VERSION unchanged.
+
 /// v90: **`MetaRow` sheds its two dead display slots**. `raw_name` and `cell`
 ///      have been empty since v86 moved display columns into
 ///      `webui/src/generated/display.json`; nothing read them. Dropped from
@@ -709,7 +715,73 @@ use alloc::{string::String, vec::Vec};
 ///      cell is now a comment on the card impl, and a row with no sheet name
 ///      is *named* after its cell (`#J11`) in `CardMeta::name`. SAVE_VERSION
 ///      unchanged.
-pub const ABI_VERSION: i32 = 90;
+
+/// v91: **namespaced trigger kinds**. `TriggerKind` is `{ ns: KindNs, id: i32 }`
+///      (`KindNs::Engine` / `KindNs::Ruleset(key)`) instead of a bare `i32`;
+///      `ActionKind` / `FilterKind` wrap it. A rule-defined kind can no longer
+///      collide with a future engine id -- or with another ruleset's ids
+///      (the key names the ruleset). Wire spelling: engine stays camelCase,
+///      ruleset is `"r:{key}:{id}"` (e.g. `"r:bandori:21"`). Bare decimals
+///      do not parse. Host masks are per-namespace (a second `u128` for ruleset
+///      ids); a ruleset id outside `0..128` is a load error.
+/// Three universal raises that Phase 1 still spelled as ruleset ids are
+/// engine kinds, same numbers: **`markerSpent` (73)** any named-counter
+/// spend commits; **`cardUsed` (74)** a field card's `On::Play` runs;
+/// **`houseAdded` (75)** a deed's house count is written. The bandori
+/// spellings `FireSpent` / `SkillUsed` / `HouseAdded` and
+/// `"r:bandori:73/74/75"` are gone. What remains in `KindNs::Ruleset` is
+/// genuinely ruleset vocabulary: `Exile` (21), `PassRewardAffected` (26),
+/// `ChargePaying` (78), `FansFlip` (107).
+/// v92: **CEL `kind` is a string**. `as_cel_i64` / `from_cel_i64` are dead;
+///      the bit-pack encoding is gone. `trig_kind` / `raise` /
+///      `declare_effect` / `trig_effect_kind` carry spellings (the
+///      two-call out-buffer pattern for host-to-guest, pointer+len for
+///      guest-to-host). `ManifestOn.triggers` is `Vec<String>` of spellings.
+///      CEL `kind` compares spellings; the IR bakes `id_of(spelling)`.
+///      `move.kind` stays `int` (`MoveKind` is a closed engine enum).
+/// SAVE_VERSION unchanged (kinds are not in `Saved`).
+/// RECORD_VERSION unchanged (the record codec does not carry kind ids).
+/// v93: **idiomatic payloads + shared vocabulary**. `FilterValue` and its
+///      `UNCHANGED` sentinel are gone. Per-kind payloads in
+///      [`crate::payload`]: `GateValue` / `PlanValue` / `RollValue` /
+///      `DealValue` / `PayAddValue` / `RedirectValue`, one `FilterPayload`
+///      impl each. `On::FilterValue`'s body is a `FilterBody` arm (temporary
+///      adapter until the Phase 3 `FilterEntry` drive). Gates move off
+///      `On::FilterFlag` onto `FilterBody::Gate`; pure-decision
+///      (`PaySplitChoose` / `PayCombinedCancel`) stays `fn(i32,i32)->bool`.
+///      Intern-id tables (`TAG_FIRE_ROLL` / `TAG_PRE_ROLLPLAN` /
+///      `REASON_POPPIN_LOCKED`) die -- bodies carry `MsgKey` strings.
+///      Shared wire vocabulary lives in `game-kinds`: `Seat` / `Tile` /
+///      `Payee` / `Dice` / `MoveKind` / `Dir` / `MsgKey`, one definition on
+///      both sides of the hostcall. Flatten to `i32` only at the
+///      `hostfns.rs` wasm-import edge. **SAVE_VERSION 11 -> 12** (`MoveCtx`
+///      / `World.recorded_roll` / `TriggerBuy` sentinels become `Option`);
+///      older saves are refused (replays ride archived engine bundles).
+/// RECORD_VERSION unchanged (the record codec does not carry kind ids).
+/// v94: **typed filter/action registration DSL**. `On::FilterFlag` /
+///      `On::FilterValue` / `FilterBody` die; every filter registration is
+///      `On::Filter(FilterEntry)` built by the `filter_kinds!` constructors
+///      (`Filter::DiceRollPlan(pre, guard, body)`), every action is
+///      `On::Action(ActionEntry)` from `action_kinds!`. One kind per entry --
+///      multi-kind lists are split. `FilterEntry.body` is a type-erased
+///      `*const ()` cast back only inside `payload::drive_*` (one per shape).
+///      Downstream rulesets declare custom kinds with the same macros
+///      (`bandori_std::kind::{Actions, Filters}`). `check_kind_variant` is
+///      deleted -- the constructor type pins the side. Source-only for the
+///      wire: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
+///      unchanged.
+/// v95: **named-field `On` entries + `counter_reason` locale keys**. The
+///      remaining positional-tuple variants become `*Body` arms holding
+///      `PlayEntry` / `CounteractEntry` / `RuleEntry` / `MessageEntry`; the
+///      call spelling stays `On::Play(pre, counter_reason, why_not, body)` via
+///      `const fn` constructors. `counter_reason` is `Option<MsgKey>` (a locale
+///      key the client resolves; `None` replaces `""`); `ActionEntry`'s field
+///      moves with it. Display text for the 「…时」 clause leaves Rust for
+///      `cards:<crate>.…` / `counter.*` locale entries. Source + display export
+///      only: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
+///      unchanged.
+pub const ABI_VERSION: i32 = 95;
+
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -825,6 +897,10 @@ pub mod export {
     /// Absent on older modules (the host then has an empty class table and
     /// only the generic `class*` props answer `tile_in`).
     pub const CLASS_DEFS: &str = "ruleset_class_defs";
+    /// `() -> i64` packed postcard of the ruleset's kind hook-only flags
+    /// (`Vec<(i32, bool)>`: ruleset kind id, hook-only). Absent on older
+    /// modules (the host then treats every ruleset kind as opening a window).
+    pub const KIND_FLAGS: &str = "ruleset_kind_flags";
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the
@@ -1232,34 +1308,9 @@ impl PromptKind {
 }
 
 /// How the player gets there -- a move is exactly one of these (walk the path
-/// vs jump to the destination). Mirrors `game_core::engine::move_ctx::MoveKind`.
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum MoveKind {
-    /// The player steps along the board, tile by tile.
-    #[default]
-    Walk = 0,
-    /// The player jumps straight to the destination. 「视为 [传送]（只触发终点）」
-    /// is this kind with the destination derived from the roll instead of named.
-    Teleport = 1,
-}
-
-impl MoveKind {
-    pub fn from_i32(v: i32) -> Option<Self> {
-        match v {
-            0 => Some(Self::Walk),
-            1 => Some(Self::Teleport),
-            _ => None,
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Walk => "walk",
-            Self::Teleport => "teleport",
-        }
-    }
-}
+/// vs jump to the destination). One definition in `game-kinds`, shared with the
+/// engine; re-exported here so guest call sites keep their path.
+pub use game_kinds::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
 
 bitflags::bitflags! {
     /// What a move resolves as it goes -- the settle axis, its own category
@@ -1384,44 +1435,97 @@ impl CardPile {
 pub const REWARD_MONEY: i32 = 0;
 pub const REWARD_CARD: i32 = 1;
 
-/// Trigger kind id (wire `i32`).
+/// Which id space a [`TriggerKind`] lives in.
 ///
-/// One shared id space for every raise point. Engine-generic kinds are named
-/// associated constants that serialize to camelCase wire names; ruleset-declared
-/// kinds are opaque ids that serialize as their decimal spelling. `as_str` and
-/// `from_str` map those two spellings. `is_filter` is the side declaration: it
-/// marks which ids are filter kinds (pure modifiers and decision gates) versus
-/// action and counteraction kinds.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-#[repr(transparent)]
-pub struct TriggerKind(pub i32);
+/// Engine kinds are the fixed generic raise points; ruleset kinds are declared
+/// by a named rule set and can never collide with a future engine id -- or
+/// with a different rule set's ids.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum KindNs {
+    /// The engine's generic raise points (`0..`).
+    #[default]
+    Engine,
+    /// A ruleset-declared namespace, keyed by the ruleset's stable name
+    /// (`"bandori"`). Distinct rulesets cannot collide on the wire.
+    Ruleset(&'static str),
+}
 
-/// Action-kind view of the shared wire id space: event reactions (`On::Action`).
+impl KindNs {
+    /// The `bandori-std` ruleset key (see `bandori_std::kind::RULESET_KEY`).
+    pub const BANDORI: Self = Self::Ruleset("bandori");
+}
+
+// `&'static str` has no `Deserialize` that fits an owned postcard buffer, so
+// the enum decodes through an owned wire form and interns the key (the known
+// `BANDORI` key is matched first; anything else is leaked once per unique key).
+impl<'de> serde::Deserialize<'de> for KindNs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        enum Wire {
+            Engine,
+            Ruleset(String),
+        }
+        Ok(match Wire::deserialize(deserializer)? {
+            Wire::Engine => KindNs::Engine,
+            // Only declared ruleset keys construct a `KindNs`. An unknown key
+            // cannot be given a `&'static str` without leaking, and the host
+            // has no business inventing a namespace it was never told about.
+            // A second ruleset declares its key next to `BANDORI`.
+            Wire::Ruleset(key) => match key.as_str() {
+                "bandori" => KindNs::BANDORI,
+                other => {
+                    return Err(serde::de::Error::custom(format_args!(
+                        "unknown ruleset kind namespace {other:?}"
+                    )))
+                }
+            },
+        })
+    }
+}
+
+/// Trigger kind: a namespaced wire id for every raise point.
+///
+/// Engine-generic kinds are named associated constants that serialize to
+/// camelCase wire names; ruleset-declared kinds are opaque ids in a named
+/// [`KindNs::Ruleset`] that serialize as `"r:{key}:{id}"` (e.g. `"r:bandori:21"`).
+/// `spelling` and `from_str` map those two spellings. `is_filter` is the side
+/// declaration for engine ids; the host treats `OnKind::Filter` /
+/// `OnKind::Action` as authoritative for ruleset kinds (see [`Self::is_filter`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct TriggerKind {
+    /// The id space this id lives in.
+    pub ns: KindNs,
+    /// The id within that space.
+    pub id: i32,
+}
+
+/// Action-kind view of the shared wire ids: event reactions (`On::Action`).
 ///
 /// A listener may emit effects and does not rewrite the triggering value. Ids
-/// are the same wire `i32` every kind view uses. Kind/variant agreement is a
+/// are the same [`TriggerKind`] every kind view uses. Kind/variant agreement is a
 /// compile error: an action entry takes these constants, never filter kinds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-#[repr(transparent)]
-pub struct ActionKind(pub i32);
+pub struct ActionKind(pub TriggerKind);
 
-/// Filter-kind view of the shared wire id space: pure value transforms
-/// (`On::Filter` / `On::FilterFlag` / `On::FilterValue`).
+/// Filter-kind view of the shared wire ids: pure value transforms
+/// (`On::Filter(FilterEntry)`).
 ///
-/// Bodies cannot prompt or emit effects. The three entry shapes are
-/// `fn(i32, i32) -> i32`, `fn(i32, i32) -> bool`, and a struct rewrite. Bool
-/// polarity: gates answer true = allowed; cancel stages answer false = cancel.
-/// Ids are the same wire `i32` every kind view uses. Kind/variant agreement is
-/// a compile error: a filter entry takes these constants, never action kinds.
+/// Bodies cannot prompt or emit effects. The four shapes
+/// ([`crate::kinds::FilterShape`]) are `fn(i32, i32) -> i32` (value),
+/// `fn(i32, i32) -> bool` (flag), `fn(i32, GateValue) -> GateValue` (gate),
+/// and `fn(i32, P) -> P` for a typed payload family. Bool polarity: gates
+/// answer `Some(true)` = allowed; cancel stages answer `false` = cancel.
+/// Ids are the same [`TriggerKind`] every kind view uses. Kind/variant
+/// agreement is a compile error: a filter entry takes these constants (via
+/// the `filter_kinds!` constructors), never action kinds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-#[repr(transparent)]
-pub struct FilterKind(pub i32);
+pub struct FilterKind(pub TriggerKind);
 
-/// Counteraction-window selectors (`On::Counteract`). Same wire id space as
-/// `TriggerKind`. A counteraction may prompt and may rewrite values its window
+/// Counteraction-window selectors (`On::Counteract`). Same wire ids as
+/// [`TriggerKind`]. A counteraction may prompt and may rewrite values its window
 /// exposes. Dual-role ids also have an `ActionKind` constant when the same
 /// raise is an action-listened event.
 pub type ChainKind = TriggerKind;
@@ -1429,271 +1533,271 @@ pub type ChainKind = TriggerKind;
 impl ActionKind {
 
     /// Unset. Never raised; the parse fallback and Default.
-    pub const None: Self = Self(TriggerKind::None.as_i32());
+    pub const None: Self = Self(TriggerKind::None);
 
     /// Action / Counteraction window. Before the move's dice are cast
     /// (行动阶段 8 移动掷骰前). Payload: the move, value = -1 as a no-roll-yet
     /// sentinel. A listener may emit effects; a counteraction may shape the roll.
-    pub const DiceRollBefore: Self = Self(TriggerKind::DiceRollBefore.as_i32());
+    pub const DiceRollBefore: Self = Self(TriggerKind::DiceRollBefore);
 
     /// Action / Counteraction window. After the move's dice land and after DiceRollAfter
     /// (行动阶段 10 移动掷骰后), before the walk. Payload: the move, value = the
     /// face. A counteraction may prompt and reroll; the written face is read back.
-    pub const DiceRollResult: Self = Self(TriggerKind::DiceRollResult.as_i32());
+    pub const DiceRollResult: Self = Self(TriggerKind::DiceRollResult);
 
     /// Action / Counteraction window. A turn begins (行动阶段 2 回合开始时), after
     /// the layer-count ticks. Payload: tile = the player's position.
     /// A listener may emit effects; a counteraction may answer the opening.
-    pub const TurnStart: Self = Self(TriggerKind::TurnStart.as_i32());
+    pub const TurnStart: Self = Self(TriggerKind::TurnStart);
 
     /// Action / Counteraction window. One tile stepped over during a move
     /// (行动阶段 12 经过), after arrival, for every path tile including the
     /// destination. Payload: the move, tile = the tile stepped on.
-    pub const Pass: Self = Self(TriggerKind::Pass.as_i32());
+    pub const Pass: Self = Self(TriggerKind::Pass);
 
     /// Action / Counteraction window. End-tile overlap (行动阶段 13) -- one raise
     /// per other player sharing the landing tile, at the move's end only.
     /// Payload: the move, tile = the landing tile, target = that player.
-    pub const PassPlayer: Self = Self(TriggerKind::PassPlayer.as_i32());
+    pub const PassPlayer: Self = Self(TriggerKind::PassPlayer);
 
     /// Action / Counteraction window. Pre-settle window (行动阶段 14 触发结算前 /
     /// 移动终点). Payload: the move, tile = the tile about to settle.
     /// A relocation here redirects the settle, which re-runs this window at the
     /// new tile. A counteraction may cancel or reshape the upcoming settle.
-    pub const SettleBefore: Self = Self(TriggerKind::SettleBefore.as_i32());
+    pub const SettleBefore: Self = Self(TriggerKind::SettleBefore);
 
     /// Action / Counteraction window. The settle's declaration (行动阶段 15
     /// 触发结算/结算时). Payload: the move, tile = the tile, target = the
     /// tile's owner (-1 = the bank). A counteraction may cancel the settle, in
     /// which case there is no body and no SettleAfter; TileResolved still fires.
-    pub const Settle: Self = Self(TriggerKind::Settle.as_i32());
+    pub const Settle: Self = Self(TriggerKind::Settle);
 
     /// Action / Counteraction window. A deed mortgage has just applied
     /// (运营阶段 抵押地契). Payload: tile = the deed. A listener may emit effects.
-    pub const Mortgage: Self = Self(TriggerKind::Mortgage.as_i32());
+    pub const Mortgage: Self = Self(TriggerKind::Mortgage);
 
     /// Action. A payment is settled -- what it actually is, after the counteraction
     /// chain and the modifier stages, before any money moves (支付阶段 5).
     /// Payload: player_id = payer, target = payee (-1 = the bank), value = amount,
     /// the pay flag (rent or not), tile, by_card. A listener may cancel the payment
     /// outright or rewrite its amount or payee.
-    pub const Pay: Self = Self(TriggerKind::Pay.as_i32());
+    pub const Pay: Self = Self(TriggerKind::Pay);
 
     /// Action / Counteraction window. Money left a player (支付阶段 6–7), after the
     /// deduction commits. Payload: player_id = payer, target = payee,
     /// value = what moved, the pay flag, tile, by_card. Opens on a payer-side loss
     /// only; a pure gain raises PayAfter alone.
-    pub const Paid: Self = Self(TriggerKind::Paid.as_i32());
+    pub const Paid: Self = Self(TriggerKind::Paid);
 
     /// Action / Counteraction window. A bankruptcy's asset cash-in is done, before
     /// the seat is cleared. Payload: none beyond the raise seat. The seat is
     /// already marked dead at BankruptBefore.
-    pub const Bankrupt: Self = Self(TriggerKind::Bankrupt.as_i32());
+    pub const Bankrupt: Self = Self(TriggerKind::Bankrupt);
 
     /// Action / Counteraction window. A card is being played from hand, before its
     /// play body. Payload: card = the card id, cards = that id, by_card = its
     /// player. A counteraction may negate the play: the card still goes to its
     /// destination, but the body does not run. Also the kind of every declared
     /// counteraction link (seq / answers say which link it is).
-    pub const Card: Self = Self(TriggerKind::Card.as_i32());
+    pub const Card: Self = Self(TriggerKind::Card);
 
     /// Action / Counteraction window. An event draw has revealed the event, before it
     /// resolves. Payload: card = the event id. A counteraction may negate the
     /// draw: the effect never resolves and the card is filed away.
-    pub const Event: Self = Self(TriggerKind::Event.as_i32());
+    pub const Event: Self = Self(TriggerKind::Event);
 
     /// Action. An abnormal effect settled on the target. Payload: player_id =
     /// the causer, target = the victim, value = the abnormal kind, by_card.
     /// This reports what landed, self-applied included; declaration-side gates
     /// are AbnormalGuard and the Effect counteraction.
-    pub const Abnormal: Self = Self(TriggerKind::Abnormal.as_i32());
+    pub const Abnormal: Self = Self(TriggerKind::Abnormal);
 
     /// Action. A single-target effect settled on the target. Payload: player_id =
     /// the causer, target, tile, card, by_card. Settlement hook only; the
     /// counteraction key for being hit by an effect is Effect. Declaration-side
     /// gates are Untargetable and Redirect.
-    pub const Target: Self = Self(TriggerKind::Target.as_i32());
+    pub const Target: Self = Self(TriggerKind::Target);
 
     // Wire id 21 is the 「获得[除外]」 post-commit raise. The rule-facing name
-    // is the ruleset-declared kind for wire 21 (`ActionKind(21)` / decimal wire); this module carries no
-    // game-named kind const.
+    // is the ruleset-declared kind (`ActionKind::ruleset(RULESET_KEY, 21)` /
+    // `"r:bandori:21"`); this module carries no game-named kind const.
 
     /// Action / Counteraction window. A player toggled skill state (the 1↔2
     /// toggle commit). Payload: player_id = who, value = the new state, by_card.
-    pub const State: Self = Self(TriggerKind::State.as_i32());
+    pub const State: Self = Self(TriggerKind::State);
 
     /// Action / Counteraction window. A counteraction has been declared against the
     /// target by player_id. Payload: player_id = the declarer, target.
     /// Not raised by the current engine.
-    pub const Counteracted: Self = Self(TriggerKind::Counteracted.as_i32());
+    pub const Counteracted: Self = Self(TriggerKind::Counteracted);
 
     /// Action / Counteraction window. A draw hit a player outside their own turn,
     /// before the cards move. Payload: player_id = target = the drawer,
     /// value = how many cards, by_card = the causer. A counteraction may block
     /// the draw. The per-draw after points remain DrewBefore / Drawn / Drew.
-    pub const DrawOut: Self = Self(TriggerKind::DrawOut.as_i32());
+    pub const DrawOut: Self = Self(TriggerKind::DrawOut);
 
     /// Action / Counteraction window. A player played their second hand card of
     /// the turn. Payload: card, cards = that id, by_card = its player.
-    pub const TwoCards: Self = Self(TriggerKind::TwoCards.as_i32());
+    pub const TwoCards: Self = Self(TriggerKind::TwoCards);
 
     /// Action / Counteraction window. Pre-half of TurnStart, before the turn
     /// opens. Payload: tile = the player's position.
-    pub const TurnStartBefore: Self = Self(TriggerKind::TurnStartBefore.as_i32());
+    pub const TurnStartBefore: Self = Self(TriggerKind::TurnStartBefore);
 
     /// Action / Counteraction window. Pre-half of Pass, before the player arrives
     /// on each path tile. Payload: the move, tile = the tile about to be stepped on.
-    pub const PassBefore: Self = Self(TriggerKind::PassBefore.as_i32());
+    pub const PassBefore: Self = Self(TriggerKind::PassBefore);
 
     /// Action / Counteraction window. Pre-half of Mortgage, before a deed
     /// mortgage applies. Payload: tile = the deed. A counteraction may veto it.
-    pub const MortgageBefore: Self = Self(TriggerKind::MortgageBefore.as_i32());
+    pub const MortgageBefore: Self = Self(TriggerKind::MortgageBefore);
 
     /// Action / Counteraction window. Pre-half of Bankrupt, before the asset
     /// cash-in. Payload: value = the amount. The seat is already marked dead.
-    pub const BankruptBefore: Self = Self(TriggerKind::BankruptBefore.as_i32());
+    pub const BankruptBefore: Self = Self(TriggerKind::BankruptBefore);
 
     /// Action / Counteraction window. Post-half of Card, after the play body and
     /// the card's destination. Payload: card, cards = that id, by_card.
-    pub const CardAfter: Self = Self(TriggerKind::CardAfter.as_i32());
+    pub const CardAfter: Self = Self(TriggerKind::CardAfter);
 
     /// Action / Counteraction window. Post-half of Event, after the event resolves
     /// and is filed away. Payload: card = the event id.
-    pub const EventAfter: Self = Self(TriggerKind::EventAfter.as_i32());
+    pub const EventAfter: Self = Self(TriggerKind::EventAfter);
 
     /// Action / Counteraction window. Post-half of SettleBefore / Settle, after
     /// the tile's land resolution (with or without the body). Payload: the
     /// move, tile = the tile, target = the tile's owner (-1 = the bank).
-    pub const SettleAfter: Self = Self(TriggerKind::SettleAfter.as_i32());
+    pub const SettleAfter: Self = Self(TriggerKind::SettleAfter);
 
     /// Action / Counteraction window. Before a buy commits. Payload: tile only.
     /// A counteraction may veto the buy. Price and deal fields are not on this
     /// payload; the buy modifier stages carry them.
-    pub const BuyBefore: Self = Self(TriggerKind::BuyBefore.as_i32());
+    pub const BuyBefore: Self = Self(TriggerKind::BuyBefore);
 
     /// Action / Counteraction window. After a buy resolves and the deed changes
     /// hands. Payload: tile; some paths also set by_card.
-    pub const BuyAfter: Self = Self(TriggerKind::BuyAfter.as_i32());
+    pub const BuyAfter: Self = Self(TriggerKind::BuyAfter);
 
     /// Action / Counteraction window. Before building a house resolves.
     /// Payload: tile. A counteraction may veto the build.
-    pub const BuildBefore: Self = Self(TriggerKind::BuildBefore.as_i32());
+    pub const BuildBefore: Self = Self(TriggerKind::BuildBefore);
 
     /// Action / Counteraction window. After a house count is written (not on a
     /// refund). Payload: tile.
-    pub const BuildAfter: Self = Self(TriggerKind::BuildAfter.as_i32());
+    pub const BuildAfter: Self = Self(TriggerKind::BuildAfter);
 
     /// Action / Counteraction window. Before a hand discard resolves.
     /// Payload: card = the card id.
-    pub const DiscardBefore: Self = Self(TriggerKind::DiscardBefore.as_i32());
+    pub const DiscardBefore: Self = Self(TriggerKind::DiscardBefore);
 
     /// Action / Counteraction window. After the discard is filed and the deck is
     /// maintained. Payload: card = the card id.
-    pub const DiscardAfter: Self = Self(TriggerKind::DiscardAfter.as_i32());
+    pub const DiscardAfter: Self = Self(TriggerKind::DiscardAfter);
 
     /// Action / Counteraction window. A player ends their turn, before the turn
     /// is queued over. Distinct from TurnEndBefore, which is the turn-end
     /// pipeline's first step. Payload: none beyond the raise seat.
-    pub const EndTurnBefore: Self = Self(TriggerKind::EndTurnBefore.as_i32());
+    pub const EndTurnBefore: Self = Self(TriggerKind::EndTurnBefore);
 
     /// Action / Counteraction window. After the player's turn has been queued
     /// over. Payload: none beyond the raise seat.
-    pub const EndTurnAfter: Self = Self(TriggerKind::EndTurnAfter.as_i32());
+    pub const EndTurnAfter: Self = Self(TriggerKind::EndTurnAfter);
 
     /// Action / Counteraction window. Before a player forfeits.
     /// Payload: none beyond the raise seat.
-    pub const LeaveBefore: Self = Self(TriggerKind::LeaveBefore.as_i32());
+    pub const LeaveBefore: Self = Self(TriggerKind::LeaveBefore);
 
     /// Action / Counteraction window. After a forfeiting player's seat is
     /// cleared. Payload: none beyond the raise seat.
-    pub const LeaveAfter: Self = Self(TriggerKind::LeaveAfter.as_i32());
+    pub const LeaveAfter: Self = Self(TriggerKind::LeaveAfter);
 
     /// Action. A turn just ended (any player's). Payload: none beyond the raise
     /// seat. A listener may emit effects.
-    pub const TurnEnd: Self = Self(TriggerKind::TurnEnd.as_i32());
+    pub const TurnEnd: Self = Self(TriggerKind::TurnEnd);
 
     /// Action. One card has been drawn and is still in hand. Payload: card = the card
     /// id, value = 1. This is the drawn card's own hook; the per-draw field-card
     /// points are DrewBefore / Drew.
-    pub const Drawn: Self = Self(TriggerKind::Drawn.as_i32());
+    pub const Drawn: Self = Self(TriggerKind::Drawn);
 
     /// Action / Counteraction window. The player stepped on or stopped at a tile
     /// during a move (行动阶段 12 经过), including teleport lands.
     /// Payload: the move, tile. Field-card hook and chain link for the same step.
-    pub const PassTile: Self = Self(TriggerKind::PassTile.as_i32());
+    pub const PassTile: Self = Self(TriggerKind::PassTile);
 
     /// Action. Every settled money move (支付阶段 6–7 资金变动), prints included.
     /// Payload: player_id = the payer (or source), target, value = what moved
     /// (0 on a cancelled payment), by_card, the pay flag, tile.
-    pub const PayAfter: Self = Self(TriggerKind::PayAfter.as_i32());
+    pub const PayAfter: Self = Self(TriggerKind::PayAfter);
 
     /// Action. A move roll resolved (行动阶段 10 移动掷骰后); the face has landed.
     /// Payload: the move, value = the face. Documented exception to filter
     /// purity: a listener here may prompt, roll, and write the face (the trigger
     /// value is read back) -- the one Action allowed to reshape a roll. Prefer
     /// DiceRollValue when a pure reshape is enough.
-    pub const DiceRollAfter: Self = Self(TriggerKind::DiceRollAfter.as_i32());
+    pub const DiceRollAfter: Self = Self(TriggerKind::DiceRollAfter);
 
     /// Action. A card's hand effect resolved and its destination is final.
     /// Payload: card, cards, by_card.
-    pub const CardPlayed: Self = Self(TriggerKind::CardPlayed.as_i32());
+    pub const CardPlayed: Self = Self(TriggerKind::CardPlayed);
 
     /// Action. A targeting declaration named the player, before the Effect
     /// counteraction. Payload: target = the named player, tile, card,
     /// by_card = the causer.
-    pub const Targeted: Self = Self(TriggerKind::Targeted.as_i32());
+    pub const Targeted: Self = Self(TriggerKind::Targeted);
 
     /// Action. First step of the turn-end pipeline (结束阶段前), before the AtEnd
     /// callbacks and the status wear-off. Payload: none beyond the raise seat.
-    pub const TurnEndBefore: Self = Self(TriggerKind::TurnEndBefore.as_i32());
+    pub const TurnEndBefore: Self = Self(TriggerKind::TurnEndBefore);
 
     /// Action. After TurnEnd; the late scheduled turn-end callbacks run here.
     /// Payload: none beyond the raise seat.
-    pub const TurnEndAfter: Self = Self(TriggerKind::TurnEndAfter.as_i32());
+    pub const TurnEndAfter: Self = Self(TriggerKind::TurnEndAfter);
 
     /// Action. This card just reached the discard pile. Payload: card = the card
     /// id.
-    pub const Discarded: Self = Self(TriggerKind::Discarded.as_i32());
+    pub const Discarded: Self = Self(TriggerKind::Discarded);
 
     /// Action. Before match start (游戏开始前) -- raised once per player before
     /// the opening hands are drawn, and dispatched to every effect source: field
     /// cards including skills (per player, in field order) and the card ids in
     /// that player's piles and hands. Payload: none beyond the raise seat.
     /// Start positions and the initial hand size are decided here.
-    pub const DeckBeforeGame: Self = Self(TriggerKind::DeckBeforeGame.as_i32());
+    pub const DeckBeforeGame: Self = Self(TriggerKind::DeckBeforeGame);
 
     /// Action. After match start (游戏开始时) -- raised once per player after the
     /// opening draw and mulligan, dispatched to every effect source the same way
     /// DeckBeforeGame is. Payload: none beyond the raise seat. Initial tokens and
     /// resources are created here.
-    pub const DeckAtGameStart: Self = Self(TriggerKind::DeckAtGameStart.as_i32());
+    pub const DeckAtGameStart: Self = Self(TriggerKind::DeckAtGameStart);
 
     /// Action. After one card has been drawn (per single card; an N-card draw raises
     /// this N times). Payload: card = the card id, value = 1, cards = that id.
     /// Per-draw field-card point; the drawn card's own hook is Drawn.
-    pub const Drew: Self = Self(TriggerKind::Drew.as_i32());
+    pub const Drew: Self = Self(TriggerKind::Drew);
 
     /// Action. A player's discard pile has been shuffled back into its deck.
     /// Payload: none beyond the raise seat.
-    pub const Reshuffled: Self = Self(TriggerKind::Reshuffled.as_i32());
+    pub const Reshuffled: Self = Self(TriggerKind::Reshuffled);
 
     /// Action. A player became the owner of the tile (buy or auction).
     /// Payload: tile; some paths also set by_card or the buy record.
-    pub const Bought: Self = Self(TriggerKind::Bought.as_i32());
+    pub const Bought: Self = Self(TriggerKind::Bought);
 
     /// Action / Counteraction window. The settle body point -- a field card
     /// placed on the tile may replace the tile's rule instances' effect.
     /// Payload: the move, tile = the tile, target = the tile's owner (-1 = the
     /// bank). Cancel here to mark the body as replaced.
-    pub const SettleBody: Self = Self(TriggerKind::SettleBody.as_i32());
+    pub const SettleBody: Self = Self(TriggerKind::SettleBody);
 
     /// Action. A player is about to leave the game (bankrupt or forfeit), before
     /// the seat is cleared. Payload: none beyond the raise seat.
-    pub const BeforeOut: Self = Self(TriggerKind::BeforeOut.as_i32());
+    pub const BeforeOut: Self = Self(TriggerKind::BeforeOut);
 
     /// Action. A teleport finished (after its settlement, or at once if it does
     /// not settle). Payload: the move, tile = the destination.
-    pub const Teleported: Self = Self(TriggerKind::Teleported.as_i32());
+    pub const Teleported: Self = Self(TriggerKind::Teleported);
 
     /// Action / Counteraction window. A card effect is declared at someone. This is the counteraction
     /// key for being hit by another player's effect -- one stable declaration
@@ -1703,13 +1807,28 @@ impl ActionKind {
     /// effect-list name on the link. A counteraction may negate or spare.
     /// Settlement hooks (Target / Abnormal / Pay / Paid) fire later and cannot
     /// reconstruct this declaration; PayAfter reports a settled money move.
-    pub const Effect: Self = Self(TriggerKind::Effect.as_i32());
+    pub const Effect: Self = Self(TriggerKind::Effect);
+
+    /// Action / Counteraction window. Any named-counter spend just committed
+    /// (`spend_marker`). Payload: `name` / `value`. Fire-pot is one name of
+    /// many. A listener may emit effects.
+    pub const MarkerSpent: Self = Self(TriggerKind::MarkerSpent);
+
+    /// Action / Counteraction window. A field card's `On::Play` entry is about
+    /// to run (a card living on the player's field rather than in hand).
+    /// Payload: `card` / `cards` / `by_card`. A counteraction may negate the
+    /// press. Dual-role: also a counteraction-window selector.
+    pub const CardUsed: Self = Self(TriggerKind::CardUsed);
+
+    /// Action / Counteraction window. A deed's house count has just been
+    /// written. Payload: `tile` / `value`. A listener may emit effects.
+    pub const HouseAdded: Self = Self(TriggerKind::HouseAdded);
 
     /// Action. A named on-card counter on a placed instance has just been written.
     /// Payload: card = the instance whose count moved, player_id = its owner,
     /// value = the signed change applied, name = the counter name.
     /// The count after the write is readable on that instance.
-    pub const CounterChanged: Self = Self(TriggerKind::CounterChanged.as_i32());
+    pub const CounterChanged: Self = Self(TriggerKind::CounterChanged);
 
     /// Action. Before one card would be drawn (per single card; an N-card draw
     /// raises this N times). Payload: card = the card that would be drawn (the
@@ -1718,84 +1837,86 @@ impl ActionKind {
     /// look or pick -- whatever it adds to the hand is the replacement draw,
     /// and the after points (Drawn / Drew) fire for it. Opening hands do not
     /// raise it.
-    pub const DrewBefore: Self = Self(TriggerKind::DrewBefore.as_i32());
+    pub const DrewBefore: Self = Self(TriggerKind::DrewBefore);
 
     /// Action. The tile's settlement is fully resolved, after SettleAfter,
     /// including when the settle is cancelled (the resolution is complete as
     /// nothing). Payload: the move, tile = the tile, target = the tile's owner
     /// (-1 = the bank).
-    pub const TileResolved: Self = Self(TriggerKind::TileResolved.as_i32());
+    pub const TileResolved: Self = Self(TriggerKind::TileResolved);
 
     /// Action. The move (and any settlement it asked for) is fully resolved.
     /// Fires at the end of a walk or teleport, after the settle pipeline.
     /// Payload: the move, tile = the final position.
-    pub const MoveResolved: Self = Self(TriggerKind::MoveResolved.as_i32());
+    pub const MoveResolved: Self = Self(TriggerKind::MoveResolved);
 
     /// Action. The bankruptcy is fully resolved -- cash-in done, the seat
     /// cleared, the leftover auctions finished. Payload: none beyond the
     /// raise seat.
-    pub const BankruptResolved: Self = Self(TriggerKind::BankruptResolved.as_i32());
+    pub const BankruptResolved: Self = Self(TriggerKind::BankruptResolved);
 
     /// Action / Counteraction window. Before any move -- walk or teleport, main
     /// or card-driven, settling or not -- once the move's plan is fixed and
     /// before the first step or the teleport. Payload: the move, tile = the
     /// origin; for a walk, value = the resolved base distance. A counteraction
     /// here cancels or alters the move (and therefore its tail).
-    pub const MoveBefore: Self = Self(TriggerKind::MoveBefore.as_i32());
+    pub const MoveBefore: Self = Self(TriggerKind::MoveBefore);
 
     /// Action / Counteraction window. After a completed move (移动后/主要移动
     /// 结束时, also the 移动终点 anchor). Fires after PassPlayer, before
     /// SettleBefore, for every completed move -- including one that does not
     /// settle. Payload: the move, tile = the destination.
-    pub const MoveAfter: Self = Self(TriggerKind::MoveAfter.as_i32());
+    pub const MoveAfter: Self = Self(TriggerKind::MoveAfter);
 
     /// Action / Counteraction window. Before a marker spend moves (any token
     /// category). Payload: player_id, value = the negative delta,
     /// card = the marker name (not a card id). A counteraction here cancels the
     /// spend; nothing moves if the link is negated.
-    pub const MarkerSpend: Self = Self(TriggerKind::MarkerSpend.as_i32());
+    pub const MarkerSpend: Self = Self(TriggerKind::MarkerSpend);
 
     /// Action / Counteraction window. Before a marker gain moves. Payload:
     /// player_id, value = the positive delta, card = the marker name.
     /// A counteraction may cancel the gain.
-    pub const MarkerGain: Self = Self(TriggerKind::MarkerGain.as_i32());
+    pub const MarkerGain: Self = Self(TriggerKind::MarkerGain);
 
     /// Action. Scheduled turn-end callback. Raised only for the card a schedule
     /// entry names, at that turn's end (one-shot), inside the TurnEndBefore /
     /// TurnEndAfter windows. Payload is that window's trigger. A listener may
     /// emit effects.
-    pub const AtEnd: Self = Self(TriggerKind::AtEnd.as_i32());
+    pub const AtEnd: Self = Self(TriggerKind::AtEnd);
 
     /// Action. Interactive pre-stage immediately before the pure PaySplitChoose
     /// filter, per settled payment leg. Payload: player_id = payer, target =
     /// payee, value = the running figure, the pay flag, tile, by_card.
     /// May prompt; the pure filter at PaySplitChoose then applies.
-    pub const PaySplitChooseBefore: Self = Self(TriggerKind::PaySplitChooseBefore.as_i32());
+    pub const PaySplitChooseBefore: Self = Self(TriggerKind::PaySplitChooseBefore);
 
     /// Action. Interactive pre-stage immediately before the pure PayCombinedAdd
     /// filter, on the whole payment command. Payload: player_id = payer,
     /// target = payee, value = the command total, the pay flag, tile, by_card.
     /// May prompt; the pure filter at PayCombinedAdd then applies.
-    pub const PayCombinedAddBefore: Self = Self(TriggerKind::PayCombinedAddBefore.as_i32());
+    pub const PayCombinedAddBefore: Self = Self(TriggerKind::PayCombinedAddBefore);
 
-    /// The wire value, shared with [`TriggerKind`] / [`ChainKind`].
-    pub const fn as_i32(self) -> i32 { self.0 }
+    /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
+    pub const fn engine(id: i32) -> Self { Self(TriggerKind::engine(id)) }
 
-    /// Any code is a valid opaque id (rule-defined kinds use this).
-    pub const fn from_i32(v: i32) -> Self { Self(v) }
+    /// Ruleset-namespace kind. Same id as [`TriggerKind::ruleset`].
+    pub const fn ruleset(key: &'static str, id: i32) -> Self {
+        Self(TriggerKind::ruleset(key, id))
+    }
 
     /// View this id in the wire namespace.
-    pub const fn as_trigger(self) -> TriggerKind { TriggerKind(self.0) }
+    pub const fn as_trigger(self) -> TriggerKind { self.0 }
 
     /// View a wire id as this side (no side check -- the consts pin the set).
-    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k.as_i32()) }
+    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k) }
 
-    /// Wire name (camelCase generic, or decimal for a ruleset-declared id).
-    pub fn as_str(self) -> &'static str { self.as_trigger().as_str() }
+    /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
+    pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
 
     /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
     /// const is always `false` and a `FilterKind` const always `true`; a raw
-    /// `Self(i)` still reports the wire fact.
+    /// `Self(k)` still reports the wire fact.
     pub const fn is_filter(self) -> bool { self.as_trigger().is_filter() }
 }
 
@@ -1816,180 +1937,186 @@ impl FilterKind {
     /// figure, target = payee, the pay flag. No prompt (use
     /// PaySplitChooseBefore). Body answers cancel: false stops the payment.
     /// An integer return is folded into the leg amount.
-    pub const PaySplitChoose: Self = Self(TriggerKind::PaySplitChoose.as_i32());
+    pub const PaySplitChoose: Self = Self(TriggerKind::PaySplitChoose);
 
     /// Filter. A settled payment leg's first amount modifier (支付阶段 2 on each
     /// share, before any money moves). Payload: value = the running figure,
     /// target = payee. No prompt. Body returns the new figure; the host folds it
     /// into the leg amount.
-    pub const PaySplitAdd: Self = Self(TriggerKind::PaySplitAdd.as_i32());
+    pub const PaySplitAdd: Self = Self(TriggerKind::PaySplitAdd);
 
     /// Filter. A settled payment leg's second amount modifier (支付阶段 4 on each
     /// share, after PaySplitAdd). Payload: value = the running figure,
     /// target = payee. No prompt. Body returns the new figure; the host folds it
     /// into the leg amount.
-    pub const PaySplitMul: Self = Self(TriggerKind::PaySplitMul.as_i32());
+    pub const PaySplitMul: Self = Self(TriggerKind::PaySplitMul);
 
     /// Filter. A settled payment leg is about to pay (支付阶段 5 on each share,
     /// after PaySplitChoose, before the pay counteraction window). Payload:
     /// value = the running figure, target = payee. No prompt. Body returns the
     /// new figure; the host folds it into the leg amount.
-    pub const PaySplitAt: Self = Self(TriggerKind::PaySplitAt.as_i32());
+    pub const PaySplitAt: Self = Self(TriggerKind::PaySplitAt);
 
     /// Filter. The move's plan pass (行动阶段 8, before the dice are rolled).
     /// Payload: the move. Body rewrites the plan struct (roller, dice, steps,
     /// direction, settle flag, tiles, factors, and so on); the host applies only
     /// the fields the body changed.
-    pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan.as_i32());
+    pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan);
 
     /// Filter. An abnormal effect is about to hit the target. Payload: target =
     /// the victim, value = the abnormal kind, by_card = the causer; the raise
     /// seat is the causer. Body true = allowed, false = cancel the hit. The
     /// host folds the answers into one decision; if it lands, a later Abnormal
     /// reports it.
-    pub const AbnormalGuard: Self = Self(TriggerKind::AbnormalGuard.as_i32());
+    pub const AbnormalGuard: Self = Self(TriggerKind::AbnormalGuard);
 
     /// Filter. Is the target untouchable by the causer's effects? Asked before
     /// naming them as a target, before an abnormal effect, and before a
     /// card-driven payment from or to them. Payload: player_id = the seat asked
     /// about, by_card = the causer. Body true = allowed, false = immune; the
     /// host folds the answers into one decision.
-    pub const ImmuneAll: Self = Self(TriggerKind::ImmuneAll.as_i32());
+    pub const ImmuneAll: Self = Self(TriggerKind::ImmuneAll);
 
     /// Filter. The causer is about to name the seat as a target. Payload:
     /// player_id = the seat asked about, by_card = the causer. Body true =
     /// allowed, false = cannot name them; the host folds the answers into one
     /// decision.
-    pub const Untargetable: Self = Self(TriggerKind::Untargetable.as_i32());
+    pub const Untargetable: Self = Self(TriggerKind::Untargetable);
 
     /// Filter. A single-target effect is about to hit the target; a placed card
     /// may take the hit instead. Payload: target, card, by_card = the causer.
     /// Body rewrites the target (or leaves it); the host folds that into who is
     /// hit. Asked before Untargetable.
-    pub const Redirect: Self = Self(TriggerKind::Redirect.as_i32());
+    pub const Redirect: Self = Self(TriggerKind::Redirect);
 
     /// Filter. May the player buy the tile at all? Payload: tile, the buy
     /// record, and on the quote path value = the price. Body true = allowed,
     /// false = refuse (with a reason); the host folds the answers into one
     /// decision. Runs for every buy kind, forced buys included.
-    pub const BuyGate: Self = Self(TriggerKind::BuyGate.as_i32());
+    pub const BuyGate: Self = Self(TriggerKind::BuyGate);
 
     /// Filter. The buy price's first modifier stage (fixed plus/minus).
     /// Payload: player_id, tile, value = the price, the buy record. Body
     /// returns the new figure; the host folds it into the price.
-    pub const BuyAdd: Self = Self(TriggerKind::BuyAdd.as_i32());
+    pub const BuyAdd: Self = Self(TriggerKind::BuyAdd);
 
     /// Filter. The buy price's second modifier stage (multiply), after BuyAdd.
     /// Payload: player_id, tile, value = the price, the buy record. Body
     /// returns the new figure; the host folds it into the price.
-    pub const BuyMul: Self = Self(TriggerKind::BuyMul.as_i32());
+    pub const BuyMul: Self = Self(TriggerKind::BuyMul);
 
     /// Filter. The buy price's third modifier stage (free or fixed price),
     /// after BuyMul. Payload: player_id, tile, value = the price, the buy
     /// record. Body returns the new figure; the host folds it into the price.
     /// Each stage floors the price at zero.
-    pub const BuySet: Self = Self(TriggerKind::BuySet.as_i32());
+    pub const BuySet: Self = Self(TriggerKind::BuySet);
 
     /// Filter. The deal is committing, before Bought. Payload: tile, the buy
     /// record including deal owner / houses / mortgaged. Body rewrites those
     /// deal fields; the host applies only the fields the body changed.
-    pub const BuyAssign: Self = Self(TriggerKind::BuyAssign.as_i32());
+    pub const BuyAssign: Self = Self(TriggerKind::BuyAssign);
 
     /// Filter. The payment command's Combined fixed plus/minus stage on the
     /// whole figure, before any split divide (支付阶段 2 on the command total).
     /// Payload: player_id = payer, target = payee, value = the command total,
     /// the pay flag, tile, by_card. No prompt (use PayCombinedAddBefore).
     /// Body returns the new figure; the host folds it into the command total.
-    pub const PayCombinedAdd: Self = Self(TriggerKind::PayCombinedAdd.as_i32());
+    pub const PayCombinedAdd: Self = Self(TriggerKind::PayCombinedAdd);
 
     /// Filter. The payment command's Combined multiply stage (支付阶段 4 on the
     /// whole figure, after PayCombinedAdd). Payload: player_id = payer,
     /// target = payee, value = the command total, the pay flag, tile, by_card.
     /// Body returns the new figure; the host folds it into the command total.
-    pub const PayCombinedMul: Self = Self(TriggerKind::PayCombinedMul.as_i32());
+    pub const PayCombinedMul: Self = Self(TriggerKind::PayCombinedMul);
 
     /// Filter. The payment command's Combined cancel (支付阶段 5 on the whole
     /// command rather than on one pair, after PayCombinedMul). Payload:
     /// player_id = payer, target = payee, value = the command total, the pay
     /// flag, tile, by_card. Body false drops the whole command: no leg runs and
     /// nothing moves. The host folds the answers into one decision.
-    pub const PayCombinedCancel: Self = Self(TriggerKind::PayCombinedCancel.as_i32());
+    pub const PayCombinedCancel: Self = Self(TriggerKind::PayCombinedCancel);
 
     /// Filter. May the player use active skills and hand play effects?
     /// Evaluated natively wherever the question is asked, including pure reads.
     /// Payload: the acting seat. Body true = allowed, false = denied; the host
     /// folds the answers into one decision.
-    pub const ActGate: Self = Self(TriggerKind::ActGate.as_i32());
+    pub const ActGate: Self = Self(TriggerKind::ActGate);
 
     /// Filter. May the player pay or receive payment? Evaluated natively like
     /// ActGate. Payload: the acting seat. Body true = allowed, false = denied;
     /// the host folds the answers into one decision.
-    pub const PayGate: Self = Self(TriggerKind::PayGate.as_i32());
+    pub const PayGate: Self = Self(TriggerKind::PayGate);
 
     /// Filter. May the player make the main move? Evaluated natively like
     /// ActGate. Payload: the acting seat. Body true = allowed, false = denied;
     /// the host folds the answers into one decision.
-    pub const MoveGate: Self = Self(TriggerKind::MoveGate.as_i32());
+    pub const MoveGate: Self = Self(TriggerKind::MoveGate);
 
     /// Filter. May the player use this exclusive resource? Payload: the
     /// exclusive card on the window, name = the owner, value / step as owner
     /// flags. Body true = allowed, false = denied; the host folds the answers
     /// into one decision.
-    pub const ExclusiveUse: Self = Self(TriggerKind::ExclusiveUse.as_i32());
+    pub const ExclusiveUse: Self = Self(TriggerKind::ExclusiveUse);
 
     /// Filter. Turn-clock modifier: the bonus-time refill in seconds the acting
     /// seat gets as its turn starts. Payload: value = the refill. Body returns
     /// the new figure; the host folds it into the clock (then caps the total).
-    pub const TurnBonusTime: Self = Self(TriggerKind::TurnBonusTime.as_i32());
+    pub const TurnBonusTime: Self = Self(TriggerKind::TurnBonusTime);
 
     /// Filter. Turn-clock modifier: the base-time refill in seconds the acting
     /// seat's turn adds at turn start. Payload: value = the refill. Body
     /// returns the new figure; the host folds it into the clock, capped at the
     /// larger of the configured initial pool and the hook's own value. A
     /// board-prop base-time set replaces the whole calculation at turn start.
-    pub const TurnBaseTime: Self = Self(TriggerKind::TurnBaseTime.as_i32());
+    pub const TurnBaseTime: Self = Self(TriggerKind::TurnBaseTime);
 
     /// Filter. May the player play a hand card right now? Distinct from ActGate,
     /// which also gates active skills and is what skips a no-act
     /// turn at the start phase. A standing hand-size lock blocks plays without
     /// cancelling the rest of the turn. Payload: the acting seat. Body true =
     /// allowed, false = denied; the host folds the answers into one decision.
-    pub const PlayGate: Self = Self(TriggerKind::PlayGate.as_i32());
+    pub const PlayGate: Self = Self(TriggerKind::PlayGate);
 
     /// Filter. Roll-value modifier, raised immediately before DiceRollAfter
     /// with the same payload (the move, value = the face). Body returns the new
     /// face; the host folds it into the roll. Pure: prefer this over the
     /// DiceRollAfter exception unless a prompt is required.
-    pub const DiceRollValue: Self = Self(TriggerKind::DiceRollValue.as_i32());
+    pub const DiceRollValue: Self = Self(TriggerKind::DiceRollValue);
 
     /// Filter. May the named seat be treated as on the board right now?
     /// Evaluated natively like ActGate. Payload: the seat. Body true = allowed,
     /// false = denied; the host folds the answers into one decision.
-    pub const OnBoardGate: Self = Self(TriggerKind::OnBoardGate.as_i32());
+    pub const OnBoardGate: Self = Self(TriggerKind::OnBoardGate);
 
     /// Filter. May this effect name the seat as a target? Evaluated natively
     /// like ActGate. Payload: the seat. Body true = allowed, false = denied;
     /// the host folds the answers into one decision.
-    pub const TargetableGate: Self = Self(TriggerKind::TargetableGate.as_i32());
+    pub const TargetableGate: Self = Self(TriggerKind::TargetableGate);
 
-    /// The wire value, shared with [`TriggerKind`] / [`ChainKind`].
-    pub const fn as_i32(self) -> i32 { self.0 }
+    /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
+    pub const fn engine(id: i32) -> Self { Self(TriggerKind::engine(id)) }
 
-    /// Any code is a valid opaque id (rule-defined kinds use this).
-    pub const fn from_i32(v: i32) -> Self { Self(v) }
+    /// Ruleset-namespace kind. Same id as [`TriggerKind::ruleset`].
+    pub const fn ruleset(key: &'static str, id: i32) -> Self {
+        Self(TriggerKind::ruleset(key, id))
+    }
 
     /// View this id in the wire namespace.
-    pub const fn as_trigger(self) -> TriggerKind { TriggerKind(self.0) }
+    pub const fn as_trigger(self) -> TriggerKind { self.0 }
 
     /// View a wire id as this side (no side check -- the consts pin the set).
-    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k.as_i32()) }
+    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k) }
 
-    /// Wire name (camelCase generic, or decimal for a ruleset-declared id).
-    pub fn as_str(self) -> &'static str { self.as_trigger().as_str() }
+    /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
+    pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
+
+    /// Engine gate id for `gate_msgs` / `gate_skip_msgs` (the manifest's
+    /// `(i32, key)` pairs). Engine gates only -- ruleset kinds have no gate id.
+    pub const fn gate_id(self) -> i32 { self.0.id }
 
     /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
     /// const is always `false` and a `FilterKind` const always `true`; a raw
-    /// `Self(i)` still reports the wire fact.
+    /// `Self(k)` still reports the wire fact.
     pub const fn is_filter(self) -> bool { self.as_trigger().is_filter() }
 }
 
@@ -2007,52 +2134,52 @@ impl From<TriggerKind> for FilterKind {
 #[allow(non_upper_case_globals)]
 impl TriggerKind {
     /// Unset.
-    pub const None: Self = Self(0);
+    pub const None: Self = Self::engine(0);
 
     /// `diceRollBefore`
-    pub const DiceRollBefore: Self = Self(1);
+    pub const DiceRollBefore: Self = Self::engine(1);
 
     /// `diceRollResult`
-    pub const DiceRollResult: Self = Self(2);
+    pub const DiceRollResult: Self = Self::engine(2);
 
     /// `turnStart`
-    pub const TurnStart: Self = Self(3);
+    pub const TurnStart: Self = Self::engine(3);
 
     /// `pass`
-    pub const Pass: Self = Self(4);
+    pub const Pass: Self = Self::engine(4);
 
     /// `passPlayer`
-    pub const PassPlayer: Self = Self(5);
+    pub const PassPlayer: Self = Self::engine(5);
 
     /// `settleBefore`
-    pub const SettleBefore: Self = Self(6);
+    pub const SettleBefore: Self = Self::engine(6);
 
     /// `settle`
-    pub const Settle: Self = Self(7);
+    pub const Settle: Self = Self::engine(7);
 
     /// `mortgage`
-    pub const Mortgage: Self = Self(8);
+    pub const Mortgage: Self = Self::engine(8);
 
     /// `pay`
-    pub const Pay: Self = Self(9);
+    pub const Pay: Self = Self::engine(9);
 
     /// `paid`
-    pub const Paid: Self = Self(10);
+    pub const Paid: Self = Self::engine(10);
 
     /// `bankrupt`
-    pub const Bankrupt: Self = Self(11);
+    pub const Bankrupt: Self = Self::engine(11);
 
     /// `card`
-    pub const Card: Self = Self(12);
+    pub const Card: Self = Self::engine(12);
 
     /// `event`
-    pub const Event: Self = Self(13);
+    pub const Event: Self = Self::engine(13);
 
     /// `abnormal`
-    pub const Abnormal: Self = Self(14);
+    pub const Abnormal: Self = Self::engine(14);
 
     /// `target`
-    pub const Target: Self = Self(15);
+    pub const Target: Self = Self::engine(15);
 
     // Wire id 16 retired; never reuse.
 
@@ -2066,255 +2193,275 @@ impl TriggerKind {
 
     // Wire id 21 is a ruleset-declared kind (the 「获得[除外]」 post-commit
     // raise). The rule-facing name lives in `bandori_std::kind`
-    // (`TriggerKind(21)` / wire string `"21"`); this module carries no
-    // game-named kind const.
+    // (`TriggerKind::ruleset(RULESET_KEY, 21)` / wire string `"r:bandori:21"`);
+    // this module carries no game-named kind const.
 
     // Wire id 22 retired; never reuse.
 
     /// `state`
-    pub const State: Self = Self(23);
+    pub const State: Self = Self::engine(23);
 
     /// `counteracted`
-    pub const Counteracted: Self = Self(24);
+    pub const Counteracted: Self = Self::engine(24);
 
     /// `drawOut`
-    pub const DrawOut: Self = Self(25);
+    pub const DrawOut: Self = Self::engine(25);
 
     /// `twoCards`
-    pub const TwoCards: Self = Self(27);
+    pub const TwoCards: Self = Self::engine(27);
 
     /// `turnStartBefore`
-    pub const TurnStartBefore: Self = Self(28);
+    pub const TurnStartBefore: Self = Self::engine(28);
 
     /// `passBefore`
-    pub const PassBefore: Self = Self(29);
+    pub const PassBefore: Self = Self::engine(29);
 
     /// `mortgageBefore`
-    pub const MortgageBefore: Self = Self(30);
+    pub const MortgageBefore: Self = Self::engine(30);
 
     /// `bankruptBefore`
-    pub const BankruptBefore: Self = Self(31);
+    pub const BankruptBefore: Self = Self::engine(31);
 
     /// `cardAfter`
-    pub const CardAfter: Self = Self(32);
+    pub const CardAfter: Self = Self::engine(32);
 
     /// `eventAfter`
-    pub const EventAfter: Self = Self(33);
+    pub const EventAfter: Self = Self::engine(33);
 
     /// `settleAfter`
-    pub const SettleAfter: Self = Self(34);
+    pub const SettleAfter: Self = Self::engine(34);
 
     /// `buyBefore`
-    pub const BuyBefore: Self = Self(35);
+    pub const BuyBefore: Self = Self::engine(35);
 
     /// `buyAfter`
-    pub const BuyAfter: Self = Self(36);
+    pub const BuyAfter: Self = Self::engine(36);
 
     /// `buildBefore`
-    pub const BuildBefore: Self = Self(37);
+    pub const BuildBefore: Self = Self::engine(37);
 
     /// `buildAfter`
-    pub const BuildAfter: Self = Self(38);
+    pub const BuildAfter: Self = Self::engine(38);
 
     /// `discardBefore`
-    pub const DiscardBefore: Self = Self(39);
+    pub const DiscardBefore: Self = Self::engine(39);
 
     /// `discardAfter`
-    pub const DiscardAfter: Self = Self(40);
+    pub const DiscardAfter: Self = Self::engine(40);
 
     /// `endTurnBefore`
-    pub const EndTurnBefore: Self = Self(41);
+    pub const EndTurnBefore: Self = Self::engine(41);
 
     /// `endTurnAfter`
-    pub const EndTurnAfter: Self = Self(42);
+    pub const EndTurnAfter: Self = Self::engine(42);
 
     /// `leaveBefore`
-    pub const LeaveBefore: Self = Self(43);
+    pub const LeaveBefore: Self = Self::engine(43);
 
     /// `leaveAfter`
-    pub const LeaveAfter: Self = Self(44);
+    pub const LeaveAfter: Self = Self::engine(44);
 
     /// `turnEnd`
-    pub const TurnEnd: Self = Self(45);
+    pub const TurnEnd: Self = Self::engine(45);
 
     /// `drawn`
-    pub const Drawn: Self = Self(46);
+    pub const Drawn: Self = Self::engine(46);
 
     /// `passTile`
-    pub const PassTile: Self = Self(47);
+    pub const PassTile: Self = Self::engine(47);
 
     /// `payAfter`
-    pub const PayAfter: Self = Self(48);
+    pub const PayAfter: Self = Self::engine(48);
 
     /// `diceRollAfter`
-    pub const DiceRollAfter: Self = Self(49);
+    pub const DiceRollAfter: Self = Self::engine(49);
 
     /// `cardPlayed`
-    pub const CardPlayed: Self = Self(50);
+    pub const CardPlayed: Self = Self::engine(50);
 
     /// `targeted`
-    pub const Targeted: Self = Self(51);
+    pub const Targeted: Self = Self::engine(51);
 
     /// `paySplitChoose`
-    pub const PaySplitChoose: Self = Self(52);
+    pub const PaySplitChoose: Self = Self::engine(52);
 
     /// `turnEndBefore`
-    pub const TurnEndBefore: Self = Self(53);
+    pub const TurnEndBefore: Self = Self::engine(53);
 
     /// `turnEndAfter`
-    pub const TurnEndAfter: Self = Self(54);
+    pub const TurnEndAfter: Self = Self::engine(54);
 
     /// `paySplitAdd`
-    pub const PaySplitAdd: Self = Self(55);
+    pub const PaySplitAdd: Self = Self::engine(55);
 
     /// `paySplitMul`
-    pub const PaySplitMul: Self = Self(56);
+    pub const PaySplitMul: Self = Self::engine(56);
 
     /// `paySplitAt`
-    pub const PaySplitAt: Self = Self(57);
+    pub const PaySplitAt: Self = Self::engine(57);
 
     /// `discarded`
-    pub const Discarded: Self = Self(58);
+    pub const Discarded: Self = Self::engine(58);
 
     /// `deckBeforeGame`
-    pub const DeckBeforeGame: Self = Self(59);
+    pub const DeckBeforeGame: Self = Self::engine(59);
 
     /// `deckAtGameStart`
-    pub const DeckAtGameStart: Self = Self(60);
+    pub const DeckAtGameStart: Self = Self::engine(60);
 
     /// `drew`
-    pub const Drew: Self = Self(61);
+    pub const Drew: Self = Self::engine(61);
 
     /// `reshuffled`
-    pub const Reshuffled: Self = Self(62);
+    pub const Reshuffled: Self = Self::engine(62);
 
     /// `bought`
-    pub const Bought: Self = Self(63);
+    pub const Bought: Self = Self::engine(63);
 
     /// `settleBody`
-    pub const SettleBody: Self = Self(64);
+    pub const SettleBody: Self = Self::engine(64);
 
     /// `beforeOut`
-    pub const BeforeOut: Self = Self(65);
+    pub const BeforeOut: Self = Self::engine(65);
 
     /// `teleported`
-    pub const Teleported: Self = Self(66);
+    pub const Teleported: Self = Self::engine(66);
 
     /// `diceRollPlan`
-    pub const DiceRollPlan: Self = Self(67);
+    pub const DiceRollPlan: Self = Self::engine(67);
 
     /// `abnormalGuard`
-    pub const AbnormalGuard: Self = Self(68);
+    pub const AbnormalGuard: Self = Self::engine(68);
 
     /// `immuneAll`
-    pub const ImmuneAll: Self = Self(69);
+    pub const ImmuneAll: Self = Self::engine(69);
 
     /// `untargetable`
-    pub const Untargetable: Self = Self(70);
+    pub const Untargetable: Self = Self::engine(70);
 
     /// `redirect`
-    pub const Redirect: Self = Self(71);
+    pub const Redirect: Self = Self::engine(71);
 
     /// `effect`
-    pub const Effect: Self = Self(72);
+    pub const Effect: Self = Self::engine(72);
+
+    /// `markerSpent` -- any named-counter spend just committed (`spend_marker`).
+    /// Payload: `name` / `value`. Fire-pot is one name of many.
+    pub const MarkerSpent: Self = Self::engine(73);
+
+    /// `cardUsed` -- a field card's `On::Play` entry is about to run (a card
+    /// living on the player's field rather than in hand). Payload: `card` /
+    /// `cards` / `by_card`.
+    pub const CardUsed: Self = Self::engine(74);
+
+    /// `houseAdded` -- a deed's house count has just been written.
+    /// Payload: `tile` / `value`.
+    pub const HouseAdded: Self = Self::engine(75);
 
     /// `counterChanged`
-    pub const CounterChanged: Self = Self(76);
+    pub const CounterChanged: Self = Self::engine(76);
 
     /// `drewBefore`
-    pub const DrewBefore: Self = Self(77);
+    pub const DrewBefore: Self = Self::engine(77);
 
     // Wire id 94 retired; never reuse.
 
     /// `buyGate`
-    pub const BuyGate: Self = Self(79);
+    pub const BuyGate: Self = Self::engine(79);
 
     /// `buyAdd`
-    pub const BuyAdd: Self = Self(80);
+    pub const BuyAdd: Self = Self::engine(80);
 
     /// `buyMul`
-    pub const BuyMul: Self = Self(81);
+    pub const BuyMul: Self = Self::engine(81);
 
     /// `buySet`
-    pub const BuySet: Self = Self(82);
+    pub const BuySet: Self = Self::engine(82);
 
     /// `buyAssign`
-    pub const BuyAssign: Self = Self(83);
+    pub const BuyAssign: Self = Self::engine(83);
 
     /// `payCombinedAdd`
-    pub const PayCombinedAdd: Self = Self(84);
+    pub const PayCombinedAdd: Self = Self::engine(84);
 
     /// `payCombinedMul`
-    pub const PayCombinedMul: Self = Self(85);
+    pub const PayCombinedMul: Self = Self::engine(85);
 
     /// `payCombinedCancel`
-    pub const PayCombinedCancel: Self = Self(86);
+    pub const PayCombinedCancel: Self = Self::engine(86);
 
     /// `tileResolved`
-    pub const TileResolved: Self = Self(87);
+    pub const TileResolved: Self = Self::engine(87);
 
     /// `moveResolved`
-    pub const MoveResolved: Self = Self(88);
+    pub const MoveResolved: Self = Self::engine(88);
 
     /// `bankruptResolved`
-    pub const BankruptResolved: Self = Self(89);
+    pub const BankruptResolved: Self = Self::engine(89);
 
     /// `moveBefore`
-    pub const MoveBefore: Self = Self(90);
+    pub const MoveBefore: Self = Self::engine(90);
 
     /// `moveAfter`
-    pub const MoveAfter: Self = Self(91);
+    pub const MoveAfter: Self = Self::engine(91);
 
     /// `markerSpend`
-    pub const MarkerSpend: Self = Self(92);
+    pub const MarkerSpend: Self = Self::engine(92);
 
     /// `markerGain`
-    pub const MarkerGain: Self = Self(93);
+    pub const MarkerGain: Self = Self::engine(93);
 
     /// `actGate`
-    pub const ActGate: Self = Self(95);
+    pub const ActGate: Self = Self::engine(95);
 
     /// `payGate`
-    pub const PayGate: Self = Self(96);
+    pub const PayGate: Self = Self::engine(96);
 
     /// `moveGate`
-    pub const MoveGate: Self = Self(97);
+    pub const MoveGate: Self = Self::engine(97);
 
     /// `exclusiveUse`
-    pub const ExclusiveUse: Self = Self(98);
+    pub const ExclusiveUse: Self = Self::engine(98);
 
     /// `turnBonusTime`
-    pub const TurnBonusTime: Self = Self(99);
+    pub const TurnBonusTime: Self = Self::engine(99);
 
     /// `turnBaseTime`
-    pub const TurnBaseTime: Self = Self(100);
+    pub const TurnBaseTime: Self = Self::engine(100);
 
     /// `playGate`
-    pub const PlayGate: Self = Self(101);
+    pub const PlayGate: Self = Self::engine(101);
 
     /// `diceRollValue`
-    pub const DiceRollValue: Self = Self(102);
+    pub const DiceRollValue: Self = Self::engine(102);
 
     /// `atEnd`
-    pub const AtEnd: Self = Self(103);
+    pub const AtEnd: Self = Self::engine(103);
 
     // Wire id 104 retired; never reuse.
 
     /// `paySplitChooseBefore`
-    pub const PaySplitChooseBefore: Self = Self(105);
+    pub const PaySplitChooseBefore: Self = Self::engine(105);
 
     /// `payCombinedAddBefore`
-    pub const PayCombinedAddBefore: Self = Self(106);
+    pub const PayCombinedAddBefore: Self = Self::engine(106);
 
     /// `onBoardGate`
-    pub const OnBoardGate: Self = Self(108);
+    pub const OnBoardGate: Self = Self::engine(108);
 
     /// `targetableGate`
-    pub const TargetableGate: Self = Self(109);
+    pub const TargetableGate: Self = Self::engine(109);
 
-    /// The wire value, shared with every kind view.
-    pub const fn as_i32(self) -> i32 {
-        self.0
+    /// Engine-namespace kind. The fixed generic raise points.
+    pub const fn engine(id: i32) -> Self {
+        Self { ns: KindNs::Engine, id }
+    }
+
+    /// Ruleset-namespace kind. Rule-defined raise points, keyed by the
+    /// ruleset's stable name; they cannot collide with a future engine id or
+    /// with another ruleset's ids.
+    pub const fn ruleset(key: &'static str, id: i32) -> Self {
+        Self { ns: KindNs::Ruleset(key), id }
     }
 
     /// Is this a filter kind? Filter kinds are modifier-pipeline /
@@ -2323,344 +2470,54 @@ impl TriggerKind {
     /// decision gates (pure yes/no or target/reason folds).
     /// A filter entry may only list these; an action entry only non-filter kinds.
     ///
-    /// Single source of truth -- the typed views, ruleset-build validation,
-    /// and the host all read this.
+    /// For [`KindNs::Engine`] this reads the side declaration from
+    /// `game_kinds` (the table `crates/` owns). For [`KindNs::Ruleset`] it
+    /// answers `false`: a rule-defined kind's side is not in this table. The
+    /// host must treat [`OnKind::Filter`] / [`OnKind::Action`] as authoritative
+    /// for rule-defined kinds (a later phase emits a registration table).
     pub const fn is_filter(self) -> bool {
-        matches!(
-            self,
-            Self::DiceRollValue
-                | Self::PaySplitChoose
-                | Self::PaySplitAdd
-                | Self::PaySplitMul
-                | Self::PaySplitAt
-                | Self::DiceRollPlan
-                // Marker spend-substitution (id 78, name is payload) is NOT a
-                // filter: its 「可」 opt-in prompts, and Filter bodies cannot.
-                // It remains on On::Action (see docs/CARDS.md).
-                | Self::BuyAdd
-                | Self::BuyMul
-                | Self::BuySet
-                | Self::BuyAssign
-                | Self::PayCombinedAdd
-                | Self::PayCombinedMul
-                | Self::PayCombinedCancel
-                | Self::TurnBonusTime
-                | Self::TurnBaseTime
-                // Decision gates (v77): pure yes/no or target/reason folds.
-                | Self::AbnormalGuard
-                | Self::ImmuneAll
-                | Self::Untargetable
-                | Self::Redirect
-                | Self::BuyGate
-                | Self::ActGate
-                | Self::PayGate
-                | Self::MoveGate
-                | Self::ExclusiveUse
-                | Self::PlayGate
-                | Self::OnBoardGate
-                | Self::TargetableGate
-        )
-    }
-
-    /// Any code is a valid opaque id.
-    pub const fn from_i32(v: i32) -> Self {
-        Self(v)
-    }
-
-    /// The trigger-kind wire string. Generic kinds keep their camelCase
-    /// spelling; a registered ruleset-declared custom id is its decimal form.
-    /// An unregistered id reads as `""` (no `Box::leak` in `no_std`).
-    pub fn as_str(self) -> &'static str {
-        match self.0 {
-            0 => "",
-            1 => "diceRollBefore",
-            2 => "diceRollResult",
-            3 => "turnStart",
-            4 => "pass",
-            5 => "passPlayer",
-            6 => "settleBefore",
-            7 => "settle",
-            8 => "mortgage",
-            9 => "pay",
-            10 => "paid",
-            11 => "bankrupt",
-            12 => "card",
-            13 => "event",
-            14 => "abnormal",
-            15 => "target",
-            // 16 was "stop" -- retired in v84, never reuse.
-            // 17 was "teleport" -- retired in v84, never reuse.
-            // 18 was "skillTeleport" -- retired in v85, never reuse.
-            // 19 was the second abnormal kind -- retired in v84, never reuse.
-            // 20 was the first abnormal kind -- retired in v84, never reuse.
-            21 => "21", // ruleset-declared custom id
-            // 22 was the third abnormal kind -- retired in v84, never reuse.
-            23 => "state",
-            24 => "counteracted",
-            25 => "drawOut",
-            27 => "twoCards",
-            28 => "turnStartBefore",
-            29 => "passBefore",
-            30 => "mortgageBefore",
-            31 => "bankruptBefore",
-            32 => "cardAfter",
-            33 => "eventAfter",
-            34 => "settleAfter",
-            35 => "buyBefore",
-            36 => "buyAfter",
-            37 => "buildBefore",
-            38 => "buildAfter",
-            39 => "discardBefore",
-            40 => "discardAfter",
-            41 => "endTurnBefore",
-            42 => "endTurnAfter",
-            43 => "leaveBefore",
-            44 => "leaveAfter",
-            45 => "turnEnd",
-            46 => "drawn",
-            47 => "passTile",
-            48 => "payAfter",
-            49 => "diceRollAfter",
-            50 => "cardPlayed",
-            51 => "targeted",
-            52 => "paySplitChoose",
-            53 => "turnEndBefore",
-            54 => "turnEndAfter",
-            55 => "paySplitAdd",
-            56 => "paySplitMul",
-            57 => "paySplitAt",
-            58 => "discarded",
-            59 => "deckBeforeGame",
-            60 => "deckAtGameStart",
-            61 => "drew",
-            62 => "reshuffled",
-            63 => "bought",
-            64 => "settleBody",
-            65 => "beforeOut",
-            66 => "teleported",
-            67 => "diceRollPlan",
-            68 => "abnormalGuard",
-            69 => "immuneAll",
-            70 => "untargetable",
-            71 => "redirect",
-            72 => "effect",
-            76 => "counterChanged",
-            77 => "drewBefore",
-            // 94 was "flipEffect" -- retired in v83, never reuse.
-            79 => "buyGate",
-            80 => "buyAdd",
-            81 => "buyMul",
-            82 => "buySet",
-            83 => "buyAssign",
-            84 => "payCombinedAdd",
-            85 => "payCombinedMul",
-            86 => "payCombinedCancel",
-            87 => "tileResolved",
-            88 => "moveResolved",
-            89 => "bankruptResolved",
-            90 => "moveBefore",
-            91 => "moveAfter",
-            92 => "markerSpend",
-            93 => "markerGain",
-            95 => "actGate",
-            96 => "payGate",
-            97 => "moveGate",
-            98 => "exclusiveUse",
-            99 => "turnBonusTime",
-            100 => "turnBaseTime",
-            101 => "playGate",
-            102 => "diceRollValue",
-            103 => "atEnd",
-            // 104 was "flipAfter" -- retired in v83, never reuse.
-            105 => "paySplitChooseBefore",
-            106 => "payCombinedAddBefore",
-            108 => "onBoardGate",
-            109 => "targetableGate",
-            26 => "26",  // ruleset-declared custom id
-            73 => "73",  // ruleset-declared custom id
-            74 => "74",  // ruleset-declared custom id
-            75 => "75",  // ruleset-declared custom id
-            78 => "78",  // ruleset-declared custom id
-            107 => "107", // ruleset-declared custom id (FansFlip)
-            _ => "",
+        if !matches!(self.ns, KindNs::Engine) {
+            return false;
         }
+        game_kinds::is_filter(self.id)
     }
 
-    /// Inverse of [`Self::as_str`]. Generic camelCase names and decimal custom
-    /// ids parse; anything else is [`Self::None`].
-    pub fn from_str(s: &str) -> Self {
-        if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
-            return Self(s.parse::<i32>().unwrap_or(0));
-        }
-        match s {
-            "diceRollBefore" => Self(1),
-            "diceRollResult" => Self(2),
-            "turnStart" => Self(3),
-            "pass" => Self(4),
-            "passPlayer" => Self(5),
-            "settleBefore" => Self(6),
-            "settle" => Self(7),
-            "mortgage" => Self(8),
-            "pay" => Self(9),
-            "paid" => Self(10),
-            "bankrupt" => Self(11),
-            "card" => Self(12),
-            "event" => Self(13),
-            "abnormal" => Self(14),
-            "target" => Self(15),
-            // "stop" retired in v84 (id 16 never reuse).
-            // "teleport" retired in v84 (id 17 never reuse).
-            // "skillTeleport" retired in v85 (id 18 never reuse).
-            // second abnormal kind retired in v84 (id 19 never reuse).
-            // first abnormal kind retired in v84 (id 20 never reuse).
-            // id 21 is ruleset-declared; the digit path above accepts "21".
-            // third abnormal kind retired in v84 (id 22 never reuse).
-            "state" => Self(23),
-            "counteracted" => Self(24),
-            "drawOut" => Self(25),
-            "twoCards" => Self(27),
-            "turnStartBefore" => Self(28),
-            "passBefore" => Self(29),
-            "mortgageBefore" => Self(30),
-            "bankruptBefore" => Self(31),
-            "cardAfter" => Self(32),
-            "eventAfter" => Self(33),
-            "settleAfter" => Self(34),
-            "buyBefore" => Self(35),
-            "buyAfter" => Self(36),
-            "buildBefore" => Self(37),
-            "buildAfter" => Self(38),
-            "discardBefore" => Self(39),
-            "discardAfter" => Self(40),
-            "endTurnBefore" => Self(41),
-            "endTurnAfter" => Self(42),
-            "leaveBefore" => Self(43),
-            "leaveAfter" => Self(44),
-            "turnEnd" => Self(45),
-            "drawn" => Self(46),
-            "passTile" => Self(47),
-            "payAfter" => Self(48),
-            "diceRollAfter" => Self(49),
-            "cardPlayed" => Self(50),
-            "targeted" => Self(51),
-            "paySplitChoose" => Self(52),
-            "turnEndBefore" => Self(53),
-            "turnEndAfter" => Self(54),
-            "paySplitAdd" => Self(55),
-            "paySplitMul" => Self(56),
-            "paySplitAt" => Self(57),
-            "discarded" => Self(58),
-            "deckBeforeGame" => Self(59),
-            "deckAtGameStart" => Self(60),
-            "drew" => Self(61),
-            "reshuffled" => Self(62),
-            "bought" => Self(63),
-            "settleBody" => Self(64),
-            "beforeOut" => Self(65),
-            "teleported" => Self(66),
-            "diceRollPlan" => Self(67),
-            "abnormalGuard" => Self(68),
-            "immuneAll" => Self(69),
-            "untargetable" => Self(70),
-            "redirect" => Self(71),
-            "effect" => Self(72),
-            "counterChanged" => Self(76),
-            "drewBefore" => Self(77),
-            // "flipEffect" retired in v83 (id 94 never reuse).
-            "buyGate" => Self(79),
-            "buyAdd" => Self(80),
-            "buyMul" => Self(81),
-            "buySet" => Self(82),
-            "buyAssign" => Self(83),
-            "payCombinedAdd" => Self(84),
-            "payCombinedMul" => Self(85),
-            "payCombinedCancel" => Self(86),
-            "tileResolved" => Self(87),
-            "moveResolved" => Self(88),
-            "bankruptResolved" => Self(89),
-            "moveBefore" => Self(90),
-            "moveAfter" => Self(91),
-            "markerSpend" => Self(92),
-            "markerGain" => Self(93),
-            "actGate" => Self(95),
-            "payGate" => Self(96),
-            "moveGate" => Self(97),
-            "exclusiveUse" => Self(98),
-            "turnBonusTime" => Self(99),
-            "turnBaseTime" => Self(100),
-            "playGate" => Self(101),
-            "diceRollValue" => Self(102),
-            "atEnd" => Self(103),
-            // "flipAfter" retired in v83 (id 104 never reuse).
-            "paySplitChooseBefore" => Self(105),
-            "payCombinedAddBefore" => Self(106),
-            "onBoardGate" => Self(108),
-            "targetableGate" => Self(109),
-            _ => Self::None,
-        }
-    }
-
-    /// Which of the three vocabularies this event belongs to.
+    /// The trigger-kind wire spelling.
     ///
-    /// Custom (ruleset-declared) ids default to [`EventRole::Hook`]; codes the
-    /// engine raises as [反击] links are listed by number in `CUSTOM_LINKS`.
-    pub const fn role(self) -> EventRole {
-        let v = self.0;
-        if list_has(GATE_CODES, v) {
-            EventRole::Gate
-        } else if list_has(CHAIN_CODES, v) || list_has(CUSTOM_LINKS, v) {
-            EventRole::Link
-        } else {
-            EventRole::Hook
+    /// Engine kinds keep their camelCase spelling from the `game_kinds` table;
+    /// a ruleset-declared id is `"r:{key}:{id}"` (e.g. `"r:bandori:21"`),
+    /// formatted -- no table. An unregistered engine id reads as `""`.
+    pub fn spelling(self) -> Cow<'static, str> {
+        match self.ns {
+            KindNs::Ruleset(key) => Cow::Owned(format!("r:{key}:{}", self.id)),
+            KindNs::Engine => Cow::Borrowed(game_kinds::wire(self.id)),
         }
     }
-}
 
-const fn list_has(list: &[i32], v: i32) -> bool {
-    let mut i = 0;
-    while i < list.len() {
-        if list[i] == v {
-            return true;
+    /// Inverse of [`Self::spelling`]. Generic camelCase names and
+    /// `"r:{key}:{id}"` parse; anything else is [`Self::None`].
+    /// A bare decimal `"21"` is **not** accepted -- only the real spelling.
+    pub fn from_str(s: &str) -> Self {
+        if let Some(rest) = s.strip_prefix("r:") {
+            if let Some((key, id)) = rest.split_once(':') {
+                if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
+                    let id = id.parse::<i32>().unwrap_or(0);
+                    // Only declared ruleset keys parse; an unknown namespace is
+                    // a miss rather than a leaked `&'static str` per call. A
+                    // second ruleset declares its key next to `BANDORI`.
+                    return match key {
+                        "bandori" => Self::ruleset("bandori", id),
+                        _ => Self::None,
+                    };
+                }
+            }
+            return Self::None;
         }
-        i += 1;
+        match game_kinds::from_wire(s) {
+            Some(id) => Self::engine(id),
+            None => Self::None,
+        }
     }
-    false
-}
-
-/// Generic gate codes (see [`FilterKind`] docs).
-const GATE_CODES: &[i32] = &[68, 69, 70, 71, 79, 95, 96, 97, 98, 108, 109];
-/// Generic chain-link codes (see [`ChainKind`] docs).
-const CHAIN_CODES: &[i32] = &[
-    1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-    25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
-    47, 64, 72, 90, 91, 92, 93,
-];
-/// Ruleset-declared custom ids that are also [反击] links (wire 26 / 73 / 74 /
-/// 75 / 78). The engine dispatches them by opaque id; the names live in
-/// `bandori-std::kind`.
-const CUSTOM_LINKS: &[i32] = &[26, 73, 74, 75, 78];
-
-/// Which vocabulary an event kind belongs to.
-///
-/// [`TriggerKind`] is the *wire* id space: every event the engine raises, and
-/// what crosses the guest boundary. Cards declare against one of the three
-/// typed views ([`ChainKind`] / [`ActionKind`] / [`FilterKind`] over
-/// [`TriggerKind`]); the `On` variant says what the event is for:
-///
-/// * [`ChainKind`] -- a chain link answers it, so a [反击] window opens.
-/// * [`ActionKind`] -- a field-card (`Fx`) settlement point; placed cards run
-///   automatically, no window.
-/// * [`FilterKind`] -- a question posed to placed cards at declaration or at
-///   resolution (`may this effect name S?` / `does anything land on S?`).
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EventRole {
-    /// Opens a [反击] window -- a chain link can answer it.
-    Link = 0,
-    /// Field-card hook only -- no window.
-    Hook = 1,
-    /// A query to placed cards -- no window.
-    Gate = 2,
 }
 
 pub fn pack(ptr: u32, len: u32) -> i64 {
@@ -2741,8 +2598,9 @@ pub struct ManifestTileText {
 pub struct ManifestOn {
     /// An [`OnKind`] as `i32`.
     pub kind: i32,
-    /// `TriggerKind`s as `i32`.
-    pub triggers: Vec<i32>,
+    /// `TriggerKind` wire **spellings** (`TriggerKind::spelling`): engine
+    /// camelCase or `"r:{key}:{id}"`.
+    pub triggers: Vec<String>,
     /// Guard **condition** source (docs/GUARDS.md §4.3), CEL over the §4.2
     /// window/candidate vocabulary. `None` = no condition (the guard alone
     /// decides). Compiled once at ruleset build (`RuleError::BadPre` on any
@@ -2779,37 +2637,38 @@ pub struct ManifestOn {
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnKind {
-    /// `On::Play(cond, reason, gate, body)` -- play this card from hand (or press it as
-    /// a skill via `invoke_skill`). `cond` is the gate's CEL condition, `reason`
-    /// is the human-readable 「…时」 clause the counteraction prompt shows
-    /// (`""` when this entry is not a [反击] window), `gate`
-    /// is the playability query (a pure `Option<Msg>`; `None` = playable,
-    /// `Some(why)` = blocked with a reason), `body` is the effect. The host
-    /// calls it between the [`TriggerKind::Card`] raise and `cardAfter`.
+    /// `On::Play(pre, counter_reason, why_not, body)` -- play this card from
+    /// hand (or press it as a skill via `invoke_skill`). `pre` is the gate's
+    /// CEL condition, `counter_reason` is the 「…时」 clause the counteraction
+    /// prompt shows (a locale key; `None` when this entry is not a [反击]
+    /// window), `why_not` is the playability query (a pure `Option<Msg>`;
+    /// `None` = playable, `Some(why)` = blocked with a reason), `body` is the
+    /// effect. The host calls it between the [`TriggerKind::Card`] raise and
+    /// `cardAfter`.
     Play = 0,
     // 1 was `CantPlay`, folded into `Play`'s gate.
-    /// `On::Counteract(kinds, cond, reason, guard, body)` -- a [反击] at those
-    /// [`ChainKind`]s. `cond` (CEL) and `guard` (the residual pure `bool` query,
-    /// `None` once G4 folded the whole body into `cond`) decide whether the card
-    /// is offered in the hand window; `reason` is the human-readable 「…时」
-    /// clause the counteraction prompt shows; `body` resolves against the
-    /// answered link. Called at the counteraction offer, then again at LIFO
-    /// resolution.
+    /// `On::Counteract(kinds, pre, counter_reason, guard, body)` -- a [反击] at
+    /// those [`ChainKind`]s. `pre` (CEL) and `guard` (the residual pure `bool`
+    /// query, `None` once G4 folded the whole body into `pre`) decide whether
+    /// the card is offered in the hand window; `counter_reason` is the 「…时」
+    /// clause the counteraction prompt shows (a locale key); `body` resolves
+    /// against the answered link. Called at the counteraction offer, then again
+    /// at LIFO resolution.
     Counteract = 2,
-    /// `On::Action(kinds, cond, reason, guard, body)` -- an **event reaction** at those
-    /// [`ActionKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
-    /// `cond`/`reason`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
-    /// **automatically** for every placed card (placement order per player)
-    /// whenever one of the kinds is raised -- no window. May emit effects;
-    /// does not modify the triggering value. Kinds must be non-filter
-    /// (`TriggerKind::is_filter() == false`).
+    /// `On::Action(Action::Kind(pre, counter_reason, guard, body))` -- an
+    /// **event reaction** at one [`ActionKind`] (v74 rename of `On::Hook`; wire
+    /// id 3 unchanged). Same `pre`/`counter_reason`/`guard`/`body` shape as
+    /// [`Self::Counteract`]. The host calls it **automatically** for every
+    /// placed card (placement order per player) whenever the kind is raised --
+    /// no window. May emit effects; does not modify the triggering value. Kinds
+    /// must be non-filter (`TriggerKind::is_filter() == false`).
     Action = 3,
-    // 4 was `AtEnd`, folded into `Action(&[TriggerKind::AtEnd], …)` in v76.
+    // 4 was `AtEnd`, folded into `On::Action(Action::AtEnd(…))` in v76.
     // Wire id 4 is retired -- never reuse.
-    // 5 was `DiceRollPlan`, folded into `FilterValue(&[TriggerKind::DiceRollPlan], …)`
+    // 5 was `DiceRollPlan`, folded into `On::Filter(Filter::DiceRollPlan(…))`
     // in v76. Wire id 5 is retired -- never reuse.
-    // 6 was `Gate`, folded into `FilterFlag` / `FilterValue` at the gate kinds
-    // in v77. Wire id 6 is retired -- never reuse.
+    // 6 was `Gate`, folded into `On::Filter(Filter::ActGate(…))` etc. at the
+    // gate kinds in v77. Wire id 6 is retired -- never reuse.
     /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(pre, guard,
     /// body)`. Tile rules (`tile:*`) are one per board tile kind and this is what
     /// runs when that tile is 结算d, inside the settle chain (a
@@ -2831,11 +2690,12 @@ pub enum OnKind {
     /// v73: a rule's **redeem body** (`On::Redeem(pre, guard, body)`) --
     /// 规则书 基础规则 6. Same split as [`Self::Mortgage`].
     Redeem = 10,
-    /// v74: `On::Filter` / `On::FilterFlag` / `On::FilterValue` -- a **value
-    /// modifier** at those modifier [`FilterKind`]s (`TriggerKind::is_filter()`).
-    /// v75: the three shapes share this wire id (the host distinguishes by the
-    /// guest's return convention). Kinds must be filter kinds. Id 11, not 9
-    /// (9/10 are the v73 deed kinds).
+    /// v74: `On::Filter(FilterEntry)` -- a **pure value / decision / gate /
+    /// payload rewrite** at one modifier [`FilterKind`]
+    /// (`TriggerKind::is_filter()`). v93: one kind per entry, built by the
+    /// `filter_kinds!` constructors; the body shape is
+    /// [`crate::kinds::FilterShape`]. Id 11, not 9 (9/10 are the v73 deed
+    /// kinds).
     Filter = 11,
     /// v80: a rule's **buy body** (`On::Buy(pre, guard, body)`) -- what runs
     /// when the deed this rule instance governs is bought (settle offer,
@@ -2850,77 +2710,10 @@ pub enum OnKind {
     Build = 13,
 }
 
-/// Small typed payload for [`crate::On::FilterValue`] (BuyAssign / DiceRollPlan).
-/// Unchanged fields keep their sentinel (`UNCHANGED`); the host applies only
-/// the fields the body rewrote. Pure: the body copies, tweaks, returns.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct FilterValue {
-    /// The integer being filtered (amount / price / roll / seconds / flip count).
-    pub value: i32,
-    /// BuyAssign: new owner (`UNCHANGED` / `-1` = bank / `>=0` = seat).
-    pub deal_owner: i32,
-    /// BuyAssign: house count (`UNCHANGED` keeps the deal's).
-    pub deal_houses: i32,
-    /// BuyAssign: mortgaged flag (`UNCHANGED` / 0 / 1).
-    pub deal_mortgaged: i32,
-    /// DiceRollPlan: who rolls (`UNCHANGED` / `-1` = the mover / `>=0` = stand-in).
-    pub roller: i32,
-    /// DiceRollPlan: base dice count / sides (sides 0 = a flat `count`).
-    pub base_count: i32,
-    pub base_sides: i32,
-    /// DiceRollPlan: extra dice count / sides.
-    pub extra_count: i32,
-    pub extra_sides: i32,
-    /// DiceRollPlan: step override (`UNCHANGED` keeps the roll; else exact count).
-    pub steps: i32,
-    /// DiceRollPlan: walk direction (`UNCHANGED` / 0 = forward / 1 = reverse).
-    pub reverse: i32,
-    /// DiceRollPlan: whether the move settles (`UNCHANGED` / 0 / 1).
-    pub resolve: i32,
-    /// DiceRollPlan: unsigned-roll floor.
-    pub min_roll: i32,
-    /// DiceRollPlan: pay / rent factor in milli (`UNCHANGED` / 0 = ×0 / 1000 = ×1).
-    pub pay_factor: i32,
-    pub rent_factor: i32,
-    /// DiceRollPlan: stop-at / settle-tile / teleport-to tile (`UNCHANGED`).
-    pub stop_at: i32,
-    pub settle_tile: i32,
-    pub teleport_to: i32,
-    /// DiceRollPlan: clear the dice table first (`UNCHANGED` / 0 / 1).
-    pub clear_dice: i32,
-    /// DiceRollPlan: `plan::set_tag("key", value)` -- the key is the creating
-    /// card's own tag name (see the body); `UNCHANGED` keeps the plan's.
-    pub tag: i32,
-    /// Pay pipeline: new payee (`UNCHANGED` / `-1` = bank / `>=0` = seat).
-    pub payee: i32,
-    /// DiceRollPlan: move kind (`UNCHANGED` / 0 = walk / 1 = teleport).
-    pub move_kind: i32,
-    /// DiceRollPlan: append this many base dice (`UNCHANGED` / count, sides).
-    pub add_base_count: i32,
-    pub add_base_sides: i32,
-    /// Gate: allow? (`UNCHANGED` / 0 = deny / 1 = allow). Prefer
-    /// [`crate::On::FilterFlag`] for a bare yes/no; this field is for a gate
-    /// that also rewrites `payee` / carries a reason.
-    pub allowed: i32,
-    /// Gate: denial reason message key (intern id, 0 = none). The host maps
-    /// the id back to the key for the UI.
-    pub reason: i32,
-    /// Host-supplied recorded roll (v78). The host pre-rolls dice into the
-    /// recorded RNG stream and exposes the face here, so a Filter body that
-    /// would have called `ctx::roll` (kaoru_thief's 1d2 direction, heat_head's
-    /// 1d6 cut) remains pure and replay-deterministic. `UNCHANGED` = no
-    /// recorded roll for this raise.
-    pub recorded_roll: i32,
-    /// `plan::set_tag` key as an intern id (v78; 0 = none). Write-back calls
-    /// `plan::set_tag_id(key, tag)`.
-    pub tag_key: i32,
-}
-
-impl FilterValue {
-    /// Sentinel: leave the host's current field alone.
-    pub const UNCHANGED: i32 = i32::MIN;
-}
-
+/// Filter payloads live in [`crate::payload`] -- one typed struct per kind
+/// family (`PlanValue` / `RollValue` / `DealValue` / `GateValue` /
+/// `PayAddValue` / `RedirectValue`). The 28-field `FilterValue` bag and its
+/// `UNCHANGED` sentinel are gone (ABI v92).
 impl OnKind {
     pub fn from_i32(v: i32) -> Option<Self> {
         Some(match v {
@@ -2942,14 +2735,14 @@ impl OnKind {
 
 #[cfg(test)]
 mod tests {
-    use super::TriggerKind;
+    use super::{KindNs, TriggerKind};
 
     /// ABI v85: wire id 18 (`skillTeleport`) is retired forever. Do not reuse
     /// the id or the spelling; listeners discriminate with `MoveAfter` + cond
     /// (`move.kind == Teleport && move.by_skill`).
     #[test]
     fn skill_teleport_id_18_is_retired_forever() {
-        assert_eq!(TriggerKind(18).as_str(), "", "id 18 must remain unnamed");
+        assert_eq!(TriggerKind::engine(18).spelling(), "", "id 18 must remain unnamed");
         assert_eq!(
             TriggerKind::from_str("skillTeleport"),
             TriggerKind::None,
@@ -2958,6 +2751,34 @@ mod tests {
         // Nearby ids: "teleport" (id 17) retired in v84, and live ids keep
         // working.
         assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
-        assert_eq!(TriggerKind::MoveAfter.as_str(), "moveAfter");
+        assert_eq!(TriggerKind::MoveAfter.spelling(), "moveAfter");
+    }
+
+    /// ABI v90/v91: the two namespaces keep distinct wire spellings and the
+    /// `"r:{key}:{id}"` form round-trips. A bare decimal is **not** a spelling.
+    /// CEL `kind` is that spelling (v91); there is no int pack.
+    #[test]
+    fn namespaced_wire_spelling() {
+        assert_eq!(TriggerKind::ruleset("bandori", 21).spelling(), "r:bandori:21");
+        assert_eq!(TriggerKind::ruleset("bandori", 107).spelling(), "r:bandori:107");
+        assert_eq!(
+            TriggerKind::from_str("r:bandori:21"),
+            TriggerKind::ruleset("bandori", 21)
+        );
+        // Bare decimals are not spellings -- only "r:{key}:{id}" parses.
+        assert_eq!(TriggerKind::from_str("21"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("paySplitAdd"), TriggerKind::engine(55));
+        // Engine and ruleset with the same numeric id are different kinds.
+        assert_ne!(TriggerKind::engine(21), TriggerKind::ruleset("bandori", 21));
+        assert_eq!(TriggerKind::ruleset("bandori", 21).ns, KindNs::BANDORI);
+        // Two rulesets with the same id are different kinds.
+        assert_ne!(
+            TriggerKind::ruleset("bandori", 21),
+            TriggerKind::ruleset("other", 21)
+        );
+        assert!(
+            !TriggerKind::ruleset("bandori", 55).is_filter(),
+            "ruleset is never is_filter"
+        );
     }
 }

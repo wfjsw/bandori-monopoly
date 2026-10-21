@@ -12,13 +12,14 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const FATE_TOGETHER: CardDef = CardDef::new(
     "CRYCHIC:一起演奏音乐的命运共同体",
     &[
-        On::Play("", "", None, fate_together),
-        On::Action(&[ActionKind::PayAfter, ActionKind::TurnStart], "", "", Some(counteract_guard), counteract),
+        On::Play("", None, None, fate_together),
+        On::Action(Action::PayAfter("", None, Some(counteract_guard), counteract)),
+        On::Action(Action::TurnStart("", None, Some(counteract_guard), counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一起演奏音乐的命运共同体"#)
@@ -121,6 +122,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -21,7 +21,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The 「角色标记」 namespace every consumer agrees on (NNM's `角色标记:*` too).
 /// A mark's name is `角色标记:<skill id>`, so (3) can hand the id to `play_card`.
@@ -45,25 +45,21 @@ fn cd_key(id: &str) -> alloc::string::String {
 pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
         // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
-        On::Action(
-            &[bandori_std::kind::SkillUsed],
-            "actor != owner && trigger_card != 0 && charge(owner) >= 1", "",
-            Some(on_skill_applies),
-            on_skill,
-        ),
-        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, tick),
+        On::Action(Action::CardUsed("actor != owner && trigger_card != 0 && charge(owner) >= 1", None, Some(on_skill_applies), on_skill)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, tick)),
     ],
 )
-    .silent(&[1])
-    .quiet_when_empty(&[4])
+    .silent(&[1, 2])
+    .quiet_when_empty(&[5])
     // 「（初始2，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
 
@@ -191,6 +187,8 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -212,12 +210,12 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
-    tick(player_id)
+pub fn on_skill_kani(player_id: i32) -> card_sdk::Asked {
+    on_skill(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_skill_kani(player_id: i32) -> card_sdk::Asked {
-    on_skill(player_id)
+pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
+    tick(player_id)
 }

@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const LOST_CHASE: CardDef = CardDef::new("event:迷子的追逐", &[On::Play("", "", None, play)])
+pub const LOST_CHASE: CardDef = CardDef::new("event:迷子的追逐", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"迷子的追逐"#)
             .text(r#"所有玩家各投5d20。如果抽到此卡的玩家的点数严格大于所有其他玩家的点数则将一张“[衍生]让我来结束一切”背面朝上放置于事件牌堆顶部，否则将一张“[衍生]一切不会结束”背面朝上放置于事件牌堆顶。"#)
@@ -67,6 +67,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

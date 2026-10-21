@@ -14,8 +14,7 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
     "CRYCHIC:主唱太拼命了",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
-        r#"一次性向其他玩家支付至少5000资金"#,
+        "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000", Some(key!("vocal_too_hard_when")),
         None,
         counteract,
     )],
@@ -36,6 +35,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

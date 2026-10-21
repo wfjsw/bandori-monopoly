@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use card_sdk::abi::{ChainKind, ActionKind};
 
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const LAYER_KEEP: CardDef = CardDef::new(
     "RAS:（和奏瑞依）寄于指尖的执念",
@@ -19,15 +19,14 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         // first): the placement from hand (「可打出此卡」), or the later press
         // that spends a 火罐 on a kept die. The gate admits whenever either
         // branch is available.
-        On::Play("", "", Some(cant_play), play),
-        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && card.placed", "", None, roll_after),
+        On::Play("", None, Some(cant_play), play),
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, None, roll_after)),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::CHARGE` (「使用火罐进行掷骰」).
         On::Counteract(
             &[ChainKind::DiceRollBefore],
-            "actor == owner && roll_source == 1",
-            "",
+            "actor == owner && roll_source == 1", None,
             None,
             counter_fire,
         ),
@@ -187,6 +186,10 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -199,8 +202,6 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
     roll_after(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]

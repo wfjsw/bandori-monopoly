@@ -15,27 +15,28 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const MARK: &str = "saaya标记";
 
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         // （1）'s 「一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时」 is the
         // hook's applicability, not its effect (the ask is the effect).
-        On::Action(&[ActionKind::PayAfter], "", "", Some(pay_after_applies), on_pay_after),
+        On::Action(Action::PayAfter("", None, Some(pay_after_applies), on_pay_after)),
         // （1）'s 「拥有saaya标记时」 -- the mark is the applicability.
-        On::Action(&[ActionKind::DiceRollAfter], card_sdk::pre::MINE, "", Some(roll_needs_mark), on_roll),
+        On::Action(Action::DiceRollAfter(card_sdk::pre::MINE, None, Some(roll_needs_mark), on_roll)),
         // （2）'s 「可使用5个[火罐]」 -- the amount and the pot are the
         // applicability; spending the pot is the cost, kept in the body.
         // Interactive (ask_yes + fire spend + amount rewrite). Rides
         // `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
-        On::Action(&[ActionKind::PaySplitChooseBefore], card_sdk::pre::MINE, "", Some(pay_cut_applies), on_pay),
+        On::Action(Action::PaySplitChooseBefore(card_sdk::pre::MINE, None, Some(pay_cut_applies), on_pay)),
     ],
 )
-    .silent(&[0])
+    .silent(&[0, 1])
     // 「（初始3，上限5）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 3), (bandori_std::fire::FIRE_CAP, 5)]);
 
@@ -147,6 +148,8 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

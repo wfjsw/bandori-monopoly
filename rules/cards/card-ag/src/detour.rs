@@ -8,26 +8,26 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{prop, ChainKind, ActionKind, FilterKind};
+use card_sdk::abi::{prop, ChainKind, ActionKind, Dice, FilterKind};
 use card_sdk::ctx::plan;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
-        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", "", None, counteract),
+        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", None, None, counteract),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
-        On::FilterValue(&[FilterKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, next_roll),
+        On::Filter(Filter::DiceRollPlan("slot('detour_next_roll') != 0", None, next_roll)),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
-        On::Action(&[ActionKind::DiceRollAfter], "slot('detour_next_roll') != 0", "", None, consume_next_roll),
-        On::Action(&[ActionKind::AtEnd], "", "", None, clear_no_reward),
+        On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", None, None, consume_next_roll)),
+        On::Action(Action::AtEnd("", None, None, clear_no_reward)),
     ],
 )
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
@@ -140,8 +140,11 @@ const NEXT_ROLL: &str = "detour_next_roll";
 /// plan is being built, so this is where the override belongs. Pure: only the
 /// dice reshape. The one-shot latch is consumed by [`consume_next_roll`] on
 /// `DiceRollAfter`.
-fn next_roll(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    card_sdk::abi::FilterValue { base_count: 1, base_sides: 6, ..v }
+fn next_roll(_player_id: i32, v: PlanValue) -> PlanValue {
+    PlanValue {
+        base: Some(Dice { count: 1, sides: 6 }),
+        ..v
+    }
 }
 
 /// Drop the one-shot [`NEXT_ROLL`] latch once the rewritten roll has landed.
@@ -175,6 +178,10 @@ fn clear_no_reward(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -190,7 +197,7 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn next_roll_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+pub fn next_roll_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     next_roll(player_id, v)
 }
 

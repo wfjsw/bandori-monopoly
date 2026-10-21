@@ -11,13 +11,13 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use bandori_std::state_key; use card_sdk::abi::prop;
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
-        On::Play("", "", None, l12),
-        On::Action(&[bandori_std::kind::FireSpent], "", "", Some(fire_spent_guard), fire_spent),
+        On::Play("", None, None, l12),
+        On::Action(Action::MarkerSpent("", None, Some(fire_spent_guard), fire_spent)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()
@@ -124,6 +124,10 @@ fn fire_spent(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

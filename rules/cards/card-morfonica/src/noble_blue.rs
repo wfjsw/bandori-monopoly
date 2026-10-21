@@ -8,7 +8,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const NOBLE_BLUE: CardDef =
-    CardDef::new("Mor:高贵的微蓝", &[On::Play("", "", Some(cant_play), noble_blue)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("Mor:高贵的微蓝", &[On::Play("", None, Some(cant_play), noble_blue)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"高贵的微蓝"#)
         .raw_name(r#"高贵的微蓝"#)
         .tags(&[])
@@ -70,6 +70,10 @@ fn noble_blue(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

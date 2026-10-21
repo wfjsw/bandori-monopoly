@@ -10,7 +10,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", "", None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
+pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"心の雨"#)
         .raw_name(r#"心の雨"#)
         .tags(&[])
@@ -55,6 +55,10 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

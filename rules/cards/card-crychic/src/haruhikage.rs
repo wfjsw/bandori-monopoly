@@ -12,12 +12,12 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         On::Counteract(
             &[
                 ChainKind::Effect,
@@ -29,8 +29,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             "(kind == DiceRollResult && actor == owner && move.roll != null) \
              || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
-                 && target == owner && tile.id >= 0 && value > 0)",
-            r#"可作为[反击]打出"#,
+                 && target == owner && tile.id >= 0 && value > 0)", Some(key!("haruhikage_when")),
             None,
             counteract
         ),
@@ -39,12 +38,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         // is a derived list (money + land + houses), residual (docs/GUARDS.md
         // §4.2). `Drawn` fires with the card already in hand (`wasm_rules.rs`
         // 「it is still in hand」), so 「手牌」 counts this card.
-        On::Action(
-            &[ActionKind::Drawn],
-            "trigger_card == card.id", "",
-            Some(assets_ready),
-            on_drawn,
-        ),
+        On::Action(Action::Drawn("trigger_card == card.id", None, Some(assets_ready), on_drawn)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -250,6 +244,10 @@ fn cancel_pay_skill(player_id: i32) {
     //   `m.TeleportTo = t.Pay.tile`) -- needs the Fx.MoveBefore hook and a
     //   remembered tile (C# `H.SetV(i, "soyoC", tile + 1)`).
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

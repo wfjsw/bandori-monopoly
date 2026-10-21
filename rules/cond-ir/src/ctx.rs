@@ -107,7 +107,12 @@ impl SetId {
 
 pub const SET_COUNT: usize = 7;
 /// Bits per set; tile/kind ids used in practice are well under this.
+/// `SetId::ChainKinds` is **not** a bitset -- kind keys are `id_of(spelling)`
+/// FNV hashes (64-bit, nowhere near `0..128`) and live in [`IrCtx::chain_kinds`].
 pub const SET_BITS: usize = 128;
+/// Chain-kind hash list (`SetId::ChainKinds`): `id_of(spelling)` per link.
+/// Short payment/effect chains; 8 matches the IR list-literal cap.
+pub const CHAIN_KIND_CAP: usize = 8;
 
 /// Named counters (`slot` / `tok` / `card_counter` / `tile_named`): a fixed
 /// linear table of `(name_id, value)`. `name_id` is `rules_cond::id_of`.
@@ -142,8 +147,13 @@ pub struct IrCtx {
     /// `(seat, key_id, value)` rows for `state(p, 'key')`; `state_n` live.
     pub state: [(i64, i64, i64); STATE_CAP],
     pub state_n: u8,
-    /// Bitsets ([`SetId`] as index).
+    /// Bitsets ([`SetId`] as index). [`SetId::ChainKinds`] is ignored here --
+    /// see [`Self::chain_kinds`].
     pub sets: [[u64; SET_BITS / 64]; SET_COUNT],
+    /// `id_of(spelling)` per chain link (`SetId::ChainKinds`); `chain_kind_n`
+    /// live entries.
+    pub chain_kinds: [i64; CHAIN_KIND_CAP],
+    pub chain_kind_n: u8,
     /// Board tile count — backs `dist` / ring wraps.
     pub tile_count: i64,
     /// Packed `(a,b) -> v` geometry.
@@ -162,6 +172,8 @@ impl Default for IrCtx {
             state: [(0, 0, 0); STATE_CAP],
             state_n: 0,
             sets: [[0; SET_BITS / 64]; SET_COUNT],
+            chain_kinds: [0; CHAIN_KIND_CAP],
+            chain_kind_n: 0,
             tile_count: 0,
             bin: [(0, 0); BIN_CAP],
             bin_n: 0,
@@ -175,7 +187,9 @@ impl IrCtx {
     }
 
     /// Store a typed scalar: `Bool` → 0/1. `OptInt` stores the raw i64; any
-    /// negative reads back as `Null` (matching `vocab::opt`).
+    /// negative reads back as `Null` (matching `vocab::opt`). `Str` stores the
+    /// `id_of(spelling)` hash the caller already computed (the IR has no
+    /// string pool).
     pub fn set_scalar_ty(&mut self, id: VarId, ty: VarTy, v: i64, is_null: bool) {
         let raw = match (ty, is_null) {
             (VarTy::Bool, _) => {
@@ -187,7 +201,8 @@ impl IrCtx {
             }
             // A null OptInt is stored as any negative (`-1` by convention).
             (VarTy::OptInt, true) => -1,
-            (_, _) => v,
+            // Str: v is already `id_of(spelling)`.
+            (VarTy::Str, _) | (_, _) => v,
         };
         self.set_scalar(id, raw);
     }
@@ -203,6 +218,9 @@ impl IrCtx {
         let raw = self.scalars[idx as usize];
         match ty {
             VarTy::Int => Val::Int(raw),
+            // Str scalars carry `id_of(spelling)`; arithmetic on them is `Err`
+            // (CEL types `kind` as a string).
+            VarTy::Str => Val::Str(raw),
             VarTy::Bool => Val::Bool(raw != 0),
             // Host rule (`vocab::opt`): **any negative** binds CEL `null`, not
             // just `-1`. Confirmed by the differential tests against the real
@@ -405,6 +423,22 @@ impl IrCtx {
     }
 
     pub fn set_insert(&mut self, set: SetId, id: i64) {
+        if set == SetId::ChainKinds {
+            // Hash-keyed list, not a bitset (see `CHAIN_KIND_CAP`).
+            let n = self.chain_kind_n as usize;
+            let mut i = 0usize;
+            while i < n && i < CHAIN_KIND_CAP {
+                if self.chain_kinds[i] == id {
+                    return;
+                }
+                i += 1;
+            }
+            if n < CHAIN_KIND_CAP {
+                self.chain_kinds[n] = id;
+                self.chain_kind_n = (n + 1) as u8;
+            }
+            return;
+        }
         if id < 0 || id as usize >= SET_BITS {
             return;
         }
@@ -414,6 +448,17 @@ impl IrCtx {
     }
 
     pub fn set_contains(&self, set: SetId, id: i64) -> bool {
+        if set == SetId::ChainKinds {
+            let n = self.chain_kind_n as usize;
+            let mut i = 0usize;
+            while i < n && i < CHAIN_KIND_CAP {
+                if self.chain_kinds[i] == id {
+                    return true;
+                }
+                i += 1;
+            }
+            return false;
+        }
         if id < 0 || id as usize >= SET_BITS {
             return false;
         }

@@ -17,7 +17,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CRYSTAL_SWAP: CardDef =
-    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play("", "", None, crystal_swap)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play("", None, None, crystal_swap)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"会被骗着买水晶的人"#)
         .raw_name(r#"会被骗着买水晶的人"#)
         .tags(&[])
@@ -157,6 +157,10 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

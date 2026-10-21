@@ -14,17 +14,17 @@
 
 use card_sdk::abi::{prop, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const RINGING_BLOOM: CardDef = CardDef::new(
     "R:（燐子）Ringing Bloom",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::PayAfter], "card.placed && pay_is_rent && target == owner", "", None, pay_after),
+        On::Play("", None, None, play),
+        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, None, pay_after)),
         // 规则书（2）: 「视为」 is continuous -- it tracks the max as houses move.
         // `HouseAdded` covers the rise path; there is no `HouseRemoved` kind yet,
         // so a raze of the max tile is not tracked (see the TODO on `apply_view`).
-        On::Action(&[bandori_std::kind::HouseAdded], "card.placed && actor == owner", "", None, on_house_added),
+        On::Action(Action::HouseAdded("card.placed && actor == owner", None, None, on_house_added)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -164,6 +164,10 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -175,4 +179,10 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn pay_after_kani(player_id: i32) -> card_sdk::Asked {
     pay_after(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_house_added_kani(player_id: i32) -> card_sdk::Asked {
+    on_house_added(player_id)
 }

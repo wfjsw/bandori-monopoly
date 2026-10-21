@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
 
@@ -19,8 +19,8 @@ const TURNS: &str = "turns";
 pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     "event:元祖！邦多利酱",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::TurnStartBefore], "", "", Some(always), on_turn_start),
+        On::Play("", None, None, play),
+        On::Action(Action::TurnStartBefore("", None, Some(always), on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -76,6 +76,8 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

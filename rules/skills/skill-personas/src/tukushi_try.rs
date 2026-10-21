@@ -15,7 +15,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 /// The paired player, or -1.
 const PARTNER: &str = "skill.tukushiTry.partner";
@@ -27,12 +27,13 @@ const SPELL: &str = "skill.tukushiTry.spell";
 pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, at_start),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
-        On::Action(&[ActionKind::DiceRollAfter], "", "", Some(paired), on_roll),
-        On::Filter(&[FilterKind::PaySplitChoose], "", Some(paired), on_pay),
-        On::Action(&[bandori_std::kind::HouseAdded], "", "", Some(partner), on_built),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, at_start)),
+        On::Action(Action::DeckAtGameStart("", None, None, at_start)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::DiceRollAfter("", None, Some(paired), on_roll)),
+        On::Filter(Filter::PaySplitMul("", Some(paired), on_pay)),
+        On::Action(Action::HouseAdded("", None, Some(partner), on_built)),
     ],
 )
     // 「（初始1，上限2）」
@@ -167,6 +168,8 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

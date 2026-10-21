@@ -20,15 +20,16 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
     &[
-        On::Play("", "", None, two_donuts),
+        On::Play("", None, None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
         // latch, the `move_dir` read) stay in the arms below.
-        On::Action(&[ActionKind::PassTile, ActionKind::SettleAfter], "card.placed", "", None, fx),
+        On::Action(Action::PassTile("card.placed", None, None, fx)),
+        On::Action(Action::SettleAfter("card.placed", None, None, fx)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)
@@ -182,6 +183,10 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -11,7 +11,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const DOLL_GARDEN: CardDef = CardDef::new(
     "Mujica:人偶的箱庭",
-    &[On::Play("", "", Some(cant_play), doll_garden)],
+    &[On::Play("", None, Some(cant_play), doll_garden)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"人偶的箱庭"#)
         .raw_name(r#"人偶的箱庭"#)
@@ -113,6 +113,10 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
     // player; that is exactly `card_move`'s bookkeeping.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

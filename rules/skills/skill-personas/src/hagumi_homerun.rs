@@ -23,9 +23,9 @@
 //! the sweep runs after each of this skill's own croquette-raising writes --
 //! the only sites that can raise the count (marker ownership).
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind, MarkFilter};
+use card_sdk::abi::{ActionKind, Dice, FilterKind, MarkFilter};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 /// The mark kind 「可乐饼」 parked on a tile.
 const ON_TILE: &str = "可乐饼";
@@ -35,23 +35,18 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Action(&[ActionKind::TurnEnd], "", "", None, at_turn_end),
+        On::Action(Action::TurnEnd("", None, None, at_turn_end)),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
-        On::Action(&[ActionKind::Pass], "", "", Some(on_pass_has_croquette), on_pass),
+        On::Action(Action::Pass("", None, Some(on_pass_has_croquette), on_pass)),
         // 「育美经过其他角色时」 -- the passer's step onto a tile another player
         // stands on (行动阶段 12 [经过]). The other player is read off the tile
         // (`passTile` has no `target`).
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner", "",
-            Some(passing_a_player),
-            on_pass_player,
-        ),
+        On::Action(Action::PassTile("actor == owner", None, Some(passing_a_player), on_pass_player)),
         // 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the skill button.
-        On::Play("", "", Some(can_cash), cash),
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, on_plan),
+        On::Play("", None, Some(can_cash), cash),
+        On::Filter(Filter::DiceRollPlan("", None, on_plan)),
     ],
 );
 
@@ -245,13 +240,12 @@ fn sweep_overflow(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「角色每拥有一个可乐饼，移动时多投掷1个1d2」 -- one extra d2 per croquette.
-/// The host folds `extra_count`/`extra_sides` via `add_extra_dice`, so a single
-/// `(n, 2)` pair is the same dice pool as the old `n` one-die calls.
-fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
+/// The host folds `extra` via `add_extra_dice`, so a single `(n, 2)` pair is the
+/// same dice pool as the old `n` one-die calls.
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     let n = ctx::tok(player_id, HELD);
     if n > 0 {
-        v.extra_count = n;
-        v.extra_sides = 2;
+        v.extra = Some(Dice { count: n, sides: 2 });
     }
     v
 }
@@ -262,10 +256,14 @@ fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
 // skill's own write sites (plus the turn-end tick). A host `heldChanged` event
 // would let this be a pure event handler.
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn spawn_kani(player_id: i32) -> card_sdk::Asked {
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_end(player_id)
 }
 
@@ -273,12 +271,6 @@ pub fn spawn_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
-    on_plan(player_id, v)
 }
 
 #[cfg(kani)]
@@ -295,12 +287,6 @@ pub fn cash_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn sweep_overflow_kani(player_id: i32) -> card_sdk::Asked {
-    sweep_overflow(player_id)
-}
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_end(player_id)
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
+    on_plan(player_id, v)
 }

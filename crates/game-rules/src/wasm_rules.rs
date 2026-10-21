@@ -2063,9 +2063,9 @@ impl CardWorld for Run {
     fn set_trigger_spare(&mut self, seat: i32) {
         self.trigger.spare(seat);
     }
-    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32) {
+    fn declare_trigger_effect(&mut self, kind: &str, target: i32, from: i32, tile: i32, value: i32) {
         self.trigger.declare(game_core::engine::rules::Effect {
-            kind: card_sdk::abi::TriggerKind::from_i32(kind).as_str(),
+            kind: kind.to_string(),
             target,
             from,
             tile,
@@ -2080,12 +2080,12 @@ impl CardWorld for Run {
             b.price = v;
         }
     }
-    fn set_trigger_deal_owner(&mut self, v: i32) {
+    fn set_trigger_deal_owner(&mut self, v: Option<game_kinds::Payee>) {
         if let Some(b) = &mut self.trigger.buy {
-            b.deal_owner = Some(v);
+            b.deal_owner = v;
         }
     }
-    fn set_trigger_deal_houses(&mut self, v: i32) {
+    fn set_trigger_deal_houses(&mut self, v: Option<i32>) {
         if let Some(b) = &mut self.trigger.buy {
             b.deal_houses = v;
         }
@@ -2187,13 +2187,13 @@ impl CardWorld for Run {
             self.outcome_plan("log.outcome.plan_steps", -1, v, "");
         }
     }
-    fn set_roller(&mut self, v: i32) {
+    fn set_roller(&mut self, v: Option<game_kinds::Seat>) {
         self.stamp_skill_source();
         // `plan::set_roller` -- the stand-in roller for 「上一名玩家代替进行此次
         // 投掷」. `MoveCtx::roller` rides `TurnCtx.plan`, so `main_move`'s
         // post-`rollPlan` re-clone picks it up.
-        if v >= 0 {
-            self.world.turn.plan.roller = v as usize;
+        if v.is_some() {
+            self.world.turn.plan.roller = v;
         }
     }
     fn set_reverse(&mut self, v: bool) {
@@ -2204,12 +2204,12 @@ impl CardWorld for Run {
         self.stamp_skill_source();
         self.world.set_signed(v);
     }
-    fn set_stop_at(&mut self, v: i32) {
+    fn set_stop_at(&mut self, v: Option<game_kinds::Tile>) {
         self.stamp_skill_source();
         let was = self.world.move_stop_at();
         self.world.set_stop_at(v);
         if v != was {
-            self.outcome_plan("log.outcome.plan_stop", v, 0, "");
+            self.outcome_plan("log.outcome.plan_stop", v.map(|t| t.0).unwrap_or(-1), 0, "");
         }
     }
     fn set_parity(&mut self, v: i32) {
@@ -2235,13 +2235,13 @@ impl CardWorld for Run {
         self.stamp_skill_source();
         self.world.set_tag(key, v);
     }
-    fn recorded_roll(&self) -> i32 {
+    fn recorded_roll(&self) -> Option<i32> {
         self.world.recorded_roll
     }
     fn move_tag(&self, key: &str) -> i32 {
         self.world.move_tag(key)
     }
-    fn set_min_roll(&mut self, v: i32) {
+    fn set_min_roll(&mut self, v: Option<i32>) {
         self.stamp_skill_source();
         self.world.set_min_roll(v);
     }
@@ -2292,15 +2292,15 @@ impl CardWorld for Run {
         self.world.set_more_steps(v);
     }
 
-    fn set_teleport_to(&mut self, v: i32) {
+    fn set_teleport_to(&mut self, v: Option<game_kinds::Tile>) {
         self.stamp_skill_source();
         self.world.set_teleport_to(v);
-        self.outcome_plan("log.outcome.plan_teleport", v, 0, "");
+        self.outcome_plan("log.outcome.plan_teleport", v.map(|t| t.0).unwrap_or(-1), 0, "");
     }
-    fn set_start(&mut self, v: i32, why: &str) {
+    fn set_start(&mut self, v: Option<game_kinds::Tile>, why: &str) {
         self.stamp_skill_source();
         self.world.set_start(v, why);
-        self.outcome_plan("log.outcome.plan_start", v, 0, why);
+        self.outcome_plan("log.outcome.plan_start", v.map(|t| t.0).unwrap_or(-1), 0, why);
     }
     fn clear_dice(&mut self) {
         self.stamp_skill_source();
@@ -2322,7 +2322,7 @@ impl CardWorld for Run {
     fn move_stopped(&self) -> bool {
         self.world.move_stopped()
     }
-    fn move_stop_at(&self) -> i32 {
+    fn move_stop_at(&self) -> Option<game_kinds::Tile> {
         self.world.move_stop_at()
     }
     fn move_parity(&self) -> i32 {
@@ -2803,7 +2803,7 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(0);
         }
         // v78: pre-roll a recorded die into the world so a DiceRollPlan /
-        // DiceRollValue Filter body can read `FilterValue.recorded_roll` instead
+        // DiceRollValue Filter body can read `RollValue.recorded_roll` instead
         // of calling `roll` (pure + replay-deterministic: the same RNG stream).
         if matches!(
             trigger.kind,
@@ -2814,7 +2814,7 @@ impl<M: CardModules> RulesBridge<M> {
             // faces) while `recorded_roll` is still deterministic per raise.
             let mut w = cx.world_copy();
             let mut peek = w.rng.clone();
-            w.recorded_roll = peek.d(6) as i32;
+            w.recorded_roll = Some(peek.d(6) as i32);
             cx.swap_world(w);
         }
         self.drive_inner(cx, call, card_id, uid, trigger, true)
@@ -3503,7 +3503,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // The gate refused the move: drop the one-shot `teleport_to`
                 // the body wrote for it so it cannot shape a later move.
                 let mut w = cx.world_copy();
-                w.turn.plan.teleport_to = -1;
+                w.turn.plan.teleport_to = None;
                 cx.swap_world(w);
             }
             return Ok(allowed as i32);
@@ -3759,7 +3759,7 @@ impl<M: CardModules> RulesBridge<M> {
         // cancelled it.
         //
         // v78: filter kinds (`TriggerKind::is_filter`) fold the filter chain
-        // instead of opening a counteraction window. A `FilterValue` kind
+        // instead of opening a counteraction window. A typed-payload kind
         // (BuyAssign) carries the deal in `deal_*` and answers the packed
         // rewritten deal (`hostfns::pack_deal`).
         HostRequest::Raise {
@@ -3771,8 +3771,7 @@ impl<M: CardModules> RulesBridge<M> {
             deal_houses,
             deal_mortgaged,
         } => {
-            let tk = card_sdk::abi::TriggerKind::from_i32(kind);
-            let kind = tk.as_str();
+            let tk = card_sdk::abi::TriggerKind::from_str(&kind);
             let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
             let t = self.raise_core(cx, kind, player_id, |t| {
                 t.value = value;
@@ -3784,17 +3783,26 @@ impl<M: CardModules> RulesBridge<M> {
                         value,
                     );
                     if deal_owner != i32::MIN {
-                        b = b.deal(deal_owner, deal_houses, deal_mortgaged != 0);
+                        b.deal_owner = Some(game_kinds::Payee::from_i32(deal_owner));
                     }
+                    // Flatten boundary: `i32::MIN` on the wire means "leave the
+                    // deal's houses alone". `deal()` would store `Some(MIN)` and
+                    // the pack/unpack round-trip would clamp that to a raze.
+                    if deal_houses != i32::MIN {
+                        b.deal_houses = Some(deal_houses);
+                    }
+                    b.deal_mortgaged = deal_mortgaged != 0;
                     t.buy = Some(b);
                 }
             })?;
             let cancelled = t.is_cancelled();
             if is_deal {
+                // Flatten boundary: `Option<Payee>` / `Option<i32>` -> wire
+                // (`i32::MIN` = no rewrite) for the packed answer.
                 let (o, h, m) = match t.buy {
                     Some(b) => (
-                        b.deal_owner.unwrap_or(deal_owner),
-                        b.deal_houses,
+                        b.deal_owner.map(|p| p.as_i32()).unwrap_or(deal_owner),
+                        b.deal_houses.unwrap_or(deal_houses),
                         b.deal_mortgaged,
                     ),
                     None => (deal_owner, deal_houses, deal_mortgaged != 0),
@@ -4013,7 +4021,7 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = n;
                     t.by_card = Some(call.player_id());
                     t.effects.push(game_core::engine::rules::Effect {
-                        kind: "drawOut",
+                        kind: "drawOut".into(),
                         target: player_id,
                         from: call.player_id(),
                         tile: -1,
@@ -4465,13 +4473,13 @@ impl<M: CardModules> RulesBridge<M> {
             // kind 73 (`fireSpent`, wire-stable; `TODO(ABI) ABI-MARKER-SPENT`
             // rename to `MarkerSpent` when card bodies can follow). Name is payload.
             for (player_id, n, name) in after.marker_spent_log {
-                self.raise_core(cx, "73", player_id, |t| {
+                self.raise_core(cx, "markerSpent", player_id, |t| {
                     t.value = n;
                     t.name = Some(name.clone());
                 })?;
             }
             for (player_id, tile, nth) in after.house_log {
-                self.raise_core(cx, "75", player_id, |t| {
+                self.raise_core(cx, "houseAdded", player_id, |t| {
                     t.tile = tile;
                     t.value = nth;
                 })?;
@@ -4501,8 +4509,7 @@ impl<M: CardModules> RulesBridge<M> {
             // that name rather than at each grant site, so a layer granted by
             // *any* path still runs.
             for (player_id, name, value) in after.named_raise_log {
-                let wire: &'static str = Box::leak(name.into_boxed_str());
-                self.raise_core(cx, wire, player_id, |t| {
+                self.raise_core(cx, name, player_id, |t| {
                     t.value = value;
                     t.by_card = by;
                 })?;
@@ -4523,7 +4530,7 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = to;
                     t.by_card = by;
                     t.effects.push(game_core::engine::rules::Effect {
-                        kind: "state",
+                        kind: "state".into(),
                         target: who,
                         from: by.unwrap_or(-1),
                         tile: -1,
@@ -4564,7 +4571,7 @@ impl<M: CardModules> RulesBridge<M> {
         // This is most raises even with cards in play, and every raise for a
         // kind nobody listens to. Nothing could have rewritten `t`, so the
         // write-back below is a no-op and is safe to skip with it.
-        if !self.ruleset.declares(trigger_kind(t.kind)) {
+        if !self.ruleset.declares(trigger_kind(t.kind.as_str())) {
             return Ok(());
         }
         // The module's view of the trigger. `move_roll` is the guest-visible
@@ -4592,7 +4599,7 @@ impl<M: CardModules> RulesBridge<M> {
         // the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
         // `drawn` also name a card on `t.card`, and must not re-run it here.
         let own = t.card.clone().unwrap_or_default();
-        let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
+        let own_play = matches!(trigger_kind(t.kind.as_str()), TriggerKind::Card | TriggerKind::Event);
         if own_play && !own.is_empty() {
             if let Some(idx) = self
                 .ruleset
@@ -4615,7 +4622,7 @@ impl<M: CardModules> RulesBridge<M> {
         // seat after the timing's player around the table; counters settle
         // newest-first before the timing they answer (see
         // `hand_counteractions`). Not at hook-only points.
-        if !is_hook_only(t.kind) {
+        if !is_hook_only(t.kind.as_str()) {
             self.hand_counteractions(cx, t, &mut trigger, 0)?;
         }
         // (3) Field-card (`Fx`) hooks: at a hook-point kind, every *placed* card
@@ -4897,7 +4904,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// One world copy; stable job list so a suspension can resume without
     /// re-walking a world the nested settle already changed.
     fn collect_hook_jobs(&self, cx: &Cx, t: &CoreTrigger) -> Vec<HookJob> {
-        let kind = trigger_kind(t.kind);
+        let kind = trigger_kind(t.kind.as_str());
         let mut jobs = Vec::new();
         if is_game_start_kind(kind) || is_own_card_kind(kind) {
             // These walks are short and do not nest settles in practice;
@@ -5207,7 +5214,7 @@ impl<M: CardModules> RulesBridge<M> {
             let declared = self.raise_core(cx, "effect", by, |t| {
                 on(t);
                 t.effects.push(game_core::engine::rules::Effect {
-                    kind: "abnormal",
+                    kind: "abnormal".into(),
                     target: player_id,
                     from: -1,
                     tile: -1,
@@ -5395,7 +5402,7 @@ impl<M: CardModules> RulesBridge<M> {
             t.card = Some(card.to_string());
             t.by_card = Some(by);
             t.effects.push(game_core::engine::rules::Effect {
-                kind: "target",
+                kind: "target".into(),
                 target: p,
                 from: -1,
                 tile,
@@ -5420,7 +5427,7 @@ impl<M: CardModules> RulesBridge<M> {
     fn raise_core(
         &self,
         cx: &mut Cx,
-        kind: &'static str,
+        kind: impl Into<String>,
         player_id: i32,
         set: impl FnOnce(&mut CoreTrigger),
     ) -> Flow<CoreTrigger> {
@@ -5709,7 +5716,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // scope's `_hand` table are stale from here.
                     memo.on_declaration();
                     let mut link =
-                        CoreTrigger::new(if uid >= 0 { "74" } else { "card" }, cursor);
+                        CoreTrigger::new(if uid >= 0 { "cardUsed" } else { "card" }, cursor);
                     if uid >= 0 {
                         link.cards = vec![id.clone()];
                     }
@@ -5768,7 +5775,7 @@ impl<M: CardModules> RulesBridge<M> {
                         } else {
                             Msg::new("log.chain_link").n("n", 1).card("card", l1_id.clone())
                         }
-                        .text("kind", l.kind.as_str())
+                        .text("kind", l.kind.spelling())
                         .player_id("who", l.player_id)
                         .i("value", l.value as i64)
                         .text("src", src)
@@ -5804,7 +5811,7 @@ impl<M: CardModules> RulesBridge<M> {
                             .effects
                             .iter()
                             .map(|e| {
-                                let mut m = Msg::new("fx").text("kind", e.kind).i("value", e.value as i64);
+                                let mut m = Msg::new("fx").text("kind", e.kind.clone()).i("value", e.value as i64);
                                 if e.target >= 0 {
                                     m = m.player_id("target", e.target);
                                 }
@@ -6685,7 +6692,7 @@ impl<M: CardModules> RulesBridge<M> {
 /// may rewrite; the engine reads it back.
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
-        trigger_kind(t.kind),
+        trigger_kind(t.kind.as_str()),
         TriggerKind::DiceRollResult | TriggerKind::DiceRollBefore | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue
     );
     // Only a move trigger carries a roll; `paid`/`settle` carry value as an
@@ -6694,10 +6701,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     // A card-driven `roll` raise has no move payload (`mv: None`); its face
     // remains on `value` and the writeback reads it from there.
     let mv = t.mv.as_ref().map(|m| TriggerMove {
-        kind: match m.kind {
-            game_core::engine::MoveKind::Walk => card_sdk::abi::MoveKind::Walk,
-            game_core::engine::MoveKind::Teleport => card_sdk::abi::MoveKind::Teleport,
-        },
+        kind: m.kind,
         resolve: m.resolve,
         tags: m.tags.clone(),
         // Mirror of `Trigger::main`.
@@ -6720,7 +6724,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         deal_mortgaged: b.deal_mortgaged,
     });
     Trigger {
-        kind: trigger_kind(t.kind),
+        kind: trigger_kind(t.kind.as_str()),
         player_id: t.player_id,
         target: t.target,
         tile: t.tile,
@@ -7279,8 +7283,8 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
 /// `self.world.*` / `self.data.*` **directly** -- never `self.<SnapSrc::method>`,
 /// which would re-enter this trait and overflow the stack.
 impl rules_cond::view::CondView for LiveSnap<'_> {
-    fn kind(&self) -> i64 {
-        self.trigger.kind.as_i32() as i64
+    fn kind(&self) -> std::borrow::Cow<'_, str> {
+        self.trigger.kind.spelling()
     }
     fn actor(&self) -> i64 {
         self.trigger.player_id as i64
@@ -7403,11 +7407,11 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn chain_count(&self) -> i64 {
         self.trigger.effects.len() as i64
     }
-    fn chain_kinds(&self) -> Vec<i64> {
+    fn chain_kinds(&self) -> Vec<String> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind).as_i32() as i64)
+            .map(|e| e.kind.clone())
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -7914,7 +7918,7 @@ impl ProbeMemo {
 /// `ask.counteract.detail` remains the fallback for the long tail of kinds -- and
 /// for prompts already on the wire, so old replays keep rendecycle.
 fn describe_trigger(t: &Trigger) -> Msg {
-    let effect_kind = t.effects.first().map(|e| e.kind).unwrap_or("");
+    let effect_kind = t.effects.first().map(|e| e.kind.as_str()).unwrap_or("");
     let card = t.card.as_deref().unwrap_or("");
     let mut m = match t.kind {
         // A play (L1) or a declared counter -- both are `card` links.
@@ -7989,8 +7993,8 @@ fn buy_trigger(
                 .unwrap_or(card_sdk::abi::BuyKind::Land),
             seller: game_core::engine::rules::Payee::from_i32(q.seller),
             price,
-            deal_owner: Some(q.player as i32),
-            deal_houses: st.houses.get(t).copied().unwrap_or(0),
+            deal_owner: Some(game_kinds::Payee::Seat(game_kinds::Seat(q.player as i32))),
+            deal_houses: Some(st.houses.get(t).copied().unwrap_or(0)),
             deal_mortgaged: st.mortgaged.get(t).copied().unwrap_or(false),
         }),
         ..Trigger::default()
@@ -8187,7 +8191,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         let kind = crate::gate::kind_of(gate);
         // The gate-declaring rule supplies the i18n key as data.
         for c in self.ruleset.cards() {
-            if let Some((_, key)) = c.gate_msgs.iter().find(|(k, _)| *k == kind.as_i32()) {
+            if let Some((_, key)) = c
+                .gate_msgs
+                .iter()
+                .find(|(k, _)| *k == kind.id)
+            {
                 return Msg::new(key);
             }
         }
@@ -8196,7 +8204,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     fn gate_skip_msg(&self, gate: game_core::engine::Gate, _player: usize) -> Msg {
         let kind = crate::gate::kind_of(gate);
         for c in self.ruleset.cards() {
-            if let Some((_, key)) = c.gate_skip_msgs.iter().find(|(k, _)| *k == kind.as_i32()) {
+            if let Some((_, key)) = c
+                .gate_skip_msgs
+                .iter()
+                .find(|(k, _)| *k == kind.id)
+            {
                 return Msg::new(key);
             }
         }
@@ -8426,8 +8438,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         .unwrap_or(card_sdk::abi::BuyKind::Land),
                     seller: game_core::engine::rules::Payee::from_i32(-1),
                     price: 0,
-                    deal_owner: Some(player_id as i32),
-                    deal_houses: st.houses.get(tile).copied().unwrap_or(0),
+                    deal_owner: Some(game_kinds::Payee::Seat(game_kinds::Seat(player_id as i32))),
+                    deal_houses: Some(st.houses.get(tile).copied().unwrap_or(0)),
                     deal_mortgaged: false,
                 });
             },
@@ -8760,7 +8772,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             return self.counteract_orig(cx, t);
         }
         let from_resume = true;
-        if !self.ruleset.declares(trigger_kind(t.kind)) {
+        if !self.ruleset.declares(trigger_kind(t.kind.as_str())) {
             return Ok(());
         }
         let mut own_done = false;
@@ -8781,7 +8793,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         };
 
         let own = t.card.clone().unwrap_or_default();
-        let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
+        let own_play = matches!(trigger_kind(t.kind.as_str()), TriggerKind::Card | TriggerKind::Event);
         if !own_done && own_play && !own.is_empty() {
             if let Some(idx) = self
                 .ruleset
@@ -8824,7 +8836,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 }
             }
             None => {
-                if !is_hook_only(t.kind) {
+                if !is_hook_only(t.kind.as_str()) {
                     // A suspend inside `hand_counteractions` / `resolve_jobs`
                     // parks a HandResume (see `resolve_jobs`).
                     self.hand_counteractions(cx, t, &mut trigger, 0)?;
@@ -9037,56 +9049,11 @@ fn source_group(world: &game_core::engine::World, uid: i32) -> LookupGroup {
 /// so the hand counteraction window opens at them. The valid-option-first pre-scan
 /// skips the whole cycle when no seat holds a card that answers, which is the
 /// common case on a `passTile` (it runs on every tile walked).
+///
+/// The flag itself is data: engine rows in `game_kinds`, ruleset rows declared
+/// by the ruleset and read at load (`kind_flags`). The engine names no id.
 fn is_hook_only(kind: &str) -> bool {
-    matches!(
-        trigger_kind(kind),
-        TriggerKind::TurnEnd
-            | TriggerKind::Drawn
-            | TriggerKind::PayAfter
-            | TriggerKind::DiceRollAfter
-            | TriggerKind::DiceRollValue
-            | TriggerKind::AtEnd
-            | TriggerKind::PaySplitChooseBefore
-            | TriggerKind::PayCombinedAddBefore
-            | TriggerKind::CardPlayed
-            | TriggerKind::Targeted
-            | TriggerKind::PaySplitChoose
-            | TriggerKind::TurnEndBefore
-            | TriggerKind::TurnEndAfter
-            | TriggerKind::PaySplitAdd
-            | TriggerKind::PaySplitMul
-            | TriggerKind::PaySplitAt
-            | TriggerKind::Discarded
-            | TriggerKind::DeckBeforeGame
-            | TriggerKind::DeckAtGameStart
-            | TriggerKind::Drew
-            | TriggerKind::DrewBefore
-            | TriggerKind(78)
-            | TriggerKind(107) // ruleset FansFlip
-            | TriggerKind::Reshuffled
-            | TriggerKind::Bought
-            | TriggerKind::BeforeOut
-            | TriggerKind::Teleported
-            | TriggerKind::DiceRollPlan
-            | TriggerKind::AbnormalGuard
-            | TriggerKind::ImmuneAll
-            | TriggerKind::Untargetable
-            | TriggerKind::ActGate
-            | TriggerKind::PayGate
-            | TriggerKind::MoveGate
-            | TriggerKind::ExclusiveUse
-            | TriggerKind::TurnBonusTime
-            | TriggerKind::TurnBaseTime
-            | TriggerKind::Redirect
-            | TriggerKind::CounterChanged
-            // v78: the buy filter stages are pure folds -- no counteraction
-            // window (`TriggerKind::is_filter`).
-            | TriggerKind::BuyGate
-            | TriggerKind::BuyAdd
-            | TriggerKind::BuyMul
-            | TriggerKind::BuySet
-            | TriggerKind::BuyAssign
-    )
+    crate::kind_flags::hook_only(trigger_kind(kind))
 }
 
 /// Kinds that run on a fresh instance of one card (named on `t.card`) rather
@@ -9256,7 +9223,9 @@ mod tests {
             "drew",
             "reshuffled",
             "bought",
-            "26",
+            // Ruleset spellings, as opaque parse examples (the engine never
+            // switches on these ids).
+            "r:bandori:26",
             "settleBody",
             "beforeOut",
             "teleported",
@@ -9272,12 +9241,12 @@ mod tests {
             "turnBonusTime",
             "turnBaseTime",
             // v28 post-commit points (what a committed effect did)
-            "73",
-            "74",
-            "75",
+            "markerSpent",
+            "cardUsed",
+            "houseAdded",
             // v50: named counter writes
             "counterChanged",
-            "78",
+            "r:bandori:78",
             // v42: the command-wide pre-split payment stage + terminals
             "payCombinedAdd",
             "payCombinedMul",

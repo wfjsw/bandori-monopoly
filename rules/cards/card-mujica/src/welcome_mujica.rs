@@ -17,8 +17,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const WELCOME_MUJICA: CardDef = CardDef::new(
     "Mujica:欢迎来到ave mujica的世界",
     &[
-        On::Play("", "", None, play),
-        On::Counteract(&[ChainKind::State], "actor != owner", r#"有其他玩家切换状态"#, None, counteract),
+        On::Play("", None, None, play),
+        On::Counteract(&[ChainKind::State], "actor != owner", Some(key!("welcome_mujica_when")), None, counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"欢迎来到ave mujica的世界"#)
@@ -108,6 +108,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

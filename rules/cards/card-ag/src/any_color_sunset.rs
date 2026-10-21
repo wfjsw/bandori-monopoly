@@ -13,7 +13,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANY_COLOR_SUNSET: CardDef =
-    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", "", None, play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, None, play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"无论是何种颜色的夕阳"#)
         .raw_name(r#"无论是何种颜色的夕阳"#)
         .tags(&[])
@@ -153,6 +153,12 @@ fn pick_from_discard(
     let id = ids.swap_remove(pick.min(ids.len() - 1));
     Ok(ctx::take_card(player_id, ctx::CardPile::Discard, &id).then_some(id))
 }
+
+//
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

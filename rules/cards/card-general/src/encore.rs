@@ -15,8 +15,7 @@ pub const ENCORE: CardDef = CardDef::new(
     "通用:安可",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner && effect.has(Abnormal)",
-        r#"[使用者]即将因任何原因受到[异常移动效果]影响"#,
+        "target == owner && effect.has(Abnormal)", Some(key!("encore_when")),
         None,
         counteract,
     )],
@@ -44,8 +43,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

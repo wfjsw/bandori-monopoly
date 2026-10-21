@@ -8,11 +8,11 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const AFTERGLOW: CardDef = CardDef::new(
     "skill:Afterglow:商店街的宠儿",
-    &[On::Action(&[ActionKind::Bought], card_sdk::pre::MINE, "", None, on_bought)],
+    &[On::Action(Action::Bought(card_sdk::pre::MINE, None, None, on_bought))],
 );
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.
@@ -43,6 +43,10 @@ bandori_std::roster::GroupDef::new(r#"Afterglow"#)
     .skill(r#"商店街的宠儿"#)
     .text(r#"你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子"#)
     .logo(r#"002"#);
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

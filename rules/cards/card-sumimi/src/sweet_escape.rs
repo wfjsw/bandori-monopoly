@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SWEET_ESCAPE: CardDef = CardDef::new(
     "Sumimi:Sweet Escape",
-    &[On::Play("", "", Some(cant_play), sweet_escape)],
+    &[On::Play("", None, Some(cant_play), sweet_escape)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Sweet Escape"#)
         .raw_name(r#"Sweet Escape"#)
@@ -151,6 +151,10 @@ fn sweet_escape(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

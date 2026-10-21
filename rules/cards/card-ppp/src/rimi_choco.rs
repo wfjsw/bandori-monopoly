@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const RIMI_CHOCO: CardDef = CardDef::new(
     "PPP:（里美）我的心就像巧克力螺",
-    &[On::Play("", "", Some(cant_play), play)],
+    &[On::Play("", None, Some(cant_play), play)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"我的心就像巧克力螺"#)
         .raw_name(r#"（里美）我的心就像巧克力螺"#)
@@ -76,6 +76,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::card_move(player_id);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

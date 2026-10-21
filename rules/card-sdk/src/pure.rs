@@ -1,6 +1,6 @@
 //! Filter-body purity flag (ABI v74).
 //!
-//! [`crate::On::Filter`] / [`crate::On::FilterFlag`] / [`crate::On::FilterValue`]
+//! [`crate::On::Filter`]
 //! bodies must be pure value transforms: no prompts, no `ctx::gain` / place /
 //! draw / plan / deal / slot writes. The dispatch wrapper sets this flag for
 //! the duration of the body; mutating `ctx` entry points refuse while it is

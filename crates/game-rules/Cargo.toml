@@ -6,6 +6,7 @@ description = "Host for the WASM card ruleset. The browser runs wasmi (interpret
 
 [dependencies]
 game-core = { path = "../game-core" }
+game-kinds = { path = "../game-kinds" }
 card-sdk = { workspace = true }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 # Optional: only the sandboxed card-module host (wasmi / wasmtime) needs an

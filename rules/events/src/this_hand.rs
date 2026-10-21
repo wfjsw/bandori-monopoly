@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const THIS_HAND: CardDef = CardDef::new("event:这只手我不会放开", &[On::Play("", "", None, play)])
+pub const THIS_HAND: CardDef = CardDef::new("event:这只手我不会放开", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"这只手我不会放开"#)
             .text(r#"所有玩家移动X，X=1d20-1d20+1d20，如果X是负数则向自身移动方向的反方向移动（每个玩家独立投掷三个1d20进行计算，不触发场地效果）"#)
@@ -49,6 +49,8 @@ fn play(_player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

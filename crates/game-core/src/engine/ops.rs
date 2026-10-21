@@ -33,8 +33,8 @@ impl World {
     pub fn set_signed(&mut self, on: bool) {
         self.turn.plan.signed = on;
     }
-    /// Force the walk to stop here; `-1` clears.
-    pub fn set_stop_at(&mut self, tile: i32) {
+    /// Force the walk to stop here; `None` clears.
+    pub fn set_stop_at(&mut self, tile: Option<game_kinds::Tile>) {
         self.turn.plan.stop_at = tile;
     }
     /// Restrict the walk to odd/even tiles; `-1` either.
@@ -58,8 +58,9 @@ impl World {
     }
     /// The walk cannot build where it lands.
 
-    /// Clamp the final face up to this after the counteractions.
-    pub fn set_min_roll(&mut self, n: i32) {
+    /// Clamp the final face up to this after the counteractions. `None` = no
+    /// floor.
+    pub fn set_min_roll(&mut self, n: Option<i32>) {
         self.turn.plan.min_roll = n;
     }
     /// Extra steps added to the walk (it grows as it runs).
@@ -70,17 +71,17 @@ impl World {
     /// Passing the start square pays nothing on this walk.
 
     /// The tile the walk begins on instead of where the player stands
-    /// (`-1` = the player's own tile). `why` names the effect on the log line.
-    pub fn set_start(&mut self, tile: i32, why: &str) {
+    /// (`None` = the player's own tile). `why` names the effect on the log line.
+    pub fn set_start(&mut self, tile: Option<game_kinds::Tile>, why: &str) {
         self.turn.plan.start = tile;
         self.turn.plan.start_why = why.to_string();
     }
-    /// The movement is a teleport to this tile (`-1` = a walk).
+    /// The movement is a teleport to this tile (`None` = a walk / clear).
     /// `card_move` branches on this.
-    pub fn set_teleport_to(&mut self, tile: i32) {
+    pub fn set_teleport_to(&mut self, tile: Option<game_kinds::Tile>) {
         self.turn.plan.teleport_to = tile;
         // Naming a destination makes it a teleport.
-        self.turn.plan.kind = if tile >= 0 {
+        self.turn.plan.kind = if tile.is_some() {
             super::move_ctx::MoveKind::Teleport
         } else {
             super::move_ctx::MoveKind::Walk
@@ -92,22 +93,18 @@ impl World {
     pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.turn.plan.base.clear();
         if count > 0 && sides >= 0 {
-            self.turn.plan.base.push(crate::engine::move_ctx::Roll {
-                count,
-                sides,
-                why: why.to_string(),
-            });
+            self.turn.plan.base.push(crate::engine::move_ctx::Roll::new(
+                count, sides, why,
+            ));
         }
     }
     /// Add one more die group to the starting dice (3d20 = three of
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
     pub fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
-            self.turn.plan.base.push(crate::engine::move_ctx::Roll {
-                count,
-                sides,
-                why: why.to_string(),
-            });
+            self.turn.plan.base.push(crate::engine::move_ctx::Roll::new(
+                count, sides, why,
+            ));
         }
     }
     /// Drop every extra die another effect added. A rewrite that
@@ -120,11 +117,9 @@ impl World {
     /// is a `0`-sided term: `add_extra_dice(n, 0, why)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
-            self.turn.plan.dice.push(crate::engine::move_ctx::Roll {
-                count,
-                sides,
-                why: why.to_string(),
-            });
+            self.turn.plan.dice.push(crate::engine::move_ctx::Roll::new(
+                count, sides, why,
+            ));
         }
     }
 
@@ -185,7 +180,7 @@ impl World {
     }
 
     /// Where the walk is forced to stop, or -1.
-    pub fn move_stop_at(&self) -> i32 {
+    pub fn move_stop_at(&self) -> Option<game_kinds::Tile> {
         self.turn.plan.stop_at
     }
     /// -1 either, 0 even, 1 odd.
@@ -500,23 +495,23 @@ impl World {
             let mut lo = 0;
             let mut hi = 0;
             for t in plan.base.iter().chain(plan.dice.iter()) {
-                if t.sides <= 0 {
-                    lo += t.count;
-                    hi += t.count;
+                if t.dice.sides <= 0 {
+                    lo += t.dice.count;
+                    hi += t.dice.count;
                 } else {
-                    lo += t.count.max(0);
-                    hi += t.count.max(0) * t.sides.max(1);
+                    lo += t.dice.count.max(0);
+                    hi += t.dice.count.max(0) * t.dice.sides.max(1);
                 }
             }
             return if self.turn.extreme == Extreme::Max { hi } else { lo };
         }
         let mut total = 0;
         for t in plan.base.iter().chain(plan.dice.iter()) {
-            if t.sides <= 0 {
-                total += t.count;
+            if t.dice.sides <= 0 {
+                total += t.dice.count;
             } else {
-                for _ in 0..t.count.max(0) {
-                    total += self.rng.d(t.sides.max(1));
+                for _ in 0..t.dice.count.max(0) {
+                    total += self.rng.d(t.dice.sides.max(1));
                 }
             }
         }

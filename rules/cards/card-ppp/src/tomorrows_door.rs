@@ -15,36 +15,21 @@
 
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
 
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
-        On::Play("", "", None, play),
-        On::Action(
-            &[ActionKind::PassTile],
-            "card.placed && actor == owner", "",
-            Some(pass_tile_guard),
-            pass_tile,
-        ),
+        On::Play("", None, None, play),
+        On::Action(Action::PassTile("card.placed && actor == owner", None, Some(pass_tile_guard), pass_tile)),
         // (3)'s surcharge joins the rent payment at `paySplitAdd` (before `paySplitMul`),
         // so a 「支付减半」 scaler sees the shaped total.
-        On::Filter(
-            &[FilterKind::PaySplitAdd],
-            "card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner",
-            Some(pay_add_guard),
-            pay_add,
-        ),
+        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner", Some(pay_add_guard), pay_add)),
         // （3）「…[结算]时额外支付」 is 行动阶段 15 (`SETTLE-STAGES.md` §4 M2)
         // -- an entry in the settle's effect list, for the shapes no rent
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
         // that replaces the body skips this entry.
-        On::Action(
-            &[ActionKind::SettleBody],
-            "card.placed && actor != owner && tile.id >= 0", "",
-            Some(settle_body_guard),
-            settle_body,
-        ),
+        On::Action(Action::SettleBody("card.placed && actor != owner && tile.id >= 0", None, Some(settle_body_guard), settle_body)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Tomorrow's Door"#)
@@ -168,7 +153,7 @@ fn tax_due() -> i32 {
     houses * 100
 }
 
-fn pay_add(player_id: i32, value: i32) -> i32 {
+fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     let due = tax_due();
     let payer = trigger::player_id();
     ctx::log(
@@ -178,7 +163,7 @@ fn pay_add(player_id: i32, value: i32) -> i32 {
             .player_id("target", payer)
             .n("money", due as i64),
     );
-    value + due
+    PayAddValue { value: v.value + due, ..v }
 }
 
 /// `Fx.SettleBody` -- the non-rent side of (3): a settle on 梦开始的地方 (or on
@@ -231,6 +216,10 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -246,8 +235,8 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
-    pay_add(player_id, value)
+pub fn pay_add_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    pay_add(player_id, v)
 }
 
 #[cfg(kani)]

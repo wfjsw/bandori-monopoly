@@ -10,7 +10,7 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Play("", "", None, rain)]).meta(&card_sdk::meta::CardMeta::new()
+pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Play("", None, None, rain)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"雨啊，快点来吧"#)
         .raw_name(r#"雨啊，快点来吧"#)
         .tags(&[r#"手"#])
@@ -59,6 +59,10 @@ fn rain(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -24,8 +24,7 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         // `stunned()` counts `stun + stunStart`, and `stunStart` is not in the
         // CEL schema -- `owner.stun == 0` would wrongly admit a stunStart seat.
         // The rent-table `Targets` loop is engine logic.
-        "pay_is_rent && actor >= 0 && actor != owner && target != owner",
-        r#"在场上其他玩家即将被不属于你的格子收费"#,
+        "pay_is_rent && actor >= 0 && actor != owner && target != owner", Some(key!("dream_return_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -119,8 +118,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

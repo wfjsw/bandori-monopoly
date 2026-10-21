@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "Sumimi:Here the world";
 
@@ -85,15 +85,14 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::TwoCards],
-            "actor != owner",
-            r#"有人同一回合内打出两张卡"#,
+            "actor != owner", Some(key!("here_the_world_when")),
             Some(can_counteract),
             counteract,
         ),
         // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-        On::Action(&[ActionKind::Drew], "actor == owner && card.placed && slot('here_held_len') <= 0", "", None, drew),
+        On::Action(Action::Drew("actor == owner && card.placed && slot('here_held_len') <= 0", None, None, drew)),
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed && slot('here_held_len') > 0", "", None, turn_start),
+        On::Action(Action::TurnStart("actor == owner && card.placed && slot('here_held_len') > 0", None, None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Here the world"#)
@@ -186,7 +185,17 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
@@ -197,10 +206,4 @@ pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
     turn_start(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
 }

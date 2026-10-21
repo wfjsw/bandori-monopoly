@@ -9,7 +9,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const COURAGE_WINGS: CardDef =
-    CardDef::new("Mor:勇气展翅高飞之时", &[On::Play("", "", None, courage_wings)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("Mor:勇气展翅高飞之时", &[On::Play("", None, None, courage_wings)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"勇气展翅高飞之时"#)
         .raw_name(r#"勇气展翅高飞之时"#)
         .tags(&[])
@@ -56,6 +56,10 @@ fn courage_wings(player_id: i32) -> card_sdk::Asked {
     )?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -11,7 +11,7 @@
 
 use card_sdk::abi::{CardPile, ActionKind};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// C# `Normal => false` with no `Play`/`Counteract`: the card is shown out of the
 /// deck before the opening hands and lives on the field from there.
@@ -21,25 +21,10 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
         // Card-in-deck is not in the CEL schema (and a `card_in(pile)` probe
         // would cost a pile walk per candidate for a hook that fires ~5 times
         // before the opening deal) -- the residual guard stays.
-        On::Action(
-            &[ActionKind::DeckBeforeGame],
-            "", "",
-            Some(deck_before_game_guard),
-            deck_before_game,
-        ),
-        On::Action(&[ActionKind::DeckAtGameStart], "card.placed", "", None, deck_at_game_start),
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner && move.main && tile.id == tile_named('Bandori车站')", "",
-            None,
-            pass_tile,
-        ),
-        On::Action(
-            &[ActionKind::SettleBefore],
-            "actor == owner && slot('lock_dream_tag') != 0", "",
-            None,
-            settle_before,
-        ),
+        On::Action(Action::DeckBeforeGame("", None, Some(deck_before_game_guard), deck_before_game)),
+        On::Action(Action::DeckAtGameStart("card.placed", None, None, deck_at_game_start)),
+        On::Action(Action::PassTile("actor == owner && move.main && tile.id == tile_named('Bandori车站')", None, None, pass_tile)),
+        On::Action(Action::SettleBefore("actor == owner && slot('lock_dream_tag') != 0", None, None, settle_before)),
     ],
 ).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"追逐梦想的步伐"#)
@@ -140,17 +125,21 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn deck_at_game_start_kani(player_id: i32) -> card_sdk::Asked {
-    deck_at_game_start(player_id)
-}
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn deck_before_game_kani(player_id: i32) -> card_sdk::Asked {
     deck_before_game(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn deck_at_game_start_kani(player_id: i32) -> card_sdk::Asked {
+    deck_at_game_start(player_id)
 }
 
 #[cfg(kani)]

@@ -12,14 +12,15 @@
 
 use card_sdk::abi::{CardPile, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "PPP:[衍生]拍卖撤下来了";
 const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(
     ID,
-    &[On::Action(&[ActionKind::Drawn, ActionKind::TurnStart], "", "", None, hook)],
+    &[On::Action(Action::Drawn("", None, None, hook)),
+    On::Action(Action::TurnStart("", None, None, hook))],
 ).props(&[(card_sdk::abi::prop::EST_COST, 540)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"拍卖撤下来了"#)
         .raw_name(r#"[衍生]拍卖撤下来了"#)
@@ -82,6 +83,10 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -14,8 +14,7 @@ pub const BEFORE_LIVE: CardDef = CardDef::new(
     "R:live前的准备",
     &[On::Counteract(
         &[ChainKind::Pass],
-        "actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')",
-        r#"经过江户川乐器店"#,
+        "actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')", Some(key!("before_live_when")),
         None,
         counteract,
     )],
@@ -50,8 +49,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

@@ -16,35 +16,26 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
         // （2）/（3）「主要移动结束时，[触发结算]前若在你的前后5格内」 -- the
         // move-main fact is the condition; the within-5 geometry is residual
         // (`dist` is not in the condition vocabulary).
         // （3） 「你可消耗1火罐…」 -- the self-nudge offer needs a pot. Fire is
         // CEL; split from (2) so the other-mover arm is not gated on it.
-        On::Action(
-            &[ActionKind::SettleBefore],
-            "actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1", "",
-            Some(within5),
-            before_settle_self,
-        ),
+        On::Action(Action::SettleBefore("actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1", None, Some(within5), before_settle_self)),
         // （2） 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」
         // -- the other-mover offer (the mover is prompted to pay).
-        On::Action(
-            &[ActionKind::SettleBefore],
-            "actor != owner && move.main && tile.id >= 0", "",
-            Some(within5),
-            before_settle_other,
-        ),
+        On::Action(Action::SettleBefore("actor != owner && move.main && tile.id >= 0", None, Some(within5), before_settle_other)),
     ],
 )
-    .silent(&[0])
+    .silent(&[0, 1])
     // 「（初始1，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 2)]);
 
@@ -144,6 +135,8 @@ fn nudge(who: i32, goal: i32) {
 //   shared with the Ave Mujica band skill, and 「只有洗牌时可以…添加奇迹水晶」
 //   carves a class of gains the engine does not tag.
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -156,8 +149,6 @@ pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]

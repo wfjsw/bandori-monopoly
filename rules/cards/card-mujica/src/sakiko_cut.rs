@@ -11,7 +11,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKIKO_CUT: CardDef = CardDef::new(
     "Mujica:（祥子）斩断留恋，忘却一切",
-    &[On::Play("", "", Some(cant_play), sakiko_cut)],
+    &[On::Play("", None, Some(cant_play), sakiko_cut)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"斩断留恋，忘却一切"#)
         .raw_name(r#"（祥子）斩断留恋，忘却一切"#)
@@ -170,6 +170,10 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
     // player; that is exactly `card_move`'s bookkeeping.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

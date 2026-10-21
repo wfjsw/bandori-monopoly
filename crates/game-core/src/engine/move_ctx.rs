@@ -6,28 +6,15 @@
 
 use serde::{Deserialize, Serialize};
 
+use game_kinds::{Dice, Seat, Tile};
+
 use crate::msg::Msg;
 use crate::state::MovePlan;
 
-/// How the player gets there: exactly one per move -- a walk that travels a
-/// [路径], or a teleport to its destination. Mirrors `card_sdk::abi::MoveKind`
-/// bit-for-bit.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MoveKind {
-    #[default]
-    Walk,
-    Teleport,
-}
-
-impl MoveKind {
-    pub fn from_i32(v: i32) -> Option<Self> {
-        match v {
-            0 => Some(Self::Walk),
-            1 => Some(Self::Teleport),
-            _ => None,
-        }
-    }
-}
+// `MoveKind` lives in `game-kinds` -- one definition shared with the guest
+// (`card-sdk`) and the host. Re-exported here so engine call sites keep their
+// path.
+pub use game_kinds::MoveKind;
 
 // Settling is not its own axis beside [`MoveKind`]: the kind already says
 // *where* resolution happens -- a walk resolves the route it travels and its
@@ -37,14 +24,13 @@ impl MoveKind {
 
 /// One term the movement rolls into its total (the `base` / `dice` tables).
 ///
-/// `count`d`sides`, summed. **`sides == 0` is a flat `count`** -- that is how a
-/// 「+2 to the roll」 effect is expressed, instead of a separate `bonus` field;
-/// the roll total is just the sum of the terms. `why` is the log's parenthetical
-/// for this term.
+/// `dice.count`d`dice.sides`, summed. **`sides == 0` is a flat `count`** --
+/// that is how a 「+2 to the roll」 effect is expressed, instead of a separate
+/// `bonus` field; the roll total is just the sum of the terms. `why` is the
+/// log's parenthetical for this term.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Roll {
-    pub count: i32,
-    pub sides: i32,
+    pub dice: Dice,
     pub why: String,
 }
 
@@ -52,16 +38,31 @@ impl Roll {
     /// `count`d`sides` (or a flat `count` when `sides == 0`).
     pub fn new(count: i32, sides: i32, why: impl Into<String>) -> Self {
         Self {
-            count,
-            sides,
+            dice: Dice { count, sides },
             why: why.into(),
         }
     }
 
+    /// `count`d`sides` (or a flat `count` when `sides == 0`).
+    pub fn from_dice(dice: Dice, why: impl Into<String>) -> Self {
+        Self {
+            dice,
+            why: why.into(),
+        }
+    }
+
+    pub fn count(&self) -> i32 {
+        self.dice.count
+    }
+
+    pub fn sides(&self) -> i32 {
+        self.dice.sides
+    }
+
     /// The value this term contributes.
     pub fn value(&self, faces: &[i32]) -> i32 {
-        if self.sides <= 0 {
-            self.count
+        if self.dice.sides <= 0 {
+            self.dice.count
         } else {
             faces.iter().sum()
         }
@@ -79,10 +80,10 @@ pub struct MoveCtx {
     // -- who ---------------------------------------------------------------
     pub player_id: usize,
     /// Who rolled, when that is not the player (shown on the log line).
-    /// [`Self::ROLLER_UNSET`] until someone claims it -- `card_move` then
-    /// defaults it to the mover, and a substitution (幻觉来了 「上一名玩家代替
-    /// 进行此次投掷」) writes the stand-in through `plan::set_roller`.
-    pub roller: usize,
+    /// `None` until someone claims it -- `card_move` then defaults it to the
+    /// mover, and a substitution (幻觉来了 「上一名玩家代替进行此次投掷」)
+    /// writes the stand-in through `plan::set_roller`.
+    pub roller: Option<Seat>,
     /// The turn's main move, as opposed to a card's side move.
     pub main: bool,
     /// An event-driven forced move (「移动X」 / 「移动1d20」): not a main move, so
@@ -90,9 +91,8 @@ pub struct MoveCtx {
     /// (`docs/EVENTS.md`). Set by the host when the running rule is `event:*`.
     pub forced: bool,
     /// The move was shaped or started by a rule whose card id starts with
-    /// `skill:` (generic source tag; cond reads `move.by_skill`). Skipped when
-    /// false so saves remain byte-identical to the pre-v85 shape.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    /// `skill:` (generic source tag; cond reads `move.by_skill`).
+    #[serde(default)]
     pub by_skill: bool,
     /// Why the move happened (a card / effect), shown in parentheses on the
     /// log line.
@@ -101,9 +101,9 @@ pub struct MoveCtx {
     // -- what kind of move ---------------------------------------------------
     /// How the player gets there: one walk or one teleport.
     pub kind: MoveKind,
-    /// The teleport's destination, or `-1` (a teleport with no named
-    /// destination derives it from the roll).
-    pub teleport_to: i32,
+    /// The teleport's destination. `None` = a teleport with no named
+    /// destination derives it from the roll.
+    pub teleport_to: Option<Tile>,
     /// Does the move settle where it lands (`settleBefore` -> `settle` -> `land`
     /// -> `settleAfter`)? Clear it to prevent settle at all -- the player still
     /// moves. 其他规则注意事项 1.2: 「是否settle」 gates **only** the settle
@@ -123,19 +123,20 @@ pub struct MoveCtx {
     /// The face the walk uses, after the counteractions have rewritten it.
     pub roll: i32,
     /// Floor applied to the final face (only when the roll is unsigned).
-    pub min_roll: i32,
+    /// `None` = no floor.
+    pub min_roll: Option<i32>,
     /// A negative `roll` walks backwards instead of clamping.
     pub signed: bool,
 
     // -- the walk ------------------------------------------------------------
-    /// Planned length, or `-1` before the roll.
-    pub steps: i32,
+    /// Planned length. `None` before the roll (the roll sets it).
+    pub steps: Option<i32>,
     /// Steps added mid-walk (extends the walk as it runs).
     pub extra_steps: i32,
     pub from: i32,
     pub to: i32,
-    /// The tile the walk begins on, or `-1` for the player's own tile.
-    pub start: i32,
+    /// The tile the walk begins on. `None` = the player's own tile.
+    pub start: Option<Tile>,
     pub start_why: String,
     /// The walk goes backwards ([`Self::dir`] is -1).
     pub reverse: bool,
@@ -145,8 +146,8 @@ pub struct MoveCtx {
     pub remaining: i32,
     /// Players standing on tiles the walk passed.
     pub passed_players: Vec<i32>,
-    /// Forced stop tile, or `-1`.
-    pub stop_at: i32,
+    /// Forced stop tile. `None` = no forced stop.
+    pub stop_at: Option<Tile>,
     /// Set mid-walk to stop here and settle (the 「强制停下」 cards).
     pub stopped: bool,
     /// Restrict the walk to odd/even tiles (`-1` = either).
@@ -170,7 +171,7 @@ pub struct MoveCtx {
     /// and the plan's own flag remains default `false` so a later move cannot
     /// inherit it. Readable from a hook as
     /// `card_sdk::ctx::trigger::is_settle_redirect()`.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default)]
     pub settle_redirect: bool,
     /// Whether this move can build on the tile it lands on. `false` is the
     /// "no build" case (`ctx::plan::set_no_build` folds into this, HOST-08) --
@@ -203,48 +204,41 @@ pub struct MoveCtx {
     pub followers: Vec<i32>,
 }
 
-impl MoveCtx {
-    /// `roller` sentinel: nobody has claimed the roll yet.
-    pub const ROLLER_UNSET: usize = usize::MAX;
-}
-
 impl Default for MoveCtx {
-    /// The sentinels a derived `Default` would get wrong: `resolve = true`,
-    /// `teleport_to` / `start` / `stop_at` / `parity` / `steps = -1`,
-    /// `base = 1d20`, and `roller = ROLLER_UNSET`. Getting these wrong is
-    /// silent -- the walk just never settles, or a teleport goes to tile 0.
+    /// `Option` / `bool` defaults are correct for every sentinel field. The
+    /// remaining non-default bits: `resolve = true`, `base = 1d20`,
+    /// `pay_factor` / `rent_factor = 1.0`, `can_build = true`.
     fn default() -> Self {
         Self {
             player_id: 0,
-            roller: Self::ROLLER_UNSET,
+            roller: None,
             main: false,
             forced: false,
             by_skill: false,
             why: None,
             kind: MoveKind::Walk,
-            teleport_to: -1,
+            teleport_to: None,
             resolve: true,
             base: vec![Roll {
-                count: 1,
-                sides: 20,
+                dice: Dice { count: 1, sides: 20 },
                 why: String::new(),
             }],
             dice: Vec::new(),
             roll: 0,
-            min_roll: 0,
+            min_roll: None,
             signed: false,
-            steps: -1,
+            steps: None,
             extra_steps: 0,
             from: 0,
             to: 0,
-            start: -1,
+            start: None,
             start_why: String::new(),
             reverse: false,
             path: Vec::new(),
             total: 0,
             remaining: 0,
             passed_players: Vec::new(),
-            stop_at: -1,
+            stop_at: None,
             stopped: false,
             parity: -1,
             settle_tile: -1,
@@ -268,18 +262,18 @@ impl MoveCtx {
     pub fn new(player_id: usize) -> Self {
         Self {
             player_id,
-            roller: player_id,
+            roller: Some(Seat(player_id as i32)),
             ..Default::default()
         }
     }
 
     /// Fix the walk length, so the move walks exactly `n` steps and does not
-    /// roll (a non-negative `steps` suppresses the roll; the walk then reads
-    /// `steps` instead of `roll`). The sign of the current roll is kept so a
-    /// reverse move remains reverse.
+    /// roll (a `Some` `steps` suppresses the roll; the walk then reads `steps`
+    /// instead of `roll`). The sign of the current roll is kept so a reverse
+    /// move remains reverse.
     pub fn set_steps(&mut self, n: i32) {
         let n = n.max(0);
-        self.steps = n;
+        self.steps = Some(n);
         self.roll = if self.roll < 0 { -n } else { n };
     }
 
@@ -327,7 +321,7 @@ impl MoveCtx {
             player_id: self.player_id as i32,
             from: self.from,
             steps: (self.total - self.remaining).max(0),
-            started: self.start >= 0,
+            started: self.start.is_some(),
             reach: self.path.clone(),
             can_build: self.can_build,
             build_anywhere: self.build_anywhere,
@@ -338,6 +332,7 @@ impl MoveCtx {
 #[cfg(test)]
 mod tests {
     use super::MoveCtx;
+    use game_kinds::Tile;
 
     /// HOST-08: `set_no_build` folds into `can_build = !on`; `build_anywhere`
     /// is its own plan flag (landing-only when false).
@@ -386,7 +381,7 @@ mod tests {
         let m = MoveCtx {
             player_id: 2,
             from: 7,
-            start: 7,
+            start: Some(Tile(7)),
             total: 5,
             remaining: 2,
             path: vec![8, 9, 10, 11, 12],

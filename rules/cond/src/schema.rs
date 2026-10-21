@@ -97,7 +97,7 @@ fn is_macro(name: &str) -> bool {
 /// True when `name` is a known constant, a VOCAB flat identifier (including
 /// the flattened `root_field` forms), or a CEL stdlib name used as an ident.
 pub fn ident_known(name: &str) -> bool {
-    if crate::kinds::constants().iter().any(|(n, _)| *n == name) {
+    if crate::kinds::ident_known(name) {
         return true;
     }
     if VOCAB

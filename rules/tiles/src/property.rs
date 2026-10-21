@@ -202,7 +202,7 @@ pub(crate) fn build(player_id: i32) -> card_sdk::Asked {
         .n("cost", spent as i64);
     ctx::log(player_id, &text);
     // `houseAdded` (75) -- 「你拥有格子上的房屋总数增加时」.
-    ctx::raise(player_id, TriggerKind::from_i32(75), h)?;
+    ctx::raise(player_id, card_sdk::abi::ActionKind::HouseAdded, h)?;
     // `buildAfter` -- only after the house actually commits.
     ctx::raise(player_id, TriggerKind::BuildAfter, 0)?;
     Ok(())
@@ -269,6 +269,8 @@ pub(crate) fn redeem(player_id: i32) -> card_sdk::Asked {
     ctx::apply_redeem(player_id, at, cost);
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

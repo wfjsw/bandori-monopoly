@@ -29,19 +29,19 @@
 use alloc::vec::Vec;
 use card_sdk::abi::{counter, mark, ActionKind, MarkFilter, Message, Target, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const CLEAR_CP: CardDef = CardDef::new(
     "通用:该清CP了",
     &[
-        On::Play("", "", Some(cant_play), clear_cp),
+        On::Play("", None, Some(cant_play), clear_cp),
         // （1）: the spread runs at the [使用者]'s turn starts for 2 of them.
-        On::Action(&[ActionKind::TurnStart], "", "", Some(spread_guard), spread),
+        On::Action(Action::TurnStart("", None, Some(spread_guard), spread)),
         // User ruling 2026-10-07: the card leaves for the discard as soon as
         // its attached [CP点] is empty -- an event handler on the count, not a
         // check at each spend site. `CpChanged` is gone; `CounterChanged` with
         // the name check in the residual guard speaks for `counter::CP` only.
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(cp_empty_guard), on_cp_empty),
+        On::Action(Action::CounterChanged("", None, Some(cp_empty_guard), on_cp_empty)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"该清CP了"#)
@@ -258,6 +258,10 @@ fn on_cp_empty(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

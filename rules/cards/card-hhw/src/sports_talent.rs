@@ -7,30 +7,25 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 const ID: &str = "HHW:运动的天赋";
 
 pub const SPORTS_TALENT: CardDef = CardDef::new(
     "HHW:运动的天赋",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 规则书: 「每回合结束时失去一个」 -- the owner's own turn end.
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", "", None, at_turn_end),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, at_turn_end)),
         // 规则书: 「每次掷骰获得一次资金」 -- the owner's own main-move dice
         // (`m.Seat == Seat && m.Main`). The free-roll check is residual.
-        On::Action(
-            &[ActionKind::DiceRollAfter],
-            "actor == owner && card.placed && move.main", "",
-            Some(roll_after_applies),
-            on_roll_after,
-        ),
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed && move.main", None, Some(roll_after_applies), on_roll_after)),
         // The body-top applicability checks are the condition now (C#
         // `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's own main
         // move, with no fixed face yet. `plan.fixed_roll` carries the "no fixed
         // face" half now.
-        On::FilterValue(&[FilterKind::DiceRollPlan], "card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Filter(Filter::DiceRollPlan("card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan)),
+        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"运动的天赋"#)
@@ -107,8 +102,11 @@ fn reward(player_id: i32) -> card_sdk::Asked {
 /// plan field, shaped here before the dice (`On::RollPlan`). Same gate as the
 /// C# `DiceRollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`) -- the
 /// entry's condition.
-fn roll_plan(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    card_sdk::abi::FilterValue { min_roll: 10, ..v }
+fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
+    PlanValue {
+        min_roll: Some(10),
+        ..v
+    }
 }
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- reroll with
@@ -158,6 +156,10 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -173,7 +175,13 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_plan_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+pub fn on_roll_after_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll_after(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     roll_plan(player_id, v)
 }
 
@@ -181,12 +189,4 @@ pub fn roll_plan_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk
 #[inline(always)]
 pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
     on_crystals_changed(player_id)
-}
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_roll_after_kani(player_id: i32) -> card_sdk::Asked {
-    on_roll_after(player_id)
 }

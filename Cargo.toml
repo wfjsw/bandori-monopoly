@@ -5,6 +5,7 @@ members = [
     "crates/bot-glue",
     "crates/bot-service",
     "crates/game-core",
+    "crates/game-kinds",
     "crates/game-rules",
     "crates/player-meta",
     "crates/spec-kit",

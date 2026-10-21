@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", "", None, resolve)]).meta(&card_sdk::meta::CardMeta::new()
+pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", None, None, resolve)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"觉悟"#)
         .raw_name(r#"[衍生] 觉悟"#)
         .derived(true)
@@ -25,6 +25,10 @@ fn resolve(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1000, &Msg::new(key!("resolve_why")))?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

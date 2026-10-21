@@ -10,7 +10,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
     "Mor:（筑紫）迷茫的庭园",
-    &[On::Play("", "", Some(cant_play), tsukushi_garden)],
+    &[On::Play("", None, Some(cant_play), tsukushi_garden)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫的庭园"#)
         .raw_name(r#"（筑紫）迷茫的庭园"#)
@@ -122,6 +122,10 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

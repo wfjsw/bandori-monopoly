@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const LULU: CardDef = CardDef::new("event:很噜的感觉", &[On::Play("", "", None, play)])
+pub const LULU: CardDef = CardDef::new("event:很噜的感觉", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"很噜的感觉"#)
             .text(r#"所有玩家可选择[传送]至快餐店（不触发场地效果），如果选择[传送]需支付500资金并喊出“噜噜噜！”（只要玩家嗓子允许，必须喊出“噜噜噜！”）"#)
@@ -47,6 +47,8 @@ fn play(_player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -10,7 +10,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SMILE_PATROL: CardDef =
-    CardDef::new("HHW:微笑巡逻队", &[On::Play("", "", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("HHW:微笑巡逻队", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微笑巡逻队"#)
         .raw_name(r#"微笑巡逻队"#)
         .tags(&[])
@@ -77,6 +77,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

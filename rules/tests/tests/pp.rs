@@ -1083,7 +1083,7 @@ fn aya_skill_2_discount_and_flip() {
 }
 
 /// 规则书: 若宫伊芙（2）「投掷前可选择将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」
-/// Two-part timing (DiceRollBefore Action + DiceRollPlan FilterValue): the ask
+/// Two-part timing (DiceRollBefore Action + DiceRollPlan Filter): the ask
 /// fires before any die lands, the fan flips happen at ask time, and Yd4 is
 /// part of the same roll's face (not a post-hoc patch).
 #[test]

@@ -16,20 +16,15 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 pub const JENNIFER: CardDef = CardDef::new(
     "PP:找回珍妮弗",
     &[
-        On::Play("", "", Some(cant_play), jennifer),
+        On::Play("", None, Some(cant_play), jennifer),
         // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
-        On::Action(
-            &[ActionKind::PassTile],
-            "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')", "",
-            None,
-            pass_tile,
-        ),
+        On::Action(Action::PassTile("card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')", None, None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"找回珍妮弗"#)
@@ -130,6 +125,10 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 // hook may move the hit). `CardDef.targeting()` / `Normal` are not declared on
 // the manifest yet; they only feed PLEASE CHOOSE's hand filter.
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -142,4 +141,3 @@ pub fn jennifer_kani(player_id: i32) -> card_sdk::Asked {
 pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
     pass_tile(player_id)
 }
-

@@ -14,8 +14,8 @@ pub struct SnapshotView<'a> {
 }
 
 impl CondView for SnapshotView<'_> {
-    fn kind(&self) -> i64 {
-        self.win.kind
+    fn kind(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::Borrowed(&self.win.kind)
     }
     fn actor(&self) -> i64 {
         self.win.actor
@@ -95,8 +95,8 @@ impl CondView for SnapshotView<'_> {
     fn chain_count(&self) -> i64 {
         self.win.chain.len() as i64
     }
-    fn chain_kinds(&self) -> Vec<i64> {
-        self.win.chain.iter().map(|l| l.kind).collect()
+    fn chain_kinds(&self) -> Vec<String> {
+        self.win.chain.iter().map(|l| l.kind.clone()).collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
         self.win.chain.iter().map(|l| l.hits).collect()

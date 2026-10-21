@@ -11,18 +11,15 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
-        On::Play("", "", None, want_human),
-        On::Action(
-            &[ActionKind::TurnStart, ActionKind::DiceRollAfter, ActionKind::TurnEnd],
-            "actor == owner && card.placed", "",
-            None,
-            counteract,
-        ),
+        On::Play("", None, None, want_human),
+        On::Action(Action::TurnStart("actor == owner && card.placed", None, None, counteract)),
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, None, counteract)),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想要成为人类"#)
@@ -153,6 +150,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

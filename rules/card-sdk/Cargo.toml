@@ -9,6 +9,7 @@ description = "Card authoring SDK + host/guest ABI for the BandoriMonopoly WASM 
 #  * rules/ruleset (guest, wasm32)  -> constants + `ctx` host imports + `ruleset!`
 #  * crates/game-rules (host, native and wasm32) -> constants only (`abi`)
 [dependencies]
+game-kinds = { path = "../../crates/game-kinds" }
 
 serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }

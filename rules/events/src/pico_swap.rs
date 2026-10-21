@@ -11,7 +11,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const PICO_SWAP: CardDef = CardDef::new("event:PICO灵魂交换", &[On::Play("", "", None, play)])
+pub const PICO_SWAP: CardDef = CardDef::new("event:PICO灵魂交换", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"PICO灵魂交换"#)
             .text(r#"所有未[除外]玩家[传送]到行动顺序的下一位未[除外]玩家的位置（不触发场地效果，例：第一位行动的玩家[传送]到第二位行动的玩家的位置并以此类推，最后行动的玩家[传送]到第一位行动的玩家的位置）"#)
@@ -61,6 +61,8 @@ fn play(_player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

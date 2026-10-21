@@ -15,9 +15,9 @@
 //! move at turn start」) and the engine reads; see the TODO below for the piece
 //! that is not expressible yet.
 
-use bandori_std::state_key; use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use bandori_std::state_key; use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 use super::ran_red::REST_TURNS;
 
@@ -27,16 +27,17 @@ const OWED: &str = "skill.tsugumiPlain.owed";
 pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
         // Pure plan reshape; the one-shot latch / CiRCLE-veto arming ride
         // DiceRollAfter (the next event after the plan, before the walk).
-        On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
-        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", "", None, on_plan_after),
+        On::Filter(Filter::DiceRollPlan("actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan)),
+        On::Action(Action::DiceRollAfter("actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, None, on_plan_after)),
     ],
 )
-    .silent(&[1])
+    .silent(&[1, 2])
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
@@ -60,12 +61,11 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 
 /// 「当你进行主要移动时」 -- the (2) press is offered while the move is being
 /// planned. Pure: the dice/plan reshape only.
-fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
+fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     // 「进行一次双倍掷骰的移动，向后移动经过CiRCLE时不获得CiRCLE奖励」 --
     // the owed move's own shape.
-    v.base_count = 2;
-    v.base_sides = 20;
-    v.reverse = 1;
+    v.base = Some(Dice { count: 2, sides: 20 });
+    v.reverse = Some(true);
     v
 }
 
@@ -103,6 +103,8 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -124,7 +126,7 @@ pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     on_plan(player_id, v)
 }
 

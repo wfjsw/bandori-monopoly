@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
 
@@ -17,9 +17,9 @@ const FIX_NOTE: &str = "修复公告";
 pub const POOL_BUG: CardDef = CardDef::new(
     "event:卡池BUG",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::Event], "", "", Some(always), on_event),
-        On::Action(&[ActionKind::BuildBefore], "", "", Some(always), before_build),
+        On::Play("", None, None, play),
+        On::Action(Action::Event("", None, Some(always), on_event)),
+        On::Action(Action::BuildBefore("", None, Some(always), before_build)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -78,6 +78,8 @@ fn before_build(_owner: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

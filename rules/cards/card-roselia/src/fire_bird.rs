@@ -10,7 +10,7 @@
 
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
@@ -19,10 +19,10 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // is effect content (rulebook L13-14), so there is no `money >= 1600`
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::TurnEnd], "card.placed", "", None, turn_end),
-        On::Filter(&[FilterKind::PaySplitMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
-        On::Action(&[ActionKind::CounterChanged], "", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Play("", None, None, play),
+        On::Action(Action::TurnEnd("card.placed", None, None, turn_end)),
+        On::Filter(Filter::PaySplitMul("card.placed && pay_is_rent && target == owner", None, pay_mul)),
+        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Fire bird"#)
@@ -145,6 +145,10 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

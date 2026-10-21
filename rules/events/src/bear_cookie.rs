@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::Play("", "", None, play)])
+pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"发送熊饼表情"#)
             .text(r#"所有技能中含有火罐的玩家可选择补充X个火罐（不能超过上限），并支付X次1000资金。随后，将一张“[衍生]冲榜”背面朝上放置于事件牌堆顶部。"#)
@@ -72,6 +72,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new("log.event.bear_cookie_push").card("event", "event:冲榜"));
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

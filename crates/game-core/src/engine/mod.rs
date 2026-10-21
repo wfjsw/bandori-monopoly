@@ -357,7 +357,14 @@ struct Saved {
 /// `affiliations` / `groupSkill`). Older saves are not loaded (SAVE_VERSION).
 /// v11: state key `"charge"`; `FieldCard` named counters only (`counters`
 /// map); profile `charge*` fields; `StateVar.flags`.
-pub const SAVE_VERSION: u32 = 11;
+/// v12: idiomatic engine sentinels. `MoveCtx` drops `ROLLER_UNSET` /
+/// `-1` / `0 = none` for `roller: Option<Seat>`, `teleport_to` / `start` /
+/// `stop_at: Option<Tile>`, `steps: Option<i32>`, `min_roll: Option<i32>`;
+/// `Roll` carries `dice: Dice`. `World.recorded_roll` is `Option<i32>`
+/// (the `no_recorded_roll` default is gone). `TriggerBuy.deal_owner` is
+/// `Option<Payee>` and `deal_houses` is `Option<i32>`. No compat shims --
+/// older saves are refused (replays ride archived engine bundles).
+pub const SAVE_VERSION: u32 = 12;
 
 /// A running match.
 pub struct Match {

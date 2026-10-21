@@ -4,7 +4,7 @@
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。
 
 use bandori_std::ctx;
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 use card_sdk::abi::ActionKind;
 
 use crate::util::{expire, keep};
@@ -17,8 +17,8 @@ const DRAWER: &str = "drawer";
 pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::AtEnd], "", "", None, expire_at_end),
+        On::Play("", None, None, play),
+        On::Action(Action::AtEnd("", None, None, expire_at_end)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -53,6 +53,8 @@ fn expire_at_end(_player_id: i32) -> card_sdk::Asked {
     expire(ID);
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

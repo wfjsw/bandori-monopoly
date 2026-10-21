@@ -13,25 +13,21 @@
 
 use card_sdk::abi::{AbKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
         // （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐」 --
         // the offer exists only for those two abnormal kinds and with two
         // pots to spend. Kind is a residual (`AbKind` match); fire is CEL.
-        On::Action(
-            &[ActionKind::Abnormal],
-            "actor == owner && charge(owner) >= 2", "",
-            Some(stay_or_teleport),
-            on_abnormal,
-        ),
+        On::Action(Action::Abnormal("actor == owner && charge(owner) >= 2", None, Some(stay_or_teleport), on_abnormal)),
     ],
 )
-    .silent(&[0])
+    .silent(&[0, 1])
     // 「（初始2，上限3）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 3)]);
 
@@ -73,6 +69,10 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     ctx::draw(player_id, 1)?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

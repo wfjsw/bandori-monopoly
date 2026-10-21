@@ -9,18 +9,18 @@
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, RollValue};
 
 const ID: &str = "AG:（摩卡）0.5倍速";
 
 pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
-        On::Play("", "", None, play),
-        On::Action(&[ActionKind::TurnEnd], "card.placed", "", None, turn_end),
-        On::Filter(&[FilterKind::DiceRollValue], "actor == owner && move.main && card.placed", None, roll_half),
-        On::Filter(&[FilterKind::PaySplitMul], "actor == owner && card.placed && value > 0", None, pay_mul),
-        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Play("", None, None, play),
+        On::Action(Action::TurnEnd("card.placed", None, None, turn_end)),
+        On::Filter(Filter::DiceRollValue("actor == owner && move.main && card.placed", None, roll_half)),
+        On::Filter(Filter::PaySplitMul("actor == owner && card.placed && value > 0", None, pay_mul)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)
@@ -78,8 +78,8 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// `CardMocaHalf.DiceRollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
 /// main-move roll. ABI v74: a pure `DiceRollValue` filter (placement order among
 /// roll reshapes is preserved).
-fn roll_half(player_id: i32, value: i32) -> i32 {
-    let roll = value.max(0);
+fn roll_half(player_id: i32, mut v: RollValue) -> RollValue {
+    let roll = v.value.max(0);
     let halved = (roll + 1) / 2;
     ctx::log(
         player_id,
@@ -87,7 +87,7 @@ fn roll_half(player_id: i32, value: i32) -> i32 {
             .i("from", roll as i64)
             .i("to", halved as i64),
     );
-    halved
+    RollValue { value: halved, ..v }
 }
 
 /// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PaySplitMul` pass (after
@@ -113,6 +113,10 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
     half
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -128,8 +132,8 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_half_kani(player_id: i32, value: i32) -> i32 {
-    roll_half(player_id, value)
+pub fn roll_half_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
+    roll_half(player_id, v)
 }
 
 #[cfg(kani)]

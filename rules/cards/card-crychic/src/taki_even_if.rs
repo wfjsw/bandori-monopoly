@@ -14,8 +14,7 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
     "CRYCHIC:（立希）即便比不上...",
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
-        "actor == owner && move.roll != null",
-        r#"进入移动阶段"#,
+        "actor == owner && move.roll != null", Some(key!("taki_even_if_when")),
         None,
         counteract,
     )],
@@ -69,6 +68,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     trigger::set_move_roll(x); // 规则书[反击]: 「进行一次重骰」-- the move uses the new face
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

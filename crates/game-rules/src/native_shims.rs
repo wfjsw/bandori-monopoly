@@ -298,8 +298,8 @@ pub trait HostOps {
     fn op_opt_ai(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_ask`
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_trig_kind`
-    fn op_trig_kind(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_trig_kind` (p, n) -- two-call out-buffer spelling
+    fn op_trig_kind(&mut self, p: i32, n: i32) -> Result<i64, HostErr>;
     /// `ruleset_trig_player`
     fn op_trig_player(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_target`
@@ -1024,7 +1024,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(crate::hostfns::raise_bought(self, a[0], a[1])? as i64)
     }
     fn op_raise(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::raise(self, a[0], a[1], a[2])? as i64)
+        let kind = crate::hostfns::guest_str(self, a[1], a[2])?;
+        Ok(crate::hostfns::raise(self, a[0], &kind, a[3])? as i64)
     }
     fn op_gain_marker(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         let name = crate::hostfns::guest_str(self, a[1], a[2])?;
@@ -1124,8 +1125,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::ask(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
     }
-    fn op_trig_kind(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::trig_kind(self)? as i64)
+    fn op_trig_kind(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::trig_kind(self, p, n)? as i64)
     }
     fn op_trig_player(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::trig_player(self)? as i64)
@@ -1259,7 +1260,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(crate::hostfns::trig_effect_count(self)? as i64)
     }
     fn op_trig_effect_kind(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::trig_effect_kind(self, a[0])? as i64)
+        Ok(crate::hostfns::trig_effect_kind(self, a[0], a[1], a[2])? as i64)
     }
     fn op_trig_effect_target(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::trig_effect_target(self, a[0])? as i64)
@@ -1274,7 +1275,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(crate::hostfns::trig_effect_value(self, a[0])? as i64)
     }
     fn op_declare_effect(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::declare_effect(self, a[0], a[1], a[2], a[3], a[4])?;
+        let kind = crate::hostfns::guest_str(self, a[0], a[1])?;
+        crate::hostfns::declare_effect(self, &kind, a[2], a[3], a[4], a[5])?;
         Ok(0)
     }
     fn op_trig_card_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -2639,8 +2641,8 @@ pub unsafe extern "C-unwind" fn ruleset_raise_bought(player_id: i32, tile: i32) 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_raise(player_id: i32, kind: i32, value: i32) -> i32 {
-    with_host(|h| match h.op_raise([player_id, kind, value, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_raise(player_id: i32, kp: i32, kl: i32, value: i32) -> i32 {
+    with_host(|h| match h.op_raise([player_id, kp, kl, value, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -2885,8 +2887,8 @@ pub unsafe extern "C-unwind" fn ruleset_ask(kind: i32, player_id: i32, title_ptr
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_trig_kind() -> i32 {
-    with_host(|h| match h.op_trig_kind([0, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_trig_kind(p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_trig_kind(p, n) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3213,8 +3215,8 @@ pub unsafe extern "C-unwind" fn ruleset_trig_effect_count() -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_trig_effect_kind(i: i32) -> i32 {
-    with_host(|h| match h.op_trig_effect_kind([i, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_trig_effect_kind(i: i32, p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_trig_effect_kind([i, p, n, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3253,8 +3255,8 @@ pub unsafe extern "C-unwind" fn ruleset_trig_effect_value(i: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_declare_effect(kind: i32, target: i32, from: i32, tile: i32, value: i32) {
-    with_host(|h| match h.op_declare_effect([kind, target, from, tile, value, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_declare_effect(kp: i32, kl: i32, target: i32, from: i32, tile: i32, value: i32) {
+    with_host(|h| match h.op_declare_effect([kp, kl, target, from, tile, value]) {
         Ok(_) => {},
         Err(e) => abort_host(e),
     })

@@ -148,6 +148,7 @@ name = "card-sdk"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "game-kinds",
  "postcard",
  "serde",
 ]
@@ -189,6 +190,13 @@ dependencies = [
  "bandori-std",
  "card-sdk",
  "rules-status",
+]
+
+[[package]]
+name = "game-kinds"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

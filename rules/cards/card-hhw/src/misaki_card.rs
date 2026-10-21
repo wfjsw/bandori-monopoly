@@ -18,8 +18,7 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         // 规则书[反击]: 「使用火罐进行移动掷骰后」 -- the [火罐] roll is
         // card-owned state: the card that armed one tagged the move
         // (`ctx::plan::set_tag("fireRoll", 1)`).
-        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
-        r#"使用火罐进行移动掷骰"#,
+        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0", Some(key!("misaki_card_when")),
         None,
         counteract,
     )],
@@ -106,8 +105,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

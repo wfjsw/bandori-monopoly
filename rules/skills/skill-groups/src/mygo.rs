@@ -12,7 +12,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "skill:MyGO!!!!!:迷途之星";
 /// 「可超出上限的[奇迹水晶]（最多超出2个）」 -- overflow allowance.
@@ -23,9 +23,9 @@ pub const MYGO: CardDef = CardDef::new(
     &[
         // （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」 -- a start
         // position: the before-match-start point decides those.
-        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, at_start),
-        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && move.roll >= 16", "", None, after_roll),
-        On::Action(&[ActionKind::Discarded], card_sdk::pre::MINE, "", None, on_discarded),
+        On::Action(Action::DeckBeforeGame("", None, None, at_start)),
+        On::Action(Action::DiceRollAfter("actor == owner && move.roll >= 16", None, None, after_roll)),
+        On::Action(Action::Discarded(card_sdk::pre::MINE, None, None, on_discarded)),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（2）/（3） give two independent 「可」 abilities
         // (move-1 before the move roll for 1 crystal; draw 1 for 2 crystals)
@@ -33,7 +33,7 @@ pub const MYGO: CardDef = CardDef::new(
         // them and the player presses again for the other. The gate admits
         // whenever either is available; the body lists the available options
         // and skips the prompt when only one is.
-        On::Play("", "", Some(cant_play), press),
+        On::Play("", None, Some(cant_play), press),
     ],
 );
 
@@ -185,6 +185,10 @@ bandori_std::roster::GroupDef::new(r#"MyGO!!!!!"#)
     .skill(r#"迷途之星"#)
     .text(r#"（1）开局时投掷3d20，并取出目作为你本局游戏的起始点 （2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶] （3）每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶] （最多超出2个）；你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡。"#)
     .logo(r#"045"#);
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

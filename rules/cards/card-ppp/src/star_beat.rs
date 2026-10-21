@@ -9,7 +9,7 @@
 //! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
 use card_sdk::abi::MoveKind;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",
@@ -18,13 +18,8 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         // the offer exists only with a layer banked and a buildable owned
         // tile within 5. Layer is CEL (`slot`); the near-buildable scan is
         // residual (owned ∩ dist ≤ 5 ∩ can_build_on).
-        On::Action(
-            &[card_sdk::abi::ActionKind::SettleAfter],
-            "actor == owner && slot('star_beat.layers') > 0", "",
-            Some(has_near_buildable),
-            after_settle,
-        ),
-        On::Play("", "", Some(cant_play), play),
+        On::Action(Action::SettleAfter("actor == owner && slot('star_beat.layers') > 0", None, Some(has_near_buildable), after_settle)),
+        On::Play("", None, Some(cant_play), play),
     ],
 )
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -183,17 +178,19 @@ fn after_settle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn play_kani(player_id: i32) -> card_sdk::Asked {
-    play(player_id)
-}
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
-
 #[cfg(kani)]
 #[inline(always)]
 pub fn after_settle_kani(player_id: i32) -> card_sdk::Asked {
     after_settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
 }

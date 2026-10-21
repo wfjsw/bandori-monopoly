@@ -14,7 +14,7 @@ pub const YOUR_LIGHT: CardDef = CardDef::new(
         // The dist clause stays in the residual guard (not `pre`): a play gate
         // must not trade its specific refusal (`your_light_why_not`) for the
         // generic `err.play_pre` a pre-reject surfaces (GUARDS.md §4.4).
-        "", "",
+        "", None,
         Some(cant_play),
         your_light,
     )],
@@ -63,6 +63,10 @@ fn your_light(player_id: i32) -> card_sdk::Asked {
     ); // 规则书: 「此次移动以…为起点」
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

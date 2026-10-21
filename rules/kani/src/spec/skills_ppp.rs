@@ -558,15 +558,15 @@ pub fn band_03c_buy_refused(any_ppp_alive: bool) -> bool {
     any_ppp_alive
 }
 
-/// ABI v77 pure FilterValue gate: deny is `allowed == 0` in the returned
-/// payload (the host reads it; the body no longer cancels the trigger).
-pub fn band_03c_gate_denied(allowed: i32) -> bool {
-    allowed == 0
+/// ABI v77 pure GateValue gate: deny is `allowed == Some(false)` in the
+/// returned payload (the host reads it; the body no longer cancels the trigger).
+pub fn band_03c_gate_denied(allowed: Option<bool>) -> bool {
+    allowed == Some(false)
 }
 
-/// Denial reason intern id 1 = `poppin_locked` (matches the body's const).
-pub fn band_03c_denial_reason() -> i32 {
-    1
+/// Denial reason key `cards:skill-groups.poppin_locked` (matches `key!`).
+pub fn band_03c_denial_reason() -> Option<&'static str> {
+    Some("cards:skill-groups.poppin_locked")
 }
 
 // ===========================================================================

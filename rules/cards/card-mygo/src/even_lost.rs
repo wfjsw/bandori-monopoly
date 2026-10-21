@@ -16,11 +16,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
-        On::Play("", "", Some(can_go), go),
+        On::Play("", None, Some(can_go), go),
         On::Counteract(
             &[ChainKind::Effect],
-            "by != owner && by >= 0 && effect.hits(owner)",
-            r#"你被其他人的卡的效果影响"#,
+            "by != owner && by >= 0 && effect.hits(owner)", Some(key!("even_lost_when")),
             None,
             counteract,
         ),
@@ -70,6 +69,10 @@ fn go(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

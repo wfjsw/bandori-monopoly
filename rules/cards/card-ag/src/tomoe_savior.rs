@@ -17,8 +17,7 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     // residual guard.
     &[On::Counteract(
         &[ChainKind::Mortgage],
-        "actor == owner || owner.money >= tile.price / 2",
-        r#"其他玩家抵押商店街地契"#,
+        "actor == owner || owner.money >= tile.price / 2", Some(key!("tomoe_savior_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -103,8 +102,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

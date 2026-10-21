@@ -17,7 +17,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// The named other player, or -1.
 const OTHER: &str = "skill.mutsumiCrychic.other";
@@ -27,13 +27,14 @@ const THEIRS: &str = "skill.mutsumiCrychic.theirs";
 pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, at_start),
-        On::Action(&[ActionKind::Pass], bandori_std::guards::OWN_START, "", None, on_pass),
-        On::Action(&[ActionKind::DiceRollAfter], "", "", Some(other), latch),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, at_start)),
+        On::Action(Action::DeckAtGameStart("", None, None, at_start)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::DiceRollAfter("", None, Some(other), latch)),
     ],
 )
-    .silent(&[3])
+    .silent(&[4])
     // 「（初始1，上限1）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
 
@@ -123,6 +124,8 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
 // TODO(规则书)[judgement]: （3） -- the clause under-specifies -- the state axis
 //   is shared with the band skill and 「只有洗牌时可以…添加奇迹水晶」 carves a
 //   class of crystal gains the engine does not tag.
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

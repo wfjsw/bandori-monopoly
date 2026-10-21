@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", "", None, pipopa)]).meta(&card_sdk::meta::CardMeta::new()
+pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", None, None, pipopa)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Pipopa"#)
         .raw_name(r#"[衍生]Pipopa"#)
         .derived(true)
@@ -29,6 +29,10 @@ fn pipopa(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

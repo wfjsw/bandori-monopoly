@@ -18,12 +18,11 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::MoveBefore],
-            "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
-            r#"时机合适"#,
+            "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key", Some(key!("sayo_play_when")),
             Some(can_counteract),
             counteract,
         ),
-        On::Play("", "", Some(counter_only), no_play),
+        On::Play("", None, Some(counter_only), no_play),
     ],
 )
 .props(&[(prop::COUNTERACT_GROUP, 1)])
@@ -82,15 +81,19 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn no_play_kani(player_id: i32) -> card_sdk::Asked {
-    no_play(player_id)
-}
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn no_play_kani(player_id: i32) -> card_sdk::Asked {
+    no_play(player_id)
 }

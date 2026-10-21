@@ -2,7 +2,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play("", "", None, press)]).meta(&card_sdk::meta::CardMeta::new()
+pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play("", None, None, press)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"压"#)
         .raw_name(r#"[衍生] 压"#)
         .derived(true)
@@ -14,6 +14,10 @@ fn press(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1000, &Msg::new(key!("press_why")))?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

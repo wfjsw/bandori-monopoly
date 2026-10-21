@@ -34,7 +34,7 @@
 use bandori_std::kind::abnormal;
 use card_sdk::ctx::trigger;
 use card_sdk::abi::{ActionKind, FilterKind};
-use card_sdk::{CardDef, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, On};
 
 /// The board-owned [停留] rule. One instance on `BOARD_OWNER`, `tile = -1`.
 /// Registered in [`crate::CARDS`]; `bind_tiles` places it.
@@ -45,21 +45,21 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // already derived from the counter. This hook is the **clause**: a
         // card that wants to know 「受到[停留]时」 hears it here rather than
         // sniffing the grant site.
-        On::Action(&[ActionKind::Abnormal], "", "", Some(stay_landed), on_stay_landed),
+        On::Action(Action::Abnormal("", None, Some(stay_landed), on_stay_landed)),
         // 「处于该状态时[无法移动]」 + [不可阻挡] 「无视已存在的[停留]」
         // (rules.txt 47/48/51) -- the move gate, **CEL-only**: the condition is
         // the whole answer, so the host evaluates it natively in pure reads
         // (`Gate::Move` at turn start, the view's `can_roll_here`). Holding
         // another status (`unstoppable`) is why the vocabulary exposes
         // per-seat status functions.
-        On::FilterFlag(&[FilterKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
+        On::Filter(Filter::MoveGate(STAY_HOLDS_MOVE, None, refuse)),
     ],
 )
     .board_role("status")
     // Turn-skip line for the move gate (`play.rs` closed-move skip). Stay
     // closes no play path, so the play table is empty and the skip table
     // carries the frozen key.
-    .gate_skip_msgs(&[(FilterKind::MoveGate.as_i32(), "log.stay_skip")]);
+    .gate_skip_msgs(&[(FilterKind::MoveGate.gate_id(), "log.stay_skip")]);
 
 /// The state key this host owns (frozen webui wire).
 pub const KEY: &str = "stay";
@@ -70,8 +70,9 @@ pub const STAY_HOLDS_MOVE: &str = "state(actor,'stay') > 0 && state(actor,'unsto
 
 /// The answer of a closed gate (only run if a gate is ever raised; pure reads
 /// use the condition alone).
-fn refuse(_owner: i32, _v: i32) -> bool {
-    false // deny
+fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
+    g.allowed = Some(false); // deny
+    g
 }
 
 /// 规则书: the hook fires for an [停留] abnormal landing on anyone.
@@ -98,8 +99,9 @@ fn on_stay_landed(_owner: i32) -> card_sdk::Asked {
 
 pub use bandori_std::status::stay::{add, blocks_act, blocks_move, blocks_pay, clear, get, unlatch, unlatch_skip_move};
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_stay_landed_kani(player_id: i32) -> card_sdk::Asked {
@@ -108,6 +110,6 @@ pub fn on_stay_landed_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32, v: i32) -> bool {
-    refuse(owner, v)
+pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
+    refuse(player_id, v)
 }

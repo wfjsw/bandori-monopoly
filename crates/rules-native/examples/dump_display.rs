@@ -27,8 +27,9 @@
 //! * Event keys are the **bare** event id (`对邦`), not the `event:` rule-id
 //!   prefix. `derived` is engine data and is not exported.
 //! * `counterReason` is read from the card's [`On::counter_reason`] -- the
-//!   human-readable 「…时」 clause the counteraction prompt shows. Several
-//!   entries join their non-empty reasons with `\n`.
+//!   「…时」 clause the counteraction prompt shows, as a **locale key** the
+//!   client resolves (`cards:<crate>.…` / `counter.*`). Several entries join
+//!   their keys with `\n`.
 //! * Deterministic: every map is a `BTreeMap` (sorted keys), pretty JSON,
 //!   one trailing newline -- byte-stable across runs.
 //! * No argument prints the document to stdout. A path argument (or
@@ -128,14 +129,16 @@ fn cards_map() -> JsonMap {
     map
 }
 
-/// The [反击] trigger's `counterReason`: every non-empty
-/// [`card_sdk::On::counter_reason`] on this card, joined with `\n`.
+/// The [反击] trigger's `counterReason`: every [`card_sdk::On::counter_reason`]
+/// key on this card, joined with `\n`. The manifest carries the key; the UI
+/// resolves it at render.
 fn counter_reason(card: &card_sdk::CardDef) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for entry in card.on {
-        let reason = entry.counter_reason();
-        if !reason.is_empty() {
-            parts.push(reason);
+        if let Some(reason) = entry.counter_reason() {
+            if !reason.is_empty() {
+                parts.push(reason);
+            }
         }
     }
     parts.join("\n")

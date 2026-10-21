@@ -75,7 +75,7 @@
 
 use card_sdk::abi::{counter, mark, ActionKind, MarkFilter};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 /// The board-owned [CP点] rule. One instance on [`BOARD_OWNER`], governing no
 /// single tile (`tile = -1`): [CP点] is a board-wide category, not a tile kind.
@@ -88,7 +88,7 @@ pub const MARK_CP: CardDef = CardDef::new(
     "mark:cp",
     &[
         On::Message(&["place"], "", Some(place_ok), on_place),
-        On::Action(&[ActionKind::SettleBody], "", "", Some(lands_on_cp), on_land),
+        On::Action(Action::SettleBody("", None, Some(lands_on_cp), on_land)),
     ],
 )
     .board_role("mark");
@@ -192,6 +192,8 @@ fn on_land(_owner: i32) -> card_sdk::Asked {
     )?;
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

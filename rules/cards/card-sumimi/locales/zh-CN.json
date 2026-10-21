@@ -6,6 +6,7 @@
   "here_the_world_note": "扣着一张卡（还有奇迹水晶）",
   "here_the_world_placed": "「Here the world」放到了 {{who}} 的场上（{{by}} 打出）",
   "here_the_world_returned": "扣着的卡回到了 {{who}} 的手牌（Here the world）",
+  "here_the_world_when": "有人同一回合内打出两张卡",
   "idol_and_band_no_effect": "资金已经有 3,000 以上，没有效果",
   "idol_and_band_redeemed": "你本回合已经赎回过。",
   "idol_and_band_why": "资金重设为 3,000（兼顾偶像与乐队）",
@@ -19,11 +20,13 @@
   "l12_taken": "「{{card}}」加入了 {{who}} 的手牌（#L12）",
   "l12_title": "#L12",
   "mana_champion_log": "「歌唱大赛5连冠」：让其他人替 {{who}} 打出 [反击]",
+  "mana_champion_when": "你或你的格子即将受到来自你以外的效果影响",
   "no_breakup_ask": "[传送] 到哪一格？（结算后资金要变成有相同数字，否则回到原处并取消受到的效果）",
   "no_breakup_mortgaged": "你本回合已经抵押/赎回过。",
   "no_breakup_moved": "{{who}} [传送] 到 {{tile}}（Sumimi不会解散哦）",
   "no_breakup_repeated": "资金里有相同的数字",
   "no_breakup_title": "Sumimi不会解散哦",
+  "now_sumimi_when": "你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]",
   "now_sumimi_why": "「现在她是Sumimi的小初啦」：获得 {{n}} 资金",
   "sweet_escape_ask": "[传送] 到哪一格并结算？（无主的必须买下）",
   "sweet_escape_moved": "{{who}} [传送] 到 {{tile}}（Sweet Escape）",
@@ -40,5 +43,6 @@
   "two_donuts_title": "一人两个甜甜圈",
   "two_donuts_yes": "要 [传送] 并结算吗？（你原本的格子和 {{by}} 的终点之间，可不传送）",
   "two_in_one_note": "替换为另一名角色",
-  "two_in_one_swap": "{{who}} 换成 Sumimi 的另一名角色（Sumimi是二人一体的）"
+  "two_in_one_swap": "{{who}} 换成 Sumimi 的另一名角色（Sumimi是二人一体的）",
+  "two_in_one_when": "你的移动掷骰后"
 }

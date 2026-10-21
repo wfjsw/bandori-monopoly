@@ -5,7 +5,7 @@
 
 use card_sdk::abi::{prop, text_slot, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
 
@@ -17,14 +17,14 @@ const CAFE: &str = "CiRCLE 咖啡厅";
 pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     "event:协助CiRCLE重建",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 「每次有人经过CiRCLE时」 / 「CiRCLE的[触发结算]」 -- the two tiles this
         // event re-homes are the hooks' applicability, not their effect. The
         // body-top tile check is the condition now (`is_start(tile.id)` and
         // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
         // bail stays a residual guard (not in the CEL schema).
-        On::Action(&[ActionKind::PassTile], "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", "", None, on_pass),
-        On::Action(&[ActionKind::SettleBody], "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", "", Some(settle_applies), on_settle_body),
+        On::Action(Action::PassTile("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, None, on_pass)),
+        On::Action(Action::SettleBody("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, Some(settle_applies), on_settle_body)),
     ],
 )
 // Deed-popup text (`docs/TILES.md` 「Tile text」): one hook covers both tiles,
@@ -158,6 +158,8 @@ fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -165,16 +167,14 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
 
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_settle_body_kani(player_id: i32) -> card_sdk::Asked {
     on_settle_body(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_pass_kani(owner: i32) -> card_sdk::Asked {
-    on_pass(owner)
 }

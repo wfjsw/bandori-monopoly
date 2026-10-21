@@ -7,13 +7,13 @@
 //! place this card on one of your deeds; that tile gains every colour, and
 //! rent charged there under a foreign agent is halved again.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardDef, ctx, Filter, key, Msg, On};
 
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",
     &[
-        On::Play("", "", Some(cant_play), soyo_colors),
-        On::Filter(&[card_sdk::abi::FilterKind::PaySplitMul], "", Some(on_rent), half_again),
+        On::Play("", None, Some(cant_play), soyo_colors),
+        On::Filter(Filter::PaySplitMul("", Some(on_rent), half_again)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"混合的颜色"#)
@@ -107,6 +107,10 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
     // settled; 「其他颜色」 is that group differing from this tile's.
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

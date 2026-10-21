@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const NET_ERROR: CardDef = CardDef::new(
     "通用:网络链接异常",
-    &[On::Counteract(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event], "", r#"1张手卡的[手]效果或事件卡的效果生效前"#, Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event], "", Some(key!("net_error_when")), Some(can_counteract), counteract)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"网络链接异常"#)
         .raw_name(r#"网络链接异常"#)
@@ -136,6 +136,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

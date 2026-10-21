@@ -10,14 +10,13 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, CardPile};
-use card_sdk::{CardDef, On};
+use card_sdk::{CardDef, key, On};
 
 pub const RIOT: CardDef = CardDef::new(
     "RAS:R. I. O. T.",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "by >= 0 && by != owner && effect.hits(owner)",
-        r#"你被其他人的卡效果影响"#,
+        "by >= 0 && by != owner && effect.hits(owner)", Some(key!("riot_when")),
         None,
         counteract,
     )],
@@ -54,6 +53,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

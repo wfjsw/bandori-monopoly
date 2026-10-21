@@ -18,7 +18,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state, trigger, CardPile};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// 「每获得一层停留，眩晕，你获得1500资金」.
 const BOUNTY: i32 = 1500;
@@ -26,34 +26,25 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
         // exists only at the pot cap. 状态2's auto-play still has to run
         // whenever state is 2, so the residual is the disjunction.
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            card_sdk::pre::MINE, "",
-            Some(state2_or_fire_capped),
-            at_turn_start,
-        ),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, Some(state2_or_fire_capped), at_turn_start)),
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner && move.main && slot('skillState') != 2", "",
-            None,
-            on_pass_player,
-        ),
+        On::Action(Action::PassTile("actor == owner && move.main && slot('skillState') != 2", None, None, on_pass_player)),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
         // raised. The guard keeps 状态1 and this player as the *recipient*
         // (`trigger::target()`), not the causer.
-        On::Action(&[ActionKind::Abnormal], "target == owner", "", Some(im_hit), on_abnormal),
+        On::Action(Action::Abnormal("target == owner", None, Some(im_hit), on_abnormal)),
     ],
 )
-    .silent(&[0])
+    .silent(&[0, 1])
     // 「（初始0，上限3）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 3)]);
 
@@ -188,6 +179,8 @@ fn play_deck_top(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -197,11 +190,9 @@ pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_abnormal_kani(player_id: i32) -> card_sdk::Asked {
-    on_abnormal(player_id)
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]
@@ -211,6 +202,6 @@ pub fn on_pass_player_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start(player_id)
+pub fn on_abnormal_kani(player_id: i32) -> card_sdk::Asked {
+    on_abnormal(player_id)
 }

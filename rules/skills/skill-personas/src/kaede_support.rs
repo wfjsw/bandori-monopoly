@@ -24,7 +24,7 @@ use alloc::vec::Vec;
 
 use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 /// 「每两个回合没有玩家发动该技能」 -- a band-wide rest counter.
 const REST: &str = "skill.kaedeSupport.rest";
@@ -39,24 +39,15 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         // 状态1's offer: another player's turn start, not in 状态2, and the
         // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
         // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            "actor != owner && slot('skillState') != 2", "",
-            Some(offer_support_open),
-            offer_support,
-        ),
-        On::Action(
-            &[ActionKind::TurnStartBefore],
-            "actor == owner && slot('skillState') != 2", "",
-            None,
-            at_turn_start,
-        ),
-        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, "", None, at_turn_end),
-        On::Play("", "", Some(can_enter_two), enter_two),
+        On::Action(Action::TurnStartBefore("actor != owner && slot('skillState') != 2", None, Some(offer_support_open), offer_support)),
+        On::Action(Action::TurnStartBefore("actor == owner && slot('skillState') != 2", None, None, at_turn_start)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, at_turn_end)),
+        On::Play("", None, Some(can_enter_two), enter_two),
         // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
         // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
         // Effect Action pays the other half out. Effect (not PayAfter) so the
@@ -66,21 +57,11 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         //   PaySplitAdd modifier that runs after this declaration would not be split
         //   (the reshape half sees the PaySplitMul-stage figure). Same figure when no
         //   other add/mul modifier touches the rent.
-        On::Filter(
-            &[FilterKind::PaySplitMul],
-            "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
-            Some(split_rent_applies),
-            split_rent,
-        ),
-        On::Action(
-            &[ActionKind::Effect],
-            "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0", "",
-            Some(split_rent_applies),
-            split_rent_gain,
-        ),
+        On::Filter(Filter::PaySplitMul("slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0", Some(split_rent_applies), split_rent)),
+        On::Action(Action::Effect("slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0", None, Some(split_rent_applies), split_rent_gain)),
     ],
 )
-    .silent(&[0, 3])
+    .silent(&[0, 1, 4])
     // 「（初始0，上限4）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 4)]);
 
@@ -350,11 +331,27 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
 //   (The band skill's fire-pot drain is the engine's stand-in exit; it does not
 //   clear the SPLIT keys or the designation marks -- see `enter_two`.)
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
     declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
+    offer_support(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
 }
 
 #[cfg(kani)]
@@ -369,14 +366,6 @@ pub fn enter_two_kani(player_id: i32) -> card_sdk::Asked {
     enter_two(player_id)
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
-    offer_support(player_id)
-}
-
 #[cfg(kani)]
 #[inline(always)]
 pub fn split_rent_kani(player_id: i32, value: i32) -> i32 {
@@ -387,10 +376,4 @@ pub fn split_rent_kani(player_id: i32, value: i32) -> i32 {
 #[inline(always)]
 pub fn split_rent_gain_kani(player_id: i32) -> card_sdk::Asked {
     split_rent_gain(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_start(player_id)
 }

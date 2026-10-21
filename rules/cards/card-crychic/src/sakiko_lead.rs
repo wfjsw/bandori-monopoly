@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SAKIKO_LEAD: CardDef = CardDef::new(
     "CRYCHIC:（祥子）带领着大家",
-    &[On::Play("", "", Some(cant_play), sakiko_lead)],
+    &[On::Play("", None, Some(cant_play), sakiko_lead)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"带领着大家"#)
         .raw_name(r#"（祥子）带领着大家"#)
@@ -67,6 +67,10 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_pay_factor(500);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const IDOL_AND_BAND: CardDef = CardDef::new(
     "Sumimi:兼顾偶像与乐队",
-    &[On::Play("", "", Some(cant_play), idol_and_band)],
+    &[On::Play("", None, Some(cant_play), idol_and_band)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"兼顾偶像与乐队"#)
         .raw_name(r#"兼顾偶像与乐队"#)
@@ -40,6 +40,10 @@ fn idol_and_band(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")))?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

@@ -17,7 +17,7 @@
 
 use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 use skill_groups::fans;
 
 /// Which character's (2) this player is currently holding, or `""`.
@@ -34,13 +34,8 @@ const POOL: [&str; 4] = [
 pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
-        On::Action(
-            &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')", "",
-            None,
-            at_start,
-        ),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, roll),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", None, None, at_start)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, roll)),
     ],
 );
 
@@ -96,15 +91,19 @@ fn expire(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-#[cfg(kani)]
-#[inline(always)]
-pub fn roll_kani(player_id: i32) -> card_sdk::Asked {
-    roll(player_id)
-}
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
     at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_kani(player_id: i32) -> card_sdk::Asked {
+    roll(player_id)
 }

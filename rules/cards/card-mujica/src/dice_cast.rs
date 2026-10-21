@@ -9,7 +9,7 @@
 use bandori_std::state_key;
 use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// Once-per-turn placement latch. `cast` is reached from both `play` and the
 /// played card's own `counteract` follow-up (`a_played_cards_own_counteract_runs_once`)
@@ -22,19 +22,18 @@ const ID: &str = "Mujica:骰子已经掷下";
 pub const DICE_CAST: CardDef = CardDef::new(
     "Mujica:骰子已经掷下",
     &[
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // 「（此卡可以被反击）」 -- the play window stays open for counters
         // before `cast` sets the lock (the lock is armed in the body).
         On::Counteract(
             &[ChainKind::Card],
-            "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key",
-            r#"本回合内所有其他玩家无法从手牌中使用[反击]"#,
+            "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key", Some(key!("dice_cast_when")),
             None,
             counteract,
         ),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Action(&[ActionKind::TurnEndAfter], "actor == owner && card.placed", "", None, turn_end),
+        On::Action(Action::TurnEndAfter("actor == owner && card.placed", None, None, turn_end)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -118,6 +117,10 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -127,12 +130,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
-    turn_end(player_id)
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
 }

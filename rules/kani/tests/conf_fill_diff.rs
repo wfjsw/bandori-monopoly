@@ -254,17 +254,24 @@ fn board_price(tile: i32) -> i32 {
         .unwrap_or(0)
 }
 
-/// Chain kind wire values for the `Effect.kind` strings `fill_window` maps
-/// through `TriggerKind::from_str`.
+/// Chain link kind **spellings** -- the same strings `fill_window` stores on
+/// `Effect.kind`. The IR `SetId::ChainKinds` keys on `id_of` of these.
 fn chain_kind_str(kind: i64) -> &'static str {
-    match kind {
-        x if x == TriggerKind::Pay.as_i32() as i64 => "pay",
-        x if x == TriggerKind::Target.as_i32() as i64 => "target",
-        x if x == TriggerKind::Abnormal.as_i32() as i64 => "abnormal",
-        x if x == TriggerKind::Card.as_i32() as i64 => "card",
-        x if x == TriggerKind::Settle.as_i32() as i64 => "settle",
-        _ => "pay",
+    // `kind` is `id_of(spelling)`; the fixture only ever inserts the five
+    // spellings below, so match on the hash.
+    const KINDS: [(&str, i64); 5] = [
+        ("pay", rules_cond_ir::ctx::id_of("pay")),
+        ("target", rules_cond_ir::ctx::id_of("target")),
+        ("abnormal", rules_cond_ir::ctx::id_of("abnormal")),
+        ("card", rules_cond_ir::ctx::id_of("card")),
+        ("settle", rules_cond_ir::ctx::id_of("settle")),
+    ];
+    for (s, h) in KINDS {
+        if h == kind {
+            return s;
+        }
     }
+    "pay"
 }
 
 impl SnapSrc for Fixture {
@@ -329,7 +336,7 @@ impl SnapSrc for Fixture {
             .chain
             .iter()
             .map(|&(kind, from, hits)| Effect {
-                kind: chain_kind_str(kind),
+                kind: chain_kind_str(kind).to_string(),
                 target: hits as i32,
                 from: from as i32,
                 tile: -1,
@@ -381,9 +388,6 @@ impl SnapSrc for Fixture {
     fn money(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.money).unwrap_or(0)
     }
-    fn charge(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.charge).unwrap_or(0)
-    }
     fn group_pool(&self, p: i32, name: &str) -> i32 {
         // Fixture holds one unnamed group-pool scalar; any name reads it.
         let _ = name;
@@ -405,22 +409,13 @@ impl SnapSrc for Fixture {
             .unwrap_or(0)
     }
     fn state_get(&self, p: i32, key: &str) -> i32 {
-        match key {
-            "stay" => self.stay_of_model(p),
-            _ => 0,
-        }
-    }
-    fn stay_of_model(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.stay).unwrap_or(0)
-    }
-    fn stun_of(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.stun).unwrap_or(0)
-    }
-    fn state_get(&self, p: i32, key: &str) -> i32 {
         let Some(s) = self.seats.get(p as usize) else {
             return 0;
         };
         match key {
+            // Production `cond_pre` reads fire via `state_get(p, "charge")`
+            // (the ABI-88 named-marker spelling), not a dedicated `charge()`.
+            "charge" => s.charge,
             "stay" => s.stay,
             "stun" => s.stun,
             "stunStart" => s.stun_start,
@@ -587,7 +582,10 @@ fn to_world(fx: &Fixture) -> KWorld {
     w.trig_target = fx.trig.target;
     w.trig_tile = fx.trig.tile;
     w.trig_value = fx.trig.value as i32;
-    w.trig_kind = fx.trig.kind.as_i32() as i32;
+    w.trig_kind = match fx.trig.kind.spelling() {
+        std::borrow::Cow::Borrowed(s) => s,
+        std::borrow::Cow::Owned(s) => Box::leak(s.into_boxed_str()),
+    };
     w.turn_player = fx.trig.turn_player;
     w.turn_key = fx.trig.turn_key;
     w
@@ -596,7 +594,10 @@ fn to_world(fx: &Fixture) -> KWorld {
 fn to_overlay(fx: &Fixture) -> TriggerOverlay {
     let t = &fx.trig;
     let mut ov = TriggerOverlay::default();
-    ov.kind = Some(t.kind.as_i32() as i32);
+    ov.kind = Some(match t.kind.spelling() {
+        std::borrow::Cow::Borrowed(s) => s,
+        std::borrow::Cow::Owned(s) => Box::leak(s.into_boxed_str()),
+    });
     ov.value = Some(t.value);
     ov.step = t.step;
     ov.by = t.by;
@@ -969,8 +970,8 @@ fn fx_chain_pay_move() -> Fixture {
         by: 1,
         pay_is_rent: true,
         chain: vec![
-            (TriggerKind::Pay.as_i32() as i64, 0, 1),
-            (TriggerKind::Target.as_i32() as i64, 1, 0),
+            (rules_cond_ir::ctx::id_of("pay"), 0, 1),
+            (rules_cond_ir::ctx::id_of("target"), 1, 0),
         ],
         mv: Some(MoveFx {
             roll: Some(5),

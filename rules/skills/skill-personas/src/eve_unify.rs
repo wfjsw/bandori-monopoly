@@ -42,9 +42,9 @@
 //! (no prompts). Fixing that needs a `diceRollBefore` raise on the card_move
 //! path.
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 use skill_groups::fans;
 
 /// Y chosen at [`ActionKind::DiceRollBefore`], consumed by the Plan filter.
@@ -55,33 +55,13 @@ const PENDING_Y: &str = "evePendingY";
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
-        On::Action(
-            &[ActionKind::DeckAtGameStart],
-            "group_is(owner, 'Pastel✽Palettes')", "",
-            None,
-            at_start,
-        ),
+        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", None, None, at_start)),
         // （2） 「投掷前」 -- ask + flips. Action: prompts allowed.
-        On::Action(
-            &[ActionKind::DiceRollBefore],
-            "actor == owner && slot('ppFansUp') >= 1", "",
-            Some(roll_ok),
-            on_before,
-        ),
+        On::Action(Action::DiceRollBefore("actor == owner && slot('ppFansUp') >= 1", None, Some(roll_ok), on_before)),
         // （2） 「为此次投掷结果增加Yd4」 -- pure dice-table append.
-        On::FilterValue(
-            &[FilterKind::DiceRollPlan],
-            "actor == owner",
-            None,
-            on_plan,
-        ),
+        On::Filter(Filter::DiceRollPlan("actor == owner", None, on_plan)),
         // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
-        On::Action(
-            &[ActionKind::DiceRollAfter],
-            "actor == owner", "",
-            None,
-            clear_pending,
-        ),
+        On::Action(Action::DiceRollAfter("actor == owner", None, None, clear_pending)),
     ],
 )
 // 2 (plan shape) and 3 (stash clear) are bookkeeping; 1 is the visible clause.
@@ -172,18 +152,17 @@ fn on_before(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2） 「为此次投掷结果增加Yd4」 -- pure FilterValue at [`FilterKind::DiceRollPlan`].
-/// Appends `Y`d4 to the move's dice table (`add_base_*`), so `roll_tables`
+/// （2） 「为此次投掷结果增加Yd4」 -- pure PlanValue at [`FilterKind::DiceRollPlan`].
+/// Appends `Y`d4 to the move's dice table (`add_base`), so `roll_tables`
 /// includes it in the face. Reads the stash [`on_before`] wrote; never writes.
-fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     // NOTE: `slot('evePendingY')` as a *condition* on this FilterValue did not
     // see the stash `on_before` writes earlier in the same roll (the Action
     // `slot` conditions do). Gate on `actor == owner` and read the stash here
     // -- `state::get` is legal in filters and does see it.
     let y = state::get(player_id, PENDING_Y);
     if y >= 1 {
-        v.add_base_count = y;
-        v.add_base_sides = 4;
+        v.add_base = Some(Dice { count: y, sides: 4 });
     }
     v
 }
@@ -193,6 +172,10 @@ fn clear_pending(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, PENDING_Y, 0);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
@@ -209,7 +192,7 @@ pub fn on_before_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     on_plan(player_id, v)
 }
 

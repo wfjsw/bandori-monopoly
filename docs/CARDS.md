@@ -11,7 +11,7 @@ The same authoring shape covers the other rule categories: board tiles
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
 the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
-what runs while it is active, `On::Action(&[ActionKind::AtEnd])` for expiry.
+what runs while it is active, `On::Action(Action::AtEnd(...))` for expiry.
 
 ## How a card runs
 
@@ -27,16 +27,16 @@ world copy the host runs against.
 ```rust
 // rules/cards/card-roselia/src/press.rs
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{key, CardDef, Filter, Action, Msg, On};
 
 /// C# `CardPress` -- 压: gain 1,000.
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     On::Play("", "", None, press),
     // On::Play("", "", Some(cant_play), press),          // C# `Card.WhyNot` gate
     // On::Counteract(&[ChainKind::Pay], "", r#"你将要失去或支付资金"#, guard, counteract),  // [反击]: kinds + condition + reason + guard + effect
-    // On::Action(&[ActionKind::TurnEnd], "", "", guard, decay),          // field hooks, auto-run in play
-    // On::Action(&[ActionKind::AtEnd], "", "", None, at_end),        // scheduled turn-end body
-    // On::FilterValue(&[FilterKind::DiceRollPlan], "", None, roll_plan), // shapes the main move
+    // On::Action(Action::TurnEnd("", "", guard, decay)),          // field hooks, auto-run in play
+    // On::Action(Action::AtEnd("", "", None, at_end)),        // scheduled turn-end body
+    // On::Filter(Filter::DiceRollPlan("", None, roll_plan)), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
 fn press(player_id: i32) {
@@ -46,10 +46,13 @@ fn press(player_id: i32) {
 
 Every handler is a `fn(player_id: i32)` (the player the card is placed at for hooks);
 `On::Counteract` carries its [反击] trigger kinds + the condition + a pure `bool`
-guard + the effect, `On::Action` the event-hook kinds (`passTile`, `drawn`,
-`turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) and `On::Filter` the
-modifier stages (`paySplitAdd`, `buySet`, ...) in the same shape. An empty kind list
-is never dispatched.
+guard + the effect, `On::Action` one event-hook kind (`passTile`, `drawn`,
+`turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) and `On::Filter` one
+modifier stage (`paySplitAdd`, `buySet`, ...). Constructors come from the
+`filter_kinds!` / `action_kinds!` tables (`Filter::DiceRollPlan(pre, guard, body)`,
+`Action::TurnEnd(pre, counter_reason, guard, body)`). **One kind per entry** --
+a card that listens at two raises declares two entries. Ruleset kinds use their
+own namespace (`Filters::MyRewrite`, `Actions::Exile`).
 
 * `id` is the **data** card id from the roster (Chinese; an identifier,
   not display text).
@@ -65,22 +68,20 @@ is never dispatched.
 ## Action vs Filter (do_action / apply_filters) — final architecture
 
 The entry surface is the WordPress `do_action` / `apply_filters` split. The
-final `On` set (ABI v83):
+final `On` set (ABI v94):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
-| `On::Play(pre, reason, gate, body)` | `fn(i32) -> Asked` | play from hand (`reason` = counterReason) | yes |
-| `On::Counteract(kinds, pre, reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`reason` = counterReason) | yes |
+| `On::Play(pre, counter_reason, gate, body)` | `fn(i32) -> Asked` | play from hand (`counter_reason` = `Option<MsgKey>`, the prompt's 「…时」 clause) | yes |
+| `On::Counteract(kinds, pre, counter_reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`counter_reason` = `Option<MsgKey>`) | yes |
 | `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
 | `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
 | `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
 | `On::Buy(pre, guard, body)` | `fn(i32) -> Asked` | a deed's buy / perform body (v80) | yes (`ctx::pay_buy`, `ctx::assign_deed`, `ctx::raise`, `ctx::log`) |
 | `On::Build(pre, guard, body)` | `fn(i32) -> Asked` | a deed's build / perform body (v80) | yes (`ctx::pay_build`, `ctx::raise`, `ctx::log`) |
-| `On::Action(kinds, pre, reason, guard, body)` | `fn(i32) -> Asked` | **event reaction** (`reason` = counterReason) | yes (`ctx::gain`, log, place, …) |
-| `On::Filter(kinds, pre, guard, body)` | `fn(i32, value: i32) -> i32` | **integer value transform** | no (pure) |
-| `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / allow decision** | no (pure) |
-| `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **struct rewrite** (deal / plan / payee / gate) | no (pure) |
+| `On::Action(ActionEntry)` | `fn(i32) -> Asked` | **event reaction** at one kind (`counter_reason` = `Option<MsgKey>`) | yes (`ctx::gain`, log, place, …) |
+| `On::Filter(FilterEntry)` | shape-dependent, see below | **pure value / decision / gate / payload rewrite** at one kind | no (pure) |
 
 `On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` stay their own
 variants (like `On::Settle`): a deed body owns eligibility + the amounts and
@@ -88,13 +89,41 @@ calls `ctx::apply_mortgage` / `ctx::apply_redeem` / `ctx::pay_buy` /
 `ctx::pay_build` / `ctx::assign_deed`, so it is not a pure value transform.
 Wire ids 9 / 10 (master's v73) and 12 / 13 (v80).
 
+`On::Action` / `On::Filter` are **one kind per entry** (every multi-kind list
+was split). Constructors come from the `action_kinds!` / `filter_kinds!` macros
+in `rules/card-sdk/src/kinds.rs`; the body shape is pinned by the constructor
+(`FilterShape`), so a filter body can never be registered on the wrong kind
+and there is no `check_kind_variant`. `On::Counteract` still takes a list of
+`ChainKind` (a [反击] may answer several chain links).
+
+### Filter body shapes (`FilterShape`)
+
+| shape | body | used by | fold |
+|---|---|---|---|
+| `Value` | `fn(i32, i32) -> i32` | scalar modifiers (`PaySplitMul`, `BuyAdd`, `TurnBaseTime`, …) | host writes the returned figure (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds) |
+| `Flag` | `fn(i32, i32) -> bool` | pure decision stages (`PaySplitChoose`, `PayCombinedCancel`) | **bool polarity:** `false` cancels the pipeline stage |
+| `Gate` | `fn(i32, GateValue) -> GateValue` | the 10 decision gates (`ActGate`, `BuyGate`, `ImmuneAll`, …) | `GateValue { allowed: Some(false), reason }` refuses; `allowed: None` leaves the host's answer |
+| `Payload` | `fn(i32, P) -> P` | typed rewrites (`PlanValue`, `RollValue`, `DealValue`, `PayAddValue`, `RedirectValue`) | host writes back only the fields the body changed (`None` = leave alone) |
+
+Integer pipelines (pay amount, buy price, turn-clock seconds, roll face) are
+the scalar fold -- one number in, one number out. Cancel stages
+(`PayCombinedCancel`) and the decision gates are booleans. `PaySplitChoose` is
+a Flag; a card that both rewrites the amount and declines is **split into two
+entries**. `ChargePaying` is **not** a filter: its 「可」 opt-in prompts, so it
+stays `On::Action`.
+
+`BuyAssign` and `DiceRollPlan` do not carry a single integer -- they rewrite a
+small record (deal owner/houses/mortgaged; roller/dice/…). Those use
+`FilterShape::Payload` with `DealValue` / `PlanValue`. Fields the body leaves
+as `None` are not written back.
+
 ### Retired wire ids (never reuse)
 
 | id | was | folded into | ABI |
 |---|---|---|---|
-| 4 | `OnKind::AtEnd` | `On::Action(&[TriggerKind::AtEnd])` | v76 |
-| 5 | `OnKind::RollPlan` | `On::FilterValue(&[TriggerKind::DiceRollPlan])` | v76 |
-| 6 | `OnKind::Gate` | `On::FilterFlag` / `On::FilterValue` at the gate kinds | v77 |
+| 4 | `OnKind::AtEnd` | `On::Action(Action::AtEnd(...))` | v76 |
+| 5 | `OnKind::RollPlan` | `On::Filter(Filter::DiceRollPlan(...))` | v76 |
+| 6 | `OnKind::Gate` | `On::Filter(Filter::ActGate(...))` / `On::Filter(Filter::DiceRollPlan(...))` at the gate kinds | v77 |
 
 `On::Hook` (the pre-v74 name) is gone; `OnKind::Hook = 3` was renamed
 `OnKind::Action` and keeps id 3. `OnKind::Filter = 11` (not 9 -- 9/10 are the
@@ -114,44 +143,53 @@ Folding would make the tile body just another `Action(SettleBody)` and lose the
 "one base body, optional replacement" shape (and the `[反击]`-able
 `ChainKind::SettleBody` link). **Decision: keep `On::Settle`.**
 
-### Filter payload shapes (the minimal clean set)
+### Filter payload types (the minimal clean set)
 
-| shape | body | kinds | fold |
+Per-kind payloads live in `rules/card-sdk/src/payload.rs`. `None` = leave the
+host's answer alone; there is no `UNCHANGED` sentinel and no `i32::MIN`
+encoding. One `FilterPayload` impl each, flattened to `i32` only at the
+`hostfns.rs` wasm-import edge.
+
+| type | body | kinds | fields |
 |---|---|---|---|
-| `On::Filter` | `fn(i32, value: i32) -> i32` | scalar modifiers | host writes the returned figure (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds) |
-| `On::FilterFlag` | `fn(i32, value: i32) -> bool` | decision stages + gates | **bool polarity:** gates `true` = allowed, cancel stages `false` = cancel / drop |
-| `On::FilterValue` | `fn(i32, v: FilterValue) -> FilterValue` | struct rewrite | host writes back only fields the body changed (`UNCHANGED = i32::MIN` is left alone) |
+| `GateValue` | `fn(i32, GateValue) -> GateValue` | the 10 gates | `allowed: Option<bool>`, `reason: Option<MsgKey>` |
+| `PlanValue` | `fn(i32, PlanValue) -> PlanValue` | `DiceRollPlan` | `roller` / `base` / `extra` / `add_base` / `reverse` / `move_kind` / `teleport_to` / `resolve` / `clear_dice` / `min_roll` / `tag: Option<(MsgKey, i32)>` / `recorded_roll` |
+| `RollValue` | `fn(i32, RollValue) -> RollValue` | `DiceRollValue` | `value: i32`, `recorded_roll: Option<i32>`, `resolve: Option<bool>` |
+| `DealValue` | `fn(i32, DealValue) -> DealValue` | `BuyAssign` | `owner: Option<Payee>`, `houses: Option<i32>`, `mortgaged: Option<bool>` |
+| `PayAddValue` | `fn(i32, PayAddValue) -> PayAddValue` | `PaySplitAdd` | `value: i32`, `payee: Option<Payee>` |
+| `RedirectValue` | `fn(i32, RedirectValue) -> RedirectValue` | `Redirect` | `payee: Option<Payee>` |
 
-Integer pipelines (pay amount, buy price, turn-clock seconds,
-roll face) are the scalar fold -- one number in, one number out.
-Cancel stages (`PayCombinedCancel`) and the decision gates are booleans.
-`PaySplitChoose` may either rewrite the amount
-(`On::Filter`) or decline (`On::FilterFlag`); a card that does both is
-**split into two entries**. `ChargePaying` is **not** a FilterFlag: its 「可」
-opt-in prompts, so it stays `On::Action`.
+`GateValue { allowed: None, reason: None }` leaves the host's answer untouched.
+`allowed: Some(false)` refuses (and `reason` is the denial message key). Scalar
+folds (`Value`) and pure decisions (`Flag`) carry no struct -- the `i32` / `bool`
+is the whole payload.
 
-`BuyAssign` and `DiceRollPlan` do not carry a single integer -- they rewrite a
-small record (deal owner/houses/mortgaged; roller/dice/steps/…). Those use
-`On::FilterValue`. Fields the body leaves as `FilterValue::UNCHANGED` (`i32::MIN`) are not
-written back.
+### Typed kinds (`ActionKind` / `FilterKind`) — v90–v93
 
-### Typed kinds (`ActionKind` / `FilterKind`) — v85 (source)
+`TriggerKind { ns: KindNs, id: i32 }` is the **wire identity** of every raise
+point. `KindNs::Engine` / `KindNs::Ruleset(key)` separate the id spaces so a
+rule-defined kind can never collide with a future engine id -- or with another
+ruleset's ids. `ActionKind` / `FilterKind` wrap `TriggerKind` and are what the
+typed constructors pin; `ChainKind` is the `TriggerKind` alias `On::Counteract`
+takes.
 
-`TriggerKind` is the **single declaration source of truth**: every wire id,
-the `as_str` / `from_str` tables, and `is_filter()`. Two typed views mirror it
-exactly and are what `On` signatures take:
-
-| view | `On` variants | consts = |
+| view | `On` variants | what it is |
 |---|---|---|
-| `ActionKind` | `On::Action` | every `TriggerKind` const with `is_filter() == false` |
-| `FilterKind` | `On::Filter` / `FilterFlag` / `FilterValue` | every `TriggerKind` const with `is_filter() == true` (25 kinds: `DiceRollValue` / `DiceRollPlan` / `PaySplit*` / `PayCombined*` / `Buy*` / `TurnBaseTime` / `TurnBonusTime` + the 10 gates) |
-| `ChainKind` | `On::Counteract` | still the `TriggerKind` alias (same id space) |
+| `ActionKind` | `On::Action(ActionEntry)` | event reactions (`fn(i32) -> Asked`) |
+| `FilterKind` | `On::Filter(FilterEntry)` | pure value / decision / gate / payload rewrites |
+| `ChainKind` | `On::Counteract` | [反击] window selectors (still a list) |
 
-Each typed const is declared as `Self(TriggerKind::X.as_i32())`, so the mirror
-is compile-time tied; `typed_kind_const_sides_match_is_filter` pins the sides
-(`ActionKind` ids are `!is_filter()`, `FilterKind` ids are `is_filter()`).
-Misdeclaring a kind on the wrong `On` variant is a **rustc error**. Wire and
-save are unchanged: one shared `i32` id space, no id renumbering.
+**Spelling.** Engine kinds serialize as camelCase (`"turnStart"`,
+`"diceRollPlan"`). Ruleset kinds serialize as `"r:{key}:{id}"` (e.g.
+`"r:bandori:21"`). Bare decimals (`"21"`) do not parse. CEL `kind` is a
+**string** (`VarTy::Str`) comparing these spellings; `move.kind` stays int
+(`MoveKind`).
+
+**Registries.** `filter_kinds!` / `action_kinds!` emit a PascalCase `const fn`
+per kind plus `Filter::KINDS` / `Action::KINDS` (`&'static [KindInfo]`) for pin
+tests and tooling. The constructor type pins the side -- there is no
+`check_kind_variant`. The engine table (ids, spellings, `is_filter`) lives in
+`crates/game-kinds`; the DSL constructors live in `rules/card-sdk/src/kinds.rs`.
 
 **Dual-role ids** (one wire id, two typed views) are ids used both as a
 [反击] chain link and as an Action-listened event. They have an `ActionKind`
@@ -159,23 +197,40 @@ const *and* a `ChainKind` value. From the current codebase:
 
 `DiceRollBefore`, `Effect`, `Bankrupt`, `Card`, `Event`, `MoveBefore`,
 `MoveAfter`, `Pass`, `PassBefore`, `PassTile`, `Settle`, `SettleBefore`,
-`SettleBody`, plus the rule-defined `PassRewardAffected` (26) and `SkillUsed`
-(74). `Effect` (72) is the canonical example. No Filter kind is a ChainKind.
+`SettleBody`, `MarkerSpent`, `CardUsed`, `HouseAdded`, plus the rule-defined
+`PassRewardAffected` (26) and `ChargePaying` (78). `Effect` (72) is the
+canonical example. No Filter kind is a ChainKind.
 
 **Rule-defined kinds** live in `rules/bandori-std/src/kind.rs` and join the
-Action side today:
+Action side today. Four are genuinely rules/-emitted (raised from `rules/` with
+this game's vocabulary):
 
 ```rust
-pub const PassRewardAffected: ActionKind = ActionKind(PASS_REWARD_AFFECTED); // 26
+pub const PassRewardAffected: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 26));
+pub const Exile: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 21));
+pub const ChargePaying: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 78));
+pub const FansFlip: ActionKind = ActionKind(TriggerKind::ruleset(RULESET_KEY, 107));
 ```
 
-A future rule-defined **FILTER** kind would declare `FilterKind(id)` there
-**and** teach `TriggerKind::is_filter()` (or a `CUSTOM_FILTERS` table beside
-`CUSTOM_LINKS` in `card-sdk::abi`) about that id. Known gap: none exist yet.
+Three universal raises moved to the engine namespace in ABI v91 (they cover the
+whole mechanic, not one game's flavour): **`markerSpent` (73)** any named-counter
+spend commits; **`cardUsed` (74)** a field card's `On::Play` runs;
+**`houseAdded` (75)** a deed's house count is written. The bandori spellings
+`FireSpent` / `SkillUsed` / `HouseAdded` and `"r:bandori:73/74/75"` are gone.
+
+A future rule-defined **filter** kind declares `FilterKind::ruleset(RULESET_KEY, id)`
+via `filter_kinds!` in the same file. The fixture is `Filters::MyRewrite`
+(`rules/bandori-std/src/kind.rs`, wire `"r:bandori:1"`): a ruleset filter kind
+exercised end to end (declaration, registration, dispatch) with no game
+semantics.
+
+**Kind-ownership boundary.** Engine kinds are defined in `crates/game-kinds`;
+ruleset kinds in `rules/bandori-std`. Each side treats the other's ids as
+opaque tokens -- never inspects them, never invents one.
 
 `HookKind` and `GateKind` are retired (no alias). Gates that used to be
 `GateKind` (`ImmuneAll`, `ActGate`, …) are `FilterKind` consts: `On::Gate` is
-long gone and those questions are `FilterFlag` / `FilterValue` entries.
+long gone and those questions are `On::Filter(Filter::ActGate(...))` entries.
 
 ### Purity
 
@@ -187,10 +242,10 @@ mutating call: `gain` / `draw` / `place_card` / `set_dest` / `set_slot` /
 log-why rule). A fused hook (value rewrite + gain/place/…) is split into a
 Filter half and an `On::Action` half on the appropriate event (e.g. `PayAfter`).
 
-A Filter body that would have rolled dice reads `FilterValue.recorded_roll`
+A Filter body that would have rolled dice reads `RollValue.recorded_roll`
 (v78: the host pre-rolls into the recorded RNG stream so replay stays
-deterministic). A named plan tag rides `FilterValue.tag_key` (intern id) +
-`tag`.
+deterministic). A named plan tag rides `PlanValue.tag: Option<(MsgKey, i32)>`
+(rewritten through `plan::set_tag(key, value)`).
 
 **The one exception (user decision 2026-10-17, keep it):** an `On::Action`
 at `DiceRollAfter` may prompt, roll dice, and write the face (trigger value
@@ -212,8 +267,10 @@ immediately before the pure filter stage:
 
 ### Filter kinds
 
-`TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
-source of truth**. Today (25 kinds):
+The engine kind table in `crates/game-kinds` (`ENGINE_KINDS`) is the **single
+declaration source of truth** for ids, spellings, and `is_filter`. The typed
+mirror is `Filter::KINDS` / `Action::KINDS` in `rules/card-sdk/src/kinds.rs`.
+Today (27 filter kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
   `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
@@ -239,13 +296,14 @@ when the rulebook puts a 「可」 offer on the reshape.
 opt-in prompts and Filter bodies cannot. It stays on `On::Action`.
 
 Everything else is `On::Action` (turn/pass/draw/settle/buy/build/counter/…
-event points, including the custom bandori-std kinds `PassRewardAffected` /
-`FireSpent` / `SkillUsed` / `HouseAdded`).
+event points, including the engine kinds `MarkerSpent` / `CardUsed` /
+`HouseAdded` and the ruleset kinds `PassRewardAffected` / `Exile` /
+`ChargePaying` / `FansFlip`).
 
-**Kind/variant agreement is a ruleset-build error:** a Filter* may only list
-filter kinds and a `On::Action` only non-filter kinds
-(`On::check_kind_variant`, enforced in `rt::manifest` and the host loader).
-A kind list that mixes the two must be **split into two entries**.
+**Kind/variant agreement is a compile error:** the `Filter::` / `Action::`
+constructor type pins the side, so a filter body can never be registered on an
+action kind and vice versa. There is no `check_kind_variant`. `On::Counteract`
+still takes a list of `ChainKind`.
 
 ### Combined vs Split payment levels (v82)
 
@@ -279,12 +337,12 @@ modifier touched stays exactly as the base formula produced it.
 
 ### v76: DiceRollPlan / AtEnd fold
 
-`On::RollPlan` is `On::FilterValue(&[FilterKind::DiceRollPlan], …)` (the plan is a
-`FilterValue`). `On::AtEnd` is `On::Action(&[ActionKind::AtEnd], …)`: the
-one-shot-ness lives in the existing `schedule_turn_end` list
-(`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire ids
-`OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never be
-reused.
+`On::RollPlan` is `On::Filter(Filter::DiceRollPlan(pre, guard, body))` (the
+plan is a `PlanValue`). `On::AtEnd` is `On::Action(Action::AtEnd(pre, reason,
+guard, body))`: the one-shot-ness lives in the existing `schedule_turn_end`
+list (`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire
+ids `OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never
+be reused.
 
 **ChargePaying stays Action.** Its 「可」 opt-in prompts and Filter bodies
 cannot. Everything else that used to be a gate is a Filter.
@@ -292,7 +350,7 @@ cannot. Everything else that used to be a gate is a Filter.
 **CEL-only status gates** (`ActGate` / `PayGate` / `MoveGate` /
 `ExclusiveUse` / `PlayGate`) keep their native path: the condition is the
 whole answer, evaluated by `gate_open` / `admits_pre` with no wasm. The
-`On::FilterFlag` body only runs if the hook path asks.
+`On::Filter(Filter::ActGate(...))` body only runs if the hook path asks.
 
 ## Authoring a condition (`pre`, ABI v45)
 
@@ -305,25 +363,25 @@ at ruleset build and evaluated natively before the wasm guard is ever
 instantiated.
 
 ```rust
-use card_sdk::{pre, On};
+use card_sdk::{pre, On, Action};
 
 // condition (`pre: &'static str`) before the guard
 On::Counteract(&[ChainKind::DiceRollValue], "actor == owner && move.roll != null",
                r#"你将要失去或支付资金"#, can_counteract, counteract),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Action(&[ActionKind::TurnEnd], pre::MINE, "", guard, decay),
+On::Action(Action::TurnEnd(pre::MINE, "", guard, decay)),
 
 // or the const builder
 On::Play("", "", Some(cant_play), play).pre("owner.money >= 1500"),
 ```
 
 **Distinct layers (nothing is rejected twice).** The category filter (the
-`On::*` kind list) owns the trigger kind; the condition owns everything
+`On::*` kind) owns the trigger kind; the condition owns everything
 expressible in the schema; the wasm guard owns only the residual. A guard must
-not restate its condition. `kind` is an ordinary variable, so a multi-kind
-entry may still *branch* on it -- never use it to reject what the category
-filter already rejected.
+not restate its condition. `kind` is an ordinary string variable
+(`VarTy::Str`, comparing spellings), so an entry may still *branch* on it --
+never use it to reject what the category filter already rejected.
 
 Fail-closed: a parse error, an unknown variable/function, or a float literal
 (the schema is int-only) fails `build-ruleset` / `RulesetBuilder::build` with
@@ -347,12 +405,12 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
     &[
         On::Play("", "", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
-                 "", "", None, declare_cap),                               // 1: bookkeeping
-        On::Action(&[ActionKind::TurnEnd], "", "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
+        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),     // 1: bookkeeping
+        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),     // 2: bookkeeping
+        On::Action(Action::TurnEnd("", "", Some(afterglow), tick)),         // 3: 「获得[火罐]」 -- flashes
     ],
 )
-.silent(&[1]);
+.silent(&[1, 2]);
 ```
 
 **When to use it.** An effect the rulebook describes as happening (gain, pay,
@@ -395,7 +453,7 @@ pulse) shows:
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
     On::Play("", "", None, use_skill),                  // 0: Auto
-    On::Action(&[ActionKind::TurnEnd], "", "", None, tick), // 1: Always (self-only)
+    On::Action(Action::TurnEnd("", "", None, tick)),    // 1: Always (self-only)
 ]).flash(&[(1, Flash::Always)]);
 ```
 
@@ -784,7 +842,7 @@ marks and the landing clause that spends both kinds
 The shape:
 
 **Before** -- 该清CP了 called the CP helpers directly and listened to
-`ActionKind::CpChanged`:
+`ActionKind::CpChanged` (retired; now `CounterChanged`):
 
 ```rust
 // 通用:该清CP了
@@ -807,13 +865,13 @@ fn cp_empty_guard(player_id: i32) -> bool {
 asking it to place CP units; `mark:cp`'s `On::Message` handler runs
 `ctx::place_mark`. The landing hook spends the placer's on-card CP via
 `ctx::add_counter_at`. The graveyard rule is an `On::Action` on
-`ActionKind::CounterChanged` filtering `counter_is('cp')` /
+`Action::CounterChanged` filtering `counter_is('cp')` /
 `card.counter('cp') == 0`:
 
 ```rust
 // 通用:该清CP了
 On::Play("", "", Some(cant_play), clear_cp),
-On::Action(&[ActionKind::CounterChanged], "", "", Some(cp_empty_guard), on_cp_empty),
+On::Action(Action::CounterChanged("", "", Some(cp_empty_guard), on_cp_empty)),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -847,7 +905,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
 
 // rules/markers/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
-On::Action(&[ActionKind::SettleBody], "", "", Some(lands_on_cp), on_land),
+On::Action(Action::SettleBody("", "", Some(lands_on_cp), on_land)),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();
@@ -912,7 +970,7 @@ both counters untouched. `flip_down` does not raise (clause （2） is only
 「变正」).
 
 Band clause （2） lives on `skill:Pastel㏄Palettes:与偶像一起` as
-`On::Action(&[FansFlip], "actor == owner", …)`: when `X >` pre-flip
+`On::Action(Actions::FansFlip("actor == owner", …))`: when `X >` pre-flip
 face-downs it adds `min(X - down, 10 - held)` 奇迹水晶 to **this card** and
 logs the amount actually added (`pastel_over`). 「最多10个」 caps the
 card's **TOTAL** crystals at 10 (user ruling 2026-10-17), not the overflow
@@ -948,7 +1006,7 @@ original names where the pairing is already implied (`settleBefore` →
 | `card` / `cardAfter` | playing a card from hand -- before its `play` body / after its `Dest` handling |
 | `event` / `eventAfter` | drawing an event -- before it resolves / after it is filed away |
 | `buyBefore` / `buyAfter` | buying a deed -- before any guard (fires even on a no-op attempt) / after the deed changes hands |
-| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::FilterFlag`, runs for **every** `BuyKind` -- Force included) refuses a buy with `set_cancelled` + `set_reason`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
+| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::Filter(Filter::BuyGate(...))` gate, runs for **every** `BuyKind` -- Force included) refuses a buy with `GateValue { allowed: Some(false), reason }`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
 | `buildBefore` / `buildAfter` | building a house -- before payment / after the house commits (not on the refund path) |
 | `discardBefore` / `discardAfter` | discarding from hand -- before the card leaves / after it is in the pile |
 | `endTurnBefore` / `endTurnAfter` | ending a turn -- the player's command / any turn end, including stun & exile auto-skips |
@@ -1070,7 +1128,7 @@ cannot ship with a raw key showing to players.
   is a no-op; several band cards (PPP:Returns) target the first in placement
   order; a swapped or removed band card takes its crystals with it. The
   empty-out clause (「此卡上不再拥有[奇迹水晶]时」) is an `On::Action` on
-  `ActionKind::CounterChanged` filtering `counter_is('crystals')`, not a check
+  `Action::CounterChanged` filtering `counter_is('crystals')`, not a check
   at each spend site.
 * A counteraction can reshape the trigger it answered: `set_move_roll` rewrites a
   move roll, `set_pay_amount` reduces or cancels (0) a payment, `set_pay_target`
@@ -1079,7 +1137,8 @@ cannot ship with a raw key showing to players.
   raised when an effect's recipients are named, before settlement; `ctx::effect`
   lists what that link declared (`count` / `kind` / `target` / `from` / `tile` /
   `value`), so a guard can take the whole list (「被…效果影响」 -- `effect::hits`)
-  or one entry (「一次性支付5000以上」 -- `effect::has(TriggerKind::Pay)`).
+  or one entry (「一次性支付5000以上」 -- `effect.has(Pay)`; `Pay` is a
+  string spelling, `kind` is `VarTy::Str`).
   `Target` / `Abnormal` / `Pay` are settlement hooks now and cannot reconstruct
   that clause. A counteraction is a chain link: it resolves **before** the effect and
   may `set_cancelled()` (negate the activation -- the link never happened),

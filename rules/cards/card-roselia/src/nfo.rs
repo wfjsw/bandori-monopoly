@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx;
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On};
 
 pub const NFO: CardDef = CardDef::new(
     "R:NFO",
@@ -21,8 +21,8 @@ pub const NFO: CardDef = CardDef::new(
         // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
         // live in a Filter. Whole offer on `ActionKind::Effect` (payment
         // declaration; `t.value` folds there).
-        On::Action(&[card_sdk::abi::ActionKind::Effect], "", "", Some(gain_guard), gain_bump),
-        On::Play("", "", None, play),
+        On::Action(Action::Effect("", None, Some(gain_guard), gain_bump)),
+        On::Play("", None, None, play),
         // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
         // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
@@ -34,14 +34,9 @@ pub const NFO: CardDef = CardDef::new(
         //   zeroed payments too and carries no "PaySplitAt ran" bit, and a Filter
         //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
         //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
-        On::Filter(
-            &[FilterKind::PaySplitAt],
-            "actor == owner && card.placed && value > 0",
-            None,
-            pay_shave,
-        ),
-        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", "", None, pay_unplace),
-        On::Action(&[ActionKind::AtEnd], "", "", None, at_end),
+        On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_shave)),
+        On::Action(Action::PayAfter("actor == owner && card.placed", None, None, pay_unplace)),
+        On::Action(Action::AtEnd("", None, None, at_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)
@@ -299,6 +294,10 @@ fn gain_bump(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("nfo_bumped")));
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

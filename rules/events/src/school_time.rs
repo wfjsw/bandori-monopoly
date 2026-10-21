@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const SCHOOL_TIME: CardDef = CardDef::new("event:上学时间", &[On::Play("", "", None, play)])
+pub const SCHOOL_TIME: CardDef = CardDef::new("event:上学时间", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"上学时间"#)
             .text(r#"全体玩家移动到操作角色当前上学的学校的格子然后获得1层[除外]（如果剧情没有明说则移动到周边学区）。"#)
@@ -93,6 +93,8 @@ fn play(_player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

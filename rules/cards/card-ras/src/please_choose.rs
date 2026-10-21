@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
-    &[On::Counteract(&[ChainKind::Settle], "", r#"有玩家在livehouse格子上结算"#, Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Settle], "", Some(key!("please_choose_when")), Some(can_counteract), counteract)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"PLEASE CHOOSE"#)
         .raw_name(r#"PLEASE CHOOSE"#)
@@ -105,6 +105,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // `BandBase.PassTile` fan-out (C# `H.EachOf(i, f => f.PassTile(m, to))`).
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

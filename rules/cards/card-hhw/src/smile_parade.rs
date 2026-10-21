@@ -19,7 +19,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";
 /// One-shot move tag armed by the (1) counteract: this move's endpoint settles
@@ -40,11 +40,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // "弦卷集团"格子交换位置」 share one `SettleBody` entry: the host runs
         // only the first hook of a kind per card, so the two body-replaces
         // cannot be separate entries.
-        On::Action(
-            &[ActionKind::SettleBody],
-            "tile.id >= 0", "",
-            Some(settle_body_guard),
-            settle_body),
+        On::Action(Action::SettleBody("tile.id >= 0", None, Some(settle_body_guard), settle_body)),
         // Consume an in-flight redirect / (2) arrival at its `tileResolved`,
         // and (3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
         // `tileResolved` is the settle's terminal (SETTLE-STAGES §4 M5), after
@@ -53,7 +49,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // discard; (2) parks `PROP_ARRIVED` when it drops the card onto the
         // endpoint so this same settle does not read as (3)'s discard; later
         // settles do, owner included.
-        On::Action(&[ActionKind::TileResolved], "card.placed", "", Some(resolve_guard), on_resolved),
+        On::Action(Action::TileResolved("card.placed", None, Some(resolve_guard), on_resolved)),
         // 规则书（2）: 「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
         // settle is a real move's endpoint. `move.kind != Teleport` keeps the
@@ -61,18 +57,14 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // onto the card's own tile) from offering 「移动终点」 = 弦卷集团 and
         // clearing crystals while the card is still there (which would trip
         // the zero-crystal discard).
-        On::Action(
-            &[ActionKind::SettleAfter],
-            "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport", "",
-            None,
-            move_after),
+        On::Action(Action::SettleAfter("actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport", None, None, move_after)),
         On::Counteract(
             &[ChainKind::Pass],
-            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null", r#"经过“弦卷集团”（#29格）"#,
+            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null", Some(key!("smile_parade_when")),
             None,
             counteract),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", "", None, turn_end),
-        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, turn_end)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)
@@ -334,11 +326,33 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
 // （3） is `settle_body` / `on_resolved` above: a two-way board position
 // exchange for the settle body/ownership/rent reads, then the discard.
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
+    settle_body(player_id)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_resolved_kani(player_id: i32) -> card_sdk::Asked {
     on_resolved(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn move_after_kani(player_id: i32) -> card_sdk::Asked {
+    move_after(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }
 
 #[cfg(kani)]
@@ -351,24 +365,4 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
     on_crystals_changed(player_id)
-}
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn move_after_kani(player_id: i32) -> card_sdk::Asked {
-    move_after(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
-    settle_body(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
 }

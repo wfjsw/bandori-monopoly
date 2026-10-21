@@ -10,19 +10,18 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const TRITONE: CardDef = CardDef::new(
     "Mor:迷茫之蝶们的三全音",
     &[
         On::Counteract(
             &[ChainKind::Effect],
-            "actor == owner && effect.has(Pay) && value > 0",
-            r#"你将要失去或支付资金"#,
+            "actor == owner && effect.has(Pay) && value > 0", Some(key!("tritone_when")),
             None,
             counteract,
         ),
-        On::Action(&[ActionKind::TurnEnd], "", "", None, counteract),
+        On::Action(Action::TurnEnd("", None, None, counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫之蝶们的三全音"#)
@@ -99,6 +98,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

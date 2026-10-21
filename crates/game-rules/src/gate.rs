@@ -47,7 +47,7 @@ pub struct Layers {
 
 fn window(actor: i32, seats: impl Iterator<Item = Layers>) -> WindowCtx {
     WindowCtx {
-        kind: 0,
+        kind: String::new(),
         actor: actor as i64,
         target: -1,
         by: -1,
@@ -114,7 +114,7 @@ pub fn window_of_exclusive(
     ask: &ExclusiveAsk<'_>,
 ) -> WindowCtx {
     let mut win = window_of_world(w, actor);
-    win.kind = TriggerKind::ExclusiveUse.as_i32() as i64;
+    win.kind = TriggerKind::ExclusiveUse.spelling().into_owned();
     win.trigger_card = id_of(ask.card);
     win.name = ask.owner.to_string();
     win.value = ask.owner_is_base as i64;

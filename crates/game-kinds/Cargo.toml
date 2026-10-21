@@ -1,0 +1,12 @@
+[package]
+name = "game-kinds"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Data-only engine trigger-kind table and shared wire vocabulary. Engine vocabulary, defined in crates/."
+
+[dependencies]
+# `no_std`-capable derive only: `MoveKind` / `Dice` / `Seat` / `Tile` ride
+# `MoveCtx` saves and the guest ABI. Not the workspace serde (that one
+# enables `std`); this is derive-only so wasm guests stay `no_std`.
+serde = { version = "1", default-features = false, features = ["derive"] }

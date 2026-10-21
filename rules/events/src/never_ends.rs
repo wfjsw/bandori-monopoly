@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play("", "", None, play)])
+pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"一切不会结束"#)
             .text(r#"抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层在回合开始时移除的[除外]。"#)
@@ -49,6 +49,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

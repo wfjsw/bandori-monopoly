@@ -14,7 +14,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{counter, AbKind, ActionKind};
 use bandori_std::ctx::{self, state, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 /// Latch for 「每回合限一次」.
 const USED: &str = "skill.takiMeeting.used";
@@ -22,13 +22,14 @@ const USED: &str = "skill.takiMeeting.used";
 pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
-        On::Play("", "", Some(can_use), use_skill),
-        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", "", None, declare_cap),
-        On::Action(&[ActionKind::Abnormal], "", "", None, on_abnormal),
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, reset),
+        On::Play("", None, Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::Abnormal("", None, None, on_abnormal)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, reset)),
     ],
 )
-    .silent(&[1, 3])
+    .silent(&[1, 2, 4])
     // 「（初始0，上限5）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 5)]);
 
@@ -101,6 +102,8 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

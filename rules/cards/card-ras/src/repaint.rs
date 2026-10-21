@@ -13,8 +13,7 @@ pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
-        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0",
-        r#"任意其他玩家进行移动掷骰并进入移动阶段"#,
+        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0", Some(key!("repaint_when")),
         None,
         counteract,
     )],
@@ -79,6 +78,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_pay_factor(500);
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

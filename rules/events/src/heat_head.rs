@@ -3,9 +3,9 @@
 //! 事件文本（`CardMeta` beside the rule body, id `超燃甩头`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue, RollValue};
 
 use crate::util::{expire, keep, roll};
 
@@ -18,16 +18,16 @@ const PHASE_DOWN: i32 = 2;
 pub const HEAT_HEAD: CardDef = CardDef::new(
     "event:超燃甩头",
     &[
-        On::Play("", "", None, play),
+        On::Play("", None, None, play),
         // 「所有玩家的移动掷骰」 -- every plan / every face. `always` deleted
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
         // read on a BOARD_OWNER event instance).
-        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, add_die),
+        On::Filter(Filter::DiceRollPlan("", None, add_die)),
         // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
         // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
-        On::FilterValue(&[FilterKind::DiceRollValue], "", None, sub_die_filter),
-        On::Action(&[ActionKind::AtEnd], "", "", None, phase_end),
+        On::Filter(Filter::DiceRollValue("", None, sub_die_filter)),
+        On::Action(Action::AtEnd("", None, None, phase_end)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -52,10 +52,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「所有玩家的移动掷骰增加1d6」 -- the dice pool gains a d6 while
 /// phase 1 is up. Pure plan-dice reshape on `DiceRollPlan`.
-fn add_die(_player_id: i32, mut v: FilterValue) -> FilterValue {
+fn add_die(_player_id: i32, mut v: PlanValue) -> PlanValue {
     if ctx::crystals() == PHASE_UP {
-        v.extra_count = 1;
-        v.extra_sides = 6;
+        v.extra = Some(Dice { count: 1, sides: 6 });
     }
     v
 }
@@ -69,7 +68,7 @@ fn add_die(_player_id: i32, mut v: FilterValue) -> FilterValue {
 // Body is a pure DiceRollValue FilterValue (v79); the old Action-at-
 // DiceRollAfter shape is gone. See docs/CARDS.md for the one documented
 // exception that still allows an Action at DiceRollAfter to write the face.
-fn sub_die_filter(_player_id: i32, v: FilterValue) -> FilterValue {
+fn sub_die_filter(_player_id: i32, v: RollValue) -> RollValue {
     if ctx::crystals() != PHASE_DOWN {
         return v;
     }
@@ -77,13 +76,12 @@ fn sub_die_filter(_player_id: i32, v: FilterValue) -> FilterValue {
     if face <= 0 {
         return v;
     }
-    let cut = v.recorded_roll;
-    if cut == FilterValue::UNCHANGED {
+    let Some(cut) = v.recorded_roll else {
         // Host did not pre-roll; leave the face unchanged.
         return v;
-    }
+    };
     let cut = cut.min(face).max(0);
-    FilterValue {
+    RollValue {
         value: face - cut,
         ..v
     }
@@ -112,6 +110,8 @@ fn phase_end(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -121,13 +121,13 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn add_die_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn add_die_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     add_die(player_id, v)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn sub_die_filter_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn sub_die_filter_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
     sub_die_filter(player_id, v)
 }
 

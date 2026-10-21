@@ -14,7 +14,7 @@
 
 use bandori_std::state_key; use card_sdk::abi::{counter, ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
 
 const ID: &str = "skill:Poppin' Party:星之鼓动";
 /// 「星星贴纸」.
@@ -25,21 +25,16 @@ const USED: &str = "skill.poppin.used";
 pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
-        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, "", None, at_turn_start),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start)),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
         // returned still flashed -- one per step of every walk.
-        On::Action(
-            &[ActionKind::Pass],
-            "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)", "",
-            None,
-            on_pass,
-        ),
+        On::Action(Action::Pass("actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)", None, None, on_pass)),
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
-        On::Action(&[ActionKind::SettleBefore], "", "", Some(before_settle_applies), before_settle),
+        On::Action(Action::SettleBefore("", None, Some(before_settle_applies), before_settle)),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（1） chains two independent 「随后可使用…」 actions
         // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather
@@ -48,7 +43,7 @@ pub const POPPIN: CardDef = CardDef::new(
         // either is available; the body lists the available options and skips
         // the prompt when only one is. The 「或」 inside the crystal half is its
         // own sub-choice (draw 1 vs +2000).
-        On::Play("", "", Some(cant_play), press),
+        On::Play("", None, Some(cant_play), press),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」
@@ -56,32 +51,22 @@ pub const POPPIN: CardDef = CardDef::new(
         // (`tile.id == tile_named('星之鼓动山丘')` -- an unknown name reads -1 and so
         // never matches a real buy tile); 「只有全部…破产后」 is the residual
         // guard, a derived scan outside the CEL schema (docs/GUARDS.md §4.2c).
-        // FilterValue (not FilterFlag) so the denial reason rides `reason`.
-        On::FilterValue(
-            &[FilterKind::BuyGate],
-            "tile.id == tile_named('星之鼓动山丘')",
-            Some(lock_hill_applies),
-            lock_hill,
-        ),
+        // Gate payload so the denial reason rides `reason`.
+        On::Filter(Filter::BuyGate("tile.id == tile_named('星之鼓动山丘')", Some(lock_hill_applies), lock_hill)),
     ],
 )
     .silent(&[0]);
 
-/// Denial reason intern id 1 = `poppin_locked` (see rt.rs REASON_POPPIN_LOCKED).
-const REASON_POPPIN_LOCKED: i32 = 1;
-
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].
-/// Pure: deny via `allowed: 0`; the reason id rides `FilterValue.reason`.
-fn lock_hill(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+/// Pure: deny via `allowed: Some(false)`; the reason rides `GateValue.reason`.
+fn lock_hill(player_id: i32, mut g: GateValue) -> GateValue {
     // 「只有全部Poppin' Party角色破产后才可被正常购买」 -- someone is still
     // standing, so the lock holds.
     ctx::log(player_id, &Msg::new(key!("poppin_locked")));
-    card_sdk::abi::FilterValue {
-        allowed: 0,
-        reason: REASON_POPPIN_LOCKED,
-        ..v
-    }
+    g.allowed = Some(false);
+    g.reason = Some(key!("poppin_locked"));
+    g
 }
 
 /// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- the lock is in play
@@ -346,11 +331,21 @@ bandori_std::roster::GroupDef::new(r#"Poppin' Party"#)
     .text(r#"（1）[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸，随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]，随后可使用此卡的2个[奇迹水晶]抽1张卡或[获得]2000资金（使用此卡[奇迹水晶]的效果为1回合1次）。（2）无法获取[CiRCLE奖励]（3）游戏开始时所有Poppin' Party角色视为同时拥有“星之鼓动山丘”，可正常抵押“星之鼓动山丘”，且非Poppin' Party角色对“星之鼓动山丘”的[结算]改为分摊支付给所有未抵押“星之鼓动山丘”的Poppin' Party角色。“星之鼓动山丘”不可被抵押双倍支付购买，只有全部Poppin' Party角色破产后才可被正常购买。（4）不能通过[主要移动]的[结算]盖房。"#)
     .logo(r#"001"#);
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }
 
 #[cfg(kani)]
@@ -365,14 +360,8 @@ pub fn press_kani(player_id: i32) -> card_sdk::Asked {
     press(player_id)
 }
 
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
 #[cfg(kani)]
-pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
-    on_pass(player_id)
-}
-
-/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
-#[cfg(kani)]
-pub fn lock_hill_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+#[inline(always)]
+pub fn lock_hill_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {
     lock_hill(player_id, v)
 }

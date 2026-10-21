@@ -15,9 +15,10 @@
 //! counter that a CiRCLE reward resets; 「下回合移动投掷改为1d20+1d4」 is the
 //! dice table being rewritten when it fires.
 
-use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
+use bandori_std::kind::Actions;
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
 
 /// Turns since the last CiRCLE reward. Cleared on the reward.
 const SILENT: &str = "skill.kanonLost.silent";
@@ -27,12 +28,12 @@ pub const KANON_LOST: CardDef = CardDef::new(
     &[
         // (1) is a starting square: the before-match-start point decides start
         // positions.
-        On::Action(&[ActionKind::DeckBeforeGame], "", "", None, at_start),
+        On::Action(Action::DeckBeforeGame("", None, None, at_start)),
         // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
         // dice, so there are not two faces to subtract.
-        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && plan.fixed_roll == null", "", None, on_roll),
-        On::Action(&[bandori_std::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, on_circle),
-        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", "", None, at_turn_end),
+        On::Action(Action::DiceRollAfter("actor == owner && plan.fixed_roll == null", None, None, on_roll)),
+        On::Action(Actions::PassRewardAffected("actor == owner && slot('skill.kanonLost.silent') >= 3", None, None, on_circle)),
+        On::Action(Action::TurnEnd("actor == owner && slot('skill.kanonLost.silent') >= 3", None, None, at_turn_end)),
         // TODO(bug): possible engine issue — a `slot()` condition on a
         // FilterValue at DiceRollPlan did not observe a state write made
         // earlier in the same roll (seen while splitting eve_unify: the
@@ -42,7 +43,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // the roll). Verify whether the gate ever mis-fires here; if it does,
         // fix the condition evaluation snapshot (or move the gate into the
         // body) and re-run the kanon tests + a two-roll scenario.
-        On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
+        On::Filter(Filter::DiceRollPlan("actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan)),
     ],
 )
     .silent(&[2, 3]);
@@ -90,16 +91,18 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 /// (3) 「下回合移动投掷改为1d20+1d4」 -- the plan's dice table, rewritten while
-/// the silence holds. Pure: the base pair is `base_count`/`base_sides` and the
-/// extra d4 rides `add_base_count`/`add_base_sides` (the wrapper appends it).
-fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
-    v.base_count = 1;
-    v.base_sides = 20;
-    v.add_base_count = 1;
-    v.add_base_sides = 4;
+/// the silence holds. Pure: the base pair is `base` and the
+/// extra d4 rides `add_base` (the wrapper appends it).
+fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
+    v.base = Some(Dice { count: 1, sides: 20 });
+    v.add_base = Some(Dice { count: 1, sides: 4 });
     ctx::log(player_id, &Msg::new(key!("kanon_lost_dice")));
     v
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
@@ -128,6 +131,6 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
     on_plan(player_id, v)
 }

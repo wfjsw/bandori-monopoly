@@ -15,27 +15,22 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{prop, FilterValue, ActionKind, FilterKind};
+use card_sdk::abi::{prop, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue, RollValue};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
     &[
-        On::Play("", "", None, no_expectation),
+        On::Play("", None, None, no_expectation),
         // ABI v74 Filter/Action split of the old shared `hook` body; v79
         // folded the shave + the 「为0则不[结算]」 clamp into one pure
         // FilterValue at DiceRollValue (option C -- the text is a result
         // modifier, not a 「掷骰后」 listener). No DiceRollAfter entry.
         // PaySplitAdd is the pure payment bend.
-        On::FilterValue(&[FilterKind::DiceRollValue], "card.placed", None, roll_shave),
-        On::Filter(&[FilterKind::PaySplitAdd], "card.placed", None, pay_add),
-        On::Action(
-            &[ActionKind::Reshuffled],
-            "actor == owner && card.placed", "",
-            None,
-            reshuffled,
-        ),
+        On::Filter(Filter::DiceRollValue("card.placed", None, roll_shave)),
+        On::Filter(Filter::PaySplitAdd("card.placed", None, pay_add)),
+        On::Action(Action::Reshuffled("actor == owner && card.placed", None, None, reshuffled)),
     ],
 )
 // 规则书[特]: 「此卡不受任何其他效果影响」 -- static [特] property, stamped at
@@ -93,10 +88,10 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
 /// `CardNoExpectation` (1): 「投掷结果减少2（…如果为0则此次移动不[结算]）」.
-/// Pure FilterValue at DiceRollValue (v79): shaves the face by 2 and, when the
+/// Pure RollValue at DiceRollValue (v79): shaves the face by 2 and, when the
 /// result is 0, clears `resolve` so the walk does not settle. `card.placed`
 /// is the pre; only the owner's rolls are shaved.
-fn roll_shave(player_id: i32, v: FilterValue) -> FilterValue {
+fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
     if trigger::player_id() != player_id {
         return v;
     }
@@ -109,11 +104,11 @@ fn roll_shave(player_id: i32, v: FilterValue) -> FilterValue {
         player_id,
         &Msg::new(key!("no_expectation_roll")).i("n", cut as i64),
     );
-    let mut out = FilterValue { value: cut, ..v };
+    let mut out = RollValue { value: cut, ..v };
     if cut == 0 {
         // 「如果为0则此次移动不[结算]」 -- also when the face was already 0
         // (the clause keys on 「为0」, not on the shave having done work).
-        out.resolve = 0;
+        out.resolve = Some(false);
         ctx::log(
             player_id,
             &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
@@ -125,26 +120,27 @@ fn roll_shave(player_id: i32, v: FilterValue) -> FilterValue {
 /// 规则书[持续]（2）: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
 /// -- C# `CardNoExpectation.PaySplitAdd`, once per stack. Pure Filter (ABI v74):
 /// returns the bent figure.
-fn pay_add(player_id: i32, value: i32) -> i32 {
+fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     let n = stacks(player_id);
     if n <= 0 {
-        return value;
+        return PayAddValue { value: v.value, ..v };
     }
     let from = trigger::player_id();
     let to = trigger::target();
-    if value <= 0 {
-        return value;
+    if v.value <= 0 {
+        return PayAddValue { value: v.value, ..v };
     }
     let bump = 100 * n;
-    if from == player_id && to >= 0 && to != player_id {
+    let out = if from == player_id && to >= 0 && to != player_id {
         // paying someone else: amount up
-        value + bump
+        v.value + bump
     } else if to == player_id && from >= 0 && from != player_id {
         // being paid by someone else: amount down
-        (value - bump).max(0)
+        (v.value - bump).max(0)
     } else {
-        value
-    }
+        v.value
+    };
+    PayAddValue { value: out, ..v }
 }
 
 /// C# `CardNoExpectation.Reshuffled` -- each time the owner's discard pile is
@@ -156,6 +152,10 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -165,18 +165,14 @@ pub fn no_expectation_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_shave_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn roll_shave_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
     roll_shave(player_id, v)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
-    pay_add(player_id, value)
+pub fn pay_add_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    pay_add(player_id, v)
 }
 
 #[cfg(kani)]
@@ -184,4 +180,3 @@ pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
 pub fn reshuffled_kani(player_id: i32) -> card_sdk::Asked {
     reshuffled(player_id)
 }
-

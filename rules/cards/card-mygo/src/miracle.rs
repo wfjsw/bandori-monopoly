@@ -13,30 +13,20 @@
 
 use card_sdk::abi::{counter, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
-        On::Play("", "", None, miracle),
-        On::Action(&[ActionKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0", "", None, before_build),
-        On::Action(&[ActionKind::BuildAfter], "actor == owner && card.counter('crystals') >= 1 && card.placed", "", None, after_build),
+        On::Play("", None, None, miracle),
+        On::Action(Action::BuildBefore("actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0", None, None, before_build)),
+        On::Action(Action::BuildAfter("actor == owner && card.counter('crystals') >= 1 && card.placed", None, None, after_build)),
         // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
         // counts, not only the end-tile [重叠]. Bookkeeping (the running mask)
         // is silent; the reward is the visible entry.
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner && card.placed && players_on(tile.id, owner) > 0", "",
-            Some(record_pass_applies),
-            record_pass,
-        ),
-        On::Action(
-            &[ActionKind::PassTile],
-            "actor == owner && card.placed", "",
-            Some(all_others_passed),
-            pass_player,
-        ),
+        On::Action(Action::PassTile("actor == owner && card.placed && players_on(tile.id, owner) > 0", None, Some(record_pass_applies), record_pass)),
+        On::Action(Action::PassTile("actor == owner && card.placed", None, Some(all_others_passed), pass_player)),
     ],
 )
 .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
@@ -191,6 +181,10 @@ fn field_crystals(p: i32) -> i32 {
         .sum()
 }
 
+//
+
+//
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
@@ -209,8 +203,6 @@ pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
 pub fn after_build_kani(player_id: i32) -> card_sdk::Asked {
     after_build(player_id)
 }
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
 
 #[cfg(kani)]
 #[inline(always)]

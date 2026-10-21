@@ -9,18 +9,18 @@
 
 use card_sdk::abi::{roll_source, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
     &[
-        On::Play("", "", Some(cant_play), haneoka),
+        On::Play("", None, Some(cant_play), haneoka),
         // C# `CardHaneoka.PaySplitChoose` -- while placed, may cancel one payment.
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive `ask_yes` + `set_dest` + `set_pay_amount(0)` offer sits
         // immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(&[ActionKind::PaySplitChooseBefore], "actor == owner && card.placed && value > 0", "", None, pay_choose),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0", None, None, pay_choose)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"羽丘的不可思议女孩"#)
@@ -146,6 +146,10 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

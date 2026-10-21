@@ -10,7 +10,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TAE_SOUND: CardDef =
-    CardDef::new("PPP:（多惠）寻找更好的声音", &[On::Play("", "", None, tae_sound)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("PPP:（多惠）寻找更好的声音", &[On::Play("", None, None, tae_sound)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"寻找更好的声音"#)
         .raw_name(r#"（多惠）寻找更好的声音"#)
         .tags(&[])
@@ -26,6 +26,10 @@ fn tae_sound(player_id: i32) -> card_sdk::Asked {
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tae_sound_why")))?;
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

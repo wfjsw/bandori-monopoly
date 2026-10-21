@@ -15,8 +15,7 @@ pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner",
-        r#"受到[除外]以外的异常移动效果影响"#,
+        "target == owner", Some(key!("own_stage_when")),
         Some(can_counteract),
         counteract,
     )],
@@ -78,8 +77,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// Kani-only direct-call exports (ppcost). Production builds omit these.
+//
 
+//
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

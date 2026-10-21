@@ -7,7 +7,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play("", "", None, pure_wings)]).meta(&card_sdk::meta::CardMeta::new()
+pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play("", None, None, pure_wings)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"纯真振翅"#)
         .raw_name(r#"纯真振翅"#)
         .tags(&[])
@@ -53,6 +53,10 @@ fn pure_wings(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

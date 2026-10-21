@@ -15,8 +15,7 @@ pub const AKO_DARK: CardDef = CardDef::new(
     "R:（亚子）黑暗大魔姬亚子",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
-        r#"你即将向其他玩家支付资金"#,
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0", Some(key!("ako_dark_when")),
         None,
         counteract,
     )],
@@ -51,6 +50,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

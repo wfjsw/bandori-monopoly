@@ -15,7 +15,7 @@
 
 use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{Action, CardDef, key, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";
 
@@ -25,9 +25,10 @@ const SLOT_STAY: &str = "parking_space_stay";
 pub const PARKING_SPACE: CardDef = CardDef::new(
     "通用:[都筑诗船]Parking Space",
     &[
-        On::Play("", "", Some(cant_play), play),
+        On::Play("", None, Some(cant_play), play),
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
-        On::Action(&[ActionKind::SettleBody, ActionKind::TurnEndAfter], "", "", Some(counteract_guard), counteract),
+        On::Action(Action::SettleBody("", None, Some(counteract_guard), counteract)),
+        On::Action(Action::TurnEndAfter("", None, Some(counteract_guard), counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Parking Space"#)
@@ -165,6 +166,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+//
+
+//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
