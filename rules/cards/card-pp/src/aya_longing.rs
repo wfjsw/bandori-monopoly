@@ -32,18 +32,22 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         On::Filter(Filter::PaySplitAdd("card.placed", None, shave_x_filter)),
         // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500」 -- the
         // 共鸣 cost makes this half interactive (`try_resonance` prompts), so it
-        // cannot be a pure Filter and stays on `ActionKind::Effect` (the payment
-        // declaration, whose `t.value` the engine still folds; PayAfter is too
-        // late). Subtraction of non-negative amounts under a final floor is
-        // order-independent, so the X-then-1500 reading is preserved.
+        // cannot be a pure Filter. It rides `Action::PaySplitMulBefore` (v96),
+        // the writable stage between the `PaySplitAdd` fold and the `PaySplitMul`
+        // fold (规则书 支付阶段 3 「支付计算后」). Sibling Add modifiers no longer
+        // see the 1500 already gone; the shave lands on the composed Add figure.
+        // (1)'s pure `PaySplitAdd` filter stays above it -- two subtractions
+        // under a local floor are order-independent, so the X-then-1500 reading
+        // is preserved.
         //
-        // TODO(规则书): only the interactive half is still off-stage. It lands at
-        //   Effect (before PaySplitAdd/PaySplitMul), so a sibling add/mul
-        //   modifier sees the 1500 already gone. Fixing that needs a
-        //   `PaySplitAddBefore` interactive pre-stage (the shape
-        //   `PaySplitChooseBefore` / `PayCombinedAddBefore` already use) -- there
-        //   is no writable stage between PaySplitAdd and PaySplitMul today.
-        On::Action(Action::Effect("actor == owner && value > 0", Some(key!("aya_longing_when")), None, pay_res)),
+        // Reading pinned here: the 1500 shave runs **after** the whole
+        // `PaySplitAdd` fold (base + sibling Add, then −1500 with a local floor).
+        // 规则书 does not pin floor-vs-add order among same-stage ± clauses; see
+        // the sibling-add regression test.
+        // TODO(规则书): local `.max(0)` per clause vs a final floor after the
+        //   whole add/sub stage is still unnamed by the book (the file's existing
+        //   order-independence claim covers X-then-1500, not add-then-floor).
+        On::Action(Action::PaySplitMulBefore("actor == owner && value > 0", Some(key!("aya_longing_when")), None, pay_res)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)
@@ -131,7 +135,8 @@ fn shave_x_filter(player_id: i32, mut v: PayAddValue) -> PayAddValue {
 }
 
 /// 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 --
-/// the 共鸣 cost is interactive, so this half stays an Action.
+/// the 共鸣 cost is interactive, so this half stays an Action on
+/// `PaySplitMulBefore` (the PaySplitMul input).
 fn pay_res(player_id: i32) -> card_sdk::Asked {
     if trigger::value() <= 0 {
         return Ok(());
