@@ -462,8 +462,9 @@ pins a known vector.
 The same recipe applies to the **server**: `rules-worker` fills `bundle` from
 the deployed glue identity (`BD_GLUE_SHA`, or the `glueSha256` in
 `BD_ENGINE_ID`, default `webui/src/wasm/engine_id.json`) plus its own ruleset
-and data hashes, so a server-made record and a browser-made record of the same
-deploy seal the **same** stamp and resolve to the same bundle.
+hash and the same empty `data_sha256`, so a server-made record and a
+browser-made record of the same deploy seal the **same** stamp and resolve to
+the same bundle.
 
 ### 9.2 Archive layout
 
@@ -873,21 +874,29 @@ whole point of carrying it. The user is told: 「正在使用回放文件内嵌�
 
 **BOM note (`data_sha256`).** `data_sha256` is empty on every record this
 build writes (§9.1): the board and rule parameters ride in the record's
-`MatchSetup`, so host tables are not hashed. Older records may still carry a
-real `data_sha256` over the two `DATA_FILES` (and historically the display
-tables that are no longer hashed). Those tables may begin with a UTF-8 BOM,
-and a byte-preserving decode keeps it (`as_bytes()` puts `EF BB BF` back)
-while `TextDecoder`'s default and `Response.text()` strip it. The stamp
-recipe was unified on **hash without the BOM**: `load_data`, `Ctx::load` and
-`tools/archive-engine.mjs` all drop a leading `U+FEFF` before hashing, so a
-record sealed by `tools/`, the server or a page carried the same
-`data_sha256` for the same tables. The embedded loader still decodes the
-tables both ways and feeds the one whose pre-recipe hash is the record's own
-`data_sha256`, so the bytes the engine parses match what the file was sealed
-against -- including records sealed before the recipe was unified (those
-carry the BOM-inclusive stamp; `compat` names `data_sha256` and `force`
-opens them). (The same dual decode is what the hosted worker's `keepBom`
-fetch does; a mismatch there falls back to the embedded engine.)
+`MatchSetup`, so host tables are not hashed. `tools/archive-engine.mjs` and
+`tools/rebuild-engine.mjs` seal **exactly** that value into the bundle id --
+they take `data_sha256` from the loaded engine's `engine_stamp()`, never
+re-hash the boot tables. (They used to hash `BOOT_FILES` into the slot, which
+minted an id no record could name; entries sealed that way stay in the index
+and gain an `aliases` key mapping the record's lookup id onto the stored one,
+see `healEmptyDataAliases` in `tools/engine-bundle.mjs`.)
+
+Older records may still carry a real `data_sha256` over the two `DATA_FILES`
+(and historically the display tables that are no longer hashed). Those tables
+may begin with a UTF-8 BOM, and a byte-preserving decode keeps it
+(`as_bytes()` puts `EF BB BF` back) while `TextDecoder`'s default and
+`Response.text()` strip it. The stamp recipe was unified on **hash without
+the BOM**: `load_data`, `Ctx::load` and `tools/archive-engine.mjs` all drop a
+leading `U+FEFF` before hashing, so a record sealed by `tools/`, the server or
+a page carried the same `data_sha256` for the same tables. The embedded
+loader still decodes the tables both ways and feeds the one whose pre-recipe
+hash is the record's own `data_sha256`, so the bytes the engine parses match
+what the file was sealed against -- including records sealed before the
+recipe was unified (those carry the BOM-inclusive stamp; `compat` names
+`data_sha256` and `force` opens them). (The same dual decode is what the
+hosted worker's `keepBom` fetch does; a mismatch there falls back to the
+embedded engine.)
 
 Sizes (the 2026-10-08 archive bundle `ae7ede19…`, 18 files, measured by
 `tools/bdrec-portable.mjs pack`):
