@@ -34,7 +34,7 @@ const ARRAY_OPS: &[&str] = &[
     "end_turn_now", "teleport_as", "log_as",
     "can_pay", "cant_move", "turn_player", "round_no",
     "turn_key", "persona_is", "set_persona", "in_group", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
-    "ask", "trig_kind", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",
+    "ask", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",
     "trig_pay_is_rent", "trig_move_kind", "trig_move_resolve", "trig_move_tag", "trig_move_main", "trig_settle_redirect", "trig_move_dir", "trig_move_remaining", "trig_move_from",
     "trig_move_total", "trig_cards", "trig_move_roll", "trig_roll_source", "trig_buy_kind", "trig_seller", "trig_price", "trig_set_price",
     "trig_deal_owner", "trig_set_deal_owner", "trig_deal_houses", "trig_set_deal_houses", "trig_deal_mortgaged", "trig_set_deal_mortgaged", "trig_set_reason", "trig_set_move_roll",
@@ -106,6 +106,9 @@ fn main() {
     writeln!(s, "    fn op_msg_text(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_text, [p, n, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_msg_reply(&mut self, v: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_reply, [v, 0, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_trig_name(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::trig_name, [p, n, 0, 0, 0, 0])) }}").unwrap();
+    // ABI spelling shift: `trig_kind` is the two-call out-buffer `(p, n)`,
+    // not an `[i32; 6]` array op. Keep it out of ARRAY_OPS.
+    writeln!(s, "    fn op_trig_kind(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::trig_kind, [p, n, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "}}").unwrap();
     fs::write(&out, s).unwrap();
 
@@ -133,7 +136,7 @@ fn main() {
         "op_add_card_counter", "op_count_held", "op_add_held", "op_count_held_name",
         "op_set_held_name", "op_move_units", "op_self_uid", "op_send", "op_msg_sender_uid",
         "op_msg_sender_seat", "op_msg_name", "op_msg_a", "op_msg_b", "op_msg_c", "op_msg_tile",
-        "op_msg_seat", "op_msg_text", "op_msg_reply", "op_trig_name",
+        "op_msg_seat", "op_msg_text", "op_msg_reply", "op_trig_name", "op_trig_kind",
     ];
     let mut generated: Vec<String> = ARRAY_OPS.iter().map(|n| format!("op_{n}")).collect();
     generated.extend(custom.iter().map(|s| s.to_string()));
