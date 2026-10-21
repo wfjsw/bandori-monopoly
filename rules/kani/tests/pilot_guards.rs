@@ -93,7 +93,8 @@ fn chain_pay_guard_evaluates() {
         c.set_scalar(VarId::Value, value);
         c.set_scalar(VarId::Target, target);
         if has_pay {
-            c.set_insert(SetId::ChainKinds, 9);
+            // Kind keys on `SetId::ChainKinds` are `id_of(spelling)`.
+            c.set_insert(SetId::ChainKinds, rules_cond_ir::ctx::id_of("pay"));
         }
         assert_eq!(
             prog.eval_bool(&c),

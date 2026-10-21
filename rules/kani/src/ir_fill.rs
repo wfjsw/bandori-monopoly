@@ -1557,8 +1557,9 @@ pub fn fill_is_start(w: &World, owner: i32, tile: i64) -> IrCtx {
 /// Fill a context for the `effect.has(Pay)` pilot.
 pub fn fill_chain_pay(w: &World, owner: i32) -> IrCtx {
     let mut c = fill_from_world(w, owner, 0, true, -1, &TriggerOverlay::default());
-    // Chain link: kind = Pay (9), hits = owner.
-    c.set_insert(SetId::ChainKinds, 9);
+    // Chain link: kind = Pay (`id_of("pay")`), hits = owner. Kind keys on
+    // `SetId::ChainKinds` are `id_of(spelling)`, matching the IR bake.
+    c.set_insert(SetId::ChainKinds, rules_cond_ir::ctx::id_of("pay"));
     c.set_insert(SetId::ChainHits, owner as i64);
     c.set_scalar(VarId::EffectCount, 1);
     let _ = (FnId::Tok, SetId::Circle);

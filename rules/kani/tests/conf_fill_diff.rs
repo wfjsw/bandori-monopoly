@@ -336,7 +336,7 @@ impl SnapSrc for Fixture {
             .chain
             .iter()
             .map(|&(kind, from, hits)| Effect {
-                kind: chain_kind_str(kind),
+                kind: chain_kind_str(kind).to_string(),
                 target: hits as i32,
                 from: from as i32,
                 tile: -1,
@@ -388,9 +388,6 @@ impl SnapSrc for Fixture {
     fn money(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.money).unwrap_or(0)
     }
-    fn charge(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.charge).unwrap_or(0)
-    }
     fn group_pool(&self, p: i32, name: &str) -> i32 {
         // Fixture holds one unnamed group-pool scalar; any name reads it.
         let _ = name;
@@ -412,22 +409,13 @@ impl SnapSrc for Fixture {
             .unwrap_or(0)
     }
     fn state_get(&self, p: i32, key: &str) -> i32 {
-        match key {
-            "stay" => self.stay_of_model(p),
-            _ => 0,
-        }
-    }
-    fn stay_of_model(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.stay).unwrap_or(0)
-    }
-    fn stun_of(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.stun).unwrap_or(0)
-    }
-    fn state_get(&self, p: i32, key: &str) -> i32 {
         let Some(s) = self.seats.get(p as usize) else {
             return 0;
         };
         match key {
+            // Production `cond_pre` reads fire via `state_get(p, "charge")`
+            // (the ABI-88 named-marker spelling), not a dedicated `charge()`.
+            "charge" => s.charge,
             "stay" => s.stay,
             "stun" => s.stun,
             "stunStart" => s.stun_start,
