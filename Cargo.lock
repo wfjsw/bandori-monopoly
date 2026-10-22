@@ -1749,7 +1749,6 @@ dependencies = [
  "bandori-std",
  "card-sdk",
  "rules-status",
- "rules-tiles",
 ]
 
 [[package]]

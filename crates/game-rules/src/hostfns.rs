@@ -2899,8 +2899,10 @@ pub fn move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 /// Resolve `Target` to the receiver instance uids that could answer, in field
 /// order. `Uid` names one; `Card` names the first field copy of that card id on
-/// that seat; `Board` names a standing board pseudo card (the tile-mark owner and kin)
-/// via [`CardWorld::mark_rule_instances`].
+/// that seat; `Board` names a standing board-owned rule by id -- a tile rule
+/// (`tile:circle`), a mark owner (`mark:cp`), an active event, a status host.
+/// They all live in the one `BOARD_OWNER` list, so the id is what
+/// disambiguates.
 fn resolve_receivers<C: HostCtx>(
     c: &C,
     target: &abi::Target,
@@ -2919,7 +2921,8 @@ fn resolve_receivers<C: HostCtx>(
                     }
                 }
             }
-            for (u, id) in w.mark_rule_instances() {
+            // Board-owned standing rules (tile / event / mark / status).
+            for (u, id) in w.field_instances(game_core::state::BOARD_OWNER) {
                 if u == uid {
                     hit.push((u, id));
                     return hit;
@@ -2933,7 +2936,7 @@ fn resolve_receivers<C: HostCtx>(
             .filter(|(_, id)| id == card)
             .collect(),
         abi::Target::Board(id) => w
-            .mark_rule_instances()
+            .field_instances(game_core::state::BOARD_OWNER)
             .into_iter()
             .filter(|(_, rid)| rid == id)
             .collect(),

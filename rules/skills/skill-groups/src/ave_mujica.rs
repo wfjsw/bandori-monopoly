@@ -34,9 +34,11 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
     &[
         On::Play("", None, Some(can_halve), halve),
         On::Action(Action::TurnStartBefore("slot('skillState') != 0", None, None, at_turn_start)),
-        // Latch the declared figure for the PayAfter one-sided fixup. `Effect`
-        // is the payment declaration (pre-PaySplitAdd); see `latch_orig`.
-        On::Action(Action::Effect("slot('skillState') == 2 && card.placed", None, None, latch_orig)),
+        // Latch the PaySplitMul input for the PayAfter one-sided fixup. Rides
+        // `PaySplitMulBefore` (v96) so the stored figure is the one the bend
+        // Filter is about to see -- after any `PaySplitAdd` rewrite, before
+        // `PaySplitMul`; see `latch_orig`.
+        On::Action(Action::PaySplitMulBefore("slot('skillState') == 2 && card.placed", None, None, latch_orig)),
         On::Filter(Filter::PaySplitMul("slot('skillState') == 2 && card.placed", None, bend)),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
         // figure, so the counterpart's side is restored here.
@@ -108,21 +110,12 @@ fn on_state(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Latch the declared (pre-PaySplitAdd) payment figure for [`after_bend`]. Rides
-/// `ActionKind::Effect` (the payment declaration) so the PaySplitMul Filter below
-/// stays pure.
-///
-/// TODO(规则书) AVE-CLAW-01: this stores the *declared* amount, not the
-///   PaySplitMul input the old in-Filter latch saw. Whenever a PaySplitAdd also
-///   rewrote the figure, `after_bend`'s clawback is against the declared figure
-///   instead of the PaySplitMul input. **class B** -- the pipeline's amount
-///   stages (`PaySplitAdd` -> `PaySplitMul`) are pure Filters (`FilterKind`,
-///   integer fold, `pure::refuse_if_filter`), so nothing can *write* the
-///   post-Add figure between them. A correct latch needs a writable interactive
-///   pre-stage immediately before `PaySplitMul` (the shape
-///   `PaySplitChooseBefore` / `PayCombinedAddBefore` already use); there is
-///   none today. Tests do not combine ave_mujica bend with a PaySplitAdd
-///   modifier.
+/// Latch the **PaySplitMul input** for [`after_bend`] -- the figure the bend
+/// Filter is about to see. Rides `ActionKind::PaySplitMulBefore` (v96), the
+/// writable stage immediately before the pure `PaySplitMul` fold, so a sibling
+/// `PaySplitAdd` rewrite is already composed into `value`. That is exactly the
+/// figure the old in-Filter latch saw; the clawback delta is therefore against
+/// the post-Add amount, not the declared one.
 fn latch_orig(player_id: i32) -> card_sdk::Asked {
     let value = ctx::trigger::value();
     if value <= 0 {

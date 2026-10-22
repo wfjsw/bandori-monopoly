@@ -3296,11 +3296,35 @@ impl Cx<'_> {
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
         for kind in ["paySplitAdd", "paySplitMul", "paySplitChoose", "paySplitAt"] {
-            // v78: interactive pre-stage. A prompt that used to live inside the
-            // PaySplitChoose Filter rides `paySplitChooseBefore` (an Action) so the prompt is
-            // at the rulebook position and the pure Filter still applies here.
-            // The ask's `set_pay_amount` / `set_pay_target` fold here just like
-            // any other stage's rewrite.
+            // v78 / v96: interactive pre-stages. A prompt that used to live
+            // inside a pure Filter rides the matching `*Before` Action so the
+            // prompt is at the rulebook position and the pure Filter still
+            // applies here. The ask's `set_pay_amount` / `set_pay_target` fold
+            // here just like any other stage's rewrite.
+            //
+            // `paySplitMulBefore` (v96) is the writable stage between the
+            // `paySplitAdd` fold and the `paySplitMul` fold (规则书 支付阶段 3
+            // 「支付计算后」): `value` is the PaySplitMul input.
+            if kind == "paySplitMul" {
+                let ask = raise!(
+                    self,
+                    "paySplitMulBefore",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = amount,
+                    by_card = p.by_card,
+                    @p TriggerPay::new(rent),
+                    tile = p.tile.map_or(-1, |t| t as i32)
+                )?;
+                if ask.value != amount {
+                    modified = true;
+                }
+                amount = ask.value;
+                if ask.target >= 0 {
+                    to = Some(ask.target as usize);
+                }
+            }
             if kind == "paySplitChoose" {
                 let ask = raise!(
                     self,
@@ -3333,6 +3357,31 @@ impl Cx<'_> {
                 @p TriggerPay::new(rent),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
+            // V5 (`NEGATION-AUDIT`) at the settlement stages: `paySplitChoose`
+            // is the Flag-shaped one -- a `false` Filter answer is folded to
+            // `set_cancelled()` by `drive_flag`, and that **stops the payment**
+            // (abi.rs `FilterKind::PaySplitChoose`: 「Body answers cancel: false
+            // stops the payment」). 规则书 支付阶段 5 「取消支付 / 无需失去资金」
+            // (G-MONEY-14, rulebook-doc.md:233) is exactly this row. The same
+            // flag is honoured by the `effect` declaration and the `pay`
+            // settlement window above/below; this stage used to fold only
+            // `t.value` / `t.target` and drop the cancel, so a CRYCHIC band-skill
+            // 「你无法获得或失去资金」 lock (or J11's stun cancel) was ignored.
+            // `payCombinedCancel` one level up already honours it; match that.
+            if kind == "paySplitChoose" && t.is_cancelled() {
+                raise!(
+                    self,
+                    "payAfter",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = 0,
+                    by_card = p.by_card,
+                    @p TriggerPay::new(rent),
+                    tile = p.tile.map_or(-1, |t| t as i32)
+                )?;
+                return Ok(Paid::default());
+            }
             if t.value != before {
                 modified = true;
             }

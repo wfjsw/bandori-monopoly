@@ -392,6 +392,31 @@ fn fever_leaves_to_the_users_discard_pile() {
     );
 }
 
+/// C# `Card.User` is per-card-instance Mem, so it has to live on the **placed**
+/// field card. `place_card` returns that uid precisely because `ctx::set_prop`
+/// (self) writes the play run's instance, which is not what （2）'s `turn_start`
+/// runs as -- a write there is lost and 「放入[使用者]弃卡区」 silently degrades
+/// to `set_dest`'s own-owner pile. That degradation is invisible whenever
+/// owner == user (the normal case: 「将此卡放置在[使用者]的[场地]」), so pin the
+/// placement itself rather than the discard.
+#[test]
+fn fever_user_mem_lands_on_the_placed_instance() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:[衍生]FEVER!").unwrap();
+    let f = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == "通用:[衍生]FEVER!")
+        .expect("FEVER! on the user's field");
+    // 1-based (`player_id + 1`) so seat 0 is representable: unset reads 0.
+    assert_eq!(
+        f.props.get("fever.user").copied(),
+        Some(1),
+        "the user Mem is on the placed instance: {:?}",
+        f.props
+    );
+}
+
 /// 规则书[手]: 「所有其他玩家可选择[消耗]500资金」 -- **every** other player may
 /// choose. No printed cash gate, so a seat under 500 is still asked.
 #[test]

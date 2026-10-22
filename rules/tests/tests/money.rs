@@ -714,3 +714,91 @@ fn modifier_order_is_effect_then_pay_add_then_one_round() {
     let after_eight = half_fold + 8; // 21
     assert_eq!(ceil10(after_eight), 30, "25 half → +8 → round10 = 30");
 }
+
+// =====================================================================
+// PaySplitMulBefore (v96) -- the writable stage between Add and Mul
+// =====================================================================
+
+/// Say yes to a [共鸣] window and decline everything else.
+fn accept_echo_else_decline(t: &mut Table) {
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("resonance") {
+            let _ = t.answer(t.asked()[0], 0);
+        } else {
+            t.decline();
+        }
+    }
+}
+
+/// AYA (2) 「将金额降低1500（最低0）」 rides `PaySplitMulBefore` (v96): the
+/// shave lands on the **composed** `PaySplitAdd` figure, not before it.
+///
+/// Reading pinned here: base + sibling Add, then −1500 with a local floor
+/// (`(base + add − 1500).max(0)`). 规则书 does not pin floor-vs-add order
+/// among same-stage ± clauses; if the shave ran first (the old `Effect`
+/// stage) the figure would be `(1000 − 1500).max(0) + 500 = 500`.
+///
+/// Setup: base 1000 (`TEST:xfer1000`), sibling Add +500 (不要背负期待 ×5
+/// stacks, 「[支付]资金时金额提高100」 per stack), AYA (2) −1500 → 0.
+/// P0 is richer than P1 so AYA (1)'s poorest clause stays out of the way.
+///
+/// 规则书（憧憬的前方（2））: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」.
+#[test]
+fn aya_longing_1500_shave_lands_after_sibling_pay_split_add() {
+    let mut t = Table::vanilla(2);
+    // Hooks only -- the play body (discard recycle) is not under test.
+    t.place_raw(0, "PP:[丸山彩]憧憬的前方");
+    t.place_raw(0, "PP:不要背负期待");
+    t.set_state(0, "no_expectation_stacks", 5); // +500 on P0→P1 pays
+    t.give(0, &["PP:[衍生]共鸣"]);
+    t.set_money(0, 15_000);
+    t.set_money(1, 10_000);
+    let before = t.money(0);
+    t.give_play(0, "TEST:xfer1000").unwrap();
+    accept_echo_else_decline(&mut t);
+    let paid = before - t.money(0);
+    assert_eq!(
+        paid, 0,
+        "(1000 + 500) − 1500 floor 0 = 0; the old Effect-first shave paid 500"
+    );
+}
+
+/// AVE-CLAW-01: the one-sided bend clawback latches the **PaySplitMul input**
+/// (the post-Add figure the bend Filter sees), not the declared amount.
+///
+/// Reading pinned here: `ORIG` = post-`PaySplitAdd` figure; the counterpart
+/// nets that figure (「只对自己结算，对应的其他玩家收支不变」 relative to the
+/// amount the bend was about to scale).
+///
+/// Setup: declared 1000 (`TEST:xfer1000`), sibling Add +500 (不要背负期待 ×5),
+/// so the PaySplitMul input is 1500. Bend ×1.5 → 2250. Clawback delta is
+/// 750 against ORIG=1500; the counterpart nets 1500. If `ORIG` were the
+/// declared 1000 the counterpart would net 1000.
+///
+/// 不要背负期待 only bends player-to-player transfers, so the clawback's own
+/// bank payment (`ctx::pay(to, delta)`) is not re-bumped.
+///
+/// 规则书（假面之下的真实）: 「你在状态2时从[收取]与[支付]的资金改为1.5倍
+/// （只对自己结算，对应的其他玩家收支不变）」.
+#[test]
+fn ave_mujica_clawback_uses_post_add_pay_split_mul_input() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丰川祥子");
+    t.place_raw(0, "skill:Ave Mujica:假面之下的真实");
+    t.set_state(0, "skillState", 2);
+    t.place_raw(0, "PP:不要背负期待");
+    t.set_state(0, "no_expectation_stacks", 5); // +500 on P0→P1 pays
+    t.set_money(0, 10_000);
+    t.set_money(1, 10_000);
+    t.give_play(0, "TEST:xfer1000").unwrap();
+    skip_all(&mut t);
+    // declared 1000 → +500 Add = 1500 (PaySplitMul input) → ×1.5 = 2250.
+    assert_eq!(t.money(0), 10_000 - 2_250, "P0 pays the bent 1.5× of 1500");
+    // Counterpart nets the PaySplitMul input (1500), not the declared 1000.
+    assert_eq!(
+        t.money(1),
+        10_000 + 1_500,
+        "P1 nets the post-Add figure; a declared-figure latch would net 1000"
+    );
+}

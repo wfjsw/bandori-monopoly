@@ -813,14 +813,15 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), player_id)
 }
 
-/// `PP:[丸山彩]憧憬的前方` -- `On::Action(Effect)` (was PaySplitAdd; the interactive
-/// resonance shave moved to the payment declaration so `set_pay_amount` still
-/// lands -- see the card's Pattern E comment).
+/// `PP:[丸山彩]憧憬的前方` -- `On::Action(PaySplitMulBefore)` (was PaySplitAdd,
+/// then Effect; the interactive resonance shave rides the writable stage
+/// between `PaySplitAdd` and `PaySplitMul` so `set_pay_amount` lands on the
+/// composed Add figure -- see the card's comment).
 #[cfg(feature = "band-pp")]
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
     hook_kind_only_idx(
         crate::card_id!("PP:[丸山彩]憧憬的前方"),
-        card_sdk::abi::ActionKind::Effect,
+        card_sdk::abi::ActionKind::PaySplitMulBefore,
         player_id,
     )
 }

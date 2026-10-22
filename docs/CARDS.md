@@ -316,7 +316,7 @@ happened.
 | level | kinds | when |
 |---|---|---|
 | Combined | `PayCombinedAdd` / `PayCombinedMul` / `PayCombinedCancel` (+ `PayCombinedAddBefore` prompt) | once per payment command, on the figure before any 「[分摊]」 divide |
-| Split | `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt` (+ `PaySplitChooseBefore` prompt) | on each settled leg/share (and once for a non-split payment) |
+| Split | `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt` (+ `PaySplitMulBefore` / `PaySplitChooseBefore` prompts) | on each settled leg/share (and once for a non-split payment) |
 
 ### Host application order
 
@@ -324,8 +324,8 @@ The host raises the pipeline stages in rulebook order and folds each stage's
 return before the next raise, within a stage in placement order:
 
 * pay: `effect` declaration → `payCombinedAddBefore` (Action) → `payCombinedAdd` →
-  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMul` →
-  `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
+  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMulBefore` (Action) →
+  `paySplitMul` → `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
 * roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window).
   `DiceRollAfter` is the one Action that may still roll and write the face
@@ -825,9 +825,15 @@ receiver admitted the message). Handling a message does not flash the card.
 
 Addressing (`abi::Target`): `Uid(i32)` (a specific field instance),
 `Card { player, card }` (the instance of a card id on a seat), or
-`Board(String)` (a standing board-owned pseudo card, e.g. `mark:cp`).
+`Board(String)` (a standing board-owned rule by id -- a tile rule
+(`tile:circle`), a mark owner (`mark:cp`), an active event, a status host).
 Multiple receivers of a name: the first admitted one in field order answers;
 a handler whose `pre` / guard rejects is not a receiver.
+
+**One rule's body is that rule's business.** A card that wants another card's
+effect asks for it over this channel; it does not call the other card's Rust.
+The whole `rules/*` tree has exactly one remaining cross-module body call and
+it is a bug if a second appears.
 
 `Message` is a few typed ints plus an optional name -- `name`, `a`, `b`, `c`,
 `tile`, `seat`, `text`. `ctx::message::{sender_uid, sender_seat, name, a, b,
@@ -943,6 +949,37 @@ The landing clause (settle on a CP tile: remove the tile unit + one on-card
 CP of the placer, gain 800) lives on `mark:cp`; the spread clause (「此卡在
 格子上添加的[CP点]及其产物」) keys on `TileMark.src` provenance the same way
 it does today.
+
+### `event:协助CiRCLE重建` ↔ `tile:circle` (card → tile rule)
+
+`event:协助CiRCLE重建` migrates 「CiRCLE原本的所有效果」 onto 「CiRCLE咖啡厅」
+(「…迁移至CiRCLE咖啡厅并覆盖其原本效果」). One of those is `tile:circle`'s
+[经过] reward. The event does **not** call that body: it messages the card.
+
+```rust
+// rules/events/src/circle_rebuild.rs -- the cafe's [经过]
+ctx::send(
+    &Target::Board("tile:circle".into()),
+    "settleReward",
+    &Message { name: "settleReward".into(), seat: who, b: landing as i32, tile: at, ..Default::default() },
+)?;
+
+// rules/tiles/src/circle.rs -- the same reward body the Pass arm runs
+On::Message(&["settleReward"], "", None, on_message_settle_reward),
+
+fn on_message_settle_reward(_owner: i32) -> Asked {
+    settle_reward(ctx::message::seat(), ctx::message::b() != 0)
+}
+```
+
+The reward runs **as `tile:circle`**: its own choice prompt, its own
+`passRewardAffected` window, its own `prop::NO_REWARD` read. `settle_reward`
+is private to that module -- the only two ways in are the rule's own Pass arm
+and this message. `rules/events` does not depend on `rules-tiles` at all.
+
+This is the shape for any "carry this other card's effect somewhere else"
+clause. The remaining gap is *instance* state and future effects riding along
+automatically -- that needs a real tile-rule swap, BACKLOG **ABI-13**.
 
 ### PP fans in the per-player state dict (ABI v83)
 

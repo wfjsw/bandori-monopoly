@@ -533,6 +533,118 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
     }
 }
 
+// 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」 -- the [经过]
+// reward is one of them, so a pass of the cafe pays it. The reward runs as
+// `tile:circle` via the cross-card `"settleReward"` message, not as a call
+// into that module.
+#[test]
+fn circle_rebuild_pays_the_reward_on_a_cafe_pass() {
+    let mut t = Table::vanilla(2);
+    draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
+    assert!(t.event_in_play("协助CiRCLE重建"), "{:?}", t.st().event_active);
+    until_turn(&mut t, 1);
+    // Three steps from two behind the cafe: across it (a [经过]), landing past.
+    t.set_pos(1, (tile("CiRCLE 咖啡厅") + 58) % 60);
+    let before = t.money(1);
+    t.dice(&[3]);
+    t.roll(1).unwrap();
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("pass_reward") {
+            let _ = t.answer_one(0); // 「[获得]2000资金」
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(
+        t.money(1),
+        before + 2_000,
+        "the cafe pays CiRCLE's [pass-reward]: {:?}",
+        t.recent_keys(16)
+    );
+}
+
+// The `prop::NO_REWARD` veto lives on the `tile:circle` instance -- the source
+// owns the arming, the reader is the tile -- so the event has to drop it on the
+// way out. A surviving arm would eat the next pass's reward.
+#[test]
+fn circle_rebuild_restores_the_reward_after_it_expires() {
+    let mut t = Table::vanilla(2);
+    draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
+    // Burn the five crystals: five [经过] of CiRCLE.
+    for _ in 0..5 {
+        until_turn(&mut t, 1);
+        t.set_pos(1, (tile("CiRCLE") + 58) % 60);
+        t.dice(&[2]);
+        t.roll(1).unwrap();
+        drain(&mut t);
+        t.set_state(1, "stay", 0);
+    }
+    assert!(!t.event_in_play("协助CiRCLE重建"), "{:?}", t.st().event_active);
+    assert!(
+        t.event_discard().iter().any(|e| e == "协助CiRCLE重建"),
+        "放入事件弃牌: {:?}",
+        t.event_discard()
+    );
+    // The next pass of CiRCLE pays again.
+    until_turn(&mut t, 1);
+    t.set_pos(1, (tile("CiRCLE") + 58) % 60);
+    let before = t.money(1);
+    t.dice(&[2]);
+    t.roll(1).unwrap();
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("pass_reward") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(
+        t.money(1),
+        before + 2_000,
+        "the veto died with the event: {:?}",
+        t.recent_keys(16)
+    );
+}
+
+// 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅」 names CiRCLE's own effects. A
+// card whose effect merely *keys on* CiRCLE -- 千早爱音's 「每次[经过]CiRCLE时
+// 获得一个[火罐]」 (charge replenish) -- is its own card's, so it stays on the
+// real CiRCLE and does not ride the migration. A tile swap that re-homed
+// identity would break this.
+#[test]
+fn circle_rebuild_leaves_charge_replenish_on_the_real_circle() {
+    // 千早爱音:重新开始 （1） 「每次[经过]CiRCLE时获得一个[火罐]（初始2，上限3）」.
+    let mut t = Table::new(&["千早爱音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
+    assert!(t.event_in_play("协助CiRCLE重建"), "{:?}", t.st().event_active);
+    assert_eq!(t.charge(0), 2, "初始2");
+    // A pass of the real CiRCLE still replenishes, even though its [经过]
+    // reward has migrated away.
+    until_turn(&mut t, 0);
+    t.set_pos(0, (tile("CiRCLE") + 58) % 60);
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.set_state(0, "stay", 0);
+    assert_eq!(t.charge(0), 3, "「每次[经过]CiRCLE时获得一个[火罐]」 still fires");
+    // A pass of the cafe does not -- the cafe inherited CiRCLE's effects, not
+    // everyone else's CiRCLE-keyed ones.
+    until_turn(&mut t, 0);
+    t.set_pos(0, (tile("CiRCLE 咖啡厅") + 58) % 60);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.charge(0),
+        3,
+        "the cafe is not CiRCLE: no charge replenish there"
+    );
+}
+
 // =====================================================================
 // A9 前场队还是后场队？
 // 「所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加定位X且

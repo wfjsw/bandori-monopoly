@@ -78,6 +78,17 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// `CardMocaHalf.DiceRollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
 /// main-move roll. ABI v74: a pure `DiceRollValue` filter (placement order among
 /// roll reshapes is preserved).
+///
+/// TODO(规则书) composition with another roll reshape. 「最终结算」 reads as
+/// *after* additive modifiers (`docs/rulebook/spec/cards/ag.md`
+/// `C-AG-half-speed-03`), which would put this half **last**: against
+/// `PP:不要背负期待` 「投掷结果减少2」 that is 7 → 5 → ceil(5/2) = **3**. The
+/// engine instead folds roll reshapes in placement order, so with 0.5倍速
+/// placed first it is 7 → 4 → 2. `g02_half_speed_plus_expectations_floor_on_a_rent`
+/// pins the 2 (start 27, land 29); its comment's "roll 7 -> 5 -> 2 either way
+/// round" is loose -- 5 → 2 is a *floor* half, and the card says 向上取整. Both
+/// readings are defensible and they disagree by one step, so the composition
+/// order needs a ruling. Filed as OPEN-ROLLRESHAPE-01.
 fn roll_half(player_id: i32, mut v: RollValue) -> RollValue {
     let roll = v.value.max(0);
     let halved = (roll + 1) / 2;

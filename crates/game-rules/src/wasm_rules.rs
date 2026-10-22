@@ -9257,6 +9257,10 @@ mod tests {
             // v43: the move-head / move-tail pair
             "moveBefore",
             "moveAfter",
+            // v78 / v96 interactive payment pre-stages (hook-only Actions)
+            "paySplitChooseBefore",
+            "payCombinedAddBefore",
+            "paySplitMulBefore",
         ] {
             assert!(
                 !matches!(trigger_kind(k), TriggerKind::None),
