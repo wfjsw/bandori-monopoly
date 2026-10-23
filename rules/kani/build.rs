@@ -204,6 +204,8 @@ const ARRAY_OPS: &[&str] = &[
     "play_card",
     "card_move",
     "card_replayable",
+    "can_fire",
+    "can_fire_any",
     "set_roller",
     "set_steps",
     "set_reverse",

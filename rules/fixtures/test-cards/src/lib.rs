@@ -1409,6 +1409,92 @@ fn my_rewrite(_player_id: i32, v: PlanValue) -> PlanValue {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Activation arguments (`declare`, docs/ACTIVATION.md §2).
+// ---------------------------------------------------------------------------
+
+/// Always declines at the activation-argument collector. The body has **no
+/// decline path** and logs unconditionally, so silence is proof it never ran
+/// (and the card must still be in hand).
+const DECLINE: CardDef = CardDef::new(
+    "TEST:decline",
+    &[On::Play("", None, None, decline_body).declare(decline_declare)],
+);
+
+fn decline_declare(_player_id: i32) -> card_sdk::Declared {
+    Ok(card_sdk::Activation::Decline)
+}
+
+fn decline_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("decline_body")));
+    Ok(())
+}
+
+/// Asks "use this?" at the collector; a yes carries the arg 7 to the body,
+/// which logs it. The body has no decline path.
+const PICK: CardDef = CardDef::new(
+    "TEST:pick",
+    &[On::Play("", None, None, pick_unused).declare_arg(pick_declare, pick_body)],
+);
+
+const fn pick_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn pick_declare(player_id: i32) -> card_sdk::Declared {
+    if ctx::ask_yes(player_id, &Msg::new(key!("pick_title")), &Msg::new(key!("pick_ask")))? {
+        Ok(card_sdk::Activation::Arg(7))
+    } else {
+        Ok(card_sdk::Activation::Decline)
+    }
+}
+
+fn pick_body(player_id: i32, arg: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pick_body")).i("arg", arg as i64),
+    );
+    Ok(())
+}
+
+/// Sibling of [`DECLINE`] on the same timing: a decline on one entry must not
+/// stop the next entry. Both fire at `card` (this one is the counter).
+const DECLINE_SIB: CardDef = CardDef::new(
+    "TEST:decline_sib",
+    &[
+        On::Play("", None, None, decline_sib_play),
+        On::Counteract(
+            &[ChainKind::Card],
+            "",
+            None,
+            Some(never),
+            decline_sib_counter,
+        ),
+    ],
+);
+
+fn decline_sib_play(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("decline_sib_play")));
+    Ok(())
+}
+
+fn decline_sib_counter(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("decline_sib_counter")));
+    Ok(())
+}
+
+/// A card whose `On::Play` gate is closed: `ctx::card_replayable` /
+/// `ctx::can_fire` must answer false for it.
+const GATE_CLOSED: CardDef = CardDef::new(
+    "TEST:gate_closed",
+    &[On::Play("", None, Some(|_p| Some(Msg::new(key!("gate_closed_why")))), gate_closed_body)],
+);
+
+fn gate_closed_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("gate_closed_body")));
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1419,5 +1505,5 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
-    CUSTOM_FILTER
+    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED
 ]);

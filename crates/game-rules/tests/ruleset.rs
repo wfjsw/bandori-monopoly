@@ -23,7 +23,8 @@ fn bad_handle_is_rejected() {
             &TestWorld::new(1),
             Call::Play {
                 card: bad,
-                player_id: 0
+                player_id: 0,
+                arg: 0
             },
             &[],
             None
@@ -62,7 +63,11 @@ fn runaway_nesting_is_stopped() {
     let err = r
         .run(
             &TestWorld::new(1),
-            Call::Play { card, player_id: 0 },
+            Call::Play {
+                card,
+                player_id: 0,
+                arg: 0
+            },
             &[],
             None,
         )

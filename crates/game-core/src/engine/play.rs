@@ -4580,6 +4580,15 @@ impl Cx<'_> {
         let Some(k) = self.w.hidden[i].hand.iter().position(|c| c == id) else {
             return Ok(());
         };
+        // Activation argument (docs/ACTIVATION.md §2) -- collected **before**
+        // `hand.remove`, the point of no return. A decline leaves the card in
+        // hand and the play never announces (LOY-SEEYOU-01's "do not commit
+        // the play until …").
+        let arg = match self.rules.declare_activation(self, i, id)? {
+            Some(a) => a,
+            None => return Ok(()),
+        };
+        self.w.turn.play_arg = arg;
         self.w.hidden[i].hand.remove(k);
         // `play_from_hand` -- this one came out of the hand. **Scoped to the
         // play**: raised for the duration of this resolution and restored when

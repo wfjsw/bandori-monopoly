@@ -691,6 +691,17 @@ pub struct HookRun<W> {
     pub outcome: Outcome<W>,
 }
 
+/// What a bare [`Ruleset::declare_play`] run collected, before the point of
+/// no return (docs/ACTIVATION.md §2).
+pub enum DeclareOut {
+    /// Proceed; the body receives this as its activation argument.
+    Arg(i32),
+    /// The player declined: the entry does not fire at all.
+    Declined,
+    /// A prompt is pending -- the caller pauses and re-runs with the answer.
+    Paused(Prompt),
+}
+
 /// One entry's applicability verdict, from [`Ruleset::entry_admitted`].
 ///
 /// Carries the shared **answer-log cursor** across `admits` + `OP_DECLARE` in
@@ -987,6 +998,16 @@ impl RulesetBuilder {
                             )));
                         }
                     }
+                }
+                // ABI v98: a filter body is a pure value fold and cannot pause
+                // for a player (docs/ACTIVATION.md "On::Filter cannot declare").
+                // `On::declare` panics at the card table's compile time; this
+                // is the second net for a hand-built manifest.
+                if ok == Some(OnKind::Filter) && o.has_declare {
+                    return Err(RuleError::Load(format!(
+                        "{} entry {ei}: On::Filter cannot declare -- use an On::Action pre-stage instead",
+                        c.id,
+                    )));
                 }
                 for s in &o.triggers {
                     let tk = crate::TriggerKind::from_str(s);
@@ -1681,7 +1702,56 @@ impl Ruleset {
         }
     }
 
-    /// Does this entry carry an `On::declare` collector (`ManifestOn::has_declare`)?
+    /// Run just the `OP_DECLARE` collector of a `Play` entry, before the play
+    /// commits (docs/ACTIVATION.md §2). `Ok(None)` = declined; `Ok(Some(arg))`
+    /// = proceed with `arg`; `Err(RuleError::NeedInput)`-shaped pause is
+    /// folded to [`DeclareOut::Paused`].
+    pub fn declare_play<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        player_id: i32,
+        answers: &[i32],
+    ) -> Result<DeclareOut, RuleError> {
+        let Some(entry) = self
+            .inner
+            .cards
+            .get(card as usize)
+            .and_then(|c| c.entry(card_sdk::abi::OnKind::Play, None))
+        else {
+            return Ok(DeclareOut::Arg(0));
+        };
+        if !self.has_declare(card, entry) {
+            return Ok(DeclareOut::Arg(0));
+        }
+        let mut store = self.store(world.clone(), answers, 0)?;
+        let res = crate::inline::with_no_inline(|| {
+            call_card(
+                &self.inner,
+                &mut store,
+                card,
+                entry,
+                export::OP_DECLARE,
+                player_id,
+                0,
+            )
+        });
+        match res {
+            Ok(v) if v == abi::EXIT_DECLINED as i64 => {
+                let _ = finish(store, Ok(0))?;
+                Ok(DeclareOut::Declined)
+            }
+            Ok(v) => {
+                let _ = finish(store, Ok(0))?;
+                Ok(DeclareOut::Arg(v as i32))
+            }
+            Err(e) => match finish(store, Err(e)) {
+                Ok(Outcome::NeedInput(p, _)) => Ok(DeclareOut::Paused(p)),
+                Ok(_) => Ok(DeclareOut::Arg(0)),
+                Err(e2) => Err(e2),
+            },
+        }
+    }
     fn has_declare(&self, card: i32, entry: i32) -> bool {
         self.inner
             .cards
@@ -2424,6 +2494,16 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         card: i32,
         player_id: i32,
     ) -> Result<Option<crate::Msg>, RuleError>;
+
+    /// Run just the `OP_DECLARE` collector of a `Play` entry, before the play
+    /// commits (docs/ACTIVATION.md §2). See [`DeclareOut`].
+    fn declare_play(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+        answers: &[i32],
+    ) -> Result<DeclareOut, RuleError>;
 }
 
 #[cfg(feature = "sandbox")]
@@ -2544,6 +2624,15 @@ impl CardModules for Ruleset {
         player_id: i32,
     ) -> Result<Option<crate::Msg>, RuleError> {
         Ruleset::cant_play::<crate::Run>(self, world, card, player_id)
+    }
+    fn declare_play(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+        answers: &[i32],
+    ) -> Result<DeclareOut, RuleError> {
+        Ruleset::declare_play::<crate::Run>(self, world, card, player_id, answers)
     }
 }
 

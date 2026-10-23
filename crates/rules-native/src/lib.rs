@@ -27,7 +27,8 @@ use card_sdk::On;
 use game_rules::hostfns;
 use game_rules::tile_class;
 use game_rules::{
-    Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome, RuleError,
+    Call, CallOut, CardInfo, CardModules, DeclareOut, HookRun, HostCtx, HostErr, HostState, Outcome,
+    RuleError,
     RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
 };
 use game_rules::{CardWorld, Msg, RulesBridge};
@@ -1014,6 +1015,51 @@ impl CardModules for NativeModules {
                 }
             },
         )
+    }
+
+    fn declare_play(
+        &self,
+        world: &Run,
+        card: i32,
+        player_id: i32,
+        answers: &[i32],
+    ) -> Result<DeclareOut, RuleError> {
+        let info = self
+            .index
+            .card(card)
+            .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
+        let Some(entry) = info.entry(OnKind::Play, None) else {
+            return Ok(DeclareOut::Arg(0));
+        };
+        if !info.on.get(entry as usize).map(|o| o.has_declare).unwrap_or(false) {
+            return Ok(DeclareOut::Arg(0));
+        }
+        let state = HostState::new(self.index.clone(), world.clone(), answers.to_vec(), 0);
+        let (res, st, _fuel) = run_on(
+            state,
+            card,
+            entry,
+            export::OP_DECLARE,
+            player_id,
+            0,
+            false,
+            DEFAULT_FUEL,
+        );
+        match res {
+            Ok(CallOut::Code(v)) if v == card_sdk::abi::EXIT_DECLINED as i64 => {
+                Ok(DeclareOut::Declined)
+            }
+            Ok(CallOut::Code(v)) => Ok(DeclareOut::Arg(v as i32)),
+            Ok(_) => Ok(DeclareOut::Arg(0)),
+            Err(HostErr::NeedInput) => {
+                if let Some(p) = st.asked {
+                    Ok(DeclareOut::Paused(p))
+                } else {
+                    Err(RuleError::Trap("need-input without a prompt".into()))
+                }
+            }
+            Err(HostErr::Trap(m)) => Err(RuleError::Trap(m)),
+        }
     }
 }
 

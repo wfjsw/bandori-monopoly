@@ -174,6 +174,11 @@ pub struct TurnCtx {
     /// from somewhere else). 「若此卡从手牌以外的地方打出」 reads this.
     #[serde(default)]
     pub play_from_hand: bool,
+    /// The activation argument `On::declare` collected for the play being
+    /// resolved (docs/ACTIVATION.md §2). Scoped to one play, like
+    /// `play_from_hand`. `rules.play` reads it into `Call::Play`'s `arg`.
+    #[serde(default)]
+    pub play_arg: i32,
     /// Seats whose designation on the play being resolved is cancelled
     /// (「取消其对目标之一的designate」). A per-pair cancel: the rest of the play's
     /// designations still land. Cleared at the start of each play.
@@ -250,6 +255,7 @@ impl Default for TurnCtx {
             abnormal: Vec::new(),
             extreme: Extreme::Plain,
             play_from_hand: false,
+            play_arg: 0,
             cancelled_designations: Vec::new(),
             play_doubled: None,
             paid_in_settle: 0,

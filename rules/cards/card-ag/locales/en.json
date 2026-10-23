@@ -37,6 +37,7 @@
   "detour_opt_tomoe": "Move 10 tiles from start toward Galaxy Ramen (Udagawa Tomoe)",
   "detour_planned": "Detour on the Way Home's effect: {{who}} makes an Afterglow-style move this turn; the move roll becomes 1d6",
   "detour_title": "Detour on the Way Home",
+  "detour_no_skill": "No initial Afterglow character's (2) skill can be activated right now",
   "himari_plus_one": "{{who}}'s roll +1 ({{card}}), now {{total}}",
   "himari_plus_one_when": "when one of your rolls is less than 6",
   "moca_half_decayed": "{{who}}'s \"0.5x Speed\" ran out of Miracle Crystals and goes to the discard pile",

@@ -55,5 +55,13 @@
   "tail_after": "tail-after",
   "tail_before": "tail-before",
   "total_cut_done": "pre-split cut: {{from}} -> {{to}}",
-  "xfer_1000_why": "probe transfer 1000"
+  "xfer_1000_why": "probe transfer 1000",
+  "decline_body": "decline body ran",
+  "decline_sib_play": "decline-sib play ran",
+  "decline_sib_counter": "decline-sib counter ran",
+  "pick_title": "TEST:pick",
+  "pick_ask": "Use this?",
+  "pick_body": "pick body ran with arg {{arg}}",
+  "gate_closed_why": "gate is closed",
+  "gate_closed_body": "gate-closed body ran"
 }

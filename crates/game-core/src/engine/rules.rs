@@ -524,6 +524,22 @@ pub trait CardRules: Send + Sync {
         None
     }
 
+    /// Collect the activation argument before the play commits
+    /// (docs/ACTIVATION.md §2). `Ok(None)` = the player declined and the card
+    /// must **not** leave the hand. `Ok(Some(arg))` = proceed; `arg` rides the
+    /// play into the body. `Err(Halt)` = a prompt is pending -- the same
+    /// multi-pass / answer-log model as a body `Asked`.
+    ///
+    /// Default: no collector, arg 0. `WasmRules` runs the entry's `OP_DECLARE`.
+    fn declare_activation(
+        &self,
+        _cx: &mut Cx,
+        _player: usize,
+        _card: &str,
+    ) -> Flow<Option<i32>> {
+        Ok(Some(0))
+    }
+
     /// Does this rule declare an activatable `On::Play` (a skill button / card
     /// play)? Passive / hook-only rules answer `false` and never appear in a
     /// viewer's skill list. `WasmRules` answers from the card's Play entry;

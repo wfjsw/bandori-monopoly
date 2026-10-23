@@ -22,7 +22,7 @@ use game_core::msg::Msg;
 
 #[cfg(feature = "sandbox")]
 use crate::host::Ruleset;
-use crate::host::{Call, CardModules, HostRequest, Outcome, Prompt, PromptOption, RuleError};
+use crate::host::{Call, CardModules, DeclareOut, HostRequest, Outcome, Prompt, PromptOption, RuleError};
 use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
@@ -8683,6 +8683,82 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             .flatten()
     }
 
+    /// Collect the activation argument before the play commits
+    /// (docs/ACTIVATION.md §2). Runs the entry's `OP_DECLARE` in a loop over
+    /// one answer cursor -- a two-step declare (pick, then confirm) is one
+    /// cursor, both prompts advance it. `Ok(None)` = declined and the card
+    /// must not leave the hand.
+    fn declare_activation(
+        &self,
+        cx: &mut Cx,
+        player_id: usize,
+        card: &str,
+    ) -> Flow<Option<i32>> {
+        let Some(idx) = self.ruleset.card(card) else {
+            return Ok(Some(0));
+        };
+        let uid = cx
+            .world()
+            .field_instances(player_id as i32)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-1, |(uid, _)| uid);
+        // One cursor across every `OP_DECLARE` step of this activation: the
+        // collector re-runs on each pause and reads the shared log in order.
+        let mut answers: Vec<i32> = Vec::new();
+        loop {
+            let run = Run {
+                world: cx.share_world(),
+                pile_checkpoints: Default::default(),
+                data: self.data.clone(),
+                props: self.modules_props(),
+                trigger: Trigger::default(),
+                activation_player: player_id as i32,
+                current_card: card.to_string(),
+                current_uid: uid,
+                carried_owner: None,
+                dest: DEST_UNSET,
+                dest_to: None,
+                paid_log: vec![],
+                discard_log: vec![],
+                draw_log: vec![],
+                reshuffle_log: vec![],
+                marker_spent_log: vec![],
+                house_log: vec![],
+                counter_log: vec![],
+                abnormal_log: vec![],
+                named_raise_log: vec![],
+                state_log: vec![],
+                doubled: -1,
+                linger_props: Default::default(),
+                wrap_effect: false,
+                live: None,
+                posted: vec![],
+                log_idx: 0,
+                logged: 0,
+                silent_body: false,
+                quiet_when_empty: false,
+                pending_header: None,
+                own_activation: -1,
+                prompted: false,
+                parent: -1,
+                flash_policy: card_sdk::abi::Flash::Auto,
+                flash_ordinal: 0,
+            };
+            match self.ruleset.declare_play(&run, idx, player_id as i32, &answers) {
+                Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
+                Ok(DeclareOut::Declined) => return Ok(None),
+                Ok(DeclareOut::Paused(p)) => {
+                    let ask = prompt_to_ask(p);
+                    let reply = cx.ask(ask)?;
+                    let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
+                    answers.push(a);
+                }
+                Err(_) => return Ok(Some(0)),
+            }
+        }
+    }
+
     /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
     /// charged for each tile, and may they buy it at all?
     ///
@@ -8861,7 +8937,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             Call::Play {
                 card: idx,
                 player_id: player_id as i32,
-                arg: 0,
+                arg: cx.world().turn.play_arg,
             },
             card,
             uid,
