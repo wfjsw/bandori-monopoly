@@ -24,6 +24,10 @@ use std::collections::HashMap;
 pub enum BodyShape {
     /// `fn(i32) -> Asked` — Play / Counteract / Action / Settle / …
     Action,
+    /// `fn(i32, i32) -> Asked` — an entry carrying `On::declare_arg`'s
+    /// activation-argument body (docs/ACTIVATION.md §2). The trampoline passes
+    /// an unconstrained `kani::any()` as the arg.
+    ActionArg,
     /// `fn(i32, i32) -> i32`
     Value,
     /// `fn(i32, i32) -> bool`
@@ -393,6 +397,10 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             } else {
                 BodyShape::Action
             };
+            // A chained `.declare(...)` / `.declare_arg(pick, body)` is part of
+            // the same registration (docs/ACTIVATION.md §2). `.declare_arg`
+            // replaces the constructor body with an `fn(i32, i32) -> Asked`.
+            let (body, shape) = apply_declare(src, j, body, shape);
             bodies.push(OnBody {
                 variant: variant.clone(),
                 kind: Some(kind),
@@ -410,11 +418,12 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
                     "on_parse: `On::{variant}` last arg `{last}` is not a body ident (byte {start})"
                 );
             };
+            let (body, shape) = apply_declare(src, j, body, BodyShape::Action);
             bodies.push(OnBody {
                 variant,
                 kind: None,
                 body,
-                shape: BodyShape::Action,
+                shape,
             });
         } else {
             // Unknown On variant: skip (other arms of the enum may appear in
@@ -425,11 +434,46 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
     bodies
 }
 
+/// Fold a chained `On::declare` / `On::declare_arg` into one registration.
+/// `after` is the byte just past `On::X(...)`'s closing paren.
+///
+/// * `.declare(pick)` -- decline-only; the body stays `fn(i32) -> Asked`.
+/// * `.declare_arg(pick, body)` -- the body becomes `fn(i32, i32) -> Asked`
+///   and the trampoline must hand it an arg.
+fn apply_declare(
+    src: &str,
+    after: usize,
+    body: String,
+    shape: BodyShape,
+) -> (String, BodyShape) {
+    let tail = src[after..].trim_start();
+    if let Some(rest) = tail.strip_prefix(".declare_arg(") {
+        // Second argument is the replacement body ident.
+        let Some(end) = paren_end(rest, 0) else {
+            return (body, shape);
+        };
+        let args = split_args(&rest[..end - 1]);
+        if args.len() < 2 {
+            return (body, shape);
+        }
+        if let Some(ident) = body_ident(args[1].trim()) {
+            return (ident, BodyShape::ActionArg);
+        }
+        return (body, shape);
+    }
+    if tail.starts_with(".declare(") {
+        // Decline-only: body unchanged.
+        return (body, shape);
+    }
+    (body, shape)
+}
+
 /// Trampoline second-argument default for a filter body. `Action` has no
 /// second argument.
 pub fn default_expr(shape: BodyShape) -> &'static str {
     match shape {
         BodyShape::Action => "/* action: no second arg */",
+        BodyShape::ActionArg => "/* action-arg: second arg is the activation arg */",
         BodyShape::Value | BodyShape::Flag => "0",
         BodyShape::Gate => "card_sdk::GateValue::default()",
         BodyShape::Plan => "card_sdk::PlanValue::default()",

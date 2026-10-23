@@ -206,10 +206,22 @@ impl CardInfo {
 /// card without one simply does nothing.
 #[derive(Debug, Clone, Copy)]
 pub enum Call {
-    /// `On::Play` -- the effect when played from hand.
-    Play { card: i32, player_id: i32 },
-    /// `On::Counteract` -- the counteraction effect, for the world's current trigger kind.
-    Counteract { card: i32, player_id: i32 },
+    /// `On::Play` -- the effect when played from hand. `arg` is the activation
+    /// argument the play path's `OP_DECLARE` collected (docs/ACTIVATION.md §2);
+    /// 0 when the entry has no declare.
+    Play {
+        card: i32,
+        player_id: i32,
+        arg: i32,
+    },
+    /// `On::Counteract` -- the counteraction effect, for the world's current
+    /// trigger kind. `arg` is the argument `finish_offer`'s `OP_DECLARE`
+    /// recorded on the chain link; 0 when the entry has no declare.
+    Counteract {
+        card: i32,
+        player_id: i32,
+        arg: i32,
+    },
     /// `On::Action` -- the field-card hook for `kind`.
     Hook {
         card: i32,
@@ -677,6 +689,28 @@ pub struct HookRun<W> {
     pub announced: bool,
     /// What the body did. The body ran on the same instantiation as the guard.
     pub outcome: Outcome<W>,
+}
+
+/// One entry's applicability verdict, from [`Ruleset::entry_admitted`].
+///
+/// Carries the shared **answer-log cursor** across `admits` + `OP_DECLARE` in
+/// one drive: `entry_admitted` returns where the next read must start, and the
+/// `OP_RUN` that follows picks up from there. A separate `HostState` per phase
+/// would re-read answer 0 (the latent bug the guard-prompt session hit).
+/// Per-drive, not global: `finish_offer` and `resolve_jobs` are separate calls
+/// and each starts at 0 over its own `answers` slice (docs/ACTIVATION.md §2).
+pub enum Admitted<W> {
+    /// The entry applies. `next_answer` is the cursor **after** `admits` and
+    /// `OP_DECLARE`; `arg` is the activation argument [`OP_DECLARE`] collected
+    /// (0 when the entry has no declare).
+    Yes { next_answer: usize, arg: i32 },
+    /// The entry does not apply (condition / guard / a declined declare).
+    /// `next_answer` is the cursor after whatever prompts ran -- a decline
+    /// that *came from a prompt* has consumed its answer-log slot and must not
+    /// be dropped, or a replay would re-prompt the player.
+    No { next_answer: usize },
+    /// A prompt / host request is pending. The first pause owns the outcome.
+    Paused(Outcome<W>),
 }
 
 #[cfg(feature = "sandbox")]
@@ -1415,7 +1449,14 @@ impl Ruleset {
         };
         // v49: AtEnd / DiceRollPlan / Settle answer "does this entry apply?" here.
         // (`Play`'s gate and `Counteract`'s `can_counteract` are their own
-        // admission and are not re-checked at body time.)
+        // admission and are not re-checked at body time; their `arg` was
+        // collected at the offer layer and rides the `Call` -- `resolve_jobs`
+        // never re-enters `OP_DECLARE`.)
+        let mut arg = match call {
+            Call::Play { arg, .. } | Call::Counteract { arg, .. } => arg,
+            _ => 0,
+        };
+        let mut next_answer = 0;
         if matches!(
             call,
             Call::AtEnd { .. }
@@ -1441,7 +1482,7 @@ impl Ruleset {
             };
             let cand =
                 crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
-            if !self.entry_admitted(
+            match self.entry_admitted(
                 world,
                 card,
                 entry,
@@ -1449,11 +1490,20 @@ impl Ruleset {
                 scope.as_ref(),
                 &cand,
                 answers,
+                0,
             )? {
-                return Ok(Outcome::Done(world.clone()));
+                Admitted::No { .. } => return Ok(Outcome::Done(world.clone())),
+                Admitted::Paused(o) => return Ok(o),
+                Admitted::Yes {
+                    next_answer: after,
+                    arg: declared,
+                } => {
+                    next_answer = after;
+                    arg = declared;
+                }
             }
         }
-        let mut store = self.store(world.clone(), answers)?;
+        let mut store = self.store(world.clone(), answers, next_answer)?;
         if let Some(cb) = on_body.as_deref_mut() {
             cb(store.data_mut().w(), entry);
         }
@@ -1464,15 +1514,22 @@ impl Ruleset {
             entry,
             export::OP_RUN,
             player_id,
+            arg,
         );
         finish(store, res)
     }
 
-    /// Category → condition → guard → body (docs/GUARDS.md §4.3) for one entry:
-    /// does `entry` admit against `world` / `player_id`? A rejecting condition
-    /// skips the wasm guard entirely (`admits_pre`); a residual guard runs on a
-    /// throwaway copy. Used by [`Self::run_hook`] (Hook + Gate) and [`Self::run`]
+    /// Category → condition → guard → **declare** → body
+    /// (docs/GUARDS.md §4.3, docs/ACTIVATION.md §2) for one entry: does
+    /// `entry` admit against `world` / `player_id`, and with what activation
+    /// argument? A rejecting condition skips the wasm guard entirely
+    /// (`admits_pre`); a residual guard runs on a throwaway copy; the
+    /// `OP_DECLARE` collector (if any) runs before the point of no return and
+    /// may pause. Used by [`Self::run_hook`] (Hook + Gate) and [`Self::run`]
     /// (AtEnd / DiceRollPlan / Settle).
+    ///
+    /// One `next_answer` cursor crosses `admits` + `OP_DECLARE` on one
+    /// `HostState` (see [`Admitted`]).
     fn entry_admitted<W: CardWorld>(
         &self,
         world: &W,
@@ -1482,36 +1539,156 @@ impl Ruleset {
         scope: Option<&rules_cond::WindowScope>,
         cand: &crate::cond_pre::CandidateCtx,
         answers: &[i32],
-    ) -> Result<bool, RuleError> {
+        start_answer: usize,
+    ) -> Result<Admitted<W>, RuleError> {
         let pre = self
             .inner
             .pre
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        let admitted = if self.guard_is_none(card, entry) {
-            crate::cond_pre::admits_pre(pre, scope, cand)
-        } else {
-            let mut store_for_guard = self.store(world.clone(), answers)?;
-            let asked: Result<bool, ()> = crate::cond_pre::admits(pre, scope, cand, || {
-                match crate::inline::with_no_inline(|| {
-                    call_card(
-                        &self.inner,
-                        &mut store_for_guard,
-                        card,
-                        entry,
-                        export::OP_GUARD,
-                        player_id,
-                    )
-                }) {
-                    Ok(0) => Ok(false),
-                    Ok(_) => Ok(true),
-                    Err(_) => Ok(false),
+        if self.guard_is_none(card, entry) {
+            return Ok(if crate::cond_pre::admits_pre(pre, scope, cand) {
+                self.declare_after(world, card, entry, player_id, answers, start_answer)?
+            } else {
+                Admitted::No {
+                    next_answer: start_answer,
                 }
             });
-            matches!(asked, Ok(true))
-        };
-        Ok(admitted)
+        }
+        // The guard's store is the only one this entry's *guard* sees; the
+        // cursor (not the world) is what crosses. Keep it in an `Option` so a
+        // pause can `finish` the store away while the `admits` closure still
+        // needs to hand it back on the verdict paths.
+        let mut store_for_guard = Some(self.store(world.clone(), answers, start_answer)?);
+        // A pause is not a verdict: park the `Outcome` and short-circuit
+        // `admits` with `Err`. A rejecting condition never reaches the closure,
+        // so the cursor stays at `start_answer`.
+        let mut paused = None;
+        let asked: Result<bool, ()> = crate::cond_pre::admits(pre, scope, cand, || {
+            let mut store = store_for_guard.take().expect("guard store present");
+            match crate::inline::with_no_inline(|| {
+                call_card(
+                    &self.inner,
+                    &mut store,
+                    card,
+                    entry,
+                    export::OP_GUARD,
+                    player_id,
+                    0,
+                )
+            }) {
+                Ok(v) => {
+                    store_for_guard = Some(store);
+                    Ok(v != 0)
+                }
+                Err(e) if is_need_input(&e) => {
+                    paused = Some(finish(store, Err(e)));
+                    Err(())
+                }
+                Err(_) => {
+                    // Historical dispatch leniency: a trapping guard declines
+                    // the entry (probes propagate the trap instead -- see
+                    // [`Self::can_counteract_scoped`]). Keep the store so the
+                    // swallow check below still runs.
+                    store_for_guard = Some(store);
+                    Ok(false)
+                }
+            }
+        });
+        if let Some(p) = paused {
+            return match p {
+                Ok(o) => Ok(Admitted::Paused(o)),
+                Err(e) => Err(e),
+            };
+        }
+        let store = store_for_guard.take().expect("guard store present");
+        let st = store.into_data();
+        // `finish`'s boundary, applied to the guard too: a residual that
+        // published a prompt and then returned a bool has swallowed an answer
+        // nobody gave.
+        if st.asked.is_some() || st.host_request.is_some() {
+            return Err(RuleError::Trap(
+                "card published a prompt and kept going".into(),
+            ));
+        }
+        Ok(match asked {
+            Ok(true) => {
+                self.declare_after(world, card, entry, player_id, answers, st.next_answer)?
+            }
+            _ => Admitted::No {
+                next_answer: st.next_answer,
+            },
+        })
+    }
+
+    /// The `OP_DECLARE` half of [`Self::entry_admitted`], run when the entry
+    /// already admitted. Shares the caller's cursor: `start_answer` is where
+    /// `admits` left off, and the returned [`Admitted`] carries it forward.
+    ///
+    /// A decline (`EXIT_DECLINED`) is [`Admitted::No`]. A decline that came
+    /// from a prompt has already advanced `next_answer` -- that slot is part
+    /// of the drive's log and must be kept, or a replay would re-ask.
+    fn declare_after<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        entry: i32,
+        player_id: i32,
+        answers: &[i32],
+        start_answer: usize,
+    ) -> Result<Admitted<W>, RuleError> {
+        if !self.has_declare(card, entry) {
+            return Ok(Admitted::Yes {
+                next_answer: start_answer,
+                arg: 0,
+            });
+        }
+        let mut store = self.store(world.clone(), answers, start_answer)?;
+        let res = crate::inline::with_no_inline(|| {
+            call_card(
+                &self.inner,
+                &mut store,
+                card,
+                entry,
+                export::OP_DECLARE,
+                player_id,
+                0,
+            )
+        });
+        let after = store.data().next_answer;
+        match res {
+            // Decline: the entry does not fire. The cursor has already
+            // advanced past any prompt the collector made.
+            Ok(v) if v == abi::EXIT_DECLINED as i64 => {
+                let _ = finish(store, Ok(0))?;
+                Ok(Admitted::No {
+                    next_answer: after,
+                })
+            }
+            Ok(v) => {
+                let arg = v as i32;
+                let _ = finish(store, Ok(0))?;
+                Ok(Admitted::Yes {
+                    next_answer: after,
+                    arg,
+                })
+            }
+            Err(e) => match finish(store, Err(e)) {
+                Ok(o) => Ok(Admitted::Paused(o)),
+                Err(e2) => Err(e2),
+            },
+        }
+    }
+
+    /// Does this entry carry an `On::declare` collector (`ManifestOn::has_declare`)?
+    fn has_declare(&self, card: i32, entry: i32) -> bool {
+        self.inner
+            .cards
+            .get(card as usize)
+            .and_then(|c| c.on.get(entry as usize))
+            .map(|o| o.has_declare)
+            .unwrap_or(false)
     }
 
     /// Ask one card's hook guards and run every admitted body -- each entry
@@ -1555,12 +1732,17 @@ impl Ruleset {
         let cand =
             crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
         let mut cur: W = world.clone();
+        // One `next_answer` cursor threads the whole call: every guard, every
+        // `OP_DECLARE` and every body reads the shared answer log in order, so
+        // a prompt in entry 1 is never re-read by entry 2 (see [`Admitted`]).
+        let mut next_answer = 0;
         let mut announced = false;
         let mut ran_any = false;
         for entry in entries {
             // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
-            // flashes).
+            // flashes). The `OP_DECLARE` collector runs here too, before the
+            // announce -- a decline is silent.
             let pre = self
                 .inner
                 .pre
@@ -1572,7 +1754,7 @@ impl Ruleset {
                     crate::cond_pre::fill_window(world),
                 ));
             }
-            if !self.entry_admitted(
+            let (arg, after_admit) = match self.entry_admitted(
                 world,
                 card,
                 entry,
@@ -1580,11 +1762,31 @@ impl Ruleset {
                 scope.as_ref(),
                 &cand,
                 answers,
+                next_answer,
             )? {
-                continue;
-            }
+                // A guard / declare prompt is still applicability: the body
+                // has not run and `on_body` has not fired, so `announced`
+                // keeps whatever earlier entries set.
+                Admitted::Paused(p) => {
+                    return Ok(Some(HookRun {
+                        announced,
+                        outcome: p,
+                    }));
+                }
+                Admitted::No {
+                    next_answer: after,
+                } => {
+                    next_answer = after;
+                    continue;
+                }
+                Admitted::Yes {
+                    next_answer: after,
+                    arg,
+                } => (arg, after),
+            };
+            next_answer = after_admit;
             announced = true;
-            let mut store = self.store(cur, answers)?;
+            let mut store = self.store(cur, answers, next_answer)?;
             if let Some(cb) = on_body.as_deref_mut() {
                 cb(store.data_mut().w(), entry);
             }
@@ -1595,13 +1797,16 @@ impl Ruleset {
                 entry,
                 export::OP_RUN,
                 player_id,
+                arg,
             );
+            let after_body = store.data().next_answer;
             let outcome = finish(store, res)?;
             ran_any = true;
             match outcome {
                 Outcome::Done(w) => {
-                    // Later entries see earlier writes.
+                    // Later entries see earlier writes and earlier answers.
                     cur = w;
+                    next_answer = after_body;
                 }
                 paused => {
                     return Ok(Some(HookRun {
@@ -1698,7 +1903,7 @@ impl Ruleset {
             crate::cond_pre::admits_pre(pre, Some(scope), &cand)
         } else {
             crate::cond_pre::admits(pre, Some(scope), &cand, || {
-                let mut store = self.store(world.clone(), &[])?;
+                let mut store = self.store(world.clone(), &[], 0)?;
                 match crate::inline::with_no_inline(|| {
                     call_card(
                         &self.inner,
@@ -1707,6 +1912,7 @@ impl Ruleset {
                         entry,
                         export::OP_GUARD,
                         player_id,
+                        0,
                     )
                 }) {
                     Ok(v) => Ok(v != 0),
@@ -1816,7 +2022,7 @@ impl Ruleset {
                 // "playable", `Some(why)` is the block. `call_card_msg` decodes
                 // that shape -- `call_card`'s 0/non-zero bool convention is the
                 // Hook-guard one and would invert the verdict.
-                let mut store = self.store(world.clone(), &[])?;
+                let mut store = self.store(world.clone(), &[], 0)?;
                 let gate_ok = match crate::inline::with_no_inline(|| {
                     call_card_msg(
                         &self.inner,
@@ -1893,7 +2099,7 @@ impl Ruleset {
                 &cand,
                 || crate::Msg::new("err.play_pre"),
                 || {
-                    let mut store = self.store(world.clone(), &[])?;
+                    let mut store = self.store(world.clone(), &[], 0)?;
                     match crate::inline::with_no_inline(|| {
                         call_card_msg(
                             &self.inner,
@@ -1925,12 +2131,17 @@ impl Ruleset {
         &self,
         world: W,
         answers: &[i32],
+        start_answer: usize,
     ) -> Result<Store<HostState<W>>, RuleError> {
         #[cfg(feature = "bot-cost")]
         let t0 = std::time::Instant::now();
         #[cfg(feature = "bot-cost")]
         bot_cost::HOST_WORLD_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let state = HostState::new(self.inner.clone(), world, answers.to_vec(), 0);
+        let mut state = HostState::new(self.inner.clone(), world, answers.to_vec(), 0);
+        // Resume the shared answer-log cursor where the previous guard /
+        // declare / body left off (see [`Admitted`]). `HostState::new` always
+        // starts at 0; only a nested `play_card` re-aligns it from its parent.
+        state.next_answer = start_answer;
         let mut store = new_store(&self.inner.engine, state);
         store.set_fuel(self.fuel).map_err(trap)?;
         #[cfg(feature = "bot-cost")]
@@ -2466,6 +2677,7 @@ pub trait HostCtx {
         entry: i32,
         op: i32,
         player_id: i32,
+        arg: i32,
         want_msg: bool,
     ) -> (
         Result<CallOut, HostErr>,
@@ -2604,6 +2816,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
         entry: i32,
         op: i32,
         player_id: i32,
+        arg: i32,
         want_msg: bool,
     ) -> (Result<CallOut, HostErr>, HostState<W>, u64) {
         let rules = match nested.rules.clone() {
@@ -2629,7 +2842,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
                 Err(e) => Err(HostErr::trap(be::error_text(&e))),
             }
         } else {
-            match call_card(&rules, &mut store, card, entry, op, player_id) {
+            match call_card(&rules, &mut store, card, entry, op, player_id, arg) {
                 Ok(v) => Ok(CallOut::Code(v)),
                 Err(e) if be::is_need_input(&e) => Err(HostErr::NeedInput),
                 Err(e) => Err(HostErr::trap(be::error_text(&e))),
@@ -2671,6 +2884,7 @@ fn call_card<W: CardWorld>(
     entry: i32,
     op: i32,
     player_id: i32,
+    arg: i32,
 ) -> Result<i64, Error> {
     let slot = rules.slots[card as usize];
     #[cfg(feature = "bot-cost")]
@@ -2685,8 +2899,8 @@ fn call_card<W: CardWorld>(
     #[cfg(feature = "bot-cost")]
     let t1 = std::time::Instant::now();
     let out = inst
-        .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
-        .call(&mut *store, (slot.local, entry, op, player_id))
+        .get_typed_func::<(i32, i32, i32, i32, i32), i64>(&mut *store, export::ON)?
+        .call(&mut *store, (slot.local, entry, op, player_id, arg))
         .and_then(fold_exit);
     #[cfg(feature = "bot-cost")]
     bot_cost::GUEST_NS.fetch_add(
@@ -2723,8 +2937,8 @@ fn call_card_msg<W: CardWorld>(
     #[cfg(feature = "bot-cost")]
     let t1 = std::time::Instant::now();
     let packed = inst
-        .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
-        .call(&mut *store, (slot.local, entry, op, player_id))
+        .get_typed_func::<(i32, i32, i32, i32, i32), i64>(&mut *store, export::ON)?
+        .call(&mut *store, (slot.local, entry, op, player_id, 0))
         .and_then(fold_exit)?;
     #[cfg(feature = "bot-cost")]
     bot_cost::GUEST_NS.fetch_add(
@@ -5523,6 +5737,7 @@ mod gate_tests {
             triggers: vec![crate::TriggerKind::PayGate.spelling().into_owned()],
             pre: pre.map(str::to_string),
             has_guard,
+            has_declare: false,
             messages: vec![],
             label: None,
             presentation: Default::default(),

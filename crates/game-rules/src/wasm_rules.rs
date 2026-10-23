@@ -4689,6 +4689,7 @@ impl<M: CardModules> RulesBridge<M> {
                     Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
+                        arg: 0,
                     },
                     &own,
                     -1,
@@ -6044,6 +6045,7 @@ impl<M: CardModules> RulesBridge<M> {
                 Call::Counteract {
                     card,
                     player_id: seat as i32,
+                    arg: 0,
                 },
                 &id,
                 uid,
@@ -6169,6 +6171,7 @@ impl<M: CardModules> RulesBridge<M> {
                     Call::Counteract {
                         card,
                         player_id: seat as i32,
+                        arg: 0,
                     },
                     &id,
                     uid,
@@ -8858,6 +8861,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             Call::Play {
                 card: idx,
                 player_id: player_id as i32,
+                arg: 0,
             },
             card,
             uid,
@@ -8897,6 +8901,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             Call::Play {
                 card: idx,
                 player_id: player_id as i32,
+                arg: 0,
             },
             &rid,
             uid,
@@ -8953,6 +8958,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
+                        arg: 0,
                     },
                     &own,
                     -1,

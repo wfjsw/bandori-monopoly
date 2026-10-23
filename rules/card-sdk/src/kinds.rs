@@ -101,6 +101,8 @@ pub struct FilterEntry {
 // and `Sync`; the pointer is never freed.
 unsafe impl Send for FilterEntry {}
 unsafe impl Sync for FilterEntry {}
+unsafe impl Send for ActionEntry {}
+unsafe impl Sync for ActionEntry {}
 
 /// One action registration: an event reaction at a single kind.
 #[derive(Clone, Copy)]
@@ -111,7 +113,14 @@ pub struct ActionEntry {
     /// no clause).
     pub counter_reason: Option<crate::MsgKey>,
     pub guard: Option<fn(i32) -> bool>,
-    pub body: fn(i32) -> Asked,
+    /// The effect, erased. See [`crate::PlayEntry::body`].
+    pub body: *const (),
+    /// See [`crate::PlayEntry::drive`].
+    pub drive: crate::BodyDrive,
+    /// See [`crate::BodyShape`].
+    pub shape: crate::BodyShape,
+    /// See [`crate::PlayEntry::declare`].
+    pub declare: Option<fn(i32) -> crate::Declared>,
     /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
     pub label: &'static str,
 }
@@ -189,7 +198,10 @@ pub const fn action(
         pre,
         counter_reason,
         guard,
-        body,
+        body: body as *const (),
+        drive: crate::drive_body_plain,
+        shape: crate::BodyShape::Plain,
+        declare: None,
         label: "",
     }
 }

@@ -2291,10 +2291,51 @@ pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
 
 /// Could `player_id` play `id` right now (it has a `play` effect and
 /// its `cant_play` gate is open)?
+///
+/// Sugar for [`can_fire`] with [`crate::abi::OnKind::Play`] and no trigger.
 #[cfg_attr(kani, inline(always))]
 pub fn card_replayable(player_id: i32, id: &str) -> bool {
-    let (p, l) = s(id);
-    unsafe { sys::card_replayable(player_id, p, l) != 0 }
+    can_fire(player_id, id, crate::abi::OnKind::Play, None)
+}
+
+/// Can `card_id`'s `kind` entry fire for `player_id` right now?
+///
+/// Evaluates that entry's **condition + residual guard / play gate** through
+/// `admits` (docs/GUARDS.md §4.4 item 6) and does **not** run its body. This is
+/// the query half next to [`play_card`] / `invoke_skill` / `send` -- see
+/// docs/ACTIVATION.md §3.
+///
+/// **Probe mode** -- never prompts. An entry whose residual guard would ask
+/// answers `false`. Unknown id, no such entry, or nesting overflow answer
+/// `false` too.
+///
+/// `trigger` selects among the entries of a trigger-keyed kind
+/// (`On::Counteract` / `On::Action` / `On::Filter`). For those kinds
+/// `trigger: None` is ambiguous and answers `false` -- use
+/// [`can_fire_any`] for the OR over every entry of the kind, or name the
+/// trigger. Non-trigger-keyed kinds (`Play`, `Settle`, `Mortgage`, `Redeem`,
+/// `Buy`, `Build`, `Message`) take `trigger: None`.
+#[cfg_attr(kani, inline(always))]
+pub fn can_fire(
+    player_id: i32,
+    card_id: &str,
+    kind: crate::abi::OnKind,
+    trigger: Option<TriggerKind>,
+) -> bool {
+    let (p, l) = s(card_id);
+    let (tp, tl) = match trigger {
+        Some(t) => s(&t.spelling()),
+        None => (0, 0),
+    };
+    unsafe { sys::can_fire(player_id, p, l, kind as i32, tp, tl) != 0 }
+}
+
+/// Does **any** entry of `card_id` at `kind` admit for `player_id`?
+/// The explicit OR -- see [`can_fire`] for the per-entry form.
+#[cfg_attr(kani, inline(always))]
+pub fn can_fire_any(player_id: i32, card_id: &str, kind: crate::abi::OnKind) -> bool {
+    let (p, l) = s(card_id);
+    unsafe { sys::can_fire_any(player_id, p, l, kind as i32) != 0 }
 }
 
 /// The move being planned: what an

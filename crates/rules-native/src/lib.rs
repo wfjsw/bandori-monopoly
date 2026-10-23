@@ -110,6 +110,7 @@ impl NativeRulesHandle {
                             }
                         },
                         has_guard: o.has_guard(),
+                        has_declare: o.has_declare(),
                         messages: match o {
                             On::MessageBody(e) => {
                                 e.names.iter().map(|s| String::from(*s)).collect()
@@ -361,10 +362,11 @@ impl HostCtx for NativeHost {
         entry: i32,
         op: i32,
         player_id: i32,
+        arg: i32,
         want_msg: bool,
     ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
         let fuel = self.fuel;
-        let (res, state, left) = run_on(nested, card, entry, op, player_id, want_msg, fuel);
+        let (res, state, left) = run_on(nested, card, entry, op, player_id, arg, want_msg, fuel);
         (res, state, left)
     }
 }
@@ -433,6 +435,7 @@ fn run_on(
     entry: i32,
     op: i32,
     player_id: i32,
+    arg: i32,
     want_msg: bool,
     fuel: u64,
 ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
@@ -453,7 +456,7 @@ fn run_on(
     // the slot again and restores it below, so the outer run continues after.
     let prev = game_rules::native_shims::install_host(Box::new(host));
     let res = catch_unwind(AssertUnwindSafe(|| {
-        card_sdk::rt::on(RULESET, card, entry, op, player_id)
+        card_sdk::rt::on(RULESET, card, entry, op, player_id, arg)
     }));
     let host_box = game_rules::native_shims::take_host().expect("host installed");
     if let Some(p) = prev {
@@ -606,6 +609,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
+                     0,
                     true,
                     DEFAULT_FUEL,
                 )
@@ -658,6 +662,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
+                     0,
                     false,
                     DEFAULT_FUEL,
                 )
@@ -786,6 +791,7 @@ impl CardModules for NativeModules {
             entry,
             export::OP_RUN,
             player_id,
+             0,
             false,
             DEFAULT_FUEL,
         );
@@ -848,6 +854,7 @@ impl CardModules for NativeModules {
                                     entry,
                                     export::OP_GUARD,
                                     player_id,
+                                     0,
                                     false,
                                     DEFAULT_FUEL,
                                 )
@@ -876,6 +883,7 @@ impl CardModules for NativeModules {
                 entry,
                 export::OP_RUN,
                 player_id,
+                 0,
                 false,
                 DEFAULT_FUEL,
             );
@@ -940,6 +948,7 @@ impl CardModules for NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
+                     0,
                     false,
                     DEFAULT_FUEL,
                 )
@@ -991,6 +1000,7 @@ impl CardModules for NativeModules {
                         entry,
                         export::OP_GUARD,
                         player_id,
+                         0,
                         true,
                         DEFAULT_FUEL,
                     )

@@ -359,6 +359,8 @@ pub enum Op {
     raise_after = 334,
     // v97: multi-select choice -- how many of the pushed options the ask wants.
     opt_count = 335,
+    can_fire = 336,
+    can_fire_any = 337,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

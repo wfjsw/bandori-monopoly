@@ -1233,6 +1233,26 @@ mod abi {
             link_name = "ruleset_card_replayable"
         )]
         pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32;
+        /// Cross-card applicability query (docs/ACTIVATION.md §3).
+        /// `kind` is an `OnKind` i32; `trig_ptr/trig_len` is the trigger
+        /// spelling, empty = no trigger selection.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_can_fire"
+        )]
+        pub fn can_fire(
+            player_id: i32,
+            ptr: i32,
+            len: i32,
+            kind: i32,
+            trig_ptr: i32,
+            trig_len: i32,
+        ) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_can_fire_any"
+        )]
+        pub fn can_fire_any(player_id: i32, ptr: i32, len: i32, kind: i32) -> i32;
         // movement shaping: the move being planned
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),

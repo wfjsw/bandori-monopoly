@@ -108,6 +108,63 @@ pub struct Prompt;
 /// What every effect entry returns: done, or "asked, re-run me".
 pub type Asked = Result<(), Prompt>;
 
+/// The activation argument a `declare` collector hands the body.
+///
+/// A three-arm rather than `Option<i32>` so "declined" is never confused with
+/// "proceed with no argument": `Arg(0)` is the accept arm of a yes/no ask,
+/// `Decline` is the entry not firing at all (docs/ACTIVATION.md §2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Activation {
+    /// The player declined. The entry does not fire at all -- no body, no
+    /// header, no flash, no log. For a [反击] this is "do not declare"; for a
+    /// play it is "the card never left the hand"; for a hook it is the
+    /// 「可选择」 opt-out.
+    Decline,
+    /// Proceed; the body receives this as its second parameter. `Arg(0)` is
+    /// the plain yes/no accept.
+    Arg(i32),
+}
+
+/// Collect the activation argument **before** the activation commits.
+///
+/// `Err(Prompt)` pauses and re-runs, same multi-pass as [`Asked`]. Runs at the
+/// offer layer, before the point of no return (docs/ACTIVATION.md §2).
+pub type Declared = Result<Activation, Prompt>;
+
+/// Monomorphized body driver: casts `body` back to its fn type and runs it.
+/// `(player_id, arg, body) -> Asked`. See [`BodyShape`].
+///
+/// The cast lives only in [`drive_body_plain`] / [`drive_body_arg`] (the
+/// [`crate::payload`] rule: only `drive` may cast).
+pub type BodyDrive = fn(i32, i32, *const ()) -> Asked;
+
+/// Which function type an entry's erased `body` pointer is (the
+/// [`crate::kinds::FilterShape`] pattern, so the ~310 existing `fn(i32) ->
+/// Asked` bodies compile unchanged).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BodyShape {
+    /// `fn(i32) -> Asked` -- no [`On::declare`].
+    Plain,
+    /// `fn(i32, i32) -> Asked` -- second parameter is the [`Activation::Arg`].
+    WithArg,
+}
+
+/// `fn(i32) -> Asked`. Ignores `arg`.
+pub fn drive_body_plain(player_id: i32, _arg: i32, body: *const ()) -> Asked {
+    // SAFETY: `body` was packed from a `fn(i32) -> Asked` and is never
+    // reinterpreted as another shape.
+    let body: fn(i32) -> Asked = unsafe { core::mem::transmute(body) };
+    body(player_id)
+}
+
+/// `fn(i32, i32) -> Asked` -- the second parameter is the [`Activation::Arg`].
+pub fn drive_body_arg(player_id: i32, arg: i32, body: *const ()) -> Asked {
+    // SAFETY: `body` was packed from a `fn(i32, i32) -> Asked` and is never
+    // reinterpreted as another shape.
+    let body: fn(i32, i32) -> Asked = unsafe { core::mem::transmute(body) };
+    body(player_id, arg)
+}
+
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
 pub mod ctx;
 pub mod pure;
@@ -582,8 +639,16 @@ pub struct PlayEntry {
     /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
     /// show. `None` for the gate itself means no gate.
     pub why_not: Option<fn(player_id: i32) -> Option<Msg>>,
-    /// The effect.
-    pub body: fn(player_id: i32) -> Asked,
+    /// The effect, erased. See [`BodyShape`] / [`BodyDrive`].
+    pub body: *const (),
+    /// Monomorphized driver; casts `body` back to its fn type.
+    pub drive: BodyDrive,
+    /// Which fn type `body` is.
+    pub shape: BodyShape,
+    /// Activation-argument collector ([`On::declare`], docs/ACTIVATION.md §2).
+    /// Runs before the point of no return; `Activation::Arg` becomes the
+    /// body's second parameter. `None` = no declare (body is [`BodyShape::Plain`]).
+    pub declare: Option<fn(player_id: i32) -> Declared>,
     /// Opaque display text for the 「效果适用」 line (「（1）」 and kin). Moves
     /// with the entry; `""` = the line shows just the card name. **Not** a key
     /// into the card text -- nothing resolves this against [`crate::text::CardText`].
@@ -604,8 +669,14 @@ pub struct CounteractEntry {
     /// Residual guard (docs/GUARDS.md §2/§4.3). `None` means G4 deleted it
     /// because the condition alone decides.
     pub guard: Option<fn(player_id: i32) -> bool>,
-    /// The effect.
-    pub body: fn(player_id: i32) -> Asked,
+    /// The effect, erased. See [`PlayEntry::body`].
+    pub body: *const (),
+    /// See [`PlayEntry::drive`].
+    pub drive: BodyDrive,
+    /// See [`PlayEntry::shape`].
+    pub shape: BodyShape,
+    /// See [`PlayEntry::declare`].
+    pub declare: Option<fn(player_id: i32) -> Declared>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
 }
@@ -618,8 +689,14 @@ pub struct RuleEntry {
     pub pre: &'static str,
     /// Residual guard. `None` = G4-deleted (condition-only entry).
     pub guard: Option<fn(player_id: i32) -> bool>,
-    /// The effect.
-    pub body: fn(player_id: i32) -> Asked,
+    /// The effect, erased. See [`PlayEntry::body`].
+    pub body: *const (),
+    /// See [`PlayEntry::drive`].
+    pub drive: BodyDrive,
+    /// See [`PlayEntry::shape`].
+    pub shape: BodyShape,
+    /// See [`PlayEntry::declare`].
+    pub declare: Option<fn(player_id: i32) -> Declared>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
 }
@@ -633,11 +710,28 @@ pub struct MessageEntry {
     pub pre: &'static str,
     /// Residual guard. `None` = G4-deleted (condition-only entry).
     pub guard: Option<fn(player_id: i32) -> bool>,
-    /// The effect.
-    pub body: fn(player_id: i32) -> Asked,
+    /// The effect, erased. See [`PlayEntry::body`].
+    pub body: *const (),
+    /// See [`PlayEntry::drive`].
+    pub drive: BodyDrive,
+    /// See [`PlayEntry::shape`].
+    pub shape: BodyShape,
+    /// See [`PlayEntry::declare`].
+    pub declare: Option<fn(player_id: i32) -> Declared>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
 }
+
+// The `body` pointer is code, not data: immutable and never freed (the same
+// contract [`crate::kinds::FilterEntry`] states). Safe to share across threads.
+unsafe impl Send for PlayEntry {}
+unsafe impl Sync for PlayEntry {}
+unsafe impl Send for CounteractEntry {}
+unsafe impl Sync for CounteractEntry {}
+unsafe impl Send for RuleEntry {}
+unsafe impl Sync for RuleEntry {}
+unsafe impl Send for MessageEntry {}
+unsafe impl Sync for MessageEntry {}
 
 /// One entry point of a card. The variant says what the
 /// entry is for, and its kind list is typed to match -- a counteraction can only be
@@ -763,7 +857,10 @@ impl On {
             pre,
             counter_reason,
             why_not,
-            body,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
             label: "",
         })
     }
@@ -783,7 +880,10 @@ impl On {
             pre,
             counter_reason,
             guard,
-            body,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
             label: "",
         })
     }
@@ -795,7 +895,15 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::SettleBody(RuleEntry { pre, guard, body, label: "" })
+        Self::SettleBody(RuleEntry {
+            pre,
+            guard,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
+            label: "",
+        })
     }
 
     /// The rule's **mortgage body**.
@@ -805,7 +913,15 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::MortgageBody(RuleEntry { pre, guard, body, label: "" })
+        Self::MortgageBody(RuleEntry {
+            pre,
+            guard,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
+            label: "",
+        })
     }
 
     /// The rule's **redeem body**.
@@ -815,7 +931,15 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::RedeemBody(RuleEntry { pre, guard, body, label: "" })
+        Self::RedeemBody(RuleEntry {
+            pre,
+            guard,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
+            label: "",
+        })
     }
 
     /// The rule's **buy body**.
@@ -825,7 +949,15 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::BuyBody(RuleEntry { pre, guard, body, label: "" })
+        Self::BuyBody(RuleEntry {
+            pre,
+            guard,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
+            label: "",
+        })
     }
 
     /// The rule's **build body**.
@@ -835,7 +967,15 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::BuildBody(RuleEntry { pre, guard, body, label: "" })
+        Self::BuildBody(RuleEntry {
+            pre,
+            guard,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
+            label: "",
+        })
     }
 
     /// A **cross-card message** this card answers (`ctx::send`).
@@ -850,7 +990,10 @@ impl On {
             names,
             pre,
             guard,
-            body,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
             label: "",
         })
     }
@@ -903,6 +1046,169 @@ impl On {
                 e.pre = pre;
                 On::MessageBody(e)
             }
+        }
+    }
+
+    /// Attach an **activation-argument collector** (docs/ACTIVATION.md §2).
+    /// Decline-only: the constructor's `fn(i32) -> Asked` body is unchanged and
+    /// ignores the arg (it is always 0). Use [`Self::declare_arg`] when the
+    /// body needs the pick.
+    ///
+    /// `pick` runs at the offer layer, **before** the point of no return
+    /// (`hand.remove` for a play / a counter declaration; before announce for
+    /// a hook). [`Activation::Decline`] means the entry does not fire at all --
+    /// no body, no header, no flash, no log.
+    ///
+    /// ```ignore
+    /// // 规则书[持续]（1）: 「可选择移除此卡的1个[奇迹水晶]」 -- the offer is
+    /// // applicability: decline = the pay hook does not fire.
+    /// On::Action(Action::PaySplitChooseBefore(pre, Some(key!("when")), None, pay))
+    ///     .declare(pay_offer),
+    /// ```
+    ///
+    /// **Not allowed on `On::Filter`** -- a filter body is a pure value fold
+    /// (`docs/ACTIVATION.md` "On::Filter cannot declare"); pausing a
+    /// `PaySplitMul` / `MoveGate` / `DiceRollPlan` mid-pipeline is the same
+    /// mistake as letting a filter emit effects. This arm panics at compile
+    /// time, and `build-ruleset` rejects it too.
+    pub const fn declare(self, pick: fn(player_id: i32) -> Declared) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.declare = Some(pick);
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.declare = Some(pick);
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.declare = Some(pick);
+                On::Action(e)
+            }
+            On::SettleBody(mut e) => {
+                e.declare = Some(pick);
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.declare = Some(pick);
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.declare = Some(pick);
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.declare = Some(pick);
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.declare = Some(pick);
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.declare = Some(pick);
+                On::MessageBody(e)
+            }
+            // Fail closed at compile time: a filter is a pure value fold and
+            // cannot pause for a player (docs/ACTIVATION.md §2).
+            On::Filter(_) => {
+                panic!("On::Filter cannot declare -- use an On::Action pre-stage instead")
+            }
+        }
+    }
+
+    /// [`Self::declare`] plus an arg-taking body: `body` replaces the
+    /// constructor's `fn(i32) -> Asked` and receives the [`Activation::Arg`]
+    /// as its second parameter.
+    ///
+    /// ```ignore
+    /// // detour: the four-way 「"afterglow"式的移动」 pick is part of declaring
+    /// // the counter, so it runs here -- not in the body, after commit.
+    /// On::Counteract(links, pre, None, Some(detour_eligible), unused)
+    ///     .declare_arg(pick_afterglow_2, counteract),
+    /// ```
+    ///
+    /// Same [`Self::declare`] rules: not allowed on `On::Filter`.
+    pub const fn declare_arg(
+        self,
+        pick: fn(player_id: i32) -> Declared,
+        body: fn(player_id: i32, arg: i32) -> Asked,
+    ) -> Self {
+        match self.declare(pick) {
+            On::PlayBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::Action(e)
+            }
+            On::SettleBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg;
+                e.shape = BodyShape::WithArg;
+                On::MessageBody(e)
+            }
+            On::Filter(_) => {
+                panic!("On::Filter cannot declare -- use an On::Action pre-stage instead")
+            }
+        }
+    }
+
+    /// Does this entry collect an activation argument before its body?
+    /// `On::Filter` never does (and cannot -- see [`Self::declare`]).
+    pub const fn has_declare(&self) -> bool {
+        match self {
+            On::PlayBody(e) => e.declare.is_some(),
+            On::CounteractBody(e) => e.declare.is_some(),
+            On::Action(e) => e.declare.is_some(),
+            On::Filter(_) => false,
+            On::SettleBody(e) => e.declare.is_some(),
+            On::MortgageBody(e) => e.declare.is_some(),
+            On::RedeemBody(e) => e.declare.is_some(),
+            On::BuyBody(e) => e.declare.is_some(),
+            On::BuildBody(e) => e.declare.is_some(),
+            On::MessageBody(e) => e.declare.is_some(),
         }
     }
 

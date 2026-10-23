@@ -1336,7 +1336,7 @@ pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Re
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, false);
+    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, 0, false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {
@@ -2724,7 +2724,7 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, false);
+    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, 0, false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {
@@ -2799,7 +2799,7 @@ pub fn card_replayable<C: HostCtx>(
             let depth = c.st().depth + 1;
             let nested = HostState::new(rules.clone(), world, vec![], depth);
             let (res, _inner, left) =
-                c.call_entry(nested, card, entry, export::OP_GUARD, player_id, true);
+                c.call_entry(nested, card, entry, export::OP_GUARD, player_id, 0, true);
             c.set_fuel(left)?;
             let playable = match res {
                 Ok(CallOut::Msg(None)) => true,
@@ -3231,7 +3231,7 @@ pub fn send<C: HostCtx>(
         nested.msg = payload.clone();
         nested.msg_reply = 0;
         let (res, inner, left) =
-            c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, false);
+            c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, 0, false);
         let st = c.st_mut();
         st.world = inner.world;
         if let Some(w) = st.world.as_mut() {

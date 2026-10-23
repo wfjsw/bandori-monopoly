@@ -970,6 +970,24 @@ pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::card_replayable, [player_id, ptr, len, 0, 0, 0])
 }
 
+pub fn can_fire(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    kind: i32,
+    trig_ptr: i32,
+    trig_len: i32,
+) -> i32 {
+    kani_host::call_i32(
+        Op::can_fire,
+        [player_id, ptr, len, kind, trig_ptr, trig_len],
+    )
+}
+
+pub fn can_fire_any(player_id: i32, ptr: i32, len: i32, kind: i32) -> i32 {
+    kani_host::call_i32(Op::can_fire_any, [player_id, ptr, len, kind, 0, 0])
+}
+
 pub fn set_roller(player_id: i32) {
     kani_host::call_unit(Op::set_roller, [player_id, 0, 0, 0, 0, 0]);
 }
