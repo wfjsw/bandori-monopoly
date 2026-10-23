@@ -116,11 +116,15 @@ impl NativeRulesHandle {
                             }
                             _ => Vec::new(),
                         },
-                        label: card
-                            .labels
-                            .iter()
-                            .find(|(e, _)| *e == ei as i32)
-                            .map(|(_, l)| String::from(*l)),
+                        // Clause display text rides the entry (`On::label`).
+                        label: {
+                            let l = o.label_of();
+                            if l.is_empty() {
+                                None
+                            } else {
+                                Some(String::from(l))
+                            }
+                        },
                         presentation: card.presentation(ei as i32).header,
                         flash: card.presentation(ei as i32).flash,
                     })

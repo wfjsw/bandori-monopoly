@@ -20,3 +20,24 @@ export type Block =
   | { t: "ol"; items: Item[] }
   /** Standalone sub-steps `1. 2. 3.` -- the 「依次进行以下操作：」 lists. */
   | { t: "steps"; items: string[] };
+/** Card-type tags that act as a subtitle when they *open* a text run.
+ *
+ *  `[手]` / `[反击]` / `[持续]` / `[特]` / `[限]` print as a section header on
+ *  their own line (`[手]：`, `[持续]：`) and as a type marker at the start of an
+ *  effect (「[反击] 当你被…」). Both are subtitles. The same tags also appear as
+ *  ordinary prose -- 「作为[反击]使用」, 「打出[反击]卡」, 「[手]效果」 -- and
+ *  those are **not** headers: only a tag at the very start of the run is split,
+ *  and it is split out as display text, never rewritten. */
+const TYPE_TAG = /^(?:\[(?:手|反击|持续|特|限)\])+/;
+
+/** Split a leading card-type tag off `text`.
+ *
+ *  `{ tag: "", rest: text }` when the run does not open with one, so a
+ *  mid-sentence 「[反击]」 is returned untouched. `tag` is the bracketed run
+ *  (`"[反击]"`, `"[反击][持续]"`); `rest` is the remainder **verbatim**
+ *  (its leading space / `：` stays with it). */
+export function splitTypeTag(text: string): { tag: string; rest: string } {
+  const m = TYPE_TAG.exec(text);
+  if (!m) return { tag: "", rest: text };
+  return { tag: m[0], rest: text.slice(m[0].length) };
+}

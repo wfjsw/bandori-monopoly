@@ -34,8 +34,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         .raw_name(r#"秘密与青春的虹彩"#)
         .tags(&[r#"反击"#])
         .text(CardText::of(&[
-            sec("", &[
-                para(r#"[反击]"#),
+            sec(r#"[反击]"#, &[
                 items(&[
                     it(r#"当你向学妹或同级生支付时，打出此卡，此次支付金额减半。"#),
                     it(r#"当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#),
