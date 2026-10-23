@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
+use card_sdk::{CardText, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const GUERRILLA: CardDef = CardDef::new(
@@ -36,10 +37,14 @@ pub const GUERRILLA: CardDef = CardDef::new(
         .name(r#"游击演出"#)
         .raw_name(r#"游击演出"#)
         .tags(&[r#"手"#, r#"反击"#, r#"特"#])
-        .text(r#"[特]：
-此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子，则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子。
-[手]：
-[反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后：传送至任意无主可购买的格子并[结算]，且必须购买。"#)
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子，则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子。"#),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"[反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后：传送至任意无主可购买的格子并[结算]，且必须购买。"#),
+            ]),
+        ]))
         // sheet cell H9
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

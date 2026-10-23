@@ -9,6 +9,7 @@
 use bandori_std::ctx::{self, trigger};
 use bandori_std::state_key;
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Once-per-turn placement latch. `cast` is reached from both `play` and the
@@ -40,7 +41,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         .name(r#"骰子已经掷下"#)
         .raw_name(r#"骰子已经掷下"#)
         .tags(&[r#"反击"#])
-        .text(r#"将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）"#)
+        .text(CardText::para(r#"将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）"#))
         // sheet cell J6
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

@@ -6,13 +6,14 @@
 //! expensive tile immediately and mark it untargetable.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const NOBLE_BLUE: CardDef =
     CardDef::new("Mor:高贵的微蓝", &[On::Play("", None, Some(cant_play), noble_blue)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"高贵的微蓝"#)
         .raw_name(r#"高贵的微蓝"#)
         .tags(&[])
-        .text(r#"当你位于一块地契价值大于等于2200的地块时，可以打出此卡，如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记，有标记时此地块不能被指定。"#)
+        .text(CardText::para(r#"当你位于一块地契价值大于等于2200的地块时，可以打出此卡，如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记，有标记时此地块不能被指定。"#))
         // sheet cell G11
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

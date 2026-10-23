@@ -16,6 +16,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -37,15 +38,19 @@ pub const JENNIFER: CardDef = CardDef::new(
         .name(r#"找回珍妮弗"#)
         .raw_name(r#"找回珍妮弗"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(
-            r#"[手]：
-将此卡放置在除[使用者]以外的一名玩家的[场地]。
-[持续]：
-[拥有者][经过]“偶像经纪公司”时依次进行以下操作：
-1. [使用者][支付][拥有者]400资金；
-2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
-3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在除[使用者]以外的一名玩家的[场地]。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                para(r#"[拥有者][经过]“偶像经纪公司”时依次进行以下操作："#),
+                steps(&[
+                    r#"[使用者][支付][拥有者]400资金；"#,
+                    r#"[使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；"#,
+                    r#"此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell D13
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );

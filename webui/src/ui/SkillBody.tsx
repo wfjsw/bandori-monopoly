@@ -1,20 +1,36 @@
 // Effect text as structured blocks: lead paragraphs, section labels, numbered
-// effects. Skill bodies and card effect text share it; the parsing (and the
-// shape it recognises) lives in ./bodyText.ts.
+// effects. Skill bodies and card effect text share it.
+//
+// Cards and events bring their structure as data (`Block[]` from the display
+// export, see ../core/body.ts) and skip parsing. Persona / group skill text is
+// still a flat rulebook string, so it goes through `./bodyText.ts`.
 
 import { memo, type ReactNode } from "react";
 import { cx } from "../core/cx";
+import type { Block } from "../core/body";
 import { parse } from "./bodyText";
 import s from "./SkillBody.module.css";
 
-export const SkillBody = memo(function SkillBody({ text, prefix, className }: { text: string; prefix?: ReactNode; className?: string }) {
-  const blocks = parse(text);
+export const SkillBody = memo(function SkillBody({
+  text,
+  blocks,
+  prefix,
+  className,
+}: {
+  /** Flat rulebook text; parsed only when `blocks` is absent. */
+  text?: string;
+  /** Pre-structured sections / bulletpoints (cards, events). Preferred. */
+  blocks?: Block[];
+  prefix?: ReactNode;
+  className?: string;
+}) {
+  const parsed = blocks ?? parse(text ?? "");
   // The skill name rides with the first paragraph; when the body opens straight
   // onto a list it gets a line of its own above it.
   let head = prefix != null;
   return (
     <div className={cx(s.body, className)}>
-      {blocks.map((b, i) => {
+      {parsed.map((b, i) => {
         if (b.t === "p") {
           const lead = head ? (
             <>
@@ -37,6 +53,18 @@ export const SkillBody = memo(function SkillBody({ text, prefix, className }: { 
             <div key={i}>
               {before}
               <p className={s.label}>{b.text}</p>
+            </div>
+          );
+        }
+        if (b.t === "steps") {
+          return (
+            <div key={i}>
+              {before}
+              <ol className={s.sub}>
+                {b.items.map((x, k) => (
+                  <li key={k}>{x}</li>
+                ))}
+              </ol>
             </div>
           );
         }

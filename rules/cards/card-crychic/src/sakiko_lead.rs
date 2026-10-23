@@ -7,6 +7,7 @@
 //! record the players sharing your tile; they follow your next main move.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const SAKIKO_LEAD: CardDef = CardDef::new(
     "CRYCHIC:（祥子）带领着大家",
@@ -15,7 +16,7 @@ pub const SAKIKO_LEAD: CardDef = CardDef::new(
         .name(r#"带领着大家"#)
         .raw_name(r#"（祥子）带领着大家"#)
         .tags(&[])
-        .text(r#"回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的[支付]价格减半。"#)
+        .text(CardText::para(r#"回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的[支付]价格减半。"#))
         // sheet cell M14
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"丰川祥子（CRYCHIC）"#)]));
 

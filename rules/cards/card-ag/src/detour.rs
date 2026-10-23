@@ -12,6 +12,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ChainKind, Dice};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 pub const DETOUR: CardDef = CardDef::new(
@@ -53,8 +54,10 @@ pub const DETOUR: CardDef = CardDef::new(
         .name(r#"回家的路上绕个道"#)
         .raw_name(r#"回家的路上绕个道"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(r#"(1)此卡可作为反击使用
-(2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#)
+        .text(CardText::items(&[
+            it(r#"此卡可作为反击使用"#),
+            it(r#"进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#),
+        ]))
         // sheet cell C9
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

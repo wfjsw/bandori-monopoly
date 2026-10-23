@@ -7,6 +7,7 @@
 //! move at 月之森女子学院 (without triggering its tile).
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const YOUR_LIGHT: CardDef = CardDef::new(
     "Mor:你的光芒将照亮前路",
@@ -22,7 +23,7 @@ pub const YOUR_LIGHT: CardDef = CardDef::new(
         .name(r#"你的光芒将照亮前路"#)
         .raw_name(r#"你的光芒将照亮前路"#)
         .tags(&[])
-        .text(r#"当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡，此次移动以“月之森女子学院”为起点（不触发起点地块效果）。"#)
+        .text(CardText::para(r#"当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡，此次移动以“月之森女子学院”为起点（不触发起点地块效果）。"#))
         // sheet cell G4
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

@@ -19,6 +19,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PP:可爱又强壮的花朵";
@@ -33,13 +34,19 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
         .name(r#"可爱又强壮的花朵"#)
         .raw_name(r#"可爱又强壮的花朵"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手]：
-[指定][使用者]拥有的一个格子，将此卡放置在被[指定]格子上并为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]。
-[持续]：
-[使用者][经过]此卡所在格子时依次进行以下操作：
-1. [强制停下]，此次移动变为[结算]；
-2. 如果[共鸣]则获得1500资金；
-3. 此卡放入[使用者]弃卡区。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"[指定][使用者]拥有的一个格子，将此卡放置在被[指定]格子上并为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                para(r#"[使用者][经过]此卡所在格子时依次进行以下操作："#),
+                steps(&[
+                    r#"[强制停下]，此次移动变为[结算]；"#,
+                    r#"如果[共鸣]则获得1500资金；"#,
+                    r#"此卡放入[使用者]弃卡区。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell D12
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 

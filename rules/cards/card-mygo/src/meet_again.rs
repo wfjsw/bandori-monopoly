@@ -9,6 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MEET_AGAIN: CardDef = CardDef::new(
@@ -23,7 +24,7 @@ pub const MEET_AGAIN: CardDef = CardDef::new(
         .name(r#"若能再次交汇"#)
         .raw_name(r#"若能再次交汇"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击]移动掷骰后，且场上有可被经过的玩家时可打出，持续进行移动掷骰直至[经过]下一名玩家（最多掷骰至移动超过原本移动终点的20格以后）。"#)
+        .text(CardText::para(r#"[反击]移动掷骰后，且场上有可被经过的玩家时可打出，持续进行移动掷骰直至[经过]下一名玩家（最多掷骰至移动超过原本移动终点的20格以后）。"#))
         // sheet cell I13
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 

@@ -8,6 +8,7 @@
 //! while they are still in).
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
     "Mujica:黑色生日",
@@ -17,7 +18,7 @@ pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
         .name(r#"黑色生日"#)
         .raw_name(r#"黑色生日"#)
         .tags(&[])
-        .text(r#"每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。"#)
+        .text(CardText::para(r#"每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。"#))
         // sheet cell J14
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

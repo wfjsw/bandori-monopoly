@@ -7,13 +7,14 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
+use card_sdk::{CardText};
 
 use crate::util::{all_players, roll};
 
 pub const FRONT_OR_BACK: CardDef = CardDef::new("event:前场队还是后场队？", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"前场队还是后场队？"#)
-            .text(r#"所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加定位X且站在格子序号31到60的玩家的投掷结果相加定位Y；如果X=Y则所有玩家获得500资金，如果X>Y则站在格子序号1到30的玩家分摊获得1000资金，如果Y>X则站在格子序号31到60的玩家分摊获得1000资金"#)
+            .text(CardText::para(r#"所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加定位X且站在格子序号31到60的玩家的投掷结果相加定位Y；如果X=Y则所有玩家获得500资金，如果X>Y则站在格子序号1到30的玩家分摊获得1000资金，如果Y>X则站在格子序号31到60的玩家分摊获得1000资金"#))
             // sheet cell A9
             .derived(false));
 

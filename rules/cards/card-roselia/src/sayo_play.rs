@@ -11,6 +11,7 @@
 
 use bandori_std::ctx::{self, plan, state, trigger};
 use card_sdk::abi::{prop, ChainKind};
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(
@@ -30,7 +31,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
         .name(r#"弹奏弹奏弹奏，继续弹奏"#)
         .raw_name(r#"（纱夜）弹奏弹奏弹奏，继续弹奏"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。"#)
+        .text(CardText::para(r#"[反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。"#))
         // sheet cell E10
         .fields(&[("group", r#"Roselia"#), ("owner", r#"冰川纱夜"#)]));
 
