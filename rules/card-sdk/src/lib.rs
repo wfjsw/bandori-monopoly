@@ -155,11 +155,6 @@ pub struct CardDef {
     /// Keys are [`abi::prop`] constants; a key not declared reads as its
     /// default (`0`).
     pub props: &'static [(&'static str, i32)],
-    /// Per-entry labels -- the rulebook's numbered clauses, 「（1）」 / 「（2）」
-    /// and kin -- as `(entry index, label)`. Rides the manifest so the
-    /// 「效果适用」 line can name which clause of a multi-entry card ran.
-    /// An entry with no label shows just the card name.
-    pub labels: &'static [(i32, &'static str)],
     /// Entry indices that are **bookkeeping**: they run their body but post no
     /// activation flash and no 「效果适用」 header. For declarations and resets
     /// the player never sees as a clause firing (`declare_cap` / `set_bounds` /
@@ -228,7 +223,6 @@ impl CardDef {
             id,
             on,
             props: &[],
-            labels: &[],
             silent: &[],
             quiet_when_empty: &[],
             flash: &[],
@@ -249,7 +243,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -263,42 +256,6 @@ impl CardDef {
         }
     }
 
-    /// Name this card's entries after their rulebook clauses -- 「（1）」,
-    /// 「（2）」, … -- as `(entry index, label)` pairs. The 「效果适用」 line
-    /// shows the label of the entry that ran; unlabelled entries remain bare.
-    ///
-    /// **Not** the same "label" as [`crate::text::TextSection::label`] (the
-    /// `[手]：` / `[持续]：` section headers printed on the card face), and not
-    /// the positional `（N）` that [`crate::text::TextBlock::Items`] numbers
-    /// into `CardText`. This names **engine entries** -- the index is the
-    /// position of an [`On`] in the `CardDef::new` slice, counting the play
-    /// body and any bookkeeping hooks. Several entries may share one clause
-    /// (「（1）[经过]或被[经过]」 is two hooks), and one clause may live under
-    /// no entry at all, so the map is kept beside the `On` list rather than
-    /// derived from the text.
-    ///
-    /// ```ignore
-    /// // On[0] = Play ([手], unnumbered), On[1] = （1）, On[2] = （2）:
-    /// .labels(&[(1, "（1）"), (2, "（2）")])
-    /// ```
-    pub const fn labels(self, labels: &'static [(i32, &'static str)]) -> Self {
-        Self {
-            id: self.id,
-            on: self.on,
-            props: self.props,
-            labels,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
-            texts: self.texts,
-            meta: self.meta,
-            board_role: self.board_role,
-            governs: self.governs,
-            gate_msgs: self.gate_msgs,
-            gate_skip_msgs: self.gate_skip_msgs,
-            exemption_prop: self.exemption_prop,
-        }
-    }
 
     /// Mark these entry indices **silent** (bookkeeping): they run their body
     /// but post no activation flash and no 「效果适用」 header. Use for
@@ -320,7 +277,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: entries,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -345,7 +301,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: entries,
             flash: self.flash,
@@ -377,7 +332,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: entries,
@@ -443,7 +397,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -476,7 +429,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -502,7 +454,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -530,7 +481,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -552,7 +502,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -574,7 +523,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -595,7 +543,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
@@ -637,6 +584,11 @@ pub struct PlayEntry {
     pub why_not: Option<fn(player_id: i32) -> Option<Msg>>,
     /// The effect.
     pub body: fn(player_id: i32) -> Asked,
+    /// Opaque display text for the 「效果适用」 line (「（1）」 and kin). Moves
+    /// with the entry; `""` = the line shows just the card name. **Not** a key
+    /// into the card text -- nothing resolves this against [`crate::text::CardText`].
+    /// If the line needs prose, put a copy of it here.
+    pub label: &'static str,
 }
 
 /// [反击] entry ([`On::Counteract`]).
@@ -654,6 +606,8 @@ pub struct CounteractEntry {
     pub guard: Option<fn(player_id: i32) -> bool>,
     /// The effect.
     pub body: fn(player_id: i32) -> Asked,
+    /// See [`PlayEntry::label`].
+    pub label: &'static str,
 }
 
 /// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
@@ -666,6 +620,8 @@ pub struct RuleEntry {
     pub guard: Option<fn(player_id: i32) -> bool>,
     /// The effect.
     pub body: fn(player_id: i32) -> Asked,
+    /// See [`PlayEntry::label`].
+    pub label: &'static str,
 }
 
 /// Cross-card message entry ([`On::Message`]).
@@ -679,6 +635,8 @@ pub struct MessageEntry {
     pub guard: Option<fn(player_id: i32) -> bool>,
     /// The effect.
     pub body: fn(player_id: i32) -> Asked,
+    /// See [`PlayEntry::label`].
+    pub label: &'static str,
 }
 
 /// One entry point of a card. The variant says what the
@@ -806,6 +764,7 @@ impl On {
             counter_reason,
             why_not,
             body,
+            label: "",
         })
     }
 
@@ -825,6 +784,7 @@ impl On {
             counter_reason,
             guard,
             body,
+            label: "",
         })
     }
 
@@ -835,7 +795,7 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::SettleBody(RuleEntry { pre, guard, body })
+        Self::SettleBody(RuleEntry { pre, guard, body, label: "" })
     }
 
     /// The rule's **mortgage body**.
@@ -845,7 +805,7 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::MortgageBody(RuleEntry { pre, guard, body })
+        Self::MortgageBody(RuleEntry { pre, guard, body, label: "" })
     }
 
     /// The rule's **redeem body**.
@@ -855,7 +815,7 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::RedeemBody(RuleEntry { pre, guard, body })
+        Self::RedeemBody(RuleEntry { pre, guard, body, label: "" })
     }
 
     /// The rule's **buy body**.
@@ -865,7 +825,7 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::BuyBody(RuleEntry { pre, guard, body })
+        Self::BuyBody(RuleEntry { pre, guard, body, label: "" })
     }
 
     /// The rule's **build body**.
@@ -875,7 +835,7 @@ impl On {
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
-        Self::BuildBody(RuleEntry { pre, guard, body })
+        Self::BuildBody(RuleEntry { pre, guard, body, label: "" })
     }
 
     /// A **cross-card message** this card answers (`ctx::send`).
@@ -891,6 +851,7 @@ impl On {
             pre,
             guard,
             body,
+            label: "",
         })
     }
 
@@ -942,6 +903,77 @@ impl On {
                 e.pre = pre;
                 On::MessageBody(e)
             }
+        }
+    }
+
+    /// Opaque display text for this entry's 「效果适用」 line (「（1）」 and kin).
+    /// Attaches to the entry, so it moves with it; `""` (the default) shows
+    /// just the card name.
+    ///
+    /// Not a key: nothing resolves this against [`crate::text::CardText`] or
+    /// the rulebook text. If the line needs prose, **duplicate** it here.
+    ///
+    /// ```ignore
+    /// On::Action(Action::Pass("", None, None, on_pass)).label("（1）")
+    /// ```
+    pub const fn label(self, label: &'static str) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.label = label;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.label = label;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.label = label;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.label = label;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.label = label;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.label = label;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.label = label;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.label = label;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.label = label;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.label = label;
+                On::MessageBody(e)
+            }
+        }
+    }
+
+    /// This entry's 「效果适用」 display text (see [`Self::label`]); `""` = none.
+    pub const fn label_of(&self) -> &'static str {
+        match self {
+            On::PlayBody(e) => e.label,
+            On::CounteractBody(e) => e.label,
+            On::Action(e) => e.label,
+            On::Filter(e) => e.label,
+            On::SettleBody(e) => e.label,
+            On::MortgageBody(e) => e.label,
+            On::RedeemBody(e) => e.label,
+            On::BuyBody(e) => e.label,
+            On::BuildBody(e) => e.label,
+            On::MessageBody(e) => e.label,
         }
     }
 

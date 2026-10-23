@@ -92,6 +92,8 @@ pub struct FilterEntry {
     /// Erased body. See the module docs: only `drive` may cast this.
     pub body: *const (),
     pub shape: FilterShape,
+    /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
+    pub label: &'static str,
 }
 
 // Safety: `body` always points at a `fn` item in static code (constructed by
@@ -110,6 +112,8 @@ pub struct ActionEntry {
     pub counter_reason: Option<crate::MsgKey>,
     pub guard: Option<fn(i32) -> bool>,
     pub body: fn(i32) -> Asked,
+    /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
+    pub label: &'static str,
 }
 
 /// Build a [`FilterEntry`] for a `fn(i32, i32) -> i32` fold.
@@ -127,6 +131,7 @@ pub const fn filter_value(
         drive: drive_value,
         body: body as *const (),
         shape: FilterShape::Value,
+        label: "",
     }
 }
 
@@ -145,6 +150,7 @@ pub const fn filter_flag(
         drive: drive_flag,
         body: body as *const (),
         shape: FilterShape::Flag,
+        label: "",
     }
 }
 
@@ -165,6 +171,7 @@ pub const fn filter_payload<P: FilterPayload>(
         drive,
         body: body as *const (),
         shape,
+        label: "",
     }
 }
 
@@ -183,6 +190,7 @@ pub const fn action(
         counter_reason,
         guard,
         body,
+        label: "",
     }
 }
 

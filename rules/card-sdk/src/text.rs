@@ -60,9 +60,10 @@ pub enum CardText {
 /// above its effects (`[手]：`, `[特]：`, `[持续]`, `状态1：`); empty for the
 /// unlabelled lead before the first label, or for a text with no labels at all.
 ///
-/// Distinct from [`crate::CardDef::labels`], which names an engine entry after
-/// its numbered clause (「（1）」) for the 「效果适用」 log -- that one indexes
-/// the `On` list, not a section of this text.
+/// Distinct from [`crate::On::label`], which names an engine entry after its
+/// numbered clause (「（1）」) for the 「效果适用」 log. That string rides the
+/// `On` entry and is opaque display text -- nothing resolves it against this
+/// structure.
 #[derive(Clone, Copy)]
 pub struct TextSection {
     pub label: &'static str,

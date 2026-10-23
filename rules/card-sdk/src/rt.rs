@@ -35,11 +35,16 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                         On::MessageBody(e) => e.names.iter().map(|s| String::from(*s)).collect(),
                         _ => Vec::new(),
                     },
-                    label: c
-                        .labels
-                        .iter()
-                        .find(|(e, _)| *e == ei as i32)
-                        .map(|(_, l)| String::from(*l)),
+                    // The clause display text rides the entry (`On::label`),
+                    // so it cannot drift when entries are reordered.
+                    label: {
+                        let l = o.label_of();
+                        if l.is_empty() {
+                            None
+                        } else {
+                            Some(String::from(l))
+                        }
+                    },
                     presentation: c.presentation(ei as i32).header,
                     flash: c.presentation(ei as i32).flash,
                 })

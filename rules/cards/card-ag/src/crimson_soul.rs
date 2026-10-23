@@ -39,15 +39,13 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive -1000 rewrite sits immediately before the pure
         // `PaySplitChoose` filter stage.
-        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && card.counter('crystals') > 0", Some(key!("crimson_soul_when")), None, pay_choose)),
-        On::Action(Action::CardUsed("", None, Some(skill_used_guard), skill_used)),
-        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && card.counter('crystals') > 0", Some(key!("crimson_soul_when")), None, pay_choose)).label("（1）"),
+        // [持续]（2）
+        On::Action(Action::CardUsed("", None, Some(skill_used_guard), skill_used)).label("（2）"),
+        // [持续]（3）
+        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)).label("（3）"),
     ],
 )
-// Entry indices of the On[] above: 0 Play is the unnumbered [手]; 1..3 are
-    // the [持续] clauses （1）/（2）/（3） the meta text lists. `labels` names
-    // the 效果适用 line after whichever clause ran.
-    .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])
 .props(&[(card_sdk::abi::prop::EST_COST, 500)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"绯红之魂"#)
         .raw_name(r#"绯红之魂"#)
