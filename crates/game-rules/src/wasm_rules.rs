@@ -7581,7 +7581,8 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn owner_charge(&self) -> i64 {
         let o = self.owner();
         if o >= 0 {
-            self.world.state_get(o as i32, "charge") as i64
+            // Source is the held token (fire is a skill counter, not a state key).
+            self.world.tok(o as i32, "charge") as i64
         } else {
             0
         }
@@ -7705,7 +7706,8 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.world.player_money(seat as i32) as i64
     }
     fn charge(&self, seat: i64) -> i64 {
-        self.world.state_get(seat as i32, "charge") as i64
+        // Source is the held token (fire is a skill counter, not a state key).
+        self.world.tok(seat as i32, "charge") as i64
     }
     fn group_pool(&self, seat: i64, name: &str) -> i64 {
         self.world.group_pool(seat as i32, name) as i64

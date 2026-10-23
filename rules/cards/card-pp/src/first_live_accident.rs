@@ -44,7 +44,7 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     // [持续] 「[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 -- the
     // token is what the P✽P skills' press gates read. One concept, one name:
     // the band's real spelling (`skill_blocked` builds `skillBlock:<band>`).
-    ctx::set_tok(player_id, "skillBlock:Pastel✽Palettes", 1);
+    ctx::set_tok(player_id, "skillBlock:Pastel✽Palettes", 1, 0, -1);
     // 规则书[手]: 「并将1张“重叠的声音”加入抽卡区并洗切」
     ctx::add_to_deck(player_id, "PP:[衍生]重叠的声音", true);
     ctx::log(

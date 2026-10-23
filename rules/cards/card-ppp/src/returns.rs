@@ -206,7 +206,7 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PROP_FROM, -1);
     // [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果」 -- arm the token
     // `skill-groups::poppin` reads to skip its no-build-on-main-settle rule.
-    ctx::set_tok(player_id, "returns.noBuild4", 1);
+    ctx::set_tok(player_id, "returns.noBuild4", 1, 0, -1);
     ctx::log(
         player_id,
         &Msg::new(key!("returns_placed")).player_id("who", player_id),
@@ -414,7 +414,7 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     // `copy_sticker_gate` keys on this uid, not on "a borrow exists" -- the
     // owner's own band card sits beside the copy and its presses are free.
     // (`returns.copied` was the old "any borrow" flag; nothing reads it now.)
-    ctx::set_tok(player_id, "returns.borrow_uid", borrowed);
+    ctx::set_tok(player_id, "returns.borrow_uid", borrowed, 0, -1);
     ctx::log(
         player_id,
         &Msg::new(key!("returns_got_band")).card("card", want),

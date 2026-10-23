@@ -101,7 +101,7 @@ fn jump(player_id: i32) -> card_sdk::Asked {
         &pool,
     )?;
     // 「清除所有标记…然后置入弃牌堆」
-    ctx::set_tok(player_id, JELLY, 0);
+    ctx::set_tok(player_id, JELLY, 0, 0, -1);
     ctx::plan::set_kind(MoveKind::Teleport);
     ctx::plan::set_teleport_to(pick);
     ctx::plan::set_resolve(true);
