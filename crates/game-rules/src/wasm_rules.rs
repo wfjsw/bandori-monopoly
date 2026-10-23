@@ -5685,6 +5685,7 @@ impl<M: CardModules> RulesBridge<M> {
             id: t.card.clone().unwrap_or_default(),
             uid: -1,
             move_extension: 0,
+            arg: 0,
             answered: 0,
             link: trigger.clone(),
             answers: Vec::new(),
@@ -5784,7 +5785,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 .copied()
                         })
                         .collect();
-                    let Some((id, idx, uid, move_extension)) =
+                    let Some((id, idx, uid, move_extension, arg)) =
                         self.declare_one(cx, cursor, &chain[timing].link, &mut memo, &groups)?
                     else {
                         // Explicit pass, or nothing eligible left: the visit
@@ -5940,6 +5941,7 @@ impl<M: CardModules> RulesBridge<M> {
                         id,
                         uid,
                         move_extension,
+                        arg,
                         answered: timing,
                         link: bridge_trigger(&link),
                         answers: Vec::new(),
@@ -6171,7 +6173,10 @@ impl<M: CardModules> RulesBridge<M> {
                     Call::Counteract {
                         card,
                         player_id: seat as i32,
-                        arg: 0,
+                        // The stored arg is the only source of truth at
+                        // resolve time (docs/ACTIVATION.md §2): `OP_DECLARE`
+                        // ran at the offer pass and is never re-entered here.
+                        arg: chain[idx].arg,
                     },
                     &id,
                     uid,
@@ -6410,7 +6415,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         memo: &mut ProbeMemo,
         groups: &[i32],
-    ) -> Flow<Option<(String, i32, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32, i32)>> {
         // Hand cards that answer this link, deduped to one entry per id.
         // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
         // index in the hand `Vec` (the authoritative state list), decl = 0 (one
@@ -6649,7 +6654,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         order: Vec<(u8, u32, u32)>,
         options: Vec<(String, i32, i32)>,
-    ) -> Flow<Option<(String, i32, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32, i32)>> {
         if options.is_empty() {
             return Ok(None);
         }
@@ -6755,7 +6760,11 @@ impl<M: CardModules> RulesBridge<M> {
                     .filter(|&x| x >= 0)
                     .unwrap_or(reply.fallback) as usize;
                 if let Some((id, idx, uid)) = options.get(pick) {
-                    return Ok(Some((id.clone(), *idx, *uid, extension)));
+                    let Some(arg) = self.declare_for_card(cx, s, id, *idx)? else {
+                        // Declined at the declare: no counter this visit.
+                        return Ok(None);
+                    };
+                    return Ok(Some((id.clone(), *idx, *uid, extension, arg)));
                 }
                 // Back (also the payment timeout) reopens the distance choice.
             }
@@ -6778,9 +6787,97 @@ impl<M: CardModules> RulesBridge<M> {
             .copied()
             .filter(|&x| x >= 0)
             .unwrap_or(reply.fallback) as usize;
-        Ok(options
-            .get(pick)
-            .map(|(id, idx, uid)| (id.clone(), *idx, *uid, 0)))
+        Ok(match options.get(pick) {
+            Some((id, idx, uid)) => {
+                let Some(arg) = self.declare_for_card(cx, s, id, *idx)? else {
+                    return Ok(None);
+                };
+                Some((id.clone(), *idx, *uid, 0, arg))
+            }
+            None => None,
+        })
+    }
+
+    /// Run the chosen card's `OP_DECLARE` before the counter declaration
+    /// commits (docs/ACTIVATION.md §2). One answer cursor across a multi-step
+    /// declare. `Ok(None)` = declined and **no counter is declared this
+    /// visit**; `Ok(Some(arg))` = the declaration carries `arg`.
+    ///
+    /// A **prompted** decline has already consumed its answer-log slot: the
+    /// prompt's answer is recorded like any other, so a replay does not
+    /// re-ask (docs/ACTIVATION.md "Bots and the answer log").
+    fn declare_for_card(
+        &self,
+        cx: &mut Cx,
+        s: usize,
+        id: &str,
+        idx: i32,
+    ) -> Flow<Option<i32>> {
+        let mut answers: Vec<i32> = Vec::new();
+        loop {
+            let run = self.declare_run(cx, s, id, idx);
+            match self.ruleset.declare_play(&run, idx, s as i32, &answers) {
+                Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
+                Ok(DeclareOut::Declined) => return Ok(None),
+                Ok(DeclareOut::Paused(p)) => {
+                    let ask = prompt_to_ask(p);
+                    let reply = cx.ask(ask)?;
+                    let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
+                    answers.push(a);
+                }
+                Err(_) => return Ok(Some(0)),
+            }
+        }
+    }
+
+    /// A `Run` bound to `id` on seat `s`, for a declare probe (no writes are
+    /// committed -- see [`Self::cant_play`]). Distinct from [`Self::probe_run`],
+    /// which binds to the trigger's player.
+    fn declare_run(&self, cx: &Cx, s: usize, id: &str, _idx: i32) -> Run {
+        let uid = cx
+            .world()
+            .field_instances(s as i32)
+            .into_iter()
+            .find(|(_, c)| c == id)
+            .map_or(-1, |(uid, _)| uid);
+        Run {
+            world: cx.share_world(),
+            pile_checkpoints: Default::default(),
+            data: self.data.clone(),
+            props: self.modules_props(),
+            trigger: Trigger::default(),
+            activation_player: s as i32,
+            current_card: id.to_string(),
+            current_uid: uid,
+            carried_owner: None,
+            dest: DEST_UNSET,
+            dest_to: None,
+            paid_log: vec![],
+            discard_log: vec![],
+            draw_log: vec![],
+            reshuffle_log: vec![],
+            marker_spent_log: vec![],
+            house_log: vec![],
+            counter_log: vec![],
+            abnormal_log: vec![],
+            named_raise_log: vec![],
+            state_log: vec![],
+            doubled: -1,
+            linger_props: Default::default(),
+            wrap_effect: false,
+            live: None,
+            posted: vec![],
+            log_idx: 0,
+            logged: 0,
+            silent_body: false,
+            quiet_when_empty: false,
+            pending_header: None,
+            own_activation: -1,
+            prompted: false,
+            parent: -1,
+            flash_policy: card_sdk::abi::Flash::Auto,
+            flash_ordinal: 0,
+        }
     }
 }
 
@@ -7012,6 +7109,10 @@ struct ChainLink {
     uid: i32,
     /// Extension chosen before declaring this movement source; zero otherwise.
     move_extension: i32,
+    /// Activation argument the declaration's `OP_DECLARE` collected
+    /// (docs/ACTIVATION.md §2). Stored here at declaration time; `resolve_jobs`
+    /// reads it back and never re-enters `OP_DECLARE`.
+    arg: i32,
     /// Node index of the timing this answers.
     answered: usize,
     /// This node's own link -- what its answers read and rewrite.
