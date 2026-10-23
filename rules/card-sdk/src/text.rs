@@ -59,6 +59,10 @@ pub enum CardText {
 /// One labelled block of effect text. `label` is the line the rulebook prints
 /// above its effects (`[手]：`, `[特]：`, `[持续]`, `状态1：`); empty for the
 /// unlabelled lead before the first label, or for a text with no labels at all.
+///
+/// Distinct from [`crate::CardDef::labels`], which names an engine entry after
+/// its numbered clause (「（1）」) for the 「效果适用」 log -- that one indexes
+/// the `On` list, not a section of this text.
 #[derive(Clone, Copy)]
 pub struct TextSection {
     pub label: &'static str,

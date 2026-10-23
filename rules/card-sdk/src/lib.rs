@@ -266,6 +266,21 @@ impl CardDef {
     /// Name this card's entries after their rulebook clauses -- 「（1）」,
     /// 「（2）」, … -- as `(entry index, label)` pairs. The 「效果适用」 line
     /// shows the label of the entry that ran; unlabelled entries remain bare.
+    ///
+    /// **Not** the same "label" as [`crate::text::TextSection::label`] (the
+    /// `[手]：` / `[持续]：` section headers printed on the card face), and not
+    /// the positional `（N）` that [`crate::text::TextBlock::Items`] numbers
+    /// into `CardText`. This names **engine entries** -- the index is the
+    /// position of an [`On`] in the `CardDef::new` slice, counting the play
+    /// body and any bookkeeping hooks. Several entries may share one clause
+    /// (「（1）[经过]或被[经过]」 is two hooks), and one clause may live under
+    /// no entry at all, so the map is kept beside the `On` list rather than
+    /// derived from the text.
+    ///
+    /// ```ignore
+    /// // On[0] = Play ([手], unnumbered), On[1] = （1）, On[2] = （2）:
+    /// .labels(&[(1, "（1）"), (2, "（2）")])
+    /// ```
     pub const fn labels(self, labels: &'static [(i32, &'static str)]) -> Self {
         Self {
             id: self.id,

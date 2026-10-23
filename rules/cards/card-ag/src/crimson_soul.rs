@@ -44,7 +44,10 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
     ],
 )
-.labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])
+// Entry indices of the On[] above: 0 Play is the unnumbered [手]; 1..3 are
+    // the [持续] clauses （1）/（2）/（3） the meta text lists. `labels` names
+    // the 效果适用 line after whichever clause ran.
+    .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])
 .props(&[(card_sdk::abi::prop::EST_COST, 500)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"绯红之魂"#)
         .raw_name(r#"绯红之魂"#)
