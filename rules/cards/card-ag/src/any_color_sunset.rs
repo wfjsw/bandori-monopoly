@@ -5,11 +5,13 @@
 //! >  投掷1d6并根据结果获得对应效果: 若为1则立刻获得1500资金，若为2则从弃牌堆中选择一张牌放置到抽牌堆顶，若为3则抽一张牌，若为4则可选择补满火罐或者获得2000资金，若为5则从弃牌堆中选择一张牌加入手牌，若为6则选择1-5中的3个效果触发（若结果严格大于6，则从1开始重新计数）
 //!
 //! 1d6 picks one of five effects (6 = pick three of them).
+//! 
+//! Reviewed 10/23/2026
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use bandori_std::ctx;
+use bandori_std::{ctx, filled_msgs};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANY_COLOR_SUNSET: CardDef =
@@ -33,7 +35,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若为6则选择1-5中的3个效果触发」
     let mut left: [bool; 5] = [true; 5];
     for n in 0..3 {
-        let mut options: [Msg; 5] = bandori_std::filled_msgs!(5, opt_key(1));
+        let mut options: [Msg; 5] = filled_msgs!(5, opt_key(1));
         let mut ids: [i32; 5] = [0; 5];
         let mut len = 0usize;
         for x in 1..=5 {
@@ -80,6 +82,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         }
         // 规则书: 「若为2则从弃牌堆中选择一张牌放置到抽牌堆顶」
         2 => {
+            // TODO: Rename discard => graveyard
             if let Some(id) = pick_from_discard(player_id, key!("any_color_sunset_deck_ask"))? {
                 ctx::add_to_deck_at(player_id, &id, ctx::DeckPos::Top);
             }
@@ -90,12 +93,10 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         }
         // 规则书: 「若为4则可选择补满火罐或者获得2000资金」
         4 => {
-            // C# offers 「补满火罐」 only when `H.HasFireSkill(i) && H.Fire(i) < H.FireMax(i)`.
-            let can_fire = bandori_std::fire::max(player_id) > 0
-                && bandori_std::fire::get(player_id) < bandori_std::fire::max(player_id);
-            let mut take_money = true;
-            if can_fire {
-                let pick = ctx::ask_pick(
+            let fire_to_fill = bandori_std::fire::max(player_id) - bandori_std::fire::get(player_id);
+            let take_money = if fire_to_fill > 0 {
+                // Ask the player whether to take money instead of filling the fire charge.
+                ctx::ask_pick(
                     player_id,
                     &Msg::new(key!("any_color_sunset_title")),
                     &Msg::new(key!("any_color_sunset_fire_ask")),
@@ -103,30 +104,31 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                         Msg::new(key!("any_color_sunset_fire_fill")),
                         Msg::new(key!("any_color_sunset_fire_money")),
                     ],
+                )? != 0
+            } else {
+                // If the fire cannot be filled, the player must take the money.
+                true
+            };
+
+            if !take_money && fire_to_fill > 0 {
+                // 规则书: 「补满火罐」 
+                bandori_std::fire::gain(
+                    player_id,
+                    fire_to_fill,
+                    &Msg::new(key!("any_color_sunset_why")),
                 )?;
-                take_money = pick != 0;
-            }
-            if !take_money {
-                // 规则书: 「补满火罐」 -- C# `H.GainFire(i, H.FireMax(i) - fire, ...)`.
-                let need = bandori_std::fire::max(player_id) - bandori_std::fire::get(player_id);
-                if need > 0 {
-                    bandori_std::fire::gain(
-                        player_id,
-                        need,
-                        &Msg::new(key!("any_color_sunset_why")),
-                    )?;
-                }
             } else {
                 // 规则书: 「获得2000资金」
                 ctx::gain(player_id, 2000, &Msg::new(key!("any_color_sunset_why")))?;
             }
         }
         // 规则书: 「若为5则从弃牌堆中选择一张牌加入手牌」
-        _ => {
+        5 => {
             if let Some(id) = pick_from_discard(player_id, key!("any_color_sunset_hand_ask"))? {
                 ctx::add_to_hand(player_id, &id);
             }
-        }
+        },
+        _ => unreachable!(),
     }
     Ok(())
 }

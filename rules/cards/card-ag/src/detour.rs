@@ -9,43 +9,54 @@
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{prop, ActionKind, ChainKind, Dice, FilterKind};
-use card_sdk::ctx::plan;
+use card_sdk::abi::{prop, ChainKind, Dice};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
-        On::Play("", None, Some(cant_play), play),
+        On::Play(
+            "", 
+            None, 
+            // Guard: only allow play if the move is not blocked
+            Some(|player_id| rules_status::move_blocked(player_id)), 
+            play
+        ),
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
-        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", None, None, counteract),
+        // > (1)此卡可作为反击使用
+        On::Counteract(
+            &[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", 
+            None, 
+            // TODO: Only handle the `blocked by status` case, not the `not_my_turn` and `already` case.
+            Some(|player_id| rules_status::move_blocked(player_id).is_none()), 
+            counteract
+        ),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
+        // > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
+        // > （2）效果），并将下一次的移动掷骰变更为1d6
         On::Filter(Filter::DiceRollPlan("slot('detour_next_roll') != 0", None, next_roll)),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
+        // > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
+        // > （2）效果），并将下一次的移动掷骰变更为1d6
         On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", None, None, consume_next_roll)),
+        // > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
+        // > （2）效果），并将下一次的移动掷骰变更为1d6
         On::Action(Action::AtEnd("", None, None, clear_no_reward)),
     ],
 )
+// TODO: Move this .silent to the actual onlist
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回家的路上绕个道"#)
         .raw_name(r#"回家的路上绕个道"#)
-        .tags(&[])
+        .tags(&[r#"手"#, r#"反击"#])
         .text(r#"(1)此卡可作为反击使用
 (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#)
         // sheet cell C9
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
-
-/// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
-fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the move is the turn's main
-    // move, so the C# `H.MoveWhyNot` gate applies (own turn, main move still
-    // available, turn's move not skipped).
-    rules_status::move_blocked(player_id)
-}
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(2): 「进行一次 "afterglow"式的移动（视为使用一次初始Afterglow角色的（2）效果）」
