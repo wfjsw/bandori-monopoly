@@ -164,16 +164,30 @@ ruleset_on(card, entry, op, player_id, arg) -> i64
   would otherwise be a *silent* wrong answer.)
 * `Call::{Play, Counteract}` and the chain link carry `arg: i32`; `resolve_jobs`
   / `drive` pass it into `OP_RUN` exactly the way `COUNTERACT_MOVE_EXTENSION`
-  is stamped today, but as a real parameter rather than a move tag.
-* **`OP_DECLARE` and `OP_RUN` share one `next_answer` cursor** over the whole
-  `run_hook` / `run` call, in one `HostState` (not a fresh store per phase).
+  is stamped today, but as a real parameter rather than a move tag. **The
+  stored `arg` is the only source of truth at resolve time.** `OP_DECLARE` runs
+  on the *offer* pass and its result is recorded; `resolve_jobs` **never
+  re-enters `OP_DECLARE`**. Recomputing the arg at resolve time is exactly
+  where answer-cursor drift lives -- the declare's prompts are in the offer
+  drive's log and the body's prompts are in the resolve drive's log, and a
+  recompute at resolve time has to reach back into a log it does not own.
+* **`OP_DECLARE` and `OP_RUN` share one `next_answer` cursor within a single
+  drive** -- one `HostState`, across `admits` + `OP_DECLARE` + `OP_RUN`.
   `entry_admitted` returns the cursor *after* `admits` + `OP_DECLARE`;
   `OP_RUN` starts there. Otherwise a declare prompt followed by a body prompt
-  re-reads answer 0.
+  re-reads answer 0. This rule is **per-drive**: `finish_offer` and
+  `resolve_jobs` are separate `run_hook` / `run` calls with separate
+  `HostState`s, each starting `next_answer = 0` over its *own* `answers`
+  slice, and that is correct. Consequences:
+  * `finish_offer` must not create a fresh store per `OP_DECLARE` step (a
+    two-step declare -- pick, then confirm -- is one cursor, both prompts
+    advance it);
+  * if `finish_offer` is re-entered on a multi-pass pause, `OP_DECLARE`
+    re-reads its answers from index 0 of *that* drive's log and must not
+    double-consume.
 * **ABI_VERSION 97 → 98.** `SAVE_VERSION` / `RECORD_VERSION` unchanged (the
-  answer log is still one `i32` per prompt; the arg is per-activation, not
-  per-prompt, and is recomputed by re-running `OP_DECLARE` on replay -- same as
-  every other body re-run).
+  answer log is still one `i32` per prompt; the arg is per-activation, stored
+  on the link / play, and is read back -- not recomputed -- on replay).
 * **Player-visible ordering (one changelog sentence).** For `On::Play` the
   `declare` prompt fires *before* the `card` counteraction window, because
   `hand.remove` is the commit and the window opens after it. That is the right
@@ -203,11 +217,19 @@ for v98; `finish_offer` already does multi-step prompts.
 
 ### Bots and the answer log
 
-`OP_DECLARE` runs inside the same drive loop as a body, so its prompts land in
-the same `answers: Vec<i32>` log and re-run the same way. `fill_ai` /
+`OP_DECLARE` runs inside the same drive as the body, so its prompts land in
+that drive's `answers: Vec<i32>` log and re-run the same way. `fill_ai` /
 `Ask::ai` / chaos fills need no change beyond the prompt itself being earlier.
-A declined declare produces **no** answer-log entry on the activation (the
-activation never happens).
+
+**A decline records its own answer.** Only a prompt-free `Decline` is
+log-silent -- a `declare` that returns `Activation::Decline` without asking
+replays deterministically and declines again. A `declare` that *asked* "use
+this?" and got **no** has consumed an answer-log slot at the index it was
+asked, exactly like any other prompt. Dropping that answer because "the
+activation never happens" makes replay re-enter `OP_DECLARE`, find no answer
+at that index, and **re-prompt the player** (or pause the match). Rule: *a
+decline that came from a prompt records that prompt's answer; only a
+prompt-free `Decline` is log-silent.*
 
 ## 3. Mechanism B -- `ctx::can_fire` (cross-card applicability)
 
@@ -392,7 +414,7 @@ moves into its `declare`).
 | `crates/rules-native/src/lib.rs` | mirror the widened `on` + `can_fire` |
 | `crates/game-core/src/engine/play.rs` / `mod.rs` | `act:"play"` / `act:"skill"` collect the arg before `hand.remove`; `NetMessage` gains an optional `arg` only if the UI wants to pre-declare (v98: host runs `OP_DECLARE`, so no net change) |
 | `rules/fixtures/test-cards` | a fixture card with a `declare` (pick one of N, cancel declines); the declaring body has **no decline path and logs unconditionally**, so silence proves it never ran; a fixture pair whose guard reads the other via `can_fire` |
-| `rules/tests` / `crates/game-rules/tests` | decline leaves the card **in hand** (LOY-SEEYOU-01 observable) / no counter declared / no header, flash, log; sibling entry still runs after a decline; the body sees the pick; `can_fire` true/false across a gated pair; probe mode does not prompt; `can_counteract_scoped` on a would-asking guard → `Err(RuleError::GuardPrompted)` |
+| `rules/tests` / `crates/game-rules/tests` | decline leaves the card **in hand** (LOY-SEEYOU-01 observable) / no counter declared / no header, flash, log; sibling entry still runs after a decline; the body sees the pick; `can_fire` true/false across a gated pair; probe mode does not prompt; `can_counteract_scoped` on a would-asking guard → `Err(RuleError::GuardPrompted)`; **replay**: decline at `finish_offer`, replay, assert no re-prompt and the same absence (the prompted decline's answer is in the log) |
 | `docs/CARDS.md`, `docs/GUARDS.md` | pointers here |
 
 `build-ruleset.mjs` must re-run after any `rules/cards` edit (the ruleset wasm
