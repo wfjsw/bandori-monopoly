@@ -5100,6 +5100,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "can_fire",
+        |mut c: C<W>,
+         player_id: i32,
+         p: i32,
+         n: i32,
+         kind: i32,
+         tp: i32,
+         tn: i32|
+         -> Result<i32, Error> {
+            hostfns::can_fire(&mut c, player_id, p, n, kind, tp, tn).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "can_fire_any",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, kind: i32| -> Result<i32, Error> {
+            hostfns::can_fire_any(&mut c, player_id, p, n, kind).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "schedule_turn_end",
         |mut c: C<W>, player_id: i32, mode: i32| -> Result<(), Error> {
             hostfns::schedule_turn_end(&mut c, player_id, mode).map_err(HostErr::into_err)

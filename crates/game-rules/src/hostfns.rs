@@ -2813,6 +2813,178 @@ pub fn card_replayable<C: HostCtx>(
     Ok(playable as i32)
 }
 
+/// Cross-card applicability query (docs/ACTIVATION.md §3): can `card_id`'s
+/// `kind` entry fire for `player_id` right now?
+///
+/// Evaluates that entry's condition + residual guard / play gate through
+/// `admits` and does **not** run its body. Probe mode: a residual that would
+/// prompt answers `false` (the same way [`RuleError::GuardPrompted`] folds an
+/// eligibility scan to "not eligible").
+///
+/// `trig` is the trigger-kind spelling; empty = no trigger selection. For a
+/// trigger-keyed kind (`Counteract` / `Action` / `Filter`) an empty `trig` is
+/// ambiguous and answers `false` -- use [`can_fire_any`] for the OR.
+pub fn can_fire<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    kind: i32,
+    tp: i32,
+    tn: i32,
+) -> Result<i32, HostErr> {
+    let id = guest_str(c, p, n)?;
+    let trig = if tn > 0 {
+        Some(guest_str(c, tp, tn)?)
+    } else {
+        None
+    };
+    can_fire_inner(c, player_id, &id, kind, trig.as_deref(), false)
+}
+
+/// Does **any** entry of `card_id` at `kind` admit? The explicit OR over
+/// [`can_fire`]'s per-entry form.
+pub fn can_fire_any<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    kind: i32,
+) -> Result<i32, HostErr> {
+    let id = guest_str(c, p, n)?;
+    can_fire_inner(c, player_id, &id, kind, None, true)
+}
+
+/// Shared body of [`can_fire`] / [`can_fire_any`]. `any` ORs over every entry
+/// of the kind; otherwise `trig` must pick one out for a trigger-keyed kind.
+fn can_fire_inner<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    id: &str,
+    kind: i32,
+    trig: Option<&str>,
+    any: bool,
+) -> Result<i32, HostErr> {
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostErr::trap("can_fire unavailable here"))?;
+    let Some(card) = rules.by_id(id) else {
+        return Ok(0);
+    };
+    let Some(info) = rules.card(card) else {
+        return Ok(0);
+    };
+    if c.st().depth >= MAX_NESTING {
+        return Ok(0);
+    }
+    let kind = match OnKind::from_i32(kind) {
+        Some(k) => k,
+        None => return Ok(0),
+    };
+    // `On::Play` is not trigger-keyed and is the "is any press open" question
+    // the engine's own `play_entry_preferring_gated` answers.
+    let entries: Vec<i32> = if kind == OnKind::Play {
+        match info.play_entry_preferring_gated() {
+            Some(e) => vec![e],
+            None => return Ok(0),
+        }
+    } else if any {
+        info.entries(kind, None)
+    } else {
+        let Some(t) = trig else {
+            // Ambiguous for a trigger-keyed kind: fail closed (docs/ACTIVATION.md §3).
+            return Ok(0);
+        };
+        let tk = crate::TriggerKind::from_str(t);
+        if tk == crate::TriggerKind::None {
+            return Ok(0);
+        }
+        info.entries(kind, Some(tk))
+    };
+    if entries.is_empty() {
+        return Ok(0);
+    }
+    for entry in entries {
+        if can_fire_entry(c, player_id, id, card, entry, kind)? {
+            return Ok(1);
+        }
+    }
+    Ok(0)
+}
+
+/// [`admits`] for one entry: condition + residual guard / play gate, body
+/// never run, probe mode.
+fn can_fire_entry<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    id: &str,
+    card: i32,
+    entry: i32,
+    kind: OnKind,
+) -> Result<bool, HostErr> {
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostErr::trap("can_fire unavailable here"))?;
+    let pre = rules.pre(card, entry);
+    let scope;
+    let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
+        scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
+            c.st().wr(),
+            player_id,
+        ));
+        Some(&scope)
+    } else {
+        None
+    };
+    let cand = crate::cond_pre::fill_candidate(c.st().wr(), player_id, id, false);
+    if kind == OnKind::Play {
+        // The Play gate answers `Option<Msg>` (None = playable) -- `admits_gate`.
+        let asked = crate::cond_pre::admits_gate(
+            pre,
+            scope,
+            &cand,
+            || (),
+            || -> Result<Option<()>, HostErr> {
+                let mut world = c.st().wr().clone();
+                world.enter_card(id);
+                let depth = c.st().depth + 1;
+                let nested = HostState::new(rules.clone(), world, vec![], depth);
+                let (res, _inner, left) =
+                    c.call_entry(nested, card, entry, export::OP_GUARD, player_id, 0, true);
+                c.set_fuel(left)?;
+                let playable = match res {
+                    Ok(CallOut::Msg(None)) => true,
+                    Ok(CallOut::Code(0)) => true,
+                    _ => false,
+                };
+                Ok(if playable { None } else { Some(()) })
+            },
+        );
+        return Ok(matches!(asked, Ok(None)));
+    }
+    // A residual guard answers 0/1. Probe mode: a pause is "does not admit".
+    let asked: Result<bool, ()> = crate::cond_pre::admits(pre, scope, &cand, || {
+        let mut world = c.st().wr().clone();
+        world.enter_card(id);
+        let depth = c.st().depth + 1;
+        let nested = HostState::new(rules.clone(), world, vec![], depth);
+        let (res, _inner, left) =
+            c.call_entry(nested, card, entry, export::OP_GUARD, player_id, 0, false);
+        let _ = c.set_fuel(left);
+        match res {
+            Ok(CallOut::Code(v)) => Ok(v != 0),
+            Ok(CallOut::Msg(None)) => Ok(true),
+            // Would prompt, or trapped: not eligible (probe mode).
+            _ => Ok(false),
+        }
+    });
+    Ok(asked.unwrap_or(false))
+}
+
 pub fn schedule_turn_end<C: HostCtx>(c: &mut C, player_id: i32, mode: i32) -> Result<(), HostErr> {
     c.st_mut()
         .w()
