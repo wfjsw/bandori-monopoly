@@ -181,11 +181,45 @@ ruleset_on(card, entry, op, player_id, arg) -> i64
   A declare trap has no such cost to charge. Propagating it into that arm
   destroys a card whose body never ran.
 
-  Visibility: the play / [反击] paths log `log.card_trap` (they have a `Cx`).
-  The hook path declines silently -- `declare_after` has no log channel and
-  matches the residual guard's own "historical dispatch leniency" just above
-  it. Unifying the log across every site is a follow-up; the **severity** is
-  what must not vary.
+  Visibility is **not** uniform yet, and the split is backwards -- see the
+  follow-up below. The **severity** is what must not vary.
+
+### Follow-up (tracked): every "the entry did not fire" trap should log
+
+**Not landed** -- deferred rather than widened into the end of the ABI
+delivery. Severity is correct and pinned (`trapping_declare_never_costs_the_card`);
+this is observability only.
+
+Today's split:
+
+| site | logs `log.card_trap`? | the player… |
+|---|---|---|
+| residual guard (`entry_admitted`) | no ("historical dispatch leniency") | — |
+| `OP_DECLARE` on a hook (`declare_after`) | **no** | just clicked nothing; a 「可选择」 silently did not apply |
+| `OP_DECLARE` on a play / [反击] | yes | just clicked something and would notice |
+| `OP_RUN` (body) | yes | — |
+
+That is loudest where the player needs it least and silent where they need it
+most. The hook path is the automatic 「可选择」 case -- the entire reason
+`declare` exists for hooks -- and the reference is `AG:绯红之魂`'s `pay_offer`.
+If that collector traps the player is **never asked**, the −1000 silently does
+not apply, and nothing is logged: they are looking at a payment that did not
+get cut, not at a dialog that failed to appear. `log.card_trap` naming the
+card and the detail turns "绯红之魂 didn't trigger, with no evidence" into a
+one-line diagnosis. The residual guard has the same hole and it is older.
+
+**The shape** (peer-reviewed): an `on_trap: Option<&mut dyn FnMut(&mut W, i32)>`
+callback on `entry_admitted`, mirroring `run_hook`'s existing
+`on_body: Option<&mut dyn FnMut(&mut W, i32)>` -- that callback already exists
+for exactly this ("the host wants to know when a thing happened inside
+`entry_admitted`"). **Do not** put `trapped` on `Admitted::No` / `HookRun`: a
+trapping declare yields `Admitted::No`, which makes `run_hook` return
+`Ok(None)`, so the drive has no channel left to learn "and by the way one of
+them trapped". The callback is the one that survives that.
+
+**Land both arms together** -- the hook `OP_DECLARE` *and* the residual
+guard's trap decline -- or the table above gains a fifth row and we are back
+to a half-fix.
 * `Call::{Play, Counteract}` and the chain link carry `arg: i32`; `resolve_jobs`
   / `drive` pass it into `OP_RUN` exactly the way `COUNTERACT_MOVE_EXTENSION`
   is stamped today, but as a real parameter rather than a move tag. **The
