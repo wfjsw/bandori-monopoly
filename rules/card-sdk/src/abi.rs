@@ -317,7 +317,10 @@ use std::borrow::Cow;
 ///      `instance`).
 /// v52: `ManifestOn::label` -- an entry's rulebook clause label (「（1）」),
 ///      carried so the host's 「效果适用」 line can name which clause of a
-///      multi-entry card ran. `CardDef::labels` fills it; `None` = unlabelled.
+///      multi-entry card ran. Filled from the `On` entry itself
+///      (`On::label`, which moves with the entry); `None` = unlabelled.
+///      Opaque display text -- nothing resolves it against the card text;
+///      if the line needs prose, the entry carries a copy of it.
 ///      No host-function change; SAVE_VERSION unchanged.
 /// v53: **purchase replies tell the truth** (HOST-06). `card_buy` / `buy` /
 ///      `acquire` / `agent_offer` / `card_build` / `card_offer_build` /
@@ -2697,9 +2700,10 @@ pub struct ManifestOn {
     /// Message names this [`OnKind::Message`] entry answers (empty otherwise).
     #[serde(default)]
     pub messages: Vec<String>,
-    /// The entry's rulebook clause label -- 「（1）」 / 「（2）」 and kin -- so
-    /// the 「效果适用」 line can name which clause of a multi-entry card ran.
+    /// Opaque display text for the 「效果适用」 line -- 「（1）」 / 「（2）」 and
+    /// kin -- so the line can name which clause of a multi-entry card ran.
     /// `None` = unlabelled (the line shows just the card name). v52.
+    /// Not a key into the card text; source is [`On::label`] on the entry.
     #[serde(default)]
     pub label: Option<String>,
     /// How this entry presents itself in the log (`CardDef::silent` /

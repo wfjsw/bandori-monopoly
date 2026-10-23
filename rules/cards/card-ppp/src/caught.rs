@@ -8,6 +8,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const CAUGHT: CardDef =
     CardDef::new("PPP:抓到了", &[On::Play("", None, Some(cant_play), play)]).meta(
@@ -15,7 +16,7 @@ pub const CAUGHT: CardDef =
             .name(r#"抓到了"#)
             .raw_name(r#"抓到了"#)
             .tags(&[])
-            .text(r#"移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。"#)
+            .text(CardText::para(r#"移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。"#))
             // sheet cell B9
             .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
     );

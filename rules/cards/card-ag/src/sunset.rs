@@ -14,17 +14,24 @@
 use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec, steps};
 
 pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"即使夕阳落山"#)
         .raw_name(r#"即使夕阳落山"#)
         .tags(&[r#"手"#, r#"限"#])
-        .text(r#"[限]：
-第100轮次开始前此卡的X为原本X的一半。
-[手]：
-[指定][使用者]拥有的四个有房子的格子和[使用者]以外的所有玩家。将X设为“被[指定]格子的地契价格和建造已有房屋的造价之和”÷“[使用者]以外的[存活]玩家数量”向上取整10。依次进行以下操作：
-1. 删除所有被[指定]格子上的1栋房；
-2. 所有被[指定]的玩家[支付][使用者]X资金。"#)
+        .text(CardText::of(&[
+            sec(r#"[限]："#, &[
+                para(r#"第100轮次开始前此卡的X为原本X的一半。"#),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"[指定][使用者]拥有的四个有房子的格子和[使用者]以外的所有玩家。将X设为“被[指定]格子的地契价格和建造已有房屋的造价之和”÷“[使用者]以外的[存活]玩家数量”向上取整10。依次进行以下操作："#),
+                steps(&[
+                    r#"删除所有被[指定]格子上的1栋房；"#,
+                    r#"所有被[指定]的玩家[支付][使用者]X资金。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell C5
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

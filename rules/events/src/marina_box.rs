@@ -5,6 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep, roll};
@@ -30,7 +31,7 @@ pub const MARINA_BOX: CardDef = CardDef::new(
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"麻里奈小姐的礼物箱"#)
-            .text(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金。"#)
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金。"#))
             // sheet cell A16
             .derived(false));
 

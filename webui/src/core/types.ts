@@ -12,6 +12,9 @@
 // not a data-table string is a localizable `Msg` (see i18n/msg.ts).
 
 import type { Msg } from "../i18n/msg";
+import type { Block } from "./body";
+
+export type { Block, Item } from "./body";
 
 /** One board tile, from `data/board.json` (identity + display together). */
 export interface TileData {
@@ -24,6 +27,9 @@ export interface TileData {
 export interface CardData {
   id: string; group: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string;
+  /** Rule text as sections / bulletpoints (`CardText`), from
+   *  `generated/display.json`. Preferred over re-parsing `text`. */
+  body?: Block[];
   /** The [反击] card's trigger-condition clause (「…时」), from
    *  `generated/display.json`. Why the card is offered. */
   counterReason?: string;
@@ -48,14 +54,18 @@ export interface GroupData {
 }
 /** Merged event row: identity + game prose from `glue.roster_json()`, display
  *  (`name` / `text`) from `generated/display.json`. */
-export interface EventData { id: string; name: string; derived: boolean; text: string }
+export interface EventData {
+  id: string; name: string; derived: boolean; text: string;
+  /** Rule text as sections / bulletpoints (`CardText`). */
+  body?: Block[];
+}
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }
 
 /** `generated/display.json`: the build-exported presentation fields (empty
  *  fields omitted). Merged onto the identity roster in `core/data.ts`. */
 export interface DisplayFile {
   cards: Record<string, {
-    text?: string; rawName?: string; counterReason?: string;
+    text?: string; body?: Block[]; rawName?: string; counterReason?: string;
   }>;
   personas: Record<string, {
     display?: string; text?: string; color?: string; variantTag?: string;
@@ -66,7 +76,7 @@ export interface DisplayFile {
   }>;
   /** Event display chrome. Absent on a stale export; `dump_display` writes it. */
   events?: Record<string, {
-    name?: string; text?: string;
+    name?: string; text?: string; body?: Block[];
   }>;
 }
 

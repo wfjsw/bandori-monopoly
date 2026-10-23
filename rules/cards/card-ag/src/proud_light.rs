@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const PROUD_LIGHT: CardDef = CardDef::new(
@@ -29,7 +30,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
         .name(r#"刻入天穹傲岸的烈光"#)
         .raw_name(r#"刻入天穹傲岸的烈光"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。"#)
+        .text(CardText::para(r#"[反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。"#))
         // sheet cell C13
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

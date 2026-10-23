@@ -1,14 +1,17 @@
 // Screen chrome: square back button, breadcrumb pill (pink section label over
 // the white title, "?" help), the status pill and the ☰ menu (MenuPopupView).
+// The title can carry a right-hand control -- the board's animation-speed
+// toggle lives there.
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { navigate } from "../app/router";
 import { sceneImg } from "../core/assets";
 import { cx } from "../core/cx";
 import { D, rules } from "../core/data";
 import { n0, richText } from "../core/format";
-import { useProfile, useTick } from "../core/hooks";
+import { useProfile, useSessionOther, useTick } from "../core/hooks";
 import { hasProfile, markSeen } from "../core/store";
+import type { GameSession } from "../game/session";
 import { Btn } from "./Button";
 import { Icon } from "./Icon";
 import { openModal } from "./Modal";
@@ -23,11 +26,13 @@ export interface TopBarProps {
   help?: (() => void) | false;
   /** Replaces the status pill and ☰ (e.g. the step indicator). */
   right?: ReactNode;
+  /** Extra control docked at the right of the title pill (e.g. the speed toggle). */
+  titleRight?: ReactNode;
   /** Narrow variant used on the board. */
   compact?: boolean;
 }
 
-export function TopBar({ section, title, onBack, help, right, compact }: TopBarProps) {
+export function TopBar({ section, title, onBack, help, right, titleRight, compact }: TopBarProps) {
   const onHelp = help === undefined ? showRules : help;
   return (
     <header className={cx(s.bar, compact && s.compact)}>
@@ -40,6 +45,7 @@ export function TopBar({ section, title, onBack, help, right, compact }: TopBarP
         <div className={s.section}>{section}</div>
         <div className={s.title}>
           <span>{title}</span>
+          {titleRight}
           {onHelp && <button type="button" className={s.help} onClick={onHelp} title={tr("topbar.help")}>?</button>}
         </div>
       </div>
@@ -54,6 +60,31 @@ export function TopBar({ section, title, onBack, help, right, compact }: TopBarP
     </header>
   );
 }
+
+/** Cycle of the single speed toggle: 1× → 2× → 4× → 1×. */
+const NEXT_SPEED: Record<number, number> = { 1: 2, 2: 4, 4: 1 };
+
+/**
+ * The board's animation-speed toggle, docked at the right of the title pill.
+ * One button: each click steps the speed and loops back to 1×. Hidden in a
+ * read-only session (a replay drives its own speed from the transport bar).
+ */
+export const AnimationSpeed = memo(function AnimationSpeed({ sess }: { sess: GameSession }) {
+  useSessionOther(sess);
+  if (sess.readOnly) return null;
+  const speed = sess.animSpeed;
+  return (
+    <button
+      type="button"
+      className={cx(s.speed, speed > 1 && s.speedOn)}
+      title={tr("board.animationSpeedAt", { n: speed })}
+      aria-label={tr("board.animationSpeed")}
+      onClick={() => sess.setAnimSpeed(NEXT_SPEED[speed] ?? 1)}
+    >
+      {speed}×
+    </button>
+  );
+});
 
 /** Time until the daily fire refill (local midnight), "HH:MM". */
 function untilRefill(): string {

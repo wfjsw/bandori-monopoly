@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
+use card_sdk::{CardText};
 
 use crate::util::{all_players, roll};
 
@@ -14,7 +15,7 @@ pub const TSURUMAKI_ESTATE: CardDef =
     CardDef::new("event:弦卷集团地产开发", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"弦卷集团地产开发"#)
-            .text(r#"随机指定一个可购买格子（如果有）然后所有玩家进行竞价，出价最大的玩家支付选择数量的资金并获得该格子的地契"#)
+            .text(CardText::para(r#"随机指定一个可购买格子（如果有）然后所有玩家进行竞价，出价最大的玩家支付选择数量的资金并获得该格子的地契"#))
             // sheet cell A3
             .derived(false));
 

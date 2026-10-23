@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Sumimi:Here the world";
@@ -98,7 +99,10 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
         .name(r#"Here the world"#)
         .raw_name(r#"Here the world"#)
         .tags(&[r#"反击"#])
-        .text(r#"（1）[反击] 当有人同一回合内打出两张卡时，将此卡放置于对方场上。（2）场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。"#)
+        .text(CardText::items(&[
+            it(r#"[反击] 当有人同一回合内打出两张卡时，将此卡放置于对方场上。"#),
+            it(r#"场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。"#),
+        ]))
         // sheet cell L7
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

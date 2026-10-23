@@ -10,6 +10,7 @@
 //!
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec, steps};
 
 pub const PERFECT: CardDef =
     CardDef::new("通用:[衍生]PERFECT", &[On::Play("", None, None, perfect)]).meta(
@@ -18,13 +19,16 @@ pub const PERFECT: CardDef =
             .raw_name(r#"[衍生]PERFECT"#)
             .derived(true)
             .tags(&[r#"手"#, r#"衍生"#])
-            .text(
-                r#"[手]：
-依次进行以下操作：
-1. [移除]此卡；
-2. 将一张“FEVER!”加入弃卡区；
-3. [获得]3000资金。"#,
-            )
+            .text(CardText::of(&[
+                sec(r#"[手]："#, &[
+                    para(r#"依次进行以下操作："#),
+                    steps(&[
+                        r#"[移除]此卡；"#,
+                        r#"将一张“FEVER!”加入弃卡区；"#,
+                        r#"[获得]3000资金。"#,
+                    ]),
+                ]),
+            ]))
             // sheet cell A5
             .fields(&[("group", r#"通用"#), ("owner", "")]),
     );

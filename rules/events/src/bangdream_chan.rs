@@ -5,6 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind};
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -25,7 +26,7 @@ pub const BANGDREAM_CHAN: CardDef = CardDef::new(
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"元祖！邦多利酱"#)
-            .text(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家的回合免费时间变为5秒，且回合恢复时间变为0秒。"#)
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家的回合免费时间变为5秒，且回合恢复时间变为0秒。"#))
             // sheet cell A17
             .derived(false));
 

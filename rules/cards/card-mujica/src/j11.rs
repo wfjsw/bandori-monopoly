@@ -9,6 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "Mujica:#J11";
@@ -34,7 +35,7 @@ pub const J11: CardDef = CardDef::new(
         .name("#J11")
         .raw_name("")
         .tags(&[])
-        .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#)
+        .text(CardText::para(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#))
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

@@ -1,4 +1,4 @@
-//! `AG:回家的路上绕个道` -- C# `CardDetour` (MatchHost.cs:1286-1352):
+//! `AG:回家的路上绕个道` 
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:回家的路上绕个道`）:
 //! > 回家的路上绕个道：
@@ -7,45 +7,59 @@
 //! > （2）效果），并将下一次的移动掷骰变更为1d6
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
+//! 
+//! Reviewed 10/23/2026
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{prop, ActionKind, ChainKind, Dice, FilterKind};
-use card_sdk::ctx::plan;
+use card_sdk::abi::{prop, ChainKind, Dice};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
-        On::Play("", None, Some(cant_play), play),
+        On::Play(
+            "", 
+            None, 
+            // Guard: only allow play if the move is not blocked
+            Some(|player_id| rules_status::move_blocked(player_id)), 
+            play
+        ),
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
-        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", None, None, counteract),
+        // > (1)此卡可作为反击使用
+        On::Counteract(
+            &[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", 
+            None, 
+            // TODO: Only handle the `blocked by status` case, not the `not_my_turn` and `already` case.
+            Some(|player_id| rules_status::move_blocked(player_id).is_none()), 
+            counteract
+        ),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
+        // > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
+        // > （2）效果），并将下一次的移动掷骰变更为1d6
         On::Filter(Filter::DiceRollPlan("slot('detour_next_roll') != 0", None, next_roll)),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
+        // > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
+        // > （2）效果），并将下一次的移动掷骰变更为1d6
         On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", None, None, consume_next_roll)),
-        On::Action(Action::AtEnd("", None, None, clear_no_reward)),
+
     ],
 )
+// TODO: Move this .silent to the actual onlist
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回家的路上绕个道"#)
         .raw_name(r#"回家的路上绕个道"#)
-        .tags(&[])
-        .text(r#"(1)此卡可作为反击使用
-(2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#)
+        .tags(&[r#"手"#, r#"反击"#])
+        .text(CardText::items(&[
+            it(r#"此卡可作为反击使用"#),
+            it(r#"进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#),
+        ]))
         // sheet cell C9
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
-
-/// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
-fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the move is the turn's main
-    // move, so the C# `H.MoveWhyNot` gate applies (own turn, main move still
-    // available, turn's move not skipped).
-    rules_status::move_blocked(player_id)
-}
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(2): 「进行一次 "afterglow"式的移动（视为使用一次初始Afterglow角色的（2）效果）」
@@ -56,6 +70,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     //   「初始Afterglow角色」, which the book never names. The four-way pick below is
     //   the C# reading, not the text's -- see the judgement block at the foot of
     //   this file.
+
+    // TODO: Call the skill card to apply the 2nd effect there.
+
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("detour_title")),
@@ -111,6 +128,12 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(_before) = trigger::move_roll() else {
         return Ok(());
     };
+
+
+    // TODO: Call the skill card to apply the 2nd effect there.
+    // This entire thing should splitted to a separate function to keep uniform to the
+    // play handler.
+
     // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the counteraction path only reverses
     // the in-flight move and drops the CiRCLE reward (C#
     // `move.Reverse = !move.Reverse; move.NoCircleReward = true` on the
@@ -125,6 +148,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- armed here, consumed by the
     // `DiceRollPlan` hook below when the next plan is being built. One-shot: the hook
     // clears it so it does not rewrite the roll after that.
+
+    // TODO: Such key we need to keep it scoped to this card.
+    // TODO: This diverged from what `play` handles.
     ctx::state::set(player_id, NEXT_ROLL, 1);
     ctx::log(
         player_id,
@@ -153,6 +179,7 @@ fn consume_next_roll(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// TODO: Remove
 /// 「向后移动经过CiRCLE时不获得CiRCLE奖励」 -- the veto is `prop::NO_REWARD` on
 /// the CiRCLE tile's `tile:circle` instance (`docs/TILES.md`), not a walk-plan
 /// flag. This card is played from hand and leaves the field, so it cannot arm
@@ -169,6 +196,7 @@ fn arm_no_reward(player_id: i32) {
     ctx::at_turn_end(player_id);
 }
 
+// TODO: Remove
 /// The clause ends at the turn end -- disarm the veto this card armed.
 fn clear_no_reward(player_id: i32) -> card_sdk::Asked {
     let circle = ctx::tile_named("CiRCLE");

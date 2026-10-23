@@ -12,6 +12,7 @@ use alloc::string::String;
 use bandori_std::ctx::{self, trigger, CardPile};
 use bandori_std::state_key;
 use card_sdk::abi::prop;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
@@ -26,7 +27,16 @@ pub const L12: CardDef = CardDef::new(
         .name("#L12")
         .raw_name("")
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#)
+        .text(CardText::of(&[
+            sec("", &[
+                para(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续]"#),
+                items(&[
+                    it(r#"[拥有者]手卡上限数量减1。"#),
+                    it(r#"每当你消耗火罐时，为此卡添加一个[奇迹水晶]"#),
+                    it(r#"当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#),
+                ]),
+            ]),
+        ]))
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]))// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
 // property (C# `Card.HandLimitDelta`), continuous while this instance sits on
 // the field.

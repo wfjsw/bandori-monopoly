@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
+use card_sdk::{CardText};
 
 use crate::util::keep;
 
@@ -43,7 +44,7 @@ const NON_DERIVED: &[&str] = &[
 pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play("", None, None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"让我来结束一切"#)
-            .text(r#"触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上，此卡在场上则[衍生]让我来结束一切不会被[衍生]迷子的追逐放置在事件牌堆顶部"#)
+            .text(CardText::para(r#"触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上，此卡在场上则[衍生]让我来结束一切不会被[衍生]迷子的追逐放置在事件牌堆顶部"#))
             // sheet cell A27
             .derived(true));
 

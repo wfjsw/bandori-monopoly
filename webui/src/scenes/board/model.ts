@@ -9,6 +9,7 @@ import { toast } from "../../ui/Toast";
 import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
+import { canSend } from "./inputLock";
 
 const FALLBACK_COLORS = ["#ED4E76", "#6BBAF1", "#F6B21E", "#4CC38A", "#C97DFC", "#EE5E4A", "#3EC1C9", "#E05CCF", "#8BBF2A", "#7C8796"];
 export const modeName = (mode: number) => [tr("mode.solo"), tr("mode.casual"), tr("mode.ranked")][mode] ?? "";
@@ -86,12 +87,11 @@ export function blankPlayer(): MatchPlayer {
 
 /**
  * Send a command; toast the error. Resolves to success.
- * While 托管 / 混沌 is on the seat belongs to the autopilot, so a user-driven
- * command is dropped here (the buttons that would send one are disabled too).
- * The autopilot itself calls `sess.act` directly and bypasses this guard.
+ * Dropped when `canSend` is false (see `inputLock`); the autopilot itself
+ * calls `sess.act` directly and bypasses this guard.
  */
-export async function act(sess: GameSession, cmd: Command): Promise<boolean> {
-  if (sess.readOnly || sess.autoMode !== "off") return false;
+export async function act(sess: GameSession, cmd: Command, overAuto = false): Promise<boolean> {
+  if (!canSend(sess, overAuto)) return false;
   const err = await sess.act(cmd);
   if (err) toast(fmtMsg(err, namesOf(sess.view?.state)), "error");
   return !err;

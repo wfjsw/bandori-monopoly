@@ -10,6 +10,7 @@
 //! [手] +Xd20 from the discard pile and [特] immunity for dice-adding cards.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
 pub const CRUSH_DRUM: CardDef = CardDef::new(
     "RAS:（MASKING）CRUSH ON THE DRUM!!!",
@@ -20,12 +21,14 @@ pub const CRUSH_DRUM: CardDef = CardDef::new(
         .name(r#"CRUSH ON THE DRUM!!!"#)
         .raw_name(r#"（MASKING）CRUSH ON THE DRUM!!!"#)
         .tags(&[r#"手"#, r#"特"#])
-        .text(
-            r#"[特]：
-打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。
-[手]：
-移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。"#),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数"#),
+            ]),
+        ]))
         // sheet cell H14
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"佐藤益木"#)]),
 );

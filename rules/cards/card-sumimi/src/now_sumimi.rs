@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new(
@@ -28,7 +29,7 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         .name(r#"现在她是Sumimi的小初啦"#)
         .raw_name(r#"现在她是Sumimi的小初啦"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）"#)
+        .text(CardText::para(r#"[反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）"#))
         // sheet cell L5
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
