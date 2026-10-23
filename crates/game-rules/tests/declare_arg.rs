@@ -74,7 +74,7 @@ fn accepted_declare_runs_the_body_once_with_the_arg() {
     let hits: Vec<_> = t
         .recent_keys(40)
         .into_iter()
-        .filter(|k| k.contains("pick body"))
+        .filter(|k| k.contains("pick_body"))
         .collect();
     assert_eq!(
         hits.len(),
@@ -82,8 +82,13 @@ fn accepted_declare_runs_the_body_once_with_the_arg() {
         "the body runs exactly once: {:?}",
         t.recent_keys(40)
     );
+    // The body logs `pick_body` with `{{arg}}`; the declared arg is 7.
+    let saw_arg = t.m.world().recent.iter().any(|e| {
+        e.msg.key().contains("pick_body")
+            && matches!(e.msg.a.get("arg"), Some(game_core::msg::Arg::I(7)))
+    });
     assert!(
-        hits[0].contains("7") || t.recent_keys(40).iter().any(|k| k.contains("7")),
+        saw_arg,
         "the body sees the declared arg (7): {:?}",
         t.recent_keys(40)
     );
@@ -105,22 +110,31 @@ fn declining_the_declare_prompt_never_runs_the_body() {
         t.hand(0)
     );
     assert!(
-        !keys_contain(&t, "pick body"),
+        !keys_contain(&t, "pick_body"),
         "the body never ran: {:?}",
         t.recent_keys(40)
     );
 }
 
-/// A decline on one entry does not stop the next entry on the same timing.
+/// A decline on one card does not stop another card's activation on the same
+/// timing, and a card whose declare declines still leaves its sibling entry
+/// free to run.
 #[test]
 fn sibling_entry_still_runs_after_a_decline() {
     let mut t = Table::vanilla(2);
-    t.set_hand(0, &["TEST:decline", "TEST:declineSib"]);
+    t.set_hand(0, &["TEST:decline", "TEST:decline_sib"]);
     t.set_hand(1, &[]);
-    t.give_play(0, "TEST:declineSib").unwrap();
+    t.give_play(0, "TEST:decline").unwrap();
     drain(&mut t);
     assert!(
-        keys_contain(&t, "decline-sib play ran"),
+        t.hand(0).iter().any(|c| c == "TEST:decline"),
+        "the declined card stays in hand: {:?}",
+        t.hand(0)
+    );
+    t.give_play(0, "TEST:decline_sib").unwrap();
+    drain(&mut t);
+    assert!(
+        keys_contain(&t, "decline_sib_play"),
         "the sibling play body runs: {:?}",
         t.recent_keys(40)
     );
