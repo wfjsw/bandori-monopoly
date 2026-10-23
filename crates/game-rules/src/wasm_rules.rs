@@ -1488,11 +1488,21 @@ impl CardWorld for Run {
         // Name-keyed (any owner / instance): the legacy `tok` lookup.
         self.world.tok(player_id, name)
     }
-    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, max: i32, instance: i32) {
         let who = self.current_card.clone();
         self.world.note_marker_owner(name, &who);
         // Stamp the owning instance on a new row (user ruling 2026-10-10).
-        self.world.set_tok(player_id, name, v, self.current_uid);
+        // `instance < 0` keeps an existing row's owner and falls back to the
+        // running card for a fresh row.
+        let inst = if instance >= 0 {
+            instance
+        } else {
+            self.current_uid
+        };
+        self.world.set_tok(player_id, name, v, inst, max);
+    }
+    fn tok_max(&self, player_id: i32, name: &str) -> i32 {
+        self.world.tok_max(player_id, name)
     }
     fn move_units(
         &mut self,
@@ -1578,6 +1588,9 @@ impl CardWorld for Run {
     fn group_skill_uid(&self, player_id: i32) -> i32 {
         self.world.group_skill_uid(player_id)
     }
+    fn persona_skill_uid(&self, player_id: i32) -> i32 {
+        self.world.persona_skill_uid(player_id)
+    }
     fn group_skill_id(&self, player_id: i32) -> Option<String> {
         self.world.group_skill_id(player_id)
     }
@@ -1626,7 +1639,7 @@ impl CardWorld for Run {
             // (the kernel logs its own `log.gain_charge_capped` when it refuses
             // before the write).
             if let Some(p) = self.world.st.players.get(player_id.max(0) as usize) {
-                let (cap, have) = (p.state_max(name), p.state_get(name));
+                let (cap, have) = (self.world.tok_max(player_id, name), self.world.tok(player_id, name));
                 if cap > 0 && have >= cap && !p.out() {
                     let msg = Msg::new("log.gain_charge_capped")
                         .player_id("who", player_id)
@@ -2014,15 +2027,11 @@ impl CardWorld for Run {
         if n <= 0 {
             return 1;
         }
-        let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
-            return 0;
-        };
         // A consumer of the counter: all-or-nothing, and it logs the spend. It
         // does not consult any cap -- spending is not the capped direction.
-        if s.state_get(name) < n {
+        if self.world.spend_marker(player_id, name, n) == 0 {
             return 0;
         }
-        s.state_add(name, -n);
         self.post_log_value(name, player_id, why.clone(), "", -n);
         if self.live.is_none() {
             self.world.log(name, player_id, why).value = -n;

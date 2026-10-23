@@ -1282,6 +1282,12 @@ pub struct Counter {
     /// wire spelling is still `-1`).
     #[serde(default, with = "opt_i32_neg1")]
     pub instance: Option<i32>,
+    /// Live ceiling the rules-layer kernel polices (「上限M」). `0` = uncapped
+    /// (the default for ephemeral tokens and for rows saved before this
+    /// field existed). Stored for display and for the pull-under; the engine
+    /// does not clamp writes to it.
+    #[serde(default)]
+    pub max: i32,
 }
 
 impl Default for Counter {
@@ -1290,6 +1296,7 @@ impl Default for Counter {
             name: String::new(),
             value: 0,
             instance: None,
+            max: 0,
         }
     }
 }

@@ -686,7 +686,7 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("add_held {player_id} {name} {n}"));
         *e
     }
-    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, _max: i32, _instance: i32) {
         self.held.insert((player_id, name.to_string()), v);
         self.events.push(format!("set_held {player_id} {name} {v}"));
     }

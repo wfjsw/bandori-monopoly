@@ -490,8 +490,12 @@ pub fn count_held_name(np: i32, nl: i32, player_id: i32) -> i32 {
     kani_host::call_i32(Op::count_held_name, [np, nl, player_id, 0, 0, 0])
 }
 
-pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32) {
-    kani_host::call_unit(Op::set_held_name, [np, nl, player_id, v, 0, 0]);
+pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32, max: i32, instance: i32) {
+    kani_host::call_unit(Op::set_held_name, [np, nl, player_id, v, max, instance]);
+}
+
+pub fn tok_max(np: i32, nl: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::tok_max, [np, nl, player_id, 0, 0, 0])
 }
 
 pub fn move_units(

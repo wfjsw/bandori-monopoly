@@ -3223,8 +3223,23 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_held_name",
-        |mut c: C<W>, np: i32, nl: i32, player_id: i32, v: i32| -> Result<(), Error> {
-            hostfns::set_held_name(&mut c, np, nl, player_id, v).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         np: i32,
+         nl: i32,
+         player_id: i32,
+         v: i32,
+         max: i32,
+         instance: i32|
+         -> Result<(), Error> {
+            hostfns::set_held_name(&mut c, np, nl, player_id, v, max, instance)
+                .map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tok_max",
+        |mut c: C<W>, np: i32, nl: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::tok_max(&mut c, np, nl, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5343,7 +5358,7 @@ impl CardWorld for NullWorld {
     fn add_held(&mut self, _: &str, _: i32, _: i32, _: i32) -> i32 {
         0
     }
-    fn set_held_name(&mut self, _: &str, _: i32, _: i32) {}
+    fn set_held_name(&mut self, _: &str, _: i32, _: i32, _: i32, _: i32) {}
     fn move_units(&mut self, _: &str, _: i32, _: i32, _: i32, _: i32, _: i32) -> i32 {
         0
     }

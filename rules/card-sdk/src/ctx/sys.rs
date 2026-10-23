@@ -646,7 +646,12 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_held_name"
         )]
-        pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32);
+        pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32, max: i32, instance: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_tok_max"
+        )]
+        pub fn tok_max(np: i32, nl: i32, player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_move_units"
