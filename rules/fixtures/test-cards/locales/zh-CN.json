@@ -70,5 +70,6 @@
   "asking_guard_ask": "Answer me from the guard?",
   "pick_c_title": "TEST:pick_counter",
   "pick_c_ask": "Counter with this?",
-  "pick_c_body": "pick-counter body ran with arg {{arg}}"
+  "pick_c_body": "pick-counter body ran with arg {{arg}}",
+  "trigger_seen_body": "trigger-seen body ran with arg {{arg}}"
 }

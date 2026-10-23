@@ -269,3 +269,33 @@ fn prompted_decline_replays_without_re_asking() {
         t.recent_keys(40)
     );
 }
+
+/// A [反击]'s `OP_DECLARE` collector sees the **trigger it is declaring
+/// against**, not a default one. `TEST:trigger_seen`'s collector accepts only
+/// when `trigger::kind()` is `Card`; a `Run` bound to `Trigger::default()`
+/// (kind `None`) would decline and the body would never run. `detour` needs
+/// this the moment its pick filters options on the roll
+/// (docs/ACTIVATION.md §2).
+#[test]
+fn counteract_declare_sees_the_trigger() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &["TEST:echo"]);
+    t.set_hand(1, &["TEST:trigger_seen"]);
+    // Player 0 plays; the `card` link opens a counteraction window.
+    t.give_play(0, "TEST:echo").unwrap();
+    assert!(
+        t.counteract_offered("TEST:trigger_seen"),
+        "the counter is offered: {}",
+        t.dump_prompt()
+    );
+    t.counteract(1, "TEST:trigger_seen").unwrap();
+    // The collector is prompt-free and gates on the trigger kind, so there is
+    // nothing to answer: declaring is the whole interaction.
+    drain(&mut t);
+    assert!(
+        keys_contain(&t, "trigger_seen_body"),
+        "the collector saw trigger::kind() == Card and admitted the entry -- \
+         a default trigger would have declined and left this silent: {:?}",
+        t.recent_keys(40)
+    );
+}

@@ -1708,6 +1708,12 @@ impl Ruleset {
     /// `OnKind::Counteract` at the trigger for a [反击] declaration. `Ok(None)`
     /// = declined; `Ok(Some(arg))` = proceed with `arg`; a pause is folded to
     /// [`DeclareOut::Paused`].
+    ///
+    /// **Standalone**: it starts its own cursor at 0 over `answers` and does
+    /// not inherit one from a surrounding drive. Callers that loop on a
+    /// multi-step declare own the vec and push each pause's answer
+    /// (`declare_for_card` / `declare_activation`); do not call this mid-drive
+    /// expecting to continue an existing `next_answer`.
     pub fn declare_entry<W: CardWorld>(
         &self,
         world: &W,

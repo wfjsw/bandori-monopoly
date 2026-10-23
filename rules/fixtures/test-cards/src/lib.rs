@@ -1577,6 +1577,44 @@ fn pick_counter_body(player_id: i32, arg: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A [反击] whose collector reads the **trigger it is declaring against**. The
+/// collector only accepts when `trigger::kind()` is `Card`; a `Run` bound to
+/// `Trigger::default()` (kind `None`) would decline and the body would never
+/// run. Pins that a [反击]'s `OP_DECLARE` sees the real trigger
+/// (docs/ACTIVATION.md §2) -- `detour` needs it the moment its pick filters on
+/// the roll.
+const TRIGGER_SEEN: CardDef = CardDef::new(
+    "TEST:trigger_seen",
+    &[On::Counteract(
+        &[ChainKind::Card],
+        "",
+        None,
+        Some(always),
+        trigger_seen_unused,
+    )
+    .declare_arg(trigger_seen_declare, trigger_seen_body)],
+);
+
+const fn trigger_seen_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn trigger_seen_declare(_player_id: i32) -> card_sdk::Declared {
+    if ctx::trigger::kind() == card_sdk::abi::TriggerKind::Card {
+        Ok(card_sdk::Activation::Arg(1))
+    } else {
+        Ok(card_sdk::Activation::Decline)
+    }
+}
+
+fn trigger_seen_body(player_id: i32, arg: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("trigger_seen_body")).i("arg", arg as i64),
+    );
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1587,5 +1625,5 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
-    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER
+    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN
 ]);

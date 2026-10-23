@@ -3496,19 +3496,7 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 Err(e) => {
                     // A trapping module must not take the match down with it.
-                    let detail = match &e {
-                        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => {
-                            m.clone()
-                        }
-                        RuleError::NoSuchCard(i) => format!("no such card {i}"),
-                        RuleError::GuardPrompted => "guard prompted".into(),
-                        RuleError::BadPre {
-                            card,
-                            entry,
-                            source,
-                            err,
-                        } => format!("bad guard pre on {card}/{entry}: {err} ({source})"),
-                    };
+                    let detail = declare_err_detail(&e);
                     let player_id = call.player_id();
                     cx.log(
                         player_id,
@@ -6760,7 +6748,7 @@ impl<M: CardModules> RulesBridge<M> {
                     .filter(|&x| x >= 0)
                     .unwrap_or(reply.fallback) as usize;
                 if let Some((id, idx, uid)) = options.get(pick) {
-                    let Some(arg) = self.declare_for_card(cx, s, id, *idx, top.kind)? else {
+                    let Some(arg) = self.declare_for_card(cx, s, id, *idx, top)? else {
                         // Declined at the declare: no counter this visit.
                         return Ok(None);
                     };
@@ -6789,7 +6777,7 @@ impl<M: CardModules> RulesBridge<M> {
             .unwrap_or(reply.fallback) as usize;
         Ok(match options.get(pick) {
             Some((id, idx, uid)) => {
-                let Some(arg) = self.declare_for_card(cx, s, id, *idx, top.kind)? else {
+                let Some(arg) = self.declare_for_card(cx, s, id, *idx, top)? else {
                     return Ok(None);
                 };
                 Some((id.clone(), *idx, *uid, 0, arg))
@@ -6812,7 +6800,7 @@ impl<M: CardModules> RulesBridge<M> {
         s: usize,
         id: &str,
         idx: i32,
-        kind: crate::TriggerKind,
+        top: &Trigger,
     ) -> Flow<Option<i32>> {
         // The declared entry is the [反击] at this trigger -- not the card's
         // `On::Play`. A declare on the counteract entry is what `finish_offer`
@@ -6821,13 +6809,13 @@ impl<M: CardModules> RulesBridge<M> {
             .ruleset
             .cards()
             .get(idx as usize)
-            .and_then(|c| c.entry(card_sdk::abi::OnKind::Counteract, Some(kind)))
+            .and_then(|c| c.entry(card_sdk::abi::OnKind::Counteract, Some(top.kind)))
         else {
             return Ok(Some(0));
         };
         let mut answers: Vec<i32> = Vec::new();
         loop {
-            let run = self.declare_run(cx, s, id, idx);
+            let run = self.declare_run(cx, s, id, idx, top);
             match self.ruleset.declare_entry(&run, idx, entry, s as i32, &answers) {
                 Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
                 Ok(DeclareOut::Declined) => return Ok(None),
@@ -6837,7 +6825,20 @@ impl<M: CardModules> RulesBridge<M> {
                     let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
                     answers.push(a);
                 }
-                Err(_) => return Ok(Some(0)),
+                // A collector that traps must not run the effect on a made-up
+                // arg (`Prompt`'s `#[must_use]` antipattern). Decline, and say
+                // why: the same policy a trapping *body* gets -- log
+                // `log.card_trap`, do not take the match down. `HaltKind` has
+                // no trap arm, so this cannot be a `Flow::Err`.
+                Err(e) => {
+                    cx.log(
+                        s as i32,
+                        Msg::new("log.card_trap")
+                            .card("card", id)
+                            .text("detail", declare_err_detail(&e)),
+                    );
+                    return Ok(None);
+                }
             }
         }
     }
@@ -6845,7 +6846,12 @@ impl<M: CardModules> RulesBridge<M> {
     /// A `Run` bound to `id` on seat `s`, for a declare probe (no writes are
     /// committed -- see [`Self::cant_play`]). Distinct from [`Self::probe_run`],
     /// which binds to the trigger's player.
-    fn declare_run(&self, cx: &Cx, s: usize, id: &str, _idx: i32) -> Run {
+    ///
+    /// `top` is the trigger the declaration is answering: a [反击]'s collector
+    /// reads `trigger::*` (`value` / `target` / `tile` / `move.roll`) against
+    /// the real trigger, not a default. The play path passes a default -- a
+    /// play answers no trigger.
+    fn declare_run(&self, cx: &Cx, s: usize, id: &str, _idx: i32, top: &Trigger) -> Run {
         let uid = cx
             .world()
             .field_instances(s as i32)
@@ -6857,7 +6863,7 @@ impl<M: CardModules> RulesBridge<M> {
             pile_checkpoints: Default::default(),
             data: self.data.clone(),
             props: self.modules_props(),
-            trigger: Trigger::default(),
+            trigger: top.clone(),
             activation_player: s as i32,
             current_card: id.to_string(),
             current_uid: uid,
@@ -6896,6 +6902,23 @@ impl<M: CardModules> RulesBridge<M> {
 /// The module's view of an engine trigger (the bridge `Trigger`). The move
 /// payload's `roll` is the guest-visible `t.Move.Roll`, which a counteraction
 /// may rewrite; the engine reads it back.
+/// One-line detail for a [`RuleError`], for `log.card_trap`. Shared by the
+/// body trap path and the `OP_DECLARE` collector path -- a trapping module is
+/// reported the same way wherever it traps.
+fn declare_err_detail(e: &RuleError) -> String {
+    match e {
+        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => m.clone(),
+        RuleError::NoSuchCard(i) => format!("no such card {i}"),
+        RuleError::GuardPrompted => "guard prompted".into(),
+        RuleError::BadPre {
+            card,
+            entry,
+            source,
+            err,
+        } => format!("bad guard pre on {card}/{entry}: {err} ({source})"),
+    }
+}
+
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
         trigger_kind(t.kind.as_str()),
@@ -8875,7 +8898,16 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
                     answers.push(a);
                 }
-                Err(_) => return Ok(Some(0)),
+                // Same as `declare_for_card`: never proceed on a made-up arg.
+                Err(e) => {
+                    cx.log(
+                        player_id as i32,
+                        Msg::new("log.card_trap")
+                            .card("card", card)
+                            .text("detail", declare_err_detail(&e)),
+                    );
+                    return Ok(None);
+                }
             }
         }
     }
