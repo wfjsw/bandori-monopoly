@@ -5,7 +5,7 @@ import { handLimit } from "../../core/hand";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle, cardText } from "../../core/data";
-import { useAutoplay, useSessionOther } from "../../core/hooks";
+import { useAutoplay } from "../../core/hooks";
 import { useEventListener, useHotkeys } from "../../hooks/dom";
 import { useDockRaise } from "../../hooks/dock";
 import { useResetScroll } from "../../hooks/measure";
@@ -350,7 +350,6 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
               <img src={sceneImg("card_back")} alt="" /><b>{m.me.draw}</b>
             </button>
             <div className={cx(autoFloat, s.autoSlot)}>
-              {!sess.readOnly && <AnimationSpeed sess={sess} />}
               <AutoToggle sess={sess} compact />
             </div>
             <div className={s.thinkingSlot}><ThinkingPill sess={sess} /></div>
@@ -380,16 +379,5 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
           : <div className={s.peekEmpty}>{tr("board.drawPileEmpty")}</div>}
       </div>
     </>
-  );
-});
-
-const AnimationSpeed = memo(function AnimationSpeed({ sess }: { sess: GameSession }) {
-  useSessionOther(sess);
-  return (
-    <div className={s.speeds} role="group" aria-label={tr("board.animationSpeed")}>
-      {[1, 2, 4].map((speed) => (
-        <button key={speed} type="button" className={cx(s.speed, sess.animSpeed === speed && s.speedOn)} aria-pressed={sess.animSpeed === speed} title={tr("board.animationSpeedAt", { n: speed })} onClick={() => sess.setAnimSpeed(speed)}>{speed}×</button>
-      ))}
-    </div>
   );
 });

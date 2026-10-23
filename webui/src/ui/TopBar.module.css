@@ -7,9 +7,9 @@
 .bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: var(--z-topbar); pointer-events: none; }
 .bar > * { pointer-events: auto; }
 /* The breadcrumb is a label: it lets clicks through to anything under it (only
-   its help button takes the pointer). */
+   its buttons -- help, the speed toggle -- take the pointer). */
 .bar > .crumb { pointer-events: none; }
-.crumb .help { pointer-events: auto; }
+.crumb button { pointer-events: auto; }
 .squareBtn { display: flex; align-items: center; justify-content: center; border-radius: var(--r-md); color: var(--pink); background: linear-gradient(var(--white), #f2f2f5); box-shadow: var(--lift); }
 .squareBtn:active { transform: translateY(3px); box-shadow: var(--lift-down); }
 .back { composes: squareBtn; position: absolute; left: max(38px, var(--safe-left, 0px)); top: max(18px, var(--safe-top, 0px)); width: 82px; height: 80px; }
@@ -21,9 +21,17 @@
    under the breadcrumb. */
 .crumb { position: absolute; left: calc(max(38px, var(--safe-left, 0px)) + 107px); top: max(16px, var(--safe-top, 0px)); width: 386px; }
 .section { height: 38px; width: 352px; border-radius: 19px 19px 19px 4px; background: var(--pink); color: #fff; font-size: 18px; font-weight: 700; padding: 6px 24px 0; white-space: nowrap; overflow: hidden; }
-.title { margin-top: -4px; height: 52px; border-radius: 26px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 20px; font-size: 24px; }
+.title { margin-top: -4px; height: 52px; border-radius: 26px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 20px; font-size: 24px; }
 .title > span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .help { width: 28px; height: 28px; border-radius: 50%; background: var(--pink); color: #fff; font-weight: 700; font-size: 17px; flex: none; }
+/* Animation speed, one looping button at the right of the title (was a
+   1×/2×/4× group in the hand header). The title pill is the surface, so the
+   button reads as an inset chip; pink once the speed is off 1×. */
+.speed { flex: none; height: 30px; min-width: 44px; padding: 0 10px; border: 1.5px solid var(--line); border-radius: 15px; background: var(--surface); color: var(--sub); font-size: 15px; font-weight: 700; }
+.speed:hover { color: var(--pink); border-color: var(--pink); }
+.speed.speedOn { background: var(--pink); border-color: var(--pink); color: #fff; }
+.speed.speedOn:hover { color: #fff; }
+.speed:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
 
 .compact .back { width: 72px; height: 70px; }
 .compact .back i { width: 34px; height: 34px; }
@@ -77,3 +85,4 @@
 :global(:root[data-compact]) .compact .title { height: 28px; font-size: 15px; padding: 0 12px; }
 :global(:root[data-compact]) .compact .section { height: 22px; padding: 3px 12px 0; line-height: 1.2; }
 :global(:root[data-compact]) .compact .title { margin-top: -2px; }
+:global(:root[data-compact]) .compact .speed { height: 22px; min-width: 36px; padding: 0 6px; font-size: 12px; border-radius: 11px; border-width: 1px; }
