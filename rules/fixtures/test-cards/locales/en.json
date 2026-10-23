@@ -63,5 +63,9 @@
   "pick_ask": "Use this?",
   "pick_body": "pick body ran with arg {{arg}}",
   "gate_closed_why": "gate is closed",
-  "gate_closed_body": "gate-closed body ran"
+  "gate_closed_body": "gate-closed body ran",
+  "asking_guard_play": "asking-guard play ran",
+  "asking_guard_counter": "asking-guard counter ran",
+  "asking_guard_title": "TEST:asking_guard",
+  "asking_guard_ask": "Answer me from the guard?"
 }

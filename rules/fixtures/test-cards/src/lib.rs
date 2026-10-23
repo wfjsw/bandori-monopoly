@@ -1495,6 +1495,43 @@ fn gate_closed_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A counteract whose residual guard **would prompt**. Eligibility probes
+/// (`can_counteract_scoped`) must refuse with `RuleError::GuardPrompted`
+/// rather than asking the player mid-scan (docs/ACTIVATION.md §3).
+const ASKING_GUARD: CardDef = CardDef::new(
+    "TEST:asking_guard",
+    &[
+        On::Play("", None, None, asking_guard_play),
+        On::Counteract(
+            &[ChainKind::Card],
+            "",
+            None,
+            Some(asking_guard),
+            asking_guard_counter,
+        ),
+    ],
+);
+
+fn asking_guard_play(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("asking_guard_play")));
+    Ok(())
+}
+
+fn asking_guard(player_id: i32) -> bool {
+    // A residual guard is a pure query; asking from one is a probe error.
+    ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("asking_guard_title")),
+        &Msg::new(key!("asking_guard_ask")),
+    )
+    .unwrap_or(true)
+}
+
+fn asking_guard_counter(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("asking_guard_counter")));
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1505,5 +1542,5 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
-    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED
+    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD
 ]);

@@ -162,3 +162,22 @@ fn can_fire_sees_a_closed_gate() {
         t.recent_keys(40)
     );
 }
+
+/// An eligibility probe of a residual guard that would prompt refuses with
+/// `RuleError::GuardPrompted` and folds to "not eligible" -- the card is never
+/// offered in the counteraction window, and no mid-scan prompt appears.
+#[test]
+fn probe_of_an_asking_guard_never_prompts() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &["TEST:echo"]);
+    t.set_hand(1, &["TEST:asking_guard"]);
+    // Player 0 plays, which raises `card` and opens a counteraction window.
+    t.give_play(0, "TEST:echo").unwrap();
+    drain(&mut t);
+    // The asking-guard card must not be offered: the probe refused it.
+    assert!(
+        !t.counteract_offered("TEST:asking_guard"),
+        "an asking residual is folded to not-eligible: {}",
+        t.dump_prompt()
+    );
+}
