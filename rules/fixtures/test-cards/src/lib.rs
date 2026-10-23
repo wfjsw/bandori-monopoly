@@ -1532,6 +1532,51 @@ fn asking_guard_counter(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A [反击] whose activation argument is collected at the **offer** layer
+/// (docs/ACTIVATION.md §2): `OP_DECLARE` runs in `finish_offer`, before the
+/// declaration commits. Declining there means **no counter is declared at
+/// all** -- the card stays in hand and the body never runs. The body has no
+/// decline path and logs unconditionally, so silence is proof it never ran.
+const PICK_COUNTER: CardDef = CardDef::new(
+    "TEST:pick_counter",
+    &[On::Counteract(
+        &[ChainKind::Card],
+        "",
+        None,
+        Some(always),
+        pick_counter_unused,
+    )
+    .declare_arg(pick_counter_declare, pick_counter_body)],
+);
+
+fn always(_player_id: i32) -> bool {
+    true
+}
+
+const fn pick_counter_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn pick_counter_declare(player_id: i32) -> card_sdk::Declared {
+    if ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("pick_c_title")),
+        &Msg::new(key!("pick_c_ask")),
+    )? {
+        Ok(card_sdk::Activation::Arg(7))
+    } else {
+        Ok(card_sdk::Activation::Decline)
+    }
+}
+
+fn pick_counter_body(player_id: i32, arg: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pick_c_body")).i("arg", arg as i64),
+    );
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1542,5 +1587,5 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
-    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD
+    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER
 ]);

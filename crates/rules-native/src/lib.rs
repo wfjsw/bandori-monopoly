@@ -1017,10 +1017,11 @@ impl CardModules for NativeModules {
         )
     }
 
-    fn declare_play(
+    fn declare_entry(
         &self,
         world: &Run,
         card: i32,
+        entry: i32,
         player_id: i32,
         answers: &[i32],
     ) -> Result<DeclareOut, RuleError> {
@@ -1028,9 +1029,6 @@ impl CardModules for NativeModules {
             .index
             .card(card)
             .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
-        let Some(entry) = info.entry(OnKind::Play, None) else {
-            return Ok(DeclareOut::Arg(0));
-        };
         if !info.on.get(entry as usize).map(|o| o.has_declare).unwrap_or(false) {
             return Ok(DeclareOut::Arg(0));
         }

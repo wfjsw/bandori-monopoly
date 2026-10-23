@@ -691,7 +691,7 @@ pub struct HookRun<W> {
     pub outcome: Outcome<W>,
 }
 
-/// What a bare [`Ruleset::declare_play`] run collected, before the point of
+/// What a bare [`Ruleset::declare_entry`] run collected, before the point of
 /// no return (docs/ACTIVATION.md §2).
 pub enum DeclareOut {
     /// Proceed; the body receives this as its activation argument.
@@ -1702,25 +1702,20 @@ impl Ruleset {
         }
     }
 
-    /// Run just the `OP_DECLARE` collector of a `Play` entry, before the play
-    /// commits (docs/ACTIVATION.md §2). `Ok(None)` = declined; `Ok(Some(arg))`
-    /// = proceed with `arg`; `Err(RuleError::NeedInput)`-shaped pause is
-    /// folded to [`DeclareOut::Paused`].
-    pub fn declare_play<W: CardWorld>(
+    /// Run just the `OP_DECLARE` collector of one entry, before the activation
+    /// commits (docs/ACTIVATION.md §2). `entry` is the manifest index the
+    /// caller resolved: `OnKind::Play` for a play / skill press,
+    /// `OnKind::Counteract` at the trigger for a [反击] declaration. `Ok(None)`
+    /// = declined; `Ok(Some(arg))` = proceed with `arg`; a pause is folded to
+    /// [`DeclareOut::Paused`].
+    pub fn declare_entry<W: CardWorld>(
         &self,
         world: &W,
         card: i32,
+        entry: i32,
         player_id: i32,
         answers: &[i32],
     ) -> Result<DeclareOut, RuleError> {
-        let Some(entry) = self
-            .inner
-            .cards
-            .get(card as usize)
-            .and_then(|c| c.entry(card_sdk::abi::OnKind::Play, None))
-        else {
-            return Ok(DeclareOut::Arg(0));
-        };
         if !self.has_declare(card, entry) {
             return Ok(DeclareOut::Arg(0));
         }
@@ -2495,12 +2490,14 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         player_id: i32,
     ) -> Result<Option<crate::Msg>, RuleError>;
 
-    /// Run just the `OP_DECLARE` collector of a `Play` entry, before the play
-    /// commits (docs/ACTIVATION.md §2). See [`DeclareOut`].
-    fn declare_play(
+    /// Run just the `OP_DECLARE` collector of one entry, before the activation
+    /// commits (docs/ACTIVATION.md §2). `entry` is the manifest index the
+    /// caller resolved. See [`DeclareOut`].
+    fn declare_entry(
         &self,
         world: &crate::Run,
         card: i32,
+        entry: i32,
         player_id: i32,
         answers: &[i32],
     ) -> Result<DeclareOut, RuleError>;
@@ -2625,14 +2622,15 @@ impl CardModules for Ruleset {
     ) -> Result<Option<crate::Msg>, RuleError> {
         Ruleset::cant_play::<crate::Run>(self, world, card, player_id)
     }
-    fn declare_play(
+    fn declare_entry(
         &self,
         world: &crate::Run,
         card: i32,
+        entry: i32,
         player_id: i32,
         answers: &[i32],
     ) -> Result<DeclareOut, RuleError> {
-        Ruleset::declare_play::<crate::Run>(self, world, card, player_id, answers)
+        Ruleset::declare_entry::<crate::Run>(self, world, card, entry, player_id, answers)
     }
 }
 

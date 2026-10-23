@@ -181,3 +181,91 @@ fn probe_of_an_asking_guard_never_prompts() {
         t.dump_prompt()
     );
 }
+
+/// Declining the declare of a **counteraction** means no counter is declared
+/// at all: the card stays in hand, the body never runs, and the answered
+/// timing resolves as if the card had not been offered. `OP_DECLARE` runs in
+/// `finish_offer`, before `declare_one` commits / `build_round`'s `hand.remove`.
+#[test]
+fn counteract_decline_declares_no_counter() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &["TEST:echo"]);
+    t.set_hand(1, &["TEST:pick_counter"]);
+    let mark = t.mark();
+    // Player 0 plays; the `card` link opens a counteraction window. Do not
+    // `drain` before the offer assert -- that would decline the window away.
+    t.give_play(0, "TEST:echo").unwrap();
+    assert!(
+        t.counteract_offered("TEST:pick_counter"),
+        "the counter is offered: {}",
+        t.dump_prompt()
+    );
+    t.counteract(1, "TEST:pick_counter").unwrap();
+    // `OP_DECLARE` asks "Counter with this?" -- decline.
+    assert!(t.prompt().is_some(), "the declare asks: {}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // no
+    drain(&mut t);
+
+    assert!(
+        t.hand(1).iter().any(|c| c == "TEST:pick_counter"),
+        "a declined declare never removes the card from hand: {:?}",
+        t.hand(1)
+    );
+    assert!(
+        !keys_contain(&t, "pick_c_body"),
+        "the body has no decline path and logs unconditionally -- silence proves it never ran: {:?}",
+        t.recent_keys(40)
+    );
+    let counters: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.card == "TEST:pick_counter")
+        .collect();
+    assert!(
+        counters.is_empty(),
+        "no counter declaration happened at all: {counters:?}"
+    );
+}
+
+/// A decline that came from a prompt **records that prompt's answer**. The
+/// multi-pass drive re-runs the activation from scratch with the answer log
+/// attached, so if the "no" were dropped the re-run would ask again. Assert
+/// there is no second prompt and the same absence of body/declaration
+/// (docs/ACTIVATION.md §2 "Bots and the answer log").
+#[test]
+fn prompted_decline_replays_without_re_asking() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &["TEST:echo"]);
+    t.set_hand(1, &["TEST:pick_counter"]);
+    t.give_play(0, "TEST:echo").unwrap();
+    // No `drain` before the offer assert: that would decline the window away.
+    assert!(t.counteract_offered("TEST:pick_counter"), "{}", t.dump_prompt());
+    t.counteract(1, "TEST:pick_counter").unwrap();
+    assert!(t.prompt().is_some(), "the declare asks once: {}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // no -- and the drive re-runs with this answer
+
+    // The re-run consumed the recorded "no" from the log. A second prompt here
+    // would mean the answer was dropped and `OP_DECLARE` re-asked.
+    assert!(
+        t.prompt().is_none(),
+        "a prompted decline must not re-ask on the multi-pass re-run: {}",
+        t.dump_prompt()
+    );
+    // …and it stays quiet: nothing else is pending on this activation.
+    drain(&mut t);
+    assert!(
+        t.prompt().is_none(),
+        "no follow-on prompt from the declined activation: {}",
+        t.dump_prompt()
+    );
+    assert!(
+        t.hand(1).iter().any(|c| c == "TEST:pick_counter"),
+        "still in hand after the replayed decline: {:?}",
+        t.hand(1)
+    );
+    assert!(
+        !keys_contain(&t, "pick_c_body"),
+        "the body never ran across the replay: {:?}",
+        t.recent_keys(40)
+    );
+}

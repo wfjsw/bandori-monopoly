@@ -6760,7 +6760,7 @@ impl<M: CardModules> RulesBridge<M> {
                     .filter(|&x| x >= 0)
                     .unwrap_or(reply.fallback) as usize;
                 if let Some((id, idx, uid)) = options.get(pick) {
-                    let Some(arg) = self.declare_for_card(cx, s, id, *idx)? else {
+                    let Some(arg) = self.declare_for_card(cx, s, id, *idx, top.kind)? else {
                         // Declined at the declare: no counter this visit.
                         return Ok(None);
                     };
@@ -6789,7 +6789,7 @@ impl<M: CardModules> RulesBridge<M> {
             .unwrap_or(reply.fallback) as usize;
         Ok(match options.get(pick) {
             Some((id, idx, uid)) => {
-                let Some(arg) = self.declare_for_card(cx, s, id, *idx)? else {
+                let Some(arg) = self.declare_for_card(cx, s, id, *idx, top.kind)? else {
                     return Ok(None);
                 };
                 Some((id.clone(), *idx, *uid, 0, arg))
@@ -6812,11 +6812,23 @@ impl<M: CardModules> RulesBridge<M> {
         s: usize,
         id: &str,
         idx: i32,
+        kind: crate::TriggerKind,
     ) -> Flow<Option<i32>> {
+        // The declared entry is the [反击] at this trigger -- not the card's
+        // `On::Play`. A declare on the counteract entry is what `finish_offer`
+        // is collecting (docs/ACTIVATION.md §2).
+        let Some(entry) = self
+            .ruleset
+            .cards()
+            .get(idx as usize)
+            .and_then(|c| c.entry(card_sdk::abi::OnKind::Counteract, Some(kind)))
+        else {
+            return Ok(Some(0));
+        };
         let mut answers: Vec<i32> = Vec::new();
         loop {
             let run = self.declare_run(cx, s, id, idx);
-            match self.ruleset.declare_play(&run, idx, s as i32, &answers) {
+            match self.ruleset.declare_entry(&run, idx, entry, s as i32, &answers) {
                 Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
                 Ok(DeclareOut::Declined) => return Ok(None),
                 Ok(DeclareOut::Paused(p)) => {
@@ -8846,7 +8858,15 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 flash_policy: card_sdk::abi::Flash::Auto,
                 flash_ordinal: 0,
             };
-            match self.ruleset.declare_play(&run, idx, player_id as i32, &answers) {
+            // The play path declares the card's `On::Play` entry -- the press
+            // surface, `OnKind::Play` (docs/ACTIVATION.md §2).
+            let entry = self
+                .ruleset
+                .cards()
+                .get(idx as usize)
+                .and_then(|c| c.entry(card_sdk::abi::OnKind::Play, None))
+                .unwrap_or(0);
+            match self.ruleset.declare_entry(&run, idx, entry, player_id as i32, &answers) {
                 Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
                 Ok(DeclareOut::Declined) => return Ok(None),
                 Ok(DeclareOut::Paused(p)) => {
