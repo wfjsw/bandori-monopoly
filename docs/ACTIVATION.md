@@ -60,18 +60,31 @@ collector + a real body argument. (`CounteractHint` at
 ### Guest surface
 
 ```rust
+/// The activation argument a `declare` collector hands the body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Activation {
+    /// The player declined. The entry does not fire at all -- no body, no
+    /// header, no flash, no log. For a [反击] this is "do not declare"; for a
+    /// play it is "the card never left the hand"; for a hook it is the
+    /// 「可选择」 opt-out.
+    Decline,
+    /// Proceed; the body receives this as its second parameter. `Arg(0)` is
+    /// the plain yes/no accept.
+    Arg(i32),
+}
+
 /// Collect the activation argument **before** the activation commits.
-///
-/// * `Ok(None)` -- the player declined. The entry does not fire at all: no
-///   body, no header, no flash. For a [反击] this is "do not declare"; for a
-///   play it is "put the card back"; for a hook it is the 「可选择」 opt-out.
-/// * `Ok(Some(arg))` -- proceed. The body receives `arg` as its second
-///   parameter.
-/// * `Err(Prompt)` -- pause and re-run, same multi-pass as [`Asked`].
-pub type Declared = Result<Option<i32>, Prompt>;
+/// `Err(Prompt)` pauses and re-runs, same multi-pass as [`Asked`].
+pub type Declared = Result<Activation, Prompt>;
 ```
 
-Attached with a builder, same style as `On::pre` / `guard_ask`:
+`Result` keeps the `?` propagation the codebase's `Asked = Result<(), Prompt>`
+relies on; the three-arm is in `Activation` so "declined" is never confused
+with "proceed with no argument" (`Arg(0)` is the accept arm of a yes/no -- a
+`Result<Option<i32>, _>` would have made `Ok(None)` read as one of the two and
+get written wrong).
+
+Attached with a builder, same style as `On::pre`:
 
 ```rust
 On::Counteract(links, pre, counter_reason, guard, body_with_arg)
@@ -99,17 +112,34 @@ card that needs more packs it, or reads the rest from `ctx`.
 |---|---|---|
 | `On::Play` | in the `act:"play"` / `act:"skill"` path, after the gate admits and **before** `play_from_hand`'s `hand.remove` | the card stays in hand |
 | `On::Counteract` | in `finish_offer`, after the player has picked this card and **before** `declare_one` returns `Some` / `build_round`'s `hand.remove` | no counter is declared this visit |
-| hooks (`On::Action` / `Filter` / `Settle` / `Mortgage` / …) | in `run_hook` / `entry_admitted`, after `admits` and before the body | the hook does not fire |
+| `On::Action` / `Settle` / `Mortgage` / `Redeem` / `Buy` / `Build` / `Message` | in `run_hook` / `entry_admitted`, after `admits` and before announce/flash/body | the hook does not fire |
+| **`On::Filter`** | **rejected at ruleset build** | — |
 
-For hooks this is also the right home for the rulebook's 「可选择」 offers: a
-decline is structurally impossible to get wrong, because the body never runs
-and nothing is announced. (A body-level `ask_yes` + early return still leaves
-the entry "fired", and any effect before the ask has already been re-run once
-by the prompt's multi-pass replay.)
+For the event-reaction hooks this is also the right home for the rulebook's
+「可选择」 offers: a decline is structurally impossible to get wrong, because
+the body never runs and nothing is announced. (A body-level `ask_yes` + early
+return still leaves the entry "fired", and any effect before the ask has
+already been re-run once by the prompt's multi-pass replay.)
 
 `declare` may call `ctx::ask_*`, including `ctx::can_fire` to build its option
 list (mechanism B). That is how the options shown are exactly the ones that
 would work.
+
+### `On::Filter` cannot declare (fail closed)
+
+A filter body is a **pure value fold** — `FilterShape::Value` / `Flag` / `Gate`
+/ `Payload`, driven under `pure::enter()`, with `pure::refuse_if_filter` on
+every effect import (`card-sdk/src/pure.rs`). Pausing a `PaySplitMul`,
+`MoveGate` or `DiceRollPlan` mid-pipeline for a player prompt is the same
+architectural mistake as letting a filter emit effects: the pipeline is
+already committed to folding this value.
+
+`build-ruleset` rejects a `declare` on `On::Filter`, the same way a mixed
+Action/Filter kind list is rejected. If a filter stage needs to be skippable,
+the opt-out is an `On::Action` at an interactive pre-stage carrying the
+`declare` — the pattern `crimson_soul` already uses, putting its interactive
+−1000 on `On::Action(Action::PaySplitChooseBefore(…))` so the ask sits on an
+event reaction immediately before the pure `PaySplitChoose` fold (v78).
 
 ### Wire
 
@@ -125,13 +155,31 @@ ruleset_on(card, entry, op, player_id, arg) -> i64
   multi-pass / `Prompt` machinery as a body `Asked`.
 * `EXIT_DECLINED` is a new sentinel (a dedicated `i32`, next to
   `EXIT_NEED_INPUT`) so the host can tell "player said no" from "paused".
+* **Sentinel collision is a trap, not a silent misread.** `OP_DECLARE` returns
+  a raw `i32` arg, so an `Arg(n)` whose `n` happens to be either sentinel
+  would be read as "paused" / "declined". The guest's `declare` boundary
+  **asserts** that the returned arg is neither `EXIT_NEED_INPUT` nor
+  `EXIT_DECLINED` and fails the activation loudly. (`EXIT_NEED_INPUT` is
+  already safe by the "published a prompt and kept going" trap; `EXIT_DECLINED`
+  would otherwise be a *silent* wrong answer.)
 * `Call::{Play, Counteract}` and the chain link carry `arg: i32`; `resolve_jobs`
   / `drive` pass it into `OP_RUN` exactly the way `COUNTERACT_MOVE_EXTENSION`
   is stamped today, but as a real parameter rather than a move tag.
+* **`OP_DECLARE` and `OP_RUN` share one `next_answer` cursor** over the whole
+  `run_hook` / `run` call, in one `HostState` (not a fresh store per phase).
+  `entry_admitted` returns the cursor *after* `admits` + `OP_DECLARE`;
+  `OP_RUN` starts there. Otherwise a declare prompt followed by a body prompt
+  re-reads answer 0.
 * **ABI_VERSION 97 → 98.** `SAVE_VERSION` / `RECORD_VERSION` unchanged (the
   answer log is still one `i32` per prompt; the arg is per-activation, not
   per-prompt, and is recomputed by re-running `OP_DECLARE` on replay -- same as
   every other body re-run).
+* **Player-visible ordering (one changelog sentence).** For `On::Play` the
+  `declare` prompt fires *before* the `card` counteraction window, because
+  `hand.remove` is the commit and the window opens after it. That is the right
+  order -- the mode is part of declaring the play, matching
+  `COUNTERACT_MOVE_EXTENSION`'s two-step-before-declaration -- but it is a
+  change cards like `see_you_tomorrow` will show.
 
 ### Manifest
 
@@ -166,7 +214,7 @@ activation never happens).
 ### Guest surface
 
 ```rust
-/// Can `card_id`'s `kind` entry fire for `player_id` right now?
+/// Can `card_id`'s entry at `kind` + `trigger` fire for `player_id` right now?
 ///
 /// Evaluates that entry's **condition + residual guard / play gate** through
 /// `admits` (`docs/GUARDS.md` §4.4 item 6) and does **not** run its body.
@@ -175,15 +223,25 @@ activation never happens).
 /// answers `false`, the same way an eligibility probe folds
 /// `RuleError::GuardPrompted` to "not eligible". Unknown id, no such entry,
 /// or nesting overflow (`MAX_NESTING`) also answer `false`.
+///
+/// `trigger` is **required for every kind except `OnKind::Play`** (which has
+/// one press surface and is selected with `play_entry_preferring_gated`). A
+/// card with three `On::Action` hooks must not answer "yes" because one of
+/// them admits -- a hook question is per-kind, so it is asked per-kind.
 pub fn can_fire(
     player_id: i32,
     card_id: &str,
     kind: OnKind,
-    trigger: Option<TriggerKind>,
+    trigger: Option<TriggerKind>,   // must be Some(_) unless kind == Play
 ) -> bool;
 
+/// Explicit OR: does **any** entry of `kind` admit? Only for callers that
+/// genuinely mean "is any of these open" -- do not use it to dodge naming the
+/// trigger.
+pub fn can_fire_any(player_id: i32, card_id: &str, kind: OnKind) -> bool;
+
 /// Could `player_id` play `id` right now (it has a `play` effect and its
-/// `cant_play` gate is open)? -- unchanged spelling; now sugar for
+/// `cant_play` gate is open)? -- unchanged spelling; sugar for
 /// `can_fire(player_id, id, OnKind::Play, None)`.
 pub fn card_replayable(player_id: i32, id: &str) -> bool;
 ```
@@ -286,39 +344,55 @@ moves into its `declare`).
 
 ## 5. What this replaces / does not add
 
-* **`Guard::Asks`** (the uncommitted `guard-prompt` worktree, 2026-10-23): a
-  `fn(i32) -> Guarded` residual that may ask "use this?" with
-  `Guarded = Result<bool, Prompt>`. That is the yes/no case of `declare`, and
-  putting the ask in the *guard* makes the eligibility probes (`can_counteract`
-  / `cant_play` / `ai_play`) have to refuse it (`RuleError::GuardPrompted`) and
-  fold that to "not eligible" -- extra machinery for a question `declare`
-  already answers *before* the point of no return, where a decline is real.
-  New code should use `declare`; a pure `Guard` stays pure.
+* **`Guard::Asks` is not shipped** (the uncommitted `guard-prompt` worktree,
+  2026-10-23, proposed `Guard::Asks(fn(i32) -> Guarded)` with
+  `Guarded = Result<bool, Prompt>`). It is the yes/no case of `declare`, and
+  keeping it would be a second spelling for one rulebook concept (「可选择」).
+
+  The decisive argument is not "less machinery" -- it is that **an asking
+  residual poisons every eligibility probe.** Probes (`can_counteract` /
+  `cant_play` / `ai_play`, and `can_fire` itself) wrap the guard so a pause
+  surfaces as `RuleError::GuardPrompted`, which every caller folds to "not
+  eligible". So a card whose 「可选择」 ask lives in its *guard* answers
+  `false` to `ctx::can_fire` -- i.e. it looks inapplicable to *other cards*
+  that are only asking "may this fire?", when in fact it would fire the moment
+  someone asked the player. That is exactly mechanism B's motivating shape
+  (`detour`: "can I activate depends on can that (2) activate?"), and an
+  asking guard makes it answer **wrong**.
+
+  With the ask in `declare` and the residual guard staying pure
+  (`Option<fn(i32) -> bool>`, no enum whose only variant is `Pure`),
+  `can_fire` answers "may I press this?" truthfully and never predicts the
+  player -- the same split `cant_play` already has, which does not predict
+  whether the player will actually play the card.
+
 * **No `On::Skill`.** A skill's press is `On::Play`; its passives are
   `On::Action`. `declare` and `can_fire` attach to the entries that exist.
 * **No direct Rust call into another card's body.** `ctx::invoke_skill` /
   `ctx::play_card` (nested `On::Play` body) and `ctx::send` remain the only
   cross-card effect seams; `can_fire` is the query half next to them.
-* **No hand-window one-gesture labels** in v98 (see §2).
+* **No `declare` on `On::Filter`** (§2) and **no hand-window one-gesture
+  labels** in v98.
 
 ## 6. Implementation map
 
 | layer | change |
 |---|---|
-| `rules/card-sdk/src/lib.rs` | `Declared`, `BodyShape`, `PlayEntry` / `CounteractEntry` / `RuleEntry` / `ActionEntry` / `FilterEntry` / `MessageEntry` gain `declare: Option<fn(i32) -> Declared>` + erased body + `drive`; `On::declare` builder |
-| `rules/card-sdk/src/kinds.rs` | same for `ActionEntry` / `FilterEntry`; `action` / `filter_*` ctors keep `fn(i32) -> Asked` sugar |
-| `rules/card-sdk/src/rt.rs` | `OP_DECLARE` arm; `OP_RUN` takes `arg` and drives `BodyShape` |
-| `rules/card-sdk/src/abi.rs` | `ABI_VERSION = 98`; `export::ON` 5 params; `OP_DECLARE`; `EXIT_DECLINED`; `ManifestOn::has_declare`; v98 changelog note |
-| `rules/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `can_fire` |
+| `rules/card-sdk/src/lib.rs` | `Activation`, `Declared`, `BodyShape`; `PlayEntry` / `CounteractEntry` / `RuleEntry` / `ActionEntry` / `MessageEntry` gain `declare: Option<fn(i32) -> Declared>` + erased body + `drive`; `On::declare` builder. **`FilterEntry` gains no `declare`.** `Guard` goes back to `Option<fn(i32) -> bool>` (no enum). |
+| `rules/card-sdk/src/kinds.rs` | same for `ActionEntry`; `action` ctors keep `fn(i32) -> Asked` sugar; `filter_*` unchanged |
+| `rules/card-sdk/src/rt.rs` | `OP_DECLARE` arm folding `Activation::{Decline, Arg}` to `EXIT_DECLINED` / the arg (asserting the arg is not a sentinel); `OP_RUN` takes `arg` and drives `BodyShape` |
+| `rules/card-sdk/src/abi.rs` | `ABI_VERSION = 98`; `export::ON` 5 params; `OP_DECLARE`; `EXIT_DECLINED`; `ManifestOn::has_declare`; v98 changelog note (incl. the Play-before-`card`-window ordering sentence) |
+| `rules/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `can_fire` / `can_fire_any` |
 | `rules/card-sdk/src/kani_host.rs` | `Op::can_fire` |
+| `tools/build-ruleset.mjs` (and its check) | reject `declare` on `On::Filter` at build, like a mixed Action/Filter kind list |
 | `crates/game-rules/src/hostfns.rs` | `can_fire` host (generalise `card_replayable`); `call_entry` gains `arg` |
-| `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` gain `arg`; `run` / `run_hook` / `entry_admitted` run `OP_DECLARE` before the body; `has_declare` plumbing |
+| `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` gain `arg`; `entry_admitted` returns `Admitted` carrying the `next_answer` cursor *after* `admits` + `OP_DECLARE`; `run` / `run_hook` thread that cursor to `OP_RUN` in the same `HostState` |
 | `crates/game-rules/src/wasm_rules.rs` | `finish_offer` runs `OP_DECLARE` before `declare_one` commits; `build_round` stores `arg` on the chain link; `resolve_jobs` passes it to `OP_RUN`; `play` path runs `OP_DECLARE` before `play_from_hand` |
 | `crates/game-rules/src/native_shims.rs` | `op_can_fire`, widened `ruleset_on` |
 | `crates/rules-native/src/lib.rs` | mirror the widened `on` + `can_fire` |
 | `crates/game-core/src/engine/play.rs` / `mod.rs` | `act:"play"` / `act:"skill"` collect the arg before `hand.remove`; `NetMessage` gains an optional `arg` only if the UI wants to pre-declare (v98: host runs `OP_DECLARE`, so no net change) |
-| `rules/fixtures/test-cards` | a fixture card with a `declare` (pick one of N, cancel declines) and a fixture pair whose guard reads the other via `can_fire` |
-| `rules/tests` | black-box: decline leaves the card in hand / no counter declared; the body sees the pick; `can_fire` true/false across a gated pair; probe mode does not prompt |
+| `rules/fixtures/test-cards` | a fixture card with a `declare` (pick one of N, cancel declines); the declaring body has **no decline path and logs unconditionally**, so silence proves it never ran; a fixture pair whose guard reads the other via `can_fire` |
+| `rules/tests` / `crates/game-rules/tests` | decline leaves the card **in hand** (LOY-SEEYOU-01 observable) / no counter declared / no header, flash, log; sibling entry still runs after a decline; the body sees the pick; `can_fire` true/false across a gated pair; probe mode does not prompt; `can_counteract_scoped` on a would-asking guard → `Err(RuleError::GuardPrompted)` |
 | `docs/CARDS.md`, `docs/GUARDS.md` | pointers here |
 
 `build-ruleset.mjs` must re-run after any `rules/cards` edit (the ruleset wasm
