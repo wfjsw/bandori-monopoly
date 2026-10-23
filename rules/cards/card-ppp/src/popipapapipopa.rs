@@ -15,6 +15,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it, items, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
@@ -37,9 +38,14 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         .raw_name(r#"[衍生]Popipapapipopa"#)
         .derived(true)
         .tags(&[r#"持续"#, r#"衍生"#])
-        .text(r#"[持续]
-（1）此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。
-（2）消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。"#)
+        .text(CardText::of(&[
+            sec(r#"[持续]"#, &[
+                items(&[
+                    it(r#"此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。"#),
+                    it(r#"消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell B4
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

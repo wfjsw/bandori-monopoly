@@ -7,6 +7,7 @@
 //! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const UIKA_FEARLESS: CardDef = CardDef::new(
     "Mujica:（初华）我，无畏悲伤",
@@ -15,7 +16,7 @@ pub const UIKA_FEARLESS: CardDef = CardDef::new(
         .name(r#"我，无畏悲伤"#)
         .raw_name(r#"（初华）我，无畏悲伤"#)
         .tags(&[])
-        .text(r#"打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字"#)
+        .text(CardText::para(r#"打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字"#))
         // sheet cell J8
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"三角初华"#)]));
 

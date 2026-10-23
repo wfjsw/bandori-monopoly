@@ -17,6 +17,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec, steps};
 use skill_groups::fans;
 
 pub const RANGER: CardDef = CardDef::new(
@@ -30,17 +31,21 @@ pub const RANGER: CardDef = CardDef::new(
         .raw_name(r#"[衍生]魔法战队Pastel✽Ranger"#)
         .derived(true)
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
-        .text(
-            r#"[特]：
-仅在你的绝对距离30-“粉丝数量”格内有你拥有房的格子时可使用。
-[手]：
-根据场上你拥有的卡数量并依次进行以下操作，如果[共鸣]则视为数量加1：
-1. 数量至少为1则[获得]500资金；
-2. 数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]；
-3. 数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡；
-4. 数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；
-5.数量至少为6则抽1张卡。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"仅在你的绝对距离30-“粉丝数量”格内有你拥有房的格子时可使用。"#),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"根据场上你拥有的卡数量并依次进行以下操作，如果[共鸣]则视为数量加1："#),
+                steps(&[
+                    r#"数量至少为1则[获得]500资金；"#,
+                    r#"数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]；"#,
+                    r#"数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡；"#,
+                    r#"数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；"#,
+                    r#"数量至少为6则抽1张卡。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell D14
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );

@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Mujica:燃尽前的线香花火";
@@ -26,7 +27,7 @@ pub const SPARKLER: CardDef = CardDef::new(
         .name(r#"燃尽前的线香花火"#)
         .raw_name(r#"燃尽前的线香花火"#)
         .tags(&[])
-        .text(r#"将此卡放置于场上并放置2个奇迹水晶（上限2），你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合，最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。"#)
+        .text(CardText::para(r#"将此卡放置于场上并放置2个奇迹水晶（上限2），你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合，最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。"#))
         // sheet cell J5
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

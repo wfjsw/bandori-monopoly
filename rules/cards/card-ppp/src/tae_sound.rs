@@ -8,6 +8,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const TAE_SOUND: CardDef = CardDef::new(
     "PPP:（多惠）寻找更好的声音",
@@ -18,7 +19,7 @@ pub const TAE_SOUND: CardDef = CardDef::new(
         .name(r#"寻找更好的声音"#)
         .raw_name(r#"（多惠）寻找更好的声音"#)
         .tags(&[])
-        .text(r#"传送到“江户川乐器店”并获得一个[火罐]"#)
+        .text(CardText::para(r#"传送到“江户川乐器店”并获得一个[火罐]"#))
         // sheet cell B17
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"花园多惠"#)]),
 );

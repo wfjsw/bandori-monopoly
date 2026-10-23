@@ -10,6 +10,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, FilterKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";
@@ -37,7 +38,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         .name(r#"离心力，不为所动"#)
         .raw_name(r#"离心力，不为所动"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击]当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时，你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果"#)
+        .text(CardText::para(r#"[反击]当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时，你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果"#))
         // sheet cell G10
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

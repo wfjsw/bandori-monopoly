@@ -7,6 +7,7 @@ use bandori_std::ctx::{self, trigger};
 use bandori_std::kind::Actions;
 use bandori_std::state_key;
 use card_sdk::abi::{AbKind, ActionKind, MarkFilter, TriggerKind};
+use card_sdk::{CardText, it};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{all_players, keep};
@@ -45,7 +46,9 @@ pub const EMBERS: CardDef = CardDef::new(
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"火种燃尽之后会怎么样呢？"#)
-            .text(r#"（1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。"#)
+            .text(CardText::items(&[
+                it(r#"将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。"#),
+            ]))
             // sheet cell A29
             .derived(false));
 

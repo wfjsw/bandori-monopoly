@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BEFORE_LIVE: CardDef = CardDef::new(
@@ -25,7 +26,7 @@ pub const BEFORE_LIVE: CardDef = CardDef::new(
         .name(r#"live前的准备"#)
         .raw_name(r#"live前的准备"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 经过江户川乐器店时可打出此卡，使自己在江户川乐器店强制停下并触发结算"#)
+        .text(CardText::para(r#"[反击] 经过江户川乐器店时可打出此卡，使自己在江户川乐器店强制停下并触发结算"#))
         // sheet cell E8
         .fields(&[("group", r#"Roselia"#), ("owner", "")]),
 );

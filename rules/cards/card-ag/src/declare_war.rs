@@ -9,6 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
@@ -19,8 +20,11 @@ pub const DECLARE_WAR: CardDef = CardDef::new(
         .name(r#"宣战布告"#)
         .raw_name(r#"宣战布告"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(r#"[手]：
-[反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"[反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。"#),
+            ]),
+        ]))
         // sheet cell C2
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

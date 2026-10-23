@@ -1,6 +1,7 @@
 //! `R:[衍生] 压` -- C# `CardPress`: gain 1,000.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play("", None, None, press)]).meta(
     &card_sdk::meta::CardMeta::new()
@@ -8,7 +9,7 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play("", None, N
         .raw_name(r#"[衍生] 压"#)
         .derived(true)
         .tags(&[r#"手"#, r#"衍生"#])
-        .text(r#"[手]：获得1000资金。"#)
+        .text(CardText::para(r#"[手]：获得1000资金。"#))
         .fields(&[("group", r#"Roselia"#), ("owner", "")]),
 );
 

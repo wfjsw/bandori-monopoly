@@ -9,13 +9,14 @@
 use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const TOKO_SWAP: CardDef =
     CardDef::new("Mor:（toko）", &[On::Play("", None, Some(cant_play), toko_swap)]).meta(&card_sdk::meta::CardMeta::new()
         .name("")
         .raw_name(r#"（toko）"#)
         .tags(&[])
-        .text(r#"选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回"#)
+        .text(CardText::para(r#"选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回"#))
         // sheet cell G8
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"桐谷透子"#)]));
 

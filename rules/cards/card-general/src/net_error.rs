@@ -12,6 +12,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NET_ERROR: CardDef = CardDef::new(
@@ -29,13 +30,16 @@ pub const NET_ERROR: CardDef = CardDef::new(
         .name(r#"网络链接异常"#)
         .raw_name(r#"网络链接异常"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(
-            r#"[手]：
-[反击]1张手卡的[手]效果或事件卡的效果生效前：根据卡和效果的类型依次进行以下操作：
-1. 手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]；
-2. 手卡的[手]效果且没有[指定]目标则抵消其所有的效果；
-3. 事件卡的效果手牌则则抵消其所有的效果。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"[反击]1张手卡的[手]效果或事件卡的效果生效前：根据卡和效果的类型依次进行以下操作："#),
+                steps(&[
+                    r#"手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]；"#,
+                    r#"手卡的[手]效果且没有[指定]目标则抵消其所有的效果；"#,
+                    r#"事件卡的效果手牌则则抵消其所有的效果。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell A10
         .fields(&[("group", r#"通用"#), ("owner", "")]),
 );
