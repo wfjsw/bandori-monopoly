@@ -249,9 +249,9 @@ mod band {
     pub fn band_01_noop_below_or_gain() {
         after_pay_world(0);
         // Pin the false-trigger region.
-        kani::assume(
-            world::with_world(|w| w.pay_amount < 2000 || w.trig_target == w.trig_player),
-        );
+        kani::assume(world::with_world(|w| {
+            w.pay_amount < 2000 || w.trig_target == w.trig_player
+        }));
         let gid = crate::guard_id!("actor == owner && value >= 2000 && target != owner");
         let admitted = {
             let ctx = fill_mine(0);
@@ -350,7 +350,10 @@ mod band {
                 "C-MOR-band-02: 替换奖励 — set_cancelled must latch"
             );
         } else {
-            crate::kassert!(log_n == 0, "C-MOR-band-02: non-money option must be a no-op");
+            crate::kassert!(
+                log_n == 0,
+                "C-MOR-band-02: non-money option must be a no-op"
+            );
         }
 
         let post = world::snapshot();
@@ -652,7 +655,10 @@ mod pass_fire {
         let mutant = spec::touko_01_log_ok_mutant(effects, user);
         kani::cover!(card && !mutant, "card matches book, not the n=2 mutant");
         crate::kassert!(card, "below-cap path must gain exactly one");
-        crate::kassert!(!mutant, "C-MOR-touko-01 mutant: card must not match GainFire(2)");
+        crate::kassert!(
+            !mutant,
+            "C-MOR-touko-01 mutant: card must not match GainFire(2)"
+        );
         let _ = log_n;
     }
 }
@@ -778,7 +784,10 @@ mod yuri_crit {
         }
 
         let post = world::snapshot();
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money at rewrite time");
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "frame: money at rewrite time"
+        );
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
         crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     }
@@ -861,7 +870,10 @@ mod yuri_crit {
         // The strict mutant would map n == 1 to a miss (X := 2). Whenever the
         // book hit, the mutant disagrees.
         let mutant_x_after = spec::rui_crit_02_x_after_mutant(1, 1);
-        kani::cover!(book_hit && mutant_x_after == 2, "reachable disagreement at n == 1");
+        kani::cover!(
+            book_hit && mutant_x_after == 2,
+            "reachable disagreement at n == 1"
+        );
         crate::kassert!(
             mutant_x_after == 2,
             "mutant threshold is strict: n == 1 is a miss for it"
@@ -1166,7 +1178,10 @@ mod tsukushi_cash {
             "gain arithmetic pinned"
         );
         let post_rate = world::with_world(|ww| ww.key_get(user, rk));
-        crate::kassert!(post_rate == want_rate_after, "rate decayed as the book says");
+        crate::kassert!(
+            post_rate == want_rate_after,
+            "rate decayed as the book says"
+        );
         // Marks cleared on every holder.
         for i in 0..n_holders {
             let (h, _, _) = holders[i];
@@ -1229,7 +1244,10 @@ mod tsukushi_cash {
         kani::cover!(book != mutant, "book floors at 200, mutant at 0");
         crate::kassert!(book == 200 && mutant == 0, "witness: book 200 vs mutant 0");
         crate::kassert!(post_rate == book, "rate stays at the 200 floor");
-        crate::kassert!(post_rate != mutant, "C-MOR-tsukushi-03 mutant: 0-floor is wrong");
+        crate::kassert!(
+            post_rate != mutant,
+            "C-MOR-tsukushi-03 mutant: 0-floor is wrong"
+        );
     }
 }
 

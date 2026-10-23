@@ -11,9 +11,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bot_core::{
-    action, Ismcts, MatchSim, SearchConfig, SeatView,
-};
+use bot_core::{action, Ismcts, MatchSim, SearchConfig, SeatView};
 use game_core::data::{GameData, Roster};
 use game_core::engine::{CardRules, Match, StubRules};
 use game_core::net::RoomMember;
@@ -25,10 +23,13 @@ fn data() -> Arc<GameData> {
     // bot-core must not grow a hard dep on the card crates, so the roster
     // comes from the generated roster fixture (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -80,18 +81,11 @@ fn parked() -> (Match, i32) {
         let st = m.state();
         let me = st.player_of(1);
         let at = (st.prompt.id > 0 && st.prompt.waiting(me))
-            || (!st.busy
-                && st.turn == me
-                && (st.step == stage::OPS || st.step == stage::END));
+            || (!st.busy && st.turn == me && (st.step == stage::OPS || st.step == stage::END));
         if st.phase == "play" && at {
             let view = SeatView::from_match(&m, 1);
-            let acts = action::legal_actions(
-                &data,
-                &view.state,
-                &view.hand,
-                &view.playable,
-                me as usize,
-            );
+            let acts =
+                action::legal_actions(&data, &view.state, &view.hand, &view.playable, me as usize);
             if !acts.is_empty() {
                 return (m, 1);
             }
@@ -216,7 +210,10 @@ fn retain_after_keeps_only_the_played_subtree() {
 
     tree.retain_after(out.root_key, &out.action);
     let after = tree.node_count();
-    assert!(after <= before, "retain cannot add nodes ({after} <= {before})");
+    assert!(
+        after <= before,
+        "retain cannot add nodes ({after} <= {before})"
+    );
     assert_eq!(
         tree.edge_count(out.root_key),
         1,
@@ -257,7 +254,11 @@ fn legacy_flags_still_search() {
         ..SearchConfig::legacy()
     };
     let out = Ismcts::new().search(&mut sim_of(&m, member), seat, cfg);
-    assert!(!out.heuristic, "legacy mode still searches: {:?}", out.action);
+    assert!(
+        !out.heuristic,
+        "legacy mode still searches: {:?}",
+        out.action
+    );
     assert!(out.iterations >= 1);
 }
 
@@ -311,7 +312,11 @@ fn early_stop_never_runs_past_the_budget_and_reports_itself() {
         ..Default::default()
     };
     let out = Ismcts::new().search(&mut sim_of(&m, member), seat, cfg);
-    assert!(!out.heuristic, "a searched answer came back: {:?}", out.action);
+    assert!(
+        !out.heuristic,
+        "a searched answer came back: {:?}",
+        out.action
+    );
     assert!(out.iterations >= 1);
     if out.early_stopped {
         assert!(
@@ -344,7 +349,10 @@ fn early_stop_stops_no_later_than_the_full_budget_search() {
     };
     let on = Ismcts::new().search(&mut sim_of(&m, member), seat, cfg(true));
     let off = Ismcts::new().search(&mut sim_of(&m, member), seat, cfg(false));
-    assert_eq!(off.iterations, cap, "the full-budget run hit the cap: {off:?}");
+    assert_eq!(
+        off.iterations, cap,
+        "the full-budget run hit the cap: {off:?}"
+    );
     assert!(
         on.iterations <= off.iterations,
         "early stop added work: {on} > {off}",
@@ -381,7 +389,10 @@ fn predict_upcoming_view_is_a_turn_start_ops_surface() {
     assert_eq!(pred.state.landed, -1);
     assert_eq!(pred.state.prompt.id, 0);
     assert!(pred.state.can_roll_here, "roll is owed at 运营");
-    assert!(!pred.state.can_end_here, "end is gated until the move resolves");
+    assert!(
+        !pred.state.can_end_here,
+        "end is gated until the move resolves"
+    );
     assert_eq!(pred.hand, idle.hand, "own hand is exact");
     assert_eq!(pred.draw, idle.draw, "own draw composition is exact");
     // The predicted frame is itself a searchable decision surface.

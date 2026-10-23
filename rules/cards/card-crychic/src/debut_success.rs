@@ -1,14 +1,14 @@
 //! `CRYCHIC:初演大成功` -- C# `CardDebutSuccess` (MatchHost.cs:3146-3163): this
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:初演大成功`）:
-//! > 初演大成功： 
+//! > 初演大成功：
 //! >   打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。
 //!
 //! turn's money never drops, then stun + a band crystal after the turn.
 
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
 use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",

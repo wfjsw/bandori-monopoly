@@ -3,8 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `超燃甩头`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。
 
-use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue, RollValue};
 
 use crate::util::{expire, keep, roll};

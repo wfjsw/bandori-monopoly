@@ -120,14 +120,18 @@ pub fn window_of_exclusive(
     win.value = ask.owner_is_base as i64;
     win.step = ask.owner_is_self as i64;
     for (i, p) in win.players.iter_mut().enumerate() {
-        let ch = w
-            .st
-            .players
-            .get(i)
-            .map(|s| s.persona.clone())
-            .unwrap_or_default();
+        let ch =
+            w.st.players
+                .get(i)
+                .map(|s| s.persona.clone())
+                .unwrap_or_default();
         p.persona = id_of(&ch);
-        p.group = id_of(&data.persona(&ch).map(|c| c.group.clone()).unwrap_or_default());
+        p.group = id_of(
+            &data
+                .persona(&ch)
+                .map(|c| c.group.clone())
+                .unwrap_or_default(),
+        );
     }
     win
 }

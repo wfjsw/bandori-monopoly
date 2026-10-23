@@ -22,9 +22,10 @@
 //! whose 「使用…需要支付你600资金」 needs the spend path to know the pot's
 //! provenance. See the TODO below.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const LISA_GODDESS: CardDef = CardDef::new(
     "skill:今井莉莎:慈爱女神",
@@ -32,12 +33,20 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
         On::Play("", None, Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
     ],
 )
-    .silent(&[1, 2])
-    // 「（初始2，上限2）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
+.silent(&[1, 2])
+// 「（初始2，上限2）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 2),
+    (bandori_std::fire::FIRE_CAP, 2),
+]);
 
 /// 「初始2，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

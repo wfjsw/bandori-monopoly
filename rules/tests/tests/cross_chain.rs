@@ -111,7 +111,11 @@ fn c01_a_single_counter_answers_a_multi_target_card() {
     // X = ceil10(2000/2) = 1000.
     let x = ceil10(2000 / 2);
     assert_eq!(x, 1000);
-    assert_eq!(t.money(0), 10_000 - 500 + x * 2, "P0 paid 500, received {x} twice");
+    assert_eq!(
+        t.money(0),
+        10_000 - 500 + x * 2,
+        "P0 paid 500, received {x} twice"
+    );
     assert_eq!(t.money(1), 10_000 + 500 - x, "P1 gained 500, paid {x}");
     assert_eq!(t.money(2), 10_000 - x, "P2 paid {x}");
     assert_eq!(t.hand(1).len(), 1, "宣战布告 drew 1: {:?}", t.hand(1));
@@ -138,7 +142,12 @@ fn c02_two_counters_on_the_same_timing() {
     t.counteract(1, "AG:宣战布告").unwrap();
     // ruling 2026-10-07: P1's visit is exhausted (its only counter is spent),
     // so priority advances to the next seat -- not the declaration itself.
-    assert_eq!(t.asked(), vec![2], "the visit exhausted, priority advances: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![2],
+        "the visit exhausted, priority advances: {}",
+        t.dump_prompt()
+    );
     assert_eq!(
         answered_card(&t).as_deref(),
         Some("通用:登上武道馆"),
@@ -218,7 +227,11 @@ fn c03_counter_to_counter_cancels_designation() {
             break;
         }
     }
-    assert!(t.counteract_offered("通用:网络链接异常"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("通用:网络链接异常"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "通用:网络链接异常").unwrap();
     while t.prompt().is_some() {
         t.decline();
@@ -242,7 +255,11 @@ fn c04_negates_an_untargeted_hand_effect() {
     let mut t = Table::vanilla(2);
     t.give(1, &["通用:网络链接异常"]);
     t.give_play(0, "通用:GREAT").unwrap();
-    assert!(t.counteract_offered("通用:网络链接异常"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("通用:网络链接异常"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "通用:网络链接异常").unwrap();
     while t.prompt().is_some() {
         t.decline();
@@ -449,7 +466,10 @@ fn c08_user_counters_own_card() {
         order.iter().any(|(w, _)| *w == 1),
         "P1 is in the ring: {order:?}"
     );
-    eprintln!("c08 record: order = {order:?}, exile = {}", t.state(0, "exile"));
+    eprintln!(
+        "c08 record: order = {order:?}, exile = {}",
+        t.state(0, "exile")
+    );
     // 安可 answers the [除外] application (an abnormal move), not the play.
     assert_eq!(t.state(0, "exile"), 0, "P0 gets no exile");
     assert_eq!(t.pos(0), 0, "P0 is not teleported");
@@ -494,7 +514,11 @@ fn c09_centrifugal_on_the_second_targeting() {
     // P1 pays 1000 once in total; P2 pays twice.
     assert_eq!(t.money(1), 10_000 - x, "P1 pays once");
     assert_eq!(t.money(2), 10_000 - x * 2, "P2 pays twice");
-    assert_eq!(t.money(0), 10_000 + x * 3 - 500 * 0, "P0 receives from P2 twice + P1 once");
+    assert_eq!(
+        t.money(0),
+        10_000 + x * 3 - 500 * 0,
+        "P0 receives from P2 twice + P1 once"
+    );
 }
 
 // =====================================================================
@@ -586,7 +610,11 @@ fn c11_exist_redirects_single_target() {
         "EXIST to discard: {:?}",
         t.discard(2)
     );
-    assert_eq!(t.hand(2).len(), 0, "EXIST draws nothing when it had an effect");
+    assert_eq!(
+        t.hand(2).len(),
+        0,
+        "EXIST draws nothing when it had an effect"
+    );
 }
 
 // =====================================================================
@@ -773,12 +801,9 @@ fn c16_cannot_look_away_answers_a_counter() {
     loop {
         let Some(_) = t.prompt() else { break };
         let p = t.expect_prompt();
-        let k = t.option("2").or_else(|| {
-            p.items
-                .iter()
-                .position(|s| s == "2")
-                .map(|x| x as i32)
-        });
+        let k = t
+            .option("2")
+            .or_else(|| p.items.iter().position(|s| s == "2").map(|x| x as i32));
         if let Some(k) = k {
             t.answer(0, k).unwrap();
         } else {
@@ -873,7 +898,8 @@ fn c18_tritone_vs_card_payment() {
         pass(&mut t, 1);
     }
     assert!(
-        t.draw_pile(1).contains(&"Mor:迷茫之蝶们的三全音".to_string()),
+        t.draw_pile(1)
+            .contains(&"Mor:迷茫之蝶们的三全音".to_string()),
         "discarded and reshuffled after 3 turn ends: {:?}",
         t.draw_pile(1)
     );

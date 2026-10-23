@@ -7,7 +7,7 @@
 //! mirrored by `bandori_std::roster::meta_key`.
 
 use card_sdk::meta::{MetaDoc, MetaRow};
-use game_core::data::{EventData, GroupData, CardData, PersonaData, Roster};
+use game_core::data::{CardData, EventData, GroupData, PersonaData, Roster};
 
 /// Decode a `ruleset_metadata` postcard blob into [`MetaDoc`].
 pub fn decode_metadata(bytes: &[u8]) -> Result<MetaDoc, String> {

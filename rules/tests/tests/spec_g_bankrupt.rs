@@ -73,7 +73,12 @@ fn vote(t: &mut Table, who: usize, yes: bool) -> Result<(), String> {
 /// Place a bid of `amount` in the open auction prompt as `who`.
 fn bid(t: &mut Table, who: usize, amount: i32) -> Result<(), String> {
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "auction", "bid outside an auction: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "auction",
+        "bid outside an auction: {}",
+        t.dump_prompt()
+    );
     t.observed(StepAct::Answer {
         who: who as i32 + 1,
         prompt: p.id,
@@ -111,7 +116,11 @@ fn bankrupt_pays_out_to_the_creditor() {
 
     let p = t.p(1);
     assert!(p.bankrupt, "P1 is out: {:?}", t.recent_keys(12));
-    assert_eq!(t.money(1), 0, "「将所有资金[消耗]或[支付]」 -- the seat is emptied");
+    assert_eq!(
+        t.money(1),
+        0,
+        "「将所有资金[消耗]或[支付]」 -- the seat is emptied"
+    );
     // 折现 of the deed is its 抵押 value (price/2 = 500), on top of the 1000 cash.
     let cashed = data().tiles[land].price / 2;
     assert_eq!(
@@ -161,14 +170,23 @@ fn shortfall_may_be_funded_by_mortgage_at_half_price() {
     t.observe(CLAUSES);
     t.give_play(0, "通用:登上武道馆").unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "mortgage", "the mortgage offer: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "mortgage",
+        "the mortgage offer: {}",
+        t.dump_prompt()
+    );
     t.answer_items(1, &[&land.to_string()]).unwrap();
     skip_all(&mut t);
 
     assert!(!t.p(1).bankrupt, "P1 stays in: {:?}", t.recent_keys(12));
     assert!(t.mortgaged(land), "the deed is mortgaged");
     // 1000 + 1500 (抵押) - 2000 (paid) = 500.
-    assert_eq!(t.money(1), 500, "「[获得]地契购买价格50%的资金」 funded the payment");
+    assert_eq!(
+        t.money(1),
+        500,
+        "「[获得]地契购买价格50%的资金」 funded the payment"
+    );
     assert_eq!(t.money(0), 12_000, "the creditor received 2000");
 }
 
@@ -189,7 +207,8 @@ fn mortgage_credits_half_the_deed_price() {
         t.observe(CLAUSES);
 
         // Voluntary 运营-phase mortgage is the same 50% path.
-        t.mortgage(0, land).map_err(|e| format!("mortgage rejected: {e}"))?;
+        t.mortgage(0, land)
+            .map_err(|e| format!("mortgage rejected: {e}"))?;
 
         let half = data().tiles[land].price / 2;
         let delta = t.money(0) as i64 - money as i64;
@@ -295,7 +314,13 @@ fn alive_is_neither_bankrupt_nor_left() {
 #[test]
 fn leave_auctions_up_to_three_deeds() {
     let mut t = Table::vanilla(4);
-    let names = ["小豆岛", "富士见坂", "成为人类桥", "Bandori车站", "星之鼓动山丘"];
+    let names = [
+        "小豆岛",
+        "富士见坂",
+        "成为人类桥",
+        "Bandori车站",
+        "星之鼓动山丘",
+    ];
     let deeds: Vec<usize> = names.iter().map(|n| rules_spec::tile(n)).collect();
     t.own(1, &deeds);
     t.observe(CLAUSES);
@@ -346,7 +371,12 @@ fn auction_prompt_waits_on_alive_seats() {
     leave(&mut t, 1).unwrap();
 
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "auction", "the leftover auction opens: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "auction",
+        "the leftover auction opens: {}",
+        t.dump_prompt()
+    );
     for &s in &p.players {
         let seat = s as usize;
         let pl = t.p(seat);
@@ -409,7 +439,11 @@ fn auction_bid_floor_raise_and_winner() {
         Some(2),
         "「最先喊价最高金额的玩家…获得地契和对应格子拥有权」"
     );
-    assert_eq!(t.money(2), 5_000 - 400, "「[消耗]同等资金」 -- the bid of 400");
+    assert_eq!(
+        t.money(2),
+        5_000 - 400,
+        "「[消耗]同等资金」 -- the bid of 400"
+    );
     assert_eq!(t.money(0), 5_000, "P0 only bid, did not win");
     assert_eq!(t.money(3), 5_000, "P3 passed");
 }

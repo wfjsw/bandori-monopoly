@@ -20,10 +20,13 @@ use serde_json::{json, Value};
 fn data() -> Arc<GameData> {
     // No ruleset in this harness: the three legacy JSON files are the bridge.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -139,7 +142,11 @@ fn decide_round_trips_a_view_frame() {
     assert_eq!(resp["id"], 9, "the id is echoed for out-of-order matching");
 
     let ans = BotAnswer::from_response(&resp).expect("usable answer");
-    assert!(!ans.answer.act.is_empty(), "a command came back: {:?}", ans.answer);
+    assert!(
+        !ans.answer.act.is_empty(),
+        "a command came back: {:?}",
+        ans.answer
+    );
     // The reply reports the search work so the server can log it.
     assert!(resp.get("iterations").is_some());
     assert!(resp.get("elapsed_ms").is_some());
@@ -206,10 +213,7 @@ fn budget_is_clamped_not_trusted() {
     let (m, member) = parked_match();
     let view = view_frame(&m, member);
     let started = std::time::Instant::now();
-    let resp = handle(
-        &ctx,
-        decide_request(8, "R", member, &view, 0, 3_600_000, 1),
-    );
+    let resp = handle(&ctx, decide_request(8, "R", member, &view, 0, 3_600_000, 1));
     assert_eq!(resp["ok"], true, "{resp}");
     // The hard cap is `MAX_BUDGET_MS` (5 s) plus overhead -- nowhere near the
     // hour the request asked for.
@@ -235,7 +239,10 @@ fn the_search_never_sees_another_seats_hand() {
     assert!(view.get("world").is_none());
     assert!(view.get("seed").is_none());
     for p in view["state"]["players"].as_array().unwrap() {
-        assert!(p.get("hand").is_none() || p["hand"].is_number(), "hand size only");
+        assert!(
+            p.get("hand").is_none() || p["hand"].is_number(),
+            "hand size only"
+        );
     }
 }
 
@@ -324,7 +331,10 @@ fn ponder_is_cached_and_reused_by_the_next_decide() {
     let d = handle(&ctx, decide_request(2, "R", member, &view, 0, 200, 5));
     let dt = started.elapsed();
     assert_eq!(d["ok"], true, "{d}");
-    assert_eq!(d["reused"], true, "the decide reuses the pondered result: {d}");
+    assert_eq!(
+        d["reused"], true,
+        "the decide reuses the pondered result: {d}"
+    );
     let ans = BotAnswer::from_response(&d).expect("usable answer");
     assert_eq!(ans.iterations, ponder_iters, "the cached work is reported");
     // Reuse is free: no new search runs (the wall time is far under budget).
@@ -359,7 +369,11 @@ fn root_parallel_decide_answers_from_the_service() {
     assert_eq!(resp["ok"], true, "{resp}");
     let ans = BotAnswer::from_response(&resp).expect("usable answer");
     if !ans.heuristic {
-        assert!(ans.iterations >= 2, "two threads x >=1 iteration: {}", ans.iterations);
+        assert!(
+            ans.iterations >= 2,
+            "two threads x >=1 iteration: {}",
+            ans.iterations
+        );
     }
     assert!(!ans.answer.act.is_empty());
 }
@@ -383,7 +397,10 @@ fn legacy_opts_answer_without_the_new_behaviour() {
     let view = view_frame(&m, member);
     let p = handle(&ctx, ponder_request(1, "R", member, &view, 50, 5));
     assert_eq!(p["ok"], true);
-    assert_eq!(p["disabled"], true, "legacy turns the ponder cache off: {p}");
+    assert_eq!(
+        p["disabled"], true,
+        "legacy turns the ponder cache off: {p}"
+    );
     let d = handle(&ctx, decide_request(2, "R", member, &view, 0, 50, 5));
     assert_eq!(d["ok"], true, "{d}");
     assert_eq!(d["reused"], false, "legacy never reuses: {d}");

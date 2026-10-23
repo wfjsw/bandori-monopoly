@@ -497,7 +497,10 @@ fn same_dream_01_iff_at(user: i32) {
             );
         }
     }
-    crate::kassert!(!world::arr4_eq(post.money, pre.money) || pre_up == 0, "money moves iff step 2 fired");
+    crate::kassert!(
+        !world::arr4_eq(post.money, pre.money) || pre_up == 0,
+        "money moves iff step 2 fired"
+    );
 }
 
 /// C-PP-same-dream-01/02/03 iff at seat 0 (`n_players = 2`).
@@ -564,7 +567,7 @@ pub fn title_idol_01_band_plus_2_iff() {
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     // Step 1 is unconditional +2. Step 2 may add more to the band card via
     // `add_counter_at` (a different store) and is not part of this assertion.
@@ -585,7 +588,7 @@ pub fn title_idol_01_mutant_is_detected() {
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     crate::kassert!(
         band != spec::pp::title_idol_01_band_after_mutant(pre_band),
@@ -610,7 +613,7 @@ pub fn seeyou_01_gate_iff() {
     let down = fans_neg_of(user as usize);
     // isolation: no resonance card in hand, so the (2) bypass cannot open
     world::with_world_mut(|w| w.hand_resonance[user as usize] = 0);
-    
+
     // The gate is `up <= down` when the player holds no 共鸣.
     let allowed = spec::pp::seeyou_01_gate_ok(up, down);
     kani::cover!(allowed, "gate admits (up <= down)");
@@ -652,7 +655,7 @@ pub fn seeyou_03_flip_iff() {
     let up = fans_pos_of(user as usize);
     let down = fans_neg_of(user as usize);
     kani::assume(spec::pp::seeyou_01_gate_ok(up, down));
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let flip = spec::pp::seeyou_03_flip(up, down);
     let (ex_up, ex_down) = spec::pp::seeyou_03_post(up, down);
@@ -692,7 +695,7 @@ pub fn seeyou_03_mutant_is_detected() {
     // So min(owned, down) == down always! The mutant equals the spec.
     // Use a different mutant: flip `down + 1` capped nowhere.
     kani::assume(down >= 1);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let flip = spec::pp::seeyou_03_flip(up, down);
     // Detect an off-by-one high: card flips `flip`, mutant wants `flip + 1`.
@@ -726,7 +729,10 @@ pub fn together_01_x_formula_iff() {
             .unwrap_or(1)
     });
     let pre_cry = crystals_at(band_uid);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("PP:有你与我在这里共度"),
+        user,
+    ));
     let post = world::snapshot();
     let flip = spec::pp::together_01_flip(up, down);
     let x = spec::pp::together_01_x(up, down);
@@ -771,7 +777,10 @@ pub fn together_01_mutant_is_detected() {
     kani::assume(up < down);
     kani::assume(spec::pp::ceil_half(down - up) != 1);
     kani::assume(down >= 7);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("PP:有你与我在这里共度"),
+        user,
+    ));
     let post = world::snapshot();
     let real = post.fans_pos[user as usize] - up;
     let mutant_flip = spec::pp::together_01_x_mutant(up, down).min(down).max(0);
@@ -800,7 +809,7 @@ pub fn guide_01_band_and_crystals_iff() {
     world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     let up = fans_pos_of(user as usize);
     let down = fans_neg_of(user as usize);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let band = band_crystals_of(user);
     crate::kassert!(
         band == spec::pp::guide_01_band_after(pre_band),
@@ -816,9 +825,8 @@ pub fn guide_01_band_and_crystals_iff() {
         "C-PP-guide-01: card carries owned/3 crystals"
     );
     // Placed on the user's field
-    let placed = world::with_world(|ww| {
-        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
-    });
+    let placed =
+        world::with_world(|ww| (0..ww.field_n as usize).any(|i| ww.field[i].player == user));
     crate::kassert!(placed, "C-PP-guide-01: card sits on the user's field");
 }
 
@@ -834,7 +842,7 @@ pub fn guide_01_mutant_is_detected() {
     let owned = up + down;
     kani::assume(owned % 3 != 0 && owned >= 1);
     world::with_world_mut(|w| w.group_pool[user as usize] = 0);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let cry = self_crystals();
     crate::kassert!(
         cry != spec::pp::guide_01_crystals_mutant(up, down),
@@ -855,7 +863,10 @@ pub fn guide_01_mutant_is_detected() {
 pub fn eve_bushido_01_gain_iff() {
     symbolic_play_world();
     let user = any_player_in();
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), user));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("PP:[若宫伊芙]属于我的武士道！"),
+        user,
+    ));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -869,19 +880,18 @@ pub fn eve_bushido_01_gain_iff() {
     // The body does `gain(sum * 60)` where `sum` is the host's 12d4 total.
     // Under Kani `roll` is symbolic within die bounds; the host's 12d4
     // returns a value in 12..=48. Pin: gained is a multiple of 60 in range.
-    crate::kassert!(
-        gained % 60 == 0,
-        "C-PP-eve-bushido-01: gain is (sum)*60"
-    );
+    crate::kassert!(gained % 60 == 0, "C-PP-eve-bushido-01: gain is (sum)*60");
     let sum = gained / 60;
     crate::kassert!(
         spec::pp::eve_bushido_01_sum_ok(sum) || gained == 0,
         "C-PP-eve-bushido-01: 12d4 sum in 12..=48 (or host returned 0)"
     );
-    let placed = world::with_world(|ww| {
-        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
-    });
-    crate::kassert!(placed, "C-PP-eve-bushido-01: card placed on the user's field");
+    let placed =
+        world::with_world(|ww| (0..ww.field_n as usize).any(|i| ww.field[i].player == user));
+    crate::kassert!(
+        placed,
+        "C-PP-eve-bushido-01: card placed on the user's field"
+    );
     crate::kassert!(post.money[user as usize] >= 0, "money frame sanity");
 }
 
@@ -898,7 +908,7 @@ pub fn eve_bushido_01_gain_iff() {
 pub fn no_expect_02_place_deck_draw_iff() {
     symbolic_play_world();
     let user = any_player_in();
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -908,9 +918,8 @@ pub fn no_expect_02_place_deck_draw_iff() {
     );
     let deck_n = world::with_world(|ww| ww.deck_n);
     crate::kassert!(deck_n >= 1, "C-PP-no-expect-02: 共鸣 joined the draw pile");
-    let placed = world::with_world(|ww| {
-        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
-    });
+    let placed =
+        world::with_world(|ww| (0..ww.field_n as usize).any(|i| ww.field[i].player == user));
     crate::kassert!(placed, "C-PP-no-expect-02: card on the user's field");
     let _ = post;
 }
@@ -926,7 +935,7 @@ pub fn no_expect_02_place_deck_draw_iff() {
 pub fn first_accident_01_place_deck_draw_iff() {
     symbolic_play_world();
     let user = any_player_in();
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     crate::kassert!(
@@ -934,10 +943,12 @@ pub fn first_accident_01_place_deck_draw_iff() {
         "C-PP-first-accident-01: place on field + draw 1"
     );
     let deck_n = world::with_world(|ww| ww.deck_n);
-    crate::kassert!(deck_n >= 1, "C-PP-first-accident-01: 重叠的声音 joined the deck");
-    let placed = world::with_world(|ww| {
-        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
-    });
+    crate::kassert!(
+        deck_n >= 1,
+        "C-PP-first-accident-01: 重叠的声音 joined the deck"
+    );
+    let placed =
+        world::with_world(|ww| (0..ww.field_n as usize).any(|i| ww.field[i].player == user));
     crate::kassert!(placed, "C-PP-first-accident-01: card on the user's field");
 }
 
@@ -1037,7 +1048,10 @@ pub fn shine_again_01_formula() {
     kani::assume(price >= 0 && price <= 10_000);
     let money = spec::pp::shine_again_01_money(price);
     crate::kassert!(money == price / 5, "price/5");
-    crate::kassert!(spec::pp::shine_again_01_fan() == 1, "exactly 1 positive fan");
+    crate::kassert!(
+        spec::pp::shine_again_01_fan() == 1,
+        "exactly 1 positive fan"
+    );
 }
 // ===========================================================================
 // C-PP-eve-bushido-04
@@ -1075,7 +1089,11 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
         ww.field_n = 1;
         ww.last_uid = 1;
     });
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
+    invoke::unwrap_done(invoke::entry_idx(
+        crate::card_id!("PP:[若宫伊芙]属于我的武士道！"),
+        1,
+        me,
+    ) /* Hook Drew */);
     let cry = self_crystals();
     crate::kassert!(
         cry == spec::pp::eve_bushido_04_crystals(pre),
@@ -1094,7 +1112,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
     world::with_world_mut(|w| w.trig_value = 0);
     world::with_world_mut(|w| w.pay_amount = 0);
     let pre = 1;
-        world::with_world_mut(|ww| {
+    world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！").0,
@@ -1108,9 +1126,16 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
         ww.field_n = 1;
         ww.last_uid = 1;
     });
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
+    invoke::unwrap_done(invoke::entry_idx(
+        crate::card_id!("PP:[若宫伊芙]属于我的武士道！"),
+        1,
+        me,
+    ) /* Hook Drew */);
     let cry = self_crystals();
-    crate::kassert!(cry == pre, "C-PP-eve-bushido-04: zero-value draw is a no-op");
+    crate::kassert!(
+        cry == pre,
+        "C-PP-eve-bushido-04: zero-value draw is a no-op"
+    );
 }
 
 // ===========================================================================
@@ -1130,7 +1155,7 @@ pub fn guide_04_turn_end_crystal_iff() {
     // (`pre == 4` → 5 crystals enters the cash-in, which may unplace the card.)
     kani::assume(pre >= 0 && pre <= 3);
     world::with_world_mut(|w| w.trig_player = me);
-        world::with_world_mut(|ww| {
+    world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:练习生解密指南").0,
@@ -1144,7 +1169,11 @@ pub fn guide_04_turn_end_crystal_iff() {
         ww.field_n = 1;
         ww.last_uid = 1;
     });
-    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:练习生解密指南"), "TurnEnd", me));
+    invoke::unwrap_done(invoke::hook_only_idx(
+        crate::card_id!("PP:练习生解密指南"),
+        "TurnEnd",
+        me,
+    ));
     let cry = self_crystals();
     crate::kassert!(
         cry == spec::pp::guide_04_crystals(pre),
@@ -1173,7 +1202,7 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
     let pre = 0i32;
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|w| w.trig_value = 1);
-        world::with_world_mut(|ww| {
+    world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:梦在前方，结彩当下").0,
@@ -1187,7 +1216,11 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
         ww.field_n = 1;
         ww.last_uid = 1;
     });
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:梦在前方，结彩当下"), 2, me)  /* Hook Drew */);
+    invoke::unwrap_done(invoke::entry_idx(
+        crate::card_id!("PP:梦在前方，结彩当下"),
+        2,
+        me,
+    ) /* Hook Drew */);
     let cry = self_crystals();
     crate::kassert!(
         cry == spec::pp::dream_ahead_01_crystals(pre),
@@ -1212,16 +1245,15 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
 pub fn shine_again_00_immune_iff() {
     symbolic_play_world();
     let user = any_player_in();
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:再次闪耀"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:再次闪耀"), user));
     let immune = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user && ww.field[i].immune)
     });
     // The body may or may not set `immune` via `set_self_immune`. The book
     // says the instance is immune to other players' effects. Assert the
     // instance exists; the immune bit is the host's record of that clause.
-    let placed = world::with_world(|ww| {
-        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
-    });
+    let placed =
+        world::with_world(|ww| (0..ww.field_n as usize).any(|i| ww.field[i].player == user));
     crate::kassert!(placed, "C-PP-shine-again-00: card is on the field");
     let _ = immune;
 }
@@ -1232,10 +1264,9 @@ pub fn shine_again_00_immune_iff() {
 pub fn no_expect_01_immune_iff() {
     symbolic_play_world();
     let user = any_player_in();
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
-    let placed = world::with_world(|ww| {
-        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
-    });
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
+    let placed =
+        world::with_world(|ww| (0..ww.field_n as usize).any(|i| ww.field[i].player == user));
     crate::kassert!(placed, "C-PP-no-expect-01: card is on the field");
 }
 
@@ -1252,7 +1283,7 @@ pub fn jennifer_01_place_other_iff() {
     let user = any_player_in();
     // Isolation: at least one other living player exists.
     kani::assume(world::with_world(|w| w.n_players) >= 2);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:找回珍妮弗"), user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:找回珍妮弗"), user));
     let owner = world::with_world(|ww| {
         let mut o = -1;
         let mut i = 0;
@@ -1309,7 +1340,10 @@ pub fn ranger_01_02_steps_by_count_iff() {
         });
     }
     let pre_money = world::with_world(|ww| ww.money[user as usize]);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]魔法战队Pastel✽Ranger"), user));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("PP:[衍生]魔法战队Pastel✽Ranger"),
+        user,
+    ));
     let post_money = world::with_world(|ww| ww.money[user as usize]);
     let band = band_crystals_of(user);
     // Exact facade length == the real placed count.
@@ -1345,7 +1379,10 @@ pub fn flower_01_place_on_tile_iff() {
     // Give the user two owned tiles so ask_tile has a choice.
     world::with_world_mut(|w| w.tiles[1].owner = user);
     world::with_world_mut(|w| w.tiles[2].owner = user);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:可爱又强壮的花朵"), user));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("PP:可爱又强壮的花朵"),
+        user,
+    ));
     let band = band_crystals_of(user);
     crate::kassert!(
         band == spec::pp::flower_01_band_after(pre_band),
@@ -1385,7 +1422,10 @@ pub fn chisato_mask_01_total_iff() {
     // and `split_pay`'s filter/collect/find is the symex cliff (class E).
     // The OPEN-分摊 total (2000) is seat-count independent.
     world::with_world_mut(|w| w.n_players = 2);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[白鹭千圣]微笑的铁假面"), user));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("PP:[白鹭千圣]微笑的铁假面"),
+        user,
+    ));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // OPEN-分摊: only the 2000 total toward the user is determined.
@@ -1405,9 +1445,8 @@ pub fn chisato_mask_01_total_iff() {
         sum == spec::pp::chisato_mask_01_total() || sum == 0,
         "C-PP-chisato-mask-01: others collectively pay the user exactly 2000 (or host model did not settle)"
     );
-    let placed = world::with_world(|ww| {
-        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
-    });
+    let placed =
+        world::with_world(|ww| (0..ww.field_n as usize).any(|i| ww.field[i].player == user));
     crate::kassert!(placed, "C-PP-chisato-mask-01: card on the user's field");
 }
 
@@ -1438,7 +1477,7 @@ pub fn shine_again_01_rescue_iff() {
     world::with_world_mut(|w| w.pay_amount = pre_amount);
     // one buyable owned tile at `price`
     world::with_world_mut(|w| w.tiles[3].owner = me);
-        world::with_world_mut(|ww| {
+    world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:再次闪耀").0,
@@ -1454,7 +1493,11 @@ pub fn shine_again_01_rescue_iff() {
     // Host model of `is_buyable` / `tile_price` / `tile_group` is partial;
     // the body's rescue is: +1 positive fan and gain price/5.
     let pre_fans = world::with_world(|ww| fans_pos_of(me as usize));
-    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PaySplitChoose", me));
+    invoke::unwrap_done(invoke::hook_only_idx(
+        crate::card_id!("PP:再次闪耀"),
+        "PaySplitChoose",
+        me,
+    ));
     let post_fans = world::with_world(|ww| fans_pos_of(me as usize));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];

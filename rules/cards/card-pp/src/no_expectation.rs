@@ -15,9 +15,9 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{prop, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue, RollValue};
+use card_sdk::abi::{prop, ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue, RollValue};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
@@ -123,12 +123,18 @@ fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
 fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     let n = stacks(player_id);
     if n <= 0 {
-        return PayAddValue { value: v.value, ..v };
+        return PayAddValue {
+            value: v.value,
+            ..v
+        };
     }
     let from = trigger::player_id();
     let to = trigger::target();
     if v.value <= 0 {
-        return PayAddValue { value: v.value, ..v };
+        return PayAddValue {
+            value: v.value,
+            ..v
+        };
     }
     let bump = 100 * n;
     let out = if from == player_id && to >= 0 && to != player_id {

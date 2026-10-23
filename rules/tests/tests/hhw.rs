@@ -43,12 +43,22 @@ fn roll_then_end(t: &mut Table, who: usize) {
 fn believe_in_you_costs_800_and_swaps_hand_cards() {
     // 规则书: 「至少有另一张手牌时可发动，消耗800资金…选择两名加入你的手牌，重洗你的抽牌堆。」
     let mut t = vanilla2();
-    t.set_hand(0, &["HHW:因为我一直相信着你", "HHW:出发！后台之旅！", "HHW:微笑巡逻队"]);
+    t.set_hand(
+        0,
+        &[
+            "HHW:因为我一直相信着你",
+            "HHW:出发！后台之旅！",
+            "HHW:微笑巡逻队",
+        ],
+    );
     t.set_draw(0, &["HHW:热气球演出", "HHW:爱心义演", "HHW:运动的天赋"]);
     t.play(0, "HHW:因为我一直相信着你").unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if t.expect_prompt().kind == "player" || t.expect_prompt().kind == "pick" || t.expect_prompt().kind == "card" {
+        if t.expect_prompt().kind == "player"
+            || t.expect_prompt().kind == "pick"
+            || t.expect_prompt().kind == "card"
+        {
             let _ = t.answer_one(0);
         } else {
             t.decline();
@@ -76,7 +86,10 @@ fn backstage_looks_at_two_and_pays_1000_per_discarded() {
     t.give_play(0, "HHW:出发！后台之旅！").unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("ask.card") || t.expect_prompt().kind == "card" || t.expect_prompt().kind == "pick" {
+        if d.contains("ask.card")
+            || t.expect_prompt().kind == "card"
+            || t.expect_prompt().kind == "pick"
+        {
             // put 0 back -> both go to the discard
             let _ = t.answer_one(t.expect_prompt().items.len().max(0) as i32);
         } else {
@@ -84,7 +97,12 @@ fn backstage_looks_at_two_and_pays_1000_per_discarded() {
         }
     }
     // both discarded -> +2000
-    assert!(t.money(0) >= 10_000, "money {} events {:?}", t.money(0), t.recent_keys(12));
+    assert!(
+        t.money(0) >= 10_000,
+        "money {} events {:?}",
+        t.money(0),
+        t.recent_keys(12)
+    );
 }
 
 // ----- HHW:运动的天赋
@@ -333,7 +351,11 @@ fn black_clothes_supply_is_a_counter_on_passing_circle() {
     t.set_pos(0, 58);
     t.dice(&[3]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("HHW:黑衣人的补给"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("HHW:黑衣人的补给"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "HHW:黑衣人的补给").unwrap();
     drain(&mut t);
 }
@@ -350,10 +372,17 @@ fn black_clothes_supply_removes_a_crystal_after_passing_the_group_tile() {
     t.counteract(0, "HHW:黑衣人的补给").unwrap();
     drain(&mut t);
     let crystals = |t: &Table, tl: usize| {
-        t.marks_on(tl).iter().filter(|m| m.kind == "黑衣人的补给").count()
+        t.marks_on(tl)
+            .iter()
+            .filter(|m| m.kind == "黑衣人的补给")
+            .count()
     };
     assert_eq!(crystals(&t, group), 1, "crystal parked on 弦卷集团");
-    assert!(t.on_field(0, "HHW:黑衣人的补给"), "stand-in placed: {:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "HHW:黑衣人的补给"),
+        "stand-in placed: {:?}",
+        t.field_ids(0)
+    );
     // P0 already rolled (the counteract walk). P1 must roll before `end`, and
     // `dice` *extends* the queue -- so only load faces a roll will consume,
     // or the next walk picks up the stale one first.
@@ -373,8 +402,16 @@ fn black_clothes_supply_removes_a_crystal_after_passing_the_group_tile() {
         group.wrapping_sub(2),
         group
     );
-    assert_eq!(crystals(&t, group), 0, "crystal removed after passing; events {:?}", t.recent_keys(12));
-    assert!(t.marks().iter().all(|m| m.kind != "黑衣人的补给"), "no stray crystals elsewhere");
+    assert_eq!(
+        crystals(&t, group),
+        0,
+        "crystal removed after passing; events {:?}",
+        t.recent_keys(12)
+    );
+    assert!(
+        t.marks().iter().all(|m| m.kind != "黑衣人的补给"),
+        "no stray crystals elsewhere"
+    );
 }
 
 // ----- HHW:梦幻的回礼
@@ -392,7 +429,11 @@ fn dream_return_is_offered_when_another_player_is_charged() {
     t.set_pos(2, (blue + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(2).unwrap();
-    assert!(t.counteract_offered("HHW:梦幻的回礼"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("HHW:梦幻的回礼"),
+        "{}",
+        t.dump_prompt()
+    );
 }
 
 // ================================================================ character skills
@@ -422,13 +463,22 @@ fn kokoro_skill_2_gains_1500_extra_on_passing_circle() {
         }
     }
     // 1000 (start) + 2000 (CiRCLE) + 1500 (skill) = 12500
-    assert_eq!(t.money(0), 11_000 + 2_000 + 1_500, "events: {:?}", t.recent_keys(12));
+    assert_eq!(
+        t.money(0),
+        11_000 + 2_000 + 1_500,
+        "events: {:?}",
+        t.recent_keys(12)
+    );
 }
 
 fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
     t.m.world_mut().st.players[who]
         .tokens
-        .push(game_core::state::Counter { name: name.into(), value, instance: None });
+        .push(game_core::state::Counter {
+            name: name.into(),
+            value,
+            instance: None,
+        });
 }
 
 #[test]
@@ -647,7 +697,8 @@ fn band_skill_1_offers_a_double_payment() {
     let mut saw = false;
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("double") || d.contains("倍") || d.contains("传播") || d.contains("smile") {
+        if d.contains("double") || d.contains("倍") || d.contains("传播") || d.contains("smile")
+        {
             saw = true;
             let _ = t.answer_one(0); // yes, double
         } else {
@@ -785,7 +836,7 @@ fn hagumi_gives_croquettes_when_passing_another_player() {
         let d = t.dump_prompt();
         if d.contains("hagumi_homerun_give") || d.contains("可乐饼转移给") {
             let _ = t.answer_one(0); // yes
-            // then the how-many pick (1..=max)
+                                     // then the how-many pick (1..=max)
             if t.prompt().is_some() {
                 let _ = t.answer_one(0); // transfer 1
             }

@@ -216,7 +216,17 @@ pub async fn create_room(
     // runtime like every other engine touch.
     let rid = id.clone();
     let (room, you) = tokio::task::spawn_blocking(move || {
-        let mut room = Room::new(rid, &name, req.ranked, req.max_players, &req.password, weights, clock, engine, store);
+        let mut room = Room::new(
+            rid,
+            &name,
+            req.ranked,
+            req.max_players,
+            &req.password,
+            weights,
+            clock,
+            engine,
+            store,
+        );
         // Advanced bots need the bot-service; without one they play as standard
         // (`docs/BOT.md` B5, `Room::start`).
         room.bot_search = bot_search;
@@ -288,7 +298,9 @@ pub async fn join_room(
 pub fn member_room(s: &Server, sess: &Session, id: &str) -> ApiResult<(Arc<Mutex<Room>>, i32)> {
     let me = member_in(sess, id)?;
     let token = sess.token.clone();
-    let room = s.room(id).ok_or_else(|| ApiError::not_found("err.room.gone"))?;
+    let room = s
+        .room(id)
+        .ok_or_else(|| ApiError::not_found("err.room.gone"))?;
     s.with_room(id, |r| {
         if r.member_of(&token) != Some(me) {
             return Err(ApiError::bad("err.room.not_member"));
@@ -548,7 +560,9 @@ pub struct MatchView {
 pub fn match_view(m: &crate::room::MatchHandle, member: i32) -> ApiResult<MatchView> {
     // Human clients compute the per-viewer extras themselves (the seat-view
     // engine, `docs/BOT.md` §1) -- do not pay the worker for them here.
-    let v = m.view(member, false).map_err(|e| ApiError::bad(e.as_str()))?;
+    let v = m
+        .view(member, false)
+        .map_err(|e| ApiError::bad(e.as_str()))?;
     let mut view: MatchView =
         serde_json::from_value(v).map_err(|e| ApiError::bad(format!("view: {e}").as_str()))?;
     let now = crate::clock::server_time_ms();
@@ -560,7 +574,9 @@ pub fn match_view(m: &crate::room::MatchHandle, member: i32) -> ApiResult<MatchV
 /// `POST /api/clock` -- one NTP-style sample. `t1` is the client's
 /// `performance.now()` at send; `t2` is stamped at receive and `t3` just
 /// before the response leaves. See `crate::clock` and `webui/src/game/clockSync.ts`.
-pub async fn clock_ping(Json(ping): Json<crate::clock::ClockPing>) -> Json<crate::clock::ClockPong> {
+pub async fn clock_ping(
+    Json(ping): Json<crate::clock::ClockPing>,
+) -> Json<crate::clock::ClockPong> {
     // T2 as late as possible: the first thing after the body is parsed.
     let t2 = crate::clock::server_time_ms();
     let t3 = crate::clock::server_time_ms();
@@ -635,7 +651,9 @@ pub async fn anim_done(
     if let Some(room) = s.room(&id) {
         room.lock().unwrap().notify();
     }
-    Ok(Json(serde_json::json!({ "ok": true, "released": released })))
+    Ok(Json(
+        serde_json::json!({ "ok": true, "released": released }),
+    ))
 }
 
 /// `POST /api/rooms/{id}/act` -- a match command (`NetMessage` with `act` set).

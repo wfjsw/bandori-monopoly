@@ -15,46 +15,294 @@ mod on_parse;
 use on_parse::*;
 
 const ARRAY_OPS: &[&str] = &[
-    "roll", "roll_ask", "log", "effect", "flash", "no_flash", "flash_card", "flash_card_keyed",
-    "flash_tile", "tile_count", "tile_named", "tile_owner", "player_pos",
-    "tile_steps_ahead", "rent_of", "buy_price", "build_cost", "mortgage_value", "owned_count", "owned_at",     "tile_is", "tile_attr", "tile_in", "tile_group", "tile_price", "houses_of", "rent_houses_of",
-    "set_houses", "add_house", "mortgaged_of", "set_mortgaged", "set_owner", "dist", "tile_forward", "neighbor",
-    "players_on_count", "players_on_at", "player_count", "player_out", "others_count", "others_at", "money", "gain",
-    "gain_typed", "pay", "pay_to", "pay_total", "pay_leg", "draw", "draw_event", "pay_rent", "charge_rent",
-    "offer_buy", "offer_force_buy", "offer_build", "apply_mortgage", "apply_redeem",
-    "pay_buy", "pay_build", "assign_deed",
-    "add_to_hand", "add_to_deck", "add_to_deck_at", "take_card", "cards_in",
-    "to_discard", "hand_count", "hand_size", "discard_count", "deck_count", "discard_size", "discard_from_hand", "shuffle_into_deck",
-    "place_card_at", "set_dest", "set_transfer_to_dest", "send_to_dest", "transfer_to_dest", "rent_unit_mult", "add_rent_unit_bonus", "teleport_to",
-    "unplace_card", "event_expire", "event_is_active", "event_deck_push", "event_banish", "self_tile", "set_self_tile", "self_face_down",
-    "set_self_face_down", "self_immune", "set_self_immune", "is_placed", "self_prop", "set_self_prop", "tile_prop", "set_tile_prop",
-    "prop_at", "set_prop_at", "state_get", "state_set", "state_add", "slot", "set_slot", "inc_slot",
-    "group_pool", "add_group_pool", "group_skill", "persona_skill", "group_skills", "add_group_skill", "invoke_skill", "raise_bought",
-    "raise", "gain_marker", "spend_marker", "add_marker_max", "apply_abnormal", "skip_main_move", "clear_move_skip", "give_extra_turn",
-    "end_turn_now", "teleport_as", "log_as",
-    "can_pay", "cant_move", "turn_player", "round_no",
-    "turn_key", "persona_is", "set_persona", "in_group", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
-    "ask", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",
-    "trig_pay_is_rent", "trig_move_kind", "trig_move_resolve", "trig_move_tag", "trig_move_main", "trig_settle_redirect", "trig_move_dir", "trig_move_remaining", "trig_move_from",
-    "trig_move_total", "trig_cards", "trig_move_roll", "trig_roll_source", "trig_buy_kind", "trig_seller", "trig_price", "trig_set_price",
-    "trig_deal_owner", "trig_set_deal_owner", "trig_deal_houses", "trig_set_deal_houses", "trig_deal_mortgaged", "trig_set_deal_mortgaged", "trig_set_reason", "trig_set_move_roll",
-    "trig_set_pay_amount", "trig_set_pay_target", "trig_set_cancelled", "trig_set_negate_effect", "trig_set_spare", "trig_cancelled", "trig_seq", "trig_answers",
-    "trig_effect_count", "trig_effect_kind", "trig_effect_target", "trig_effect_from", "trig_effect_tile", "trig_effect_value", "declare_effect", "trig_card_is",
-    "play_card", "card_move", "card_replayable", "set_roller", "set_steps", "set_reverse", "set_signed", "set_stop_at",
-    "set_parity", "set_resolve", "set_settle_tile", "set_pay_factor", "set_rent_factor", "set_no_buy", "set_no_build", "set_build_anywhere",
-    "set_kind", "set_teleport_to", "set_start", "set_base_dice", "add_base_dice", "add_extra_dice", "move_stopped", "set_min_roll",
-    "set_extra_steps", "set_more_steps", "set_tag", "set_tag_id", "recorded_roll", "set_settle_as_agent", "plan_add_follower", "move_stop_at", "move_parity", "move_resolve",
-    "move_steps", "move_remaining", "move_total", "move_dir", "abnormal_count", "target", "targeted_count", "gains_this_turn",
-    "placed_tile", "play_doubled", "set_play_doubled", "schedule_turn_end", "set_no_money_loss", "set_fixed_roll", "fixed_roll", "set_next_steps",
-    "turn_main_steps", "card_build", "set_can_build", "clear_dice", "can_build_on", "card_buy", "buy_quotes",
-    "ai_agent_choice", "buy", "acquire", "agent_offer", "linger", "card_immune", "card_mortgage", "card_text_mentions",
-    "gain_fixed", "paid_in_settle", "place_card_on", "play_from_hand", "set_build_discount", "set_card_immune", "set_card_tile",
-    "set_extreme", "turn_rolls", "turn_snap", "turn_start_pos", "unplace_card_named", "tok_names", "designations",
-    "cancel_designation", "designation_cancelled", "gate", "card_settle_at", "card_offer_build", "do_move_roll", "placed_cards",
-    "field_instances", "unplace_at", "tile_at", "set_tile_at", "is_face_down_at", "set_face_down_at", "is_immune_at", "set_immune_at",
-    "set_build_cost_pct", "set_card_face_down", "card_face_down",
-    "join_redirect_target", "set_join_used", "adjust_money", "card_prop",
-    "state_set_flags", "raise_after",
+    "roll",
+    "roll_ask",
+    "log",
+    "effect",
+    "flash",
+    "no_flash",
+    "flash_card",
+    "flash_card_keyed",
+    "flash_tile",
+    "tile_count",
+    "tile_named",
+    "tile_owner",
+    "player_pos",
+    "tile_steps_ahead",
+    "rent_of",
+    "buy_price",
+    "build_cost",
+    "mortgage_value",
+    "owned_count",
+    "owned_at",
+    "tile_is",
+    "tile_attr",
+    "tile_in",
+    "tile_group",
+    "tile_price",
+    "houses_of",
+    "rent_houses_of",
+    "set_houses",
+    "add_house",
+    "mortgaged_of",
+    "set_mortgaged",
+    "set_owner",
+    "dist",
+    "tile_forward",
+    "neighbor",
+    "players_on_count",
+    "players_on_at",
+    "player_count",
+    "player_out",
+    "others_count",
+    "others_at",
+    "money",
+    "gain",
+    "gain_typed",
+    "pay",
+    "pay_to",
+    "pay_total",
+    "pay_leg",
+    "draw",
+    "draw_event",
+    "pay_rent",
+    "charge_rent",
+    "offer_buy",
+    "offer_force_buy",
+    "offer_build",
+    "apply_mortgage",
+    "apply_redeem",
+    "pay_buy",
+    "pay_build",
+    "assign_deed",
+    "add_to_hand",
+    "add_to_deck",
+    "add_to_deck_at",
+    "take_card",
+    "cards_in",
+    "to_discard",
+    "hand_count",
+    "hand_size",
+    "discard_count",
+    "deck_count",
+    "discard_size",
+    "discard_from_hand",
+    "shuffle_into_deck",
+    "place_card_at",
+    "set_dest",
+    "set_transfer_to_dest",
+    "send_to_dest",
+    "transfer_to_dest",
+    "rent_unit_mult",
+    "add_rent_unit_bonus",
+    "teleport_to",
+    "unplace_card",
+    "event_expire",
+    "event_is_active",
+    "event_deck_push",
+    "event_banish",
+    "self_tile",
+    "set_self_tile",
+    "self_face_down",
+    "set_self_face_down",
+    "self_immune",
+    "set_self_immune",
+    "is_placed",
+    "self_prop",
+    "set_self_prop",
+    "tile_prop",
+    "set_tile_prop",
+    "prop_at",
+    "set_prop_at",
+    "state_get",
+    "state_set",
+    "state_add",
+    "slot",
+    "set_slot",
+    "inc_slot",
+    "group_pool",
+    "add_group_pool",
+    "group_skill",
+    "persona_skill",
+    "group_skills",
+    "add_group_skill",
+    "invoke_skill",
+    "raise_bought",
+    "raise",
+    "gain_marker",
+    "spend_marker",
+    "add_marker_max",
+    "apply_abnormal",
+    "skip_main_move",
+    "clear_move_skip",
+    "give_extra_turn",
+    "end_turn_now",
+    "teleport_as",
+    "log_as",
+    "can_pay",
+    "cant_move",
+    "turn_player",
+    "round_no",
+    "turn_key",
+    "persona_is",
+    "set_persona",
+    "in_group",
+    "opt_int",
+    "opt_str",
+    "opt_tile",
+    "opt_price",
+    "opt_ai",
+    "ask",
+    "trig_player",
+    "trig_target",
+    "trig_tile",
+    "trig_value",
+    "trig_step",
+    "trig_by_card",
+    "trig_pay_is_rent",
+    "trig_move_kind",
+    "trig_move_resolve",
+    "trig_move_tag",
+    "trig_move_main",
+    "trig_settle_redirect",
+    "trig_move_dir",
+    "trig_move_remaining",
+    "trig_move_from",
+    "trig_move_total",
+    "trig_cards",
+    "trig_move_roll",
+    "trig_roll_source",
+    "trig_buy_kind",
+    "trig_seller",
+    "trig_price",
+    "trig_set_price",
+    "trig_deal_owner",
+    "trig_set_deal_owner",
+    "trig_deal_houses",
+    "trig_set_deal_houses",
+    "trig_deal_mortgaged",
+    "trig_set_deal_mortgaged",
+    "trig_set_reason",
+    "trig_set_move_roll",
+    "trig_set_pay_amount",
+    "trig_set_pay_target",
+    "trig_set_cancelled",
+    "trig_set_negate_effect",
+    "trig_set_spare",
+    "trig_cancelled",
+    "trig_seq",
+    "trig_answers",
+    "trig_effect_count",
+    "trig_effect_kind",
+    "trig_effect_target",
+    "trig_effect_from",
+    "trig_effect_tile",
+    "trig_effect_value",
+    "declare_effect",
+    "trig_card_is",
+    "play_card",
+    "card_move",
+    "card_replayable",
+    "set_roller",
+    "set_steps",
+    "set_reverse",
+    "set_signed",
+    "set_stop_at",
+    "set_parity",
+    "set_resolve",
+    "set_settle_tile",
+    "set_pay_factor",
+    "set_rent_factor",
+    "set_no_buy",
+    "set_no_build",
+    "set_build_anywhere",
+    "set_kind",
+    "set_teleport_to",
+    "set_start",
+    "set_base_dice",
+    "add_base_dice",
+    "add_extra_dice",
+    "move_stopped",
+    "set_min_roll",
+    "set_extra_steps",
+    "set_more_steps",
+    "set_tag",
+    "set_tag_id",
+    "recorded_roll",
+    "set_settle_as_agent",
+    "plan_add_follower",
+    "move_stop_at",
+    "move_parity",
+    "move_resolve",
+    "move_steps",
+    "move_remaining",
+    "move_total",
+    "move_dir",
+    "abnormal_count",
+    "target",
+    "targeted_count",
+    "gains_this_turn",
+    "placed_tile",
+    "play_doubled",
+    "set_play_doubled",
+    "schedule_turn_end",
+    "set_no_money_loss",
+    "set_fixed_roll",
+    "fixed_roll",
+    "set_next_steps",
+    "turn_main_steps",
+    "card_build",
+    "set_can_build",
+    "clear_dice",
+    "can_build_on",
+    "card_buy",
+    "buy_quotes",
+    "ai_agent_choice",
+    "buy",
+    "acquire",
+    "agent_offer",
+    "linger",
+    "card_immune",
+    "card_mortgage",
+    "card_text_mentions",
+    "gain_fixed",
+    "paid_in_settle",
+    "place_card_on",
+    "play_from_hand",
+    "set_build_discount",
+    "set_card_immune",
+    "set_card_tile",
+    "set_extreme",
+    "turn_rolls",
+    "turn_snap",
+    "turn_start_pos",
+    "unplace_card_named",
+    "tok_names",
+    "designations",
+    "cancel_designation",
+    "designation_cancelled",
+    "gate",
+    "card_settle_at",
+    "card_offer_build",
+    "do_move_roll",
+    "placed_cards",
+    "field_instances",
+    "unplace_at",
+    "tile_at",
+    "set_tile_at",
+    "is_face_down_at",
+    "set_face_down_at",
+    "is_immune_at",
+    "set_immune_at",
+    "set_build_cost_pct",
+    "set_card_face_down",
+    "card_face_down",
+    "join_redirect_target",
+    "set_join_used",
+    "adjust_money",
+    "card_prop",
+    "state_set_flags",
+    "raise_after",
 ];
 
 fn main() {
@@ -130,13 +378,40 @@ fn main() {
         .unwrap_or("");
     // Custom-arity names already written above (not in ARRAY_OPS).
     let custom = [
-        "op_place_mark", "op_place_mark_pair", "op_count_marks_f", "op_bump_mark_f", "op_remove_marks_f",
-        "op_mark_src_at", "op_mark_instance_at", "op_mark_partner", "op_counter_self", "op_add_counter_self",
-        "op_set_counter_self", "op_counter_at", "op_add_counter_at", "op_card_counter",
-        "op_add_card_counter", "op_count_held", "op_add_held", "op_count_held_name",
-        "op_set_held_name", "op_move_units", "op_self_uid", "op_send", "op_msg_sender_uid",
-        "op_msg_sender_seat", "op_msg_name", "op_msg_a", "op_msg_b", "op_msg_c", "op_msg_tile",
-        "op_msg_seat", "op_msg_text", "op_msg_reply", "op_trig_name", "op_trig_kind",
+        "op_place_mark",
+        "op_place_mark_pair",
+        "op_count_marks_f",
+        "op_bump_mark_f",
+        "op_remove_marks_f",
+        "op_mark_src_at",
+        "op_mark_instance_at",
+        "op_mark_partner",
+        "op_counter_self",
+        "op_add_counter_self",
+        "op_set_counter_self",
+        "op_counter_at",
+        "op_add_counter_at",
+        "op_card_counter",
+        "op_add_card_counter",
+        "op_count_held",
+        "op_add_held",
+        "op_count_held_name",
+        "op_set_held_name",
+        "op_move_units",
+        "op_self_uid",
+        "op_send",
+        "op_msg_sender_uid",
+        "op_msg_sender_seat",
+        "op_msg_name",
+        "op_msg_a",
+        "op_msg_b",
+        "op_msg_c",
+        "op_msg_tile",
+        "op_msg_seat",
+        "op_msg_text",
+        "op_msg_reply",
+        "op_trig_name",
+        "op_trig_kind",
     ];
     let mut generated: Vec<String> = ARRAY_OPS.iter().map(|n| format!("op_{n}")).collect();
     generated.extend(custom.iter().map(|s| s.to_string()));
@@ -224,7 +499,13 @@ fn gen_body_dispatch() {
     ];
     let enabled: Vec<&str> = ALL_BANDS
         .iter()
-        .filter(|(_, feat)| env::var_os(&format!("CARGO_FEATURE_{}", feat.replace('-', "_").to_uppercase())).is_some())
+        .filter(|(_, feat)| {
+            env::var_os(&format!(
+                "CARGO_FEATURE_{}",
+                feat.replace('-', "_").to_uppercase()
+            ))
+            .is_some()
+        })
         .map(|(c, _)| *c)
         .collect();
     let GROUPS: Vec<&str> = enabled;
@@ -245,7 +526,11 @@ fn gen_body_dispatch() {
     {
         let mut bs = String::new();
         let _ = writeln!(bs, "// Generated by build.rs. Do not edit.");
-        let _ = writeln!(bs, "pub const BAND_START: [usize; {}] = [", GROUPS.len() + 1);
+        let _ = writeln!(
+            bs,
+            "pub const BAND_START: [usize; {}] = [",
+            GROUPS.len() + 1
+        );
         for s in &starts {
             let _ = writeln!(bs, "    {s},");
         }
@@ -278,9 +563,7 @@ fn gen_body_dispatch() {
             rules_dir.join("card-sdk/src/kinds.rs"),
             rules_dir.join("bandori-std/src/kind.rs"),
         ] {
-            sources.push(
-                fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {:?}: {e}", p)),
-            );
+            sources.push(fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {:?}: {e}", p)));
         }
         kind_shapes_from(&sources)
     };
@@ -320,7 +603,8 @@ fn gen_body_dispatch() {
             {
                 let src = mod_src_of(&rules_dir, crate_name, module);
                 let stripped = strip_rust_comments(&src);
-                let has_filter = stripped.contains("On::Filter(") || stripped.contains("On::Action(");
+                let has_filter =
+                    stripped.contains("On::Filter(") || stripped.contains("On::Action(");
                 if has_filter && bodies.is_empty() {
                     panic!(
                         "rules-kani/build.rs: {crate_name}::{module}::{konst} has On::Filter/On::Action text but parse_on_bodies matched 0 registrations"
@@ -401,7 +685,9 @@ fn gen_body_dispatch() {
     s.push_str("}\n");
     s.push_str("\n/// Const-generic body dispatch: `IDX` folds to a single trampoline.\n");
     s.push_str("#[cfg(kani)]\n#[inline(always)]\n");
-    s.push_str("fn call_body_idx_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {\n");
+    s.push_str(
+        "fn call_body_idx_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {\n",
+    );
     s.push_str("    match IDX {\n");
     for (i, _c) in GROUPS.iter().enumerate() {
         let base = starts[i];
@@ -492,7 +778,8 @@ fn parse_cards(rules_dir: &PathBuf, crate_name: &str) -> Vec<(String, String)> {
             }
         }
     }
-    let body = cards_array_body(&t).unwrap_or_else(|| panic!("{crate_name}: CARDS array not found"));
+    let body =
+        cards_array_body(&t).unwrap_or_else(|| panic!("{crate_name}: CARDS array not found"));
     let mut out = Vec::new();
     for item in body.split(',') {
         let item = item.split("//").next().unwrap_or("").trim();
@@ -526,10 +813,13 @@ fn gen_card_ids(rules_dir: &PathBuf, bands: &[&str], starts: &[usize]) {
         assert_eq!(cards.len(), count, "{crate_name} CARDS vs BAND_START");
         for (module, konst) in &cards {
             // Recover the CardDef id string from the const's `CardDef::new("…"`
-            let lib = crate_dir(rules_dir, crate_name).join("src").join(format!("{module}.rs"));
+            let lib = crate_dir(rules_dir, crate_name)
+                .join("src")
+                .join(format!("{module}.rs"));
             let src = fs::read_to_string(&lib).unwrap_or_else(|e| panic!("read {lib:?}: {e}"));
-            let id = extract_card_id(&src, konst)
-                .unwrap_or_else(|| panic!("{crate_name}::{module}::{konst}: CardDef::new id not found"));
+            let id = extract_card_id(&src, konst).unwrap_or_else(|| {
+                panic!("{crate_name}::{module}::{konst}: CardDef::new id not found")
+            });
             ids.push((id, format!("{crate_name}::{module}::{konst}")));
         }
     }
@@ -605,7 +895,10 @@ fn extract_card_id(src: &str, konst: &str) -> Option<String> {
     let mut search = src;
     while let Some(pos) = search.find(ident) {
         let line_start = search[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
-        let line_end = search[pos..].find('\n').map(|i| pos + i).unwrap_or(search.len());
+        let line_end = search[pos..]
+            .find('\n')
+            .map(|i| pos + i)
+            .unwrap_or(search.len());
         let line = &search[line_start..line_end];
         if line.contains("const") && line.contains("&str") {
             if let Some(q) = line.find('"') {

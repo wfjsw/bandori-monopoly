@@ -17,9 +17,9 @@
 //! the payment was avoided by *this* effect, and the engine does not currently
 //! attribute a payment's reduction to one skill. See the TODO.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The re-colour is armed for this turn's landing.
 const ARMED: &str = "skill.soyoClear.armed";
@@ -34,16 +34,34 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
     &[
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
         // （2）「移动掷骰后可消耗一个火罐」 -- only with a pot to spend, and
         // only on a free roll.
-        On::Action(Action::DiceRollAfter("actor == owner && charge(owner) >= 1 && plan.fixed_roll == null", None, None, offer)),
-        On::Action(Action::Settle("actor == owner && slot('skill.soyoClear.armed') != 0", None, None, on_settle)),
+        On::Action(Action::DiceRollAfter(
+            "actor == owner && charge(owner) >= 1 && plan.fixed_roll == null",
+            None,
+            None,
+            offer,
+        )),
+        On::Action(Action::Settle(
+            "actor == owner && slot('skill.soyoClear.armed') != 0",
+            None,
+            None,
+            on_settle,
+        )),
     ],
 )
-    .silent(&[0, 1])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+.silent(&[0, 1])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 /// 「初始1，上限1」 -- and the re-colour's expiry.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

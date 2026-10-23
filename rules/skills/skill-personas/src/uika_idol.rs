@@ -10,9 +10,10 @@
 //! pay is `X*30` where X is how many steps were left *after* passing it. The
 //! mark is spent when it pays out.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, MarkFilter};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, MarkFilter};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind 「火罐」 this skill parks on a tile.
 const POT: &str = "skill.uikaIdol.pot";
@@ -22,21 +23,39 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
     &[
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
         // （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 --
         // the offer exists only when such a tile exists. The colour-group
         // scan is residual (`is_color` / `tile_named`).
-        On::Action(Action::TurnStartBefore("actor == owner && charge(owner) >= 1", None, Some(has_street_color_tile), at_turn_start)),
+        On::Action(Action::TurnStartBefore(
+            "actor == owner && charge(owner) >= 1",
+            None,
+            Some(has_street_color_tile),
+            at_turn_start,
+        )),
         // （2）「其他玩家经过该格且到达移动终点后向你支付X*30资金」 -- a pot on
         // the tile is the applicability (`count_marks` is not in the condition
         // vocabulary, so it is the residual guard). `actor != owner &&
         // move.remaining > 0` states the rest of the clause.
-        On::Action(Action::PassTile("actor != owner && move.remaining > 0", None, Some(on_pass_tile_has_pot), on_pass_tile)),
+        On::Action(Action::PassTile(
+            "actor != owner && move.remaining > 0",
+            None,
+            Some(on_pass_tile_has_pot),
+            on_pass_tile,
+        )),
     ],
 )
-    .silent(&[0, 1])
-    // 「（初始2，上限2）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
+.silent(&[0, 1])
+// 「（初始2，上限2）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 2),
+    (bandori_std::fire::FIRE_CAP, 2),
+]);
 
 /// Residual guard for 「经过该格」 with a pot on it -- `count_marks` stays here
 /// (not yet in the condition vocabulary).
@@ -108,7 +127,9 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         player_id,
         ctx::self_uid(),
         1,
-        &Msg::new(key!("uika_idol_note")), card_sdk::abi::Stack::Fresh);
+        &Msg::new(key!("uika_idol_note")),
+        card_sdk::abi::Stack::Fresh,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("uika_idol_placed")).tile("tile", tile),

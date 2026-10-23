@@ -11,17 +11,21 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, None, great)]).meta(&card_sdk::meta::CardMeta::new()
+pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, None, great)]).meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"GREAT"#)
         .raw_name(r#"GREAT"#)
         .tags(&[r#"手"#])
-        .text(r#"[手]：
+        .text(
+            r#"[手]：
 依次进行以下操作：
 1. [移除]此卡；
 2. 将一张“PERFECT”加入抽卡区并洗切；
-3. [获得]2000资金。"#)
+3. [获得]2000资金。"#,
+        )
         // sheet cell A4
-        .fields(&[("group", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]),
+);
 
 fn great(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「1. [移除]此卡」

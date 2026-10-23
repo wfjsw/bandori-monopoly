@@ -1,7 +1,7 @@
 //! `CRYCHIC:想要抓住...` -- C# `CardWantToGrab`: gain one [Stay]; the follow-up
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要抓住...`）:
-//! > 想要抓住...： 
+//! > 想要抓住...：
 //! >  
 //! > （1）获得一层[停留]。
 //!
@@ -14,10 +14,10 @@
 //! `card_move`, but the `GrabFx` attachment and the grid-nearest teleport
 //! (「视为你的主要移动」) are still held (see the TODOs below).
 
-use card_sdk::abi::ActionKind;
-use bandori_std::ctx::{plan, trigger};
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::ctx::{plan, trigger};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The passer this card is waiting for, or -1. A slot rather than a `GrabFx`
 /// attachment: it is a value the card stores under its own key.

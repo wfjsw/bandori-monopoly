@@ -237,9 +237,7 @@ impl ToMetaRow for GroupDef {
             text: alloc_string(self.text),
             tags: Vec::new(),
             derived: false,
-            fields: Vec::from([
-                (alloc_string(meta_key::SKILL), alloc_string(self.skill)),
-            ]),
+            fields: Vec::from([(alloc_string(meta_key::SKILL), alloc_string(self.skill))]),
             lists: Vec::new(),
             flags: Vec::from([(
                 alloc_string(meta_key::SHARES_EXCLUSIVES),

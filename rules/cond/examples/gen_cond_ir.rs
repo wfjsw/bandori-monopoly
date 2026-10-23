@@ -6,7 +6,9 @@
 //! ```
 
 fn main() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
     let (src, n) = rules_cond::gen_ir::generate(root);
     match std::env::args().nth(1) {
         Some(p) => {

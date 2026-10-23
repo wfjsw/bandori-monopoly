@@ -79,10 +79,7 @@ crate::host_subset!(that_day_rain_dispatch {
 /// `host::dispatch`). Handled locally below so the subset still covers every
 /// op the body reaches; the main agent should extract `arm_stay_of` /
 /// `arm_stun_of` into `host.rs` and swap this to `host_subset!`.
-fn hitoshizuku_dispatch(
-    op: card_sdk::kani_host::Op,
-    a: card_sdk::kani_host::Args,
-) -> i64 {
+fn hitoshizuku_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Args) -> i64 {
     use card_sdk::kani_host::Op;
     match op {
         Op::player_count => host::arm_player_count(a),
@@ -270,8 +267,14 @@ fn journey_01_place_four_crystals_iff_at(user: i32) {
         post_c == 4,
         "C-MYGO-journey-01: card must hold exactly 4 crystals"
     );
-    crate::kassert!(field_n == 1, "C-MYGO-journey-01: exactly one field instance");
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(
+        field_n == 1,
+        "C-MYGO-journey-01: exactly one field instance"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money unchanged"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
     crate::kassert!(
@@ -355,21 +358,37 @@ fn haneoka_thresholds_iff_at(user: i32) {
     // Recover the face from the effects: <10 → empty; else look at the chain.
     // We don't have the face in the log, so branch on the observed shape and
     // cover each band via the house/draw/place presence.
-    let has_house = effects.iter().any(|e| matches!(e, Effect::SetHouses { .. }));
+    let has_house = effects
+        .iter()
+        .any(|e| matches!(e, Effect::SetHouses { .. }));
     let has_draw = effects.iter().any(|e| matches!(e, Effect::Draw { .. }));
-    let has_place = effects.iter().any(|e| matches!(e, Effect::PlaceCard { .. }));
+    let has_place = effects
+        .iter()
+        .any(|e| matches!(e, Effect::PlaceCard { .. }));
 
-    kani::cover!(!has_house && !has_draw && !has_place, "r < 10 (ineffective)");
+    kani::cover!(
+        !has_house && !has_draw && !has_place,
+        "r < 10 (ineffective)"
+    );
     kani::cover!(has_house && !has_draw && !has_place, "10..=14 (house only)");
     kani::cover!(has_house && has_draw && !has_place, "15..=19 (house+draw)");
-    kani::cover!(has_house && has_draw && has_place, "r >= 20 (house+draw+place)");
+    kani::cover!(
+        has_house && has_draw && has_place,
+        "r >= 20 (house+draw+place)"
+    );
 
     // Shape consistency: draw only with house; place only with draw.
     if has_draw {
-        crate::kassert!(has_house, "C-MYGO-haneoka: draw implies house (r>=15 ⊇ r>=10)");
+        crate::kassert!(
+            has_house,
+            "C-MYGO-haneoka: draw implies house (r>=15 ⊇ r>=10)"
+        );
     }
     if has_place {
-        crate::kassert!(has_draw, "C-MYGO-haneoka: place implies draw (r>=20 ⊇ r>=15)");
+        crate::kassert!(
+            has_draw,
+            "C-MYGO-haneoka: place implies draw (r>=20 ⊇ r>=15)"
+        );
         crate::kassert!(has_house, "C-MYGO-haneoka: place implies house");
     }
     if has_house {
@@ -382,8 +401,14 @@ fn haneoka_thresholds_iff_at(user: i32) {
             "C-MYGO-haneoka-02: 免费 — money unchanged"
         );
     } else {
-        crate::kassert!(post_houses == pre_houses, "C-MYGO-haneoka-05: no house on r<10");
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+        crate::kassert!(
+            post_houses == pre_houses,
+            "C-MYGO-haneoka-05: no house on r<10"
+        );
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "frame: money unchanged"
+        );
     }
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
@@ -467,7 +492,10 @@ fn rainday_01_place_five_crystals_iff_at(user: i32) {
         post_c == 5,
         "C-MYGO-rainday-01: card must hold exactly 5 crystals"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money unchanged"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 
     let mut stayed = false;
@@ -763,7 +791,10 @@ fn tomori_card_02_empty_hand_iff_at(user: i32) {
         post.stay[user as usize] == pre.stay[user as usize].saturating_add(2),
         "C-MYGO-tomori-card-01: exactly 2 stay layers"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money unchanged"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     crate::kassert!(
         world::arr8b_eq(post.hand, pre.hand),

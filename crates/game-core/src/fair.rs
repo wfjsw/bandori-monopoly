@@ -293,7 +293,10 @@ pub fn commit_hex_v1(
 pub fn derive_match_seed(seed: &[u8; 32], nonces: &[(i32, [u8; 32])]) -> [u8; 32] {
     let mut list: Vec<&(i32, [u8; 32])> = nonces.iter().collect();
     list.sort_by_key(|(m, _)| *m);
-    let mut parts: Vec<Vec<u8>> = vec![format!("{DOM_SEED}\n").into(), format!("{}\n", hex32(seed)).into()];
+    let mut parts: Vec<Vec<u8>> = vec![
+        format!("{DOM_SEED}\n").into(),
+        format!("{}\n", hex32(seed)).into(),
+    ];
     for (m, n) in list {
         parts.push(format!("{m}\n{}\n", hex32(n)).into());
     }
@@ -308,8 +311,12 @@ pub fn match_id(match_seed: &[u8; 32]) -> i32 {
     let d = unhex32(&sha256_hex(&[
         b"bd-fair-id-v1
 ",
-        format!("{}
-", hex32(match_seed)).as_bytes(),
+        format!(
+            "{}
+",
+            hex32(match_seed)
+        )
+        .as_bytes(),
     ]))
     .expect("sha256 is 32 bytes");
     let id = u32::from_le_bytes([d[0], d[1], d[2], d[3]]);
@@ -440,7 +447,11 @@ pub fn verify(file: &RecordFile) -> VerifyReport {
             cs.clock = setup.clock.unwrap_or_default();
             let want = cs.canon();
             if want != fair.settings {
-                r.push("settings", false, "canonical settings do not match the record");
+                r.push(
+                    "settings",
+                    false,
+                    "canonical settings do not match the record",
+                );
             } else {
                 r.push("settings", true, "");
             }
@@ -501,7 +512,11 @@ pub fn verify(file: &RecordFile) -> VerifyReport {
         match unhex32(&n.nonce) {
             Ok(b) => {
                 if nonces.iter().any(|(m, _)| *m == n.member) {
-                    r.push("nonces", false, format!("member {} nonce duplicated", n.member));
+                    r.push(
+                        "nonces",
+                        false,
+                        format!("member {} nonce duplicated", n.member),
+                    );
                     return r;
                 }
                 nonces.push((n.member, b));
@@ -635,7 +650,11 @@ pub fn verify_replay(
         Some(k) if k == live_seed(&derived) => {}
         got => {
             if rng_ok {
-                r.push("initial_rng", false, format!("live stream mismatch: {got:?}"));
+                r.push(
+                    "initial_rng",
+                    false,
+                    format!("live stream mismatch: {got:?}"),
+                );
             }
         }
     }
@@ -760,8 +779,14 @@ mod tests {
         let a = derive_match_seed(&seed(1), &[(1, seed(9)), (0, seed(8))]);
         let b = derive_match_seed(&seed(1), &[(0, seed(8)), (1, seed(9))]);
         assert_eq!(a, b);
-        assert_ne!(a, derive_match_seed(&seed(1), &[(0, seed(8)), (1, seed(7))]));
-        assert_ne!(a, derive_match_seed(&seed(2), &[(0, seed(8)), (1, seed(9))]));
+        assert_ne!(
+            a,
+            derive_match_seed(&seed(1), &[(0, seed(8)), (1, seed(7))])
+        );
+        assert_ne!(
+            a,
+            derive_match_seed(&seed(2), &[(0, seed(8)), (1, seed(9))])
+        );
         // A missing nonce is simply absent -- a different list is a
         // different seed.
         assert_ne!(a, derive_match_seed(&seed(1), &[(0, seed(8))]));
@@ -769,18 +794,32 @@ mod tests {
 
     #[test]
     fn settings_canon_stable() {
-        let s = CanonSettings::new(MatchMode::Casual, 0.05, &ScoreWeights::default(), &members());
+        let s = CanonSettings::new(
+            MatchMode::Casual,
+            0.05,
+            &ScoreWeights::default(),
+            &members(),
+        );
         let c = s.canon();
         assert!(
-            c.starts_with(&format!("bd-fair-settings-v1
+            c.starts_with(&format!(
+                "bd-fair-settings-v1
 {}
-", MatchMode::Casual as i32)),
+",
+                MatchMode::Casual as i32
+            )),
             "{c}"
         );
         assert!(c.contains("alice"));
         assert_eq!(
             c,
-            CanonSettings::new(MatchMode::Casual, 0.05, &ScoreWeights::default(), &members()).canon()
+            CanonSettings::new(
+                MatchMode::Casual,
+                0.05,
+                &ScoreWeights::default(),
+                &members()
+            )
+            .canon()
         );
     }
 }

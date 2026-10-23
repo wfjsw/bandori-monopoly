@@ -22,10 +22,10 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{prop, CardPile, ActionKind, TriggerKind};
-use skill_groups::fans;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{prop, ActionKind, CardPile, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
+use skill_groups::fans;
 
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",

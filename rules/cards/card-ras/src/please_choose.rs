@@ -8,8 +8,8 @@
 //!
 //! [反击] the settler picks a forced play at you, or you teleport onto them.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
@@ -70,7 +70,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let pick = ctx::ask_pick(
         other,
         &Msg::new(key!("please_choose_title")),
-        &Msg::new(key!("please_choose_ask")).player_id("who", player_id).card("card", "RAS:PLEASE CHOOSE"),
+        &Msg::new(key!("please_choose_ask"))
+            .player_id("who", player_id)
+            .card("card", "RAS:PLEASE CHOOSE"),
         &[opt1, opt2],
     )?;
     if pick == 0 {

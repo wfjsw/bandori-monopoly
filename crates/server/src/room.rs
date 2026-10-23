@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use game_core::fair::{self, CanonSettings, FairPublic, Fairness, NonceEntry};
 use game_core::msg::Msg;
 use game_core::net::{self, NetMessage, RoomInfo, RoomMember};
-use game_core::fair::{self, CanonSettings, FairPublic, Fairness, NonceEntry};
 use game_core::record::{
     body_check, hash_save, Init, Input, MatchSetup, Origin, RecordBody, RecordFile, RecordHeader,
     SeatInfo, MAGIC,
@@ -195,7 +195,11 @@ impl MatchHandle {
     }
 
     /// [`Self::restore`] without a blob in hand: look it up in the store.
-    pub fn attach(id: String, store: Arc<dyn CrossState>, engine: Arc<Pool>) -> Result<Self, String> {
+    pub fn attach(
+        id: String,
+        store: Arc<dyn CrossState>,
+        engine: Arc<Pool>,
+    ) -> Result<Self, String> {
         let h = Self { id, store, engine };
         h.snapshot()?;
         // Promote a leftover `dirty` from a crashed operation to `gaps`, under
@@ -229,12 +233,19 @@ impl MatchHandle {
     }
 
     fn load_meta(&self) -> Result<crate::store::RecMeta, String> {
-        match self.store.rec_meta_get(&self.id).map_err(|e| e.to_string())? {
+        match self
+            .store
+            .rec_meta_get(&self.id)
+            .map_err(|e| e.to_string())?
+        {
             Some(m) => Ok(m),
             None => {
                 // Pre-meta match: rebuild the counters from the log, the same
                 // way a restore used to. `members` come from the head.
-                let lines = self.store.record_log_get(&self.id).map_err(|e| e.to_string())?;
+                let lines = self
+                    .store
+                    .record_log_get(&self.id)
+                    .map_err(|e| e.to_string())?;
                 let mut st = crate::store::RecMeta::default();
                 for line in &lines {
                     match LogEntry::parse_line(line) {
@@ -364,13 +375,19 @@ impl MatchHandle {
 
     pub fn member_left(&self, member: i32, can_return: bool) -> Result<(), String> {
         self.run(
-            |_| Input::Left { m: member, can_return },
+            |_| Input::Left {
+                m: member,
+                can_return,
+            },
             |s, e| e.member_left(s, member, can_return),
         )
     }
 
     pub fn member_back(&self, member: i32) -> Result<(), String> {
-        self.run(|_| Input::Back { m: member }, |s, e| e.member_back(s, member))
+        self.run(
+            |_| Input::Back { m: member },
+            |s, e| e.member_back(s, member),
+        )
     }
 
     /// The acting seat's animation queue drained for state version `seq`.
@@ -498,7 +515,10 @@ impl MatchHandle {
         meta.dirty = false;
         meta.done = true;
         self.save_meta(meta)?;
-        let lines = self.store.record_log_get(&self.id).map_err(|e| e.to_string())?;
+        let lines = self
+            .store
+            .record_log_get(&self.id)
+            .map_err(|e| e.to_string())?;
         let members = meta.members.clone();
         let ticks = meta.ticks;
         let gaps = meta.gaps;
@@ -542,10 +562,9 @@ impl MatchHandle {
         // ranks and scores are what the results screen showed.
         let member = members.first().copied().unwrap_or(0);
         let view = self.engine.view(&blob, member, false)?;
-        let st: game_core::state::MatchState = serde_json::from_value(
-            view.get("state").cloned().unwrap_or(Value::Null),
-        )
-        .map_err(|e| format!("final view: {e}"))?;
+        let st: game_core::state::MatchState =
+            serde_json::from_value(view.get("state").cloned().unwrap_or(Value::Null))
+                .map_err(|e| format!("final view: {e}"))?;
         let seats = st
             .players
             .iter()
@@ -1093,11 +1112,7 @@ impl Room {
 
     /// Host-only edit of the match clock / timer settings (the `weights`
     /// sibling). Sanitized server-side to `ClockSettings::MIN..=MAX`.
-    pub fn set_clock(
-        &mut self,
-        member: i32,
-        c: game_core::clock::ClockSettings,
-    ) -> ApiResult<()> {
+    pub fn set_clock(&mut self, member: i32, c: game_core::clock::ClockSettings) -> ApiResult<()> {
         self.host_only(member)?;
         if self.info.playing {
             return Err(ApiError::bad("err.room.playing"));
@@ -1203,7 +1218,13 @@ impl Room {
         let settings = canon.canon();
         let (blob, board) = self
             .engine
-            .new_match(&members, derived, mode as i32, &self.info.weights, self.info.clock)
+            .new_match(
+                &members,
+                derived,
+                mode as i32,
+                &self.info.weights,
+                self.info.clock,
+            )
             .map_err(|e| ApiError::bad(e.as_str()))?;
         // The record starts from the same inputs `new_match` got, plus the
         // engine's own identity (`docs/REPLAY.md` §4) and the full
@@ -1289,9 +1310,8 @@ impl Room {
         if self.info.members.iter().any(|m| m.id == member && m.bot) {
             return Err(ApiError::bad("err.fair.not_human"));
         }
-        let nonce = fair::unhex32(nonce_hex).map_err(|e| {
-            ApiError::bad(Msg::new("err.fair.nonce").text("detail", e))
-        })?;
+        let nonce = fair::unhex32(nonce_hex)
+            .map_err(|e| ApiError::bad(Msg::new("err.fair.nonce").text("detail", e)))?;
         f.nonces.insert(member, nonce);
         self.persist();
         Ok(())
@@ -1343,12 +1363,9 @@ impl Room {
     /// the join / post-stream grace period). The TTL is what makes a stream a
     /// dead process stopped refreshing vanish on its own.
     fn presence_touch(&self, member: i32, stream: &str, ttl: std::time::Duration) {
-        let _ = self.store.presence_set(
-            &self.info.id,
-            member,
-            stream,
-            ttl.as_millis().max(1) as u64,
-        );
+        let _ =
+            self.store
+                .presence_set(&self.info.id, member, stream, ttl.as_millis().max(1) as u64);
     }
 
     /// Note a stream opening. `stream` is this connection's presence key (the
@@ -1412,11 +1429,7 @@ impl Room {
             .filter(|m| {
                 !m.away
                     && !m.bot
-                    && self
-                        .store
-                        .presence_count(&self.info.id, m.id)
-                        .unwrap_or(1)
-                        == 0
+                    && self.store.presence_count(&self.info.id, m.id).unwrap_or(1) == 0
             })
             .map(|m| m.id)
             .collect();
@@ -1444,12 +1457,7 @@ impl Room {
                 .info
                 .spectators
                 .iter()
-                .filter(|s| {
-                    self.store
-                        .presence_count(&self.info.id, s.id)
-                        .unwrap_or(1)
-                        == 0
-                })
+                .filter(|s| self.store.presence_count(&self.info.id, s.id).unwrap_or(1) == 0)
                 .map(|s| s.id)
                 .collect();
             for s in stale_spec {

@@ -602,10 +602,37 @@ pub trait HostOps {
     fn op_card_face_down(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_place_mark` -- 11 args, explicit params (the array is only 6).
     /// `stack`: 0 = merge, 1 = fresh row.
-    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
+    fn op_place_mark(
+        &mut self,
+        tile: i32,
+        kp: i32,
+        kl: i32,
+        cptr: i32,
+        cl: i32,
+        owner: i32,
+        src: i32,
+        count: i32,
+        stack: i32,
+        np: i32,
+        nl: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_place_mark_pair` -- 12 args, explicit params. Places one paired
     /// mark spanning tiles `a`/`b`; 1 = placed, 0 = atomic refusal.
-    fn op_place_mark_pair(&mut self, a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
+    fn op_place_mark_pair(
+        &mut self,
+        a: i32,
+        b: i32,
+        kp: i32,
+        kl: i32,
+        cptr: i32,
+        cl: i32,
+        owner: i32,
+        src: i32,
+        count: i32,
+        stack: i32,
+        np: i32,
+        nl: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_count_marks_f`
     fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
     /// `ruleset_bump_mark_f`
@@ -627,25 +654,78 @@ pub trait HostOps {
     /// `ruleset_counter_at`
     fn op_counter_at(&mut self, uid: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
     /// `ruleset_add_counter_at`
-    fn op_add_counter_at(&mut self, uid: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr>;
+    fn op_add_counter_at(
+        &mut self,
+        uid: i32,
+        np: i32,
+        nl: i32,
+        n: i32,
+        max: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_card_counter`
-    fn op_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
+    fn op_card_counter(
+        &mut self,
+        player_id: i32,
+        cptr: i32,
+        cl: i32,
+        np: i32,
+        nl: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_add_card_counter`
-    fn op_add_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr>;
+    fn op_add_card_counter(
+        &mut self,
+        player_id: i32,
+        cptr: i32,
+        cl: i32,
+        np: i32,
+        nl: i32,
+        n: i32,
+        max: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_count_held`
     fn op_count_held(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr>;
     /// `ruleset_add_held`
-    fn op_add_held(&mut self, np: i32, nl: i32, player_id: i32, n: i32, max: i32) -> Result<i64, HostErr>;
+    fn op_add_held(
+        &mut self,
+        np: i32,
+        nl: i32,
+        player_id: i32,
+        n: i32,
+        max: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_count_held_name`
     fn op_count_held_name(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr>;
     /// `ruleset_set_held_name`
-    fn op_set_held_name(&mut self, np: i32, nl: i32, player_id: i32, v: i32) -> Result<i64, HostErr>;
+    fn op_set_held_name(
+        &mut self,
+        np: i32,
+        nl: i32,
+        player_id: i32,
+        v: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_move_units`
-    fn op_move_units(&mut self, np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32) -> Result<i64, HostErr>;
+    fn op_move_units(
+        &mut self,
+        np: i32,
+        nl: i32,
+        from_tile: i32,
+        from_player: i32,
+        to_tile: i32,
+        to_player: i32,
+        n: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_self_uid`
     fn op_self_uid(&mut self) -> Result<i64, HostErr>;
     /// `ruleset_send`
-    fn op_send(&mut self, tp: i32, tl: i32, np: i32, nl: i32, pp: i32, pl: i32) -> Result<i64, HostErr>;
+    fn op_send(
+        &mut self,
+        tp: i32,
+        tl: i32,
+        np: i32,
+        nl: i32,
+        pp: i32,
+        pl: i32,
+    ) -> Result<i64, HostErr>;
     /// `ruleset_msg_sender_uid`
     fn op_msg_sender_uid(&mut self) -> Result<i64, HostErr>;
     /// `ruleset_msg_sender_seat`
@@ -1629,11 +1709,42 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_face_down(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_face_down(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::place_mark(self, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl)? as i64)
+    fn op_place_mark(
+        &mut self,
+        tile: i32,
+        kp: i32,
+        kl: i32,
+        cptr: i32,
+        cl: i32,
+        owner: i32,
+        src: i32,
+        count: i32,
+        stack: i32,
+        np: i32,
+        nl: i32,
+    ) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::place_mark(
+            self, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl,
+        )? as i64)
     }
-    fn op_place_mark_pair(&mut self, a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::place_mark_pair(self, a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl)? as i64)
+    fn op_place_mark_pair(
+        &mut self,
+        a: i32,
+        b: i32,
+        kp: i32,
+        kl: i32,
+        cptr: i32,
+        cl: i32,
+        owner: i32,
+        src: i32,
+        count: i32,
+        stack: i32,
+        np: i32,
+        nl: i32,
+    ) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::place_mark_pair(
+            self, a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl,
+        )? as i64)
     }
     fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::count_marks_f(self, tile, fp, fl)? as i64)
@@ -1665,35 +1776,91 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_counter_at(&mut self, uid: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::counter_at(self, uid, np, nl)? as i64)
     }
-    fn op_add_counter_at(&mut self, uid: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {
+    fn op_add_counter_at(
+        &mut self,
+        uid: i32,
+        np: i32,
+        nl: i32,
+        n: i32,
+        max: i32,
+    ) -> Result<i64, HostErr> {
         Ok(crate::hostfns::add_counter_at(self, uid, np, nl, n, max)? as i64)
     }
-    fn op_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
+    fn op_card_counter(
+        &mut self,
+        player_id: i32,
+        cptr: i32,
+        cl: i32,
+        np: i32,
+        nl: i32,
+    ) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_counter(self, player_id, cptr, cl, np, nl)? as i64)
     }
-    fn op_add_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {
+    fn op_add_card_counter(
+        &mut self,
+        player_id: i32,
+        cptr: i32,
+        cl: i32,
+        np: i32,
+        nl: i32,
+        n: i32,
+        max: i32,
+    ) -> Result<i64, HostErr> {
         Ok(crate::hostfns::add_card_counter(self, player_id, cptr, cl, np, nl, n, max)? as i64)
     }
     fn op_count_held(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::count_held(self, np, nl, player_id)? as i64)
     }
-    fn op_add_held(&mut self, np: i32, nl: i32, player_id: i32, n: i32, max: i32) -> Result<i64, HostErr> {
+    fn op_add_held(
+        &mut self,
+        np: i32,
+        nl: i32,
+        player_id: i32,
+        n: i32,
+        max: i32,
+    ) -> Result<i64, HostErr> {
         Ok(crate::hostfns::add_held(self, np, nl, player_id, n, max)? as i64)
     }
     fn op_count_held_name(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::count_held_name(self, np, nl, player_id)? as i64)
     }
-    fn op_set_held_name(&mut self, np: i32, nl: i32, player_id: i32, v: i32) -> Result<i64, HostErr> {
+    fn op_set_held_name(
+        &mut self,
+        np: i32,
+        nl: i32,
+        player_id: i32,
+        v: i32,
+    ) -> Result<i64, HostErr> {
         crate::hostfns::set_held_name(self, np, nl, player_id, v)?;
         Ok(0)
     }
-    fn op_move_units(&mut self, np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::move_units(self, np, nl, from_tile, from_player, to_tile, to_player, n)? as i64)
+    fn op_move_units(
+        &mut self,
+        np: i32,
+        nl: i32,
+        from_tile: i32,
+        from_player: i32,
+        to_tile: i32,
+        to_player: i32,
+        n: i32,
+    ) -> Result<i64, HostErr> {
+        Ok(
+            crate::hostfns::move_units(self, np, nl, from_tile, from_player, to_tile, to_player, n)?
+                as i64,
+        )
     }
     fn op_self_uid(&mut self) -> Result<i64, HostErr> {
         Ok(crate::hostfns::self_uid(self)? as i64)
     }
-    fn op_send(&mut self, tp: i32, tl: i32, np: i32, nl: i32, pp: i32, pl: i32) -> Result<i64, HostErr> {
+    fn op_send(
+        &mut self,
+        tp: i32,
+        tl: i32,
+        np: i32,
+        nl: i32,
+        pp: i32,
+        pl: i32,
+    ) -> Result<i64, HostErr> {
         Ok(crate::hostfns::send(self, tp, tl, np, nl, pp, pl)? as i64)
     }
     fn op_msg_sender_uid(&mut self) -> Result<i64, HostErr> {
@@ -1790,17 +1957,24 @@ pub unsafe extern "C-unwind" fn ruleset_roll(player_id: i32, count: i32, sides: 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_roll_ask(player_id: i32, count: i32, sides: i32, source: i32) -> i32 {
-    with_host(|h| match h.op_roll_ask([player_id, count, sides, source, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_roll_ask(
+    player_id: i32,
+    count: i32,
+    sides: i32,
+    source: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_roll_ask([player_id, count, sides, source, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_log(player_id: i32, ptr: i32, len: i32) {
     with_host(|h| match h.op_log([player_id, ptr, len, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -1808,7 +1982,7 @@ pub unsafe extern "C-unwind" fn ruleset_log(player_id: i32, ptr: i32, len: i32) 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_effect(player_id: i32, ptr: i32, len: i32) {
     with_host(|h| match h.op_effect([player_id, ptr, len, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -1847,10 +2021,12 @@ pub unsafe extern "C-unwind" fn ruleset_player_pos(player_id: i32) -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_tile_steps_ahead(player_id: i32, steps: i32) -> i32 {
-    with_host(|h| match h.op_tile_steps_ahead([player_id, steps, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_tile_steps_ahead([player_id, steps, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -1903,18 +2079,22 @@ pub unsafe extern "C-unwind" fn ruleset_owned_at(player_id: i32, index: i32) -> 
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_tile_is(tile: i32, kind_ptr: i32, kind_len: i32) -> i32 {
-    with_host(|h| match h.op_tile_is([tile, kind_ptr, kind_len, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_tile_is([tile, kind_ptr, kind_len, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_tile_attr(tile: i32, attr_ptr: i32, attr_len: i32) -> i32 {
-    with_host(|h| match h.op_tile_attr([tile, attr_ptr, attr_len, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_tile_attr([tile, attr_ptr, attr_len, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -1924,10 +2104,12 @@ pub unsafe extern "C-unwind" fn ruleset_tile_in(
     class_ptr: i32,
     class_len: i32,
 ) -> i32 {
-    with_host(|h| match h.op_tile_in([player_id, tile, class_ptr, class_len, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_tile_in([player_id, tile, class_ptr, class_len, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -1965,7 +2147,7 @@ pub unsafe extern "C-unwind" fn ruleset_rent_houses_of(tile: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_houses(tile: i32, n: i32) {
     with_host(|h| match h.op_set_houses([tile, n, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -1989,7 +2171,7 @@ pub unsafe extern "C-unwind" fn ruleset_mortgaged_of(tile: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_mortgaged(tile: i32, v: i32) {
     with_host(|h| match h.op_set_mortgaged([tile, v, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -1997,7 +2179,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_mortgaged(tile: i32, v: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_owner(tile: i32, player_id: i32) {
     with_host(|h| match h.op_set_owner([tile, player_id, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2028,18 +2210,22 @@ pub unsafe extern "C-unwind" fn ruleset_neighbor(player_id: i32, dir: i32) -> i3
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_players_on_count(tile: i32, except: i32) -> i32 {
-    with_host(|h| match h.op_players_on_count([tile, except, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_players_on_count([tile, except, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_players_on_at(tile: i32, except: i32, index: i32) -> i32 {
-    with_host(|h| match h.op_players_on_at([tile, except, index, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_players_on_at([tile, except, index, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2083,7 +2269,12 @@ pub unsafe extern "C-unwind" fn ruleset_money(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_gain(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_gain(
+    player_id: i32,
+    amount: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
     with_host(|h| match h.op_gain([player_id, amount, ptr, len, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -2091,23 +2282,44 @@ pub unsafe extern "C-unwind" fn ruleset_gain(player_id: i32, amount: i32, ptr: i
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_gain_typed(player_id: i32, amount: i32, tp: i32, tl: i32, xp: i32, xl: i32) -> i32 {
-    with_host(|h| match h.op_gain_typed([player_id, amount, tp, tl, xp, xl, ]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_gain_typed(
+    player_id: i32,
+    amount: i32,
+    tp: i32,
+    tl: i32,
+    xp: i32,
+    xl: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_gain_typed([player_id, amount, tp, tl, xp, xl]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_adjust_money(player_id: i32, delta: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_adjust_money([player_id, delta, ptr, len, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_adjust_money(
+    player_id: i32,
+    delta: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_adjust_money([player_id, delta, ptr, len, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_pay(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_pay(
+    player_id: i32,
+    amount: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
     with_host(|h| match h.op_pay([player_id, amount, ptr, len, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -2115,7 +2327,13 @@ pub unsafe extern "C-unwind" fn ruleset_pay(player_id: i32, amount: i32, ptr: i3
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_pay_to(from: i32, to: i32, amount: i32, ptr: i32, len: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_pay_to(
+    from: i32,
+    to: i32,
+    amount: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
     with_host(|h| match h.op_pay_to([from, to, amount, ptr, len, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -2123,7 +2341,13 @@ pub unsafe extern "C-unwind" fn ruleset_pay_to(from: i32, to: i32, amount: i32, 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_pay_total(from: i32, to: i32, amount: i32, ptr: i32, len: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_pay_total(
+    from: i32,
+    to: i32,
+    amount: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
     with_host(|h| match h.op_pay_total([from, to, amount, ptr, len, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -2131,7 +2355,13 @@ pub unsafe extern "C-unwind" fn ruleset_pay_total(from: i32, to: i32, amount: i3
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_pay_leg(from: i32, to: i32, amount: i32, ptr: i32, len: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_pay_leg(
+    from: i32,
+    to: i32,
+    amount: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
     with_host(|h| match h.op_pay_leg([from, to, amount, ptr, len, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -2168,10 +2398,12 @@ pub unsafe extern "C-unwind" fn ruleset_charge_rent(
     tile: i32,
     milli_scale: i32,
 ) -> i32 {
-    with_host(|h| match h.op_charge_rent([player_id, tile, milli_scale, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_charge_rent([player_id, tile, milli_scale, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2184,10 +2416,12 @@ pub unsafe extern "C-unwind" fn ruleset_offer_buy(player_id: i32, tile: i32) -> 
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_offer_force_buy(player_id: i32, tile: i32) -> i32 {
-    with_host(|h| match h.op_offer_force_buy([player_id, tile, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_offer_force_buy([player_id, tile, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2201,37 +2435,63 @@ pub unsafe extern "C-unwind" fn ruleset_offer_build(player_id: i32, tile: i32) -
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_add_to_hand(player_id: i32, ptr: i32, len: i32) {
     with_host(|h| match h.op_add_to_hand([player_id, ptr, len, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_deck(player_id: i32, ptr: i32, len: i32, shuffle: i32) {
-    with_host(|h| match h.op_add_to_deck([player_id, ptr, len, shuffle, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_add_to_deck(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    shuffle: i32,
+) {
+    with_host(
+        |h| match h.op_add_to_deck([player_id, ptr, len, shuffle, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_deck_at(player_id: i32, ptr: i32, len: i32, pos: i32) {
-    with_host(|h| match h.op_add_to_deck_at([player_id, ptr, len, pos, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_add_to_deck_at(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    pos: i32,
+) {
+    with_host(
+        |h| match h.op_add_to_deck_at([player_id, ptr, len, pos, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_take_card(player_id: i32, pile: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_take_card([player_id, pile, ptr, len, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_take_card(
+    player_id: i32,
+    pile: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_take_card([player_id, pile, ptr, len, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_cards_in(player_id: i32, pile: i32, buf: i32, cap: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_cards_in(
+    player_id: i32,
+    pile: i32,
+    buf: i32,
+    cap: i32,
+) -> i32 {
     with_host(|h| match h.op_cards_in([player_id, pile, buf, cap, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -2241,7 +2501,7 @@ pub unsafe extern "C-unwind" fn ruleset_cards_in(player_id: i32, pile: i32, buf:
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_to_discard(player_id: i32, ptr: i32, len: i32) {
     with_host(|h| match h.op_to_discard([player_id, ptr, len, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2264,10 +2524,12 @@ pub unsafe extern "C-unwind" fn ruleset_hand_size(player_id: i32) -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_discard_count(player_id: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_discard_count([player_id, ptr, len, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_discard_count([player_id, ptr, len, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2287,43 +2549,65 @@ pub unsafe extern "C-unwind" fn ruleset_discard_size(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_discard_from_hand(player_id: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_discard_from_hand([player_id, ptr, len, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_discard_from_hand(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_discard_from_hand([player_id, ptr, len, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_shuffle_into_deck(player_id: i32, hand: i32, discard: i32) -> i32 {
-    with_host(|h| match h.op_shuffle_into_deck([player_id, hand, discard, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_shuffle_into_deck(
+    player_id: i32,
+    hand: i32,
+    discard: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_shuffle_into_deck([player_id, hand, discard, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_place_card_at(player_id: i32, cptr: i32, cl: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_place_card_at([player_id, cptr, cl, ptr, len, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_place_card_at(
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_place_card_at([player_id, cptr, cl, ptr, len, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_dest(dest: i32) {
     with_host(|h| match h.op_set_dest([dest, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_transfer_to_dest(to: i32, dest: i32) {
-    with_host(|h| match h.op_set_transfer_to_dest([to, dest, 0, 0, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_set_transfer_to_dest([to, dest, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2361,7 +2645,7 @@ pub unsafe extern "C-unwind" fn ruleset_add_rent_unit_bonus(n: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_teleport_to(player_id: i32, tile: i32) {
     with_host(|h| match h.op_teleport_to([player_id, tile, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2377,7 +2661,7 @@ pub unsafe extern "C-unwind" fn ruleset_unplace_card() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_event_expire(ip: i32, il: i32, removed: i32) {
     with_host(|h| match h.op_event_expire([ip, il, removed, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2392,16 +2676,18 @@ pub unsafe extern "C-unwind" fn ruleset_event_is_active(ip: i32, il: i32) -> i32
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_event_deck_push(ip: i32, il: i32, face_down: i32) {
-    with_host(|h| match h.op_event_deck_push([ip, il, face_down, 0, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_event_deck_push([ip, il, face_down, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_event_banish(ip: i32, il: i32) {
     with_host(|h| match h.op_event_banish([ip, il, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2462,9 +2748,6 @@ pub unsafe extern "C-unwind" fn ruleset_is_placed() -> i32 {
     })
 }
 
-
-
-
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_self_prop(kp: i32, kl: i32) -> i32 {
     with_host(|h| match h.op_self_prop([kp, kl, 0, 0, 0, 0]) {
@@ -2513,43 +2796,50 @@ pub unsafe extern "C-unwind" fn ruleset_set_prop_at(uid: i32, kp: i32, kl: i32, 
     })
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_state_get(player_id: i32, ptr: i32, len: i32, field: i32) -> i32 {
-    with_host(|h| match h.op_state_get([player_id, ptr, len, field, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_state_get(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    field: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_state_get([player_id, ptr, len, field, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_state_set(player_id: i32, ptr: i32, len: i32, field: i32, v: i32) -> i32 {
-    with_host(|h| match h.op_state_set([player_id, ptr, len, field, v, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_state_set(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    field: i32,
+    v: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_state_set([player_id, ptr, len, field, v, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_state_add(player_id: i32, ptr: i32, len: i32, delta: i32) -> i32 {
-    with_host(|h| match h.op_state_add([player_id, ptr, len, delta, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_state_add(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    delta: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_state_add([player_id, ptr, len, delta, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2563,13 +2853,18 @@ pub unsafe extern "C-unwind" fn ruleset_slot(player_id: i32, ptr: i32, len: i32)
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_slot(player_id: i32, ptr: i32, len: i32, v: i32) {
     with_host(|h| match h.op_set_slot([player_id, ptr, len, v, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_inc_slot(player_id: i32, ptr: i32, len: i32, by: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_inc_slot(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    by: i32,
+) -> i32 {
     with_host(|h| match h.op_inc_slot([player_id, ptr, len, by, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -2585,11 +2880,19 @@ pub unsafe extern "C-unwind" fn ruleset_group_pool(player_id: i32, np: i32, nl: 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
-    with_host(|h| match h.op_add_group_pool([player_id, np, nl, n, max, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_add_group_pool(
+    player_id: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_add_group_pool([player_id, np, nl, n, max, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2602,26 +2905,37 @@ pub unsafe extern "C-unwind" fn ruleset_group_skill(player_id: i32, buf: i32, ca
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_persona_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_persona_skill([player_id, buf, cap, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_persona_skill([player_id, buf, cap, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_group_skills(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_group_skills([player_id, buf, cap, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_group_skills([player_id, buf, cap, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_group_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32 {
-    with_host(|h| match h.op_add_group_skill([player_id, p, n, extra, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_add_group_skill(
+    player_id: i32,
+    p: i32,
+    n: i32,
+    extra: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_add_group_skill([player_id, p, n, extra, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2657,10 +2971,12 @@ pub unsafe extern "C-unwind" fn ruleset_gain_marker(
     why_p: i32,
     why_l: i32,
 ) -> i32 {
-    with_host(|h| match h.op_gain_marker([player_id, name_p, name_l, n, why_p, why_l]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_gain_marker([player_id, name_p, name_l, n, why_p, why_l]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2672,10 +2988,12 @@ pub unsafe extern "C-unwind" fn ruleset_spend_marker(
     why_p: i32,
     why_l: i32,
 ) -> i32 {
-    with_host(|h| match h.op_spend_marker([player_id, name_p, name_l, n, why_p, why_l]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_spend_marker([player_id, name_p, name_l, n, why_p, why_l]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2685,48 +3003,63 @@ pub unsafe extern "C-unwind" fn ruleset_add_marker_max(
     name_l: i32,
     n: i32,
 ) -> i32 {
-    with_host(|h| match h.op_add_marker_max([player_id, name_p, name_l, n, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_add_marker_max([player_id, name_p, name_l, n, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_state_set_flags(player_id: i32, kp: i32, kn: i32, flags: i32) {
-    with_host(|h| match h.op_state_set_flags([player_id, kp, kn, flags, 0, 0]) {
-        Ok(_) => 0,
-        Err(e) => abort_host(e),
-    });
+pub unsafe extern "C-unwind" fn ruleset_state_set_flags(
+    player_id: i32,
+    kp: i32,
+    kn: i32,
+    flags: i32,
+) {
+    with_host(
+        |h| match h.op_state_set_flags([player_id, kp, kn, flags, 0, 0]) {
+            Ok(_) => 0,
+            Err(e) => abort_host(e),
+        },
+    );
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_raise_after(player_id: i32, np: i32, nl: i32, value: i32) {
-    with_host(|h| match h.op_raise_after([player_id, np, nl, value, 0, 0]) {
-        Ok(_) => 0,
-        Err(e) => abort_host(e),
-    });
+    with_host(
+        |h| match h.op_raise_after([player_id, np, nl, value, 0, 0]) {
+            Ok(_) => 0,
+            Err(e) => abort_host(e),
+        },
+    );
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_apply_abnormal(player_id: i32, kind: i32, n: i32, to: i32) {
-    with_host(|h| match h.op_apply_abnormal([player_id, kind, n, to, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_apply_abnormal([player_id, kind, n, to, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_skip_main_move(player_id: i32, locked: i32) {
-    with_host(|h| match h.op_skip_main_move([player_id, locked, 0, 0, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_skip_main_move([player_id, locked, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_clear_move_skip(player_id: i32) {
     with_host(|h| match h.op_clear_move_skip([player_id, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2734,7 +3067,7 @@ pub unsafe extern "C-unwind" fn ruleset_clear_move_skip(player_id: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_give_extra_turn(player_id: i32) {
     with_host(|h| match h.op_give_extra_turn([player_id, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2742,7 +3075,7 @@ pub unsafe extern "C-unwind" fn ruleset_give_extra_turn(player_id: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_end_turn_now(player_id: i32) {
     with_host(|h| match h.op_end_turn_now([player_id, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2754,10 +3087,12 @@ pub unsafe extern "C-unwind" fn ruleset_teleport_as(
     resolve: i32,
     as_main: i32,
 ) {
-    with_host(|h| match h.op_teleport_as([player_id, tile, resolve, as_main, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_teleport_as([player_id, tile, resolve, as_main, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2768,10 +3103,12 @@ pub unsafe extern "C-unwind" fn ruleset_log_as(
     msg_ptr: i32,
     msg_len: i32,
 ) {
-    with_host(|h| match h.op_log_as([player_id, kind_ptr, kind_len, msg_ptr, msg_len, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_log_as([player_id, kind_ptr, kind_len, msg_ptr, msg_len, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -2825,7 +3162,7 @@ pub unsafe extern "C-unwind" fn ruleset_persona_is(player_id: i32, ptr: i32, len
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_persona(player_id: i32, ptr: i32, len: i32) {
     with_host(|h| match h.op_set_persona([player_id, ptr, len, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2841,7 +3178,7 @@ pub unsafe extern "C-unwind" fn ruleset_in_group(player_id: i32, ptr: i32, len: 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_opt_int(v: i32) {
     with_host(|h| match h.op_opt_int([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2849,7 +3186,7 @@ pub unsafe extern "C-unwind" fn ruleset_opt_int(v: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_opt_str(ptr: i32, len: i32) {
     with_host(|h| match h.op_opt_str([ptr, len, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2857,7 +3194,7 @@ pub unsafe extern "C-unwind" fn ruleset_opt_str(ptr: i32, len: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_opt_tile(tile: i32, lp: i32, ll: i32) {
     with_host(|h| match h.op_opt_tile([tile, lp, ll, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2865,7 +3202,7 @@ pub unsafe extern "C-unwind" fn ruleset_opt_tile(tile: i32, lp: i32, ll: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_opt_price(price: i32) {
     with_host(|h| match h.op_opt_price([price, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -2873,17 +3210,26 @@ pub unsafe extern "C-unwind" fn ruleset_opt_price(price: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_opt_ai(ai: i32) {
     with_host(|h| match h.op_opt_ai([ai, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_ask(kind: i32, player_id: i32, title_ptr: i32, title_len: i32, text_ptr: i32, text_len: i32) -> i32 {
-    with_host(|h| match h.op_ask([kind, player_id, title_ptr, title_len, text_ptr, text_len, ]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_ask(
+    kind: i32,
+    player_id: i32,
+    title_ptr: i32,
+    title_len: i32,
+    text_ptr: i32,
+    text_len: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_ask([kind, player_id, title_ptr, title_len, text_ptr, text_len]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3073,7 +3419,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_price() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_price(v: i32) {
     with_host(|h| match h.op_trig_set_price([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3089,7 +3435,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_deal_owner() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_deal_owner(v: i32) {
     with_host(|h| match h.op_trig_set_deal_owner([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3105,7 +3451,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_deal_houses() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_deal_houses(v: i32) {
     with_host(|h| match h.op_trig_set_deal_houses([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3121,7 +3467,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_deal_mortgaged() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_deal_mortgaged(v: i32) {
     with_host(|h| match h.op_trig_set_deal_mortgaged([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3129,7 +3475,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_deal_mortgaged(v: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_reason(ptr: i32, len: i32) {
     with_host(|h| match h.op_trig_set_reason([ptr, len, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3137,7 +3483,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_reason(ptr: i32, len: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_move_roll(v: i32) {
     with_host(|h| match h.op_trig_set_move_roll([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3145,7 +3491,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_move_roll(v: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_amount(v: i32) {
     with_host(|h| match h.op_trig_set_pay_amount([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3153,7 +3499,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_amount(v: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_target(to: i32) {
     with_host(|h| match h.op_trig_set_pay_target([to, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3161,7 +3507,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_target(to: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_cancelled() {
     with_host(|h| match h.op_trig_set_cancelled([0, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3169,7 +3515,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_cancelled() {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_negate_effect() {
     with_host(|h| match h.op_trig_set_negate_effect([0, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3177,7 +3523,7 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_negate_effect() {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_spare(seat: i32) {
     with_host(|h| match h.op_trig_set_spare([seat, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3255,11 +3601,20 @@ pub unsafe extern "C-unwind" fn ruleset_trig_effect_value(i: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_declare_effect(kp: i32, kl: i32, target: i32, from: i32, tile: i32, value: i32) {
-    with_host(|h| match h.op_declare_effect([kp, kl, target, from, tile, value]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_declare_effect(
+    kp: i32,
+    kl: i32,
+    target: i32,
+    from: i32,
+    tile: i32,
+    value: i32,
+) {
+    with_host(
+        |h| match h.op_declare_effect([kp, kl, target, from, tile, value]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3272,10 +3627,12 @@ pub unsafe extern "C-unwind" fn ruleset_trig_card_is(ptr: i32, len: i32) -> i32 
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_play_card(id_ptr: i32, id_len: i32, player_id: i32) -> i32 {
-    with_host(|h| match h.op_play_card([id_ptr, id_len, player_id, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_play_card([id_ptr, id_len, player_id, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3288,16 +3645,18 @@ pub unsafe extern "C-unwind" fn ruleset_card_move(player_id: i32) -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_card_replayable(player_id: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_card_replayable([player_id, ptr, len, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_card_replayable([player_id, ptr, len, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_roller(player_id: i32) {
     with_host(|h| match h.op_set_roller([player_id, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3305,7 +3664,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_roller(player_id: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_steps(n: i32) {
     with_host(|h| match h.op_set_steps([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3313,7 +3672,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_steps(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_reverse(on: i32) {
     with_host(|h| match h.op_set_reverse([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3321,7 +3680,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_reverse(on: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_signed(on: i32) {
     with_host(|h| match h.op_set_signed([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3329,7 +3688,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_signed(on: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_stop_at(n: i32) {
     with_host(|h| match h.op_set_stop_at([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3337,7 +3696,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_stop_at(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_parity(n: i32) {
     with_host(|h| match h.op_set_parity([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3345,7 +3704,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_parity(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_resolve(on: i32) {
     with_host(|h| match h.op_set_resolve([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3353,7 +3712,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_resolve(on: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_settle_tile(n: i32) {
     with_host(|h| match h.op_set_settle_tile([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3361,7 +3720,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_settle_tile(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_pay_factor(n: i32) {
     with_host(|h| match h.op_set_pay_factor([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3369,7 +3728,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_pay_factor(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_rent_factor(n: i32) {
     with_host(|h| match h.op_set_rent_factor([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3377,7 +3736,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_rent_factor(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_no_buy(on: i32) {
     with_host(|h| match h.op_set_no_buy([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3385,7 +3744,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_no_buy(on: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_no_build(on: i32) {
     with_host(|h| match h.op_set_no_build([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3393,7 +3752,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_no_build(on: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_build_anywhere(on: i32) {
     with_host(|h| match h.op_set_build_anywhere([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3401,7 +3760,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_build_anywhere(on: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_kind(kind: i32) {
     with_host(|h| match h.op_set_kind([kind, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3409,7 +3768,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_kind(kind: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_teleport_to(tile: i32) {
     with_host(|h| match h.op_set_teleport_to([tile, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3417,33 +3776,39 @@ pub unsafe extern "C-unwind" fn ruleset_set_teleport_to(tile: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_start(tile: i32, ptr: i32, len: i32) {
     with_host(|h| match h.op_set_start([tile, ptr, len, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_base_dice(count: i32, sides: i32, ptr: i32, len: i32) {
-    with_host(|h| match h.op_set_base_dice([count, sides, ptr, len, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_set_base_dice([count, sides, ptr, len, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_add_base_dice(count: i32, sides: i32, ptr: i32, len: i32) {
-    with_host(|h| match h.op_add_base_dice([count, sides, ptr, len, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_add_base_dice([count, sides, ptr, len, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_add_extra_dice(count: i32, sides: i32, ptr: i32, len: i32) {
-    with_host(|h| match h.op_add_extra_dice([count, sides, ptr, len, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_add_extra_dice([count, sides, ptr, len, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3457,7 +3822,7 @@ pub unsafe extern "C-unwind" fn ruleset_move_stopped() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_min_roll(n: i32) {
     with_host(|h| match h.op_set_min_roll([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3465,7 +3830,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_min_roll(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_extra_steps(n: i32) {
     with_host(|h| match h.op_set_extra_steps([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3473,7 +3838,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_extra_steps(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_more_steps(n: i32) {
     with_host(|h| match h.op_set_more_steps([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3481,7 +3846,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_more_steps(n: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_tag(kp: i32, kl: i32, v: i32) {
     with_host(|h| match h.op_set_tag([kp, kl, v, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3489,7 +3854,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_tag(kp: i32, kl: i32, v: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_tag_id(key_id: i32, v: i32) {
     with_host(|h| match h.op_set_tag_id([key_id, v, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3505,21 +3870,22 @@ pub unsafe extern "C-unwind" fn ruleset_recorded_roll() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_settle_as_agent(on: i32) {
     with_host(|h| match h.op_set_settle_as_agent([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_plan_add_follower(player_id: i32) {
-    with_host(|h| match h.op_plan_add_follower([player_id, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_plan_add_follower([player_id, 0, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_move_stop_at() -> i32 {
     with_host(|h| match h.op_move_stop_at([0, 0, 0, 0, 0, 0]) {
@@ -3627,31 +3993,35 @@ pub unsafe extern "C-unwind" fn ruleset_play_doubled() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_play_doubled(n: i32) {
     with_host(|h| match h.op_set_play_doubled([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_schedule_turn_end(player_id: i32, mode: i32) {
-    with_host(|h| match h.op_schedule_turn_end([player_id, mode, 0, 0, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_schedule_turn_end([player_id, mode, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_no_money_loss(player_id: i32) {
-    with_host(|h| match h.op_set_no_money_loss([player_id, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_set_no_money_loss([player_id, 0, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_fixed_roll(n: i32) {
     with_host(|h| match h.op_set_fixed_roll([n, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3667,7 +4037,7 @@ pub unsafe extern "C-unwind" fn ruleset_fixed_roll() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_next_steps(player_id: i32, n: i32) {
     with_host(|h| match h.op_set_next_steps([player_id, n, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3680,7 +4050,6 @@ pub unsafe extern "C-unwind" fn ruleset_turn_main_steps() -> i32 {
     })
 }
 
-
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_card_build(player_id: i32, tile: i32) -> i32 {
     with_host(|h| match h.op_card_build([player_id, tile, 0, 0, 0, 0]) {
@@ -3692,7 +4061,7 @@ pub unsafe extern "C-unwind" fn ruleset_card_build(player_id: i32, tile: i32) ->
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_can_build(on: i32) {
     with_host(|h| match h.op_set_can_build([on, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3700,7 +4069,7 @@ pub unsafe extern "C-unwind" fn ruleset_set_can_build(on: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_clear_dice() {
     with_host(|h| match h.op_clear_dice([0, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3722,19 +4091,29 @@ pub unsafe extern "C-unwind" fn ruleset_card_buy(player_id: i32, tile: i32) -> i
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_buy_quotes(player_id: i32, kind: i32, buf: i32, n: i32, out: i32) -> i32 {
-    with_host(|h| match h.op_buy_quotes([player_id, kind, buf, n, out, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_buy_quotes(
+    player_id: i32,
+    kind: i32,
+    buf: i32,
+    n: i32,
+    out: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_buy_quotes([player_id, kind, buf, n, out, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_ai_agent_choice(player_id: i32, buf: i32, n: i32) -> i32 {
-    with_host(|h| match h.op_ai_agent_choice([player_id, buf, n, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_ai_agent_choice([player_id, buf, n, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3746,19 +4125,33 @@ pub unsafe extern "C-unwind" fn ruleset_buy(player_id: i32, tile: i32, kind: i32
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_acquire(player_id: i32, from: i32, tile: i32, price: i32) -> i32 {
-    with_host(|h| match h.op_acquire([player_id, from, tile, price, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_acquire(
+    player_id: i32,
+    from: i32,
+    tile: i32,
+    price: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_acquire([player_id, from, tile, price, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_agent_offer(player_id: i32, agent: i32, tile: i32, kind: i32) -> i32 {
-    with_host(|h| match h.op_agent_offer([player_id, agent, tile, kind, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_agent_offer(
+    player_id: i32,
+    agent: i32,
+    tile: i32,
+    kind: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_agent_offer([player_id, agent, tile, kind, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3779,10 +4172,12 @@ pub unsafe extern "C-unwind" fn ruleset_card_immune(player_id: i32, cptr: i32, c
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_card_mortgage(player_id: i32, tile: i32) -> i32 {
-    with_host(|h| match h.op_card_mortgage([player_id, tile, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_card_mortgage([player_id, tile, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3791,18 +4186,26 @@ pub unsafe extern "C-unwind" fn ruleset_apply_mortgage(
     tile: i32,
     amount: i32,
 ) -> i32 {
-    with_host(|h| match h.op_apply_mortgage([player_id, tile, amount, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_apply_mortgage([player_id, tile, amount, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
-    with_host(|h| match h.op_apply_redeem([player_id, tile, amount, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_apply_redeem(
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_apply_redeem([player_id, tile, amount, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3812,18 +4215,22 @@ pub unsafe extern "C-unwind" fn ruleset_pay_buy(
     amount: i32,
     kind: i32,
 ) -> i32 {
-    with_host(|h| match h.op_pay_buy([player_id, tile, amount, kind, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_pay_buy([player_id, tile, amount, kind, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_pay_build(player_id: i32, tile: i32, amount: i32) -> i32 {
-    with_host(|h| match h.op_pay_build([player_id, tile, amount, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_pay_build([player_id, tile, amount, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3834,18 +4241,27 @@ pub unsafe extern "C-unwind" fn ruleset_assign_deed(
     houses: i32,
     mortgaged: i32,
 ) -> i32 {
-    with_host(|h| match h.op_assign_deed([player_id, tile, owner, houses, mortgaged, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_assign_deed([player_id, tile, owner, houses, mortgaged, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_text_mentions(cptr: i32, cl: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_card_text_mentions([cptr, cl, np, nl, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_card_text_mentions(
+    cptr: i32,
+    cl: i32,
+    np: i32,
+    nl: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_card_text_mentions([cptr, cl, np, nl, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3857,11 +4273,18 @@ pub unsafe extern "C-unwind" fn ruleset_card_prop(ip: i32, il: i32, kp: i32, kl:
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_gain_fixed([player_id, amount, ptr, len, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_gain_fixed(
+    player_id: i32,
+    amount: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_gain_fixed([player_id, amount, ptr, len, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3873,11 +4296,20 @@ pub unsafe extern "C-unwind" fn ruleset_paid_in_settle() -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_place_card_on(player_id: i32, tile: i32, cptr: i32, cl: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_place_card_on([player_id, tile, cptr, cl, ptr, len, ]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_place_card_on(
+    player_id: i32,
+    tile: i32,
+    cptr: i32,
+    cl: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_place_card_on([player_id, tile, cptr, cl, ptr, len]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3891,31 +4323,45 @@ pub unsafe extern "C-unwind" fn ruleset_play_from_hand() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_build_discount(n: i32, layers: i32) {
     with_host(|h| match h.op_set_build_discount([n, layers, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_card_immune(player_id: i32, cptr: i32, cl: i32, on: i32) -> i32 {
-    with_host(|h| match h.op_set_card_immune([player_id, cptr, cl, on, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_set_card_immune(
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    on: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_set_card_immune([player_id, cptr, cl, on, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_card_tile(player_id: i32, cptr: i32, cl: i32, tile: i32) -> i32 {
-    with_host(|h| match h.op_set_card_tile([player_id, cptr, cl, tile, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_set_card_tile(
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    tile: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_set_card_tile([player_id, cptr, cl, tile, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_extreme(v: i32) {
     with_host(|h| match h.op_set_extreme([v, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -3945,16 +4391,27 @@ pub unsafe extern "C-unwind" fn ruleset_turn_start_pos(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_unplace_card_named(player_id: i32, cptr: i32, cl: i32) -> i32 {
-    with_host(|h| match h.op_unplace_card_named([player_id, cptr, cl, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_unplace_card_named(
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_unplace_card_named([player_id, cptr, cl, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
-
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_tok_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_tok_names(
+    player_id: i32,
+    p: i32,
+    n: i32,
+    buf: i32,
+    cap: i32,
+) -> i32 {
     with_host(|h| match h.op_tok_names([player_id, p, n, buf, cap, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -3963,26 +4420,30 @@ pub unsafe extern "C-unwind" fn ruleset_tok_names(player_id: i32, p: i32, n: i32
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_designations(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_designations([player_id, buf, cap, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_designations([player_id, buf, cap, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_cancel_designation(seat: i32) {
     with_host(|h| match h.op_cancel_designation([seat, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_designation_cancelled(seat: i32) -> i32 {
-    with_host(|h| match h.op_designation_cancelled([seat, 0, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_designation_cancelled([seat, 0, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3994,19 +4455,27 @@ pub unsafe extern "C-unwind" fn ruleset_gate(player_id: i32, kind: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_settle_at(player_id: i32, tile: i32, main: i32) -> i32 {
-    with_host(|h| match h.op_card_settle_at([player_id, tile, main, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_card_settle_at(
+    player_id: i32,
+    tile: i32,
+    main: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_card_settle_at([player_id, tile, main, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_card_offer_build(player_id: i32, buf: i32, n: i32) -> i32 {
-    with_host(|h| match h.op_card_offer_build([player_id, buf, n, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_card_offer_build([player_id, buf, n, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -4019,21 +4488,23 @@ pub unsafe extern "C-unwind" fn ruleset_do_move_roll(player_id: i32) -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_placed_cards(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_placed_cards([player_id, buf, cap, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_placed_cards([player_id, buf, cap, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_field_instances(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_field_instances([player_id, buf, cap, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_field_instances([player_id, buf, cap, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
-
-
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_unplace_at(uid: i32) -> i32 {
@@ -4094,39 +4565,76 @@ pub unsafe extern "C-unwind" fn ruleset_set_immune_at(uid: i32, on: i32) -> i32 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_build_cost_pct(pct: i32) {
     with_host(|h| match h.op_set_build_cost_pct([pct, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_card_face_down(player_id: i32, cptr: i32, cl: i32, down: i32) -> i32 {
-    with_host(|h| match h.op_set_card_face_down([player_id, cptr, cl, down, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_set_card_face_down(
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    down: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_set_card_face_down([player_id, cptr, cl, down, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
-
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_card_face_down(player_id: i32, cptr: i32, cl: i32) -> i32 {
-    with_host(|h| match h.op_card_face_down([player_id, cptr, cl, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_card_face_down([player_id, cptr, cl, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_place_mark(tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_place_mark(tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_place_mark(
+    tile: i32,
+    kp: i32,
+    kl: i32,
+    cptr: i32,
+    cl: i32,
+    owner: i32,
+    src: i32,
+    count: i32,
+    stack: i32,
+    np: i32,
+    nl: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_place_mark(tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_place_mark_pair(a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_place_mark_pair(a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
+pub unsafe extern "C-unwind" fn ruleset_place_mark_pair(
+    a: i32,
+    b: i32,
+    kp: i32,
+    kl: i32,
+    cptr: i32,
+    cl: i32,
+    owner: i32,
+    src: i32,
+    count: i32,
+    stack: i32,
+    np: i32,
+    nl: i32,
+) -> i32 {
+    with_host(|h| {
+        match h.op_place_mark_pair(a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        }
     })
 }
 #[no_mangle]
@@ -4137,7 +4645,12 @@ pub unsafe extern "C-unwind" fn ruleset_count_marks_f(tile: i32, fp: i32, fl: i3
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_bump_mark_f(tile: i32, fp: i32, fl: i32, delta: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_bump_mark_f(
+    tile: i32,
+    fp: i32,
+    fl: i32,
+    delta: i32,
+) -> i32 {
     with_host(|h| match h.op_bump_mark_f(tile, fp, fl, delta) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -4179,7 +4692,12 @@ pub unsafe extern "C-unwind" fn ruleset_counter_self(np: i32, nl: i32) -> i32 {
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_counter_self(np: i32, nl: i32, n: i32, max: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_add_counter_self(
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
     with_host(|h| match h.op_add_counter_self(np, nl, n, max) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -4200,25 +4718,47 @@ pub unsafe extern "C-unwind" fn ruleset_counter_at(uid: i32, np: i32, nl: i32) -
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_counter_at(uid: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_add_counter_at(
+    uid: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
     with_host(|h| match h.op_add_counter_at(uid, np, nl, n, max) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_counter(player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_card_counter(
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    np: i32,
+    nl: i32,
+) -> i32 {
     with_host(|h| match h.op_card_counter(player_id, cptr, cl, np, nl) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_card_counter(player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
-    with_host(|h| match h.op_add_card_counter(player_id, cptr, cl, np, nl, n, max) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_add_card_counter(
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_add_card_counter(player_id, cptr, cl, np, nl, n, max) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_count_held(np: i32, nl: i32, player_id: i32) -> i32 {
@@ -4228,7 +4768,13 @@ pub unsafe extern "C-unwind" fn ruleset_count_held(np: i32, nl: i32, player_id: 
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_held(np: i32, nl: i32, player_id: i32, n: i32, max: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_add_held(
+    np: i32,
+    nl: i32,
+    player_id: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
     with_host(|h| match h.op_add_held(np, nl, player_id, n, max) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -4244,16 +4790,26 @@ pub unsafe extern "C-unwind" fn ruleset_count_held_name(np: i32, nl: i32, player
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_held_name(np: i32, nl: i32, player_id: i32, v: i32) {
     with_host(|h| match h.op_set_held_name(np, nl, player_id, v) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_move_units(np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32) -> i32 {
-    with_host(|h| match h.op_move_units(np, nl, from_tile, from_player, to_tile, to_player, n) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+pub unsafe extern "C-unwind" fn ruleset_move_units(
+    np: i32,
+    nl: i32,
+    from_tile: i32,
+    from_player: i32,
+    to_tile: i32,
+    to_player: i32,
+    n: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_move_units(np, nl, from_tile, from_player, to_tile, to_player, n) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_self_uid() -> i32 {
@@ -4263,7 +4819,14 @@ pub unsafe extern "C-unwind" fn ruleset_self_uid() -> i32 {
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_send(tp: i32, tl: i32, np: i32, nl: i32, pp: i32, pl: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_send(
+    tp: i32,
+    tl: i32,
+    np: i32,
+    nl: i32,
+    pp: i32,
+    pl: i32,
+) -> i32 {
     with_host(|h| match h.op_send(tp, tl, np, nl, pp, pl) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -4335,7 +4898,7 @@ pub unsafe extern "C-unwind" fn ruleset_msg_text(p: i32, n: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_msg_reply(v: i32) {
     with_host(|h| match h.op_msg_reply(v) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -4351,35 +4914,42 @@ pub unsafe extern "C-unwind" fn ruleset_trig_name(p: i32, n: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_flash() {
     with_host(|h| match h.op_flash([0, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_no_flash() {
     with_host(|h| match h.op_no_flash([0, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_flash_card(cptr: i32, cl: i32, p: i32, n: i32) {
     with_host(|h| match h.op_flash_card([cptr, cl, p, n, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_flash_card_keyed(kp: i32, kl: i32, cptr: i32, cl: i32, p: i32, n: i32) {
+pub unsafe extern "C-unwind" fn ruleset_flash_card_keyed(
+    kp: i32,
+    kl: i32,
+    cptr: i32,
+    cl: i32,
+    p: i32,
+    n: i32,
+) {
     with_host(|h| match h.op_flash_card_keyed([kp, kl, cptr, cl, p, n]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_flash_tile(tile: i32, p: i32, n: i32) {
     with_host(|h| match h.op_flash_tile([tile, p, n, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
@@ -4393,7 +4963,7 @@ pub unsafe extern "C-unwind" fn ruleset_join_redirect_target() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_join_used() {
     with_host(|h| match h.op_set_join_used([0, 0, 0, 0, 0, 0]) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }

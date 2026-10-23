@@ -85,9 +85,9 @@ fn answer_tile_else_decline(t: &mut Table, tile: usize) {
 
 /// Did this step activate `card` from hand (`kind == "play"` or bare)?
 fn played(step: &Step<'_>, card: &str) -> bool {
-    step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == card && (e.kind == "play" || e.kind.is_empty())
-    })
+    step.events
+        .iter()
+        .any(|e| e.r#type == "card" && e.card == card && (e.kind == "play" || e.kind.is_empty()))
 }
 
 // ------------------------------------------------------------ clause checks
@@ -489,7 +489,9 @@ fn first_accident_blocks_pp_skill_2() {
         while t.prompt().is_some() {
             let p = t.expect_prompt();
             if p.title.key().contains("aya_with")
-                || p.options.iter().any(|o| format!("{o:?}").contains("aya_with"))
+                || p.options
+                    .iter()
+                    .any(|o| format!("{o:?}").contains("aya_with"))
             {
                 return Err(format!(
                     "C-PP-first-accident-02: PP (2) skill prompt offered under 初次演出事故: {}",
@@ -660,10 +662,7 @@ fn no_expect_hand() {
             return Err("C-PP-no-expect-01: [特] 不受任何其他效果影响 -- immune not set".into());
         }
         if !t.draw_pile(0).contains(&"PP:[衍生]共鸣".to_string()) {
-            return Err(format!(
-                "共鸣 not added to draw: {:?}",
-                t.draw_pile(0)
-            ));
+            return Err(format!("共鸣 not added to draw: {:?}", t.draw_pile(0)));
         }
         // Hand limit -1 (determined by (1)); check the prop is live.
         if t.p(0).hand_limit() != Some(4) {
@@ -918,7 +917,10 @@ fn jennifer_place_and_agency_pass() {
         if t.on_field(1, "PP:找回珍妮弗") {
             return Err("C-PP-jennifer-03: card still on field".into());
         }
-        if !t.hand(0).contains(&"PP:[衍生]魔法战队Pastel✽Ranger".to_string()) {
+        if !t
+            .hand(0)
+            .contains(&"PP:[衍生]魔法战队Pastel✽Ranger".to_string())
+        {
             return Err(format!(
                 "C-PP-jennifer-03: Ranger not in user hand: {:?}",
                 t.hand(0)
@@ -1027,7 +1029,10 @@ fn dream_ahead_no_build_and_hand_limit() {
     t.roll(0).unwrap();
     // G-SETTLE-06/07: the only build path is the settle's optional build.
     if t.build(0).is_ok() {
-        panic!("C-PP-dream-ahead-02: build must be refused: {}", t.dump_prompt());
+        panic!(
+            "C-PP-dream-ahead-02: build must be refused: {}",
+            t.dump_prompt()
+        );
     }
     if t.houses(1) != 0 {
         panic!(
@@ -1261,7 +1266,9 @@ fn aya_haruka_hand() {
         }
         let hand = t.hand(0);
         if hand.len() != 1 {
-            return Err(format!("C-PP-aya-haruka-01: hand {hand:?}, expected 1 recycled"));
+            return Err(format!(
+                "C-PP-aya-haruka-01: hand {hand:?}, expected 1 recycled"
+            ));
         }
         let _ = rng;
         Ok(())
@@ -1367,9 +1374,7 @@ fn fans_survive_save_restore() {
     let u1 = m2.world().st.players[1].state_get(FANS_UP);
     let d1 = m2.world().st.players[1].state_get(FANS_DOWN);
     if (u0, d0) != (3, 2) || (u1, d1) != (0, 5) {
-        panic!(
-            "save/restore lost fans: ({u0},{d0}) / ({u1},{d1}), expected (3,2) / (0,5)"
-        );
+        panic!("save/restore lost fans: ({u0},{d0}) / ({u1},{d1}), expected (3,2) / (0,5)");
     }
 }
 
@@ -1406,7 +1411,10 @@ fn aya_skill_2_pay_discount() {
                 break;
             }
             let p = t.expect_prompt();
-            if p.options.iter().any(|o| format!("{o:?}").contains("intOption")) {
+            if p.options
+                .iter()
+                .any(|o| format!("{o:?}").contains("intOption"))
+            {
                 let _ = t.answer_one(y);
             } else {
                 t.decline();
@@ -1459,7 +1467,10 @@ fn eve_skill_2_adds_yd4() {
                 break;
             }
             let p = t.expect_prompt();
-            if p.options.iter().any(|o| format!("{o:?}").contains("intOption")) {
+            if p.options
+                .iter()
+                .any(|o| format!("{o:?}").contains("intOption"))
+            {
                 let _ = t.answer_one(y);
             } else {
                 t.decline();
@@ -1504,7 +1515,10 @@ fn chisato_skill_2_income_boost() {
                 break;
             }
             let p = t.expect_prompt();
-            if p.options.iter().any(|o| format!("{o:?}").contains("intOption")) {
+            if p.options
+                .iter()
+                .any(|o| format!("{o:?}").contains("intOption"))
+            {
                 let _ = t.answer_one(y);
             } else {
                 t.decline();
@@ -1547,7 +1561,10 @@ fn maya_skill_2_watch_pick() {
                 break;
             }
             let p = t.expect_prompt();
-            let is_y = p.options.iter().any(|o| format!("{o:?}").contains("intOption"));
+            let is_y = p
+                .options
+                .iter()
+                .any(|o| format!("{o:?}").contains("intOption"));
             if is_y {
                 let _ = t.answer_one(y);
             } else if p.kind == "pick" || p.kind == "card" {
@@ -1693,9 +1710,7 @@ fn hina_skill_2_borrows_skill() {
     let borrowed = t.state(0, "skill.hinaLottery.borrowed");
     // Face 2 -> pool index 1 = 白鹭千圣.
     if borrowed != 1 {
-        panic!(
-            "C-PP-hina-lottery-02: borrowed index {borrowed}, expected 1 (face 2 = 白鹭千圣)"
-        );
+        panic!("C-PP-hina-lottery-02: borrowed index {borrowed}, expected 1 (face 2 = 白鹭千圣)");
     }
     if !t.on_field(0, "skill:白鹭千圣:保持坦率的你") {
         panic!(
@@ -1873,6 +1888,9 @@ fn band_turn_start_with_prompt_logs_once() {
         .iter()
         .filter(|e| e.r#type == "card" && e.card == BAND_SKILL)
         .count();
-    let outcomes = evs.iter().filter(|e| e.msg.key() == "log.outcome.counter").count();
+    let outcomes = evs
+        .iter()
+        .filter(|e| e.msg.key() == "log.outcome.counter")
+        .count();
     assert_eq!((heads, outcomes), (1, 1), "{:?}", t.keys_since(mark));
 }

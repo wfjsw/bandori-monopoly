@@ -6,8 +6,8 @@
 //!
 //! lap without settling, then pay 1,000 at end of turn.
 
-use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 use card_sdk::abi::ActionKind;
+use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 pub const SIGNPOST: CardDef = CardDef::new(
     "PPP:向着未来的路标",
@@ -18,13 +18,16 @@ pub const SIGNPOST: CardDef = CardDef::new(
         On::Action(Action::AtEnd("owner.out == 0", None, None, at_end)),
     ],
 )
-.props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::EST_COST, 1000)])
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"向着未来的路标"#)
         .raw_name(r#"向着未来的路标"#)
         .tags(&[])
         .text(r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#)
         // sheet cell B14
-        .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
+);
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

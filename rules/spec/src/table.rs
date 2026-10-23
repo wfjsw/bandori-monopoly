@@ -54,7 +54,10 @@ pub fn settle_match(m: &mut Match) {
         }
         m.tick(0.25);
     }
-    panic!("settle: the match did not come to rest: {:?}", m.state().step);
+    panic!(
+        "settle: the match did not come to rest: {:?}",
+        m.state().step
+    );
 }
 
 pub struct Table {
@@ -161,12 +164,7 @@ impl Table {
     /// opening run to P0's 运营. `mode` matters for prompt deadlines -- Solo
     /// never forces a local seat's answer, Casual (online) times out to the
     /// fallback after the prompt's clock + `REMOTE_GRACE`.
-    pub fn with_data(
-        data: Arc<GameData>,
-        chars: &[&str],
-        seed: u64,
-        mode: MatchMode,
-    ) -> Self {
+    pub fn with_data(data: Arc<GameData>, chars: &[&str], seed: u64, mode: MatchMode) -> Self {
         let n = chars.len();
         assert!((2..=10).contains(&n), "2..=10 players");
         let members: Vec<RoomMember> = (1..=n as i32)
@@ -290,7 +288,12 @@ impl Table {
                         who: who as i32 + 1,
                         prompt: p.id,
                         value: v,
-                        cards: p.items.iter().take(p.count.max(0) as usize).cloned().collect(),
+                        cards: p
+                            .items
+                            .iter()
+                            .take(p.count.max(0) as usize)
+                            .cloned()
+                            .collect(),
                     }
                 } else if v == p.fallback && p.title.key().contains("counteract") {
                     StepAct::Decline {
@@ -397,8 +400,11 @@ impl Table {
     /// There is no END-step `act buy` any more -- the settle prompt IS the buy.
     pub fn buy(&mut self, who: usize) -> Result<(), String> {
         let _ = who;
-        let p = self.prompt().ok_or_else(|| "no buy prompt open".to_string())?;
-        if !format!("{:?}", p.title).contains("buy") && !format!("{:?}", p.title).contains("ask.buy")
+        let p = self
+            .prompt()
+            .ok_or_else(|| "no buy prompt open".to_string())?;
+        if !format!("{:?}", p.title).contains("buy")
+            && !format!("{:?}", p.title).contains("ask.buy")
         {
             return Err(format!("open prompt is not a buy: {}", self.dump_prompt()));
         }
@@ -409,11 +415,16 @@ impl Table {
     /// There is no END-step `act build` any more -- the settle prompt IS the build.
     pub fn build(&mut self, who: usize) -> Result<(), String> {
         let _ = who;
-        let p = self.prompt().ok_or_else(|| "no build prompt open".to_string())?;
+        let p = self
+            .prompt()
+            .ok_or_else(|| "no build prompt open".to_string())?;
         if !format!("{:?}", p.title).contains("build")
             && !format!("{:?}", p.title).contains("ask.build")
         {
-            return Err(format!("open prompt is not a build: {}", self.dump_prompt()));
+            return Err(format!(
+                "open prompt is not a build: {}",
+                self.dump_prompt()
+            ));
         }
         self.answer_one(0)
     }
@@ -559,9 +570,9 @@ impl Table {
     pub fn counteract_offered(&self, card: &str) -> bool {
         self.prompt().is_some_and(|p| {
             p.title.key() == "ask.counteract.title"
-                && p.options.iter().any(|o| {
-                    o.key() == "ask.counteract.play" && format!("{o:?}").contains(card)
-                })
+                && p.options
+                    .iter()
+                    .any(|o| o.key() == "ask.counteract.play" && format!("{o:?}").contains(card))
         })
     }
 
@@ -626,7 +637,13 @@ impl Table {
             p.pos = 0;
             // Keep bound skills only.
             p.field.retain(|f| f.card.starts_with("skill:"));
-            for k in [bandori_std::state_key::STAY, bandori_std::state_key::STUN, bandori_std::state_key::STUN_START, bandori_std::state_key::EXILE, bandori_std::state_key::NO_HAND] {
+            for k in [
+                bandori_std::state_key::STAY,
+                bandori_std::state_key::STUN,
+                bandori_std::state_key::STUN_START,
+                bandori_std::state_key::EXILE,
+                bandori_std::state_key::NO_HAND,
+            ] {
                 p.state.remove(k);
             }
             for f in p.field.iter_mut() {
@@ -712,16 +729,21 @@ impl Table {
         let w = self.m.world_mut();
         use game_core::state::{state_flag, Tick};
         let (flags, tick): (u8, Option<Tick>) = match key {
-            k if k == bandori_std::state_key::STAY || k == bandori_std::state_key::STUN => {
-                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnEnd))
-            }
-            k if k == bandori_std::state_key::STUN_START => {
-                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnStart))
-            }
-            k if k == bandori_std::state_key::EXILE => {
-                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnStart))
-            }
-            k if k == bandori_std::state_key::NO_HAND || k == bandori_std::state_key::UNSTOPPABLE => {
+            k if k == bandori_std::state_key::STAY || k == bandori_std::state_key::STUN => (
+                state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,
+                Some(Tick::TurnEnd),
+            ),
+            k if k == bandori_std::state_key::STUN_START => (
+                state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,
+                Some(Tick::TurnStart),
+            ),
+            k if k == bandori_std::state_key::EXILE => (
+                state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,
+                Some(Tick::TurnStart),
+            ),
+            k if k == bandori_std::state_key::NO_HAND
+                || k == bandori_std::state_key::UNSTOPPABLE =>
+            {
                 (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, None)
             }
             _ => (0, None),
@@ -736,7 +758,9 @@ impl Table {
     }
 
     pub fn set_state_var(&mut self, who: usize, key: &str, v: StateVar) {
-        self.m.world_mut().st.players[who].state.insert(key.into(), v);
+        self.m.world_mut().st.players[who]
+            .state
+            .insert(key.into(), v);
     }
 
     /// Fire pots: `value` held, `max` cap.
@@ -882,7 +906,12 @@ impl Table {
 
     /// The draw pile, top first.
     pub fn draw_pile(&self, who: usize) -> Vec<String> {
-        self.m.world().hidden[who].draw.iter().rev().cloned().collect()
+        self.m.world().hidden[who]
+            .draw
+            .iter()
+            .rev()
+            .cloned()
+            .collect()
     }
 
     pub fn discard(&self, who: usize) -> Vec<String> {
@@ -903,7 +932,10 @@ impl Table {
 
     /// Crystals on `who`'s first field copy of `card` (None if not placed).
     pub fn crystals(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+        self.field(who)
+            .iter()
+            .find(|f| f.card == card)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
@@ -917,7 +949,10 @@ impl Table {
 
     /// On-card [CP点] on `who`'s first field copy of `card` (None if not placed).
     pub fn cp_on_card(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("cp").copied().unwrap_or(0))
+        self.field(who)
+            .iter()
+            .find(|f| f.card == card)
+            .map(|f| f.counters.get("cp").copied().unwrap_or(0))
     }
 
     /// Put `n` on-card [CP点] on `who`'s first field copy of `card` (test seam).

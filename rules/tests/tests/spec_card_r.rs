@@ -136,7 +136,13 @@ fn cookie_time_contract() {
     forall(8, 0xC0C0_0001, |rng, _i| {
         let mut t = vanilla2();
         let n = rng.range(1, 5) as usize;
-        let pool = ["R:NFO", "R:轨迹", "R:Fire bird", "R:Sprechchor", "R:向着顶点"];
+        let pool = [
+            "R:NFO",
+            "R:轨迹",
+            "R:Fire bird",
+            "R:Sprechchor",
+            "R:向着顶点",
+        ];
         let mut discard = Vec::new();
         for k in 0..n {
             discard.push(pool[k % pool.len()]);
@@ -145,7 +151,8 @@ fn cookie_time_contract() {
         let money0 = t.money(0);
         let pre = t.snapshot_world();
         t.observe(COOKIE_CLAUSES);
-        t.give_play(0, COOKIE).map_err(|e| format!("play rejected: {e}"))?;
+        t.give_play(0, COOKIE)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
 
         let delta = t.money(0) as i64 - money0 as i64;
@@ -160,7 +167,9 @@ fn cookie_time_contract() {
             .filter(|c| !discard.contains(&c.as_str()) && c != COOKIE)
             .collect();
         if !leftover.is_empty() {
-            return Err(format!("unexpected cards left in the discard: {leftover:?}"));
+            return Err(format!(
+                "unexpected cards left in the discard: {leftover:?}"
+            ));
         }
         for c in &discard {
             if t.discard(0).iter().any(|d| d == c) {
@@ -228,7 +237,11 @@ pub fn resolve_hand_removes(step: &Step<'_>) -> Result<(), String> {
             h.map(|h| (&h.hand, &h.draw, &h.discard))
         ));
     }
-    if step.post.st.players[who].field.iter().any(|f| f.card == RESOLVE) {
+    if step.post.st.players[who]
+        .field
+        .iter()
+        .any(|f| f.card == RESOLVE)
+    {
         return Err("觉悟 should not sit on the field".into());
     }
     Ok(())
@@ -257,7 +270,8 @@ fn resolve_contract() {
         let money0 = t.money(0);
         let pre = t.snapshot_world();
         t.observe(RESOLVE_CLAUSES);
-        t.give_play(0, RESOLVE).map_err(|e| format!("play rejected: {e}"))?;
+        t.give_play(0, RESOLVE)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
         let delta = t.money(0) as i64 - money0 as i64;
         if delta != 1000 {
@@ -302,9 +316,8 @@ pub fn louder_mult(step: &Step<'_>) -> Result<(), String> {
     if !played(step, LOUDER) {
         return Ok(());
     }
-    let bonus = |w: &game_core::engine::World| {
-        w.rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0)
-    };
+    let bonus =
+        |w: &game_core::engine::World| w.rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0);
     let delta = bonus(step.post) as i64 - bonus(step.pre) as i64;
     if delta != 5 {
         return Err(format!(
@@ -329,14 +342,25 @@ fn louder_contract() {
         t.begin_turn(0);
         drain(&mut t);
         let times = rng.range(1, 3);
-        let base = t.world().rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0);
+        let base = t
+            .world()
+            .rule_param_bonus
+            .get("rentUnitMult")
+            .copied()
+            .unwrap_or(0);
         let pre = t.snapshot_world();
         t.observe(LOUDER_CLAUSES);
         for _ in 0..times {
-            t.give_play(0, LOUDER).map_err(|e| format!("play rejected: {e}"))?;
+            t.give_play(0, LOUDER)
+                .map_err(|e| format!("play rejected: {e}"))?;
             drain(&mut t);
         }
-        let delta = t.world().rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0) as i64
+        let delta = t
+            .world()
+            .rule_param_bonus
+            .get("rentUnitMult")
+            .copied()
+            .unwrap_or(0) as i64
             - base as i64;
         if delta != 5 * times as i64 {
             return Err(format!(
@@ -487,8 +511,7 @@ pub fn fire_bird_exhaust(step: &Step<'_>) -> Result<(), String> {
     // draw pile may immediately reshuffle it into the draw (G-CARDS); both
     // zones honour the clause.
     let h = &step.post.hidden[who];
-    let landed = h.discard.iter().any(|c| c == FIRE_BIRD)
-        || h.draw.iter().any(|c| c == FIRE_BIRD);
+    let landed = h.discard.iter().any(|c| c == FIRE_BIRD) || h.draw.iter().any(|c| c == FIRE_BIRD);
     if pre_on && !post_on && !landed {
         return Err(format!(
             "Fire bird left the field without entering the discard; discard={:?} draw={:?}",
@@ -523,14 +546,18 @@ fn fire_bird_place_contract() {
         let pre = t.snapshot_world();
         t.observe(FIRE_BIRD_CLAUSES);
         t.give(0, &[FIRE_BIRD]);
-        t.play(0, FIRE_BIRD).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, FIRE_BIRD)
+            .map_err(|e| format!("play rejected: {e}"))?;
         // X (自选): pick a positive crystal count so the instance survives
         // (X = 0 would exhaust immediately and hit clause 04 instead).
         let mut chose = false;
         while t.prompt().is_some() {
             let d = t.dump_prompt();
             if d.contains("crystal") || d.contains("Crystal") || d.contains("奇迹") {
-                let _ = t.answer_one(1.min(t.expect_prompt().options.len().saturating_sub(1) as i32).max(0));
+                let _ = t.answer_one(
+                    1.min(t.expect_prompt().options.len().saturating_sub(1) as i32)
+                        .max(0),
+                );
                 chose = true;
             } else {
                 t.decline();
@@ -538,11 +565,7 @@ fn fire_bird_place_contract() {
         }
         let _ = chose;
         if t.money(0) != money - 1600 {
-            return Err(format!(
-                "money {}, expected {}",
-                t.money(0),
-                money - 1600
-            ));
+            return Err(format!("money {}, expected {}", t.money(0), money - 1600));
         }
         if !t.on_field(0, FIRE_BIRD) {
             return Err(format!("Fire bird not on field: {:?}", t.field_ids(0)));
@@ -610,13 +633,7 @@ fn fire_bird_turn_end_burn() {
         frame(
             &pre,
             t.world(),
-            &[
-                "money:P0",
-                "field:P0",
-                "crystals:P0",
-                "pool:",
-                "fprop:P0",
-            ],
+            &["money:P0", "field:P0", "crystals:P0", "pool:", "fprop:P0"],
         )
     })
     .expect("Fire bird turn-end burn");
@@ -654,8 +671,15 @@ fn fire_bird_exhaust_to_discard() {
         frame(
             &pre,
             t.world(),
-            &["money:P0", "field:P0", "crystals:P0",
-                "pool:", "fprop:P0", "discard:P0", "draw:P0"],
+            &[
+                "money:P0",
+                "field:P0",
+                "crystals:P0",
+                "pool:",
+                "fprop:P0",
+                "discard:P0",
+                "draw:P0",
+            ],
         )
     })
     .expect("Fire bird exhaust");
@@ -714,9 +738,10 @@ pub fn nfo_roll(step: &Step<'_>) -> Result<(), String> {
     if !played(step, NFO) {
         return Ok(());
     }
-    let rolled = step.events.iter().any(|e| {
-        e.r#type == "dice" || e.msg.key().contains("dice") || e.msg.key().contains("掷")
-    });
+    let rolled = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "dice" || e.msg.key().contains("dice") || e.msg.key().contains("掷"));
     if !rolled {
         return Err(format!(
             "NFO played without a 1d6 roll; keys={:?}",
@@ -843,7 +868,9 @@ fn nfo_face5_character_crystals() {
     // card vs a player-level counter). Spec pins the determined part: a
     // stock of exactly 6 [奇迹水晶] the user can later spend.
     let field = t.field(0);
-    let field_hit = field.iter().find(|f| f.counters.get("crystals").copied().unwrap_or(0) >= 6);
+    let field_hit = field
+        .iter()
+        .find(|f| f.counters.get("crystals").copied().unwrap_or(0) >= 6);
     let player = t.p(0);
     let token_hit = player.tokens.iter().find(|tok| tok.value >= 6);
     assert!(
@@ -896,7 +923,10 @@ const LIVE_PREP: &str = "R:live前的准备";
 /// C-R-live前的准备-02 -- force stop at 江户川乐器店 and settle.
 pub fn live_prep_stop(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
-    let played_now = step.events.iter().any(|e| e.r#type == "card" && e.card == LIVE_PREP);
+    let played_now = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "card" && e.card == LIVE_PREP);
     if !played_now {
         return Ok(());
     }
@@ -985,7 +1015,8 @@ fn toward_top_contract() {
         let r1 = tile("RiNG 1");
         let pre = t.snapshot_world();
         t.observe(TOP_CLAUSES);
-        t.give_play(0, TOP).map_err(|e| format!("play rejected: {e}"))?;
+        t.give_play(0, TOP)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
         if t.pos(0) != r1 {
             return Err(format!(
@@ -1042,7 +1073,8 @@ fn blue_rose_payout_contract() {
         let money0 = t.money(0);
         let pre = t.snapshot_world();
         t.observe(BLUE_CLAUSES);
-        t.give_play(0, BLUE).map_err(|e| format!("play rejected: {e}"))?;
+        t.give_play(0, BLUE)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
         // RiNG 1 price 1000 -> 20% = 200.
         let delta = t.money(0) as i64 - money0 as i64;
@@ -1372,7 +1404,11 @@ pub fn ringing_bloom_place(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = actor(step);
-    if !step.post.st.players[who].field.iter().any(|f| f.card == RINGING) {
+    if !step.post.st.players[who]
+        .field
+        .iter()
+        .any(|f| f.card == RINGING)
+    {
         return Err("Ringing Bloom not on the user's field".into());
     }
     Ok(())
@@ -1394,7 +1430,8 @@ fn ringing_bloom_place_contract() {
         drain(&mut t);
         let pre = t.snapshot_world();
         t.observe(RINGING_CLAUSES);
-        t.give_play(0, RINGING).map_err(|e| format!("play rejected: {e}"))?;
+        t.give_play(0, RINGING)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
         if !t.on_field(0, RINGING) {
             return Err(format!("not on field: {:?}", t.field_ids(0)));

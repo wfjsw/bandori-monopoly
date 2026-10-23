@@ -48,7 +48,7 @@ fn state_set_packs_field_and_value() {
     // through the same field the host writes.
     // field 0: VALUE = 7 (a4), not the field id (a3).
     let (ptr, len) = (0i32, 1i32); // will be interned as raw bytes via name_id
-    // Use the real host path: intern the name bytes into the guest arena.
+                                   // Use the real host path: intern the name bytes into the guest arena.
     let h = card_sdk::native::intern(b"k");
     let ret = rules_kani::host::dispatch(
         Op::state_set,
@@ -213,22 +213,13 @@ fn add_counter_clamps_to_max() {
     assert!(uid >= 0);
     let h = card_sdk::native::intern(b"crystals");
     // +5 with max 3 → 3
-    let got = rules_kani::host::dispatch(
-        Op::add_counter_self,
-        [h.0, h.1, 5, 3, 0, 0],
-    );
+    let got = rules_kani::host::dispatch(Op::add_counter_self, [h.0, h.1, 5, 3, 0, 0]);
     assert_eq!(got, 3, "clamp at max");
     // +5 with max 0 (uncapped) → 8
-    let got = rules_kani::host::dispatch(
-        Op::add_counter_self,
-        [h.0, h.1, 5, 0, 0, 0],
-    );
+    let got = rules_kani::host::dispatch(Op::add_counter_self, [h.0, h.1, 5, 0, 0, 0]);
     assert_eq!(got, 8, "max=0 is uncapped");
     // -100 floor at 0
-    let got = rules_kani::host::dispatch(
-        Op::add_counter_self,
-        [h.0, h.1, -100, 0, 0, 0],
-    );
+    let got = rules_kani::host::dispatch(Op::add_counter_self, [h.0, h.1, -100, 0, 0, 0]);
     assert_eq!(got, 0, "floor at 0");
 }
 
@@ -298,8 +289,7 @@ fn shuffle_into_deck_moves_piles() {
     install(w);
     let moved = rules_kani::host::dispatch(Op::shuffle_into_deck, [0, 1, 1, 0, 0, 0]);
     assert_eq!(moved, 3, "three cards moved");
-    let (hand_n, disc_n, deck_n) =
-        kworld::with_world(|w| (w.hand_n, w.discard_n, w.deck_n));
+    let (hand_n, disc_n, deck_n) = kworld::with_world(|w| (w.hand_n, w.discard_n, w.deck_n));
     assert_eq!(hand_n, 0, "hand emptied");
     assert_eq!(disc_n, 0, "discard emptied");
     assert_eq!(deck_n, 3, "draw holds the multiset");
@@ -315,10 +305,7 @@ fn place_card_on_reads_name_from_cp_cl() {
     // slot 0 = CARD_AYA. cp/cl for "A" (1 byte).
     let h = card_sdk::native::intern(b"A");
     // Place on tile 0 (CiRCLE), name at (a2,a3) = (h.0, h.1).
-    let uid = rules_kani::host::dispatch(
-        Op::place_card_on,
-        [0, 0, h.0, h.1, 0, 0],
-    );
+    let uid = rules_kani::host::dispatch(Op::place_card_on, [0, 0, h.0, h.1, 0, 0]);
     assert!(uid >= 0, "place_card_on returns a uid");
     let tile = kworld::with_world(|w| w.field[0].tile);
     assert_eq!(tile, 0, "lands on the given tile (CiRCLE), not dest");
@@ -384,7 +371,10 @@ fn raise_returns_settled_not_cancelled() {
     let _g = model_lock();
     install(base());
     let settled = rules_kani::host::dispatch(Op::raise, [0, 0, 0, 0, 0, 0]);
-    assert_eq!(settled, 1, "raise must report settled (1), not cancelled (0)");
+    assert_eq!(
+        settled, 1,
+        "raise must report settled (1), not cancelled (0)"
+    );
 }
 
 /// `Op::gate` returns `allowed`: **1 = may land**. 0 means guarded / immune /
@@ -490,7 +480,10 @@ fn counter_self_and_card_counter_decode_their_own_packing() {
     // card_counter: [player, cp, cl, np, nl] — name at a3,a4
     rules_kani::host::dispatch(Op::add_card_counter, [0, 0, 0, h.0, h.1, 6]);
     let got2 = kworld::with_world(|w| w.key_get(0, key));
-    assert_eq!(got2, 10, "add_card_counter adds n=a5 to the counter named (a3,a4): 4+6");
+    assert_eq!(
+        got2, 10,
+        "add_card_counter adds n=a5 to the counter named (a3,a4): 4+6"
+    );
 }
 
 /// `hand_count(player, ptr, len)` packs `[player, ptr, len]` — card name at

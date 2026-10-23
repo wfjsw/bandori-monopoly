@@ -26,13 +26,15 @@ pub const CP_REWARD: i32 = 800;
 /// * the mark's attached 该清CP了 instance (`src`) has ≥1 on-card [CP点]
 ///   (「自己[场上]1个[CP点]」 to spend);
 /// * the settle is not cancelled (「将该次结算改为…」 skips every entry).
-pub fn mark_cp_land_guard(cancelled: bool, settler: i32, tile: i32, tile_cp: i32, src: i32, src_cp: i32) -> bool {
-    !cancelled
-        && settler >= 0
-        && tile >= 0
-        && tile_cp > 0
-        && src >= 0
-        && src_cp > 0
+pub fn mark_cp_land_guard(
+    cancelled: bool,
+    settler: i32,
+    tile: i32,
+    tile_cp: i32,
+    src: i32,
+    src_cp: i32,
+) -> bool {
+    !cancelled && settler >= 0 && tile >= 0 && tile_cp > 0 && src >= 0 && src_cp > 0
 }
 
 /// Full book effect of one [结算] on a CP tile:

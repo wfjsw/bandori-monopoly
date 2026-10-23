@@ -18,9 +18,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",

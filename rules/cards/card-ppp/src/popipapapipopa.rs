@@ -13,9 +13,9 @@
 //! A pure [持续] card: the C# has no `Play`, it is placed by `CardPipopa`
 //! (`place_card` in `pipopa.rs`). Both continuous clauses are Fx hooks.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
     "PPP:[衍生]Popipapapipopa",

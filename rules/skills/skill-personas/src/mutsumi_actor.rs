@@ -14,9 +14,10 @@
 //! overlay of the borrowed face's `CardDef` numbers (`fire::overlay` /
 //! `end_overlay`), keyed on the last-player-to-play latch.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Turns since the last hand play. A play resets it.
 const QUIET: &str = "skill.mutsumiActor.quiet";
@@ -31,12 +32,22 @@ const OVERLAID: &str = "skill.mutsumiActor.overlaid";
 pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
     "skill:若叶睦:天生的演员",
     &[
-        On::Action(Action::TurnStartBefore("actor == owner && slot('skillState') != 2", None, None, at_turn_start)),
+        On::Action(Action::TurnStartBefore(
+            "actor == owner && slot('skillState') != 2",
+            None,
+            None,
+            at_turn_start,
+        )),
         On::Action(Action::CardPlayed(card_sdk::pre::MINE, None, None, on_play)),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, at_turn_end)),
+        On::Action(Action::TurnEnd(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            at_turn_end,
+        )),
     ],
 )
-    .silent(&[1]);
+.silent(&[1]);
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // `slot('skillState') != 2` is the pre.

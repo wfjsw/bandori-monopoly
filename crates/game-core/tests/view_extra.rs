@@ -24,9 +24,7 @@ fn member(id: i32, bot: bool) -> RoomMember {
 /// A solo match: member 1 is the human, the rest are bots. `quick_start` skips
 /// ban/pick/deck so the match is in `play`.
 fn solo(seed: u64) -> Match {
-    let members: Vec<RoomMember> = (1..=3)
-        .map(|i| member(i, i != 1))
-        .collect();
+    let members: Vec<RoomMember> = (1..=3).map(|i| member(i, i != 1)).collect();
     let mut m = Match::new(
         data(),
         Arc::new(StubRules),
@@ -135,7 +133,14 @@ impl CardRules for TestRules {
 
 fn solo_with(rules: Arc<dyn CardRules>, seed: u64) -> Match {
     let members: Vec<RoomMember> = (1..=3).map(|i| member(i, i != 1)).collect();
-    let mut m = Match::new(data(), rules, &members, seed, MatchMode::Solo, ScoreWeights::default());
+    let mut m = Match::new(
+        data(),
+        rules,
+        &members,
+        seed,
+        MatchMode::Solo,
+        ScoreWeights::default(),
+    );
     m.quick_start();
     m
 }
@@ -193,10 +198,13 @@ fn skills_are_empty_before_the_play_phase() {
 #[test]
 fn skills_list_only_activatable_rules_during_ops() {
     // Place the persona + group skills, mark only the first as `On::Play`.
-    let m = solo_with(Arc::new(TestRules {
-        play: vec![],
-        refuse: None,
-    }), 5);
+    let m = solo_with(
+        Arc::new(TestRules {
+            play: vec![],
+            refuse: None,
+        }),
+        5,
+    );
     let ids = skill_ids(&m, 1);
     assert!(!ids.is_empty(), "the picked persona has at least one skill");
     let rules = Arc::new(TestRules {
@@ -216,10 +224,13 @@ fn skills_list_only_activatable_rules_during_ops() {
 
 #[test]
 fn skills_carry_the_engine_gate_reason_when_blocked() {
-    let m = solo_with(Arc::new(TestRules {
-        play: vec![],
-        refuse: None,
-    }), 6);
+    let m = solo_with(
+        Arc::new(TestRules {
+            play: vec![],
+            refuse: None,
+        }),
+        6,
+    );
     let ids = skill_ids(&m, 1);
     let refuse = Msg::new("err.play_pre");
     let mut m = solo_with(
@@ -241,10 +252,13 @@ fn skills_carry_the_engine_gate_reason_when_blocked() {
 fn skills_are_disabled_outside_the_ops_window() {
     // Same rules as the enabled case, but read the list *before* OPS (right
     // after `quick_start`, while the first turn is still starting).
-    let m = solo_with(Arc::new(TestRules {
-        play: vec![],
-        refuse: None,
-    }), 7);
+    let m = solo_with(
+        Arc::new(TestRules {
+            play: vec![],
+            refuse: None,
+        }),
+        7,
+    );
     let ids = skill_ids(&m, 1);
     let mut m = solo_with(
         Arc::new(TestRules {
@@ -265,10 +279,14 @@ fn skills_are_disabled_outside_the_ops_window() {
     let skills = extra["skills"].as_array().expect("skills list");
     assert_eq!(skills.len(), 1);
     assert_eq!(
-        skills[0]["enabled"], serde_json::json!(false),
+        skills[0]["enabled"],
+        serde_json::json!(false),
         "outside OPS the engine gate refuses the press"
     );
-    assert_eq!(skills[0]["reason"]["k"], serde_json::json!("err.skill_not_now"));
+    assert_eq!(
+        skills[0]["reason"]["k"],
+        serde_json::json!("err.skill_not_now")
+    );
 }
 
 #[test]
@@ -276,10 +294,13 @@ fn skills_press_through_why_not_act_matches_the_list() {
     // The list's `enabled` flag must agree with a real `act: "skill"`: when the
     // list says enabled the engine accepts, and when it says disabled the
     // engine refuses with the same reason.
-    let m = solo_with(Arc::new(TestRules {
-        play: vec![],
-        refuse: None,
-    }), 8);
+    let m = solo_with(
+        Arc::new(TestRules {
+            play: vec![],
+            refuse: None,
+        }),
+        8,
+    );
     let ids = skill_ids(&m, 1);
     let mut m = solo_with(
         Arc::new(TestRules {

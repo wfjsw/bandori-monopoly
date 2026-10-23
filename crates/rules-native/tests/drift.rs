@@ -121,7 +121,8 @@ fn assert_same(seed: u64, cap: i32, a: &Run, b: &Run) {
     );
     for (i, (x, y)) in a.checkpoints.iter().zip(b.checkpoints.iter()).enumerate() {
         assert_eq!(
-            x, y,
+            x,
+            y,
             "seed {seed} cap {cap}: checkpoint {i} diverged.\n{}\n\
              The native build is advisory: the sandbox remains authoritative.",
             byte_ctx(x, y)
@@ -208,7 +209,11 @@ fn native_and_sandbox_agree_on_the_manifest() {
             assert_eq!(oa.pre, ob.pre, "card {} entry {j} condition", a.id);
             assert_eq!(oa.has_guard, ob.has_guard, "card {} entry {j} guard", a.id);
             assert_eq!(oa.label, ob.label, "card {} entry {j} label", a.id);
-            assert_eq!(oa.presentation, ob.presentation, "card {} entry {j} presentation", a.id);
+            assert_eq!(
+                oa.presentation, ob.presentation,
+                "card {} entry {j} presentation",
+                a.id
+            );
             // The compiled condition must be present exactly when the source
             // string is -- the `RulesHandle::pre` default-`None` bug left
             // every condition silently uncompiled on native.

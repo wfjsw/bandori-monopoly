@@ -264,9 +264,7 @@ impl StepAct {
                 cards: cards.clone(),
                 ..NetMessage::act("answer")
             },
-            StepAct::Decline {
-                prompt, value, ..
-            } => NetMessage {
+            StepAct::Decline { prompt, value, .. } => NetMessage {
                 prompt: *prompt,
                 value: *value,
                 ..NetMessage::act("answer")

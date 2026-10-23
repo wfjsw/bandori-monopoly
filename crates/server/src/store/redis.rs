@@ -378,10 +378,8 @@ impl CrossState for Store {
     }
 
     fn presence_del(&self, room: &str, member: i32, stream: &str) -> Result<(), StoreError> {
-        self.call(|c| {
-            c.del::<_, ()>(format!("{NS_PRES}{room}:{member}:{stream}"))
-        })
-        .map(|_| ())
+        self.call(|c| c.del::<_, ()>(format!("{NS_PRES}{room}:{member}:{stream}")))
+            .map(|_| ())
     }
 
     fn presence_clear(&self, room: &str, member: i32) -> Result<(), StoreError> {
@@ -421,10 +419,8 @@ impl CrossState for Store {
 
     fn rec_meta_put(&self, room: &str, meta: &RecMeta) -> Result<(), StoreError> {
         let v = json(meta)?;
-        self.call(|c| {
-            c.set::<_, _, ()>(format!("{NS_RECMETA}{room}"), v)
-        })
-        .map(|_| ())
+        self.call(|c| c.set::<_, _, ()>(format!("{NS_RECMETA}{room}"), v))
+            .map(|_| ())
     }
 
     fn rec_meta_del(&self, room: &str) -> Result<(), StoreError> {

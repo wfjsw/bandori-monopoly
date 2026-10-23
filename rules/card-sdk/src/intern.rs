@@ -130,17 +130,72 @@ fn fnv1a(s: &[u8]) -> u64 {
             }
         };
     }
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
+    step!(8);
+    step!(9);
+    step!(10);
+    step!(11);
+    step!(12);
+    step!(13);
+    step!(14);
+    step!(15);
+    step!(16);
+    step!(17);
+    step!(18);
+    step!(19);
+    step!(20);
+    step!(21);
+    step!(22);
+    step!(23);
+    step!(24);
+    step!(25);
+    step!(26);
+    step!(27);
+    step!(28);
+    step!(29);
+    step!(30);
+    step!(31);
+    step!(32);
+    step!(33);
+    step!(34);
+    step!(35);
+    step!(36);
+    step!(37);
+    step!(38);
+    step!(39);
+    step!(40);
+    step!(41);
+    step!(42);
+    step!(43);
+    step!(44);
+    step!(45);
+    step!(46);
+    step!(47);
+    step!(48);
+    step!(49);
+    step!(50);
+    step!(51);
+    step!(52);
+    step!(53);
+    step!(54);
+    step!(55);
+    step!(56);
+    step!(57);
+    step!(58);
+    step!(59);
+    step!(60);
+    step!(61);
+    step!(62);
+    step!(63);
     h
 }
-
 
 /// Production twin of `fnv1a` — the original 8×8 chunk walk, byte-for-byte
 /// the master code so wasm/native codegen is unchanged (`cfg(not(kani))`).
@@ -204,17 +259,72 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
             }
         };
     }
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
+    step!(8);
+    step!(9);
+    step!(10);
+    step!(11);
+    step!(12);
+    step!(13);
+    step!(14);
+    step!(15);
+    step!(16);
+    step!(17);
+    step!(18);
+    step!(19);
+    step!(20);
+    step!(21);
+    step!(22);
+    step!(23);
+    step!(24);
+    step!(25);
+    step!(26);
+    step!(27);
+    step!(28);
+    step!(29);
+    step!(30);
+    step!(31);
+    step!(32);
+    step!(33);
+    step!(34);
+    step!(35);
+    step!(36);
+    step!(37);
+    step!(38);
+    step!(39);
+    step!(40);
+    step!(41);
+    step!(42);
+    step!(43);
+    step!(44);
+    step!(45);
+    step!(46);
+    step!(47);
+    step!(48);
+    step!(49);
+    step!(50);
+    step!(51);
+    step!(52);
+    step!(53);
+    step!(54);
+    step!(55);
+    step!(56);
+    step!(57);
+    step!(58);
+    step!(59);
+    step!(60);
+    step!(61);
+    step!(62);
+    step!(63);
     ok
 }
-
 
 /// Production twin of `bytes_eq` — original 8 outer × 8 unrolled bytes.
 #[cfg(not(kani))]
@@ -347,14 +457,70 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
             }
         };
     }
-    cpy!(0); cpy!(1); cpy!(2); cpy!(3); cpy!(4); cpy!(5); cpy!(6); cpy!(7);
-    cpy!(8); cpy!(9); cpy!(10); cpy!(11); cpy!(12); cpy!(13); cpy!(14); cpy!(15);
-    cpy!(16); cpy!(17); cpy!(18); cpy!(19); cpy!(20); cpy!(21); cpy!(22); cpy!(23);
-    cpy!(24); cpy!(25); cpy!(26); cpy!(27); cpy!(28); cpy!(29); cpy!(30); cpy!(31);
-    cpy!(32); cpy!(33); cpy!(34); cpy!(35); cpy!(36); cpy!(37); cpy!(38); cpy!(39);
-    cpy!(40); cpy!(41); cpy!(42); cpy!(43); cpy!(44); cpy!(45); cpy!(46); cpy!(47);
-    cpy!(48); cpy!(49); cpy!(50); cpy!(51); cpy!(52); cpy!(53); cpy!(54); cpy!(55);
-    cpy!(56); cpy!(57); cpy!(58); cpy!(59); cpy!(60); cpy!(61); cpy!(62); cpy!(63);
+    cpy!(0);
+    cpy!(1);
+    cpy!(2);
+    cpy!(3);
+    cpy!(4);
+    cpy!(5);
+    cpy!(6);
+    cpy!(7);
+    cpy!(8);
+    cpy!(9);
+    cpy!(10);
+    cpy!(11);
+    cpy!(12);
+    cpy!(13);
+    cpy!(14);
+    cpy!(15);
+    cpy!(16);
+    cpy!(17);
+    cpy!(18);
+    cpy!(19);
+    cpy!(20);
+    cpy!(21);
+    cpy!(22);
+    cpy!(23);
+    cpy!(24);
+    cpy!(25);
+    cpy!(26);
+    cpy!(27);
+    cpy!(28);
+    cpy!(29);
+    cpy!(30);
+    cpy!(31);
+    cpy!(32);
+    cpy!(33);
+    cpy!(34);
+    cpy!(35);
+    cpy!(36);
+    cpy!(37);
+    cpy!(38);
+    cpy!(39);
+    cpy!(40);
+    cpy!(41);
+    cpy!(42);
+    cpy!(43);
+    cpy!(44);
+    cpy!(45);
+    cpy!(46);
+    cpy!(47);
+    cpy!(48);
+    cpy!(49);
+    cpy!(50);
+    cpy!(51);
+    cpy!(52);
+    cpy!(53);
+    cpy!(54);
+    cpy!(55);
+    cpy!(56);
+    cpy!(57);
+    cpy!(58);
+    cpy!(59);
+    cpy!(60);
+    cpy!(61);
+    cpy!(62);
+    cpy!(63);
     t.n += 1;
     NameId(first_empty as u16)
 }
@@ -364,7 +530,6 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
 pub fn intern(s: &str) -> NameId {
     intern_bytes(s.as_bytes())
 }
-
 
 /// Production `intern_bytes` — master's 8-probe loop + `copy_from_slice`
 /// insert, byte-for-byte so wasm/native codegen is unchanged.

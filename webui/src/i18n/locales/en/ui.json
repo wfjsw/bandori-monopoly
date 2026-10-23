@@ -254,7 +254,6 @@
   "boot.namePlaceholder": "Your name (up to 16 characters)",
   "boot.needSave": "First game here: create a save file first",
   "boot.rulesError": "Card rules failed to load; solo matches run without card, skill or tile effects. Replays recorded under the full ruleset will diverge ({{detail}})",
-  "boot.tapToStart": "Click anywhere to start",
   "boot.tip.circle": "Passing the start square lets you take money or draw a card.",
   "boot.tip.dealer": "On a dealer tile you can buy an unowned tile of that colour, or add a house to your own.",
   "boot.tip.disconnect": "If you disconnect the computer holds your seat; reconnect and you are back.",

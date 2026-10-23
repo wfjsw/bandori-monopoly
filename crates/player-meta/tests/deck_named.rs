@@ -36,7 +36,10 @@ fn create_duplicate_rename_delete_and_reorder() {
     // Rename: trimmed, capped, duplicates allowed, blank restores the auto name.
     assert!(decks::rename(&mut p, c, 2, "  要乐奈专用  "));
     assert_eq!(decks::list(&p, c)[2].name, "要乐奈专用");
-    assert!(decks::rename(&mut p, c, 3, "要乐奈专用"), "duplicates allowed");
+    assert!(
+        decks::rename(&mut p, c, 3, "要乐奈专用"),
+        "duplicates allowed"
+    );
     assert!(!decks::rename(&mut p, c, 2, "要乐奈专用"), "no change");
     let long = "あ".repeat(DECK_NAME_MAX + 10);
     assert!(decks::rename(&mut p, c, 4, &long));
@@ -113,17 +116,17 @@ fn old_slot_profile_migrates_to_named_decks() {
     // shows exactly the old 「卡组 1」/「卡组 2」/「卡组 3」 from the ids.
     let got: Vec<(i32, &str)> = listed.iter().map(|x| (x.slot, x.name.as_str())).collect();
     assert_eq!(got, vec![(1, ""), (2, ""), (3, "")]);
-    assert_eq!(
-        decks::cards(&d, &p, c, 2),
-        preset,
-        "the card list is kept"
-    );
+    assert_eq!(decks::cards(&d, &p, c, 2), preset, "the card list is kept");
     // The chosen slot still points at the same deck.
     assert_eq!(decks::chosen_slot(&d, &p, c), 2);
     // The empty old slot is kept as a deck (clearable/deletable, not dropped).
     assert!(decks::is_empty(&d, &p, c, 1));
     assert_eq!(decks::list(&p, c).len(), 3);
-    assert_eq!(decks::list(&p, other).len(), 1, "other personas keep theirs");
+    assert_eq!(
+        decks::list(&p, other).len(),
+        1,
+        "other personas keep theirs"
+    );
     assert_eq!(
         decks::chosen_slot(&d, &p, other),
         0,

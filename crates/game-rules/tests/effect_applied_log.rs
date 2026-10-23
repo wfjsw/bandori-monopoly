@@ -51,7 +51,10 @@ fn activation_header_precedes_the_host_effects_it_causes() {
         .expect("the hook announces");
     assert_eq!(head.msg.key(), "log.effect_applied");
     // Every child of the header comes after it in the stream.
-    for e in events.iter().filter(|e| e.parent == head.id && e.id != head.id) {
+    for e in events
+        .iter()
+        .filter(|e| e.parent == head.id && e.id != head.id)
+    {
         assert!(
             e.id > head.id,
             "child {} must follow the header {}",
@@ -92,10 +95,7 @@ fn body_lines_group_under_the_header() {
         .filter(|e| e.parent == head.id && e.id != head.id)
         .collect();
     assert_eq!(children.len(), 1, "one body line: {:?}", children);
-    assert!(
-        children[0].id > head.id,
-        "the body line follows the header"
-    );
+    assert!(children[0].id > head.id, "the body line follows the header");
 }
 
 /// A counteraction resolution names the answered link in its why.
@@ -212,7 +212,11 @@ fn every_listened_trigger_kind_has_a_real_why() {
     for k in [21, 26, 73, 74, 75, 78] {
         let t = Trigger::new(TriggerKind::ruleset("bandori", k), 0);
         let why = trigger_reason(&t);
-        assert_eq!(why.key(), "log.why.generic", "custom id {k} uses generic why");
+        assert_eq!(
+            why.key(),
+            "log.why.generic",
+            "custom id {k} uses generic why"
+        );
     }
 }
 /// A body that rolls and then pays (host request -> multi-pass) emits exactly
@@ -237,7 +241,6 @@ fn roll_then_host_request_emits_exactly_one_dice() {
         dice.iter().map(|e| (e.id, e.value)).collect::<Vec<_>>()
     );
 }
-
 
 /// HostRequest replay semantics (BACKLOG HOST-01): a body that reads state X,
 /// performs a host effect that changes X, then reads X again. The **landing
@@ -264,7 +267,10 @@ fn reread_after_host_effect_sees_the_updated_value() {
     };
     let h0 = house_arg("rhr_before").expect("before line");
     let h1 = house_arg("rhr_after").expect("after line");
-    eprintln!("rhr houses before={h0} after={h1} keys={:?}", evs.iter().map(|e| e.msg.key()).collect::<Vec<_>>());
+    eprintln!(
+        "rhr houses before={h0} after={h1} keys={:?}",
+        evs.iter().map(|e| e.msg.key()).collect::<Vec<_>>()
+    );
     // HOST-01: the landing pass reads `live + host_effects` for both reads --
     // the re-run is rebased onto the updated live world, so a host effect that
     // changed X is visible to *both* the pre- and post-effect reads on the
@@ -291,8 +297,18 @@ fn same_name_copies_announce_with_their_own_uid() {
     t.roll(0).unwrap();
     drain(&mut t);
     let heads = activations_since(&t, mark, "TEST:tileHook");
-    eprintln!("{:?}", heads.iter().map(|e| (e.id, e.uid, e.msg.key().to_string())).collect::<Vec<_>>());
-    let mut uids: Vec<i32> = heads.iter().filter(|e| e.msg.key() == "log.effect_applied").map(|e| e.uid).collect();
+    eprintln!(
+        "{:?}",
+        heads
+            .iter()
+            .map(|e| (e.id, e.uid, e.msg.key().to_string()))
+            .collect::<Vec<_>>()
+    );
+    let mut uids: Vec<i32> = heads
+        .iter()
+        .filter(|e| e.msg.key() == "log.effect_applied")
+        .map(|e| e.uid)
+        .collect();
     uids.sort();
     assert_eq!(uids, vec![a.min(b), a.max(b)], "{heads:?}");
 }

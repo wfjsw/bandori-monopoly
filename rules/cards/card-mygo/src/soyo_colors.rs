@@ -7,7 +7,7 @@
 //! place this card on one of your deeds; that tile gains every colour, and
 //! rent charged there under a foreign agent is halved again.
 
-use card_sdk::{CardDef, ctx, Filter, key, Msg, On};
+use card_sdk::{ctx, key, CardDef, Filter, Msg, On};
 
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",

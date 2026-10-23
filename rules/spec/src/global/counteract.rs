@@ -173,10 +173,7 @@ pub fn g_counter_01(step: &Step<'_>) -> Result<(), String> {
             if c.parent == e.id && BODY_TYPES.contains(&c.r#type.as_str()) {
                 return Err(format!(
                     "negated activation {} ({}) has body event {} type {}",
-                    e.id,
-                    e.card,
-                    c.id,
-                    c.r#type
+                    e.id, e.card, c.id, c.r#type
                 ));
             }
         }
@@ -325,9 +322,11 @@ pub fn g_counter_04(step: &Step<'_>) -> Result<(), String> {
     if n < 3 {
         return Ok(());
     }
-    for x in step.events.iter().filter(|e| {
-        e.r#type == "card" && e.kind != "counter" && e.kind != "hook" && !e.negated
-    }) {
+    for x in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && e.kind != "counter" && e.kind != "hook" && !e.negated)
+    {
         let Some(text) = card_text(step, &x.card) else {
             continue;
         };
@@ -342,7 +341,11 @@ pub fn g_counter_04(step: &Step<'_>) -> Result<(), String> {
         for ty in BODY_TYPES {
             let mut seats: Vec<usize> = Vec::new();
             let mut fan_out = true;
-            for c in step.events.iter().filter(|c| c.parent == x.id && c.r#type == ty) {
+            for c in step
+                .events
+                .iter()
+                .filter(|c| c.parent == x.id && c.r#type == ty)
+            {
                 // A fan-out onto the user: every leg names the user as the
                 // counterparty (`other`), and the subject is the designated
                 // seat. (登上武道馆: each designated player pays the user.)
@@ -415,9 +418,11 @@ pub fn g_counter_05(step: &Step<'_>) -> Result<(), String> {
         // and skipped; a later act closes it.
         return Ok(());
     }
-    for e in step.events.iter().filter(|e| {
-        e.r#type == "card" && !e.negated && (e.kind == "play" || e.kind == "counter")
-    }) {
+    for e in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && !e.negated && (e.kind == "play" || e.kind == "counter"))
+    {
         let Some(text) = card_text(step, &e.card) else {
             continue;
         };
@@ -511,9 +516,11 @@ const G_COUNTER_06: Clause = Clause::new(
 /// same seat -- 「玩家执行效果」. The band/character *filter* is
 /// scenario-tested.
 pub fn g_counter_06(step: &Step<'_>) -> Result<(), String> {
-    for e in step.events.iter().filter(|e| {
-        e.r#type == "card" && e.kind == "hook" && !e.negated && e.player_id >= 0
-    }) {
+    for e in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && e.kind == "hook" && !e.negated && e.player_id >= 0)
+    {
         let who = e.player_id;
         for c in step.events.iter().filter(|c| c.parent == e.id) {
             // A body leg whose subject is a different seat is that seat
@@ -618,9 +625,11 @@ const G_COUNTER_09: Clause = Clause::new(
 /// Executable form of [`G-COUNTER-09`].
 pub fn g_counter_09(step: &Step<'_>) -> Result<(), String> {
     let n = step.pre.st.players.len();
-    for e in step.events.iter().filter(|e| {
-        e.r#type == "card" && !e.negated
-    }) {
+    for e in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && !e.negated)
+    {
         let Some(text) = card_text(step, &e.card) else {
             continue;
         };
@@ -674,9 +683,11 @@ pub fn g_counter_10(step: &Step<'_>) -> Result<(), String> {
         }
         _ => return Ok(()),
     };
-    for e in step.events.iter().filter(|e| {
-        e.r#type == "card" && e.kind == "play" && !e.negated && e.card == card
-    }) {
+    for e in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && e.kind == "play" && !e.negated && e.card == card)
+    {
         if e.player_id as usize != who {
             return Err(format!(
                 "G-COUNTER-10: [使用者] of {} is seat {} (the act), but activation {} says {}",
@@ -713,9 +724,11 @@ const G_COUNTER_11: Clause = Clause::new(
 
 /// Executable form of [`G_COUNTER_11`].
 pub fn g_counter_11(step: &Step<'_>) -> Result<(), String> {
-    for e in step.events.iter().filter(|e| {
-        e.r#type == "card" && e.kind == "hook" && !e.card.is_empty()
-    }) {
+    for e in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && e.kind == "hook" && !e.card.is_empty())
+    {
         // Same scope as G-COUNTER-12: only a [持续] body speaks of [拥有者].
         let Some(text) = card_text(step, &e.card) else {
             continue;
@@ -724,8 +737,7 @@ pub fn g_counter_11(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let owners_of = |w: &game_core::engine::World| -> Vec<usize> {
-            w.st
-                .players
+            w.st.players
                 .iter()
                 .enumerate()
                 .filter(|(_, p)| p.field.iter().any(|f| f.card == e.card))
@@ -781,9 +793,11 @@ const G_COUNTER_12: Clause = Clause::new(
 /// also tags some non-[持续] listeners `kind == "hook"`, and those are not
 /// 「卡在任何玩家的[场地]或格子上时持续生效的效果」.
 pub fn g_counter_12(step: &Step<'_>) -> Result<(), String> {
-    for e in step.events.iter().filter(|e| {
-        e.r#type == "card" && e.kind == "hook" && !e.card.is_empty()
-    }) {
+    for e in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && e.kind == "hook" && !e.card.is_empty())
+    {
         let Some(text) = card_text(step, &e.card) else {
             continue;
         };
@@ -794,16 +808,19 @@ pub fn g_counter_12(step: &Step<'_>) -> Result<(), String> {
         // (`pre` and `post` both miss it). Accept: on a field in `pre` or
         // `post`, or a place event in the window itself.
         let on_field = |w: &game_core::engine::World| {
-            w.st.players.iter().any(|p| p.field.iter().any(|f| f.card == e.card))
+            w.st.players
+                .iter()
+                .any(|p| p.field.iter().any(|f| f.card == e.card))
                 || w.st.board_field.iter().any(|f| f.card == e.card)
         };
         let placed_this_window = step.events.iter().any(|c| {
             c.id < e.id
                 && (c.r#type == "place" || c.msg.key().contains("place"))
                 && (c.card == e.card || c.value == 0)
-        }) || step.events.iter().any(|c| {
-            c.id < e.id && c.r#type == "text" && c.msg.key().contains("place")
-        });
+        }) || step
+            .events
+            .iter()
+            .any(|c| c.id < e.id && c.r#type == "text" && c.msg.key().contains("place"));
         if !on_field(step.pre) && !on_field(step.post) && !placed_this_window {
             // Mid-window place/remove, or a listener the engine tagged
             // `hook` without a [持续] home. Undetermined from the snapshot:
@@ -939,17 +956,18 @@ pub fn g_counter_15(step: &Step<'_>) -> Result<(), String> {
     if !text.contains("[手]") && !text.contains("【手】") {
         return Ok(());
     }
-    for e in step.events.iter().filter(|e| {
-        e.r#type == "card" && e.kind == "play" && e.card == card && !e.negated
-    }) {
+    for e in step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "card" && e.kind == "play" && e.card == card && !e.negated)
+    {
         // The body ran if anything observable moved: a child event, a later
         // event, or a non-bookkeeping world delta (a fan rewrite can settle
         // with no log line of its own).
         let has_event = step.events.iter().any(|c| {
             c.id != e.id
                 && (c.parent == e.id
-                    || (c.id > e.id
-                        && !(c.r#type == "card" && c.kind == "play" && c.card == card)))
+                    || (c.id > e.id && !(c.r#type == "card" && c.kind == "play" && c.card == card)))
         });
         let before = spec_kit::snapshot(step.pre);
         let after = spec_kit::snapshot(step.post);
@@ -970,4 +988,3 @@ pub fn g_counter_15(step: &Step<'_>) -> Result<(), String> {
     }
     Ok(())
 }
-

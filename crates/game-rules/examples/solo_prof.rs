@@ -15,7 +15,13 @@ use game_rules::{Ruleset, WasmRules};
 
 fn load_data(roster: Roster) -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster).expect("data"))
+    Arc::new(
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .expect("data"),
+    )
 }
 
 fn ms(t: Instant) -> f64 {
@@ -23,11 +29,16 @@ fn ms(t: Instant) -> f64 {
 }
 
 fn main() {
-    let a: Vec<u64> = std::env::args().skip(1).filter_map(|x| x.parse().ok()).collect();
+    let a: Vec<u64> = std::env::args()
+        .skip(1)
+        .filter_map(|x| x.parse().ok())
+        .collect();
     let games = a.first().copied().unwrap_or(2);
     let max_rounds = a.get(1).copied().unwrap_or(30) as i32;
     let dir = std::env::var("CARDS_DIR").expect("CARDS_DIR=/abs/dist/cards");
-    let ruleset = Ruleset::load_dir(Path::new(&dir)).expect("read").expect("build-ruleset first");
+    let ruleset = Ruleset::load_dir(Path::new(&dir))
+        .expect("read")
+        .expect("build-ruleset first");
     let data = load_data(ruleset.roster());
     let rules: Arc<dyn CardRules> = Arc::new(WasmRules::new(ruleset, data.clone()));
     let mut ticks: Vec<(f64, String)> = vec![];
@@ -39,9 +50,22 @@ fn main() {
     for seed in first..first + games {
         // member 1 = the "human" (driven below with default legal acts); 2..4 bots
         let members: Vec<RoomMember> = (1..=4)
-            .map(|i| RoomMember { id: i, player: format!("P{i}"), bot: i != 1, mentality: BotMentality::default(), ..Default::default() })
+            .map(|i| RoomMember {
+                id: i,
+                player: format!("P{i}"),
+                bot: i != 1,
+                mentality: BotMentality::default(),
+                ..Default::default()
+            })
             .collect();
-        let mut m = Match::new(data.clone(), rules.clone(), &members, seed, MatchMode::Solo, ScoreWeights::default());
+        let mut m = Match::new(
+            data.clone(),
+            rules.clone(),
+            &members,
+            seed,
+            MatchMode::Solo,
+            ScoreWeights::default(),
+        );
         let mut n = 0u64;
         while !m.ended() && m.state().round <= max_rounds && n < 100000 {
             let st = m.state().clone();
@@ -54,21 +78,58 @@ fn main() {
                     let _ = m.act(1, &NetMessage::act("ban"));
                     did = "ban".into();
                 } else if st.phase == "pick" && st.turn == me {
-                    if let Some(c) = data.personas.iter().find(|c| st.players.iter().all(|p| p.persona != c.name)) {
-                        let _ = m.act(1, &NetMessage { persona: c.name.clone(), ..NetMessage::act("pick") });
+                    if let Some(c) = data
+                        .personas
+                        .iter()
+                        .find(|c| st.players.iter().all(|p| p.persona != c.name))
+                    {
+                        let _ = m.act(
+                            1,
+                            &NetMessage {
+                                persona: c.name.clone(),
+                                ..NetMessage::act("pick")
+                            },
+                        );
                         did = "pick".into();
                     }
                 } else if st.phase == "deck" && !st.players[mi].deck_ready {
                     if let Some(c) = data.persona(&st.players[mi].persona) {
                         let cards = game_core::deck::preset(&data, c);
-                        let _ = m.act(1, &NetMessage { cards, ..NetMessage::act("deck") });
+                        let _ = m.act(
+                            1,
+                            &NetMessage {
+                                cards,
+                                ..NetMessage::act("deck")
+                            },
+                        );
                         did = "deck".into();
                     }
                 } else if st.prompt.id != 0 && st.prompt.players.contains(&me) {
-                    let r = m.act(1, &NetMessage { value: st.prompt.fallback, prompt: st.prompt.id, ..NetMessage::act("answer") }); if n < 60000 && r.is_err() { eprintln!("answer err {:?} id={} tl={} answers={:?} wait/phase={} n={n}", r.as_ref().err().map(|e| e.key().to_string()), st.prompt.id, st.prompt.time_left, st.prompt.answers, st.phase); }
+                    let r = m.act(
+                        1,
+                        &NetMessage {
+                            value: st.prompt.fallback,
+                            prompt: st.prompt.id,
+                            ..NetMessage::act("answer")
+                        },
+                    );
+                    if n < 60000 && r.is_err() {
+                        eprintln!(
+                            "answer err {:?} id={} tl={} answers={:?} wait/phase={} n={n}",
+                            r.as_ref().err().map(|e| e.key().to_string()),
+                            st.prompt.id,
+                            st.prompt.time_left,
+                            st.prompt.answers,
+                            st.phase
+                        );
+                    }
                     did = format!("answer:{}", st.prompt.kind);
                 } else if st.phase == "play" && st.turn == me && st.prompt.id == 0 {
-                    let act = if st.step == stage::OPS { "diceRollBefore" } else { "end" };
+                    let act = if st.step == stage::OPS {
+                        "diceRollBefore"
+                    } else {
+                        "end"
+                    };
                     let _ = m.act(1, &NetMessage::act(act));
                     did = act.into();
                 }
@@ -78,7 +139,13 @@ fn main() {
             }
             let t = Instant::now();
             m.tick(0.25);
-            ticks.push((ms(t), format!("seed{seed} #{n} r{} phase={} step={}", st.round, st.phase, st.step)));
+            ticks.push((
+                ms(t),
+                format!(
+                    "seed{seed} #{n} r{} phase={} step={}",
+                    st.round, st.phase, st.step
+                ),
+            ));
             if n % 20 == 0 {
                 let t = Instant::now();
                 let _ = m.save();
@@ -95,8 +162,19 @@ fn main() {
     let rep = |name: &str, v: &mut Vec<(f64, String)>| {
         v.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
         let tot: f64 = v.iter().map(|x| x.0).sum();
-        let p = |q: f64| v.get(((v.len() as f64) * (1.0 - q)) as usize).map(|x| x.0).unwrap_or(0.0);
-        println!("{name}: n={} total={tot:.0}ms p50={:.3} p90={:.3} p99={:.3} max={:.1}ms", v.len(), p(0.5), p(0.1), p(0.01), v.first().map(|x| x.0).unwrap_or(0.0));
+        let p = |q: f64| {
+            v.get(((v.len() as f64) * (1.0 - q)) as usize)
+                .map(|x| x.0)
+                .unwrap_or(0.0)
+        };
+        println!(
+            "{name}: n={} total={tot:.0}ms p50={:.3} p90={:.3} p99={:.3} max={:.1}ms",
+            v.len(),
+            p(0.5),
+            p(0.1),
+            p(0.01),
+            v.first().map(|x| x.0).unwrap_or(0.0)
+        );
         for x in v.iter().take(8) {
             println!("   {:8.1}ms  {}", x.0, x.1);
         }
@@ -105,15 +183,28 @@ fn main() {
     rep("human act", &mut acts);
     let avg = |v: &Vec<f64>| v.iter().sum::<f64>() / v.len().max(1) as f64;
     let mx = |v: &Vec<f64>| v.iter().cloned().fold(0.0, f64::max);
-    println!("save avg {:.2}ms max {:.2}; state+view_extra json avg {:.2}ms max {:.2}", avg(&saves), mx(&saves), avg(&views), mx(&views));
+    println!(
+        "save avg {:.2}ms max {:.2}; state+view_extra json avg {:.2}ms max {:.2}",
+        avg(&saves),
+        mx(&saves),
+        avg(&views),
+        mx(&views)
+    );
     #[cfg(feature = "bot-cost")]
     {
-        use std::sync::atomic::Ordering::Relaxed as R;
         use game_rules::bot_cost as b;
+        use std::sync::atomic::Ordering::Relaxed as R;
         println!("instantiations={} instantiate={:.0}ms store={:.0}ms guest={:.0}ms host_world_clones={} engine_world_clones={}",
             b::INSTANTIATIONS.load(R), b::INSTANTIATE_NS.load(R) as f64 / 1e6, b::STORE_NS.load(R) as f64 / 1e6, b::GUEST_NS.load(R) as f64 / 1e6,
             b::HOST_WORLD_CLONES.load(R), game_core::engine::bot_cost::WORLD_CLONES.load(R));
-        println!("counteract windows={} skipped={} probes={} memo_hits={} declared={}", b::COUNTERACT_WINDOWS.load(R), b::COUNTERACT_WINDOWS_SKIPPED.load(R), b::COUNTERACT_PROBES.load(R), b::COUNTERACT_PROBE_MEMO_HITS.load(R), b::COUNTERACT_DECLARED.load(R));
+        println!(
+            "counteract windows={} skipped={} probes={} memo_hits={} declared={}",
+            b::COUNTERACT_WINDOWS.load(R),
+            b::COUNTERACT_WINDOWS_SKIPPED.load(R),
+            b::COUNTERACT_PROBES.load(R),
+            b::COUNTERACT_PROBE_MEMO_HITS.load(R),
+            b::COUNTERACT_DECLARED.load(R)
+        );
     }
     for (k, v) in rtimer::snapshot() {
         println!("rtimer {k}: {:.0}ms", v as f64 / 1e6);

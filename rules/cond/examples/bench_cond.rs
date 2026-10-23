@@ -12,7 +12,9 @@
 
 use std::time::Instant;
 
-use rules_cond::{compile, CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope};
+use rules_cond::{
+    compile, CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope,
+};
 
 fn window() -> WindowCtx {
     WindowCtx {
@@ -42,8 +44,16 @@ fn window() -> WindowCtx {
         roll_source: 0,
         abnormal: false,
         chain: vec![
-            ChainLink { kind: rules_cond::trig::Pay.to_string(), from: 1, hits: 0 },
-            ChainLink { kind: rules_cond::trig::Effect.to_string(), from: 2, hits: -1 },
+            ChainLink {
+                kind: rules_cond::trig::Pay.to_string(),
+                from: 1,
+                hits: 0,
+            },
+            ChainLink {
+                kind: rules_cond::trig::Effect.to_string(),
+                from: 2,
+                hits: -1,
+            },
         ],
         turn_player: 1,
         turn_key: 7,
@@ -104,7 +114,11 @@ fn bench(name: &str, cond: &Cond, win: &WindowCtx, reuse: bool) -> f64 {
     let ns = dt.as_nanos() as f64 / SAMPLES as f64;
     println!(
         "{name:44} {ns:9.1} ns/eval   ({}, sink={sink})",
-        if reuse { "scope reused " } else { "scope rebuilt" }
+        if reuse {
+            "scope reused "
+        } else {
+            "scope rebuilt"
+        }
     );
     ns
 }
@@ -200,9 +214,7 @@ fn main() {
         let t0 = Instant::now();
         for i in 0..SAMPLES {
             let seat = (i % 4) as i64;
-            let v = rules_cond::eval::with_live_view(&probe, || {
-                rules_cond::eval::lazy_money(seat)
-            });
+            let v = rules_cond::eval::with_live_view(&probe, || rules_cond::eval::lazy_money(seat));
             sink = sink.wrapping_add(v);
         }
         println!(

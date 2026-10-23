@@ -6,10 +6,10 @@
 //!
 //! that places itself and locks other players out of hand [反击]s this turn.
 
-use bandori_std::state_key;
-use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Once-per-turn placement latch. `cast` is reached from both `play` and the
 /// played card's own `counteract` follow-up (`a_played_cards_own_counteract_runs_once`)

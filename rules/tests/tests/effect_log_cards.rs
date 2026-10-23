@@ -6,13 +6,11 @@ mod common;
 
 use common::*;
 
-
 fn drain(t: &mut Table) {
     while t.prompt().is_some() {
         t.decline();
     }
 }
-
 
 /// A `deckBeforeGame` hook that places itself announces exactly once per
 /// source -- the pile->field transition must not dispatch it a second time.
@@ -27,15 +25,18 @@ fn deck_before_game_self_place_announces_once() {
         .iter()
         .filter(|e| e.msg.key() == "cards:card-ppp.returns_added")
         .count();
-    assert!(added >= 1, "the opening deck carries PPP:Returns: {}", t.recent_keys(30).join(", "));
+    assert!(
+        added >= 1,
+        "the opening deck carries PPP:Returns: {}",
+        t.recent_keys(30).join(", ")
+    );
     let headers = events
         .iter()
         .filter(|e| {
             e.r#type == "card"
                 && e.card == "PPP:Returns"
                 && e.msg.key() == "log.effect_applied"
-                && e
-                    .msg
+                && e.msg
                     .a
                     .get("why")
                     .map(|w| format!("{w:?}").contains("deck_before"))
@@ -43,7 +44,8 @@ fn deck_before_game_self_place_announces_once() {
         })
         .count();
     assert_eq!(
-        headers, added,
+        headers,
+        added,
         "one header per self-placing deckBeforeGame source (pile->field must not re-dispatch): {}",
         t.recent_keys(40).join(", ")
     );
@@ -98,4 +100,3 @@ fn be_strongest_rolls_only_with_a_livehouse() {
         .count();
     assert_eq!(dice, 1, "owns a livehouse -> exactly one 1d10 roll");
 }
-

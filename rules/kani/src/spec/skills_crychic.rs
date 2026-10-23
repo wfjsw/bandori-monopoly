@@ -63,12 +63,7 @@ pub fn tomoriskill_03_noop_log_ok(effects: &[Effect]) -> bool {
 
 /// Yes branch: waive the pay + arm the one-shot teleport latch.
 /// `tile_key` / `armed_key` are interned `skill.soyoCrychic.tile` / `.armed`.
-pub fn soyoskill_01_log_ok(
-    effects: &[Effect],
-    tile_key: u16,
-    armed_key: u16,
-    tile: i32,
-) -> bool {
+pub fn soyoskill_01_log_ok(effects: &[Effect], tile_key: u16, armed_key: u16, tile: i32) -> bool {
     effects.len() == 3
         && matches!(effects[0], Effect::SetPayAmount { to: 0 })
         && matches!(
@@ -87,7 +82,12 @@ pub fn soyoskill_01_noop_log_ok(effects: &[Effect]) -> bool {
 }
 
 /// MUTANT: waive to 1.
-pub fn soyoskill_01_log_ok_mutant(effects: &[Effect], tile_key: u16, armed_key: u16, tile: i32) -> bool {
+pub fn soyoskill_01_log_ok_mutant(
+    effects: &[Effect],
+    tile_key: u16,
+    armed_key: u16,
+    tile: i32,
+) -> bool {
     effects.len() == 3
         && matches!(effects[0], Effect::SetPayAmount { to: 1 })
         && matches!(
@@ -132,7 +132,13 @@ pub fn band_01_hand_limit_value() -> i32 {
 }
 
 /// Turn-start body: SetState{handLimit, i32::MAX} + SetState{SEEN, hand}.
-pub fn band_01_log_ok(effects: &[Effect], player: i32, seen_key: u16, limit_key: u16, hand: i32) -> bool {
+pub fn band_01_log_ok(
+    effects: &[Effect],
+    player: i32,
+    seen_key: u16,
+    limit_key: u16,
+    hand: i32,
+) -> bool {
     effects.len() == 2
         && matches!(
             effects[0],

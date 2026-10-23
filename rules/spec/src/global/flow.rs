@@ -12,24 +12,9 @@ use spec_kit::{Clause, Step, StepAct};
 /// over one observed transition. Setup-only clauses no-op when the trigger is
 /// absent (a soak never runs 开始游戏 through the observer).
 pub const CLAUSES: &[Clause] = &[
-    G_FLOW_01,
-    G_FLOW_02,
-    G_FLOW_03,
-    G_FLOW_04,
-    G_FLOW_05,
-    G_FLOW_06,
-    G_FLOW_07,
-    G_FLOW_08,
-    G_FLOW_09,
-    G_FLOW_10,
-    G_FLOW_11,
-    G_FLOW_12,
-    G_FLOW_13,
-    G_FLOW_14,
-    G_FLOW_15,
-    G_FLOW_16,
-    G_FLOW_17,
-    G_FLOW_18,
+    G_FLOW_01, G_FLOW_02, G_FLOW_03, G_FLOW_04, G_FLOW_05, G_FLOW_06, G_FLOW_07, G_FLOW_08,
+    G_FLOW_09, G_FLOW_10, G_FLOW_11, G_FLOW_12, G_FLOW_13, G_FLOW_14, G_FLOW_15, G_FLOW_16,
+    G_FLOW_17, G_FLOW_18,
 ];
 
 // ---------------------------------------------------------------- helpers
@@ -84,7 +69,8 @@ fn exile(step_pre: bool, step: &Step<'_>, i: usize) -> i32 {
     } else {
         step.post.st.players.get(i)
     };
-    p.map(|p| p.state_get(bandori_std::state_key::EXILE)).unwrap_or(0)
+    p.map(|p| p.state_get(bandori_std::state_key::EXILE))
+        .unwrap_or(0)
 }
 
 /// Duration-grant marker (`exileHold`) of player `i`. While set, the
@@ -104,7 +90,8 @@ fn stay_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
     } else {
         step.post.st.players.get(i)
     };
-    p.map(|p| p.state_get(bandori_std::state_key::STAY)).unwrap_or(0)
+    p.map(|p| p.state_get(bandori_std::state_key::STAY))
+        .unwrap_or(0)
 }
 
 fn stun_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
@@ -113,7 +100,8 @@ fn stun_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
     } else {
         step.post.st.players.get(i)
     };
-    p.map(|p| p.state_get(bandori_std::state_key::STUN)).unwrap_or(0)
+    p.map(|p| p.state_get(bandori_std::state_key::STUN))
+        .unwrap_or(0)
 }
 
 /// Card / skill activations in the window -- a hook may have layered a status
@@ -171,20 +159,8 @@ pub fn g_flow_01(step: &Step<'_>) -> Result<(), String> {
     let is_roll_cmd = is_act(step, "diceRollBefore");
     if is_roll_cmd && pre_moved {
         let seat = step.pre.turn.player_id;
-        let pos_before = step
-            .pre
-            .st
-            .players
-            .get(seat)
-            .map(|p| p.pos)
-            .unwrap_or(-1);
-        let pos_after = step
-            .post
-            .st
-            .players
-            .get(seat)
-            .map(|p| p.pos)
-            .unwrap_or(-1);
+        let pos_before = step.pre.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
+        let pos_after = step.post.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
         if pos_before != pos_after {
             return Err(format!(
                 "second [主要移动] moved player {seat} {pos_before} -> {pos_after} in turn {pre_turn}"
@@ -195,20 +171,8 @@ pub fn g_flow_01(step: &Step<'_>) -> Result<(), String> {
     // `log.main_move_used` and must not have walked.
     if has_key(step, "log.main_move_used") {
         let seat = step.pre.turn.player_id;
-        let pos_before = step
-            .pre
-            .st
-            .players
-            .get(seat)
-            .map(|p| p.pos)
-            .unwrap_or(-1);
-        let pos_after = step
-            .post
-            .st
-            .players
-            .get(seat)
-            .map(|p| p.pos)
-            .unwrap_or(-1);
+        let pos_before = step.pre.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
+        let pos_after = step.post.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
         if pos_before != pos_after {
             return Err(format!(
                 "invalid second [主要移动] still moved player {seat} {pos_before} -> {pos_after}"
@@ -406,9 +370,7 @@ pub fn g_flow_04(step: &Step<'_>) -> Result<(), String> {
                 .map(|p| p.mulligan)
                 .unwrap_or(false);
             if before {
-                return Err(format!(
-                    "mulligan of player {who} ran twice (「仅一次」)"
-                ));
+                return Err(format!("mulligan of player {who} ran twice (「仅一次」)"));
             }
             let mulliganed = step
                 .post
@@ -733,8 +695,7 @@ pub fn g_flow_09(step: &Step<'_>) -> Result<(), String> {
     // A stunned skip must not also walk a [主要移动].
     if step.post.turn.main_moved {
         return Err(
-            "晕眩 skip ran a [主要移动] (main_moved=true); book says 跳过经营和主要移动阶段"
-                .into(),
+            "晕眩 skip ran a [主要移动] (main_moved=true); book says 跳过经营和主要移动阶段".into(),
         );
     }
     if has_key(step, "log.roll") {
@@ -827,27 +788,13 @@ pub fn g_flow_11(step: &Step<'_>) -> Result<(), String> {
     // The roll must not have run. Compare the actor's own pos (the turn
     // player may differ if a non-turn seat sent the command).
     let who = step.player_of_act();
-    let pos_before = step
-        .pre
-        .st
-        .players
-        .get(who)
-        .map(|p| p.pos)
-        .unwrap_or(-1);
-    let pos_after = step
-        .post
-        .st
-        .players
-        .get(who)
-        .map(|p| p.pos)
-        .unwrap_or(-1);
+    let pos_before = step.pre.st.players.get(who).map(|p| p.pos).unwrap_or(-1);
+    let pos_after = step.post.st.players.get(who).map(|p| p.pos).unwrap_or(-1);
     if pos_before != pos_after || step.post.turn.main_moved {
         return Err(format!(
             "roll entered 移动阶段 while an effect was executing \
              (busy={}, prompt={}; pos {pos_before} -> {pos_after}, main_moved={})",
-            step.pre.st.busy,
-            step.pre_prompt_open,
-            step.post.turn.main_moved
+            step.pre.st.busy, step.pre_prompt_open, step.post.turn.main_moved
         ));
     }
     Ok(())
@@ -885,9 +832,7 @@ pub fn g_flow_12(step: &Step<'_>) -> Result<(), String> {
     }
     let n = step.post.st.players.len();
     if !(3..=10).contains(&n) {
-        return Err(format!(
-            "娱乐 mode seated {n} players, book says 3到10人"
-        ));
+        return Err(format!("娱乐 mode seated {n} players, book says 3到10人"));
     }
     Ok(())
 }
@@ -922,11 +867,12 @@ const G_FLOW_13: Clause = Clause::new(
 /// Executable form of [`G-FLOW-13`].
 pub fn g_flow_13(step: &Step<'_>) -> Result<(), String> {
     use game_core::msg::Arg;
-    let Some(e) = step
-        .events
-        .iter()
-        .find(|e| matches!(spec_kit::event_key(e).as_str(), "log.order" | "log.order_rerolled"))
-    else {
+    let Some(e) = step.events.iter().find(|e| {
+        matches!(
+            spec_kit::event_key(e).as_str(),
+            "log.order" | "log.order_rerolled"
+        )
+    }) else {
         return Ok(());
     };
     let key = spec_kit::event_key(e);
@@ -1040,8 +986,7 @@ pub fn g_flow_15(step: &Step<'_>) -> Result<(), String> {
     }
     // Ban-phase turn order: after a ban the engine walks the turn index down.
     // A rejected ban is a no-op (no `ban` event) and is not a second ban.
-    let ban_accepted = is_act(step, "ban")
-        && step.events.iter().any(|e| e.r#type == "ban");
+    let ban_accepted = is_act(step, "ban") && step.events.iter().any(|e| e.r#type == "ban");
     if ban_accepted {
         let who = step.player_of_act();
         // 「禁用角色的顺数为行动顺序从后到前」 -- the turn index counts down.
@@ -1079,8 +1024,7 @@ pub fn g_flow_15(step: &Step<'_>) -> Result<(), String> {
     }
     // A banned character cannot be picked afterwards. A rejected pick is a
     // no-op (no `pick` event).
-    let pick_accepted = is_act(step, "pick")
-        && step.events.iter().any(|e| e.r#type == "pick");
+    let pick_accepted = is_act(step, "pick") && step.events.iter().any(|e| e.r#type == "pick");
     if pick_accepted {
         let c = match step.act {
             StepAct::Act { msg, .. } => msg.persona.clone(),
@@ -1278,13 +1222,7 @@ pub fn g_flow_18(step: &Step<'_>) -> Result<(), String> {
     if step.post.st.mode == game_core::MatchMode::Ranked as i32 {
         if seen.iter().any(|(r, _)| *r == 1) {
             // Every seat has finished ban (possibly a skip) before the first pick.
-            let unbanned = step
-                .pre
-                .st
-                .players
-                .iter()
-                .filter(|p| !p.ban_done)
-                .count();
+            let unbanned = step.pre.st.players.iter().filter(|p| !p.ban_done).count();
             // `pre` of a pick act is mid-pick-phase: bans are done. A window
             // that contains a pick while some seat has not ban_done would mean
             // ban was skipped.

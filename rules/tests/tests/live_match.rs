@@ -22,10 +22,12 @@ use game_rules::{Ruleset, WasmRules};
 
 fn data() -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -42,7 +44,6 @@ fn rules() -> WasmRules {
         .expect("ruleset should load")
         .expect("dist/cards must exist -- run tools/build-ruleset.sh")
 }
-
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {
@@ -207,7 +208,11 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         "character skill stays bound: {ids:?}"
     );
     // 「初始0，上限1」 -- the skill card is what assigns fire.max.
-    let fire = st.players[1].state.get("charge").copied().unwrap_or_default();
+    let fire = st.players[1]
+        .state
+        .get("charge")
+        .copied()
+        .unwrap_or_default();
     assert_eq!(fire.max, 1, "the skill assigned the cap: {fire:?}");
 }
 
@@ -290,7 +295,6 @@ fn an_unported_card_falls_back_gracefully() {
     );
 }
 
-
 #[test]
 fn ported_official_cards_run_in_a_match() {
     // R:[衍生] 压 -- straight gain, no prompt.
@@ -336,5 +340,3 @@ fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
     }
     msg
 }
-
-

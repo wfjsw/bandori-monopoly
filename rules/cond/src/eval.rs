@@ -129,9 +129,7 @@ impl WindowScope {
         };
         bind_candidate(&mut child, cond, &view);
         self.bind_window_tables(&mut child, cond);
-        let val = child
-            .resolve(cond.expr())
-            .map_err(EvalError::Exec)?;
+        let val = child.resolve(cond.expr()).map_err(EvalError::Exec)?;
         match val {
             Value::Bool(b) => Ok(b),
             other => Err(EvalError::NotBool(format!("{other:?}"))),
@@ -258,7 +256,9 @@ fn build_table_value(t: &Table) -> Value {
                     Value::List(Arc::new(list)),
                 );
             }
-            Value::Map(Map { map: Arc::new(outer) })
+            Value::Map(Map {
+                map: Arc::new(outer),
+            })
         }
         Table::IntStrMap(rows) => {
             // `(tile, attr) -> v`, keyed by `"tile:attr"` (`tile_attr`).
@@ -276,10 +276,7 @@ fn build_table_value(t: &Table) -> Value {
             // `"player:tile:class"`.
             let mut m = HashMap::new();
             for (p, t, c) in rows {
-                m.insert(
-                    Key::String(Arc::new(format!("{p}:{t}:{c}"))),
-                    Value::Int(1),
-                );
+                m.insert(Key::String(Arc::new(format!("{p}:{t}:{c}"))), Value::Int(1));
             }
             Value::Map(Map { map: Arc::new(m) })
         }
@@ -494,7 +491,10 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             // cannot reverse, so only string args resolve).
             ctx.add_function(
                 fname,
-                move |ftx: &FunctionContext, tile: i64, kind: Arc<String>| -> Result<bool, ExecutionError> {
+                move |ftx: &FunctionContext,
+                      tile: i64,
+                      kind: Arc<String>|
+                      -> Result<bool, ExecutionError> {
                     let m = map_var(ftx, &var)?;
                     let want = format!("{tile}:{}", kind.as_str());
                     // Table is kind -> tile list; scan for the pair.
@@ -504,7 +504,9 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
                                 continue;
                             }
                             if let Value::List(items) = v {
-                                return Ok(items.iter().any(|i| matches!(i, Value::Int(x) if *x == tile)));
+                                return Ok(items
+                                    .iter()
+                                    .any(|i| matches!(i, Value::Int(x) if *x == tile)));
                             }
                         }
                     }
@@ -518,9 +520,16 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             let var = var.to_string();
             ctx.add_function(
                 fname,
-                move |ftx: &FunctionContext, tile: i64, attr: Arc<String>| -> Result<i64, ExecutionError> {
+                move |ftx: &FunctionContext,
+                      tile: i64,
+                      attr: Arc<String>|
+                      -> Result<i64, ExecutionError> {
                     let m = map_var(ftx, &var)?;
-                    Ok(int_at_str(&m, &format!("{tile}:{}", attr.as_str()), default_attr(attr.as_str())))
+                    Ok(int_at_str(
+                        &m,
+                        &format!("{tile}:{}", attr.as_str()),
+                        default_attr(attr.as_str()),
+                    ))
                 },
             )
             .expect(fname);
@@ -549,7 +558,10 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             // `state(p, 'key')` -- the key is a string; missing = 0.
             ctx.add_function(
                 fname,
-                move |ftx: &FunctionContext, seat: i64, key: Arc<String>| -> Result<i64, ExecutionError> {
+                move |ftx: &FunctionContext,
+                      seat: i64,
+                      key: Arc<String>|
+                      -> Result<i64, ExecutionError> {
                     let m = map_var(ftx, &var)?;
                     Ok(int_at_str(&m, &format!("{seat}:{}", key.as_str()), 0))
                 },
@@ -621,7 +633,9 @@ fn list_contains(ftx: &FunctionContext, name: &str, needle: i64) -> bool {
         return false;
     };
     match to_value(v.as_ref()) {
-        Ok(Value::List(items)) => items.iter().any(|i| matches!(i, Value::Int(x) if *x == needle)),
+        Ok(Value::List(items)) => items
+            .iter()
+            .any(|i| matches!(i, Value::Int(x) if *x == needle)),
         _ => false,
     }
 }
@@ -639,11 +653,7 @@ impl Cond {
         WindowScope::new(win).eval(self, cand)
     }
 
-    pub fn eval_checked(
-        &self,
-        win: &WindowCtx,
-        cand: &CandidateCtx,
-    ) -> Result<bool, EvalError> {
+    pub fn eval_checked(&self, win: &WindowCtx, cand: &CandidateCtx) -> Result<bool, EvalError> {
         WindowScope::new(win).eval_checked(self, cand)
     }
 }

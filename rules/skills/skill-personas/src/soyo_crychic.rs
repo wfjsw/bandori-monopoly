@@ -16,9 +16,9 @@
 //! gates the read and the CEL `slot('skill.soyoCrychic.armed')` condition, so
 //! the residual guard is gone.
 
-use card_sdk::abi::{ActionKind, FilterKind, MoveKind, Tile};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
+use card_sdk::abi::{ActionKind, FilterKind, MoveKind, Tile};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 /// The teleport is armed (0/1). Presence only -- the tile to teleport to rides
 /// in [`TILE`], so no value doubles as "nothing owed".
@@ -39,16 +39,30 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive cancel (`ask_yes` + `set_pay_amount(0)` + state writes)
         // sits immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(Action::PaySplitChooseBefore("actor != owner && tile.owner == owner && value > 0", None, None, on_pay)),
+        On::Action(Action::PaySplitChooseBefore(
+            "actor != owner && tile.owner == owner && value > 0",
+            None,
+            None,
+            on_pay,
+        )),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
         // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
         // so the condition alone decides and no residual guard remains.
-        On::Filter(Filter::DiceRollPlan("actor == owner && slot('skill.soyoCrychic.armed') != 0", None, on_plan)),
+        On::Filter(Filter::DiceRollPlan(
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+            None,
+            on_plan,
+        )),
         // One-shot latch clear once the rewritten move has been taken. This is
         // a teleport plan, so `DiceRollAfter` never fires (no dice) -- `MoveAfter`
         // is the next event for both teleports and walks.
-        On::Action(Action::MoveAfter("actor == owner && slot('skill.soyoCrychic.armed') != 0", None, None, on_plan_after)),
+        On::Action(Action::MoveAfter(
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+            None,
+            None,
+            on_plan_after,
+        )),
     ],
 );
 

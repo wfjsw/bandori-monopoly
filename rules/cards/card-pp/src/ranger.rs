@@ -16,18 +16,22 @@
 //! The ladder body runs off `cards_in(Field)` for the placed-card count.
 
 use bandori_std::ctx;
-use skill_groups::fans;
 use card_sdk::{key, CardDef, Msg, On};
+use skill_groups::fans;
 
 pub const RANGER: CardDef = CardDef::new(
     "PP:[衍生]魔法战队Pastel✽Ranger",
     &[On::Play("", None, Some(cant_play), ranger)],
-).props(&[(card_sdk::abi::prop::EST_COST, 2000)]).meta(&card_sdk::meta::CardMeta::new()
+)
+.props(&[(card_sdk::abi::prop::EST_COST, 2000)])
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"魔法战队Pastel✽Ranger"#)
         .raw_name(r#"[衍生]魔法战队Pastel✽Ranger"#)
         .derived(true)
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
-        .text(r#"[特]：
+        .text(
+            r#"[特]：
 仅在你的绝对距离30-“粉丝数量”格内有你拥有房的格子时可使用。
 [手]：
 根据场上你拥有的卡数量并依次进行以下操作，如果[共鸣]则视为数量加1：
@@ -35,9 +39,11 @@ pub const RANGER: CardDef = CardDef::new(
 2. 数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]；
 3. 数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡；
 4. 数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；
-5.数量至少为6则抽1张卡。"#)
+5.数量至少为6则抽1张卡。"#,
+        )
         // sheet cell D14
-        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
+);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 

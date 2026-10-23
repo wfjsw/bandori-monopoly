@@ -9,8 +9,8 @@
 //! The flip goes through `skill_groups::fans::flip_up` (state-dict +
 //! `FansFlip` raise; `docs/CARDS.md`), which band clause （2） listens to.
 
-use card_sdk::{key, CardDef, Msg, On};
 use bandori_std::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 
 pub const TOGETHER_HERE: CardDef =

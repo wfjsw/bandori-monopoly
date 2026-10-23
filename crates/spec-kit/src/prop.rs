@@ -90,9 +90,7 @@ pub fn forall(
             .wrapping_mul(0x9E37_79B9_7F4A_7C15);
         let mut rng = Rng::new(case_seed);
         if let Err(e) = f(&mut rng, i) {
-            return Err(format!(
-                "forall case {i}/{n} (seed {seed:#x}): {e}"
-            ));
+            return Err(format!("forall case {i}/{n} (seed {seed:#x}): {e}"));
         }
     }
     Ok(())

@@ -38,11 +38,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use game_core::data::{PersonaData, GameData};
+use game_core::data::{GameData, PersonaData};
 use game_core::deck;
-use game_core::deck_book::{
-    DeckBook, DeckBookEntry, DECK_BOOK_VERSION, POLICY_STANDARD,
-};
+use game_core::deck_book::{DeckBook, DeckBookEntry, DECK_BOOK_VERSION, POLICY_STANDARD};
 use game_core::engine::{CardRules, Match};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
@@ -168,7 +166,9 @@ fn parse_args() -> Config {
                     .filter_map(|s| Level::parse(s))
                     .collect();
                 if levels.is_empty() {
-                    eprintln!("deckbook: --levels needs at least one of me,seat_groups,groups,exact");
+                    eprintln!(
+                        "deckbook: --levels needs at least one of me,seat_groups,groups,exact"
+                    );
                     std::process::exit(2);
                 }
             }
@@ -203,7 +203,8 @@ fn parse_args() -> Config {
     } else {
         rung0
     };
-    let budget = (budget_minutes > 0.0).then(|| Instant::now() + std::time::Duration::from_secs_f64(budget_minutes * 60.0));
+    let budget = (budget_minutes > 0.0)
+        .then(|| Instant::now() + std::time::Duration::from_secs_f64(budget_minutes * 60.0));
     Config {
         cap_rounds,
         games_per_candidate: games_per_candidate.max(rung0),
@@ -292,7 +293,10 @@ fn cand_key(cards: &[String]) -> Vec<String> {
 /// * **add:j** -- add pool card *j* not in the preset, cutting the preset's
 ///   last card in pool order to remain at 10.
 fn candidates(data: &GameData, c: &PersonaData) -> Vec<Cand> {
-    let pool: Vec<String> = deck::pool(data, c).into_iter().map(|k| k.id.clone()).collect();
+    let pool: Vec<String> = deck::pool(data, c)
+        .into_iter()
+        .map(|k| k.id.clone())
+        .collect();
     let preset = deck::preset(data, c);
     let mut out: Vec<Cand> = Vec::new();
     let mut seen: Vec<Vec<String>> = Vec::new();
@@ -335,7 +339,10 @@ fn candidates(data: &GameData, c: &PersonaData) -> Vec<Cand> {
 
 /// One-card swaps of `base` against the pool (the greedy neighbourhood).
 fn swaps(data: &GameData, c: &PersonaData, base: &[String]) -> Vec<Cand> {
-    let pool: Vec<String> = deck::pool(data, c).into_iter().map(|k| k.id.clone()).collect();
+    let pool: Vec<String> = deck::pool(data, c)
+        .into_iter()
+        .map(|k| k.id.clone())
+        .collect();
     let mut out: Vec<Cand> = Vec::new();
     let mut seen: Vec<Vec<String>> = Vec::new();
     for (i, card) in base.iter().enumerate() {
@@ -482,9 +489,7 @@ fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
                         let opp = sample_opponents(&names, me, s, cfg.players - 1);
                         let mut groups: Vec<String> = opp
                             .iter()
-                            .map(|o| {
-                                data.persona(o).map(|c| c.group.clone()).unwrap_or_default()
-                            })
+                            .map(|o| data.persona(o).map(|c| c.group.clone()).unwrap_or_default())
                             .collect();
                         groups.sort();
                         tasks.push(Task {
@@ -848,8 +853,7 @@ fn race(
             })
             .collect();
         if !games_needed.is_empty() {
-            let by_id: BTreeMap<String, &Cand> =
-                cands.iter().map(|c| (c.id.clone(), c)).collect();
+            let by_id: BTreeMap<String, &Cand> = cands.iter().map(|c| (c.id.clone(), c)).collect();
             let mut jobs: Vec<(String, usize)> = Vec::new();
             for (id, have) in &games_needed {
                 for idx in *have..rung {
@@ -866,16 +870,7 @@ fn race(
                         return None;
                     };
                     let seed = game_seed(cfg, task, *idx);
-                    let r = play_one(
-                        data,
-                        rules.clone(),
-                        book,
-                        sha,
-                        task,
-                        &cand.cards,
-                        seed,
-                        cfg,
-                    )?;
+                    let r = play_one(data, rules.clone(), book, sha, task, &cand.cards, seed, cfg)?;
                     let secs = r.secs;
                     results.lock().unwrap().push((id.clone(), *idx, r));
                     Some(secs)
@@ -1107,10 +1102,7 @@ fn main() {
         .expect("game data"),
     );
     let warm = WasmRules::new(ruleset, data.clone());
-    let sha = warm
-        .ruleset_sha256()
-        .unwrap_or("stub")
-        .to_string();
+    let sha = warm.ruleset_sha256().unwrap_or("stub").to_string();
     let ruleset = warm.ruleset().clone();
     println!(
         "deckbook: ruleset {sha}, cap {} rounds, {} games/candidate (rung0 {}), {} threads, levels {:?}",
@@ -1256,7 +1248,8 @@ fn main() {
     out.seat_groups
         .sort_by(|a, b| (a.seat, a.me.clone()).cmp(&(b.seat, b.me.clone())));
     out.groups.sort_by(|a, b| a.me.cmp(&b.me));
-    out.exact.sort_by(|a, b| (a.seat, a.me.clone()).cmp(&(b.seat, b.me.clone())));
+    out.exact
+        .sort_by(|a, b| (a.seat, a.me.clone()).cmp(&(b.seat, b.me.clone())));
 
     if let Some(dir) = cfg.out.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -1291,7 +1284,13 @@ fn main() {
 }
 
 /// Rough full-run wall time for every persona at `gpc` games/candidate.
-fn estimate(_tasks: &[Task], data: &GameData, cfg: &Config, gpc: usize, ms_per_game: f64) -> String {
+fn estimate(
+    _tasks: &[Task],
+    data: &GameData,
+    cfg: &Config,
+    gpc: usize,
+    ms_per_game: f64,
+) -> String {
     let n_chars = if cfg.personas.is_empty() {
         data.personas.len()
     } else {
@@ -1491,7 +1490,9 @@ fn derive_one(
     }
     eprintln!(
         "deckbook: {} done in {:.1}s wall, {} games, {:.0} ms/game",
-        label, wall, games_total,
+        label,
+        wall,
+        games_total,
         if games_total > 0 {
             game_secs_total * 1e3 / games_total as f64
         } else {

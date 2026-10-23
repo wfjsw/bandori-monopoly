@@ -21,10 +21,13 @@ fn data() -> Arc<GameData> {
     // bot-core must not grow a hard dep on the card crates, so the roster
     // comes from the generated roster fixture (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -216,7 +219,10 @@ fn settle_build_prompt_is_an_offer_answer_not_a_build_act() {
     );
     for (i, a) in acts.iter().enumerate() {
         let msg = action::to_net_message(a, &st, 1);
-        assert_eq!(msg.act, "answer", "settle build answers the prompt: {msg:?}");
+        assert_eq!(
+            msg.act, "answer",
+            "settle build answers the prompt: {msg:?}"
+        );
         assert_eq!(msg.prompt, 12);
         assert_eq!(msg.value, i as i32);
     }

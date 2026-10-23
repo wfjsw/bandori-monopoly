@@ -94,8 +94,7 @@ fn any_crystals(t: &Table, card: &str) -> i32 {
 
 /// Is `card` in play on any player field or the board field?
 fn any_in_play(t: &Table, card: &str) -> bool {
-    (0..t.n).any(|w| t.on_field(w, card))
-        || t.world().st.board_field.iter().any(|f| f.card == card)
+    (0..t.n).any(|w| t.on_field(w, card)) || t.world().st.board_field.iter().any(|f| f.card == card)
 }
 
 // ===========================================================================
@@ -565,12 +564,10 @@ fn riot_contract() {
         t.set_hand(2, &p2hand);
         t.set_draw(0, &["AG:Y.O.L.O", "AG:Y.O.L.O"]);
         t.set_draw(1, &["通用:安可", "通用:安可", "通用:安可"]);
-        t.set_draw(2, &[
-            "AG:宣战布告",
-            "AG:宣战布告",
-            "AG:宣战布告",
-            "AG:宣战布告",
-        ]);
+        t.set_draw(
+            2,
+            &["AG:宣战布告", "AG:宣战布告", "AG:宣战布告", "AG:宣战布告"],
+        );
         t.set_money(0, 20_000);
         t.set_money(1, 20_000);
         t.set_money(2, 20_000);
@@ -585,7 +582,10 @@ fn riot_contract() {
         t.play(0, "通用:登上武道馆")
             .map_err(|e| format!("budokan: {e}"))?;
         if !t.counteract_offered("RAS:R. I. O. T.") {
-            return Err(format!("C-RAS-riot-01: window not open: {}", t.dump_prompt()));
+            return Err(format!(
+                "C-RAS-riot-01: window not open: {}",
+                t.dump_prompt()
+            ));
         }
         t.counteract(1, "RAS:R. I. O. T.")
             .map_err(|e| format!("counteract: {e}"))?;
@@ -674,7 +674,10 @@ fn repaint_contract() {
         t.dice(&[roll]);
         t.roll(1).map_err(|e| format!("roll: {e}"))?;
         if !t.counteract_offered("RAS:Repaint") {
-            return Err(format!("C-RAS-repaint-01: window not open: {}", t.dump_prompt()));
+            return Err(format!(
+                "C-RAS-repaint-01: window not open: {}",
+                t.dump_prompt()
+            ));
         }
         let mut x = 0;
         for tile in 6..=(5 + roll as usize) {
@@ -736,9 +739,7 @@ fn repaint_halves_the_payment() {
 /// * **Quote:** 「投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」
 pub fn c_ras_unstoppable_card_teleport(step: &Step<'_>) -> Result<(), String> {
     let played = step.events.iter().any(|e| {
-        e.r#type == "card"
-            && e.card == "RAS:UNSTOPPABLE"
-            && (e.kind == "play" || e.kind.is_empty())
+        e.r#type == "card" && e.card == "RAS:UNSTOPPABLE" && (e.kind == "play" || e.kind.is_empty())
     });
     if !played {
         return Ok(());
@@ -802,9 +803,7 @@ fn unstoppable_card_contract() {
 /// C-RAS-become-strongest-01 -- 1d10 maps onto the sorted livehouse table.
 pub fn c_ras_become_strongest_map(step: &Step<'_>) -> Result<(), String> {
     let played = step.events.iter().any(|e| {
-        e.r#type == "card"
-            && e.card == "RAS:成为最强"
-            && (e.kind == "play" || e.kind.is_empty())
+        e.r#type == "card" && e.card == "RAS:成为最强" && (e.kind == "play" || e.kind.is_empty())
     });
     if !played {
         return Ok(());
@@ -830,11 +829,16 @@ pub fn c_ras_become_strongest_none(_step: &Step<'_>) -> Result<(), String> {
 /// 成为最强: board-wide sorted livehouse table; fallback to Live House.
 #[test]
 fn become_strongest_contract() {
-    let table = [RING1, RING2, DUB, LIVE_HOUSE, RING3, BUDOKAN, SPACE, LH_GALAXY, RING4];
+    let table = [
+        RING1, RING2, DUB, LIVE_HOUSE, RING3, BUDOKAN, SPACE, LH_GALAXY, RING4,
+    ];
     for (i, &tile) in table.iter().enumerate() {
         let face = (i + 1) as i32;
         let mut t = Table::vanilla(2);
-        t.own(0, &[RING1, RING2, DUB, RING3, BUDOKAN, SPACE, LH_GALAXY, RING4]);
+        t.own(
+            0,
+            &[RING1, RING2, DUB, RING3, BUDOKAN, SPACE, LH_GALAXY, RING4],
+        );
         t.dice(&[face]);
         t.observe(&[Clause::new(
             "C-RAS-become-strongest-01",
@@ -1109,9 +1113,7 @@ fn storm_contract() {
         }
         crystals = any_crystals(&t, "RAS:练习室里的风暴");
         if crystals != 2 {
-            return Err(format!(
-                "C-RAS-storm-02: crystals {crystals}, expected 2"
-            ));
+            return Err(format!("C-RAS-storm-02: crystals {crystals}, expected 2"));
         }
         // C-RAS-storm-03: p1 settles at SPACE (42), distance 2 from BUDOKAN (40).
         let x = 2i32;
@@ -1149,7 +1151,10 @@ fn storm_refuses_off_livehouse() {
     let mut t = Table::vanilla(2);
     t.give(0, &["RAS:练习室里的风暴"]);
     let r = t.play(0, "RAS:练习室里的风暴");
-    assert!(r.is_err(), "C-RAS-storm-01: must refuse off a livehouse: {r:?}");
+    assert!(
+        r.is_err(),
+        "C-RAS-storm-01: must refuse off a livehouse: {r:?}"
+    );
 }
 
 // ===========================================================================
@@ -1243,10 +1248,7 @@ fn crush_hand_contract() {
             ));
         }
         if t.dice_left() != 0 {
-            return Err(format!(
-                "C-RAS-crush-02: {} faces left",
-                t.dice_left()
-            ));
+            return Err(format!("C-RAS-crush-02: {} faces left", t.dice_left()));
         }
         Ok(())
     })
@@ -1376,10 +1378,7 @@ fn layer_press_contract() {
         }
         drain(&mut t);
         if t.charge(0) != 0 {
-            return Err(format!(
-                "C-RAS-layer-03: fire {}, expected 0",
-                t.charge(0)
-            ));
+            return Err(format!("C-RAS-layer-03: fire {}, expected 0", t.charge(0)));
         }
         if t.state(0, "layer_keep_count") != 0 {
             return Err(format!(
@@ -1391,10 +1390,7 @@ fn layer_press_contract() {
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         drain(&mut t);
         if t.pos(0) as i32 != kept {
-            return Err(format!(
-                "C-RAS-layer-03: pos {}, expected {kept}",
-                t.pos(0)
-            ));
+            return Err(format!("C-RAS-layer-03: pos {}, expected {kept}", t.pos(0)));
         }
         Ok(())
     })
@@ -1448,7 +1444,12 @@ fn rio_reroll_contract() {
     assert_eq!(p.options.len(), 2, "yes/no: {}", t.dump_prompt());
     t.answer(0, 0).unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.options.len(), 2, "keep old / keep new: {}", t.dump_prompt());
+    assert_eq!(
+        p.options.len(),
+        2,
+        "keep old / keep new: {}",
+        t.dump_prompt()
+    );
     t.answer(0, 1).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 10, "C-RAS-rio-02: 择其一执行");

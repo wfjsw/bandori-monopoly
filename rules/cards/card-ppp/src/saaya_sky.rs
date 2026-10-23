@@ -9,9 +9,9 @@
 //!
 //! park on 山吹面包房; after the user passes it, +1 fire and the card hops to 3d20.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
 
@@ -19,17 +19,33 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
     "PPP:（沙绫）总有一天要给这片天空命名",
     &[
         On::Play("", None, None, play),
-        On::Action(Action::PassTile("actor == owner && card.placed", None, None, pass_tile)),
-        On::Action(Action::TurnEndAfter("card.placed && slot('saaya_sky_passed') != 0", None, None, turn_end_after)),
+        On::Action(Action::PassTile(
+            "actor == owner && card.placed",
+            None,
+            None,
+            pass_tile,
+        )),
+        On::Action(Action::TurnEndAfter(
+            "card.placed && slot('saaya_sky_passed') != 0",
+            None,
+            None,
+            turn_end_after,
+        )),
     ],
-).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+)
+.silent(&[1])
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"总有一天要给这片天空命名"#)
         .raw_name(r#"（沙绫）总有一天要给这片天空命名"#)
         .tags(&[])
-        .text(r#"（1）将此卡放置在山吹面包房
-（2）[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上"#)
+        .text(
+            r#"（1）将此卡放置在山吹面包房
+（2）[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上"#,
+        )
         // sheet cell B18
-        .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]),
+);
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
 /// C# `CardSaayaSky._passed` -- the user walked past the card this turn.

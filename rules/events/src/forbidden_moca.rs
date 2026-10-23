@@ -3,8 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `Forbidden Moca`）:
 //! > 直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！
 
-use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx;
+use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::{Action, CardDef, Filter, Msg, On, RollValue};
 
 use crate::util::{expire_removed, keep};
@@ -22,11 +22,13 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         On::Action(Action::AtEnd("", None, None, expire)),
     ],
 )
-        .meta(&card_sdk::meta::CardMeta::new()
-            .name(r#"Forbidden Moca"#)
-            .text(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#)
-            // sheet cell A20
-            .derived(false));
+.meta(
+    &card_sdk::meta::CardMeta::new()
+        .name(r#"Forbidden Moca"#)
+        .text(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#)
+        // sheet cell A20
+        .derived(false),
+);
 
 /// 规则书: 「直到你的下个回合结束…」 -- the event stays in play (「你的」 is the
 /// player who drew it) and its expiry is scheduled on that player's next turn

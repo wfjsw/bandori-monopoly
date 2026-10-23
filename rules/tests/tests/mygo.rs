@@ -64,7 +64,11 @@ fn confused_counter_places_on_own_field() {
     let mut t = Table::vanilla(2);
     t.give(1, &["MyGO:即使迷茫着"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    assert!(t.counteract_offered("MyGO:即使迷茫着"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("MyGO:即使迷茫着"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "MyGO:即使迷茫着").unwrap();
     assert!(t.on_field(1, "MyGO:即使迷茫着"), "{:?}", t.field_ids(1));
     assert!(!t.hand(1).contains(&"MyGO:即使迷茫着".to_string()));
@@ -291,7 +295,11 @@ fn rain_extra_settle_at_turn_end() {
     assert_eq!(t.pos(0), 2);
     let rent = 260; // 天文馆 base rent
     t.end(0).unwrap();
-    assert_eq!(t.money(1), 10_000 + 2 * rent, "settled twice: land + turn-end");
+    assert_eq!(
+        t.money(1),
+        10_000 + 2 * rent,
+        "settled twice: land + turn-end"
+    );
     assert_eq!(t.money(0), 10_000 - 2 * rent);
 }
 
@@ -447,7 +455,8 @@ fn haneoka_below_10_is_ineffective() {
         let t = haneoka(0, face);
         assert_eq!(t.houses(7), 0, "face {face}: no house");
         assert!(
-            t.discard(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
+            t.discard(0)
+                .contains(&"MyGO:羽丘的不可思议女孩".to_string()),
             "face {face}: to discard"
         );
         assert!(!t.on_field(0, "MyGO:羽丘的不可思议女孩"), "face {face}");
@@ -485,7 +494,11 @@ fn haneoka_over_15_also_draws() {
     for face in [16, 20] {
         let t = haneoka(0, face);
         assert_eq!(t.houses(7), 1, "face {face}");
-        assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "face {face}: drew one");
+        assert_eq!(
+            t.hand(0),
+            vec!["R:[衍生] 压".to_string()],
+            "face {face}: drew one"
+        );
     }
 }
 
@@ -524,7 +537,8 @@ fn haneoka_at_20_places_the_card() {
         t.field_ids(0)
     );
     assert!(
-        !t.discard(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
+        !t.discard(0)
+            .contains(&"MyGO:羽丘的不可思议女孩".to_string()),
         "placed, not discarded"
     );
 }
@@ -540,7 +554,8 @@ fn haneoka_at_19_does_not_place() {
         "19 is not ≥20; the card must not stay on the field"
     );
     assert!(
-        t.draw_pile(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
+        t.draw_pile(0)
+            .contains(&"MyGO:羽丘的不可思议女孩".to_string()),
         "to discard"
     );
 }
@@ -734,10 +749,17 @@ fn anon_link_marks_die_with_the_creating_instance() {
         "row on 1 is the stand-in's counter: {:?}",
         t.marks_on(1)[0]
     );
-    assert_eq!(t.marks_on(2)[0].instance, Some(uid), "{:?}", t.marks_on(2)[0]);
+    assert_eq!(
+        t.marks_on(2)[0].instance,
+        Some(uid),
+        "{:?}",
+        t.marks_on(2)[0]
+    );
     // Leaving the field destroys the instance's units (both rows at once).
     assert!(
-        t.m.world_mut().unplace_card(0, "MyGO:[千早爱音]Anon Tokyo").is_some(),
+        t.m.world_mut()
+            .unplace_card(0, "MyGO:[千早爱音]Anon Tokyo")
+            .is_some(),
         "unplace the field stand-in"
     );
     assert_eq!(anon_marks(&t, 1), 0, "row on 1 died with the instance");
@@ -780,7 +802,10 @@ fn soyo_mixed_colors_attaches_to_owned_tile() {
         "{:?}",
         t.field_ids(0)
     );
-    let f = t.field(0).into_iter().find(|f| f.card.starts_with("MyGO:（soyo）"));
+    let f = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card.starts_with("MyGO:（soyo）"));
     assert_eq!(f.map(|f| f.tile), Some(2), "sits on the chosen tile");
 }
 
@@ -873,7 +898,11 @@ fn rana_fun_woman_sits_on_current_tile() {
     t.set_character_raw(0, "要乐奈");
     t.set_pos(0, 5);
     t.give_play(0, "MyGO:（乐奈）有趣的女人").unwrap();
-    assert!(t.on_field(0, "MyGO:（乐奈）有趣的女人"), "{:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "MyGO:（乐奈）有趣的女人"),
+        "{:?}",
+        t.field_ids(0)
+    );
     let f = t
         .field(0)
         .into_iter()
@@ -926,7 +955,11 @@ fn rain_day_d10_stays_the_matching_zone() {
     t.dice(&[1]);
     t.give_play(0, "MyGO:那天的雨").unwrap();
     assert_eq!(t.state(1, "stay"), 1, "player on a blue tile gains stay");
-    assert_eq!(t.state(2, "stay"), 0, "player outside the zone is untouched");
+    assert_eq!(
+        t.state(2, "stay"),
+        0,
+        "player outside the zone is untouched"
+    );
 }
 
 #[test]
@@ -973,7 +1006,11 @@ fn meet_again_rerolls_until_passing_a_player() {
     t.give(0, &["MyGO:若能再次交汇"]);
     t.dice(&[2, 5]); // first 2 (no pass), then 5 (passes P1 at 3)
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("MyGO:若能再次交汇"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("MyGO:若能再次交汇"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "MyGO:若能再次交汇").unwrap();
     rest(&mut t);
     drain(&mut t);
@@ -993,13 +1030,21 @@ fn journey_places_on_tile_with_four_crystals() {
     let mut t = Table::vanilla(2);
     t.set_pos(0, 5);
     t.give_play(0, "MyGO:哪怕这旅程没有终点").unwrap();
-    assert!(t.on_field(0, "MyGO:哪怕这旅程没有终点"), "{:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "MyGO:哪怕这旅程没有终点"),
+        "{:?}",
+        t.field_ids(0)
+    );
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 4);
     let f = t
         .field(0)
         .into_iter()
         .find(|f| f.card == "MyGO:哪怕这旅程没有终点");
-    assert_eq!(f.map(|f| f.tile), Some(5), "sits on the tile it was played on");
+    assert_eq!(
+        f.map(|f| f.tile),
+        Some(5),
+        "sits on the tile it was played on"
+    );
 }
 
 #[test]
@@ -1435,7 +1480,11 @@ fn band_roll_16_plus_adds_crystal() {
     t.roll(0).unwrap();
     rest(&mut t);
     drain(&mut t);
-    assert_eq!(crystals(&t, 0, &band), 1, "roll 16 puts a crystal on the band card");
+    assert_eq!(
+        crystals(&t, 0, &band),
+        1,
+        "roll 16 puts a crystal on the band card"
+    );
 }
 
 #[test]
@@ -1482,7 +1531,8 @@ fn band_ineffective_card_adds_over_cap_crystal() {
     rest(&mut t);
     drain(&mut t);
     assert!(
-        t.draw_pile(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
+        t.draw_pile(0)
+            .contains(&"MyGO:羽丘的不可思议女孩".to_string()),
         "ineffective card filed and reshuffled: {:?}",
         t.draw_pile(0)
     );
@@ -1600,7 +1650,11 @@ fn inter_net_error_negates_untargeted_hand_effect() {
     t.give(1, &["通用:网络链接异常"]);
     t.give(0, &["MyGO:哪怕这旅程没有终点"]);
     let _ = t.play(0, "MyGO:哪怕这旅程没有终点");
-    assert!(t.counteract_offered("通用:网络链接异常"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("通用:网络链接异常"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "通用:网络链接异常").unwrap();
     assert!(!t.on_field(0, "MyGO:哪怕这旅程没有终点"), "negated");
 }
@@ -1613,7 +1667,11 @@ fn inter_budokan_opens_confused_counter_for_each_target() {
     t.give(1, &["MyGO:即使迷茫着"]);
     t.give(2, &["MyGO:即使迷茫着"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    assert!(t.counteract_offered("MyGO:即使迷茫着"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("MyGO:即使迷茫着"),
+        "{}",
+        t.dump_prompt()
+    );
     while t.prompt().is_some() {
         if t.counteract_offered("MyGO:即使迷茫着") {
             let who = t.asked()[0];
@@ -1643,7 +1701,11 @@ fn inter_haneoka_ineffective_feeds_band_crystal() {
     t.give_play(0, "MyGO:羽丘的不可思议女孩").unwrap();
     rest(&mut t);
     drain(&mut t);
-    assert_eq!(crystals(&t, 0, &band), 1, "ineffective card fed the band crystal");
+    assert_eq!(
+        crystals(&t, 0, &band),
+        1,
+        "ineffective card fed the band crystal"
+    );
 }
 #[test]
 fn inter_yolo_pushes_haneoka_over_20() {
@@ -1790,7 +1852,10 @@ fn no_road_in_ops_still_owes_the_roll_and_does_not_read_as_skip() {
     assert_eq!(t.state(0, "exile"), 2);
     let st = t.st();
     assert_eq!(st.step, stage::OPS);
-    assert!(!st.skip_move, "the roll is still owed: not a skipped movement");
+    assert!(
+        !st.skip_move,
+        "the roll is still owed: not a skipped movement"
+    );
     assert!(st.can_roll_here && !st.can_end_here);
     assert_eq!(t.end(0), Err("err.roll_first".to_string()));
     t.roll(0).unwrap();

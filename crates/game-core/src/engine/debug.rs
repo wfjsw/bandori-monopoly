@@ -39,9 +39,7 @@ impl Match {
             "draw" => (1..=100).contains(&m.value),
             "state" => {
                 (-1_000_000..=1_000_000).contains(&m.value)
-                    && self.world.st.players[target]
-                        .state
-                        .contains_key(&m.persona)
+                    && self.world.st.players[target].state.contains_key(&m.persona)
             }
             // Deed cheats: same tile-rule primitives as the settle / net
             // commands (`ctx::buy` / `card_build` / `mortgage` / `redeem`),
@@ -79,7 +77,8 @@ impl Match {
                 // amounts live in `rules/tiles`; these bypass only the prompt
                 // and the phase/turn gate (cheats already do).
                 "buy" => {
-                    let _ = cx.deed_buy(target, m.value as usize, super::purchase::BuyKind::Land, 0);
+                    let _ =
+                        cx.deed_buy(target, m.value as usize, super::purchase::BuyKind::Land, 0);
                 }
                 "build" => {
                     let _ = cx.deed_build(target, m.value as usize);

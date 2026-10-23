@@ -2,8 +2,8 @@
 //! metadata rows defined beside each skill rule. Rebuild after lifting a band.
 
 use alloc::vec::Vec;
-use card_sdk::meta::MetaRow;
 use bandori_std::roster::PersonaDef;
+use card_sdk::meta::MetaRow;
 
 pub use super::akao_cool::CHARACTER as AKAO_COOL;
 pub use super::anon_restart::CHARACTER as ANON_RESTART;

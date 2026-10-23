@@ -54,7 +54,10 @@ pub fn rent_of_property_table() {
     kani::cover!(houses == 0, "0 houses");
     kani::cover!(houses == 2, "2 houses");
     kani::cover!(houses >= 4, "clamped at 3+");
-    crate::kassert!(got == expect, "rent_of must equal table_rent at counted houses");
+    crate::kassert!(
+        got == expect,
+        "rent_of must equal table_rent at counted houses"
+    );
 }
 
 /// RiNG rent quotes the tile's base `price` (the rolled figure is a pay-time

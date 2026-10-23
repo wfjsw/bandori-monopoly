@@ -12,8 +12,8 @@
 //! draw when the shield lands; this body takes the fallback draw when nobody
 //! shielded.
 
-use card_sdk::abi::{prop, ChainKind};
 use bandori_std::ctx;
+use card_sdk::abi::{prop, ChainKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MANA_CHAMPION: CardDef = CardDef::new(

@@ -8,7 +8,7 @@
 use crate::host;
 use crate::invoke;
 use crate::spec;
-use crate::world::{self, Effect, World, TILE_SHOP, MAX_PLAYERS};
+use crate::world::{self, Effect, World, MAX_PLAYERS, TILE_SHOP};
 
 fn symbolic_play_world() -> World {
     host::install();
@@ -67,7 +67,10 @@ pub fn tae_sound_teleport_and_fire_iff() {
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
             crate::kassert!(post.pos[p] == pre.pos[p], "frame: other players unmoved");
-            crate::kassert!(post.charge[p] == pre.charge[p], "frame: other players' fire");
+            crate::kassert!(
+                post.charge[p] == pre.charge[p],
+                "frame: other players' fire"
+            );
         }
     }
 }

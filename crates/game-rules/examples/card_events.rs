@@ -114,7 +114,9 @@ fn main() {
         }
     }
     lines.push(format!("TOTAL kinds={total:?}"));
-    lines.push(format!("TOTAL chars={CHARS:?} seeds={SEEDS:?} max_rounds={max_rounds}"));
+    lines.push(format!(
+        "TOTAL chars={CHARS:?} seeds={SEEDS:?} max_rounds={max_rounds}"
+    ));
 
     let path = Path::new(&out);
     if let Some(parent) = path.parent() {
@@ -125,7 +127,11 @@ fn main() {
     println!("TOTAL kinds={total:?}");
 }
 
-fn count(kinds: &mut BTreeMap<String, usize>, e: &MatchEvent, card_by_kind: &mut BTreeMap<String, usize>) {
+fn count(
+    kinds: &mut BTreeMap<String, usize>,
+    e: &MatchEvent,
+    card_by_kind: &mut BTreeMap<String, usize>,
+) {
     *kinds.entry(e.r#type.clone()).or_default() += 1;
     if e.r#type == "card" {
         *card_by_kind.entry(e.kind.clone()).or_default() += 1;

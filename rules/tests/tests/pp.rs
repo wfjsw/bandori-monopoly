@@ -89,7 +89,10 @@ fn walk_onto_y(t: &mut Table, who: usize, from: usize, tile: usize, y: i32) {
             return;
         }
         let p = t.expect_prompt();
-        if p.options.iter().any(|o| format!("{o:?}").contains("intOption")) {
+        if p.options
+            .iter()
+            .any(|o| format!("{o:?}").contains("intOption"))
+        {
             // The Y prompt belongs to the skill owner (whoever the prompt
             // waits on), which is not necessarily the mover -- answer as them.
             let _ = t.answer_one(y);
@@ -146,7 +149,11 @@ fn shanyao_counter_on_short_payment() {
     // The 50-cash rent shortfall bankrupts P0 after the rescue, so the fan is
     // swept. Pin that: the ruling is the sweep, not the survival.
     assert!(t.p(0).bankrupt, "P0 is out: {:?}", t.recent_keys(10));
-    assert_eq!(fans(&t, 0), (0, 0), "the fan is cleared with the bankruptcy");
+    assert_eq!(
+        fans(&t, 0),
+        (0, 0),
+        "the fan is cleared with the bankruptcy"
+    );
 }
 
 // ============================================================ PP:同一个梦想
@@ -182,7 +189,11 @@ fn dream_echo_flips_all_pp_characters() {
     accept_echo(&mut t);
     assert_eq!(fans(&t, 2), (3, 0), "PP character's reverse fans flipped");
     assert_eq!(fans(&t, 1), (0, 5), "non-PP fans untouched");
-    assert!(t.draw_pile(0).contains(&"PP:[衍生]共鸣".to_string()), "{:?}", t.draw_pile(0));
+    assert!(
+        t.draw_pile(0).contains(&"PP:[衍生]共鸣".to_string()),
+        "{:?}",
+        t.draw_pile(0)
+    );
 }
 
 // ============================================================ PP:初次演出事故
@@ -256,15 +267,18 @@ fn overlap_discard_hook_banishes_accident() {
     t.place_raw(0, "PP:初次演出事故");
     // Put the card in hand over the limit so `discard_card` (the over-hand
     // discard act) can fire and raise `Discarded`.
-    t.set_hand(0, &[
-        "PP:[衍生]重叠的声音",
-        "通用:GREAT",
-        "通用:GREAT",
-        "通用:GREAT",
-        "通用:GREAT",
-        "通用:GREAT",
-        "通用:GREAT",
-    ]);
+    t.set_hand(
+        0,
+        &[
+            "PP:[衍生]重叠的声音",
+            "通用:GREAT",
+            "通用:GREAT",
+            "通用:GREAT",
+            "通用:GREAT",
+            "通用:GREAT",
+            "通用:GREAT",
+        ],
+    );
     // Keep the draw pile non-empty so the discard is not reshuffled away.
     t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
     assert!(t.on_field(0, "PP:初次演出事故"), "{:?}", t.field_ids(0));
@@ -308,10 +322,16 @@ fn seeyou_echo_ignores_gate() {
     let mut t = Table::vanilla(2);
     set_fans(&mut t, 0, 5, 0);
     t.give(0, &["PP:[衍生]共鸣", "PP:[衍生]明天见"]);
-    assert!(t.play(0, "PP:[衍生]明天见").is_ok(), "echo bypasses the gate");
+    assert!(
+        t.play(0, "PP:[衍生]明天见").is_ok(),
+        "echo bypasses the gate"
+    );
     accept_echo(&mut t);
     assert!(!t.hand(0).contains(&"PP:[衍生]明天见".to_string()), "spent");
-    assert!(!t.hand(0).contains(&"PP:[衍生]共鸣".to_string()), "共鸣 paid");
+    assert!(
+        !t.hand(0).contains(&"PP:[衍生]共鸣".to_string()),
+        "共鸣 paid"
+    );
     assert_eq!(fans(&t, 0), (5, 0), "effect ran");
 }
 
@@ -338,8 +358,14 @@ fn seeyou_declined_echo_keeps_card_in_hand() {
         t.decline();
     }
     let hand = t.hand(0);
-    assert!(hand.contains(&"PP:[衍生]明天见".to_string()), "kept: {hand:?}");
-    assert!(hand.contains(&"PP:[衍生]共鸣".to_string()), "共鸣 unspent: {hand:?}");
+    assert!(
+        hand.contains(&"PP:[衍生]明天见".to_string()),
+        "kept: {hand:?}"
+    );
+    assert!(
+        hand.contains(&"PP:[衍生]共鸣".to_string()),
+        "共鸣 unspent: {hand:?}"
+    );
     assert_eq!(fans(&t, 0), (3, 1), "no effect");
 }
 
@@ -486,7 +512,11 @@ fn together_echo_x_minus_5_and_draw() {
 #[test]
 fn dream_ahead_autoplaced_at_game_start() {
     let t = Table::new(&["丸山彩", "户山香澄"]);
-    assert!(t.on_field(0, "PP:梦在前方，结彩当下"), "{:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "PP:梦在前方，结彩当下"),
+        "{:?}",
+        t.field_ids(0)
+    );
 }
 
 /// 规则书: 「…且初始手牌减1。」
@@ -567,7 +597,11 @@ fn dream_ahead_extra_rent() {
             t.decline();
         }
     }
-    assert_eq!(t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0), 5, "capped");
+    assert_eq!(
+        t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0),
+        5,
+        "capped"
+    );
     t.own(0, &[7]);
     t.begin_turn(1);
     walk_onto(&mut t, 1, 5, 7);
@@ -808,7 +842,8 @@ fn jennifer_pass_agency_pays_and_grants_ranger() {
     assert_eq!(fans(&t, 0).0, 1, "user gained 1 positive fan");
     assert!(!t.on_field(1, "PP:找回珍妮弗"), "card removed");
     assert!(
-        t.hand(0).contains(&"PP:[衍生]魔法战队Pastel✽Ranger".to_string()),
+        t.hand(0)
+            .contains(&"PP:[衍生]魔法战队Pastel✽Ranger".to_string()),
         "Ranger in user hand: {:?}",
         t.hand(0)
     );
@@ -834,8 +869,7 @@ fn jennifer_runs_its_steps_in_printed_order() {
     walk_onto(&mut t, 1, 3, 6); // path 4,5,6 passes 偶像经纪公司 (5)
     let keys = t.recent_keys(40);
     let idx = |k: &str| {
-        keys
-            .iter()
+        keys.iter()
             .position(|x| x == k)
             .unwrap_or_else(|| panic!("{k} missing from {keys:?}"))
     };
@@ -845,8 +879,14 @@ fn jennifer_runs_its_steps_in_printed_order() {
     let pay = idx("log.pay");
     let gone = idx("log.outcome.unplace");
     let ranger = idx("cards:card-pp.jennifer_ranger");
-    assert!(pay < gone, "pay (step 1) must precede the [移除] (step 3): {keys:?}");
-    assert!(gone < ranger, "[移除] must precede the Ranger add: {keys:?}");
+    assert!(
+        pay < gone,
+        "pay (step 1) must precede the [移除] (step 3): {keys:?}"
+    );
+    assert!(
+        gone < ranger,
+        "[移除] must precede the Ranger add: {keys:?}"
+    );
 }
 
 // ============================================================ PP:[衍生]魔法战队Pastel✽Ranger
@@ -857,11 +897,17 @@ fn rangers_gate_needs_house_within_range() {
     let mut t = Table::vanilla(2);
     set_fans(&mut t, 0, 0, 0);
     t.give(0, &["PP:[衍生]魔法战队Pastel✽Ranger"]);
-    assert!(t.play(0, "PP:[衍生]魔法战队Pastel✽Ranger").is_err(), "no house");
+    assert!(
+        t.play(0, "PP:[衍生]魔法战队Pastel✽Ranger").is_err(),
+        "no house"
+    );
     t.own(0, &[10]);
     t.set_houses(10, 1);
     t.set_pos(0, 0);
-    assert!(t.play(0, "PP:[衍生]魔法战队Pastel✽Ranger").is_ok(), "house in range");
+    assert!(
+        t.play(0, "PP:[衍生]魔法战队Pastel✽Ranger").is_ok(),
+        "house in range"
+    );
 }
 
 /// 规则书: 「1.数量至少为1则[获得]500资金；2.数量至少为3则为乐队卡添加3个[奇迹水晶]…」
@@ -962,8 +1008,12 @@ fn guide_resonance_pays_500_and_adds_two_marks() {
     }
     assert_eq!(t.money(0), money0 - 500, "[消耗]500资金");
     // The marks are this instance's `mono` / `dual` counters (they die with it).
-    let mono = t.counter_on_card(0, "PP:练习生解密指南", "mono").unwrap_or(0);
-    let dual = t.counter_on_card(0, "PP:练习生解密指南", "dual").unwrap_or(0);
+    let mono = t
+        .counter_on_card(0, "PP:练习生解密指南", "mono")
+        .unwrap_or(0);
+    let dual = t
+        .counter_on_card(0, "PP:练习生解密指南", "dual")
+        .unwrap_or(0);
     assert_eq!(mono + dual, 2, "added any 2 marks: mono={mono} dual={dual}");
     assert!(t.on_field(0, "PP:练习生解密指南"), "{:?}", t.field_ids(0));
 }
@@ -1079,7 +1129,11 @@ fn aya_skill_2_discount_and_flip() {
     let paid = 10_000 - t.money(0);
     assert_eq!(paid, 640 - 300, "rent - Y*100");
     assert_eq!(fans(&t, 0), (2, 3), "Y positive flipped reverse");
-    assert_eq!(fans(&t, 1), (3, 1), "3 reverse of other-band flipped positive");
+    assert_eq!(
+        fans(&t, 1),
+        (3, 1),
+        "3 reverse of other-band flipped positive"
+    );
 }
 
 /// 规则书: 若宫伊芙（2）「投掷前可选择将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」
@@ -1101,7 +1155,9 @@ fn eve_skill_2_adds_yd4() {
         let p = t.expect_prompt();
         assert!(
             p.title.key().contains("eve")
-                || p.options.iter().any(|o| format!("{o:?}").contains("intOption")),
+                || p.options
+                    .iter()
+                    .any(|o| format!("{o:?}").contains("intOption")),
             "first prompt is the eve ask: {}",
             t.dump_prompt()
         );
@@ -1117,7 +1173,9 @@ fn eve_skill_2_adds_yd4() {
     while t.prompt().is_some() {
         let p = t.expect_prompt();
         if p.title.key().contains("eve")
-            || p.options.iter().any(|o| format!("{o:?}").contains("intOption"))
+            || p.options
+                .iter()
+                .any(|o| format!("{o:?}").contains("intOption"))
         {
             let _ = t.answer(0, 2);
         } else {
@@ -1153,7 +1211,9 @@ fn eve_skill_2_no_stale_yd4_on_next_roll() {
     while t.prompt().is_some() {
         let p = t.expect_prompt();
         if p.title.key().contains("eve")
-            || p.options.iter().any(|o| format!("{o:?}").contains("intOption"))
+            || p.options
+                .iter()
+                .any(|o| format!("{o:?}").contains("intOption"))
         {
             let _ = t.answer(0, 2);
         } else {
@@ -1174,7 +1234,9 @@ fn eve_skill_2_no_stale_yd4_on_next_roll() {
     while t.prompt().is_some() {
         let p = t.expect_prompt();
         if p.title.key().contains("eve")
-            || p.options.iter().any(|o| format!("{o:?}").contains("intOption"))
+            || p.options
+                .iter()
+                .any(|o| format!("{o:?}").contains("intOption"))
         {
             // Y = 0: decline.
             let _ = t.answer(0, 0);
@@ -1217,7 +1279,10 @@ fn maya_skill_2_watch_and_pick() {
     t.begin_turn(0);
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        let is_y = p.options.iter().any(|o| format!("{o:?}").contains("intOption"));
+        let is_y = p
+            .options
+            .iter()
+            .any(|o| format!("{o:?}").contains("intOption"));
         if is_y {
             let _ = t.answer(0, 2); // Y=2 -> watch 3
         } else if p.kind == "pick" || p.kind == "card" {
@@ -1437,7 +1502,11 @@ fn clause2_overflow_no_add_when_full() {
     t.give_play(0, "PP:有你与我在这里共度").unwrap();
     accept_echo(&mut t);
     drain(&mut t);
-    assert_eq!(band_xtal(&t, 0), 12, "full pile is left alone (no force-reduce)");
+    assert_eq!(
+        band_xtal(&t, 0),
+        12,
+        "full pile is left alone (no force-reduce)"
+    );
 }
 
 /// jennifer's owner flip is X=1 with 0 face-downs → overflow 1 crystal on
@@ -1462,8 +1531,8 @@ fn jennifer_owner_flip_clause2_crystal() {
     place_band(&mut t, 1);
     set_band_xtal(&mut t, 1, 0);
     walk_onto(&mut t, 1, 3, 6); // path 4,5,6 passes 偶像经纪公司 (5)
-    // Owner flip X=1, 0 face-downs → overflow 1. (The user's grant is a
-    // plain `fans::grant` and does not pay clause （2）.)
+                                // Owner flip X=1, 0 face-downs → overflow 1. (The user's grant is a
+                                // plain `fans::grant` and does not pay clause （2）.)
     assert_eq!(band_xtal(&t, 1), 1, "clause (2): owner flip X=1 > 0 downs");
 }
 
@@ -1504,8 +1573,8 @@ fn aya_flip_all_pp_clause2_crystal() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩"); // Pastel✽Palettes
     t.set_character_raw(1, "户山香澄"); // non-PP
-    // P1 holds the granted (2) skill (「所有非Pastel✽Palettes玩家获得丸山彩的
-    // （2）技能」).
+                                        // P1 holds the granted (2) skill (「所有非Pastel✽Palettes玩家获得丸山彩的
+                                        // （2）技能」).
     t.place_raw(1, "skill:丸山彩:With~");
     place_band(&mut t, 0);
     set_band_xtal(&mut t, 0, 0);
@@ -1551,11 +1620,7 @@ fn clause2_silent_when_band_on_other_seat_seeyou() {
     t.give_play(0, "PP:[衍生]明天见").unwrap();
     drain(&mut t);
     assert_eq!(fans(&t, 0), (5, 0), "P0's counters still flip");
-    assert_eq!(
-        band_xtal(&t, 1),
-        0,
-        "P1's band does not pay for P0's flip"
-    );
+    assert_eq!(band_xtal(&t, 1), 0, "P1's band does not pay for P0's flip");
 }
 
 /// Jennifer owner flip: no band card on the owner → counters move, no crystal.
@@ -1682,7 +1747,11 @@ fn ix_encore_blocks_overlap_teleport() {
             t.decline();
         }
     }
-    assert!(answered, "安可 window must open for the self-teleport: {}", t.dump_prompt());
+    assert!(
+        answered,
+        "安可 window must open for the self-teleport: {}",
+        t.dump_prompt()
+    );
     assert_eq!(t.pos(0), 0, "teleport negated");
 }
 
@@ -1712,11 +1781,7 @@ fn ix_echo_chain_adds_crystals() {
     t.play(0, "PP:同一个梦想").unwrap();
     accept_echo(&mut t);
     // dream step 1 +3 and 共鸣 +2 land in the same engine pool
-    assert_eq!(
-        band_xtal(&t, 0),
-        5,
-        "3 (dream) + 2 (共鸣) on the band card"
-    );
+    assert_eq!(band_xtal(&t, 0), 5, "3 (dream) + 2 (共鸣) on the band card");
 }
 
 /// 规则书: 再次闪耀 「此卡不受除拥有此卡的玩家以外的玩家的效果影响」
@@ -1748,7 +1813,11 @@ fn skill_1_grants_5_positive_fans_at_game_start() {
 fn skill_1_grants_five_fans_any_seat() {
     let t = Table::new(&["户山香澄", "丸山彩"]);
     assert_eq!(fans(&t, 1), (5, 0), "PP character on seat 1 gets 5");
-    assert_eq!(fans(&t, 0), (0, 1), "non-PP seat gets the band (1) reverse only");
+    assert_eq!(
+        fans(&t, 0),
+        (0, 1),
+        "non-PP seat gets the band (1) reverse only"
+    );
 }
 
 /// 规则书: 「（1）游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]」
@@ -1810,7 +1879,11 @@ fn accident_blocks_pp_skill_2() {
     // `skillBlock:Pastel✽Palettes` token. Play the card for real.
     t.give_play(0, "PP:初次演出事故").unwrap();
     drain(&mut t);
-    eprintln!("DBG field={:?} tok={}", t.field_ids(0), t.token(0, "skillBlock:Pastel✽Palettes"));
+    eprintln!(
+        "DBG field={:?} tok={}",
+        t.field_ids(0),
+        t.token(0, "skillBlock:Pastel✽Palettes")
+    );
     set_fans(&mut t, 0, 3, 0);
     t.own(1, &[7]);
     t.set_houses(7, 1);
@@ -1914,7 +1987,10 @@ fn aya_longing_does_not_shave_a_payment_to_the_owner() {
     b.roll(1).unwrap();
     drain(&mut b);
     let full = bbefore - b.money(1);
-    assert_eq!(paid, full, "the owner's card does not shave someone else's rent");
+    assert_eq!(
+        paid, full,
+        "the owner's card does not shave someone else's rent"
+    );
 }
 
 /// 规则书: 「将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。」(白鹭千圣 exclusive)
@@ -1940,4 +2016,3 @@ fn hina_skill_2_borrows_skill() {
     assert_eq!(t.state(0, "skill.hinaLottery.borrowed"), 1);
     assert!(t.on_field(0, "skill:白鹭千圣:保持坦率的你"));
 }
-

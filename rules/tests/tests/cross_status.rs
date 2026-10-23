@@ -182,10 +182,7 @@ fn s05_crychic_band_six_cards() {
     t.dice(&[2]);
     t.roll(1).unwrap();
     drain(&mut t);
-    eprintln!(
-        "s05 record: P1 hand = {:?} (must take the draw)",
-        t.hand(1)
-    );
+    eprintln!("s05 record: P1 hand = {:?} (must take the draw)", t.hand(1));
 }
 
 // =====================================================================
@@ -213,7 +210,11 @@ fn s06_izana_clears_statuses() {
     // and gains 1000 extra for the own stun.
     assert_eq!(t.money(1), 9_000, "P1 pays 1000 (1 own type)");
     assert_eq!(t.money(2), 9_000, "P2 pays 1000 (1 own type)");
-    assert_eq!(t.money(0), 10_000 + 1_000 + 1_000 + 1_000, "1000 x 2 + 1000 extra");
+    assert_eq!(
+        t.money(0),
+        10_000 + 1_000 + 1_000 + 1_000,
+        "1000 x 2 + 1000 extra"
+    );
 }
 
 // =====================================================================
@@ -239,7 +240,10 @@ fn s07_riki_counts_stays() {
         let Some(p) = t.prompt() else { break };
         let is_player = p.options.iter().any(|o| o.key() == "ask.player");
         if is_player {
-            let pick = [2i32, 3].into_iter().find(|w| !picks.contains(w)).unwrap_or(2);
+            let pick = [2i32, 3]
+                .into_iter()
+                .find(|w| !picks.contains(w))
+                .unwrap_or(2);
             picks.push(pick);
             answer_player(&mut t, 1, pick);
         } else {
@@ -371,8 +375,5 @@ fn s10_numa_raises_payments() {
     );
     assert_eq!(t.charge(1), 3, "P1 gains 1 fire");
     let paid = 10_000 - t.money(0);
-    assert!(
-        paid == r + 200 || paid == r + 300,
-        "paid = {paid}, R = {r}"
-    );
+    assert!(paid == r + 200 || paid == r + 300, "paid = {paid}, R = {r}");
 }

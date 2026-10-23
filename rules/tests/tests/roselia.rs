@@ -75,7 +75,9 @@ fn louder_is_consumed_and_exclusive_to_yukina() {
     t.give(0, &["R:（ykn）louder"]);
     t.play(0, "R:（ykn）louder").unwrap();
     drain(&mut t);
-    assert!(t.discard(0).contains(&"R:（ykn）louder".to_string()) || t.on_field(0, "R:（ykn）louder"));
+    assert!(
+        t.discard(0).contains(&"R:（ykn）louder".to_string()) || t.on_field(0, "R:（ykn）louder")
+    );
 }
 
 #[test]
@@ -101,7 +103,12 @@ fn cookie_time_reshuffles_the_discard_and_pays_500_each() {
     t.set_discard(0, &["R:NFO", "R:轨迹", "R:Fire bird"]);
     t.give_play(0, "R:曲奇时间").unwrap();
     drain(&mut t);
-    assert_eq!(t.money(0), 10_000 + 3 * 500, "events: {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        10_000 + 3 * 500,
+        "events: {:?}",
+        t.recent_keys(8)
+    );
     assert_eq!(t.hand(0), hand, "other hand cards must not be shuffled");
     let mut draw = t.draw_pile(0);
     draw.sort();
@@ -182,8 +189,17 @@ fn fire_bird_turn_end_burns_400_and_a_crystal() {
     }
     roll_then_end(&mut t, 0);
     assert_eq!(t.money(0), 10_000 - 400, "events: {:?}", t.recent_keys(8));
-    assert!(!t.on_field(0, "R:Fire bird"), "crystals exhausted -> discard");
-    assert!(t.draw_pile(0).contains(&"R:Fire bird".to_string()), "empty draw refills immediately: hand={:?}, draw={:?}, discard={:?}", t.hand(0), t.draw_pile(0), t.discard(0));
+    assert!(
+        !t.on_field(0, "R:Fire bird"),
+        "crystals exhausted -> discard"
+    );
+    assert!(
+        t.draw_pile(0).contains(&"R:Fire bird".to_string()),
+        "empty draw refills immediately: hand={:?}, draw={:?}, discard={:?}",
+        t.hand(0),
+        t.draw_pile(0),
+        t.discard(0)
+    );
     assert!(t.discard(0).is_empty());
 }
 
@@ -340,7 +356,12 @@ fn sprechchor_pays_1000_plus_120_per_die_face() {
     t.dice(&[10]);
     t.give_play(0, "R:Sprechchor").unwrap();
     drain(&mut t);
-    assert_eq!(t.money(0), 10_000 + 1_000 + 10 * 120, "events: {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        10_000 + 1_000 + 10 * 120,
+        "events: {:?}",
+        t.recent_keys(8)
+    );
 }
 
 // ----- R:live前的准备
@@ -401,10 +422,16 @@ fn derived_resolve_removes_itself_and_pays_on_removal() {
     let mut t = vanilla2();
     t.give_play(0, "R:[衍生] 觉悟").unwrap();
     drain(&mut t);
-    assert!(!t.recent_keys(10).iter().any(|k| k.is_empty()), "no empty 效果适用 header");
+    assert!(
+        !t.recent_keys(10).iter().any(|k| k.is_empty()),
+        "no empty 效果适用 header"
+    );
     assert_eq!(t.money(0), 11_000, "events: {:?}", t.recent_keys(8));
     assert!(!t.hand(0).contains(&"R:[衍生] 觉悟".to_string()));
-    assert!(!t.discard(0).contains(&"R:[衍生] 觉悟".to_string()), "[移除]ed");
+    assert!(
+        !t.discard(0).contains(&"R:[衍生] 觉悟".to_string()),
+        "[移除]ed"
+    );
 }
 
 // ----- R:（燐子）Ringing Bloom
@@ -418,7 +445,11 @@ fn ringing_bloom_places_itself() {
     t.give(0, &["R:（燐子）Ringing Bloom"]);
     t.play(0, "R:（燐子）Ringing Bloom").unwrap();
     drain(&mut t);
-    assert!(t.on_field(0, "R:（燐子）Ringing Bloom"), "{:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "R:（燐子）Ringing Bloom"),
+        "{:?}",
+        t.field_ids(0)
+    );
 }
 
 // ----- R:（亚子）黑暗大魔姬亚子
@@ -435,10 +466,17 @@ fn ako_exclusive_stuns_you_to_dodge_a_payment() {
     t.set_pos(0, (blue + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("R:（亚子）黑暗大魔姬亚子"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("R:（亚子）黑暗大魔姬亚子"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "R:（亚子）黑暗大魔姬亚子").unwrap();
     drain(&mut t);
-    assert!(t.state(0, "stun") + t.state(0, "stunStart") >= 1, "gained [眩晕]");
+    assert!(
+        t.state(0, "stun") + t.state(0, "stunStart") >= 1,
+        "gained [眩晕]"
+    );
 }
 
 // ================================================================ character skills
@@ -671,7 +709,12 @@ fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
         }
     }
     assert!(offered, "the [反击] window offered 必然的联系: {prompts:?}");
-    assert_eq!(t.pos(0), 10, "skill teleported onto P1: {:?}", t.recent_keys(15));
+    assert_eq!(
+        t.pos(0),
+        10,
+        "skill teleported onto P1: {:?}",
+        t.recent_keys(15)
+    );
     assert!(
         t.on_field(1, LISA_LINK),
         "card placed on the target's field: p1={:?} prompts={prompts:?}",
@@ -710,7 +753,12 @@ fn lisa_link_does_not_offer_on_non_skill_teleport() {
     }
     // 纯真振翅: teleport 20 ahead (5 -> 25, onto P1), then 「立刻进行移动掷骰」
     // walks the loaded face from there (25 + 3 = 28).
-    assert_eq!(t.pos(0), 28, "teleport then roll walks on: {:?}", t.recent_keys(15));
+    assert_eq!(
+        t.pos(0),
+        28,
+        "teleport then roll walks on: {:?}",
+        t.recent_keys(15)
+    );
     assert!(
         !t.on_field(1, LISA_LINK),
         "card stays in hand: p1={:?} prompts={prompts:?}",
@@ -793,7 +841,11 @@ fn interaction_live_prep_vs_a_walk_past_the_store() {
     t.set_pos(1, (store + 60 - 3) % 60);
     t.dice(&[5]);
     t.roll(1).unwrap();
-    assert!(t.counteract_offered("R:live前的准备"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("R:live前的准备"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "R:live前的准备").unwrap();
     drain(&mut t);
     assert_eq!(t.pos(1), store);
@@ -845,8 +897,17 @@ fn interaction_yukina_stop_pot_vs_a_passing_player() {
             t.decline();
         }
     }
-    assert!(offered, "the force-stop offer came up: {:?}", t.recent_keys(12));
-    assert_eq!(t.pos(1), r2, "forced stop on yukina's tile: {:?}", t.recent_keys(12));
+    assert!(
+        offered,
+        "the force-stop offer came up: {:?}",
+        t.recent_keys(12)
+    );
+    assert_eq!(
+        t.pos(1),
+        r2,
+        "forced stop on yukina's tile: {:?}",
+        t.recent_keys(12)
+    );
 }
 
 #[test]
@@ -880,7 +941,11 @@ fn interaction_ako_counter_vs_a_rent_payment() {
     t.set_pos(0, (blue + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("R:（亚子）黑暗大魔姬亚子"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("R:（亚子）黑暗大魔姬亚子"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "R:（亚子）黑暗大魔姬亚子").unwrap();
     drain(&mut t);
     assert!(t.state(0, "stun") + t.state(0, "stunStart") >= 1);

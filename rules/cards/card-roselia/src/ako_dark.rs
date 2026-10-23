@@ -1,14 +1,14 @@
 //! `R:（亚子）黑暗大魔姬亚子` -- C# `CardAkoDark` (MatchHost.cs:10781-10814): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（亚子）黑暗大魔姬亚子`）:
-//! > （亚子）黑暗大魔姬亚子： 
+//! > （亚子）黑暗大魔姬亚子：
 //! >  
 //! > （1）[反击] 当你即将向其他玩家支付资金时可打出此卡，使自己获得一层[眩晕]。若此卡从手牌以外的地方打出，你抽一张卡。
 //!
 //! just before you pay another player: take a [眩晕] layer instead of paying.
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AKO_DARK: CardDef = CardDef::new(

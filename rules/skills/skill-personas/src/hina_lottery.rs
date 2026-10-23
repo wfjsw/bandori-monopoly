@@ -15,9 +15,9 @@
 //! and unplacing it at the next turn start is the same shape as （1）, with an
 //! expiry -- which is what the keyed state's `expires` is for.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
 /// Which character's (2) this player is currently holding, or `""`.
@@ -34,8 +34,18 @@ const POOL: [&str; 4] = [
 pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
-        On::Action(Action::DeckAtGameStart("group_is(owner, 'Pastel✽Palettes')", None, None, at_start)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, roll)),
+        On::Action(Action::DeckAtGameStart(
+            "group_is(owner, 'Pastel✽Palettes')",
+            None,
+            None,
+            at_start,
+        )),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            roll,
+        )),
     ],
 );
 

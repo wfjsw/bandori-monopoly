@@ -9,7 +9,8 @@
 
 use alloc::vec::Vec;
 
-use bandori_std::state_key; use card_sdk::abi::prop;
+use bandori_std::state_key;
+use card_sdk::abi::prop;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", None, None, hitoshizuku)])
@@ -104,7 +105,11 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
     for &(j, n) in &cleared {
         if j == player_id && n > 0 {
-            ctx::gain(player_id, 1000 * n, &Msg::new(key!("hitoshizuku_self_gain")))?;
+            ctx::gain(
+                player_id,
+                1000 * n,
+                &Msg::new(key!("hitoshizuku_self_gain")),
+            )?;
         }
     }
     Ok(())

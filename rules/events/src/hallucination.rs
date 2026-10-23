@@ -3,8 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `幻觉来了`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。
 
-use card_sdk::abi::{ActionKind, FilterKind, Seat};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{ActionKind, FilterKind, Seat};
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};

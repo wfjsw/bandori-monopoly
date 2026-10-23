@@ -36,7 +36,11 @@ fn deck_save_choose_and_clear() {
         decks::save(&d, &mut p, c, id, &Vec::<String>::new()),
         "empty clears"
     );
-    assert_eq!(decks::list(&p, c).len(), 1, "the deck remains after a clear");
+    assert_eq!(
+        decks::list(&p, c).len(),
+        1,
+        "the deck remains after a clear"
+    );
     assert!(decks::cards(&d, &p, c, id).is_empty());
 
     assert!(decks::delete(&mut p, c, id));
@@ -47,7 +51,13 @@ fn deck_save_choose_and_clear() {
 #[test]
 fn profile_create_and_apply_match() {
     let d = data();
-    let mut p = PlayerProfile::create(&d, "  Tomori  ", "123456789", "2026-10-04 12:00", "2026-10-04");
+    let mut p = PlayerProfile::create(
+        &d,
+        "  Tomori  ",
+        "123456789",
+        "2026-10-04 12:00",
+        "2026-10-04",
+    );
     assert_eq!(p.player_name, "Tomori");
     assert_eq!(p.home_persona, "", "home starts empty; the client sets it");
     assert!(!p.has_any_new(&d), "a new profile has seen everything");
@@ -56,7 +66,14 @@ fn profile_create_and_apply_match() {
     assert_eq!(p.charge, 5);
 
     p.set_charge_per_game(3);
-    let r = p.apply_match(MatchMode::Ranked, 1, 6, "Alpha", "2026-10-05 20:00", "r1a2b3");
+    let r = p.apply_match(
+        MatchMode::Ranked,
+        1,
+        6,
+        "Alpha",
+        "2026-10-05 20:00",
+        "r1a2b3",
+    );
     assert_eq!(
         (r.base_exp, r.charge_used, r.multiplier, r.exp),
         (200, 3, 4, 800)
@@ -65,10 +82,7 @@ fn profile_create_and_apply_match() {
     // 800 EXP from level 0: 100 + 115 + 130 + 145 + 160 = 650 -> level 5, 150 left.
     assert_eq!((p.level, p.exp, p.total_exp), (5, 150, 800));
     assert_eq!((r.coins, p.coins, p.ranked_wins, p.stars), (500, 500, 1, 1));
-    assert_eq!(
-        p.stat_of("Alpha").map(|s| (s.uses, s.firsts)),
-        Some((1, 1))
-    );
+    assert_eq!(p.stat_of("Alpha").map(|s| (s.uses, s.firsts)), Some((1, 1)));
     assert!(p.has_new(&d, Seen::History));
     // The history row carries the local replay-store id it was written with.
     assert_eq!(p.history[0].replay_id, "r1a2b3");
@@ -112,7 +126,11 @@ fn live2d_picks() {
     let c = d.persona("Alpha").unwrap();
     let mut p = PlayerProfile::default();
     let opts = ["syn-001", "syn-001b"];
-    assert_eq!(p.live2d_for(c, &opts), "syn-001", "options[0] is the default");
+    assert_eq!(
+        p.live2d_for(c, &opts),
+        "syn-001",
+        "options[0] is the default"
+    );
     assert!(p.set_live2d(c, "syn-001b", &opts));
     assert_eq!(p.live2d_for(c, &opts), "syn-001b");
     assert_eq!(

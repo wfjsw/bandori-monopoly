@@ -96,7 +96,11 @@ fn main() {
     println!(
         "ruleset: {} ({}), search-threads {threads}, ponder {with_ponder}",
         ctx.rules.ruleset_sha256().unwrap_or("stub"),
-        if real { "real WasmRules" } else { "STUB -- no effects" },
+        if real {
+            "real WasmRules"
+        } else {
+            "STUB -- no effects"
+        },
     );
 
     // One seat's whole decision stream over a fresh match per sample: every
@@ -202,7 +206,8 @@ fn main() {
     // Score each sample under both deadline policies. A sample "falls back"
     // exactly when its latency exceeds the outer deadline -- the server gives
     // up and answers with the engine heuristic instead.
-    let old_timeout = |b: u64| Duration::from_millis(b.saturating_add(400)).min(Duration::from_millis(1_500));
+    let old_timeout =
+        |b: u64| Duration::from_millis(b.saturating_add(400)).min(Duration::from_millis(1_500));
     let new_timeout = |b: u64| server::botsvc::ask_timeout(b);
     let mut old_ok = 0usize;
     let mut new_ok = 0usize;
@@ -235,13 +240,8 @@ fn main() {
         lat_searched.iter().sum::<u64>() as f64 / lat_searched.len() as f64
     };
     let s_max = lat_searched.last().copied().unwrap_or(0);
-    println!(
-        "decisions {n}  searched {searched}  delegated {delegated}  reused {reused}"
-    );
-    println!(
-        "searched latency: mean {:.0} ms, max {s_max} ms",
-        s_mean
-    );
+    println!("decisions {n}  searched {searched}  delegated {delegated}  reused {reused}");
+    println!("searched latency: mean {:.0} ms, max {s_max} ms", s_mean);
     println!(
         "shipped deadline (budget + {} ms capped {:?}): answered {} ({:.1}%), fell back {} ({:.1}%)",
         server::botsvc::ITERATION_OVERRUN_MS,

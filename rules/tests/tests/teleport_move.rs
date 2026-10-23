@@ -98,7 +98,11 @@ fn a_two_donuts_settle_teleport_lands_on_the_chosen_tile() {
     t.set_pos(0, 10);
     t.give_play(0, "Sumimi:一人两个甜甜圈").unwrap();
     drain(&mut t);
-    assert!(t.state(0, "exile") > 0, "P0 gets [除外]: {}", t.state(0, "exile"));
+    assert!(
+        t.state(0, "exile") > 0,
+        "P0 gets [除外]: {}",
+        t.state(0, "exile")
+    );
     // P1 walks from 5 past 10 (P0's original square) to 15.
     until_turn(&mut t, 1);
     t.set_pos(1, 5);

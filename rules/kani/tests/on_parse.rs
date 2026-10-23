@@ -46,13 +46,7 @@ fn parse_on_bodies_one_per_shape() {
     let got = parse_on_bodies(SNIPPET, &shapes);
     let summary: Vec<(&str, &str, BodyShape)> = got
         .iter()
-        .map(|b| {
-            (
-                b.variant.as_str(),
-                b.kind.as_deref().unwrap_or(""),
-                b.shape,
-            )
-        })
+        .map(|b| (b.variant.as_str(), b.kind.as_deref().unwrap_or(""), b.shape))
         .collect();
     assert_eq!(
         summary,
@@ -133,11 +127,26 @@ fn retired_spellings_are_loud() {
 fn default_exprs_are_shape_typed() {
     assert_eq!(default_expr(BodyShape::Value), "0");
     assert_eq!(default_expr(BodyShape::Flag), "0");
-    assert_eq!(default_expr(BodyShape::Gate), "card_sdk::GateValue::default()");
-    assert_eq!(default_expr(BodyShape::Plan), "card_sdk::PlanValue::default()");
-    assert_eq!(default_expr(BodyShape::Roll), "card_sdk::RollValue::default()");
-    assert_eq!(default_expr(BodyShape::Deal), "card_sdk::DealValue::default()");
-    assert_eq!(default_expr(BodyShape::PayAdd), "card_sdk::PayAddValue::default()");
+    assert_eq!(
+        default_expr(BodyShape::Gate),
+        "card_sdk::GateValue::default()"
+    );
+    assert_eq!(
+        default_expr(BodyShape::Plan),
+        "card_sdk::PlanValue::default()"
+    );
+    assert_eq!(
+        default_expr(BodyShape::Roll),
+        "card_sdk::RollValue::default()"
+    );
+    assert_eq!(
+        default_expr(BodyShape::Deal),
+        "card_sdk::DealValue::default()"
+    );
+    assert_eq!(
+        default_expr(BodyShape::PayAdd),
+        "card_sdk::PayAddValue::default()"
+    );
     assert_eq!(
         default_expr(BodyShape::Redirect),
         "card_sdk::RedirectValue::default()"
@@ -273,7 +282,9 @@ fn every_registration_names_a_declared_kind() {
     let shapes = shapes();
     let root = rules_root();
     let mut files = Vec::new();
-    for dir in ["cards", "skills", "events", "tiles", "markers", "status", "fixtures"] {
+    for dir in [
+        "cards", "skills", "events", "tiles", "markers", "status", "fixtures",
+    ] {
         walk_rs(&root.join(dir), &mut files);
     }
 
@@ -290,8 +301,14 @@ fn every_registration_names_a_declared_kind() {
     declared_action.dedup();
 
     // Cross-check the tables against `Filter::KINDS` / `Action::KINDS`.
-    let sdk_filter: Vec<String> = card_sdk::Filter::KINDS.iter().map(|k| k.name.to_string()).collect();
-    let sdk_action: Vec<String> = card_sdk::Action::KINDS.iter().map(|k| k.name.to_string()).collect();
+    let sdk_filter: Vec<String> = card_sdk::Filter::KINDS
+        .iter()
+        .map(|k| k.name.to_string())
+        .collect();
+    let sdk_action: Vec<String> = card_sdk::Action::KINDS
+        .iter()
+        .map(|k| k.name.to_string())
+        .collect();
     for name in &sdk_filter {
         assert!(
             shapes.contains_key(name),
@@ -350,7 +367,10 @@ fn kind_shapes_cover_all_payload_families() {
         BodyShape::PayAdd,
         BodyShape::Redirect,
     ] {
-        assert!(seen.contains(&need), "filter_kinds! tables missing shape {need:?}");
+        assert!(
+            seen.contains(&need),
+            "filter_kinds! tables missing shape {need:?}"
+        );
     }
 }
 

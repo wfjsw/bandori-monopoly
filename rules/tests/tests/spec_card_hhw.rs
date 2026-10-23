@@ -41,7 +41,9 @@ fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
 /// Is the card's [手] / [反击] activation present in this window?
 fn played(step: &Step<'_>, card: &str) -> bool {
     step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == card && (e.kind == "play" || e.kind == "counter" || e.kind.is_empty())
+        e.r#type == "card"
+            && e.card == card
+            && (e.kind == "play" || e.kind == "counter" || e.kind.is_empty())
     })
 }
 
@@ -254,7 +256,8 @@ fn backstage_pays_1000_per_discard() {
         t.give(0, &[BACKSTAGE]);
         let pre = t.snapshot_world();
         t.observe(BACKSTAGE_CLAUSES);
-        t.play(0, BACKSTAGE).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, BACKSTAGE)
+            .map_err(|e| format!("play rejected: {e}"))?;
         // Select nothing to put back: both flip to the discard.
         for _ in 0..16 {
             if t.prompt().is_none() {
@@ -283,7 +286,9 @@ fn backstage_pays_1000_per_discard() {
             ));
         }
         if disc.iter().any(|c| c == BACKSTAGE) == false {
-            return Err(format!("played card should be in the discard, got {disc:?}"));
+            return Err(format!(
+                "played card should be in the discard, got {disc:?}"
+            ));
         }
         frame(
             &pre,
@@ -343,7 +348,8 @@ fn athletic_places_three_crystals() {
         t.give(0, &[ATHLETIC]);
         let pre = t.snapshot_world();
         t.observe(ATHLETIC_CLAUSES);
-        t.play(0, ATHLETIC).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, ATHLETIC)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
         if !t.on_field(0, ATHLETIC) {
             return Err(format!(
@@ -469,7 +475,8 @@ fn patrol_paid_build() {
         // or far tile and the paid build is the only certain +1.
         t.dice(&[1, 1, 1]);
         t.give(0, &[PATROL]);
-        t.play(0, PATROL).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, PATROL)
+            .map_err(|e| format!("play rejected: {e}"))?;
         for _ in 0..16 {
             if t.prompt().is_none() {
                 break;
@@ -557,7 +564,8 @@ fn hlsy_teleports_and_is_the_main_move() {
     // roll has to be pinned for 「传送」 to be observable. (Before the
     // player-meta split the unpinned stream happened to land on 1 or 3.)
     t.dice(&[1]);
-    t.play(0, HLSY).unwrap_or_else(|e| panic!("play rejected: {e}"));
+    t.play(0, HLSY)
+        .unwrap_or_else(|e| panic!("play rejected: {e}"));
     drain(&mut t);
     let after = t.pos(0);
     if after == before {
@@ -617,11 +625,15 @@ fn balloon_teleports_to_a_chosen_result() {
     let mut t = Table::vanilla(2);
     t.dice(&[1, 1, 1, 7, 8, 8, 14, 14, 15, 20, 20, 20]);
     t.give(0, &[BALLOON]);
-    t.play(0, BALLOON).unwrap_or_else(|e| panic!("play rejected: {e}"));
+    t.play(0, BALLOON)
+        .unwrap_or_else(|e| panic!("play rejected: {e}"));
     // Pick the first offered result (a tile prompt of the four destinations).
     let p = t.expect_prompt();
     if p.kind != "tile" {
-        panic!("C-HHW-balloon-02: expected a tile pick, got {}", t.dump_prompt());
+        panic!(
+            "C-HHW-balloon-02: expected a tile pick, got {}",
+            t.dump_prompt()
+        );
     }
     let _ = t.answer(0, 0);
     drain(&mut t);
@@ -675,7 +687,8 @@ fn charity_halves_payment() {
         let mut t = Table::vanilla(2);
         t.set_money(0, 10_000 + rng.range(0, 10) * 100);
         t.set_money(1, 10_000 + rng.range(0, 10) * 100);
-        t.give_play(0, CHARITY).map_err(|e| format!("play rejected: {e}"))?;
+        t.give_play(0, CHARITY)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
         let blue = rules_spec::tile("江户川公园");
         t.set_owner(blue, Some(1));
@@ -765,18 +778,27 @@ fn kkr_pays_10000() {
         drain(&mut t);
         let delta = t.money(0) as i64 - money as i64;
         if delta != -10_000 {
-            return Err(format!("C-HHW-kkr-01: money delta {delta}, expected -10000"));
+            return Err(format!(
+                "C-HHW-kkr-01: money delta {delta}, expected -10000"
+            ));
         }
         // C-HHW-kkr-02 -- 「将此卡置于CiRCLE上」.
         let circle = 0; // #1 CiRCLE
-        let placed = t.field(0).into_iter().any(|f| {
-            f.card == KKR && (f.tile == circle as i32 || f.tile < 0)
-        }) || t.m.world().st.board_field.iter().any(|f| f.card == KKR);
+        let placed = t
+            .field(0)
+            .into_iter()
+            .any(|f| f.card == KKR && (f.tile == circle as i32 || f.tile < 0))
+            || t.m.world().st.board_field.iter().any(|f| f.card == KKR);
         if !placed {
             return Err(format!(
                 "C-HHW-kkr-02: card not placed on CiRCLE; field={:?} bfield={:?}",
                 t.field_ids(0),
-                t.m.world().st.board_field.iter().map(|f| &f.card).collect::<Vec<_>>()
+                t.m.world()
+                    .st
+                    .board_field
+                    .iter()
+                    .map(|f| &f.card)
+                    .collect::<Vec<_>>()
             ));
         }
         frame(
@@ -849,7 +871,8 @@ fn wacha_places_from_hand() {
     t.begin_turn(0);
     drain(&mut t);
     t.give(0, &[WACHA]);
-    t.play(0, WACHA).unwrap_or_else(|e| panic!("play rejected: {e}"));
+    t.play(0, WACHA)
+        .unwrap_or_else(|e| panic!("play rejected: {e}"));
     drain(&mut t);
     if !t.on_field(0, WACHA) {
         panic!(
@@ -866,10 +889,14 @@ fn wacha_jump_at_nine_markers() {
     drain(&mut t);
     t.place_raw(0, WACHA);
     set_tok(&mut t, 0, "水母标记", 9);
-    t.skill(0, WACHA).unwrap_or_else(|e| panic!("press refused: {e}"));
+    t.skill(0, WACHA)
+        .unwrap_or_else(|e| panic!("press refused: {e}"));
     let p = t.expect_prompt();
     if p.kind != "tile" {
-        panic!("C-HHW-wacha-02: expected a tile pick, got {}", t.dump_prompt());
+        panic!(
+            "C-HHW-wacha-02: expected a tile pick, got {}",
+            t.dump_prompt()
+        );
     }
     let aquarium = rules_spec::tile("水族馆");
     let mansion = rules_spec::tile("弦卷豪宅");
@@ -905,8 +932,8 @@ pub fn supply_seeds(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let tg = 28; // #29 弦卷集团
-    // 「奇迹水晶」 on a tile. The engine's kind for this card's crystal is
-    // the card name (「黑衣人的补给」) with note `black_suits_crystal_note`.
+                 // 「奇迹水晶」 on a tile. The engine's kind for this card's crystal is
+                 // the card name (「黑衣人的补给」) with note `black_suits_crystal_note`.
     let crystal = |m: &game_core::state::TileMark| {
         m.kind.contains("crystal")
             || m.kind.contains("奇迹")
@@ -1064,7 +1091,8 @@ fn hagumi_two_rolls_place_a_mark() {
     // Two 4d20 sums of 10 and 12 (faces well under 60).
     t.dice(&[2, 2, 3, 3, 3, 3, 3, 3]);
     t.give(0, &[HAGUMI_CARD]);
-    t.play(0, HAGUMI_CARD).unwrap_or_else(|e| panic!("play rejected: {e}"));
+    t.play(0, HAGUMI_CARD)
+        .unwrap_or_else(|e| panic!("play rejected: {e}"));
     // A prompt offers the two results; pick the first (≤ 60 branch).
     for _ in 0..16 {
         if t.prompt().is_none() {
@@ -1076,7 +1104,10 @@ fn hagumi_two_rolls_place_a_mark() {
     // sit on one of those 序号 tiles (indices 9 and 11).
     let marks = t.marks();
     let hit = marks.iter().find(|m| {
-        m.kind.contains("hagumi") || m.kind.contains("育美") || m.card.contains("hagumi") || m.card.contains("育美")
+        m.kind.contains("hagumi")
+            || m.kind.contains("育美")
+            || m.card.contains("hagumi")
+            || m.card.contains("育美")
     });
     let Some(m) = hit else {
         panic!(
@@ -1100,7 +1131,8 @@ fn phantom_places_on_field() {
     t.begin_turn(0);
     drain(&mut t);
     t.give(0, &[PHANTOM]);
-    t.play(0, PHANTOM).unwrap_or_else(|e| panic!("play rejected: {e}"));
+    t.play(0, PHANTOM)
+        .unwrap_or_else(|e| panic!("play rejected: {e}"));
     for _ in 0..16 {
         if t.prompt().is_none() {
             break;
@@ -1158,9 +1190,7 @@ fn kokoro_opening_bonus() {
     // the opening run adds nothing else.
     let m = t.money(0);
     if m != 11_000 {
-        panic!(
-            "C-HHW-kokoro-01: opening money {m}, expected exactly 11000 (10000 + 1000)"
-        );
+        panic!("C-HHW-kokoro-01: opening money {m}, expected exactly 11000 (10000 + 1000)");
     }
 }
 
@@ -1216,8 +1246,7 @@ const THIEF_TOK: &str = "cards:card-hhw.kaoru_thief_tok";
 
 /// Total [怪盗标记] units on every seat's field.
 fn thief_marks(t: &Table) -> i32 {
-    t.m
-        .world()
+    t.m.world()
         .st
         .players
         .iter()
@@ -1262,8 +1291,7 @@ fn kaoru_removes_a_phantom_mark_instead_of_a_pot() {
     if marks_before < 1 {
         panic!(
             "C-HHW-kaoru-01 arrange: no [怪盗标记] after the printed plant; tokens={:?}",
-            t.m
-                .world()
+            t.m.world()
                 .st
                 .players
                 .iter()
@@ -1304,14 +1332,16 @@ fn kaoru_skill_plants_three_marks_for_seven_fire() {
     drain(&mut t);
     t.set_fire(0, 7, 7);
     let skill = t.skill_id(0, "梦幻的王子殿下");
-    t.skill(0, &skill).unwrap_or_else(|e| panic!("skill (2) refused: {e}"));
+    t.skill(0, &skill)
+        .unwrap_or_else(|e| panic!("skill (2) refused: {e}"));
     for _ in 0..8 {
         if t.prompt().is_none() {
             break;
         }
         let p = t.expect_prompt();
         if p.kind == "player" || p.kind == "choice" || p.kind == "pick" {
-            t.answer_one(0).unwrap_or_else(|e| panic!("plant answer: {e}"));
+            t.answer_one(0)
+                .unwrap_or_else(|e| panic!("plant answer: {e}"));
         } else {
             t.decline();
         }
@@ -1325,8 +1355,7 @@ fn kaoru_skill_plants_three_marks_for_seven_fire() {
     if marks != 3 {
         panic!(
             "C-HHW-kaoru-02: [怪盗标记] count {marks}, expected 3; tokens={:?} keys={:?}",
-            t.m
-                .world()
+            t.m.world()
                 .st
                 .players
                 .iter()
@@ -1440,7 +1469,8 @@ fn band_offers_a_double_payment() {
             break;
         }
         let d = t.dump_prompt();
-        if d.contains("double") || d.contains("倍") || d.contains("传播") || d.contains("smile") {
+        if d.contains("double") || d.contains("倍") || d.contains("传播") || d.contains("smile")
+        {
             saw = true;
             let _ = t.answer_one(0); // accept the double
             break;
@@ -1475,7 +1505,8 @@ fn band_double_pays_twice_and_gains_a_crystal() {
             break;
         }
         let d = t.dump_prompt();
-        if d.contains("double") || d.contains("倍") || d.contains("传播") || d.contains("smile") {
+        if d.contains("double") || d.contains("倍") || d.contains("传播") || d.contains("smile")
+        {
             let _ = t.answer_one(0);
         } else {
             t.decline();
@@ -1506,9 +1537,9 @@ fn band_double_pays_twice_and_gains_a_crystal() {
     // record itself is still pinned by the `hhw_saved` counter outcome in
     // the event window above (the book's 「记录」).
     let keys = t.recent_keys(40);
-    let saved = keys.iter().any(|k| {
-        k.contains("hhw_saved") || k.contains("hhw_recorded") || k.contains("counter")
-    });
+    let saved = keys
+        .iter()
+        .any(|k| k.contains("hhw_saved") || k.contains("hhw_recorded") || k.contains("counter"));
     if !saved {
         panic!(
             "C-HHW-band-01/02: no crystal/record counter outcome in the window; keys={:?}",

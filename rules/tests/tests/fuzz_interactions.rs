@@ -107,7 +107,10 @@ fn fuzz_interactions_invariants() {
 
     // Unknown findings fail the run; known ones are already filed as ignored
     // tests in `fuzz_found.rs`.
-    let unknown: Vec<&Finding> = findings.iter().filter(|f| is_known(&f.what).is_none()).collect();
+    let unknown: Vec<&Finding> = findings
+        .iter()
+        .filter(|f| is_known(&f.what).is_none())
+        .collect();
     assert!(
         unknown.is_empty(),
         "{} new findings:\n{}",

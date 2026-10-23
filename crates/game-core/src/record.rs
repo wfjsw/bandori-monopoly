@@ -365,9 +365,7 @@ pub enum Init {
     Seed(MatchSetup),
     /// From a `Match::save()` blob: everything before the snapshot is gone
     /// (old solo saves, a mid-match server join).
-    Snapshot {
-        save: String,
-    },
+    Snapshot { save: String },
 }
 
 /// One recorded call. `#[serde(tag = "t")]` keeps the log greppable.
@@ -375,7 +373,10 @@ pub enum Init {
 #[serde(tag = "t")]
 pub enum Input {
     /// `n` calls of `tick_steps(k)`, run-length merged. Split at checkpoints.
-    Ticks { k: u8, n: u32 },
+    Ticks {
+        k: u8,
+        n: u32,
+    },
     /// `act(member, msg)`. `ok` is whether it returned `Ok`.
     Act {
         m: i32,
@@ -529,10 +530,28 @@ pub fn compat(a: &EngineStamp, b: &EngineStamp) -> Vec<Mismatch> {
             fatal: true,
         });
     }
-    num(&mut out, "save_version", a.save_version, b.save_version, false);
+    num(
+        &mut out,
+        "save_version",
+        a.save_version,
+        b.save_version,
+        false,
+    );
     num(&mut out, "abi", a.abi, b.abi, true);
-    text(&mut out, "ruleset_sha256", &a.ruleset_sha256, &b.ruleset_sha256, false);
-    text(&mut out, "data_sha256", &a.data_sha256, &b.data_sha256, false);
+    text(
+        &mut out,
+        "ruleset_sha256",
+        &a.ruleset_sha256,
+        &b.ruleset_sha256,
+        false,
+    );
+    text(
+        &mut out,
+        "data_sha256",
+        &a.data_sha256,
+        &b.data_sha256,
+        false,
+    );
     out
 }
 
@@ -595,7 +614,10 @@ pub fn parse_record(json: &str) -> Result<RecordFile, ReplayError> {
     if f.header.engine.format >= 3 {
         let want = body_check(&f.body);
         if want != f.check {
-            return Err(ReplayError::Corrupt(format!("check {} != {}", f.check, want)));
+            return Err(ReplayError::Corrupt(format!(
+                "check {} != {}",
+                f.check, want
+            )));
         }
     }
     Ok(f)
@@ -785,8 +807,7 @@ pub fn zst_decode(bytes: &[u8], max: usize) -> Result<Vec<u8>, ReplayError> {
 pub fn encode_record_gz(file: &RecordFile) -> Vec<u8> {
     use std::io::Write;
     let mut out = Vec::new();
-    let mut enc =
-        flate2::write::GzEncoder::new(&mut out, flate2::Compression::default());
+    let mut enc = flate2::write::GzEncoder::new(&mut out, flate2::Compression::default());
     enc.write_all(encode_record_json(file).as_bytes())
         .expect("gzip write");
     enc.finish().expect("gzip finish");
@@ -914,11 +935,7 @@ impl Recorder {
     }
 
     pub fn push_act(&mut self, member: i32, msg: NetMessage, ok: bool) {
-        self.inputs.push(Input::Act {
-            m: member,
-            msg,
-            ok,
-        });
+        self.inputs.push(Input::Act { m: member, msg, ok });
     }
 
     pub fn push_quick_start(&mut self) {
@@ -1798,8 +1815,7 @@ impl Replayer {
             // Carry the event prefix over only when this session has already
             // collected it (a plain forward play). Otherwise start the log at
             // the keyframe and leave the gap to the caller.
-            let have_prefix = k_last_event == 0
-                || self.events.iter().any(|e| e.id == k_last_event);
+            let have_prefix = k_last_event == 0 || self.events.iter().any(|e| e.id == k_last_event);
             if have_prefix {
                 rp.events = self
                     .events

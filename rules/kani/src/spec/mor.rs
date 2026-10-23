@@ -324,7 +324,8 @@ pub fn band_01_draws(loss_from: i32, player: i32, value: i32) -> bool {
 
 /// Exactly one effect: `Draw { player, n: 1 }`.
 pub fn band_01_effects_ok(effects: &[Effect], player: i32) -> bool {
-    effects.len() == 1 && matches!(effects[0], Effect::Draw { player: p, n } if p == player && n == 1)
+    effects.len() == 1
+        && matches!(effects[0], Effect::Draw { player: p, n } if p == player && n == 1)
 }
 
 /// 1st money-reward = 1000, 2nd = 1500, 3rd = 2000, 4th = 1000, …
@@ -435,7 +436,9 @@ pub fn toko_swap_effects_ok(
 /// The mark leg: exactly one `PlaceMark` on the user's tile. The forced
 /// settle (1) is OPEN-触发结算 and is not pinned here.
 pub fn noble_02_mark_ok(effects: &[Effect], tile: i32) -> bool {
-    effects.iter().any(|e| matches!(e, Effect::PlaceMark { tile: t, .. } if *t == tile))
+    effects
+        .iter()
+        .any(|e| matches!(e, Effect::PlaceMark { tile: t, .. } if *t == tile))
 }
 // ===========================================================================
 // C-MOR-courage-03 post  `Mor:勇气展翅高飞之时`
@@ -489,11 +492,7 @@ pub fn starry_01_amount(x: i32) -> i32 {
 /// Field), AddCounter(user, crystals, X). `set_dest(Field)` is folded into
 /// the PlaceCard dest (2 = Dest::Field). Counter owner is the trigger seat
 /// (the play's player under a normal play).
-pub fn starry_01_effects_ok(
-    effects: &[Effect],
-    player: i32,
-    x: i32,
-) -> bool {
+pub fn starry_01_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
     if effects.len() != 3 {
         return false;
     }
@@ -562,7 +561,8 @@ pub fn starry_05_effects_ok(effects: &[Effect], owner: i32) -> bool {
 /// nnm-02: the user draws x cards. The end-of-turn discard-down is a
 /// separate AtEnd entry (PROTOCOL-LEVEL scheduling).
 pub fn nnm_02_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
-    effects.len() == 1 && matches!(effects[0], Effect::Draw { player: p, n } if p == player && n == x)
+    effects.len() == 1
+        && matches!(effects[0], Effect::Draw { player: p, n } if p == player && n == x)
 }
 
 /// nnm-03 clause pin: x times the *live* CiRCLE money reward.
@@ -617,7 +617,10 @@ pub fn nnm_05_wants_discard(dest: i32) -> bool {
 /// no `UnplaceCard` and dest unchanged. Exhaustion is a CounterChanged clause,
 /// not an inline check at the press site.
 pub fn nnm_05_press_empty_noop(effects: &[Effect], dest: i32, pre_dest: i32) -> bool {
-    !effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. })) && dest == pre_dest
+    !effects
+        .iter()
+        .any(|e| matches!(e, Effect::UnplaceCard { .. }))
+        && dest == pre_dest
 }
 
 // ===========================================================================
@@ -729,8 +732,7 @@ pub fn noble_02_not_yours_ok(effects: &[Effect]) -> bool {
 /// noble-02, tile is yours: only the mark leg (forced settle is
 /// OPEN-触发结算 / a `card_settle_at` protocol stub).
 pub fn noble_02_effects_ok(effects: &[Effect], tile: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::PlaceMark { tile: t, .. } if t == tile)
+    effects.len() == 1 && matches!(effects[0], Effect::PlaceMark { tile: t, .. } if t == tile)
 }
 
 // ===========================================================================

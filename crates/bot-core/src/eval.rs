@@ -66,9 +66,7 @@ fn normaliser(data: &GameData, st: &MatchState) -> f64 {
 pub fn relative_worth(data: &GameData, st: &MatchState, seat: usize) -> f64 {
     let mine = net_worth(data, st, seat);
     let alive = st.players.iter().filter(|p| !p.out()).count().max(1) as f64;
-    let sum: f64 = (0..st.players.len())
-        .map(|i| net_worth(data, st, i))
-        .sum();
+    let sum: f64 = (0..st.players.len()).map(|i| net_worth(data, st, i)).sum();
     mine - (sum - mine) / (alive - 1.0).max(1.0)
 }
 

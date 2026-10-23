@@ -49,11 +49,7 @@ fn effects_of(buf: &mut [Effect; world::MAX_LOG]) -> usize {
 }
 
 /// In-place 2-seat world on `dispatch`, then `f` for the card-specific fields.
-fn sparse2(
-    dispatch: card_sdk::kani_host::Backend,
-    user: i32,
-    f: impl FnOnce(&mut world::World),
-) {
+fn sparse2(dispatch: card_sdk::kani_host::Backend, user: i32, f: impl FnOnce(&mut world::World)) {
     host::install_backend(dispatch);
     world::with_world_mut(|w| {
         w.n_players = 2;
@@ -287,10 +283,7 @@ pub fn band_state2_bend_mutant_is_detected() {
     let pre_amount = bend_world(user);
     let folded = skill_groups::ave_mujica::bend_kani(user, pre_amount);
     if pre_amount > 0 && pre_amount != (pre_amount * 3 + 1) / 2 {
-        crate::kassert!(
-            folded != pre_amount,
-            "mutant: amount must change"
-        );
+        crate::kassert!(folded != pre_amount, "mutant: amount must change");
     }
 }
 

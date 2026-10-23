@@ -14,9 +14,10 @@
 //! maximum absolute `dist` from where the player stands; 「并[结算]」 is the
 //! teleport resolving, and 「可选择盖房」 is the build offer that follows.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「你的回合中[经过]」 -- latched on the pass, paid at turn end.
 const PASSED: &str = "skill.rimiResolve.passed";
@@ -30,13 +31,26 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
         // （1）「你的回合中[经过]任意Live House颜色格子」 -- `is_live_house_for`
         // is player-relative (sees a recolour too) and not in the condition
         // vocabulary, so it is the residual guard. `actor == owner` is the pre.
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, Some(on_pass_live_house), on_pass)),
-        On::Action(Action::TurnEnd("actor == owner && slot('skill.rimiResolve.passed') != 0", None, None, at_turn_end)),
+        On::Action(Action::Pass(
+            card_sdk::pre::MINE,
+            None,
+            Some(on_pass_live_house),
+            on_pass,
+        )),
+        On::Action(Action::TurnEnd(
+            "actor == owner && slot('skill.rimiResolve.passed') != 0",
+            None,
+            None,
+            at_turn_end,
+        )),
     ],
 )
-    .silent(&[1, 2, 3])
-    // 「（初始1，上限3）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 3)]);
+.silent(&[1, 2, 3])
+// 「（初始1，上限3）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 3),
+]);
 
 /// 「初始1，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

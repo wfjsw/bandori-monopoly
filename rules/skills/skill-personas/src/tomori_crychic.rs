@@ -12,9 +12,10 @@
 //! （3） has two halves on one condition: a [停留] now, and a settle at turn end.
 //! The settle is the `settleAtEnd` counter the engine already honours.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
@@ -22,16 +23,29 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Play("", None, Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
-        On::Action(Action::DiceRollAfter(card_sdk::pre::MINE, None, None, on_roll)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
+        On::Action(Action::DiceRollAfter(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            on_roll,
+        )),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
         On::Action(Action::AtEnd("owner.pos >= 0", None, None, settle_now)),
     ],
 )
-    .silent(&[1, 2])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+.silent(&[1, 2])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

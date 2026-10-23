@@ -38,10 +38,18 @@ fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landin
     );
     // The client lights the whole route at once: the head event says how many
     // steps the walk still has after this pass-reward-cut segment.
-    assert_eq!(first.ahead, steps - segment.abs(), "steps left after the segment");
+    assert_eq!(
+        first.ahead,
+        steps - segment.abs(),
+        "steps left after the segment"
+    );
     let first_id = first.id;
     t.m.tick(0.5);
-    assert_eq!(t.pos(0), 0, "wait at the start square until the reward is chosen");
+    assert_eq!(
+        t.pos(0),
+        0,
+        "wait at the start square until the reward is chosen"
+    );
     assert_eq!(
         t.mark(),
         events.last().unwrap().id,
@@ -56,7 +64,10 @@ fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landin
         .iter()
         .find(|e| e.msg.key() == "log.pass_reward_money")
         .unwrap();
-    assert!(first_id < reward.id, "walk to the start square, then pay the reward");
+    assert!(
+        first_id < reward.id,
+        "walk to the start square, then pay the reward"
+    );
     let walks: Vec<_> = events
         .iter()
         .filter(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"))
@@ -66,7 +77,11 @@ fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landin
         "answering must not repeat the approach"
     );
     if landing == 0 {
-        assert_eq!(walks.len(), 1, "landing on the start square needs no continuation");
+        assert_eq!(
+            walks.len(),
+            1,
+            "landing on the start square needs no continuation"
+        );
     } else {
         assert_eq!(walks.len(), 2);
         let rest = walks[1];
@@ -207,7 +222,10 @@ fn a_pass_tile_flash_waits_for_the_walk_to_the_hook_tile() {
     // The walk onto tile 21 must be announced before the flash.
     let first = segs.first().expect("a walk segment");
     assert_eq!(first.r#type, "diceRollBefore");
-    assert_eq!((first.from, first.to, first.value, first.dice), (20, 21, 1, 4));
+    assert_eq!(
+        (first.from, first.to, first.value, first.dice),
+        (20, 21, 1, 4)
+    );
     assert!(
         first.id < flashes[0].id,
         "walk to the hook tile, then the card flash: {:?}",
@@ -237,7 +255,10 @@ fn a_mid_route_pass_tile_flash_splits_the_walk_around_it() {
     // Steps 21-22 are silent (no flush); the flash on 23 flushes 20 -> 23.
     let first = segs.first().expect("a walk segment");
     assert_eq!(first.r#type, "diceRollBefore");
-    assert_eq!((first.from, first.to, first.value, first.dice), (20, 23, 3, 5));
+    assert_eq!(
+        (first.from, first.to, first.value, first.dice),
+        (20, 23, 3, 5)
+    );
     assert!(
         first.id < flashes[0].id,
         "walk to the hook tile, then the card flash: {:?}",
@@ -267,7 +288,10 @@ fn a_pass_before_flash_waits_for_the_walk_to_the_previous_tile() {
     assert_eq!(flashes.len(), 1, "one card flash: {:?}", t.recent_keys(20));
     let first = segs.first().expect("a walk segment");
     assert_eq!(first.r#type, "diceRollBefore");
-    assert_eq!((first.from, first.to, first.value, first.dice), (20, 22, 2, 5));
+    assert_eq!(
+        (first.from, first.to, first.value, first.dice),
+        (20, 22, 2, 5)
+    );
     assert!(
         first.id < flashes[0].id,
         "walk to the tile before the hook tile, then the card flash: {:?}",
@@ -297,7 +321,10 @@ fn a_flash_on_the_first_pass_before_shows_the_dice_first() {
     let flashes = cards(&events);
     assert_eq!(flashes.len(), 1, "one card flash: {:?}", t.recent_keys(20));
     let first = segs.first().expect("a walk segment");
-    assert_eq!(first.r#type, "diceRollBefore", "the head is the main move's roll");
+    assert_eq!(
+        first.r#type, "diceRollBefore",
+        "the head is the main move's roll"
+    );
     assert_eq!(
         (first.from, first.to, first.value, first.dice),
         (20, 20, 0, 4),

@@ -19,9 +19,10 @@
 //! recipient holding the recorded figure. 「若为抽卡效果则记录2200」 is the
 //! text's own constant for a draw.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const UP: &str = "X";
 const DOWN: &str = "X标记(反)";
@@ -41,9 +42,15 @@ pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
         // restoring the rulebook PaySplitChoose position: the offers sit immediately
         // before the pure `PaySplitChoose` filter stage (per leg on a split).
         On::Action(Action::PaySplitChooseBefore("", None, Some(mine), on_gain)),
-        On::Action(Action::PaySplitChooseBefore("", None, Some(other), on_theirs)),
+        On::Action(Action::PaySplitChooseBefore(
+            "",
+            None,
+            Some(other),
+            on_theirs,
+        )),
     ],
-).silent(&[1]);
+)
+.silent(&[1]);
 
 /// Residual guard for [`on_gain`]: the payee is the owner and some other
 /// survivor exists to redirect to. 「可以改为指定场上除你以外的一个角色」.

@@ -175,10 +175,7 @@ impl Server {
         r.presence_timeout = self.presence_timeout;
         r.restore_game();
         let r = Arc::new(Mutex::new(r));
-        self.rooms
-            .lock()
-            .unwrap()
-            .insert(id.to_string(), r.clone());
+        self.rooms.lock().unwrap().insert(id.to_string(), r.clone());
         Some(r)
     }
 
@@ -199,7 +196,9 @@ impl Server {
         id: &str,
         f: impl FnOnce(&mut Room) -> ApiResult<T>,
     ) -> ApiResult<T> {
-        let room = self.room(id).ok_or_else(|| ApiError::not_found("err.room.gone"))?;
+        let room = self
+            .room(id)
+            .ok_or_else(|| ApiError::not_found("err.room.gone"))?;
         let key = format!("room:{id}");
         let owner = format!("{}:{}", self.instance, random_hex(4));
         let out = store::try_with_lock(

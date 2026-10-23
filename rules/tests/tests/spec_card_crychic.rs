@@ -1056,6 +1056,10 @@ fn crychic_clause_ids_are_unique() {
     let mut seen = std::collections::BTreeSet::new();
     for c in CLAUSES {
         assert!(seen.insert(c.id), "duplicate clause id {}", c.id);
-        assert!(c.id.starts_with("C-CRYCHIC-"), "id {} lacks the unit prefix", c.id);
+        assert!(
+            c.id.starts_with("C-CRYCHIC-"),
+            "id {} lacks the unit prefix",
+            c.id
+        );
     }
 }

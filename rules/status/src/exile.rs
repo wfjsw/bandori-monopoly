@@ -51,7 +51,12 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // 「任意玩家获得[除外]…时」 -- the landing clause (already raised from
         // the engine's post-commit log as wire kind 21; this `Abnormal`
         // hook is the same moment from the abnormal path).
-        On::Action(Action::Abnormal("", None, Some(exile_landed), on_exile_landed)),
+        On::Action(Action::Abnormal(
+            "",
+            None,
+            Some(exile_landed),
+            on_exile_landed,
+        )),
         // 「任意玩家获得[除外]…时」 (`bandori_std::kind::Exile`, wire 21) --
         // raised from the engine's post-commit abnormal log. Cards that mean
         // 「获得[除外]时」 listen here rather than at each grant site (memory:
@@ -60,7 +65,12 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // 「玩家的每回合开始前移除一层」 / the duration-hold skip. Runs as a
         // field hook collected last among the `turnStartBefore` walk so
         // sibling hooks still see pre-tick state (`docs/STATUS-HOSTS.md` §4).
-        On::Action(Action::TurnStartBefore("", None, Some(turn_start_peels_or_holds), on_turn_start_before)),
+        On::Action(Action::TurnStartBefore(
+            "",
+            None,
+            Some(turn_start_peels_or_holds),
+            on_turn_start_before,
+        )),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
         On::Filter(Filter::ActGate(EXILED, None, refuse)),
@@ -72,11 +82,11 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         On::Filter(Filter::TargetableGate(EXILED, None, refuse)),
     ],
 )
-    .board_role("status")
-    // Play refusal when the piece is off board (`cannot_play` checks OnBoard
-    // first). The turn is auto-skipped by `on_turn_start_before`'s own
-    // `log.exiled_skip` / `log.exiled_skip_hold` lines, not by `gate_refusal_msg`.
-    .gate_msgs(&[(FilterKind::OnBoardGate.gate_id(), "err.play_exiled")]);
+.board_role("status")
+// Play refusal when the piece is off board (`cannot_play` checks OnBoard
+// first). The turn is auto-skipped by `on_turn_start_before`'s own
+// `log.exiled_skip` / `log.exiled_skip_hold` lines, not by `gate_refusal_msg`.
+.gate_msgs(&[(FilterKind::OnBoardGate.gate_id(), "err.play_exiled")]);
 
 /// The condition under which [除外] closes the act, pay and move gates.
 pub const EXILED: &str = "state(actor,'exile') > 0";

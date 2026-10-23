@@ -14,9 +14,9 @@
 //! *placed* cards, so the play body places this card as the `HagumiMarkFx`
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
-use card_sdk::abi::{ChainKind, ActionKind, MarkFilter, MoveKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind, MarkFilter, MoveKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";
 
@@ -97,7 +97,9 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
         player_id,
         ctx::self_uid(),
         1,
-        &note, card_sdk::abi::Stack::Fresh);
+        &note,
+        card_sdk::abi::Stack::Fresh,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("hagumi_marks_placed")).tile("tile", tile),
@@ -169,7 +171,9 @@ fn hook(player_id: i32) -> card_sdk::Asked {
 
 /// The 育美标记 filter: this kind, owned by `player_id`.
 fn mark_filter(owner: i32) -> MarkFilter {
-    MarkFilter::any().kind(key!("hagumi_marks_mark")).owner(owner)
+    MarkFilter::any()
+        .kind(key!("hagumi_marks_mark"))
+        .owner(owner)
 }
 
 /// Does `player_id` still own any 育美标记 on the board?

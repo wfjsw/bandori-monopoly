@@ -47,10 +47,7 @@ fn negative_status_leak() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(3)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    let mut t = Table::with_seed(
-        &["户山香澄", "花园多惠", "山吹沙绫", "丸山彩"],
-        seed,
-    );
+    let mut t = Table::with_seed(&["户山香澄", "花园多惠", "山吹沙绫", "丸山彩"], seed);
     let mut rng = fuzz::rng::Rng::new(seed ^ 0xA5A5);
     fuzz::drive::drive(&mut t, &mut rng, 4, fuzz::drive::AnswerMode::Free).unwrap();
     fuzz::drive::check_nonneg(&t).expect("negative status leak");
@@ -64,10 +61,7 @@ fn fire_over_cap() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(5)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    let mut t = Table::with_seed(
-        &["户山香澄", "花园多惠", "山吹沙绫", "丸山彩"],
-        seed,
-    );
+    let mut t = Table::with_seed(&["户山香澄", "花园多惠", "山吹沙绫", "丸山彩"], seed);
     let mut rng = fuzz::rng::Rng::new(seed ^ 0xA5A5);
     fuzz::drive::drive(&mut t, &mut rng, 4, fuzz::drive::AnswerMode::Free).unwrap();
     fuzz::drive::check_nonneg(&t).expect("fire over cap");
@@ -219,11 +213,7 @@ fn immunity_gap() {
     while t.prompt().is_some() {
         t.decline();
     }
-    assert_eq!(
-        t.money(0),
-        m0,
-        "shielded P0 lost money despite 夏日合宿"
-    );
+    assert_eq!(t.money(0), m0, "shielded P0 lost money despite 夏日合宿");
 }
 
 // =====================================================================

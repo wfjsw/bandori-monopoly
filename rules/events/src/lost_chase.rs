@@ -28,15 +28,23 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let face = roll(p, 5, 20);
         ctx::log(
             player_id,
-            &Msg::new("log.event.dice").player_id("who", p).i("n", face as i64),
+            &Msg::new("log.event.dice")
+                .player_id("who", p)
+                .i("n", face as i64),
         );
         faces.push((p, face));
     }
-    let mine = faces.iter().find(|&&(p, _)| p == player_id).map(|&(_, f)| f);
+    let mine = faces
+        .iter()
+        .find(|&&(p, _)| p == player_id)
+        .map(|&(_, f)| f);
     let Some(mine) = mine else {
         // Drawer already out -- treat as the 否则 branch.
         ctx::event_deck_push("一切不会结束", true);
-        ctx::log(player_id, &Msg::new("log.event.lost_never").card("event", "event:一切不会结束"));
+        ctx::log(
+            player_id,
+            &Msg::new("log.event.lost_never").card("event", "event:一切不会结束"),
+        );
         return Ok(());
     };
     // 「严格大于所有其他玩家的点数」 -- a tie is not a win.

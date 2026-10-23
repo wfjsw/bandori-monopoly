@@ -14,9 +14,7 @@ use game_core::fair::{
     CanonSettings, Fairness, NonceEntry, FAIR_VERSION,
 };
 use game_core::net::RoomMember;
-use game_core::record::{
-    EngineStamp, Init, MatchSetup, Origin, RecordedMatch, RECORD_VERSION,
-};
+use game_core::record::{EngineStamp, Init, MatchSetup, Origin, RecordedMatch, RECORD_VERSION};
 use game_core::rng::{Rng, Seed256};
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
@@ -107,13 +105,7 @@ fn seeded_record_v(o: &Openings, v: u32) -> game_core::record::RecordFile {
     let settings = settings_of(&members);
     let st = stamp();
     let commit = if v == 1 {
-        commit_hex_v1(
-            &o.seed,
-            &o.salt,
-            &st.bundle,
-            &st.ruleset_sha256,
-            &settings,
-        )
+        commit_hex_v1(&o.seed, &o.salt, &st.bundle, &st.ruleset_sha256, &settings)
     } else {
         commit_hex(&o.seed, &o.salt, &st.bundle, &st.ruleset_sha256)
     };
@@ -123,7 +115,7 @@ fn seeded_record_v(o: &Openings, v: u32) -> game_core::record::RecordFile {
         seed: 0,
         seed256: Some(Seed256(derived)),
         weights: ScoreWeights::default(),
-            clock: None,
+        clock: None,
         ..Default::default()
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
@@ -370,7 +362,7 @@ fn a_record_without_fairness_material_is_reported_not_faked() {
         seed: 42,
         seed256: None,
         weights: ScoreWeights::default(),
-            clock: None,
+        clock: None,
         ..Default::default()
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
@@ -397,7 +389,7 @@ fn the_match_rng_is_keyed_by_the_derived_seed() {
         seed: 0,
         seed256: Some(Seed256(derived)),
         weights: ScoreWeights::default(),
-            clock: None,
+        clock: None,
         ..Default::default()
     };
     let m = Match::new_seeded(
@@ -413,7 +405,9 @@ fn the_match_rng_is_keyed_by_the_derived_seed() {
     assert_eq!(live_key, Some(live_seed(&derived)));
     // And the RNG state in the save names that key.
     let parsed: serde_json::Value = serde_json::from_str(&m.save()).unwrap();
-    let key_hex = parsed["world"]["rng"]["c"]["key"].as_str().expect("chaCha rng");
+    let key_hex = parsed["world"]["rng"]["c"]["key"]
+        .as_str()
+        .expect("chaCha rng");
     assert_eq!(key_hex, hex32(&derived));
     // `match_id` carries no seed bits (it is hashed).
     assert_eq!(m.state().match_id, game_core::fair::match_id(&derived));
@@ -429,7 +423,7 @@ fn legacy_u64_records_still_replay_on_the_legacy_stream() {
         seed: 7,
         seed256: None,
         weights: ScoreWeights::default(),
-            clock: None,
+        clock: None,
         ..Default::default()
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);

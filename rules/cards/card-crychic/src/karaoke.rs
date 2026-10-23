@@ -13,13 +13,16 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const KARAOKE: CardDef = CardDef::new(
     "CRYCHIC:去唱卡拉ok吧",
     &[On::Play("", None, Some(cant_play), karaoke)],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"去唱卡拉ok吧"#)
         .raw_name(r#"去唱卡拉ok吧"#)
         .tags(&[])
         .text(r#"进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。"#)
         // sheet cell M4
-        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
+);
 
 /// C# `CardKaraoke.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

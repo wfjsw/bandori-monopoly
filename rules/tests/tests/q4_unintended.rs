@@ -43,7 +43,11 @@ fn sweep() -> Sweep {
     let audits = single::audit_batch(sample, seeds);
     s.lines.extend(single::report(&audits));
     s.findings.extend(single::findings(&audits));
-    s.counts.push(("single", audits.len(), audits.iter().filter(|a| a.ok()).count()));
+    s.counts.push((
+        "single",
+        audits.len(),
+        audits.iter().filter(|a| a.ok()).count(),
+    ));
 
     // ---- 2. pairwise non-interference ---------------------------------
     let runs = pair::pair_batch(pairs);

@@ -93,18 +93,20 @@ impl World {
     pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.turn.plan.base.clear();
         if count > 0 && sides >= 0 {
-            self.turn.plan.base.push(crate::engine::move_ctx::Roll::new(
-                count, sides, why,
-            ));
+            self.turn
+                .plan
+                .base
+                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
         }
     }
     /// Add one more die group to the starting dice (3d20 = three of
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
     pub fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
-            self.turn.plan.base.push(crate::engine::move_ctx::Roll::new(
-                count, sides, why,
-            ));
+            self.turn
+                .plan
+                .base
+                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
         }
     }
     /// Drop every extra die another effect added. A rewrite that
@@ -117,9 +119,10 @@ impl World {
     /// is a `0`-sided term: `add_extra_dice(n, 0, why)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
-            self.turn.plan.dice.push(crate::engine::move_ctx::Roll::new(
-                count, sides, why,
-            ));
+            self.turn
+                .plan
+                .dice
+                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
         }
     }
 
@@ -343,7 +346,10 @@ impl World {
         exclude: Option<usize>,
     ) -> i32 {
         self.st.players[player].money
-            + data.tiles.iter().enumerate()
+            + data
+                .tiles
+                .iter()
+                .enumerate()
                 .filter(|&(t, tile)| {
                     Some(t) != exclude
                         && tile.is_buyable()
@@ -503,7 +509,11 @@ impl World {
                     hi += t.dice.count.max(0) * t.dice.sides.max(1);
                 }
             }
-            return if self.turn.extreme == Extreme::Max { hi } else { lo };
+            return if self.turn.extreme == Extreme::Max {
+                hi
+            } else {
+                lo
+            };
         }
         let mut total = 0;
         for t in plan.base.iter().chain(plan.dice.iter()) {
@@ -878,7 +888,11 @@ impl World {
         let mut pile = std::mem::take(&mut self.hidden[i].discard);
         self.rng.shuffle(&mut pile);
         self.hidden[i].draw = pile;
-        self.log("text", i as i32, Msg::new("log.reshuffle").player_id("who", i));
+        self.log(
+            "text",
+            i as i32,
+            Msg::new("log.reshuffle").player_id("who", i),
+        );
         true
     }
 
@@ -911,8 +925,12 @@ impl World {
             self.log(
                 "draw",
                 player_id,
-                Msg::new("log.draw").player_id("who", player_id).i("n", got).opt("over", over),
-            ).value = got;
+                Msg::new("log.draw")
+                    .player_id("who", player_id)
+                    .i("n", got)
+                    .opt("over", over),
+            )
+            .value = got;
         }
         let _ = over_hand_limit;
         got
@@ -979,14 +997,20 @@ impl World {
         // instance (a per-player veto) and the tile's rule instance (a per-tile
         // veto). A hand card's 「本回合无法加盖房屋」 rides a lingering instance
         // instead -- see below.
-        if s.field
-            .iter()
-            .any(|f| f.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0)
-            || self.st.board_field.iter().any(|f| {
-                f.tile == tile
-                    && f.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0
-            })
-        {
+        if s.field.iter().any(|f| {
+            f.props
+                .get(crate::state::prop::NO_BUILD)
+                .copied()
+                .unwrap_or(0)
+                > 0
+        }) || self.st.board_field.iter().any(|f| {
+            f.tile == tile
+                && f.props
+                    .get(crate::state::prop::NO_BUILD)
+                    .copied()
+                    .unwrap_or(0)
+                    > 0
+        }) {
             return Some(Msg::new("err.build_blocked"));
         }
         // 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `prop::NO_BUILD_ABOVE`
@@ -1015,12 +1039,14 @@ impl World {
         // home for a per-player veto, since a hand play has no field instance
         // for `ctx::set_prop` to write. It keeps its own message key so the
         // log line does not move.
-        if self
-            .turn
-            .lingering
-            .iter()
-            .any(|l| l.owner == player_id && l.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0)
-        {
+        if self.turn.lingering.iter().any(|l| {
+            l.owner == player_id
+                && l.props
+                    .get(crate::state::prop::NO_BUILD)
+                    .copied()
+                    .unwrap_or(0)
+                    > 0
+        }) {
             return Some(Msg::new("err.build_denied"));
         }
         // No upgrade past the declared table (a rule may also stamp
@@ -1111,11 +1137,7 @@ impl World {
         let group_skill = data.is_group_skill(card);
         // 「此卡不受任何其他效果影响」 is a static [特] property, not a play-body
         // side effect -- `place_raw` and engine placement must see it too.
-        let immune = props
-            .get(crate::state::prop::IMMUNE)
-            .copied()
-            .unwrap_or(0)
-            != 0;
+        let immune = props.get(crate::state::prop::IMMUNE).copied().unwrap_or(0) != 0;
         let inst = FieldCard {
             uid,
             card: card.to_string(),
@@ -1462,7 +1484,11 @@ impl World {
             if id.is_empty() {
                 continue;
             }
-            if self.tile_rule_instances(t as i32).iter().any(|(_, c)| c == &id) {
+            if self
+                .tile_rule_instances(t as i32)
+                .iter()
+                .any(|(_, c)| c == &id)
+            {
                 continue;
             }
             if !rules.has_rule(&id) {
@@ -1899,9 +1925,10 @@ impl World {
         // Pair cap 1: refuse if either end already carries a matching mark for
         // that owner. Atomic -- neither row is placed when this trips.
         let marked = |tile: i32| {
-            self.st.marks.iter().any(|m| {
-                m.tile == tile && m.kind == kind && m.category == cat && m.owner == owner
-            })
+            self.st
+                .marks
+                .iter()
+                .any(|m| m.tile == tile && m.kind == kind && m.category == cat && m.owner == owner)
         };
         if marked(a) || marked(b) {
             return false;
@@ -1953,7 +1980,9 @@ impl World {
     /// Drop every matching mark on `tile`; returns how many rows were removed.
     pub fn remove_marks(&mut self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
         let before = self.st.marks.len();
-        self.st.marks.retain(|m| !(m.tile == tile && filter.matches(m)));
+        self.st
+            .marks
+            .retain(|m| !(m.tile == tile && filter.matches(m)));
         (before - self.st.marks.len()) as i32
     }
 
@@ -2048,7 +2077,14 @@ impl World {
     /// Bind `n` more units of `instance`'s counter `name` to `player_id`
     /// (a rule-created player token). Clamped at 0 / `max`. Returns how much
     /// actually moved.
-    pub fn bind_held(&mut self, instance: i32, name: &str, player_id: i32, n: i32, max: i32) -> i32 {
+    pub fn bind_held(
+        &mut self,
+        instance: i32,
+        name: &str,
+        player_id: i32,
+        n: i32,
+        max: i32,
+    ) -> i32 {
         let instance = (instance >= 0).then_some(instance);
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -2134,7 +2170,17 @@ impl World {
         };
         // Put on the destination.
         if to_tile >= 0 {
-            self.place_mark(instance, name, "", to_tile, -1, -1, took, Msg::default(), true);
+            self.place_mark(
+                instance,
+                name,
+                "",
+                to_tile,
+                -1,
+                -1,
+                took,
+                Msg::default(),
+                true,
+            );
         } else if to_player >= 0 {
             self.bind_held(instance, name, to_player, took, 0);
         } else {
@@ -2178,7 +2224,12 @@ impl World {
     /// Is the capability gate open for this player? Asks the ruleset (its
     /// CEL-only gate conditions). A ruleset with no opinion answers open --
     /// the engine keeps no named mirror.
-    pub fn gate_open(&self, rules: &dyn super::CardRules, gate: super::Gate, player: usize) -> bool {
+    pub fn gate_open(
+        &self,
+        rules: &dyn super::CardRules,
+        gate: super::Gate,
+        player: usize,
+    ) -> bool {
         if let Some(open) = rules.gate_open(self, gate, player) {
             return open;
         }
@@ -2246,10 +2297,7 @@ impl World {
 
     /// Add `n` to the named rule parameter's bonus; returns the new bonus.
     pub fn add_rule_param_bonus(&mut self, name: &str, n: i32) -> i32 {
-        let e = self
-            .rule_param_bonus
-            .entry(name.to_string())
-            .or_insert(0);
+        let e = self.rule_param_bonus.entry(name.to_string()).or_insert(0);
         *e += n;
         *e
     }

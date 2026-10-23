@@ -113,10 +113,6 @@ pub fn observe(
 /// Observe without a post-act settle: the window covers only the raw input.
 /// Useful when the caller wants to interleave its own settle policy per
 /// prompt. Prefer [`observe`] with a settle closure.
-pub fn observe_raw(
-    m: &mut Match,
-    act: StepAct,
-    clauses: &[Clause],
-) -> Observed {
+pub fn observe_raw(m: &mut Match, act: StepAct, clauses: &[Clause]) -> Observed {
     observe(m, act, |_| {}, clauses)
 }

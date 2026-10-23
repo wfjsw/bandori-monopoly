@@ -119,11 +119,7 @@ pub fn c_mor_light_start(step: &Step<'_>) -> Result<(), String> {
     // pre_pos, for the same walk length. We only know that the start tile
     // effect of 月之森 did not fire -- pin that instead of inventing N.
     // A walk of the turn's main move must leave 月之森, not pre_pos.
-    let walks: Vec<_> = step
-        .events
-        .iter()
-        .filter(|e| e.r#type == "move")
-        .collect();
+    let walks: Vec<_> = step.events.iter().filter(|e| e.r#type == "move").collect();
     if walks.is_empty() {
         // No walk in this window (the play itself does not move).
         return Ok(());
@@ -191,11 +187,7 @@ pub fn c_mor_again_counter(step: &Step<'_>) -> Result<(), String> {
             "counteruser money rose by {delta}, expected a consume of {paid}"
         ));
     }
-    if !step
-        .post
-        .st
-        .players
-        [who]
+    if !step.post.st.players[who]
         .field
         .iter()
         .any(|f| f.card == AGAIN)
@@ -273,11 +265,7 @@ pub fn c_mor_summer_shield(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    if !step
-        .post
-        .st
-        .players
-        [who]
+    if !step.post.st.players[who]
         .field
         .iter()
         .any(|f| f.card == SUMMER)
@@ -311,11 +299,7 @@ pub fn c_mor_centrifuge_shield(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    if !step
-        .post
-        .st
-        .players
-        [who]
+    if !step.post.st.players[who]
         .field
         .iter()
         .any(|f| f.card == CENTRIFUGE)
@@ -384,14 +368,12 @@ pub fn c_mor_wing_roll(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     // A movement dice roll must have happened in this window.
-    let rolled = step.events.iter().any(|e| {
-        e.r#type == "diceRollBefore" || e.r#type == "move" || e.r#type == "dice"
-    });
+    let rolled = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "diceRollBefore" || e.r#type == "move" || e.r#type == "dice");
     if !rolled {
-        return Err(
-            "C-MOR-wing-02: 「立刻进行移动掷骰」 -- no movement dice in the window"
-                .into(),
-        );
+        return Err("C-MOR-wing-02: 「立刻进行移动掷骰」 -- no movement dice in the window".into());
     }
     Ok(())
 }
@@ -424,11 +406,7 @@ pub fn c_mor_starry_place(step: &Step<'_>) -> Result<(), String> {
     }
     // Only when the card is now placed and the user paid for it.
     let who = step.player_of_act();
-    let Some(crystals) = step
-        .post
-        .st
-        .players
-        [who]
+    let Some(crystals) = step.post.st.players[who]
         .field
         .iter()
         .find(|f| f.card == STARRY)
@@ -486,18 +464,16 @@ pub fn c_mor_tritone_gain(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let crystals = step
-        .post
-        .st
-        .players
-        [who]
+    let crystals = step.post.st.players[who]
         .field
         .iter()
         .find(|f| f.card == TRITONE)
         .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .ok_or("tritone not placed")?;
     if crystals != 3 {
-        return Err(format!("tritone placed with {crystals} crystals, expected 3"));
+        return Err(format!(
+            "tritone placed with {crystals} crystals, expected 3"
+        ));
     }
     // The window's net on `who` is 0: the loss that opened the window is
     // given back on the spot.
@@ -621,9 +597,10 @@ pub fn c_mor_rui_demon_x(step: &Step<'_>) -> Result<(), String> {
     // Quote: 「每当你的技能被触发后，立即将x设置为5」 -- only when a skill
     // of the user's fired during this settle. Without such a trigger the
     // clause is a no-op (the card itself must not invent the write).
-    let skill_fired = step.events.iter().any(|e| {
-        e.r#type == "card" && e.kind == "skill" && e.player_id == who as i32
-    });
+    let skill_fired = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "card" && e.kind == "skill" && e.player_id == who as i32);
     if !skill_fired {
         return Ok(());
     }
@@ -721,9 +698,7 @@ pub fn c_mor_garden_teleport(step: &Step<'_>) -> Result<(), String> {
     // The main move is spent: the turn cannot roll again. Observable as
     // `turn.main_moved` staying true.
     if !step.post.turn.main_moved {
-        return Err(
-            "C-MOR-garden-02: 「并视为主要移动」 -- main move not spent".into(),
-        );
+        return Err("C-MOR-garden-02: 「并视为主要移动」 -- main move not spent".into());
     }
     Ok(())
 }
@@ -1173,7 +1148,8 @@ fn light_gate_and_start() {
         // that follows the play starts at 月之森, not at `pos`. The play
         // itself does not walk; the main roll does.
         t.dice(&[3]);
-        t.roll(0).map_err(|e| format!("roll after the play rejected: {e}"))?;
+        t.roll(0)
+            .map_err(|e| format!("roll after the play rejected: {e}"))?;
         decline_all(&mut t);
         let expect = (tsuki + 3) % 60;
         let got = t.pos(0);
@@ -1550,7 +1526,10 @@ fn rainbow_halves_a_payment_to_a_same_grade() {
         t.dice(&[1]);
         t.roll(0).unwrap();
         if !t.counteract_offered(RAINBOW) {
-            return Err(format!("C-MOR-rainbow-01: not offered: {}", t.dump_prompt()));
+            return Err(format!(
+                "C-MOR-rainbow-01: not offered: {}",
+                t.dump_prompt()
+            ));
         }
         t.counteract(0, RAINBOW).unwrap();
         decline_all(&mut t);
@@ -1611,7 +1590,10 @@ fn rainbow_same_grade_pays_you_at_1_5x() {
         t.dice(&[1]);
         t.roll(1).unwrap();
         if !t.counteract_offered(RAINBOW) {
-            return Err(format!("C-MOR-rainbow-02: not offered: {}", t.dump_prompt()));
+            return Err(format!(
+                "C-MOR-rainbow-02: not offered: {}",
+                t.dump_prompt()
+            ));
         }
         t.counteract(0, RAINBOW).unwrap();
         decline_all(&mut t);
@@ -1884,7 +1866,8 @@ fn tritone_gains_the_loss_and_counts_down() {
         // Countdown: owner turn-end ticks 1 crystal off. 「三回合后」 is
         // three of the **owner's** turns. p0 already rolled this turn (the
         // counteract answered its rent), so end it without re-rolling.
-        t.end(0).map_err(|e| format!("end after the counteract: {e}"))?;
+        t.end(0)
+            .map_err(|e| format!("end after the counteract: {e}"))?;
         decline_all(&mut t);
         if t.crystals(0, TRITONE) != Some(2) {
             return Err(format!(
@@ -2154,7 +2137,9 @@ fn xiaobai_turns_pay_into_lose() {
 
         let lost = money0 as i64 - t.money(0) as i64;
         if lost != rent as i64 {
-            return Err(format!("C-MOR-xiaobai-01: user lost {lost}, expected {rent}"));
+            return Err(format!(
+                "C-MOR-xiaobai-01: user lost {lost}, expected {rent}"
+            ));
         }
         let target_lost = money1 as i64 - t.money(1) as i64;
         if target_lost != (rent / 2) as i64 {
@@ -2175,13 +2160,7 @@ fn xiaobai_turns_pay_into_lose() {
 #[test]
 fn garden_gains_100_and_teleports_as_a_main_move() {
     forall(3, 0xC0_10_14, |rng, _i| {
-        let mut t = Table::new(&[
-            "二叶筑紫",
-            "户山香澄",
-            "花园多惠",
-            "牛込里美",
-            "山吹沙绫",
-        ]);
+        let mut t = Table::new(&["二叶筑紫", "户山香澄", "花园多惠", "牛込里美", "山吹沙绫"]);
         t.clean();
         t.begin_turn(0);
         let pos1 = rng.range(10, 40) as usize;
@@ -2495,11 +2474,13 @@ fn nnm_hand_play_spends_marks_and_draws() {
         t.begin_turn(0);
         // Arrange one 角色标记 (namespace `角色标记:<skill id>`, what
         // 广町七深 (2) writes).
-        t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
-            name: "角色标记:skill:户山香澄:鼓动".into(),
-            value: 1,
-            instance: None,
-        });
+        t.m.world_mut().st.players[0]
+            .tokens
+            .push(game_core::state::Counter {
+                name: "角色标记:skill:户山香澄:鼓动".into(),
+                value: 1,
+                instance: None,
+            });
         t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
         t.give(0, &[NNM]);
         t.observe(CLAUSES);
@@ -2511,9 +2492,7 @@ fn nnm_hand_play_spends_marks_and_draws() {
         })?;
         // Branch (1): option 0 = draw x.
         t.answer_one(0).map_err(|e| {
-            format!(
-                "C-MOR-nnm-02: branch choice rejected: {e} (multi-activation dispatch)"
-            )
+            format!("C-MOR-nnm-02: branch choice rejected: {e} (multi-activation dispatch)")
         })?;
         decline_all(&mut t);
         if t.hand(0).len() != 1 {

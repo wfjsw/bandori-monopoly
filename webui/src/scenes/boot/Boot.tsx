@@ -1,6 +1,7 @@
 // Boot (BootController): load manifest, fonts, game data and the wasm rules;
-// create a profile on the first run. After a refresh (a route in the URL and a
-// profile on disk) it goes straight back to that screen.
+// create a profile on the first run. Once the load is in it drops straight into
+// the menu (or, with a route in the URL and a profile on disk, back to that
+// screen) -- there is no tap-to-start gate.
 
 import { type FormEvent, useEffect, useState } from "react";
 import { navigate } from "../../app/router";
@@ -86,14 +87,14 @@ function loadAll(progress: (p: number) => void): Promise<void> {
   return loading;
 }
 
-type Stage = "loading" | "tap" | "create" | "error";
+type Stage = "loading" | "create" | "error";
 
 /**
  * One-shot boot: manifest, fonts, then `loadGameData` (ruleset + tables + the
  * typed `D`), with a progress meter. On success it plays the boot BGM and
- * either hands back to the shell (`resume`) or offers the tap / create screens.
- * A throw leaves `D` unset and lands on the error stage -- `loadGameData`
- * assigns `D` only after every piece is in.
+ * either hands back to the shell (`resume`) or drops into the menu; only the
+ * create screen still waits on the player. A throw leaves `D` unset and lands
+ * on the error stage -- `loadGameData` assigns `D` only after every piece is in.
  */
 function useBootAssets(opts: {
   resume: boolean;
@@ -109,9 +110,12 @@ function useBootAssets(opts: {
       .then(() => {
         if (!alive) return;
         playSceneBgm("boot");
-        if (!hasProfile()) setStage("create");
-        else if (resume) onReady();
-        else setStage("tap");
+        if (!hasProfile()) return setStage("create");
+        // No tap gate: keep a deep route, or land on the menu. Deliberately no
+        // `unlockAudio` here -- that would flip `unlocked` before a gesture and
+        // the global pointerdown handler would then skip the real resume/play.
+        if (!resume) navigate({ name: "menu" }, { replace: true });
+        onReady();
       })
       .catch((e: Error) => {
         if (!alive) return;
@@ -135,13 +139,6 @@ export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void
   const [name, setName] = useState("");
   useBootAssets({ resume, onReady, setP, setStage, setError });
 
-  const start = () => {
-    if (stage !== "tap") return;
-    unlockAudio();
-    navigate({ name: "menu" }, { replace: true });
-    onReady();
-  };
-
   const create = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return toast(tr("boot.nameEmpty"));
@@ -152,19 +149,19 @@ export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void
   };
 
   return (
-    <div className={s.boot} onClick={start}>
+    <div className={s.boot}>
       <BootArt />
       <div className={s.panel}>
         {res("BandoriUI/transition_logo") && <img className={s.logo} src={res("BandoriUI/transition_logo")} alt="" />}
         <div className={s.tip}>{tip}</div>
         <div className={s.progress}><div style={{ width: `${Math.round(p * 100)}%` }} /></div>
         <div className={stage === "error" ? s.error : s.status}>
-          {stage === "loading" ? tr("boot.loading") : stage === "tap" ? tr("boot.tapToStart") : stage === "error" ? error : tr("boot.needSave")}
+          {stage === "loading" ? tr("boot.loading") : stage === "error" ? error : tr("boot.needSave")}
         </div>
       </div>
       {stage === "create" && (
         <div className={s.createBack}>
-          <form className={s.create} onSubmit={create} onClick={(e) => e.stopPropagation()}>
+          <form className={s.create} onSubmit={create}>
             <h2>{tr("boot.createTitle")}</h2>
             <p>{tr("boot.createText")}</p>
             <input className={s.input} maxLength={16} placeholder={tr("boot.namePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} autoFocus />

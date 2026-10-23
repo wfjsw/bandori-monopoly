@@ -568,7 +568,14 @@ pub trait CardWorld: Clone + 'static {
         0
     }
     /// Add to a named on-card pool on a placed card; `max` caps (0 = uncapped).
-    fn add_card_pool(&mut self, _player_id: i32, _card: &str, _name: &str, _n: i32, _max: i32) -> i32 {
+    fn add_card_pool(
+        &mut self,
+        _player_id: i32,
+        _card: &str,
+        _name: &str,
+        _n: i32,
+        _max: i32,
+    ) -> i32 {
         0
     }
     /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
@@ -690,7 +697,14 @@ pub trait CardWorld: Clone + 'static {
         let _ = (player_id, card, name);
         0
     }
-    fn add_card_counter(&mut self, player_id: i32, card: &str, name: &str, n: i32, max: i32) -> i32 {
+    fn add_card_counter(
+        &mut self,
+        player_id: i32,
+        card: &str,
+        name: &str,
+        n: i32,
+        max: i32,
+    ) -> i32 {
         let _ = (player_id, card, name, n, max);
         0
     }
@@ -733,7 +747,12 @@ pub trait CardWorld: Clone + 'static {
         let _ = (tile, filter);
         0
     }
-    fn bump_mark(&mut self, tile: i32, filter: &game_core::state::MarkFilter<'_>, delta: i32) -> i32 {
+    fn bump_mark(
+        &mut self,
+        tile: i32,
+        filter: &game_core::state::MarkFilter<'_>,
+        delta: i32,
+    ) -> i32 {
         let _ = (tile, filter, delta);
         0
     }

@@ -11,25 +11,38 @@
 //! after the effect landed. The two kinds the clause names are `Stay` and
 //! `Teleport`; the trigger carries which one in `abnormal_kind()`.
 
-use card_sdk::abi::{AbKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{AbKind, ActionKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
         // （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐」 --
         // the offer exists only for those two abnormal kinds and with two
         // pots to spend. Kind is a residual (`AbKind` match); fire is CEL.
-        On::Action(Action::Abnormal("actor == owner && charge(owner) >= 2", None, Some(stay_or_teleport), on_abnormal)),
+        On::Action(Action::Abnormal(
+            "actor == owner && charge(owner) >= 2",
+            None,
+            Some(stay_or_teleport),
+            on_abnormal,
+        )),
     ],
 )
-    .silent(&[0, 1])
-    // 「（初始2，上限3）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 3)]);
+.silent(&[0, 1])
+// 「（初始2，上限3）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 2),
+    (bandori_std::fire::FIRE_CAP, 3),
+]);
 
 /// 「初始2，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

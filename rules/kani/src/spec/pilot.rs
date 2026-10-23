@@ -75,8 +75,7 @@ pub fn tae_sound_effects_ok(effects: &[Effect], player: i32, shop: i32) -> bool 
 
 /// Post-state the clause demands.
 pub fn tae_sound_post_ok(post: &Snapshot, player: i32, shop: i32, pre_fire: i32) -> bool {
-    post.pos[player as usize] == shop
-        && post.charge[player as usize] == pre_fire + 1
+    post.pos[player as usize] == shop && post.charge[player as usize] == pre_fire + 1
 }
 
 // ===========================================================================

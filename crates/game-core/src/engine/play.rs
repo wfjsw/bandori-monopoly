@@ -8,12 +8,12 @@
 
 use super::cx::{Ask, Cx, Flow, Halt};
 pub(crate) use super::move_ctx::MoveCtx as Move;
-use game_kinds::{Payee, Seat, Tile};
 use super::move_ctx::MoveKind;
 use super::rules::{raise, Dest, Trigger, TriggerBuy, TriggerPay};
 use super::world::{Extreme, Signal, WalkSeg, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
+use game_kinds::{Payee, Seat, Tile};
 
 /// The purchase surface (`docs/PURCHASE.md`): quote / deal / assign.
 pub mod purchase;
@@ -390,16 +390,16 @@ impl Cx<'_> {
                 .map(|&p| self.start_hand(p))
                 .max()
                 .unwrap_or(START_HAND);
-            self.w.log(
-                "text",
-                -1,
-                Msg::new("log.mulligan_offer").i("n", n as i64),
-            );
+            self.w
+                .log("text", -1, Msg::new("log.mulligan_offer").i("n", n as i64));
             let ask = Ask::choice(
                 humans.clone(),
                 Msg::new("ask.mulligan.title"),
                 Msg::new("ask.mulligan.text").i("n", n as i64),
-                vec![Msg::new("ask.mulligan.keep").i("n", n as i64), Msg::new("ask.mulligan.redo")],
+                vec![
+                    Msg::new("ask.mulligan.keep").i("n", n as i64),
+                    Msg::new("ask.mulligan.redo"),
+                ],
                 0,
                 20.0,
             )
@@ -570,11 +570,7 @@ impl Cx<'_> {
             .iter()
             .map(|p| super::world::TurnSnap {
                 pos: p.pos,
-                state: p
-                    .state
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.value))
-                    .collect(),
+                state: p.state.iter().map(|(k, v)| (k.clone(), v.value)).collect(),
             })
             .collect();
         raise!(self, "turnStart", i, tile = self.w.st.players[i].pos)?;
@@ -592,13 +588,7 @@ impl Cx<'_> {
         // `turnBaseTime`'s default is the match's per-turn base refill
         // (`ClockSettings::base_refill`), not a fixed constant -- the host
         // then refills/caps it at `StartTimer` (see `engine::Signal`).
-        let refill = raise!(
-            self,
-            "turnBonusTime",
-            i,
-            value = super::BONUS_REFILL as i32
-        )?
-        .value;
+        let refill = raise!(self, "turnBonusTime", i, value = super::BONUS_REFILL as i32)?.value;
         let base = raise!(
             self,
             "turnBaseTime",
@@ -606,9 +596,11 @@ impl Cx<'_> {
             value = self.w.clock.base_refill as i32
         )?
         .value;
-        self.w
-            .signals
-            .push(Signal::StartTimer(i, refill.max(0) as f32, base.max(0) as f32));
+        self.w.signals.push(Signal::StartTimer(
+            i,
+            refill.max(0) as f32,
+            base.max(0) as f32,
+        ));
         // The ruleset's act / move gates (`docs/STATUS-HOSTS.md` §4).
         // A closed act gate skips the whole turn; a closed move gate skips
         // only the main move. Skip messages come from the ruleset.
@@ -810,7 +802,9 @@ impl Cx<'_> {
                         plan.roll = steps.max(0);
                     }
                     if !plan.signed {
-                        if let Some(mr) = plan.min_roll { plan.roll = plan.roll.max(mr); };
+                        if let Some(mr) = plan.min_roll {
+                            plan.roll = plan.roll.max(mr);
+                        };
                     }
                     // A `rollAfter` / `diceRollResult` body may have cleared resolve
                     // on the turn plan (`plan::set_resolve(false)`, e.g.
@@ -1059,7 +1053,13 @@ impl Cx<'_> {
     /// TODO(规则书) ruling 8: 巴's 「常规收购价一半」 base is undecided; the
     /// caller passes the price.
     /// `true` when the deed actually changed hands. HOST-06.
-    pub fn card_acquire(&mut self, player_id: usize, from: usize, tile: usize, price: i32) -> Flow<bool> {
+    pub fn card_acquire(
+        &mut self,
+        player_id: usize,
+        from: usize,
+        tile: usize,
+        price: i32,
+    ) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
             return Ok(false);
         }
@@ -1126,14 +1126,28 @@ impl Cx<'_> {
             }
             deal.mortgaged_after = b.deal_mortgaged;
         }
-        purchase::assign_deed(&mut self.w, tile, deal.owner_after, deal.houses_after, deal.mortgaged_after);
+        purchase::assign_deed(
+            &mut self.w,
+            tile,
+            deal.owner_after,
+            deal.houses_after,
+            deal.mortgaged_after,
+        );
         let mut t = Trigger::new("bought", player_id);
         t.tile = tile as i32;
-        t.buy = Some(TriggerBuy::new(purchase::BuyKind::Acquire, from as i32, price));
+        t.buy = Some(TriggerBuy::new(
+            purchase::BuyKind::Acquire,
+            from as i32,
+            price,
+        ));
         self.raise(t)?;
         let mut t = Trigger::new("buyAfter", player_id);
         t.tile = tile as i32;
-        t.buy = Some(TriggerBuy::new(purchase::BuyKind::Acquire, from as i32, price));
+        t.buy = Some(TriggerBuy::new(
+            purchase::BuyKind::Acquire,
+            from as i32,
+            price,
+        ));
         self.raise(t)?;
         Ok(true)
     }
@@ -1321,7 +1335,9 @@ impl Cx<'_> {
                 // to the final face after the counteractions, so a card that
                 // pushes the roll down still respects the floor.
                 if !m.signed {
-                    if let Some(mr) = m.min_roll { m.roll = m.roll.max(mr); };
+                    if let Some(mr) = m.min_roll {
+                        m.roll = m.roll.max(mr);
+                    };
                 }
                 // A `rollAfter` / `diceRollResult` body may have cleared resolve on
                 // the turn plan (`plan::set_resolve(false)`, e.g. 不要背负期待's
@@ -1514,13 +1530,16 @@ impl Cx<'_> {
         let steps = m.steps.unwrap_or(m.roll);
         // Snapshot the log-line fields: the loop below writes `m.total` /
         // `m.remaining` / `m.path`, so the closure must not borrow `m`.
-        let (main, roller, why, dir, resolve) = (m.main, m.roller, m.why.clone(), m.dir(), m.resolve);
+        let (main, roller, why, dir, resolve) =
+            (m.main, m.roller, m.why.clone(), m.dir(), m.resolve);
         let head = move |still: bool| {
             let base = if main {
                 Msg::new("log.roll").opt(
                     "by",
-                    (roller != Some(Seat(i as i32)))
-                        .then(|| Msg::new("log.part.rolled_by").player_id("who", roller.map(|r| r.0).unwrap_or(i as i32))),
+                    (roller != Some(Seat(i as i32))).then(|| {
+                        Msg::new("log.part.rolled_by")
+                            .player_id("who", roller.map(|r| r.0).unwrap_or(i as i32))
+                    }),
                 )
             } else {
                 Msg::new(if dir < 0 {
@@ -1528,7 +1547,10 @@ impl Cx<'_> {
                 } else {
                     "log.move_forward"
                 })
-                .opt("why", why.clone().map(|w| Msg::new("log.part.why").msg("why", w)))
+                .opt(
+                    "why",
+                    why.clone().map(|w| Msg::new("log.part.why").msg("why", w)),
+                )
             };
             base.player_id("who", i)
                 .i("n", steps)
@@ -2231,7 +2253,9 @@ impl Cx<'_> {
     /// the dice-rent roll (`unit × 1d20`).
     fn rent_figure(&mut self, owner: usize, t: usize) -> (i32, Option<Msg>) {
         let tile = self.tile(t);
-        let dice_mult = self.w.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT);
+        let dice_mult = self
+            .w
+            .tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT);
         if dice_mult > 0 {
             let d = self.w.rng.d(20);
             let kind = tile.kind.as_str().to_string();
@@ -2351,7 +2375,10 @@ impl Cx<'_> {
         tile: Option<usize>,
         milli_scale: i32,
     ) -> i32 {
-        if matches!(kind, PayKind::Buy | PayKind::Build | PayKind::ForceBuy | PayKind::Gain) {
+        if matches!(
+            kind,
+            PayKind::Buy | PayKind::Build | PayKind::ForceBuy | PayKind::Gain
+        ) {
             return amount;
         }
         let mut f = 1.0f64;
@@ -2454,8 +2481,15 @@ impl Cx<'_> {
             // is 「获得的地契仍为抵押状态」; TODO(规则书): `FORCE_STAYS_MORTGAGED`
             // (`= 0` clears) is not distinguishable from "absent" through
             // `tile_prop`, so the native default holds unconditionally.
-            let mut deal =
-                purchase::default_deal(self.data, &self.w.st, t, i, purchase::BuyKind::Force, price, true);
+            let mut deal = purchase::default_deal(
+                self.data,
+                &self.w.st,
+                t,
+                i,
+                purchase::BuyKind::Force,
+                price,
+                true,
+            );
             let at = raise!(
                 self,
                 "buyAssign",
@@ -2541,10 +2575,7 @@ impl Cx<'_> {
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
         ask.view.price = price;
-        if self.ask(ask)?.of(i) == 0
-            && self.w.st.owners[t] < 0
-            && !self.out(i)
-        {
+        if self.ask(ask)?.of(i) == 0 && self.w.st.owners[t] < 0 && !self.out(i) {
             self.deed_buy(i, t, purchase::BuyKind::Land, 0)?;
         }
         Ok(())
@@ -2625,7 +2656,11 @@ impl Cx<'_> {
     /// [`crate::strategy::StrategyParams`] keys (the sort key is
     /// `(has_houses · house_key, price · price_key, tile)`, which with both
     /// keys at `1000` is exactly the old `(houses > 0, price, t)` order).
-    fn mortgage_order(&self, mut deeds: Vec<usize>, p: &crate::strategy::StrategyParams) -> Vec<usize> {
+    fn mortgage_order(
+        &self,
+        mut deeds: Vec<usize>,
+        p: &crate::strategy::StrategyParams,
+    ) -> Vec<usize> {
         deeds.sort_by_key(|&t| p.mortgage_key(self.w.st.houses[t], self.tile(t).price, t));
         deeds
     }
@@ -2640,7 +2675,12 @@ impl Cx<'_> {
         self.auto_mortgage_from(player_id, need, self.mortgageable(player_id))
     }
 
-    pub(crate) fn auto_mortgage_from(&mut self, player_id: usize, need: i32, deeds: Vec<usize>) -> Vec<String> {
+    pub(crate) fn auto_mortgage_from(
+        &mut self,
+        player_id: usize,
+        need: i32,
+        deeds: Vec<usize>,
+    ) -> Vec<String> {
         if self.is_chaos(player_id) {
             let mut rest = deeds;
             let mut got = 0;
@@ -2679,7 +2719,12 @@ impl Cx<'_> {
     /// The quoted price for one tile, through the rules crate's `buy_quote`
     /// (`docs/PURCHASE.md`). For `StubRules` this is `quote_native` -- the
     /// plain rulebook formula -- so the sim's behaviour is unchanged.
-    pub(crate) fn buy_quote_for(&self, i: usize, t: usize, kind: purchase::BuyKind) -> purchase::Quote {
+    pub(crate) fn buy_quote_for(
+        &self,
+        i: usize,
+        t: usize,
+        kind: purchase::BuyKind,
+    ) -> purchase::Quote {
         // Force-buy and 收购 name the owner as the payee; every other kind buys
         // from the bank (`docs/PURCHASE.md`).
         let seller = match kind {
@@ -3050,7 +3095,13 @@ impl Cx<'_> {
     /// Route a buy through the tile rule's `On::Buy` body
     /// (`CardRules::deed_buy`). `reason`: 0 = settle offer, 1 = card-driven,
     /// 2 = agent, 3 = acquire / auction.
-    pub fn deed_buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind, reason: i32) -> Flow<bool> {
+    pub fn deed_buy(
+        &mut self,
+        i: usize,
+        t: usize,
+        kind: purchase::BuyKind,
+        reason: i32,
+    ) -> Flow<bool> {
         self.rules().deed_buy(self, i, t, kind, reason)
     }
 
@@ -3532,7 +3583,9 @@ impl Cx<'_> {
         // lands here. Refuse it the same way the early payee gate does.
         // `ForceBuy` skips the status pay gate (same as the early gate).
         if p.kind != PayKind::ForceBuy {
-            if let Some(t) = to.filter(|&t| !self.out(t) && !self.w.gate_open(self.rules, super::Gate::OnBoard, t)) {
+            if let Some(t) = to
+                .filter(|&t| !self.out(t) && !self.w.gate_open(self.rules, super::Gate::OnBoard, t))
+            {
                 let text = Msg::new(if p.from.is_some() {
                     "log.blocked_pay"
                 } else {
@@ -3567,7 +3620,11 @@ impl Cx<'_> {
                 } else if p.allow_mortgage {
                     // Fund the final amount after the payment hooks, without
                     // forcing an optional purchase or risking bankruptcy.
-                    let exclude = if p.kind == PayKind::Build { p.tile } else { None };
+                    let exclude = if p.kind == PayKind::Build {
+                        p.tile
+                    } else {
+                        None
+                    };
                     if !self.offer_mortgage_funds(f, loss, exclude)? {
                         self.w.log(
                             "text",
@@ -3727,14 +3784,9 @@ impl Cx<'_> {
         // divides. An untouched total is the base figure and remains as-is (the
         // per-share formula still CeilTo-10s each share -- that share rounding
         // is the book's printed 「向上取整10」, not this rule).
-        Ok(shaped.map(|s| {
-            if s != total {
-                ceil10_money(s)
-            } else {
-                s
-            }
-        })
-        .filter(|&s| s > 0))
+        Ok(shaped
+            .map(|s| if s != total { ceil10_money(s) } else { s })
+            .filter(|&s| s > 0))
     }
 
     /// Emit the money log line for one settled payment.
@@ -3797,7 +3849,12 @@ impl Cx<'_> {
 
     /// Optional funding: selecting no mortgage cancels the purchase/build.
     /// Rulebook: the deed being upgraded cannot fund its own construction.
-    fn offer_mortgage_funds(&mut self, i: usize, amount: i32, exclude: Option<usize>) -> Flow<bool> {
+    fn offer_mortgage_funds(
+        &mut self,
+        i: usize,
+        amount: i32,
+        exclude: Option<usize>,
+    ) -> Flow<bool> {
         let need = amount - self.w.st.players[i].money;
         let deeds: Vec<usize> = self
             .mortgageable(i)
@@ -3821,7 +3878,8 @@ impl Cx<'_> {
         }
         for id in &reply.a.picked {
             if let Ok(t) = id.parse::<usize>() {
-                if deeds.contains(&t) && self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
+                if deeds.contains(&t) && self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t]
+                {
                     self.deed_mortgage(i, t, 2)?;
                 }
             }
@@ -4002,11 +4060,7 @@ impl Cx<'_> {
             .collect();
         // Every bound counter unit dies with its owning card instance (user
         // ruling 2026-10-10). Collect the uids before the field is cleared.
-        let owned_uids: Vec<i32> = self.w.st.players[i]
-            .field
-            .iter()
-            .map(|f| f.uid)
-            .collect();
+        let owned_uids: Vec<i32> = self.w.st.players[i].field.iter().map(|f| f.uid).collect();
         let s = &mut self.w.st.players[i];
         s.ai = true;
         s.money = 0;
@@ -4086,9 +4140,10 @@ impl Cx<'_> {
             for p in self.w.st.players.iter_mut() {
                 p.tokens.retain(|t| t.name != name);
             }
-            self.w.st.marks.retain(|m| {
-                m.owner == crate::state::BOARD_OWNER || m.kind != name
-            });
+            self.w
+                .st
+                .marks
+                .retain(|m| m.owner == crate::state::BOARD_OWNER || m.kind != name);
         }
     }
 
@@ -4215,8 +4270,15 @@ impl Cx<'_> {
         self.w.st.players[b].money -= bid;
         // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
         // one ownership write (`docs/PURCHASE.md`).
-        let mut deal =
-            purchase::default_deal(self.data, &self.w.st, t, b, purchase::BuyKind::Auction, bid, true);
+        let mut deal = purchase::default_deal(
+            self.data,
+            &self.w.st,
+            t,
+            b,
+            purchase::BuyKind::Auction,
+            bid,
+            true,
+        );
         let at = raise!(
             self,
             "buyAssign",
@@ -4361,13 +4423,22 @@ impl Cx<'_> {
                 // `drew` -- the field-card per-draw point (one raise per single
                 // card). `cards` names the one card too, so a hook written
                 // against an older batch payload still reads it.
-                raise!(self, "drew", i, card = Some(card.clone()), value = 1, cards = vec![card])?;
+                raise!(
+                    self,
+                    "drew",
+                    i,
+                    card = Some(card.clone()),
+                    value = 1,
+                    cards = vec![card]
+                )?;
             }
         }
         if hooks && got > 0 {
             let over = self.over_hand(i).then(|| {
-                Msg::new("log.part.over_hand")
-                    .i("limit", i64::from(self.w.st.players[i].hand_limit().unwrap_or_default()))
+                Msg::new("log.part.over_hand").i(
+                    "limit",
+                    i64::from(self.w.st.players[i].hand_limit().unwrap_or_default()),
+                )
             });
             self.w
                 .log(
@@ -4439,8 +4510,7 @@ impl Cx<'_> {
         if !self.w.gate_open(self.rules, super::Gate::OnBoard, i) {
             return Some(self.rules.gate_refusal_msg(super::Gate::OnBoard, i));
         }
-        if !self.w.gate_open(self.rules, super::Gate::Act, i)
-            && !self.rules.card_act_exemption(id)
+        if !self.w.gate_open(self.rules, super::Gate::Act, i) && !self.rules.card_act_exemption(id)
         {
             return Some(self.rules.gate_refusal_msg(super::Gate::Act, i));
         }
@@ -4458,12 +4528,7 @@ impl Cx<'_> {
     /// (CRYCHIC). Memoized per `(player, card)` under the world stamp, like
     /// [`Self::rules_cant_play`] -- the gate is a ruleset query, not a field
     /// read.
-    fn exclusive_play(
-        &self,
-        i: usize,
-        id: &str,
-        card: &crate::data::CardData,
-    ) -> Option<Msg> {
+    fn exclusive_play(&self, i: usize, id: &str, card: &crate::data::CardData) -> Option<Msg> {
         let persona = &self.w.st.players[i].persona;
         let base = self.data.base_persona(persona);
         let owner_is_self = card.owner == *persona;

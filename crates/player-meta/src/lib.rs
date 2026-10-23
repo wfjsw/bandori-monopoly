@@ -4,6 +4,6 @@
 //! The game engine lives in `game-core`. This crate depends on it (never the
 //! reverse) and holds only the persistent player state that sits outside a match.
 
+pub mod decks;
 pub mod profile;
 pub mod progression;
-pub mod decks;

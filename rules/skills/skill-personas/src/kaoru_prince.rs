@@ -20,9 +20,10 @@
 //! （3） 「不会经过…所拥有的格子」 is a walk that skips another player's deeds
 //! when they hold a mark -- the plan's route filter.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind 「[怪盗标记]」 -- a held counter on the marked player
 /// (「向一名玩家场上放置一个怪盗标记」).
@@ -47,14 +48,22 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
         // M4), the passer's step onto this player's tile -- not the end-tile
         // [重叠]. `target` is not on a `passTile` payload, so the condition
         // reads the tile being entered.
-        On::Action(Action::PassTile("actor != owner && tile.id == owner.pos", None, None, on_passed)),
+        On::Action(Action::PassTile(
+            "actor != owner && tile.id == owner.pos",
+            None,
+            None,
+            on_passed,
+        )),
     ],
 )
 .labels(&[(0, "（2）"), (2, "（1）"), (3, "（1）")])
 .silent(&[1])
 .quiet_when_empty(&[2, 3])
-    // 「（上限7）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 7)]);
+// 「（上限7）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 0),
+    (bandori_std::fire::FIRE_CAP, 7),
+]);
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
 /// The numbers ride this face's own `CardDef` (`.props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 7)])` above) so

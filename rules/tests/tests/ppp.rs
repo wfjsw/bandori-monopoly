@@ -69,15 +69,21 @@ fn popipa_gains_adds_draws_and_removes() {
     assert_eq!(t.money(0), 11_000);
     // 规则书: 「将一张“Pipopa”加入抽牌堆」 -- shuffled in, so its position is
     // not specified; it may even be the card 「然后抽一张牌」 takes.
-    assert!(t.draw_pile(0).contains(&"PPP:[衍生]Pipopa".to_string()) || {
-        t.discard(0).contains(&"PPP:[衍生]Pipopa".to_string())
-            || t.hand(0).contains(&"PPP:[衍生]Pipopa".to_string())
-    });
+    assert!(
+        t.draw_pile(0).contains(&"PPP:[衍生]Pipopa".to_string()) || {
+            t.discard(0).contains(&"PPP:[衍生]Pipopa".to_string())
+                || t.hand(0).contains(&"PPP:[衍生]Pipopa".to_string())
+        }
+    );
     // 规则书: 「然后抽一张牌」 -- one card came to hand; which one is the
     // shuffle's business, not the text's.
     assert_eq!(t.hand(0).len(), 1, "「抽一张牌」: hand {:?}", t.hand(0));
     // 规则书: 「然后此卡[移除]」
-    assert!(!t.discard(0).contains(&"PPP:Popipa".to_string()), "discard {:?}", t.discard(0));
+    assert!(
+        !t.discard(0).contains(&"PPP:Popipa".to_string()),
+        "discard {:?}",
+        t.discard(0)
+    );
 }
 
 // =====================================================================
@@ -90,7 +96,11 @@ fn pipopa_gains_places_and_removes() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "PPP:[衍生]Pipopa").unwrap();
     assert_eq!(t.money(0), 11_000);
-    assert!(t.on_field(0, "PPP:[衍生]Popipapapipopa"), "field {:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "PPP:[衍生]Popipapapipopa"),
+        "field {:?}",
+        t.field_ids(0)
+    );
     assert!(!t.discard(0).contains(&"PPP:[衍生]Pipopa".to_string()));
 }
 
@@ -105,7 +115,12 @@ fn popipapapipopa_crystals_on_pass() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.crystals(0, "PPP:[衍生]Popipapapipopa"), Some(1), "events {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.crystals(0, "PPP:[衍生]Popipapapipopa"),
+        Some(1),
+        "events {:?}",
+        t.recent_keys(8)
+    );
     // Pass 星之鼓动山丘 (index 44).
     t.begin_turn(0);
     t.set_pos(0, 41);
@@ -178,7 +193,8 @@ fn returns_placed_at_start_and_borrows_band() {
         "borrowed Afterglow band beside the PPP one: {ids:?}"
     );
     assert!(
-        ids.iter().any(|c| c.contains("Poppin") || c.contains("星之鼓动")),
+        ids.iter()
+            .any(|c| c.contains("Poppin") || c.contains("星之鼓动")),
         "the Poppin' Party band card is still on the field: {ids:?}"
     );
 }
@@ -212,7 +228,11 @@ fn returns_borrow_options_carry_band_cards() {
             _ => None,
         });
         // The option names the player...
-        assert_eq!(who, Some(i as i32 + 1), "option {i} names its player: {opt:?}");
+        assert_eq!(
+            who,
+            Some(i as i32 + 1),
+            "option {i} names its player: {opt:?}"
+        );
         // ...and shows that player's 团卡 (the band-skill stand-in).
         let card = card.unwrap_or_else(|| panic!("option {i} carries a card: {opt:?}"));
         assert!(
@@ -231,7 +251,8 @@ fn returns_borrow_options_carry_band_cards() {
     t.answer_one(1).unwrap();
     let ids = t.field_ids(0);
     assert!(
-        ids.iter().any(|c| c.contains("Pastel") || c.contains("与偶像一起")),
+        ids.iter()
+            .any(|c| c.contains("Pastel") || c.contains("与偶像一起")),
         "answering option 1 borrows that player's group: {ids:?}"
     );
 }
@@ -571,10 +592,15 @@ fn random_star_sweeps_and_stacks_auction_card() {
     assert!(t.on_field(0, "PPP:仓库里的Random Star"));
     let draw = t.draw_pile(0);
     // Hand and discard swept into the deck.
-    assert!(draw.contains(&"通用:GREAT".to_string()) || t.hand(0).contains(&"通用:GREAT".to_string()));
+    assert!(
+        draw.contains(&"通用:GREAT".to_string()) || t.hand(0).contains(&"通用:GREAT".to_string())
+    );
     assert!(draw.contains(&"通用:登上武道馆".to_string()));
     // 规则书: 「放置在卡组底端」
-    assert_eq!(draw.last().map(String::as_str), Some("PPP:[衍生]拍卖撤下来了"));
+    assert_eq!(
+        draw.last().map(String::as_str),
+        Some("PPP:[衍生]拍卖撤下来了")
+    );
 }
 
 // =====================================================================
@@ -628,7 +654,8 @@ fn saaya_card_is_exclusive() {
 fn saaya_card_lands_on_yamabuki() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "山吹沙绫");
-    t.give_play(0, "PPP:（沙绫）总有一天要给这片天空命名").unwrap();
+    t.give_play(0, "PPP:（沙绫）总有一天要给这片天空命名")
+        .unwrap();
     let f = &t.field(0)[0];
     assert_eq!(f.card, "PPP:（沙绫）总有一天要给这片天空命名");
     assert_eq!(f.tile, YAMABUKI as i32, "on 山吹面包房");
@@ -837,7 +864,10 @@ fn saaya_skill_offers_on_big_spend() {
     }
     eprintln!("money: {} {} fire={}", t.money(0), t.money(1), t.charge(0));
     // 「可让那名玩家获得200资金且自己获得1个saaya标记和1个[火罐]」.
-    assert!(offered, "焕然一新的天空中 (1) window must open on a >=1000 payment");
+    assert!(
+        offered,
+        "焕然一新的天空中 (1) window must open on a >=1000 payment"
+    );
     assert!(took, "the trade option must be offered");
     assert_eq!(t.charge(0), 1, "P0 gains 1 fire");
     assert_eq!(
@@ -976,17 +1006,25 @@ fn band_press_offers_both_exchange_and_cash() {
         w.st.players[0].tokens.push(game_core::state::Counter {
             name: STICKER.into(),
             value: 2,
-        
-        instance: None,
-    });
+
+            instance: None,
+        });
     }
     let sid = t.skill_id(0, "星之鼓动");
     t.set_crystals(0, &sid, 2);
     t.skill(0, &sid).unwrap();
     let p = t.expect_prompt();
     assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
-    assert!(t.option("poppin_press_crystal").is_some(), "{}", t.dump_prompt());
-    assert!(t.option("poppin_press_cash").is_some(), "{}", t.dump_prompt());
+    assert!(
+        t.option("poppin_press_crystal").is_some(),
+        "{}",
+        t.dump_prompt()
+    );
+    assert!(
+        t.option("poppin_press_cash").is_some(),
+        "{}",
+        t.dump_prompt()
+    );
     // Take the crystal spend this press (draw 1).
     let k = t.option("poppin_press_cash").unwrap();
     t.answer(0, k).unwrap();
@@ -1016,7 +1054,10 @@ fn ix_ag_declaration_vs_caught() {
     }
     skip_all(&mut t);
     // The declaration pays 500 and draws; P0 still moved unless negated.
-    assert!(t.money(1) != 10_000 || t.pos(0) == 5, "either counter or move");
+    assert!(
+        t.money(1) != 10_000 || t.pos(0) == 5,
+        "either counter or move"
+    );
 }
 
 // 通用:安可 (general) vs the signpost's 60-tile move is not an [异常移动效果],

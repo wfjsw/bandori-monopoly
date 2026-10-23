@@ -16,20 +16,8 @@ use spec_kit::{Clause, Step};
 /// Money clauses. Each entry is one book sentence, checked as a predicate
 /// over one observed transition.
 pub const CLAUSES: &[Clause] = &[
-    G_MONEY_01,
-    G_MONEY_02,
-    G_MONEY_03,
-    G_MONEY_04,
-    G_MONEY_05,
-    G_MONEY_06,
-    G_MONEY_07,
-    G_MONEY_08,
-    G_MONEY_09,
-    G_MONEY_10,
-    G_MONEY_11,
-    G_MONEY_12,
-    G_MONEY_13,
-    G_MONEY_14,
+    G_MONEY_01, G_MONEY_02, G_MONEY_03, G_MONEY_04, G_MONEY_05, G_MONEY_06, G_MONEY_07, G_MONEY_08,
+    G_MONEY_09, G_MONEY_10, G_MONEY_11, G_MONEY_12, G_MONEY_13, G_MONEY_14,
 ];
 
 // ---------------------------------------------------------------------------
@@ -54,7 +42,10 @@ fn int_arg_deep(msg: &Msg, name: &str) -> Option<i64> {
 /// A half-charge marker (`log.part.rent_half`'s `full` / `cut`), searched
 /// through the nested `note` / `half` chain of a rent line.
 fn half_parts(msg: &Msg) -> Option<(i64, i64)> {
-    if let (Some(f), Some(c)) = (spec_kit::int_arg(msg, "full"), spec_kit::int_arg(msg, "cut")) {
+    if let (Some(f), Some(c)) = (
+        spec_kit::int_arg(msg, "full"),
+        spec_kit::int_arg(msg, "cut"),
+    ) {
         return Some((f, c));
     }
     for a in msg.a.values() {
@@ -102,14 +93,7 @@ pub fn table_rent(step: &Step<'_>, t: usize) -> Option<i32> {
     if tile.rent.is_empty() {
         return None;
     }
-    let h = step
-        .pre
-        .st
-        .houses
-        .get(t)
-        .copied()
-        .unwrap_or(0)
-        .max(0) as usize;
+    let h = step.pre.st.houses.get(t).copied().unwrap_or(0).max(0) as usize;
     Some(tile.rent[h.min(tile.rent.len() - 1)])
 }
 
@@ -231,12 +215,7 @@ fn ledger_legs(step: &Step<'_>) -> Option<Vec<Leg>> {
 
 /// Compare every seat's money delta against the reconstructed legs.
 fn ledger_mismatch(step: &Step<'_>, legs: &[Leg]) -> Option<String> {
-    let n = step
-        .pre
-        .st
-        .players
-        .len()
-        .max(step.post.st.players.len());
+    let n = step.pre.st.players.len().max(step.post.st.players.len());
     let mut expect = vec![0i64; n];
     for l in legs {
         if l.who < 0 || l.who as usize >= n {
@@ -918,9 +897,7 @@ pub fn g_money_09(step: &Step<'_>) -> Result<(), String> {
         // earlier) may have scaled the settled figure; the book's clause is
         // about the marked rate. Only demand it on a clean window.
         let touched = step.events.iter().any(|x| {
-            x.r#type == "card"
-                || x.r#type == "skill"
-                || x.msg.key().starts_with("cards:")
+            x.r#type == "card" || x.r#type == "skill" || x.msg.key().starts_with("cards:")
         });
         if touched {
             continue;

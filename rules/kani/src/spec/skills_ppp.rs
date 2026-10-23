@@ -332,8 +332,7 @@ pub fn saaya_02_fire_after(pre_fire: i32) -> i32 {
 }
 
 pub fn saaya_02_log_ok(effects: &[Effect], expected: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::SetPayAmount { to } if to == expected)
+    effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == expected)
 }
 
 // ===========================================================================

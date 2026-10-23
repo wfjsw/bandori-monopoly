@@ -20,9 +20,10 @@
 //! （3） 「获得一层在你的下回合开始前移除的[除外]」 is `give_exile` with
 //! `expires: TurnStart`.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const GROUP: &str = "skill.misakiOther.group";
 
@@ -32,13 +33,26 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
         On::Play("", None, Some(can_use_exile), use_exile),
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass("actor == owner && tile.id == tile_named('弦卷集团')", None, None, on_pass)),
-        On::Action(Action::TurnStartBefore("actor == owner && charge(owner) >= 1", None, None, at_turn_start)),
+        On::Action(Action::Pass(
+            "actor == owner && tile.id == tile_named('弦卷集团')",
+            None,
+            None,
+            on_pass,
+        )),
+        On::Action(Action::TurnStartBefore(
+            "actor == owner && charge(owner) >= 1",
+            None,
+            None,
+            at_turn_start,
+        )),
     ],
 )
-    .silent(&[1, 2])
-    // 「（初始0，上限2）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
+.silent(&[1, 2])
+// 「（初始0，上限2）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 0),
+    (bandori_std::fire::FIRE_CAP, 2),
+]);
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

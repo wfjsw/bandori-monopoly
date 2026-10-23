@@ -254,7 +254,6 @@
   "boot.namePlaceholder": "你的名字（最多 16 个字）",
   "boot.needSave": "第一次游玩：先创建存档",
   "boot.rulesError": "卡牌规则未能加载，单机对局将不含卡牌 / 技能 / 地块效果。用这份规则录的回放在完整规则下会不一致（{{detail}}）",
-  "boot.tapToStart": "点击任意位置开始",
   "boot.tip.circle": "经过起点时可以选资金，也可以选抽卡。",
   "boot.tip.dealer": "停在地产商：可以买下一块同色的空地，或给自己同色的地加盖一栋房屋。",
   "boot.tip.disconnect": "断线了也不用担心：电脑会暂时托管，重新连上后回到原来的座位。",

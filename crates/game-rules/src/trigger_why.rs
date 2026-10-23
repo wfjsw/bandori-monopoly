@@ -45,16 +45,15 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::PassPlayer => Msg::new("log.why.pass_player")
             .player_id("who", who)
             .player_id("target", target),
-        TriggerKind::DiceRollBefore | TriggerKind::DiceRollResult | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue => {
-            Msg::new("log.why.roll")
-                .player_id("who", who)
-                .i("value", value)
-        }
-        TriggerKind::Teleported => {
-            Msg::new("log.why.teleport")
-                .player_id("who", who)
-                .tile("tile", tile)
-        }
+        TriggerKind::DiceRollBefore
+        | TriggerKind::DiceRollResult
+        | TriggerKind::DiceRollAfter
+        | TriggerKind::DiceRollValue => Msg::new("log.why.roll")
+            .player_id("who", who)
+            .i("value", value),
+        TriggerKind::Teleported => Msg::new("log.why.teleport")
+            .player_id("who", who)
+            .tile("tile", tile),
 
         // ---- settle ------------------------------------------------------
         TriggerKind::Settle
@@ -126,12 +125,12 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
                 None => Msg::new("log.why.drew").player_id("who", who),
             }
         }
-        TriggerKind::Discarded
-        | TriggerKind::DiscardBefore
-        | TriggerKind::DiscardAfter => match &card {
-            Some(c) => Msg::new("log.why.discarded").card("card", c.clone()),
-            None => Msg::new("log.why.discarded_no_card").player_id("who", who),
-        },
+        TriggerKind::Discarded | TriggerKind::DiscardBefore | TriggerKind::DiscardAfter => {
+            match &card {
+                Some(c) => Msg::new("log.why.discarded").card("card", c.clone()),
+                None => Msg::new("log.why.discarded_no_card").player_id("who", who),
+            }
+        }
         TriggerKind::Reshuffled => Msg::new("log.why.reshuffled").player_id("who", who),
 
         // ---- property ----------------------------------------------------
@@ -145,11 +144,9 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BuyAssign => Msg::new("log.why.bought")
             .player_id("who", who)
             .tile("tile", tile),
-        TriggerKind::BuildBefore | TriggerKind::BuildAfter => {
-            Msg::new("log.why.build")
-                .player_id("who", who)
-                .tile("tile", tile)
-        }
+        TriggerKind::BuildBefore | TriggerKind::BuildAfter => Msg::new("log.why.build")
+            .player_id("who", who)
+            .tile("tile", tile),
         TriggerKind::Mortgage | TriggerKind::MortgageBefore => Msg::new("log.why.mortgage")
             .player_id("who", who)
             .tile("tile", tile),

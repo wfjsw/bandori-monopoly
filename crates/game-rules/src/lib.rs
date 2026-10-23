@@ -19,12 +19,12 @@
 //!
 //! See `docs/P0-FINDINGS.md` for why this replaced the CEL + Lua design.
 
-mod host;
 pub mod gate;
+mod host;
 pub mod hostfns;
 pub mod inline;
-/// Roster metadata (ABI v63): `ruleset_metadata` -> [`game_core::data::Roster`].
-pub mod roster;
+/// Ruleset-declared kind flags (hook-only) read at load.
+pub mod kind_flags;
 /// The `ruleset_*` host-import shims. Lives here, not in
 /// `rules-native`, so every binary that links `card-sdk` with `guest`
 /// on -- including a server test binary in a unified `cargo test` -- resolves
@@ -34,10 +34,10 @@ pub mod roster;
 /// symbol references inside the one module.
 #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
 pub mod native_shims;
+/// Roster metadata (ABI v63): `ruleset_metadata` -> [`game_core::data::Roster`].
+pub mod roster;
 /// THE ruleset class registration for `tile_in` (ABI v56).
 pub mod tile_class;
-/// Ruleset-declared kind flags (hook-only) read at load.
-pub mod kind_flags;
 mod wasm_rules;
 mod world;
 
@@ -52,7 +52,9 @@ pub use cond_pre::{
     PRECOMPILED_CONDS_VERSION,
 };
 pub use game_core::msg::Msg;
-pub use kind_flags::{hook_only, set_kind_flags};
+/// Shared with `rules-native`: the engine-side `Msg` decoder and the per-run
+/// fuel budget the nested-call plumbing shares.
+pub use host::{engine_msg, DEFAULT_FUEL};
 pub use host::{
     Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,
     HostState, KindMask, Outcome, Prompt, PromptOption, RuleError, RulesHandle, MAX_NESTING,
@@ -63,17 +65,17 @@ pub use host::{
 pub use host::{Ruleset, RulesetBuilder};
 /// Simulation-mode inline answers (`docs/BOT.md` §3.2).
 pub use inline::{with_inline_host, InlineHost};
-/// Shared with `rules-native`: the engine-side `Msg` decoder and the per-run
-/// fuel budget the nested-call plumbing shares.
-pub use host::{engine_msg, DEFAULT_FUEL};
-pub use wasm_rules::{take_silent_visible, RulesBridge, Run};
+pub use kind_flags::{hook_only, set_kind_flags};
 /// Sandbox-only `CardRules` over [`Ruleset`].
 #[cfg(feature = "sandbox")]
 pub use wasm_rules::WasmRules;
+pub use wasm_rules::{take_silent_visible, RulesBridge, Run};
 mod trigger_why;
-pub use world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 /// The 「效果适用」 why-clause builder.
-pub use trigger_why::{counteract_reason, counter_name, mark_kind_name, state_key_name, trigger_reason};
+pub use trigger_why::{
+    counter_name, counteract_reason, mark_kind_name, state_key_name, trigger_reason,
+};
+pub use world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0); see `host::bot_cost`.
 #[cfg(feature = "bot-cost")]

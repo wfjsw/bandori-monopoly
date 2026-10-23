@@ -13,9 +13,9 @@ use game_core::engine::World;
 use game_core::msg::Msg;
 use game_core::state::MatchEvent;
 use rules_spec::global::status::{
-    MoneyGate, verify_exile_return, verify_exile_turn_start, verify_layers_nonneg,
-    verify_main_move_skipped, verify_no_money_status, verify_stay_turn_end,
-    verify_stun_turn_end, verify_unstoppable, ABNORMAL_MOVE_EFFECTS, CLAUSES,
+    verify_exile_return, verify_exile_turn_start, verify_layers_nonneg, verify_main_move_skipped,
+    verify_no_money_status, verify_stay_turn_end, verify_stun_turn_end, verify_unstoppable,
+    MoneyGate, ABNORMAL_MOVE_EFFECTS, CLAUSES,
 };
 use rules_spec::{frame, Table};
 
@@ -256,7 +256,11 @@ fn stay_stacks_and_decays_one() {
     arm_layer(&mut t, 0, "stay", 2);
     assert_eq!(t.state(0, "stay"), 2, "G-STATUS-03: layers stack");
     finish_turn(&mut t, 0);
-    assert_eq!(t.state(0, "stay"), 1, "G-STATUS-03: one layer off, one left");
+    assert_eq!(
+        t.state(0, "stay"),
+        1,
+        "G-STATUS-03: one layer off, one left"
+    );
 }
 
 /// Condition false (not their turn end): the decay is a no-op.
@@ -323,7 +327,10 @@ fn stay_decay_verifier_rejects_mutants() {
     // The decay verifier itself does not own money; frame() is the MORE
     // check. Assert frame rejects the leak.
     let fr = frame(&pre, &more, &["state:P0:stay"]);
-    assert!(fr.is_err(), "G-STATUS-03 frame: reject unrelated money move");
+    assert!(
+        fr.is_err(),
+        "G-STATUS-03 frame: reject unrelated money move"
+    );
 
     // A grant line makes the window non-quiet: exact -1 no longer applies
     // (`give_stay(p, 2)` logs one line for two layers).
@@ -361,8 +368,12 @@ fn stun_decays_one_layer_and_skips_turn() {
             1,
             "G-STATUS-05: stunned player's turn should auto-skip (row 4)"
         );
-        frame(&pre, &post, &["state:P1:stun", "state:P1:stunStart", "pos:P0"])
-            .expect("G-STATUS-05 frame");
+        frame(
+            &pre,
+            &post,
+            &["state:P1:stun", "state:P1:stunStart", "pos:P0"],
+        )
+        .expect("G-STATUS-05 frame");
     }
 }
 
@@ -503,8 +514,12 @@ fn exile_decays_one_layer_before_turn_start() {
             "G-STATUS-07: [除外] {pre_layers} -> {got} before the owner's turn start (want {})",
             pre_layers - 1
         );
-        frame(&pre, &post, &["state:P1:exile", "state:P1:exileTo", "pos:P0"])
-            .expect("G-STATUS-07 frame");
+        frame(
+            &pre,
+            &post,
+            &["state:P1:exile", "state:P1:exileTo", "pos:P0"],
+        )
+        .expect("G-STATUS-07 frame");
     }
 }
 
@@ -519,7 +534,11 @@ fn exile_expiry_teleports_to_named_tile() {
     let pre = t.snapshot_world();
     finish_turn(&mut t, 0);
     let post = t.snapshot_world();
-    assert_eq!(t.state(1, "exile"), 0, "G-STATUS-08: the last layer ticked out");
+    assert_eq!(
+        t.state(1, "exile"),
+        0,
+        "G-STATUS-08: the last layer ticked out"
+    );
     assert_eq!(
         t.pos(1),
         dest,
@@ -770,9 +789,7 @@ fn unstoppable_ignores_stay() {
     assert_eq!(t.turn(), 1);
     t.roll(1)
         .map_err(|e| {
-            format!(
-                "G-STATUS-09: unstoppable player must be able to [主要移动], roll refused: {e}"
-            )
+            format!("G-STATUS-09: unstoppable player must be able to [主要移动], roll refused: {e}")
         })
         .unwrap();
 }

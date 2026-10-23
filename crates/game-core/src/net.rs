@@ -66,7 +66,6 @@ pub struct NetMessage {
     /// `Input::Act` embeds this in `RecordBody`, and `body_check` re-serializes
     /// archived `.bdrec` bodies byte-identically. Renaming the key breaks every
     /// stored check hash (`parse_record`). Do not "neutralize" this rename.
-    
     pub persona: String,
     /// `play` / `discard`: the card id.
     pub card: String,
@@ -183,7 +182,6 @@ pub struct RoomMember {
     /// Seat persona. JSON key is `persona`.
     /// `RecordBody` embeds `MatchSetup.members`, and `body_check` re-serializes
     /// archived `.bdrec` bodies byte-identically. Do not rename the key.
-    
     pub persona: String,
     pub cn_id: String,
     pub ready: bool,

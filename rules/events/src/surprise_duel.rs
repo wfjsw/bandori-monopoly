@@ -3,8 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `意外的对邦`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。
 
-use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};

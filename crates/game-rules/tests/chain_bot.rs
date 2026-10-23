@@ -17,7 +17,7 @@
 
 mod common;
 
-use common::{personas, data, int_arg, Table};
+use common::{data, int_arg, personas, Table};
 use game_core::msg::Arg;
 use game_core::state::{BotMentality, MatchEvent};
 use game_core::strategy::{
@@ -212,7 +212,12 @@ fn a_strategy_book_can_hold_a_counter_back() {
     t.counteract(2, "TEST:probe").unwrap();
     // Lap 1 carried P2's declaration, so the cycle re-opens the earlier seats:
     // P0 holds nothing, the bot is offered once more (it still holds its probe).
-    assert_eq!(t.asked(), vec![1], "second lap re-offers the bot: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![1],
+        "second lap re-offers the bot: {}",
+        t.dump_prompt()
+    );
     t.tick_until("the bot answers lap 2", |t| t.asked() != vec![1]);
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());
     // Only P2's probe settled -- the held-back bot took the skip both times.
@@ -293,7 +298,12 @@ fn an_advanced_seat_gets_the_offer_and_the_fallback_answers_it() {
     t.give(0, &["TEST:aimer"]);
     t.give(1, &["TEST:probe"]);
     t.play(0, "TEST:aimer").unwrap();
-    assert_eq!(t.asked(), vec![1], "the held seat gets the offer: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![1],
+        "the held seat gets the offer: {}",
+        t.dump_prompt()
+    );
     assert!(t.counteract_offered("TEST:probe"), "{}", t.dump_prompt());
     // It is a live prompt, unanswered, while the deadline has not run out.
     t.m.tick(0.25);
@@ -302,7 +312,11 @@ fn an_advanced_seat_gets_the_offer_and_the_fallback_answers_it() {
     // fallback -- the skip -- is applied.
     t.tick_until("the fallback answers", |t| t.prompt().is_none());
     // The skip: the probe remained in hand, nothing declared, X settled.
-    assert_eq!(who_of(&t, "probe_fired"), Vec::<i64>::new(), "no declaration");
+    assert_eq!(
+        who_of(&t, "probe_fired"),
+        Vec::<i64>::new(),
+        "no declaration"
+    );
     assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X settled");
     let hand = &t.m.world().hidden[1].hand;
     assert!(
@@ -345,6 +359,14 @@ fn out_seats_never_get_an_offer() {
         t.decline();
     }
     assert!(!asked_ever.is_empty(), "the window never opened at all");
-    assert_eq!(who_of(&t, "probe_fired"), Vec::<i64>::new(), "nobody declared");
-    assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X named its live target");
+    assert_eq!(
+        who_of(&t, "probe_fired"),
+        Vec::<i64>::new(),
+        "nobody declared"
+    );
+    assert_eq!(
+        ev_args(&t, "aimer_done", "got"),
+        vec![1],
+        "X named its live target"
+    );
 }

@@ -8,9 +8,9 @@
 //! plant this card on the current tile with 4 miracle crystals; settles pay
 //! out 60 per tile walked, and a long main move burns a crystal.
 
-use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
     "MyGO:哪怕这旅程没有终点",

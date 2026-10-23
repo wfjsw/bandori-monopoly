@@ -132,8 +132,7 @@ pub const TOUKO_01_FIRE_MAX: i32 = 1;
 
 /// Exact effect-log when the gain applies (below cap): one `GainFire{player,1}`.
 pub fn touko_01_log_ok(effects: &[Effect], player: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::GainFire { player: p, n: 1 } if p == player)
+    effects.len() == 1 && matches!(effects[0], Effect::GainFire { player: p, n: 1 } if p == player)
 }
 
 /// Book post when below the cap: fire increases by exactly one.
@@ -149,8 +148,7 @@ pub fn touko_01_post_at_cap(post_fire: i32, pre_fire: i32) -> bool {
 
 /// MUTANT: demands two fire pots.
 pub fn touko_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::GainFire { player: p, n: 2 } if p == player)
+    effects.len() == 1 && matches!(effects[0], Effect::GainFire { player: p, n: 2 } if p == player)
 }
 
 // ===========================================================================
@@ -203,8 +201,7 @@ pub fn nanami_01_post_below_cap(post_fire: i32, pre_fire: i32) -> bool {
 }
 
 pub fn nanami_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::GainFire { player: p, n: 2 } if p == player)
+    effects.len() == 1 && matches!(effects[0], Effect::GainFire { player: p, n: 2 } if p == player)
 }
 
 // ===========================================================================
@@ -338,12 +335,7 @@ pub const TSUKUSHI_01_DRAW_RECORD: i32 = 2200;
 /// 3. the amount is recorded on the skill owner (`SetState`);
 /// 4. `who` gains `amount` (`GainMoney`).
 /// Mark key is OPEN-X标记 — match the token by player and count only.
-pub fn tsukushi_01_log_ok(
-    effects: &[Effect],
-    player: i32,
-    who: i32,
-    amount: i32,
-) -> bool {
+pub fn tsukushi_01_log_ok(effects: &[Effect], player: i32, who: i32, amount: i32) -> bool {
     if effects.len() != 4 {
         return false;
     }
@@ -368,12 +360,7 @@ pub fn tsukushi_01_decline_ok(effects: &[Effect]) -> bool {
 }
 
 /// MUTANT: forwards 2× the amount.
-pub fn tsukushi_01_log_ok_mutant(
-    effects: &[Effect],
-    player: i32,
-    who: i32,
-    amount: i32,
-) -> bool {
+pub fn tsukushi_01_log_ok_mutant(effects: &[Effect], player: i32, who: i32, amount: i32) -> bool {
     if effects.len() != 4 {
         return false;
     }

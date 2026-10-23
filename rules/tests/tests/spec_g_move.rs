@@ -309,7 +309,12 @@ fn g_move_04_pass_rewrites_the_end_before_settle() {
 #[test]
 fn g_move_05_teleport_path_is_only_the_end() {
     assert_eq!(
-        move_path(&[teleport_event(0, 20, tile("CiRCLE") as i32)], 0, BOARD_TILES).unwrap(),
+        move_path(
+            &[teleport_event(0, 20, tile("CiRCLE") as i32)],
+            0,
+            BOARD_TILES
+        )
+        .unwrap(),
         vec![tile("CiRCLE") as i32],
         "[传送] path is the endpoint only"
     );
@@ -398,7 +403,12 @@ fn g_move_06_reward_iff_pass_and_start_not_circle() {
     drain(&mut t);
     assert_eq!(t.pos(0), circle);
     assert_eq!(t.money(0), money, "card half gains no money");
-    assert_eq!(t.hand(0).len(), 2, "reward draw + landing draw: {:?}", t.hand(0));
+    assert_eq!(
+        t.hand(0).len(),
+        2,
+        "reward draw + landing draw: {:?}",
+        t.hand(0)
+    );
 
     // (c) 移动起点 == CiRCLE: walking off pays nothing (「且[移动起点]不为CiRCLE」).
     let mut t = at(circle);
@@ -433,13 +443,19 @@ fn g_move_07_main_move_is_1d20_clockwise() {
         drain_circle(&mut t, 0);
         drain(&mut t);
         let evs = t.events_since(mark);
-        let rolls: Vec<_> = evs.iter().filter(|e| e.r#type == "diceRollBefore").collect();
+        let rolls: Vec<_> = evs
+            .iter()
+            .filter(|e| e.r#type == "diceRollBefore")
+            .collect();
         if rolls.is_empty() {
             return Err(format!("no roll event: {:?}", t.keys_since(mark)));
         }
         let head = rolls[0];
         if head.dice != face {
-            return Err(format!("roll event dice {} != loaded face {face}", head.dice));
+            return Err(format!(
+                "roll event dice {} != loaded face {face}",
+                head.dice
+            ));
         }
         let end = (start as i32 + face) % BOARD_TILES as i32;
         if t.pos(0) as i32 != end {
@@ -471,10 +487,7 @@ fn g_move_08_second_main_move_does_nothing() {
     t.dice(&[5]);
     let mark = t.mark();
     let err = t.roll(0).unwrap_err();
-    assert!(
-        !err.is_empty(),
-        "second roll refused: {err}"
-    );
+    assert!(!err.is_empty(), "second roll refused: {err}");
     assert_eq!(t.pos(0), pos, "the refused roll did not move");
     assert_eq!(t.money(0), money, "the refused roll moved no money");
     let keys = t.keys_since(mark);
@@ -540,7 +553,9 @@ fn g_move_09_settle_follows_the_main_move() {
     // 不[结算]: the unowned Bandori车站 does not announce a buy/land settle.
     // (The card's own 「可选择购买任意无主的[可购买格子]」 gate is not a settle.)
     assert!(
-        !keys.iter().any(|k| k.contains("land_unowned") || k.contains("rent")),
+        !keys
+            .iter()
+            .any(|k| k.contains("land_unowned") || k.contains("rent")),
         "「不[结算]」: no settle on the landing: {keys:?}"
     );
     // The card's own 「可选择购买任意无主的[可购买格子]」 gate is not the settle.
@@ -653,7 +668,9 @@ fn g_move_11_circle_reward_sits_between_walk_and_settle() {
     );
     let keys_mid = t.keys_since(mark);
     assert!(
-        keys_mid.iter().any(|k| k.contains("roll") || k.contains("move")),
+        keys_mid
+            .iter()
+            .any(|k| k.contains("roll") || k.contains("move")),
         "the approach to CiRCLE is logged before the prompt: {keys_mid:?}"
     );
     assert!(
@@ -671,7 +688,11 @@ fn g_move_11_circle_reward_sits_between_walk_and_settle() {
     let settle = keys
         .iter()
         .position(|k| k.contains("land") || k.contains("rent"))
-        .or(if saw_settle_prompt { Some(keys.len()) } else { None });
+        .or(if saw_settle_prompt {
+            Some(keys.len())
+        } else {
+            None
+        });
     let (Some(r), Some(s)) = (reward, settle) else {
         panic!("missing reward or settle: {keys:?} settle_prompt={saw_settle_prompt}");
     };
@@ -679,4 +700,3 @@ fn g_move_11_circle_reward_sits_between_walk_and_settle() {
     assert_eq!(t.pos(0), 1);
     assert_eq!(t.money(0), 12_000);
 }
-

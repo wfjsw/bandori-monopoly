@@ -136,9 +136,9 @@ fn status_cleared(events: &[MatchEvent]) -> bool {
 /// without a `log.outcome.*` line (the hostfns `give_stay` path does not
 /// log). Exact decay is only required on a quiet window.
 fn busy_window(events: &[MatchEvent]) -> bool {
-    events.iter().any(|e| {
-        e.r#type == "card" || matches!(msg_key(e), "effect_applied" | "card_effect")
-    })
+    events
+        .iter()
+        .any(|e| e.r#type == "card" || matches!(msg_key(e), "effect_applied" | "card_effect"))
 }
 
 /// Did this window log a [停留] skip for `who`?
@@ -173,7 +173,9 @@ fn act_played_card(step: &Step<'_>, who: usize) -> Option<String> {
 
 /// Card-text exception 「可在眩晕时打出」 / 「可在晕眩时打出」.
 fn playable_stunned(step: &Step<'_>, card: &str) -> bool {
-    step.data.card(card).is_some_and(|c| text_allows_stunned_use(&c.text))
+    step.data
+        .card(card)
+        .is_some_and(|c| text_allows_stunned_use(&c.text))
 }
 
 /// Does `text` print a stun-use waiver? The book spells 眩晕 and 晕眩
@@ -193,7 +195,8 @@ fn text_allows_stunned_use(text: &str) -> bool {
             }
         }
         // 「此技能可以正常使用或在[晕眩]状态下使用」 -- the bracketed form.
-        if text.contains(&format!("[{stun}]状态下使用")) || text.contains(&format!("[{stun}]时使用"))
+        if text.contains(&format!("[{stun}]状态下使用"))
+            || text.contains(&format!("[{stun}]时使用"))
         {
             return true;
         }
@@ -236,8 +239,6 @@ fn skip_money_window(events: &[MatchEvent]) -> bool {
         .iter()
         .any(|e| e.r#type == "bankrupt" || e.r#type == "auction")
 }
-
-
 
 // ---------------------------------------------------------------------------
 // G-STATUS-01 -- layer counts
@@ -689,7 +690,6 @@ pub fn g_status_10(_step: &Step<'_>) -> Result<(), String> {
     Ok(())
 }
 
-
 // ---------------------------------------------------------------------------
 // Pure verifiers (iff). Clauses delegate to these; `g_status.rs` drives them
 // and applies mutants. Signature is (pre, post, events, ...) so a test can
@@ -755,7 +755,12 @@ pub fn verify_main_move_skipped(
 
 /// G-STATUS-03: [停留] loses exactly one layer at the owner's turn end (quiet
 /// window), never stacks illegally, and is unchanged otherwise.
-pub fn verify_stay_turn_end(pre: &World, post: &World, events: &[MatchEvent], who: usize) -> Result<(), String> {
+pub fn verify_stay_turn_end(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    who: usize,
+) -> Result<(), String> {
     let before = layers(pre, who, STAY);
     let after = layers(post, who, STAY);
     let g = grants(events, who, STAY);
@@ -999,4 +1004,3 @@ pub fn verify_unstoppable(
     }
     Ok(())
 }
-

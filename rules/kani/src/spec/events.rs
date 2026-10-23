@@ -45,9 +45,30 @@ pub fn log_is_paytos(effects: &[Effect], expected: &[(i32, i32, i32)]) -> bool {
             }
         };
     }
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
+    step!(8);
+    step!(9);
+    step!(10);
+    step!(11);
+    step!(12);
+    step!(13);
+    step!(14);
+    step!(15);
+    step!(16);
+    step!(17);
+    step!(18);
+    step!(19);
+    step!(20);
+    step!(21);
+    step!(22);
+    step!(23);
     true
 }
 
@@ -67,10 +88,7 @@ pub fn log_is_gains(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
                     _ => return false,
                 };
                 match e {
-                    Effect::GainMoney {
-                        player: q,
-                        n: m,
-                    } => {
+                    Effect::GainMoney { player: q, n: m } => {
                         if *q != p || *m != amt {
                             return false;
                         }
@@ -80,9 +98,30 @@ pub fn log_is_gains(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
             }
         };
     }
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
+    step!(8);
+    step!(9);
+    step!(10);
+    step!(11);
+    step!(12);
+    step!(13);
+    step!(14);
+    step!(15);
+    step!(16);
+    step!(17);
+    step!(18);
+    step!(19);
+    step!(20);
+    step!(21);
+    step!(22);
+    step!(23);
     true
 }
 
@@ -101,10 +140,7 @@ pub fn log_is_teleports(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
     for e in effects {
         match e {
             Effect::SetState { .. } => continue,
-            Effect::Teleport {
-                player: q,
-                tile: t,
-            } => {
+            Effect::Teleport { player: q, tile: t } => {
                 if i >= expected.len() {
                     return false;
                 }
@@ -189,7 +225,10 @@ pub fn duobang_sheet_example_is_100() -> bool {
 /// E-duobang-02 (unique extremes): total money moved equals `(max-min)*50`.
 /// With multiple extremes the total is `n_low * n_high * each` (OPEN-tie).
 pub fn duobang_total_moved(faces: &[(i32, i32)]) -> i32 {
-    duobang_expected_paytos(faces).iter().map(|(_, _, n)| *n).sum()
+    duobang_expected_paytos(faces)
+        .iter()
+        .map(|(_, _, n)| *n)
+        .sum()
 }
 
 /// Mutant: off-by-one on the pairwise amount.
@@ -371,7 +410,14 @@ pub fn front_or_back_share_total_ok(gains: &[(i32, i32)], winners: &[i32]) -> bo
             }
         };
     }
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
     let n = winners.len() as i32;
     let expected_total = 1000 - (1000 % n);
     total == expected_total && gains.len() == winners.len()
@@ -416,9 +462,30 @@ pub fn front_or_back_share_legs(effects: &[Effect], winners: &[i32]) -> Vec<(i32
             }
         };
     }
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
+    step!(8);
+    step!(9);
+    step!(10);
+    step!(11);
+    step!(12);
+    step!(13);
+    step!(14);
+    step!(15);
+    step!(16);
+    step!(17);
+    step!(18);
+    step!(19);
+    step!(20);
+    step!(21);
+    step!(22);
+    step!(23);
     out
 }
 
@@ -668,10 +735,7 @@ pub fn exile_one_each(effects: &[Effect], players: &[i32]) -> bool {
     // GiveExile multiset exactly against `players`.
     let mut got = Vec::new();
     for e in effects {
-        if let Effect::GiveExile {
-            player, n, to, ..
-        } = e
-        {
+        if let Effect::GiveExile { player, n, to, .. } = e {
             if *n != 1 || *to != -1 {
                 return false;
             }

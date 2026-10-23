@@ -25,7 +25,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let n = roll(player_id, 1, 4);
     ctx::log(
         player_id,
-        &Msg::new("log.event.dice").player_id("who", player_id).i("n", n as i64),
+        &Msg::new("log.event.dice")
+            .player_id("who", player_id)
+            .i("n", n as i64),
     );
     // 「对应数字的RiNG」 -- `data/board.json` names them "RiNG 1".."RiNG 4".
     let tile = ctx::tile_named(&format!("RiNG {n}"));

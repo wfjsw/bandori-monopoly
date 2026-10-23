@@ -1,7 +1,7 @@
 //! `CRYCHIC:优雅的呐喊` -- C# `CardElegantShout` (MatchHost.cs:2912-2936): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:优雅的呐喊`）:
-//! > 优雅的呐喊 
+//! > 优雅的呐喊
 //! >  ：[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。
 //!
 //! on an out-of-turn draw, draw 1 at the end of your next turn.
@@ -10,23 +10,32 @@
 //! effect-caused and lands outside the drawer's own turn (wasm_rules
 //! `HostRequest::Draw`). `pre::MINE` is the drawer (「你」).
 
-use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
-        On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, Some(key!("elegant_shout_when")), None, counteract),
+        On::Counteract(
+            &[ChainKind::DrawOut],
+            card_sdk::pre::MINE,
+            Some(key!("elegant_shout_when")),
+            None,
+            counteract,
+        ),
         On::Action(Action::AtEnd("", None, None, at_end)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"优雅的呐喊"#)
         .raw_name(r#"优雅的呐喊"#)
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。"#)
         // sheet cell M6
-        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」

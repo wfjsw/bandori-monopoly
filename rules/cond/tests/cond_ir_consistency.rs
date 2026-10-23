@@ -23,7 +23,9 @@ fn collect_guards() -> Vec<String> {
 /// The table exactly as `rules/kani/build.rs` generates it (it is built, not
 /// committed).
 fn generated_text() -> String {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
     rules_cond::gen_ir::generate(root).0
 }
 
@@ -82,7 +84,12 @@ fn parse_root_line(line: &str) -> u16 {
     let a = line.find("root:").unwrap() + 5;
     let rest = line[a..].trim();
     let b = rest.find('}').unwrap_or(rest.len());
-    rest[..b].trim().trim_end_matches(',').trim().parse().unwrap()
+    rest[..b]
+        .trim()
+        .trim_end_matches(',')
+        .trim()
+        .parse()
+        .unwrap()
 }
 
 fn parse_node(line: &str) -> Node {
@@ -202,5 +209,8 @@ fn generated_guard_ids_are_dense_and_ordered() {
         .filter(|l| l.trim_start().starts_with("&G_"))
         .count();
     assert_eq!(by_id_count, ids.len(), "BY_ID length != number of guards");
-    println!("generated_guard_ids_are_dense_and_ordered: {} ids", ids.len());
+    println!(
+        "generated_guard_ids_are_dense_and_ordered: {} ids",
+        ids.len()
+    );
 }

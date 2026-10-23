@@ -14,10 +14,13 @@ use server::Server;
 fn data() -> Arc<GameData> {
     // No ruleset in this harness: the three legacy JSON files are the bridge.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -136,7 +139,10 @@ impl Client {
 
     /// GET as raw bytes plus the response headers (the record endpoint serves
     /// a file, not a JSON envelope).
-    async fn get_bytes(&self, path: &str) -> (StatusCode, bytes::Bytes, reqwest::header::HeaderMap) {
+    async fn get_bytes(
+        &self,
+        path: &str,
+    ) -> (StatusCode, bytes::Bytes, reqwest::header::HeaderMap) {
         let r = self
             .http
             .get(format!("{}{path}", self.base))
@@ -403,7 +409,10 @@ async fn spectators_watch_without_a_seat() {
 
     // Still a seat join is refused while playing; spectate is not.
     let (s, v) = w
-        .post(&format!("/api/rooms/{id}/join"), json!({ "password": "pw" }))
+        .post(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "password": "pw" }),
+        )
         .await;
     assert!(
         s == StatusCode::CONFLICT && ["playing", "full"].contains(&v["reason"].as_str().unwrap())
@@ -429,8 +438,14 @@ async fn spectators_watch_without_a_seat() {
     let me = joined["you"].as_i64().unwrap();
     let room = &joined["room"];
     assert_eq!(room["playing"], true);
-    assert_eq!(room["members"].as_array().unwrap().len(), 3, "seats unchanged");
-    let spectators = room["spectators"].as_array().expect("spectators on the wire");
+    assert_eq!(
+        room["members"].as_array().unwrap().len(),
+        3,
+        "seats unchanged"
+    );
+    let spectators = room["spectators"]
+        .as_array()
+        .expect("spectators on the wire");
     assert_eq!(spectators.len(), 1);
     assert_eq!(spectators[0]["id"].as_i64(), Some(me));
     assert_eq!(spectators[0]["player"], "Watchera");
@@ -473,9 +488,7 @@ async fn spectators_watch_without_a_seat() {
 
     // A spectator may not act, ready, start, or steer the room.
     let path = format!("/api/rooms/{id}/act");
-    let (s, v) = w
-        .post(&path, json!({ "act": "roll" }))
-        .await;
+    let (s, v) = w.post(&path, json!({ "act": "roll" })).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
     assert_eq!(v["error"]["k"], "err.not_a_player");
     for (p, body) in [
@@ -501,7 +514,11 @@ async fn spectators_watch_without_a_seat() {
     assert_eq!(room["room"]["playing"], true, "room still playing");
     // `spectators` is omitted on the wire while empty (skip_serializing_if).
     assert!(
-        room["room"]["spectators"].as_array().map(Vec::len).unwrap_or(0) == 0,
+        room["room"]["spectators"]
+            .as_array()
+            .map(Vec::len)
+            .unwrap_or(0)
+            == 0,
         "spectator gone: {}",
         room["room"]["spectators"]
     );
@@ -515,9 +532,7 @@ async fn a_spectator_can_take_a_free_seat() {
     let (base, _) = spawn(Duration::from_secs(20)).await;
     let a = Client::new(&base, "Host").await;
     let w = Client::new(&base, "Watcher").await;
-    let id = a
-        .ok("/api/rooms", json!({ "maxPlayers": 3 }))
-        .await["room"]["id"]
+    let id = a.ok("/api/rooms", json!({ "maxPlayers": 3 })).await["room"]["id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -539,7 +554,10 @@ async fn a_spectator_can_take_a_free_seat() {
 
     // While the match runs there is no seat to take.
     let (s, v) = w
-        .post(&format!("/api/rooms/{id}/join"), json!({ "spectate": false }))
+        .post(
+            &format!("/api/rooms/{id}/join"),
+            json!({ "spectate": false }),
+        )
         .await;
     assert_eq!(
         (s, v["reason"].as_str()),
@@ -547,9 +565,7 @@ async fn a_spectator_can_take_a_free_seat() {
     );
 
     // In a lobby room (not playing) the upgrade is immediate.
-    let id2 = a
-        .ok("/api/rooms", json!({ "maxPlayers": 2 }))
-        .await["room"]["id"]
+    let id2 = a.ok("/api/rooms", json!({ "maxPlayers": 2 })).await["room"]["id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -621,11 +637,15 @@ async fn spectator_presence_never_hands_a_seat_to_the_ai() {
     let (_, state) = a.get(&format!("/api/rooms/{id}/state")).await;
     let players = state["match"]["state"]["players"].as_array().unwrap();
     assert!(
-        players.iter().all(|p| p["ai"] != true || p["member"] != Value::from(me)),
+        players
+            .iter()
+            .all(|p| p["ai"] != true || p["member"] != Value::from(me)),
         "spectator id never became a seat"
     );
     assert!(
-        players.iter().all(|p| !p["left"].as_bool().unwrap_or(false)),
+        players
+            .iter()
+            .all(|p| !p["left"].as_bool().unwrap_or(false)),
         "no seat was left/forfeited by spectator presence"
     );
     let room = &state["room"];
@@ -646,8 +666,11 @@ async fn a_room_with_only_spectators_dissolves() {
         .as_str()
         .unwrap()
         .to_string();
-    w.ok(&format!("/api/rooms/{id}/join"), json!({ "spectate": true }))
-        .await;
+    w.ok(
+        &format!("/api/rooms/{id}/join"),
+        json!({ "spectate": true }),
+    )
+    .await;
     let mut sse = w.stream(&id, None).await;
     // The spectator leaving does not dissolve a room that still has a player.
     a.ok(&format!("/api/rooms/{id}/leave"), json!({})).await;
@@ -1170,9 +1193,7 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
     let (base, server) = spawn_scaled(Duration::from_millis(400), 20.0).await;
     let a = Client::new(&base, "Host").await;
     let outsider = Client::new(&base, "Outsider").await;
-    let id = a
-        .ok("/api/rooms", json!({ "name": "Record" }))
-        .await["room"]["id"]
+    let id = a.ok("/api/rooms", json!({ "name": "Record" })).await["room"]["id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -1332,9 +1353,7 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
 /// Returns `(room id, match handle)`. The caller has already quick-started or
 /// will.
 async fn advanced_room(server: &Arc<Server>, who: &Client, bots: usize) -> String {
-    let id = who
-        .ok("/api/rooms", json!({ "name": "Advanced" }))
-        .await["room"]["id"]
+    let id = who.ok("/api/rooms", json!({ "name": "Advanced" })).await["room"]["id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -1515,7 +1534,10 @@ async fn a_bot_service_timeout_falls_back_without_stalling() {
     let bots = server.bots.as_ref().expect("a service is attached");
     let stats = bots.stats();
     assert!(stats.decides > 0, "the drive kept asking: {stats:?}");
-    assert_eq!(stats.decide_ok, 0, "no ask ever beat the zero deadline: {stats:?}");
+    assert_eq!(
+        stats.decide_ok, 0,
+        "no ask ever beat the zero deadline: {stats:?}"
+    );
     assert_eq!(
         stats.decide_fallback, stats.decides,
         "every decide fell back to the heuristic: {stats:?}"
@@ -1533,9 +1555,7 @@ async fn a_bot_service_timeout_falls_back_without_stalling() {
 async fn the_bot_mentality_picker_accepts_advanced() {
     let (base, _server) = spawn(Duration::from_secs(30)).await;
     let a = Client::new(&base, "Host").await;
-    let id = a
-        .ok("/api/rooms", json!({ "name": "Mentality" }))
-        .await["room"]["id"]
+    let id = a.ok("/api/rooms", json!({ "name": "Mentality" })).await["room"]["id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -1633,7 +1653,11 @@ async fn ponder_is_sent_for_an_idle_advanced_seat_and_does_not_block_the_tick() 
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
-    assert!(saw_ponder, "an idle advanced seat was pondered: {:?}", bots.stats());
+    assert!(
+        saw_ponder,
+        "an idle advanced seat was pondered: {:?}",
+        bots.stats()
+    );
     let dt = health_while_pondering.expect("a health probe during a ponder");
     assert!(
         dt < Duration::from_millis(150),
@@ -1652,7 +1676,10 @@ async fn ponder_is_sent_for_an_idle_advanced_seat_and_does_not_block_the_tick() 
 
     // And the tick kept moving the match while the ponders flew.
     let after = handle.snapshot().unwrap();
-    assert_ne!(before, after, "the match advanced while ponders were in flight");
+    assert_ne!(
+        before, after,
+        "the match advanced while ponders were in flight"
+    );
 
     handle.finish().unwrap();
     assert!(
@@ -1708,9 +1735,7 @@ fn parked_searchable_view() -> (Value, i32, i32) {
         let st = m.state();
         let me = st.player_of(1);
         let at = (st.prompt.id > 0 && st.prompt.waiting(me))
-            || (!st.busy
-                && st.turn == me
-                && (st.step == stage::OPS || st.step == stage::END));
+            || (!st.busy && st.turn == me && (st.step == stage::OPS || st.step == stage::END));
         if st.phase == "play" && at {
             let view = bot_service::BotSeatView::from_match(&m, 1);
             let acts = bot_service::bot_action::legal_actions(
@@ -1784,7 +1809,15 @@ async fn a_decide_after_a_ponder_for_the_same_key_is_answered_from_cache() {
     let (other, _, _) = parked_searchable_view();
     if other != view {
         let ans2 = bots
-            .decide("R", member, &other, prompt_id, 50, 13, Duration::from_secs(3))
+            .decide(
+                "R",
+                member,
+                &other,
+                prompt_id,
+                50,
+                13,
+                Duration::from_secs(3),
+            )
             .await
             .expect("decide answers");
         assert!(!ans2.reused, "a different key must not hit the cache");
@@ -1858,7 +1891,10 @@ async fn the_openings_never_reach_a_client_payload() {
     {
         let room = server.room(&id).unwrap();
         let r = room.lock().unwrap();
-        assert!(r.game.as_ref().is_some(), "the match exists the moment start returns");
+        assert!(
+            r.game.as_ref().is_some(),
+            "the match exists the moment start returns"
+        );
     }
 
     // Drink the live SSE stream (room + match frames).
@@ -1915,7 +1951,10 @@ async fn the_openings_never_reach_a_client_payload() {
     let text = String::from_utf8_lossy(&json).to_string();
     assert!(text.contains(&seed_hex), "the reveal carries the seed");
     assert!(text.contains(&salt_hex), "the reveal carries the salt");
-    assert!(text.contains(commit.as_str()), "the record repeats the commitment");
+    assert!(
+        text.contains(commit.as_str()),
+        "the record repeats the commitment"
+    );
     // And the derived seed in the setup is what the openings produce.
     let file = game_core::record::decode_record(&body).expect("record parses");
     let fair = file.header.fair.as_ref().expect("fairness material");
@@ -1924,9 +1963,18 @@ async fn the_openings_never_reach_a_client_payload() {
     let nonces: Vec<(i32, [u8; 32])> = fair
         .nonces
         .iter()
-        .filter_map(|n| game_core::fair::unhex32(&n.nonce).ok().map(|b| (n.member, b)))
+        .filter_map(|n| {
+            game_core::fair::unhex32(&n.nonce)
+                .ok()
+                .map(|b| (n.member, b))
+        })
         .collect();
-    assert_eq!(nonces.len(), 2, "both seated humans contributed: {:?}", fair.nonces);
+    assert_eq!(
+        nonces.len(),
+        2,
+        "both seated humans contributed: {:?}",
+        fair.nonces
+    );
     let derived = game_core::fair::derive_match_seed(&seed, &nonces);
     match &file.body.init {
         game_core::record::Init::Seed(setup) => {
@@ -2026,8 +2074,17 @@ async fn nonces_of_non_participants_are_dropped_and_the_start_never_waits() {
     let file = game_core::record::decode_record(&body).expect("record parses");
     let fair = file.header.fair.as_ref().expect("fairness material");
     let members: Vec<i32> = fair.nonces.iter().map(|n| n.member).collect();
-    assert_eq!(members.len(), 1, "only the seated human's nonce: {:?}", fair.nonces);
-    assert!(!members.contains(&2), "the leaver's nonce was dropped: {:?}", fair.nonces);
+    assert_eq!(
+        members.len(),
+        1,
+        "only the seated human's nonce: {:?}",
+        fair.nonces
+    );
+    assert!(
+        !members.contains(&2),
+        "the leaver's nonce was dropped: {:?}",
+        fair.nonces
+    );
     assert!(game_core::fair::verify(&file).ok);
 }
 
@@ -2050,7 +2107,10 @@ async fn a_finished_match_rolls_a_fresh_commit_and_takes_nonces_again() {
         .await;
     // Mid-match the slot is consumed: a nonce is refused, the commit stands.
     let (s, _) = a
-        .post(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": "00".repeat(32) }))
+        .post(
+            &format!("/api/rooms/{id}/nonce"),
+            json!({ "nonce": "00".repeat(32) }),
+        )
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "nonce refused mid-match");
 
@@ -2077,7 +2137,11 @@ async fn a_finished_match_rolls_a_fresh_commit_and_takes_nonces_again() {
     let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
     assert_eq!(s, StatusCode::OK, "{st}");
     let commit2 = st["room"]["fair"]["commit"].as_str().unwrap();
-    assert_ne!(commit2, commit1.as_str(), "a fresh commitment per match: {st}");
+    assert_ne!(
+        commit2,
+        commit1.as_str(),
+        "a fresh commitment per match: {st}"
+    );
     assert_eq!(commit2.len(), 64);
     // And a nonce for the next match is accepted again, no waiting.
     a.fair_nonce(&id).await;

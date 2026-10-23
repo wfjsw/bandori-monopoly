@@ -308,14 +308,16 @@ pub fn merge_stats(parts: &[Vec<ActionStats>]) -> Vec<ActionStats> {
     let mut by_action: HashMap<Action, ActionStats> = HashMap::new();
     for part in parts {
         for s in part {
-            let e = by_action.entry(s.action.clone()).or_insert_with(|| ActionStats {
-                action: s.action.clone(),
-                visits: 0,
-                value_sum: 0.0,
-                eval_max: f64::NEG_INFINITY,
-                eval_sum: 0.0,
-                eval_visits: 0,
-            });
+            let e = by_action
+                .entry(s.action.clone())
+                .or_insert_with(|| ActionStats {
+                    action: s.action.clone(),
+                    visits: 0,
+                    value_sum: 0.0,
+                    eval_max: f64::NEG_INFINITY,
+                    eval_sum: 0.0,
+                    eval_visits: 0,
+                });
             e.visits += s.visits;
             e.value_sum += s.value_sum;
             e.eval_max = e.eval_max.max(s.eval_max);
@@ -425,7 +427,12 @@ impl Ismcts {
     ///
     /// Falls back to the root action list's first entry (the heuristic's
     /// first choice in the abstraction) when nothing is searchable.
-    pub fn search<S: Simulator>(&mut self, sim: &mut S, seat: usize, cfg: SearchConfig) -> SearchOutcome {
+    pub fn search<S: Simulator>(
+        &mut self,
+        sim: &mut S,
+        seat: usize,
+        cfg: SearchConfig,
+    ) -> SearchOutcome {
         let started = Instant::now();
         let mut rng = DeterminizerRng::new(cfg.seed);
         let mut times = Timings::default();
@@ -745,8 +752,7 @@ impl Ismcts {
             if cfg.bias_weight <= 0.0 {
                 return 0.5;
             }
-            node.and_then(|n| n.priors.get(a).copied())
-                .unwrap_or(0.5)
+            node.and_then(|n| n.priors.get(a).copied()).unwrap_or(0.5)
         };
         full.sort_by(|x, y| {
             y.visits
@@ -849,7 +855,8 @@ impl Ismcts {
             }
         });
         // Merge the root statistics (sums of visits / value sums) and pick.
-        let parts: Vec<Vec<ActionStats>> = outcomes.iter().map(|o| o.root_stats_full.clone()).collect();
+        let parts: Vec<Vec<ActionStats>> =
+            outcomes.iter().map(|o| o.root_stats_full.clone()).collect();
         let mut full = merge_stats(&parts);
         // `merge_stats` drops actions no thread saw; keep the root action
         // order stable by re-sorting only (it already sorts).
@@ -970,12 +977,10 @@ fn early_stop_should_break(
     };
     // Every root action must have been tried; an untried one is not yet in
     // the running and the lead below would be meaningless.
-    if root_actions.iter().any(|a| {
-        node.edges
-            .get(a)
-            .map(|e| e.visits == 0)
-            .unwrap_or(true)
-    }) {
+    if root_actions
+        .iter()
+        .any(|a| node.edges.get(a).map(|e| e.visits == 0).unwrap_or(true))
+    {
         return false;
     }
     // Two best edges by visits (the pick's primary key).

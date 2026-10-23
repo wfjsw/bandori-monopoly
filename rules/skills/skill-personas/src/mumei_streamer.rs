@@ -17,9 +17,10 @@
 //! field card does, not something this skill can enforce from inside its own
 //! hooks.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 /// Cards this skill flipped, so it can flip them back on exit.
 const FLIPPED: &str = "skill.mumei.flipped";
@@ -36,23 +37,50 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
         // mutating, so they ride `ActionKind::Effect` (the payment declaration,
         // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
-        On::Action(Action::Effect("target == owner && actor != owner && slot('skillState') != 2", None, None, on_pay_declare)),
+        On::Action(Action::Effect(
+            "target == owner && actor != owner && slot('skillState') != 2",
+            None,
+            None,
+            on_pay_declare,
+        )),
         // 状态1（1）「并使那次支付的金额提高X*100」 -- pure amount reshape.
-        On::Filter(Filter::PaySplitAdd("target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0", None, on_pay_add)),
+        On::Filter(Filter::PaySplitAdd(
+            "target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0",
+            None,
+            on_pay_add,
+        )),
         // Drop the one-shot latch once the payment is done (split legs all see
         // the same X).
-        On::Action(Action::PayAfter("actor == owner && slot('skill.mumei.bumpX') >= 0", None, None, clear_bump)),
-        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2", None, Some(fire_at_cap), at_turn_end)),
+        On::Action(Action::PayAfter(
+            "actor == owner && slot('skill.mumei.bumpX') >= 0",
+            None,
+            None,
+            clear_bump,
+        )),
+        On::Action(Action::TurnEnd(
+            "actor == owner && slot('skillState') != 2",
+            None,
+            Some(fire_at_cap),
+            at_turn_end,
+        )),
         // 「你退出状态2后，被你翻面的卡自动翻回」 -- only while out of 状态2
         // with a non-empty flip list. Both are player-state reads (`skillState`
         // and the `skill.mumei.flipped` count), so the entry does not activate
         // (and so does not flash) when there is nothing to sweep.
-        On::Action(Action::TurnEnd("actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0", None, None, at_turn_end_exit)),
+        On::Action(Action::TurnEnd(
+            "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0",
+            None,
+            None,
+            at_turn_end_exit,
+        )),
     ],
 )
-    .silent(&[0, 1, 4])
-    // 「（初始0，上限5）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 5)]);
+.silent(&[0, 1, 4])
+// 「（初始0，上限5）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 0),
+    (bandori_std::fire::FIRE_CAP, 5),
+]);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

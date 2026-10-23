@@ -13,9 +13,10 @@
 //! kickback. The pairing is a value (「你与一名其他玩家」) and the two rolls are
 //! a countdown, both of which the keyed state holds.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// The paired player, or -1.
 const PARTNER: &str = "skill.tukushiTry.partner";
@@ -30,14 +31,22 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
         On::Play("", None, Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, None, at_start)),
         On::Action(Action::DeckAtGameStart("", None, None, at_start)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
         On::Action(Action::DiceRollAfter("", None, Some(paired), on_roll)),
         On::Filter(Filter::PaySplitMul("", Some(paired), on_pay)),
         On::Action(Action::HouseAdded("", None, Some(partner), on_built)),
     ],
 )
-    // 「（初始1，上限2）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 2)]);
+// 「（初始1，上限2）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 2),
+]);
 
 /// Either half of the pair is under the spell.
 fn paired(player_id: i32) -> bool {

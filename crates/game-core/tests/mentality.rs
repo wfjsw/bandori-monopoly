@@ -8,7 +8,7 @@ mod common;
 use common::data_arc as data;
 use game_core::engine::{
     bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, Ask, Cx, Dest, Flow,
-    Match, StubRules, Trigger, BUY_RESERVE, BUILD_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
+    Match, StubRules, Trigger, BUILD_RESERVE, BUY_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
     FORCE_BUY_RESERVE, REDEEM_RESERVE,
 };
 use game_core::msg::Msg;
@@ -27,8 +27,19 @@ fn member(id: i32, bot: bool, m: BotMentality) -> RoomMember {
     }
 }
 
-fn new_match(members: &[RoomMember], seed: u64, rules: Arc<dyn game_core::engine::CardRules>) -> Match {
-    Match::new(data(), rules, members, seed, MatchMode::Casual, ScoreWeights::default())
+fn new_match(
+    members: &[RoomMember],
+    seed: u64,
+    rules: Arc<dyn game_core::engine::CardRules>,
+) -> Match {
+    Match::new(
+        data(),
+        rules,
+        members,
+        seed,
+        MatchMode::Casual,
+        ScoreWeights::default(),
+    )
 }
 
 /// Tick until the match ends (or `max_rounds` pass, then finish it).
@@ -129,7 +140,10 @@ fn chaos_bot_buys_with_no_reserve() {
         );
         broke |= chaos.iter().any(|&m| m < BUY_RESERVE);
     }
-    assert!(broke, "no chaos purchase in 6 games left under the standard reserve");
+    assert!(
+        broke,
+        "no chaos purchase in 6 games left under the standard reserve"
+    );
 }
 
 // ---------------------------------------------------------------- prompt picks
@@ -204,7 +218,10 @@ impl game_core::engine::CardRules for PromptRules {
 fn chaos_picks_a_non_default_prompt_option() {
     for seed in 1..=8 {
         let rules = Arc::new(PromptRules::default());
-        let members = [member(1, true, BotMentality::Chaos), member(2, true, BotMentality::Chaos)];
+        let members = [
+            member(1, true, BotMentality::Chaos),
+            member(2, true, BotMentality::Chaos),
+        ];
         let mut m = new_match(&members, seed, rules.clone());
         m.quick_start();
         play_out(&mut m, 25);
@@ -225,7 +242,10 @@ fn chaos_counters_only_on_chance() {
     let mut offered = 0usize;
     for seed in 1..=8 {
         let rules = Arc::new(PromptRules::default());
-        let members = [member(1, true, BotMentality::Chaos), member(2, true, BotMentality::Chaos)];
+        let members = [
+            member(1, true, BotMentality::Chaos),
+            member(2, true, BotMentality::Chaos),
+        ];
         let mut m = new_match(&members, seed, rules.clone());
         m.quick_start();
         play_out(&mut m, 25);
@@ -234,7 +254,10 @@ fn chaos_counters_only_on_chance() {
         offered += picks.len();
         declared += picks.iter().filter(|&&p| p != 1).count();
     }
-    assert!(declared > 0, "chaos never declared a counteract in {offered} offers");
+    assert!(
+        declared > 0,
+        "chaos never declared a counteract in {offered} offers"
+    );
     assert!(
         declared < offered,
         "chaos declared every one of {offered} offers (expected ~30%)"
@@ -250,11 +273,18 @@ fn chaos_counters_only_on_chance() {
 #[test]
 fn standard_takes_the_prompt_fallback() {
     let rules = Arc::new(PromptRules::default());
-    let members = [member(1, true, BotMentality::Standard), member(2, true, BotMentality::Standard)];
+    let members = [
+        member(1, true, BotMentality::Standard),
+        member(2, true, BotMentality::Standard),
+    ];
     let mut m = new_match(&members, 5, rules.clone());
     m.quick_start();
     play_out(&mut m, 25);
-    assert_eq!(*rules.play_pick.lock().unwrap(), Some(0), "standard ignored the fallback");
+    assert_eq!(
+        *rules.play_pick.lock().unwrap(),
+        Some(0),
+        "standard ignored the fallback"
+    );
 }
 
 /// A counteraction offer is a real decision for standard too -- user ruling 2026-10-08,
@@ -269,7 +299,10 @@ fn standard_counters_at_the_default_propensity() {
     let mut offered = 0usize;
     for seed in 1..=8 {
         let rules = Arc::new(PromptRules::default());
-        let members = [member(1, true, BotMentality::Standard), member(2, true, BotMentality::Standard)];
+        let members = [
+            member(1, true, BotMentality::Standard),
+            member(2, true, BotMentality::Standard),
+        ];
         let mut m = new_match(&members, seed, rules.clone());
         m.quick_start();
         play_out(&mut m, 25);
@@ -300,7 +333,9 @@ fn standard_counters_at_the_default_propensity() {
 #[test]
 fn chaos_plays_a_playable_card_instead_of_rolling() {
     for seed in 1..=6 {
-        let members: Vec<RoomMember> = (1..=4).map(|i| member(i, true, BotMentality::Chaos)).collect();
+        let members: Vec<RoomMember> = (1..=4)
+            .map(|i| member(i, true, BotMentality::Chaos))
+            .collect();
         let mut m = new_match(&members, seed, Arc::new(StubRules));
         m.quick_start();
         let mut last = 0;
@@ -335,11 +370,16 @@ fn chaos_plays_a_playable_card_instead_of_rolling() {
 #[test]
 fn same_seed_same_chaos_game() {
     let run = |seed: u64| -> (String, usize) {
-        let members: Vec<RoomMember> = (1..=3).map(|i| member(i, true, BotMentality::Chaos)).collect();
+        let members: Vec<RoomMember> = (1..=3)
+            .map(|i| member(i, true, BotMentality::Chaos))
+            .collect();
         let mut m = new_match(&members, seed, Arc::new(StubRules));
         m.quick_start();
         play_out(&mut m, 25);
-        (serde_json::to_string(&m.state()).unwrap(), m.events_since(0).len())
+        (
+            serde_json::to_string(&m.state()).unwrap(),
+            m.events_since(0).len(),
+        )
     };
     assert_eq!(run(42), run(42), "chaos must be replayable");
     assert_ne!(run(42).0, run(43).0, "different seeds must differ");
@@ -348,7 +388,9 @@ fn same_seed_same_chaos_game() {
 /// A chaos save restored mid-match continues the same game.
 #[test]
 fn chaos_save_and_restore_continue_identically() {
-    let members: Vec<RoomMember> = (1..=3).map(|i| member(i, true, BotMentality::Chaos)).collect();
+    let members: Vec<RoomMember> = (1..=3)
+        .map(|i| member(i, true, BotMentality::Chaos))
+        .collect();
     let mut a = new_match(&members, 7, Arc::new(StubRules));
     a.quick_start();
     for _ in 0..40 {
@@ -396,7 +438,11 @@ fn a_human_seat_is_never_chaos() {
     m.quick_start();
     let st = m.state();
     let human = st.players.iter().find(|p| !p.bot).unwrap();
-    assert_eq!(human.mentality, BotMentality::Chaos, "the tag is on the seat");
+    assert_eq!(
+        human.mentality,
+        BotMentality::Chaos,
+        "the tag is on the seat"
+    );
     // The engine's policy lookup ignores it (exercised through a full game --
     // the human is never auto-answered by chaos).
     play_out(&mut m, 30);

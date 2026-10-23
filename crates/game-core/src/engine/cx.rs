@@ -552,7 +552,12 @@ impl PlayMemo {
 pub struct GuestOverlay {
     /// `(player, key, base, wrote)` for each state item the guest decreased.
     /// `base` is `None` when the key was absent before the overlay.
-    state: Vec<(usize, String, Option<crate::state::StateVar>, crate::state::StateVar)>,
+    state: Vec<(
+        usize,
+        String,
+        Option<crate::state::StateVar>,
+        crate::state::StateVar,
+    )>,
 }
 
 impl<'a> Cx<'a> {
@@ -567,8 +572,7 @@ impl<'a> Cx<'a> {
     /// A copy of the replayable world (a rules host runs against one).
     pub fn world_copy(&self) -> World {
         #[cfg(feature = "bot-cost")]
-        crate::engine::bot_cost::WORLD_CLONES
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        crate::engine::bot_cost::WORLD_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.w.deep_clone()
     }
 
@@ -587,8 +591,7 @@ impl<'a> Cx<'a> {
     /// writes into a throwaway sandbox.
     pub fn share_world(&self) -> crate::engine::world::SharedWorld {
         #[cfg(feature = "bot-cost")]
-        crate::engine::bot_cost::WORLD_SHARES
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        crate::engine::bot_cost::WORLD_SHARES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.w.share()
     }
 
@@ -644,7 +647,9 @@ impl<'a> Cx<'a> {
         uid: i32,
     ) -> i32 {
         self.w.flush_walk();
-        let e = self.w.card_activation(kind, owner, card, target, tile, negated, msg);
+        let e = self
+            .w
+            .card_activation(kind, owner, card, target, tile, negated, msg);
         e.parent = parent;
         e.uid = uid;
         e.id
@@ -1016,7 +1021,9 @@ impl<'a> Cx<'a> {
         #[cfg(feature = "bot-cost")]
         crate::engine::bot_cost::CANT_PLAY_CALLS.fetch_add(1, Relaxed);
         let why = self.rules.cant_play(self, player, card);
-        self.play_memo.borrow_mut().insert(player, card, why.clone());
+        self.play_memo
+            .borrow_mut()
+            .insert(player, card, why.clone());
         why
     }
 
@@ -1034,7 +1041,8 @@ impl<'a> Cx<'a> {
             }
             if let Some(denied) = memo.get_exclusive(player, card) {
                 #[cfg(feature = "bot-cost")]
-                crate::engine::bot_cost::CANT_PLAY_MEMO_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                crate::engine::bot_cost::CANT_PLAY_MEMO_HITS
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 return denied;
             }
         }

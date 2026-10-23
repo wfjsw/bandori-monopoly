@@ -12,7 +12,7 @@
 //! re-declare 「想要成为人类」's X for money, then a MyGO placement + pull skill.
 
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 use crate::want_human::SLOT_X;
 
@@ -55,7 +55,9 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
         let x = ctx::ask_number(
             player_id,
             &Msg::new(key!("tomori_inner_shout_title")),
-            &Msg::new(key!("tomori_inner_shout_ask")).i("n", old as i64).card("card", "CRYCHIC:想要成为人类"),
+            &Msg::new(key!("tomori_inner_shout_ask"))
+                .i("n", old as i64)
+                .card("card", "CRYCHIC:想要成为人类"),
             1,
             20,
         )?;

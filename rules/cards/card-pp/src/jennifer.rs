@@ -14,9 +14,9 @@
 //! The [持续] runs in the `PassTile` hook; the user is kept in a player slot
 //! (stand-in for the C# per-card `Card.User`).
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
 pub const JENNIFER: CardDef = CardDef::new(
@@ -24,21 +24,31 @@ pub const JENNIFER: CardDef = CardDef::new(
     &[
         On::Play("", None, Some(cant_play), jennifer),
         // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
-        On::Action(Action::PassTile("card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')", None, None, pass_tile)),
+        On::Action(Action::PassTile(
+            "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')",
+            None,
+            None,
+            pass_tile,
+        )),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"找回珍妮弗"#)
         .raw_name(r#"找回珍妮弗"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手]：
+        .text(
+            r#"[手]：
 将此卡放置在除[使用者]以外的一名玩家的[场地]。
 [持续]：
 [拥有者][经过]“偶像经纪公司”时依次进行以下操作：
 1. [使用者][支付][拥有者]400资金；
 2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
-3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#)
+3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#,
+        )
         // sheet cell D13
-        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
+);
 
 /// Stand-in for C# `Card.User` (per-card Mem): the player who played the card,
 /// stored on the owner's player while it is in play.

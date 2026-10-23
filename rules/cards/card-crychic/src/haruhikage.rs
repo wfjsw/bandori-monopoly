@@ -1,7 +1,7 @@
 //! `CRYCHIC:春日影` -- C# `CardHaruhikage` (MatchHost.cs:2584-2707): [反击] that
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:春日影`）:
-//! > 春日影 
+//! > 春日影
 //! >  ：
 //! > （1）[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。
 //! > （2）（此卡可作为[反击]打出）使用一次Crychic角色的技能
@@ -10,9 +10,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",

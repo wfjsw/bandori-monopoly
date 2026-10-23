@@ -73,6 +73,14 @@ fn off_board_seats_never_get_an_offer() {
         t.decline();
     }
     assert!(!asked_ever.is_empty(), "the window never opened at all");
-    assert_eq!(who_of(&t, "probe_fired"), Vec::<i64>::new(), "nobody declared");
-    assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X named its live target");
+    assert_eq!(
+        who_of(&t, "probe_fired"),
+        Vec::<i64>::new(),
+        "nobody declared"
+    );
+    assert_eq!(
+        ev_args(&t, "aimer_done", "got"),
+        vec![1],
+        "X named its live target"
+    );
 }

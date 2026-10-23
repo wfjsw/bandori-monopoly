@@ -31,10 +31,13 @@ fn data() -> Arc<GameData> {
     // `tests/common`. `rules_with_fixtures` could supply its ruleset's roster,
     // but `data()` is also called standalone by `match_with_rules`.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../rules/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -44,7 +47,6 @@ fn data() -> Arc<GameData> {
         .unwrap(),
     )
 }
-
 
 /// The shipped cards plus the test-only fixture cards (`TEST:*`), one ruleset.
 fn rules_with_fixtures() -> WasmRules {
@@ -79,7 +81,6 @@ fn play(card: &str) -> NetMessage {
         ..NetMessage::act("play")
     }
 }
-
 
 fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     let members = vec![member(1, false), member(2, true)];
@@ -149,7 +150,6 @@ fn decline_prompts(m: &mut Match) {
     }
 }
 
-
 #[test]
 fn a_card_whose_named_counters_run_out_leaves_the_field() {
     // TEST:named counter places itself with one named counter and spends it in the same
@@ -158,7 +158,8 @@ fn a_card_whose_named_counters_run_out_leaves_the_field() {
     // `TEST:named-counter` / `named-counter-empty` / `named-counter-none` are rules/ fixture ids
     // (rules/fixtures/test-cards) -- kept to match the fixture definitions.
     let mut m = match_with_rules("TEST:named-counter", rules_with_fixtures());
-    m.act(1, &play("TEST:named-counter")).expect("play should run");
+    m.act(1, &play("TEST:named-counter"))
+        .expect("play should run");
     let st = m.state();
     let me = st
         .players

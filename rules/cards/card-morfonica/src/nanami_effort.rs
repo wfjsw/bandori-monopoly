@@ -15,9 +15,9 @@
 //!
 //! x character tokens for one of three effects.
 
-use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词 11) -- the default CiRCLE money reward. A
 /// `passRewardAffected` listener may replace it (Morfonica's cycle).
@@ -160,7 +160,11 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
 /// so a listener may replace the amount or cancel it outright; if it stands,
 /// the default 专有名词 11 figure is paid.
 fn gain_circle_money(player_id: i32) -> card_sdk::Asked {
-    if ctx::raise(player_id, bandori_std::kind::PassRewardAffected, REWARD_MONEY)? {
+    if ctx::raise(
+        player_id,
+        bandori_std::kind::PassRewardAffected,
+        REWARD_MONEY,
+    )? {
         ctx::gain(
             player_id,
             CIRCLE_MONEY,

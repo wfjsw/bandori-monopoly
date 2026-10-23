@@ -167,13 +167,23 @@ fn negated_counteraction_shows_negated() {
 
     // The deny itself ran: an activation, not negated.
     let deny = activations_since(&t, mark, "TEST:deny");
-    assert_eq!(deny.len(), 1, "the deny activates: {}", t.recent_keys(30).join(", "));
+    assert_eq!(
+        deny.len(),
+        1,
+        "the deny activates: {}",
+        t.recent_keys(30).join(", ")
+    );
     assert!(!deny[0].negated);
     assert_eq!(deny[0].kind, "counter");
 
     // The root play was not negated -- it activated normally.
     let aimer = activations_since(&t, mark, "TEST:aimer");
-    assert_eq!(aimer.len(), 1, "the play activates: {}", t.recent_keys(30).join(", "));
+    assert_eq!(
+        aimer.len(),
+        1,
+        "the play activates: {}",
+        t.recent_keys(30).join(", ")
+    );
     assert!(!aimer[0].negated);
     assert_eq!(aimer[0].kind, "play");
 }
@@ -465,7 +475,9 @@ fn rollplan_whose_cel_pre_rejects_remains_silent() {
         t.recent_keys(20).join(", ")
     );
     assert!(
-        !t.recent_keys(40).iter().any(|k| k.contains("pre_rollplan_ran")),
+        !t.recent_keys(40)
+            .iter()
+            .any(|k| k.contains("pre_rollplan_ran")),
         "a rejecting DiceRollPlan body must not run: {}",
         t.recent_keys(20).join(", ")
     );
@@ -499,7 +511,9 @@ fn atend_whose_cel_pre_rejects_remains_silent() {
         t.recent_keys(20).join(", ")
     );
     assert!(
-        !t.recent_keys(40).iter().any(|k| k.contains("pre_at_end_ran")),
+        !t.recent_keys(40)
+            .iter()
+            .any(|k| k.contains("pre_at_end_ran")),
         "a rejecting AtEnd body must not run: {}",
         t.recent_keys(20).join(", ")
     );

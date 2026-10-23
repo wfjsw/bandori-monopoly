@@ -1,13 +1,13 @@
 //! `MyGO:轮符雨` -- C# `CardRinneRain` (MatchHost.cs:6348-6363): gain one
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:轮符雨`）:
-//! > 轮符雨： 
+//! > 轮符雨：
 //! >  使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]
 //!
 //! [停留] layer and book an extra [触发结算] at this turn's end.
 
-use card_sdk::{Action, CardDef, ctx, key, Msg, On};
 use card_sdk::abi::ActionKind;
+use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 pub const RINNE_RAIN: CardDef = CardDef::new(
     "MyGO:轮符雨",
@@ -21,13 +21,16 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         On::Action(Action::AtEnd("owner.pos >= 0", None, None, settle_now)),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::SONG, 1)])
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"轮符雨"#)
         .raw_name(r#"轮符雨"#)
         .tags(&[])
         .text(r#"使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]"#)
         // sheet cell I4
-        .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
+        .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]),
+);
 
 fn rinne_rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使自己获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, CardName)`.

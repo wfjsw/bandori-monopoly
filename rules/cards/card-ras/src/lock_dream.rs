@@ -9,9 +9,9 @@
 //!
 //! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 
-use card_sdk::abi::{CardPile, ActionKind};
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, CardPile};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// C# `Normal => false` with no `Play`/`Counteract`: the card is shown out of the
 /// deck before the opening hands and lives on the field from there.
@@ -45,7 +45,9 @@ const SLOT_TAG: &str = "lock_dream_tag";
 /// distinct id per player, up to 5 passes before the opening deal); it only
 /// applies while the card is still in the owner's deck.
 fn deck_before_game_guard(player_id: i32) -> bool {
-    ctx::cards_in(player_id, CardPile::Deck).iter().any(|c| c == "RAS:（LOCK）追逐梦想的步伐")
+    ctx::cards_in(player_id, CardPile::Deck)
+        .iter()
+        .any(|c| c == "RAS:（LOCK）追逐梦想的步伐")
 }
 
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {

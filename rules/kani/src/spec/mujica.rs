@@ -73,7 +73,8 @@ pub fn black_bday_log_ok(effects: &[Effect], user: i32, others: &[i32], low: &[b
             if i >= effects.len() {
                 return false;
             }
-            if !matches!(effects[i], Effect::PayTo { from: f, to: t, n } if f == p && t == user && n == 800) {
+            if !matches!(effects[i], Effect::PayTo { from: f, to: t, n } if f == p && t == user && n == 800)
+            {
                 return false;
             }
             i += 1;
@@ -82,7 +83,8 @@ pub fn black_bday_log_ok(effects: &[Effect], user: i32, others: &[i32], low: &[b
                 return false;
             }
             for _ in 0..2 {
-                if !matches!(effects[i], Effect::PayTo { from: f, to: t, n } if f == p && t == user && n == 200) {
+                if !matches!(effects[i], Effect::PayTo { from: f, to: t, n } if f == p && t == user && n == 200)
+                {
                     return false;
                 }
                 i += 1;
@@ -93,12 +95,24 @@ pub fn black_bday_log_ok(effects: &[Effect], user: i32, others: &[i32], low: &[b
 }
 
 /// Post money for one low-bracket solvent payer and the user.
-pub fn black_bday_low_post_ok(post: &Snapshot, from: i32, to: i32, pre_from: i32, pre_to: i32) -> bool {
+pub fn black_bday_low_post_ok(
+    post: &Snapshot,
+    from: i32,
+    to: i32,
+    pre_from: i32,
+    pre_to: i32,
+) -> bool {
     post.money[from as usize] == pre_from - 800 && post.money[to as usize] == pre_to + 800
 }
 
 /// Post money for one high-bracket solvent payer and the user (total 400).
-pub fn black_bday_high_post_ok(post: &Snapshot, from: i32, to: i32, pre_from: i32, pre_to: i32) -> bool {
+pub fn black_bday_high_post_ok(
+    post: &Snapshot,
+    from: i32,
+    to: i32,
+    pre_from: i32,
+    pre_to: i32,
+) -> bool {
     post.money[from as usize] == pre_from - 400 && post.money[to as usize] == pre_to + 400
 }
 
@@ -369,9 +383,9 @@ pub fn sakiko_mortgage_effect(effects: &[Effect], tile: i32) -> bool {
 
 /// Discard-one-hand effect (hand non-empty branch).
 pub fn sakiko_discard_one_effect(effects: &[Effect], player: i32) -> bool {
-    effects.iter().any(|e| {
-        matches!(e, Effect::DiscardFromHand { player: p, .. } if *p == player)
-    })
+    effects
+        .iter()
+        .any(|e| matches!(e, Effect::DiscardFromHand { player: p, .. } if *p == player))
 }
 
 // ===========================================================================
@@ -398,7 +412,12 @@ pub fn welcome_next_state(current: i32, has_state2: bool) -> i32 {
 
 /// Toggle effect: exactly one `SetState` on the designated player's
 /// `skillState` key to the toggled value.
-pub fn welcome_toggle_effects(effects: &[Effect], player: i32, to: i32, skill_state_key: u16) -> bool {
+pub fn welcome_toggle_effects(
+    effects: &[Effect],
+    player: i32,
+    to: i32,
+    skill_state_key: u16,
+) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::SetState { player: p, key, n } if p == player && key == skill_state_key && n == to)
 }
@@ -474,13 +493,7 @@ pub fn mortis_inert_is_noop(effects: &[Effect]) -> bool {
 // ===========================================================================
 
 /// Money frame: only `user` and `others` may move; every other seat is equal.
-pub fn money_frame_ok(
-    pre: &Snapshot,
-    post: &Snapshot,
-    user: i32,
-    others: &[i32],
-    n: i32,
-) -> bool {
+pub fn money_frame_ok(pre: &Snapshot, post: &Snapshot, user: i32, others: &[i32], n: i32) -> bool {
     for p in 0..n.min(MAX_PLAYERS as i32) {
         let touched = p == user || others.contains(&p);
         if !touched && pre.money[p as usize] != post.money[p as usize] {

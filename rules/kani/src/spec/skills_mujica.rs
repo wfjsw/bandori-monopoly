@@ -38,7 +38,11 @@ pub fn band_initial_state() -> i32 {
 
 /// Fresh-world effect of the band skill's turn-start initialiser: exactly one
 /// SetState writing skillState = 1.
-pub fn band_init_effects(effects: &[crate::world::Effect], player: i32, skill_state_key: u16) -> bool {
+pub fn band_init_effects(
+    effects: &[crate::world::Effect],
+    player: i32,
+    skill_state_key: u16,
+) -> bool {
     effects.len() >= 1
         && effects.iter().any(|e| {
             matches!(e, crate::world::Effect::SetState { player: p, key, n }

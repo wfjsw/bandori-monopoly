@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use game_core::data::{PersonaData, GameData};
+use game_core::data::{GameData, PersonaData};
 use game_core::deck;
 use game_core::deck_book::{self, DeckBook, DeckBookEntry, DECK_BOOK_VERSION, POLICY_STANDARD};
 use game_core::engine::{Match, StubRules};
@@ -24,7 +24,13 @@ fn deck_slice(d: &GameData, c: &PersonaData, skip: usize) -> Vec<String> {
     ids[skip..skip + deck::SIZE].to_vec()
 }
 
-fn entry(me: &str, seat: Option<u32>, opponents: &[&str], groups: &[&str], cards: Vec<String>) -> DeckBookEntry {
+fn entry(
+    me: &str,
+    seat: Option<u32>,
+    opponents: &[&str],
+    groups: &[&str],
+    cards: Vec<String>,
+) -> DeckBookEntry {
     DeckBookEntry {
         me: me.into(),
         seat,
@@ -42,7 +48,11 @@ fn book(entries: Vec<DeckBookEntry>) -> DeckBook {
     b.generated_at = "test".into();
     // Drop entries into the level their key shape says.
     for e in entries {
-        match (e.seat.is_some(), !e.opponents.is_empty(), !e.opponent_groups.is_empty()) {
+        match (
+            e.seat.is_some(),
+            !e.opponents.is_empty(),
+            !e.opponent_groups.is_empty(),
+        ) {
             (true, true, _) => b.exact.push(e),
             (true, false, _) => b.seat_groups.push(e),
             (false, false, true) => b.groups.push(e),
@@ -70,8 +80,20 @@ fn lookup_falls_back_in_order() {
     let me_only = deck_slice(&d, c, 4);
     let b = book(vec![
         entry("Alpha", Some(1), &["Beta", "Gamma"], &[], exact.clone()),
-        entry("Alpha", Some(1), &[], &["GroupA", "GroupA"], seat_groups.clone()),
-        entry("Alpha", None, &[], &["GroupA", "GroupA"], group_decks.clone()),
+        entry(
+            "Alpha",
+            Some(1),
+            &[],
+            &["GroupA", "GroupA"],
+            seat_groups.clone(),
+        ),
+        entry(
+            "Alpha",
+            None,
+            &[],
+            &["GroupA", "GroupA"],
+            group_decks.clone(),
+        ),
         entry("Alpha", None, &[], &[], me_only.clone()),
     ]);
     let lookup = |seat: usize, opponents: &[&str]| {
@@ -257,7 +279,14 @@ fn solo_bots(d: Arc<GameData>, seed: u64) -> Match {
             ..Default::default()
         })
         .collect();
-    Match::new(d, Arc::new(StubRules), &members, seed, MatchMode::Solo, ScoreWeights::default())
+    Match::new(
+        d,
+        Arc::new(StubRules),
+        &members,
+        seed,
+        MatchMode::Solo,
+        ScoreWeights::default(),
+    )
 }
 
 /// The bot seats of `solo_bots`, `(member, persona)`.
@@ -277,7 +306,11 @@ fn standard_bots_submit_the_book_entry_when_present() {
     for name in ["Alpha", "Beta", "Delta"] {
         let c = d.persona(name).unwrap();
         let cards = deck_slice(&d, c, 1);
-        assert_ne!(cards, deck::preset(&d, c), "the book deck must beat the preset");
+        assert_ne!(
+            cards,
+            deck::preset(&d, c),
+            "the book deck must beat the preset"
+        );
         per_persona.push((name.to_string(), cards.clone()));
         // Level 4 keeps the test independent of the seed's seating.
         d.deck_book.me.push(entry(name, None, &[], &[], cards));
@@ -287,7 +320,11 @@ fn standard_bots_submit_the_book_entry_when_present() {
     d.deck_book.policy = POLICY_STANDARD.into();
 
     let m = solo_bots(Arc::new(d.clone()), 42);
-    assert_eq!(m.state().phase, "deck", "the human holds the deck phase open");
+    assert_eq!(
+        m.state().phase,
+        "deck",
+        "the human holds the deck phase open"
+    );
     for (member, name) in bot_seats(&m) {
         let (_, cards) = per_persona.iter().find(|(n, _)| *n == name).unwrap();
         let mut want = cards.clone();

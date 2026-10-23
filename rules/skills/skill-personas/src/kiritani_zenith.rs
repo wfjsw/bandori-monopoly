@@ -14,9 +14,10 @@
 //! 取整百）」 -- half the tile's rent, divided by how many players are being
 //! charged, rounded **up to a hundred**.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Latch for 「一回合一次」.
 const USED: &str = "skill.kiritani.used";
@@ -27,13 +28,26 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
         On::Play("", None, Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, reset)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            reset,
+        )),
     ],
 )
-    .silent(&[1, 2, 4])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+.silent(&[1, 2, 4])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

@@ -7,8 +7,8 @@
 //!
 //! [反击] when another player's card affects you, they pay you 500 and you draw.
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(

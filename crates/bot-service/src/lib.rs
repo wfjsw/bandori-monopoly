@@ -35,9 +35,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bot_core::{
-    action, Ismcts, MatchSim, SearchConfig, SearchOutcome, SeatView,
-};
+use bot_core::{action, Ismcts, MatchSim, SearchConfig, SearchOutcome, SeatView};
 use game_core::data::GameData;
 use game_core::engine::CardRules;
 
@@ -50,10 +48,10 @@ compile_error!(
 #[cfg(not(feature = "native-rules"))]
 use game_core::engine::StubRules;
 use game_core::net::NetMessage;
-#[cfg(not(feature = "native-rules"))]
-use game_rules::WasmRules;
 #[cfg(feature = "native-rules")]
 use game_rules::CardModules;
+#[cfg(not(feature = "native-rules"))]
+use game_rules::WasmRules;
 use serde_json::{json, Value};
 
 // Re-exported for the server's fallback path: it must be able to answer with
@@ -61,8 +59,8 @@ use serde_json::{json, Value};
 // gone (`docs/BOT.md` §1).
 pub use bot_core::action as bot_action;
 pub use bot_core::heuristic_message_view;
-pub use bot_core::{next_turn_near, predict_upcoming_view};
 pub use bot_core::SeatView as BotSeatView;
+pub use bot_core::{next_turn_near, predict_upcoming_view};
 
 /// Hard cap on one request's search budget, whatever the caller asks for.
 /// The client has its own deadline; this keeps a wild `budget_ms` from
@@ -399,8 +397,14 @@ fn decide(ctx: &Ctx, req: &Value) -> Result<Value, String> {
     let st = view.state.clone();
     // Heuristic-delegated surface (roll / end / discard / trivial prompts):
     // the engine's own policy answers it -- same as the B4 harness.
-    let searched =
-        action::legal_actions_with_cost(&ctx.data, &st, &view.hand, &view.playable, &view.est_cost, seat);
+    let searched = action::legal_actions_with_cost(
+        &ctx.data,
+        &st,
+        &view.hand,
+        &view.playable,
+        &view.est_cost,
+        seat,
+    );
     // Trivial root (`docs/BOT.md` §3.4): one forced action, or a free menu.
     // Answer without searching -- this was 27–34% of searched bot CPU.
     match action::trivial_decision(&searched) {
@@ -753,7 +757,14 @@ pub fn decide_request(
 
 /// Build a `ponder` request (BOT-RESEARCH #5). Same view frame as
 /// [`decide_request`]; the server sends it while the other seats act.
-pub fn ponder_request(id: u64, room: &str, seat: i32, view: &Value, budget_ms: u64, seed: u64) -> Value {
+pub fn ponder_request(
+    id: u64,
+    room: &str,
+    seat: i32,
+    view: &Value,
+    budget_ms: u64,
+    seed: u64,
+) -> Value {
     json!({
         "id": id,
         "op": "ponder",

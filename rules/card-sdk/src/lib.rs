@@ -41,9 +41,9 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 pub mod abi;
-pub mod payload;
 pub mod meta;
 pub mod msg;
+pub mod payload;
 
 /// Generic interned-name table (`u16` ids). Under `cfg(kani)` the ctx boundary
 /// interns every `&str` so the symbolic host never runs `memcmp`. Game
@@ -84,10 +84,8 @@ pub use msg::Msg;
 
 /// A locale key the client resolves (`key!` / `err.*` / `log.*` / `counter.*`).
 pub use abi::MsgKey;
-pub use payload::{
-    DealValue, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue,
-};
 pub use payload::FilterPayload;
+pub use payload::{DealValue, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue};
 
 /// The run stopped at a prompt: the host has published the question and will
 /// re-run this effect from the top with the answer plugged in (see the replay
@@ -260,7 +258,6 @@ impl CardDef {
             exemption_prop: self.exemption_prop,
         }
     }
-
 
     /// Name this card's entries after their rulebook clauses -- 「（1）」,
     /// 「（2）」, … -- as `(entry index, label)` pairs. The 「效果适用」 line
@@ -1123,11 +1120,7 @@ mod tests {
     fn typed_kind_const_sides_match_is_filter() {
         for k in Filter::KINDS {
             assert!(k.is_filter, "Filter::{} KindInfo.is_filter", k.name);
-            assert!(
-                k.kind.is_filter(),
-                "Filter::{} must be is_filter()",
-                k.name
-            );
+            assert!(k.kind.is_filter(), "Filter::{} must be is_filter()", k.name);
             assert!(
                 !k.spelling().is_empty(),
                 "Filter::{} has empty wire spelling",
@@ -1228,8 +1221,14 @@ mod tests {
         // Live neighbours still round-trip.
         assert_eq!(TriggerKind::from_str("drewBefore").spelling(), "drewBefore");
         assert_eq!(TriggerKind::from_str("atEnd").spelling(), "atEnd");
-        assert_eq!(TriggerKind::from_str("paySplitChooseBefore").spelling(), "paySplitChooseBefore");
-        assert_eq!(TriggerKind::from_str("paySplitMulBefore").spelling(), "paySplitMulBefore");
+        assert_eq!(
+            TriggerKind::from_str("paySplitChooseBefore").spelling(),
+            "paySplitChooseBefore"
+        );
+        assert_eq!(
+            TriggerKind::from_str("paySplitMulBefore").spelling(),
+            "paySplitMulBefore"
+        );
         assert_eq!(TriggerKind::PaySplitMulBefore.id, 110);
     }
 }

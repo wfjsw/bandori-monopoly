@@ -23,66 +23,486 @@ pub struct TileData {
 }
 
 pub const TILES: [TileData; 60] = [
-    TileData { index: 1, kind: 0, group: 0, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 2, kind: 1, group: 1, price: 3000, house_cost: 2000, rent: [300, 1360, 3220, 6680] },
-    TileData { index: 3, kind: 1, group: 7, price: 2600, house_cost: 1500, rent: [260, 1080, 2500, 5120] },
-    TileData { index: 4, kind: 1, group: 7, price: 3200, house_cost: 2000, rent: [320, 1400, 3280, 6760] },
-    TileData { index: 5, kind: 2, group: 1, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 6, kind: 1, group: 1, price: 1600, house_cost: 1000, rent: [160, 680, 1600, 3320] },
-    TileData { index: 7, kind: 1, group: 1, price: 1600, house_cost: 1000, rent: [160, 680, 1600, 3320] },
-    TileData { index: 8, kind: 1, group: 1, price: 1400, house_cost: 1000, rent: [140, 640, 1540, 3240] },
-    TileData { index: 9, kind: 3, group: 6, price: 1000, house_cost: 500, rent: [0, 0, 0, 0] },
-    TileData { index: 10, kind: 1, group: 2, price: 1800, house_cost: 1000, rent: [180, 720, 1660, 3400] },
-    TileData { index: 11, kind: 1, group: 2, price: 2200, house_cost: 1500, rent: [220, 1000, 2380, 4960] },
-    TileData { index: 12, kind: 1, group: 7, price: 600, house_cost: 500, rent: [60, 280, 700, 1520] },
-    TileData { index: 13, kind: 2, group: 2, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 14, kind: 1, group: 2, price: 3200, house_cost: 2000, rent: [320, 1400, 3280, 6760] },
-    TileData { index: 15, kind: 1, group: 7, price: 800, house_cost: 500, rent: [80, 320, 760, 1600] },
-    TileData { index: 16, kind: 4, group: 0, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 17, kind: 3, group: 6, price: 1000, house_cost: 500, rent: [0, 0, 0, 0] },
-    TileData { index: 18, kind: 2, group: 3, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 19, kind: 1, group: 3, price: 2800, house_cost: 1500, rent: [280, 1120, 2560, 5200] },
-    TileData { index: 20, kind: 1, group: 3, price: 1600, house_cost: 1000, rent: [160, 680, 1600, 3320] },
-    TileData { index: 21, kind: 1, group: 3, price: 3000, house_cost: 2000, rent: [300, 1360, 3220, 6680] },
-    TileData { index: 22, kind: 1, group: 6, price: 2400, house_cost: 1500, rent: [240, 1040, 2440, 5040] },
-    TileData { index: 23, kind: 1, group: 3, price: 1200, house_cost: 500, rent: [120, 400, 880, 1760] },
-    TileData { index: 24, kind: 2, group: 4, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 25, kind: 1, group: 4, price: 2400, house_cost: 1500, rent: [240, 1040, 2440, 5040] },
-    TileData { index: 26, kind: 1, group: 4, price: 1000, house_cost: 500, rent: [100, 360, 820, 1680] },
-    TileData { index: 27, kind: 1, group: 5, price: 3000, house_cost: 2000, rent: [300, 1360, 3220, 6680] },
-    TileData { index: 28, kind: 1, group: 5, price: 1800, house_cost: 1000, rent: [180, 720, 1660, 3400] },
-    TileData { index: 29, kind: 2, group: 5, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 30, kind: 1, group: 5, price: 3600, house_cost: 2000, rent: [360, 1480, 3400, 6920] },
-    TileData { index: 31, kind: 5, group: 0, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 32, kind: 2, group: 6, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 33, kind: 1, group: 7, price: 1200, house_cost: 500, rent: [120, 400, 880, 1760] },
-    TileData { index: 34, kind: 1, group: 7, price: 2400, house_cost: 1500, rent: [240, 1040, 2440, 5040] },
-    TileData { index: 35, kind: 2, group: 7, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 36, kind: 1, group: 7, price: 800, house_cost: 500, rent: [80, 320, 760, 1600] },
-    TileData { index: 37, kind: 3, group: 6, price: 1000, house_cost: 500, rent: [0, 0, 0, 0] },
-    TileData { index: 38, kind: 1, group: 8, price: 2800, house_cost: 1500, rent: [280, 1120, 2560, 5200] },
-    TileData { index: 39, kind: 1, group: 8, price: 2800, house_cost: 1500, rent: [280, 1120, 2560, 5200] },
-    TileData { index: 40, kind: 2, group: 8, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 41, kind: 1, group: 6, price: 3400, house_cost: 2000, rent: [340, 1440, 3340, 6840] },
-    TileData { index: 42, kind: 2, group: 9, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 43, kind: 1, group: 6, price: 1200, house_cost: 500, rent: [120, 400, 880, 1760] },
-    TileData { index: 44, kind: 1, group: 9, price: 1400, house_cost: 1000, rent: [140, 640, 1540, 3240] },
-    TileData { index: 45, kind: 1, group: 9, price: 600, house_cost: 500, rent: [60, 280, 700, 1520] },
-    TileData { index: 46, kind: 6, group: 0, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 47, kind: 2, group: 10, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
-    TileData { index: 48, kind: 1, group: 10, price: 2200, house_cost: 1500, rent: [220, 1000, 2380, 4960] },
-    TileData { index: 49, kind: 1, group: 10, price: 2000, house_cost: 1000, rent: [200, 760, 1720, 3480] },
-    TileData { index: 50, kind: 1, group: 10, price: 2000, house_cost: 1000, rent: [200, 760, 1720, 3480] },
-    TileData { index: 51, kind: 1, group: 6, price: 1400, house_cost: 1000, rent: [140, 640, 1540, 3240] },
-    TileData { index: 52, kind: 1, group: 10, price: 2000, house_cost: 1000, rent: [200, 760, 1720, 3480] },
-    TileData { index: 53, kind: 1, group: 10, price: 1800, house_cost: 1000, rent: [180, 720, 1660, 3400] },
-    TileData { index: 54, kind: 3, group: 6, price: 1000, house_cost: 500, rent: [0, 0, 0, 0] },
-    TileData { index: 55, kind: 1, group: 11, price: 2200, house_cost: 1500, rent: [220, 1000, 2380, 4960] },
-    TileData { index: 56, kind: 1, group: 11, price: 2600, house_cost: 1500, rent: [260, 1080, 2500, 5120] },
-    TileData { index: 57, kind: 1, group: 7, price: 1000, house_cost: 500, rent: [100, 360, 820, 1680] },
-    TileData { index: 58, kind: 1, group: 11, price: 3400, house_cost: 2000, rent: [340, 1440, 3340, 6840] },
-    TileData { index: 59, kind: 1, group: 11, price: 2600, house_cost: 1500, rent: [260, 1080, 2500, 5120] },
-    TileData { index: 60, kind: 2, group: 11, price: 0, house_cost: 0, rent: [0, 0, 0, 0] },
+    TileData {
+        index: 1,
+        kind: 0,
+        group: 0,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 2,
+        kind: 1,
+        group: 1,
+        price: 3000,
+        house_cost: 2000,
+        rent: [300, 1360, 3220, 6680],
+    },
+    TileData {
+        index: 3,
+        kind: 1,
+        group: 7,
+        price: 2600,
+        house_cost: 1500,
+        rent: [260, 1080, 2500, 5120],
+    },
+    TileData {
+        index: 4,
+        kind: 1,
+        group: 7,
+        price: 3200,
+        house_cost: 2000,
+        rent: [320, 1400, 3280, 6760],
+    },
+    TileData {
+        index: 5,
+        kind: 2,
+        group: 1,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 6,
+        kind: 1,
+        group: 1,
+        price: 1600,
+        house_cost: 1000,
+        rent: [160, 680, 1600, 3320],
+    },
+    TileData {
+        index: 7,
+        kind: 1,
+        group: 1,
+        price: 1600,
+        house_cost: 1000,
+        rent: [160, 680, 1600, 3320],
+    },
+    TileData {
+        index: 8,
+        kind: 1,
+        group: 1,
+        price: 1400,
+        house_cost: 1000,
+        rent: [140, 640, 1540, 3240],
+    },
+    TileData {
+        index: 9,
+        kind: 3,
+        group: 6,
+        price: 1000,
+        house_cost: 500,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 10,
+        kind: 1,
+        group: 2,
+        price: 1800,
+        house_cost: 1000,
+        rent: [180, 720, 1660, 3400],
+    },
+    TileData {
+        index: 11,
+        kind: 1,
+        group: 2,
+        price: 2200,
+        house_cost: 1500,
+        rent: [220, 1000, 2380, 4960],
+    },
+    TileData {
+        index: 12,
+        kind: 1,
+        group: 7,
+        price: 600,
+        house_cost: 500,
+        rent: [60, 280, 700, 1520],
+    },
+    TileData {
+        index: 13,
+        kind: 2,
+        group: 2,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 14,
+        kind: 1,
+        group: 2,
+        price: 3200,
+        house_cost: 2000,
+        rent: [320, 1400, 3280, 6760],
+    },
+    TileData {
+        index: 15,
+        kind: 1,
+        group: 7,
+        price: 800,
+        house_cost: 500,
+        rent: [80, 320, 760, 1600],
+    },
+    TileData {
+        index: 16,
+        kind: 4,
+        group: 0,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 17,
+        kind: 3,
+        group: 6,
+        price: 1000,
+        house_cost: 500,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 18,
+        kind: 2,
+        group: 3,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 19,
+        kind: 1,
+        group: 3,
+        price: 2800,
+        house_cost: 1500,
+        rent: [280, 1120, 2560, 5200],
+    },
+    TileData {
+        index: 20,
+        kind: 1,
+        group: 3,
+        price: 1600,
+        house_cost: 1000,
+        rent: [160, 680, 1600, 3320],
+    },
+    TileData {
+        index: 21,
+        kind: 1,
+        group: 3,
+        price: 3000,
+        house_cost: 2000,
+        rent: [300, 1360, 3220, 6680],
+    },
+    TileData {
+        index: 22,
+        kind: 1,
+        group: 6,
+        price: 2400,
+        house_cost: 1500,
+        rent: [240, 1040, 2440, 5040],
+    },
+    TileData {
+        index: 23,
+        kind: 1,
+        group: 3,
+        price: 1200,
+        house_cost: 500,
+        rent: [120, 400, 880, 1760],
+    },
+    TileData {
+        index: 24,
+        kind: 2,
+        group: 4,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 25,
+        kind: 1,
+        group: 4,
+        price: 2400,
+        house_cost: 1500,
+        rent: [240, 1040, 2440, 5040],
+    },
+    TileData {
+        index: 26,
+        kind: 1,
+        group: 4,
+        price: 1000,
+        house_cost: 500,
+        rent: [100, 360, 820, 1680],
+    },
+    TileData {
+        index: 27,
+        kind: 1,
+        group: 5,
+        price: 3000,
+        house_cost: 2000,
+        rent: [300, 1360, 3220, 6680],
+    },
+    TileData {
+        index: 28,
+        kind: 1,
+        group: 5,
+        price: 1800,
+        house_cost: 1000,
+        rent: [180, 720, 1660, 3400],
+    },
+    TileData {
+        index: 29,
+        kind: 2,
+        group: 5,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 30,
+        kind: 1,
+        group: 5,
+        price: 3600,
+        house_cost: 2000,
+        rent: [360, 1480, 3400, 6920],
+    },
+    TileData {
+        index: 31,
+        kind: 5,
+        group: 0,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 32,
+        kind: 2,
+        group: 6,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 33,
+        kind: 1,
+        group: 7,
+        price: 1200,
+        house_cost: 500,
+        rent: [120, 400, 880, 1760],
+    },
+    TileData {
+        index: 34,
+        kind: 1,
+        group: 7,
+        price: 2400,
+        house_cost: 1500,
+        rent: [240, 1040, 2440, 5040],
+    },
+    TileData {
+        index: 35,
+        kind: 2,
+        group: 7,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 36,
+        kind: 1,
+        group: 7,
+        price: 800,
+        house_cost: 500,
+        rent: [80, 320, 760, 1600],
+    },
+    TileData {
+        index: 37,
+        kind: 3,
+        group: 6,
+        price: 1000,
+        house_cost: 500,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 38,
+        kind: 1,
+        group: 8,
+        price: 2800,
+        house_cost: 1500,
+        rent: [280, 1120, 2560, 5200],
+    },
+    TileData {
+        index: 39,
+        kind: 1,
+        group: 8,
+        price: 2800,
+        house_cost: 1500,
+        rent: [280, 1120, 2560, 5200],
+    },
+    TileData {
+        index: 40,
+        kind: 2,
+        group: 8,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 41,
+        kind: 1,
+        group: 6,
+        price: 3400,
+        house_cost: 2000,
+        rent: [340, 1440, 3340, 6840],
+    },
+    TileData {
+        index: 42,
+        kind: 2,
+        group: 9,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 43,
+        kind: 1,
+        group: 6,
+        price: 1200,
+        house_cost: 500,
+        rent: [120, 400, 880, 1760],
+    },
+    TileData {
+        index: 44,
+        kind: 1,
+        group: 9,
+        price: 1400,
+        house_cost: 1000,
+        rent: [140, 640, 1540, 3240],
+    },
+    TileData {
+        index: 45,
+        kind: 1,
+        group: 9,
+        price: 600,
+        house_cost: 500,
+        rent: [60, 280, 700, 1520],
+    },
+    TileData {
+        index: 46,
+        kind: 6,
+        group: 0,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 47,
+        kind: 2,
+        group: 10,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 48,
+        kind: 1,
+        group: 10,
+        price: 2200,
+        house_cost: 1500,
+        rent: [220, 1000, 2380, 4960],
+    },
+    TileData {
+        index: 49,
+        kind: 1,
+        group: 10,
+        price: 2000,
+        house_cost: 1000,
+        rent: [200, 760, 1720, 3480],
+    },
+    TileData {
+        index: 50,
+        kind: 1,
+        group: 10,
+        price: 2000,
+        house_cost: 1000,
+        rent: [200, 760, 1720, 3480],
+    },
+    TileData {
+        index: 51,
+        kind: 1,
+        group: 6,
+        price: 1400,
+        house_cost: 1000,
+        rent: [140, 640, 1540, 3240],
+    },
+    TileData {
+        index: 52,
+        kind: 1,
+        group: 10,
+        price: 2000,
+        house_cost: 1000,
+        rent: [200, 760, 1720, 3480],
+    },
+    TileData {
+        index: 53,
+        kind: 1,
+        group: 10,
+        price: 1800,
+        house_cost: 1000,
+        rent: [180, 720, 1660, 3400],
+    },
+    TileData {
+        index: 54,
+        kind: 3,
+        group: 6,
+        price: 1000,
+        house_cost: 500,
+        rent: [0, 0, 0, 0],
+    },
+    TileData {
+        index: 55,
+        kind: 1,
+        group: 11,
+        price: 2200,
+        house_cost: 1500,
+        rent: [220, 1000, 2380, 4960],
+    },
+    TileData {
+        index: 56,
+        kind: 1,
+        group: 11,
+        price: 2600,
+        house_cost: 1500,
+        rent: [260, 1080, 2500, 5120],
+    },
+    TileData {
+        index: 57,
+        kind: 1,
+        group: 7,
+        price: 1000,
+        house_cost: 500,
+        rent: [100, 360, 820, 1680],
+    },
+    TileData {
+        index: 58,
+        kind: 1,
+        group: 11,
+        price: 3400,
+        house_cost: 2000,
+        rent: [340, 1440, 3340, 6840],
+    },
+    TileData {
+        index: 59,
+        kind: 1,
+        group: 11,
+        price: 2600,
+        house_cost: 1500,
+        rent: [260, 1080, 2500, 5120],
+    },
+    TileData {
+        index: 60,
+        kind: 2,
+        group: 11,
+        price: 0,
+        house_cost: 0,
+        rent: [0, 0, 0, 0],
+    },
 ];
 
 /// Real-engine tile index (0-based, `0..60`) → table slot. Returns -1 if out of range.
@@ -295,14 +715,70 @@ pub fn tile_hash(bytes: &[u8]) -> u64 {
         };
     }
     // 64 straight-line steps; board names are ≤ 32 UTF-8 bytes.
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
+    step!(8);
+    step!(9);
+    step!(10);
+    step!(11);
+    step!(12);
+    step!(13);
+    step!(14);
+    step!(15);
+    step!(16);
+    step!(17);
+    step!(18);
+    step!(19);
+    step!(20);
+    step!(21);
+    step!(22);
+    step!(23);
+    step!(24);
+    step!(25);
+    step!(26);
+    step!(27);
+    step!(28);
+    step!(29);
+    step!(30);
+    step!(31);
+    step!(32);
+    step!(33);
+    step!(34);
+    step!(35);
+    step!(36);
+    step!(37);
+    step!(38);
+    step!(39);
+    step!(40);
+    step!(41);
+    step!(42);
+    step!(43);
+    step!(44);
+    step!(45);
+    step!(46);
+    step!(47);
+    step!(48);
+    step!(49);
+    step!(50);
+    step!(51);
+    step!(52);
+    step!(53);
+    step!(54);
+    step!(55);
+    step!(56);
+    step!(57);
+    step!(58);
+    step!(59);
+    step!(60);
+    step!(61);
+    step!(62);
+    step!(63);
     h
 }
 
@@ -388,8 +864,8 @@ pub const TILE_NAME_HASHES: [u64; 60] = [
 /// Board index for each [`TILE_NAME_HASHES`] slot (same order).
 pub const TILE_NAME_IDX: [i32; 60] = [
     42, 38, 24, 41, 18, 30, 37, 1, 8, 36, 16, 53, 55, 54, 48, 45, 29, 50, 17, 26, 15, 20, 34, 52,
-    9, 39, 13, 49, 19, 33, 32, 11, 25, 2, 57, 56, 22, 12, 28, 47, 46, 3, 58, 40, 59, 10, 4, 21,
-    43, 44, 0, 5, 31, 14, 7, 23, 6, 51, 35, 27,
+    9, 39, 13, 49, 19, 33, 32, 11, 25, 2, 57, 56, 22, 12, 28, 47, 46, 3, 58, 40, 59, 10, 4, 21, 43,
+    44, 0, 5, 31, 14, 7, 23, 6, 51, 35, 27,
 ];
 
 /// [`tile_named`] over raw guest bytes (the Kani ABI passes `ptr, len`).
@@ -433,13 +909,69 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
             }
         };
     }
-    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+    step!(0);
+    step!(1);
+    step!(2);
+    step!(3);
+    step!(4);
+    step!(5);
+    step!(6);
+    step!(7);
+    step!(8);
+    step!(9);
+    step!(10);
+    step!(11);
+    step!(12);
+    step!(13);
+    step!(14);
+    step!(15);
+    step!(16);
+    step!(17);
+    step!(18);
+    step!(19);
+    step!(20);
+    step!(21);
+    step!(22);
+    step!(23);
+    step!(24);
+    step!(25);
+    step!(26);
+    step!(27);
+    step!(28);
+    step!(29);
+    step!(30);
+    step!(31);
+    step!(32);
+    step!(33);
+    step!(34);
+    step!(35);
+    step!(36);
+    step!(37);
+    step!(38);
+    step!(39);
+    step!(40);
+    step!(41);
+    step!(42);
+    step!(43);
+    step!(44);
+    step!(45);
+    step!(46);
+    step!(47);
+    step!(48);
+    step!(49);
+    step!(50);
+    step!(51);
+    step!(52);
+    step!(53);
+    step!(54);
+    step!(55);
+    step!(56);
+    step!(57);
+    step!(58);
+    step!(59);
+    step!(60);
+    step!(61);
+    step!(62);
+    step!(63);
     ok
 }

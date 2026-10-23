@@ -5,8 +5,8 @@
 //! vocabulary) and lives in card-sdk so the ctx boundary can intern too.
 
 pub use card_sdk::intern::{
-    decode_handle, encode_handle, id_eq_bytes, id_eq_str, intern, intern_bytes, len,
-    reset, resolve, resolve_str, NameId, INTERN_TAG, MAX_INTERN, MAX_NAME, SLOTS,
+    decode_handle, encode_handle, id_eq_bytes, id_eq_str, intern, intern_bytes, len, reset,
+    resolve, resolve_str, NameId, INTERN_TAG, MAX_INTERN, MAX_NAME, SLOTS,
 };
 
 /// Intern a name, panicking under Kani when the table is exhausted (an

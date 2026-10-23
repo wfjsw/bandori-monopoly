@@ -14,9 +14,9 @@
 //! That is close to 开局 rather than equal to it -- anything that paid out
 //! between setup and the first turn start would come first.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Latch so 「开局时」 pays once. Free-form state: this is a consumer naming its
 /// own key, which is what the keyed map is for.
@@ -25,8 +25,18 @@ const DONE: &str = "skill.kasumiGroup.start";
 pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
-        On::Action(Action::TurnStartBefore("slot('skill.kasumiGroup.start') == 0", None, None, at_start)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::TurnStartBefore(
+            "slot('skill.kasumiGroup.start') == 0",
+            None,
+            None,
+            at_start,
+        )),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
     ],
 );
 

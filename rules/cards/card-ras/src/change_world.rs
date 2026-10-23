@@ -1,16 +1,16 @@
 //! `RAS:Change the world` -- C# `CardChangeWorld` (MatchHost.cs:9441-9531):
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:Change the world`）:
-//! > Change the world： 
+//! > Change the world：
 //! >   将此卡放置于你的一个有房屋的livehouse格子上，你的本次移动掷骰变为3d20，期间每经过一个不属于你的livehouse格子，此卡获得一个奇迹水晶，此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数，触发后将该卡放入弃牌堆
 //!
 //! place on a house-bearing Live House and turn the move dice into 3d20.
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const CHANGE_WORLD: CardDef = CardDef::new(
     "RAS:Change the world",
@@ -146,7 +146,10 @@ fn pay_choose(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     // -- C# `Bonus() = 50 * (Crystals + 1) * houses[Tile]`, added to `p.amount`.
     let bonus = 50 * (ctx::crystals() + 1) * houses;
     if bonus <= 0 {
-        return PayAddValue { value: v.value, ..v };
+        return PayAddValue {
+            value: v.value,
+            ..v
+        };
     }
     ctx::log(
         player_id,
@@ -154,7 +157,10 @@ fn pay_choose(player_id: i32, mut v: PayAddValue) -> PayAddValue {
             .player_id("who", player_id)
             .i("n", bonus as i64),
     );
-    PayAddValue { value: v.value + bonus, ..v }
+    PayAddValue {
+        value: v.value + bonus,
+        ..v
+    }
 }
 
 /// C# `CardChangeWorld.PayAfter` -- the pay that carried the bonus discards the

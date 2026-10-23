@@ -17,14 +17,19 @@ fn data() -> Arc<GameData> {
     // `common` harness. Least-invasive roster: the synthetic fixture
     // (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-            .unwrap(),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap(),
     )
 }
 
@@ -198,7 +203,9 @@ fn bankruptcy_pays_the_creditor_and_can_end_the_game() {
 fn bankrupt_land_is_freed_and_auctioned() {
     let (d, mut w) = setup(3);
     let t = first(&d, |x| x.is_buyable() && x.rent.len() >= 3);
-    let mine = first(&d, |x| x.is_buyable() && x.rent.len() >= 2 && x.name != d.tiles[t].name);
+    let mine = first(&d, |x| {
+        x.is_buyable() && x.rent.len() >= 2 && x.name != d.tiles[t].name
+    });
     w.st.owners[t] = 1;
     w.st.houses[t] = 3;
     w.st.owners[mine] = 0;
@@ -367,7 +374,11 @@ fn quote_native_matches_todays_prices_on_every_tile() {
             "force_price_native(tile {t}) == 2x"
         );
         // The engine's own `buy_price` is the same formula.
-        assert_eq!(w.buy_price(&d, t as i32), expect, "World::buy_price(tile {t})");
+        assert_eq!(
+            w.buy_price(&d, t as i32),
+            expect,
+            "World::buy_price(tile {t})"
+        );
     }
     // A tile with houses on it counts them in.
     let prop = d

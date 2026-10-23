@@ -8,11 +8,35 @@
 //! Data-only: no engine logic, `no_std`.
 
 /// A seat at the table. `i32` on the wire.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Seat(pub i32);
 
 /// A tile index. `i32` on the wire.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Tile(pub i32);
 
 /// A log / denial message key (`key!` expansion, e.g.
@@ -57,7 +81,9 @@ pub struct Dice {
 
 /// How the player gets there: exactly one per move -- a walk that travels a
 /// [路径], or a teleport to its destination.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum MoveKind {
     /// The player steps along the board, tile by tile.
     #[default]

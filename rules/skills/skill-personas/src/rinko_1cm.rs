@@ -17,9 +17,10 @@
 //! `cannot_play`) refuses every action while stunned; `prop::PLAYABLE_STUNNED`
 //! is the documented exception (the same waiver 壱雫空 carries).
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RINKO_1CM: CardDef = CardDef::new(
     "skill:白金燐子:即使1cm也要前进",
@@ -27,17 +28,23 @@ pub const RINKO_1CM: CardDef = CardDef::new(
         On::Play("", None, Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
     ],
 )
-    // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate
-    // (`bandori_std::prop::PLAYABLE_STUNNED`, the same waiver 壱雫空 carries).
-    // 「（初始3，上限3）」
-        .props(&[
-        (bandori_std::fire::FIRE_INITIAL, 3), (bandori_std::fire::FIRE_CAP, 3),
-        (bandori_std::prop::PLAYABLE_STUNNED, 1),
-    ])
-    .silent(&[1, 2]);
+// 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate
+// (`bandori_std::prop::PLAYABLE_STUNNED`, the same waiver 壱雫空 carries).
+// 「（初始3，上限3）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 3),
+    (bandori_std::fire::FIRE_CAP, 3),
+    (bandori_std::prop::PLAYABLE_STUNNED, 1),
+])
+.silent(&[1, 2]);
 
 /// 「初始3，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

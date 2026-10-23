@@ -99,10 +99,14 @@ fn main() {
             .unwrap_or(1)
             .max(1)
     } else {
-        arg("--search-threads", "BOT_SEARCH_THREADS", &threads.to_string())
-            .parse()
-            .unwrap_or(threads)
-            .max(1)
+        arg(
+            "--search-threads",
+            "BOT_SEARCH_THREADS",
+            &threads.to_string(),
+        )
+        .parse()
+        .unwrap_or(threads)
+        .max(1)
     };
     let ctx = Arc::new(Ctx::load(&data_dir, &rules_dir).with_opts(opts.clone()));
     eprintln!(
@@ -146,7 +150,9 @@ fn main() {
                     Ok(req) => handle(&ctx, req),
                     // A bad request is answered, not fatal: the process remains
                     // up and keeps serving the pool.
-                    Err(e) => serde_json::json!({"ok": false, "error": format!("bad request json: {e}")}),
+                    Err(e) => {
+                        serde_json::json!({"ok": false, "error": format!("bad request json: {e}")})
+                    }
                 };
                 let text = out.to_string();
                 let mut w = stdout.lock().unwrap();

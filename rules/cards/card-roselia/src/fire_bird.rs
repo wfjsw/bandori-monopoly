@@ -8,9 +8,9 @@
 //! pay 400 and burn one crystal at every turn end, all your tiles charge 1.5x
 //! rent, and the card hits the discard when the crystals run out.
 
-use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",

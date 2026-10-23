@@ -147,7 +147,10 @@ fn idolband_reset_iff_at(user: i32) {
     if !playable {
         // Host would not call the body. Untouched.
         let post = world::snapshot();
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "rejected play must not touch money");
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "rejected play must not touch money"
+        );
         let (logbuf, log_n) = log_slice();
         crate::kassert!(log_n == 0, "rejected play must not log");
         let _ = effects_of(&logbuf, log_n);
@@ -277,7 +280,10 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     if !admitted {
         // Host would not call the body. Untouched.
         let post = world::snapshot();
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "rejected hook must not touch fire");
+        crate::kassert!(
+            world::arr4_eq(post.charge, pre.charge),
+            "rejected hook must not touch fire"
+        );
         let (logbuf, log_n) = log_slice();
         crate::kassert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);
@@ -305,7 +311,10 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     );
     for p in 0..MAX_PLAYERS {
         if p != user as usize {
-            crate::kassert!(post.charge[p] == pre.charge[p], "frame: other players' fire");
+            crate::kassert!(
+                post.charge[p] == pre.charge[p],
+                "frame: other players' fire"
+            );
         }
         crate::kassert!(post.money[p] == pre.money[p], "frame: money");
         crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
@@ -395,7 +404,10 @@ fn childhood_02_fire_iff_at(user: i32) {
     let pre = world::snapshot();
     if !admitted {
         let post = world::snapshot();
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "rejected hook must not touch fire");
+        crate::kassert!(
+            world::arr4_eq(post.charge, pre.charge),
+            "rejected hook must not touch fire"
+        );
         let (logbuf, log_n) = log_slice();
         crate::kassert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);
@@ -499,7 +511,9 @@ fn twodonuts_01_exile_iff_at(user: i32) {
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
-    let hold = world::with_world(|ww| ww.key_get(user, intern::intern(card_sdk::abi::state_key::EXILE_HOLD)));
+    let hold = world::with_world(|ww| {
+        ww.key_get(user, intern::intern(card_sdk::abi::state_key::EXILE_HOLD))
+    });
 
     crate::kassert!(
         spec::sumimi::twodonuts_exile_ok(effects, user),
@@ -680,7 +694,10 @@ pub fn idolband_money_formula() {
     }
     let wrong = spec::sumimi::idolband_post_money_mutant(pre);
     if pre < 3000 {
-        crate::kassert!(wrong == 2999 && post != wrong, "mutant 2999 is distinguishable");
+        crate::kassert!(
+            wrong == 2999 && post != wrong,
+            "mutant 2999 is distinguishable"
+        );
     }
     kani::cover!(pre < 3000, "under 3000");
     kani::cover!(pre >= 3000, "at/over 3000");
@@ -716,10 +733,16 @@ pub fn band_02_rent_bonus_formula() {
     let crystals: i32 = kani::any();
     kani::assume(crystals >= 0 && crystals <= 8);
     let post = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
-    crate::kassert!(post == pre_amount + crystals * 100, "bonus is +100 per crystal");
+    crate::kassert!(
+        post == pre_amount + crystals * 100,
+        "bonus is +100 per crystal"
+    );
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, crystals);
     if crystals != 1 {
-        crate::kassert!(post != wrong, "mutant +100-total distinguishable when c != 1");
+        crate::kassert!(
+            post != wrong,
+            "mutant +100-total distinguishable when c != 1"
+        );
     }
     kani::cover!(crystals == 0, "c=0");
     kani::cover!(crystals >= 2, "c>=2");

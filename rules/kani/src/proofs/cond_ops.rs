@@ -48,7 +48,10 @@ pub fn ir_eq_matches_spec_for_all_operands() {
 pub fn ir_lt_matches_spec() {
     let a = symbolic_val();
     let b = symbolic_val();
-    assert_eq!(eval_binop(Kind::Lt, a, b), spec::spec_cmp(a, b, spec::Cmp::Lt));
+    assert_eq!(
+        eval_binop(Kind::Lt, a, b),
+        spec::spec_cmp(a, b, spec::Cmp::Lt)
+    );
 }
 
 #[kani::proof]
@@ -57,7 +60,10 @@ pub fn ir_lt_matches_spec() {
 pub fn ir_le_matches_spec() {
     let a = symbolic_val();
     let b = symbolic_val();
-    assert_eq!(eval_binop(Kind::Le, a, b), spec::spec_cmp(a, b, spec::Cmp::Le));
+    assert_eq!(
+        eval_binop(Kind::Le, a, b),
+        spec::spec_cmp(a, b, spec::Cmp::Le)
+    );
 }
 
 #[kani::proof]
@@ -66,7 +72,10 @@ pub fn ir_le_matches_spec() {
 pub fn ir_gt_matches_spec() {
     let a = symbolic_val();
     let b = symbolic_val();
-    assert_eq!(eval_binop(Kind::Gt, a, b), spec::spec_cmp(a, b, spec::Cmp::Gt));
+    assert_eq!(
+        eval_binop(Kind::Gt, a, b),
+        spec::spec_cmp(a, b, spec::Cmp::Gt)
+    );
 }
 
 #[kani::proof]
@@ -75,7 +84,10 @@ pub fn ir_gt_matches_spec() {
 pub fn ir_ge_matches_spec() {
     let a = symbolic_val();
     let b = symbolic_val();
-    assert_eq!(eval_binop(Kind::Ge, a, b), spec::spec_cmp(a, b, spec::Cmp::Ge));
+    assert_eq!(
+        eval_binop(Kind::Ge, a, b),
+        spec::spec_cmp(a, b, spec::Cmp::Ge)
+    );
 }
 
 #[kani::proof]
@@ -84,7 +96,10 @@ pub fn ir_ge_matches_spec() {
 pub fn ir_add_matches_spec() {
     let a = symbolic_val();
     let b = symbolic_val();
-    assert_eq!(eval_binop(Kind::Add, a, b), spec::spec_arith(a, b, spec::Arith::Add));
+    assert_eq!(
+        eval_binop(Kind::Add, a, b),
+        spec::spec_arith(a, b, spec::Arith::Add)
+    );
 }
 
 #[kani::proof]
@@ -93,7 +108,10 @@ pub fn ir_add_matches_spec() {
 pub fn ir_sub_matches_spec() {
     let a = symbolic_val();
     let b = symbolic_val();
-    assert_eq!(eval_binop(Kind::Sub, a, b), spec::spec_arith(a, b, spec::Arith::Sub));
+    assert_eq!(
+        eval_binop(Kind::Sub, a, b),
+        spec::spec_arith(a, b, spec::Arith::Sub)
+    );
 }
 
 #[kani::proof]
@@ -102,7 +120,10 @@ pub fn ir_sub_matches_spec() {
 pub fn ir_mul_matches_spec() {
     let a = symbolic_val();
     let b = symbolic_val();
-    assert_eq!(eval_binop(Kind::Mul, a, b), spec::spec_arith(a, b, spec::Arith::Mul));
+    assert_eq!(
+        eval_binop(Kind::Mul, a, b),
+        spec::spec_arith(a, b, spec::Arith::Mul)
+    );
 }
 
 /// Truncating-divmod characterisation shared by the evaluator and the

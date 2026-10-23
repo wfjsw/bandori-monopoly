@@ -18,9 +18,10 @@
 //! say *whose* skill a running body belongs to when the body was copied, which
 //! is the same provenance question as the temporary-pot cost. See the TODO.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The counter X. 「X初始为0」.
 const X: &str = "skill.yuriCrit.x";
@@ -40,7 +41,8 @@ pub const YURI_CRIT: CardDef = CardDef::new(
         // 「无需失去资金」. PayAfter is too late to rewrite.
         On::Action(Action::Pay("", None, Some(mine), on_pay)),
     ],
-).silent(&[0]);
+)
+.silent(&[0]);
 
 fn mine(player_id: i32) -> bool {
     // 「获得或失去资金」 -- the skill fires on either side of a money move:

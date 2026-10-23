@@ -8,9 +8,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
@@ -239,7 +239,11 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
     let tile = trigger::tile();
     let owner_of_tile = ctx::tile_owner(tile);
     // The 被分享方 is the other member of the pair (「之后被分享方资金直接增加」).
-    let recipient = if owner_of_tile == partner { owner } else { partner };
+    let recipient = if owner_of_tile == partner {
+        owner
+    } else {
+        partner
+    };
     // 规则书: 「不受其他任何效果影响」 -- raw money moves, no payment pipeline.
     let src = Msg::new(key!("one_of_us_share"));
     ctx::lose_raw(owner_of_tile, half, &src);

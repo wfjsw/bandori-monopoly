@@ -11,9 +11,8 @@ use game_core::net::NetMessage;
 
 /// Use `who`'s `skill` with an explicit `value` (e.g. X for a fire-count skill).
 fn skill_with(t: &mut Table, who: usize, skill: &str, x: i32) -> Result<(), String> {
-    let r = t
-        .m
-        .act(
+    let r =
+        t.m.act(
             who as i32 + 1,
             &NetMessage {
                 card: skill.into(),
@@ -31,14 +30,8 @@ fn skill_with(t: &mut Table, who: usize, skill: &str, x: i32) -> Result<(), Stri
 fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
     let d = data();
     let props = rules().card_props(card);
-    t.m.world_mut().place_card_on(
-        &d,
-        who as i32,
-        tile as i32,
-        card,
-        Msg::default(),
-        props,
-    );
+    t.m.world_mut()
+        .place_card_on(&d, who as i32, tile as i32, card, Msg::default(), props);
 }
 
 /// Inert filler for draw piles / hands (never auto-plays).
@@ -139,7 +132,12 @@ fn g08_starlit_reroll_of_a_whole_3d20_set() {
     t.dice(&[10, 1, 1, 1, 1, 2, 2, 2, 2, 2]);
     t.roll(0).unwrap();
     drain_playing(&mut t, 0, "Mor:蝴蝶飞舞的星月夜");
-    assert_eq!(t.dice_left(), 0, "every loaded face was rolled: {}", t.dice_left());
+    assert_eq!(
+        t.dice_left(),
+        0,
+        "every loaded face was rolled: {}",
+        t.dice_left()
+    );
     // The walk is the second sum (10) from CiRCLE (index 0) -> index 10.
     assert_eq!(
         t.pos(0),
@@ -424,7 +422,12 @@ fn g14_amekomi_replaces_a_started_backward_walk() {
     t.play(0, "AG:商店街的青梅竹马").unwrap();
     drain(&mut t);
     // The teleport replaces the walk.
-    assert_eq!(t.pos(0), cafe, "the teleport is the main move: pos = {}", t.pos(0));
+    assert_eq!(
+        t.pos(0),
+        cafe,
+        "the teleport is the main move: pos = {}",
+        t.pos(0)
+    );
     assert_eq!(t.dice_left(), 0, "every loaded face was rolled");
 }
 

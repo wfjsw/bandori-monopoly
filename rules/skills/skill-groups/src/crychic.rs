@@ -13,10 +13,11 @@
 //! can be played from hand. （2） is the hand-emptying reshuffle that turns the
 //! player into a MyGO or Ave Mujica player. （3） is a crystal on a 4→5 crossing.
 
-use bandori_std::kind::Actions;
-use bandori_std::state_key; use card_sdk::abi::{CardPile, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
+use bandori_std::kind::Actions;
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, CardPile, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "skill:CRYCHIC:美好的往日幻影";
 /// Hand size last seen, so （3） can see a 4→5 crossing.
@@ -25,14 +26,29 @@ const SEEN: &str = "skill.crychic.seen";
 pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            at_turn_start,
+        )),
         On::Action(Action::Drawn(card_sdk::pre::MINE, None, None, on_drawn)),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
-        On::Action(Action::TurnEndBefore(card_sdk::pre::MINE, None, Some(decks_empty), at_turn_end)),
+        On::Action(Action::TurnEndBefore(
+            card_sdk::pre::MINE,
+            None,
+            Some(decks_empty),
+            at_turn_end,
+        )),
         On::Filter(Filter::PaySplitChoose("", Some(in_lock), lock_pay)),
-        On::Action(Actions::PassRewardAffected("", None, Some(in_lock), force_card)),
+        On::Action(Actions::PassRewardAffected(
+            "",
+            None,
+            Some(in_lock),
+            force_card,
+        )),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
@@ -47,13 +63,12 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Play("", None, Some(can_transform), transform_now),
     ],
 )
-    .silent(&[0]);
+.silent(&[0]);
 
 /// The condition under which this band skill closes the exclusive-use gate.
 /// CRYCHIC variants may play their own exclusives (`step == 1`) but not the
 /// base character's (`value == 1 && step == 0`).
-pub const EXCLUSIVE_USE_DENIED: &str =
-    "group_is(actor, 'CRYCHIC') && value == 1 && step == 0";
+pub const EXCLUSIVE_USE_DENIED: &str = "group_is(actor, 'CRYCHIC') && value == 1 && step == 0";
 
 /// The answer of a closed exclusive-use gate (only run if a gate is ever
 /// raised; pure reads use the condition alone).

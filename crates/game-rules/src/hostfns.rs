@@ -12,8 +12,8 @@
 use card_sdk::abi::{self, export, OnKind, PromptKind};
 
 use crate::host::{
-    engine_msg, CallOut, GuestMem, HostCtx, HostErr, HostRequest, HostState, Prompt,
-    PromptOption, RulesHandle, MAX_NESTING,
+    engine_msg, CallOut, GuestMem, HostCtx, HostErr, HostRequest, HostState, Prompt, PromptOption,
+    RulesHandle, MAX_NESTING,
 };
 use crate::world::CardWorld;
 use crate::{AbKind, Msg};
@@ -43,22 +43,22 @@ pub fn abnormal_gate<C: HostCtx>(c: &mut C, player_id: i32, kind: AbKind) -> Res
 }
 
 pub fn roll<C: HostCtx>(c: &mut C, player_id: i32, count: i32, sides: i32) -> Result<i32, HostErr> {
-            if !(1..=100).contains(&count) || !(1..=1000).contains(&sides) {
-                return Err(HostErr::trap(format!("roll({count}d{sides}) out of range")));
-            }
-            Ok(c.st_mut().w().roll(player_id, count, sides))
+    if !(1..=100).contains(&count) || !(1..=1000).contains(&sides) {
+        return Err(HostErr::trap(format!("roll({count}d{sides}) out of range")));
+    }
+    Ok(c.st_mut().w().roll(player_id, count, sides))
 }
 
 pub fn log<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let msg = guest_msg(c, p, n)?;
-            c.st_mut().w().log(player_id, msg);
-            Ok(())
+    let msg = guest_msg(c, p, n)?;
+    c.st_mut().w().log(player_id, msg);
+    Ok(())
 }
 
 pub fn effect<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let msg = guest_msg(c, p, n)?;
-            c.st_mut().w().effect(player_id, msg);
-            Ok(())
+    let msg = guest_msg(c, p, n)?;
+    c.st_mut().w().effect(player_id, msg);
+    Ok(())
 }
 
 // -- flash (v55) -------------------------------------------------------------
@@ -76,7 +76,13 @@ pub fn no_flash<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
 }
 
 /// `ctx::flash_card` -- proactive "look here" flash of another card.
-pub fn flash_card<C: HostCtx>(c: &mut C, cptr: i32, cl: i32, p: i32, n: i32) -> Result<(), HostErr> {
+pub fn flash_card<C: HostCtx>(
+    c: &mut C,
+    cptr: i32,
+    cl: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostErr> {
     let card_id = guest_str(c, cptr, cl)?;
     let msg = guest_msg(c, p, n)?;
     c.st_mut().w().flash_card(&card_id, msg);
@@ -130,9 +136,9 @@ pub fn place_mark<C: HostCtx>(
     let category = guest_str(c, cptr, cl)?;
     let note = guest_msg(c, np, nl)?;
     let fresh = stack != 0; // Stack::Fresh = 1
-    Ok(c.st_mut().w().place_mark(
-        tile, &kind, &category, owner, src, count, note, fresh,
-    ))
+    Ok(c.st_mut()
+        .w()
+        .place_mark(tile, &kind, &category, owner, src, count, note, fresh))
 }
 
 /// Place **one** paired mark spanning tiles `a` and `b` (one row per tile,
@@ -158,13 +164,16 @@ pub fn place_mark_pair<C: HostCtx>(
     let category = guest_str(c, cptr, cl)?;
     let note = guest_msg(c, np, nl)?;
     let fresh = stack != 0; // Stack::Fresh = 1
-    Ok(c
-        .st_mut()
+    Ok(c.st_mut()
         .w()
         .place_mark_pair(a, b, &kind, &category, owner, src, count, note, fresh) as i32)
 }
 
-fn guest_filter<C: HostCtx>(c: &mut C, fp: i32, fl: i32) -> Result<game_core::state::MarkFilter<'static>, HostErr> {
+fn guest_filter<C: HostCtx>(
+    c: &mut C,
+    fp: i32,
+    fl: i32,
+) -> Result<game_core::state::MarkFilter<'static>, HostErr> {
     let bytes = c.read_guest(fp, fl)?;
     let f: card_sdk::abi::MarkFilter = postcard::from_bytes(&bytes)
         .map_err(|_| HostErr::trap("guest mark filter is not MarkFilter postcard"))?;
@@ -205,7 +214,12 @@ pub fn mark_src_at<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result
     Ok(c.st().wr().mark_src_at(tile, &f))
 }
 
-pub fn mark_instance_at<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
+pub fn mark_instance_at<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    fp: i32,
+    fl: i32,
+) -> Result<i32, HostErr> {
     let f = guest_filter(c, fp, fl)?;
     Ok(c.st().wr().mark_instance_at(tile, &f))
 }
@@ -279,7 +293,9 @@ pub fn add_card_counter<C: HostCtx>(
 ) -> Result<i32, HostErr> {
     let card = guest_str(c, cptr, cl)?;
     let name = guest_str(c, np, nl)?;
-    Ok(c.st_mut().w().add_card_counter(player_id, &card, &name, n, max))
+    Ok(c.st_mut()
+        .w()
+        .add_card_counter(player_id, &card, &name, n, max))
 }
 
 pub fn count_held<C: HostCtx>(c: &mut C, np: i32, nl: i32, player_id: i32) -> Result<i32, HostErr> {
@@ -349,9 +365,9 @@ pub fn move_units<C: HostCtx>(
     n: i32,
 ) -> Result<i32, HostErr> {
     let name = guest_str(c, np, nl)?;
-    Ok(c.st_mut().w().move_units(
-        &name, from_tile, from_player, to_tile, to_player, n,
-    ))
+    Ok(c.st_mut()
+        .w()
+        .move_units(&name, from_tile, from_player, to_tile, to_player, n))
 }
 
 pub fn self_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -359,27 +375,31 @@ pub fn self_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn money<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().money(player_id)
-    })
+    Ok({ c.st().wr().money(player_id) })
 }
 
-pub fn gain<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let src = guest_msg(c, p, n)?;
-                        // A card-driven gain runs the same `Money` pipeline as a payment --
-            // print (game -> player) -- so PaySplitAdd / PaySplitChoose / the `effect`
-            // counteraction window all see it. The pause/resume is the same as `pay`:
-            // the engine answers with the amount that actually moved.
-            {
-                let req = HostRequest::Pay {
-                from: -1,
-                to: player_id,
-                amount,
-                src: Some(src),
-                total_stage: true,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+pub fn gain<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    amount: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let src = guest_msg(c, p, n)?;
+    // A card-driven gain runs the same `Money` pipeline as a payment --
+    // print (game -> player) -- so PaySplitAdd / PaySplitChoose / the `effect`
+    // counteraction window all see it. The pause/resume is the same as `pay`:
+    // the engine answers with the amount that actually moved.
+    {
+        let req = HostRequest::Pay {
+            from: -1,
+            to: player_id,
+            amount,
+            src: Some(src),
+            total_stage: true,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 pub fn gain_typed<C: HostCtx>(
@@ -391,17 +411,17 @@ pub fn gain_typed<C: HostCtx>(
     xp: i32,
     xl: i32,
 ) -> Result<i32, HostErr> {
-            let typ = guest_str(c, tp, tl)?;
-            let text = guest_msg(c, xp, xl)?;
-                        {
-                let req = HostRequest::GainTyped {
-                player_id,
-                amount,
-                typ,
-                text: Some(text),
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+    let typ = guest_str(c, tp, tl)?;
+    let text = guest_msg(c, xp, xl)?;
+    {
+        let req = HostRequest::GainTyped {
+            player_id,
+            amount,
+            typ,
+            text: Some(text),
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 /// Raw money adjustment (`ctx::adjust_money` / `gain_raw` / `lose_raw`):
@@ -431,67 +451,94 @@ pub fn adjust_money<C: HostCtx>(
     Ok(c.st_mut().w().adjust_money_raw(player_id, delta, src))
 }
 
-pub fn pay<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let src = guest_msg(c, p, n)?;
-                        // A card-driven payment is paused so the engine can raise a `pay`
-            // trigger (and the counteraction window) before the money moves. The answer is
-            // the final amount to move -- 0 cancels the payment outright.
-            //
-            // The pause is the sentinel **as the return value**, not a trap:
-            // `ctx::pay` reads it through `asked()` and hands the card
-            // `Err(Prompt)`. Trapping here would tear the stack before the card
-            // ever saw a `Result`.
-            {
-                let req = HostRequest::Pay {
-                from: player_id,
-                to: -1,
-                amount,
-                src: Some(src),
-                total_stage: true,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+pub fn pay<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    amount: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let src = guest_msg(c, p, n)?;
+    // A card-driven payment is paused so the engine can raise a `pay`
+    // trigger (and the counteraction window) before the money moves. The answer is
+    // the final amount to move -- 0 cancels the payment outright.
+    //
+    // The pause is the sentinel **as the return value**, not a trap:
+    // `ctx::pay` reads it through `asked()` and hands the card
+    // `Err(Prompt)`. Trapping here would tear the stack before the card
+    // ever saw a `Result`.
+    {
+        let req = HostRequest::Pay {
+            from: player_id,
+            to: -1,
+            amount,
+            src: Some(src),
+            total_stage: true,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
-pub fn pay_to<C: HostCtx>(c: &mut C, from: i32, to: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let src = guest_msg(c, p, n)?;
-                        {
-                let req = HostRequest::Pay {
-                from,
-                to,
-                amount,
-                src: Some(src),
-                total_stage: true,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+pub fn pay_to<C: HostCtx>(
+    c: &mut C,
+    from: i32,
+    to: i32,
+    amount: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let src = guest_msg(c, p, n)?;
+    {
+        let req = HostRequest::Pay {
+            from,
+            to,
+            amount,
+            src: Some(src),
+            total_stage: true,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
-pub fn pay_total<C: HostCtx>(c: &mut C, from: i32, to: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let src = guest_msg(c, p, n)?;
-                        {
-                let req = HostRequest::PayTotal {
-                from,
-                to,
-                amount,
-                src: Some(src),
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+pub fn pay_total<C: HostCtx>(
+    c: &mut C,
+    from: i32,
+    to: i32,
+    amount: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let src = guest_msg(c, p, n)?;
+    {
+        let req = HostRequest::PayTotal {
+            from,
+            to,
+            amount,
+            src: Some(src),
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
-pub fn pay_leg<C: HostCtx>(c: &mut C, from: i32, to: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let src = guest_msg(c, p, n)?;
-                        {
-                let req = HostRequest::Pay {
-                from,
-                to,
-                amount,
-                src: Some(src),
-                total_stage: false,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+pub fn pay_leg<C: HostCtx>(
+    c: &mut C,
+    from: i32,
+    to: i32,
+    amount: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let src = guest_msg(c, p, n)?;
+    {
+        let req = HostRequest::Pay {
+            from,
+            to,
+            amount,
+            src: Some(src),
+            total_stage: false,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 pub fn player_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -499,78 +546,56 @@ pub fn player_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn player_out<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().player_out(player_id)
-    })
+    Ok({ c.st().wr().player_out(player_id) })
 }
 
 pub fn others_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().others_count(player_id)
-    })
+    Ok({ c.st().wr().others_count(player_id) })
 }
 
 pub fn others_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().others_at(player_id, index)
-    })
+    Ok({ c.st().wr().others_at(player_id, index) })
 }
 
 pub fn tile_named<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
-            let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().tile_named(&name))
+    let name = guest_str(c, p, n)?;
+    Ok(c.st().wr().tile_named(&name))
 }
 
 pub fn tile_owner<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().tile_owner(tile)
-    })
+    Ok({ c.st().wr().tile_owner(tile) })
 }
 
 pub fn player_pos<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().player_pos(player_id)
-    })
+    Ok({ c.st().wr().player_pos(player_id) })
 }
 
 pub fn tile_steps_ahead<C: HostCtx>(c: &mut C, player_id: i32, steps: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().tile_steps_ahead(player_id, steps),)
+    Ok(c.st().wr().tile_steps_ahead(player_id, steps))
 }
 
 pub fn rent_of<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().rent_of(tile)
-    })
+    Ok({ c.st().wr().rent_of(tile) })
 }
 
 pub fn buy_price<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().buy_price(tile)
-    })
+    Ok({ c.st().wr().buy_price(tile) })
 }
 
 pub fn build_cost<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().build_cost(tile)
-    })
+    Ok({ c.st().wr().build_cost(tile) })
 }
 
 pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().mortgage_value(tile)
-    })
+    Ok({ c.st().wr().mortgage_value(tile) })
 }
 
 pub fn owned_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().owned_count(player_id)
-    })
+    Ok({ c.st().wr().owned_count(player_id) })
 }
 
 pub fn owned_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().owned_at(player_id, index)
-    })
+    Ok({ c.st().wr().owned_at(player_id, index) })
 }
 
 /// `tile_is(tile, kind_ptr, kind_len) -> i32` -- data kind by wire spelling.
@@ -602,36 +627,36 @@ pub fn tile_in<C: HostCtx>(
 }
 
 pub fn paid_in_settle<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().paid_in_settle()
-    })
+    Ok({ c.st().wr().paid_in_settle() })
 }
 
 pub fn turn_rolls<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let rolls = c.st().wr().turn_rolls();
-            let bytes = postcard::to_allocvec(&rolls)
-                .map_err(|e| HostErr::trap(format!("turn_rolls encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+    let rolls = c.st().wr().turn_rolls();
+    let bytes = postcard::to_allocvec(&rolls)
+        .map_err(|e| HostErr::trap(format!("turn_rolls encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
-pub fn field_instances<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let inst = c.st().wr().field_instances(player_id);
-            let bytes = postcard::to_allocvec(&inst)
-                .map_err(|e| HostErr::trap(format!("field_instances encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn field_instances<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let inst = c.st().wr().field_instances(player_id);
+    let bytes = postcard::to_allocvec(&inst)
+        .map_err(|e| HostErr::trap(format!("field_instances encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
-
 
 pub fn unplace_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().unplace_at(uid)
-    })
+    Ok({ c.st_mut().w().unplace_at(uid) })
 }
 
 pub fn tile_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
@@ -639,49 +664,37 @@ pub fn tile_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
 }
 
 pub fn set_tile_at<C: HostCtx>(c: &mut C, uid: i32, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().set_tile_at(uid, tile) as i32
-    })
+    Ok({ c.st_mut().w().set_tile_at(uid, tile) as i32 })
 }
 
 pub fn is_face_down_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_face_down_at(uid) as i32
-    })
+    Ok({ c.st().wr().is_face_down_at(uid) as i32 })
 }
 
 pub fn set_face_down_at<C: HostCtx>(c: &mut C, uid: i32, on: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().set_face_down_at(uid, on != 0) as i32
-    })
+    Ok({ c.st_mut().w().set_face_down_at(uid, on != 0) as i32 })
 }
 
 pub fn is_immune_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_immune_at(uid) as i32
-    })
+    Ok({ c.st().wr().is_immune_at(uid) as i32 })
 }
 
 pub fn set_immune_at<C: HostCtx>(c: &mut C, uid: i32, on: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().set_immune_at(uid, on != 0) as i32
-    })
+    Ok({ c.st_mut().w().set_immune_at(uid, on != 0) as i32 })
 }
 
 pub fn set_build_discount<C: HostCtx>(c: &mut C, n: i32, layers: i32) -> Result<(), HostErr> {
-            c.st_mut().w().set_build_discount(n, layers);
-            Ok(())
+    c.st_mut().w().set_build_discount(n, layers);
+    Ok(())
 }
 
 pub fn set_build_cost_pct<C: HostCtx>(c: &mut C, pct: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_build_cost_pct(pct);
-        Ok(())
+    c.st_mut().w().set_build_cost_pct(pct);
+    Ok(())
 }
 
 pub fn turn_start_pos<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().turn_start_pos(player_id)
-    })
+    Ok({ c.st().wr().turn_start_pos(player_id) })
 }
 
 pub fn turn_snap<C: HostCtx>(c: &mut C, player_id: i32, buf: i32) -> Result<i32, HostErr> {
@@ -693,84 +706,67 @@ pub fn turn_snap<C: HostCtx>(c: &mut C, player_id: i32, buf: i32) -> Result<i32,
 }
 
 pub fn tile_group<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().tile_group(tile)
-    })
+    Ok({ c.st().wr().tile_group(tile) })
 }
 
 pub fn tile_price<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().tile_price(tile)
-    })
+    Ok({ c.st().wr().tile_price(tile) })
 }
 
 pub fn houses_of<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().houses_of(tile)
-    })
+    Ok({ c.st().wr().houses_of(tile) })
 }
 
 pub fn rent_houses_of<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().rent_houses_of(tile)
-    })
+    Ok({ c.st().wr().rent_houses_of(tile) })
 }
 
 pub fn set_houses<C: HostCtx>(c: &mut C, tile: i32, n: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_houses(tile, n);
-        Ok(())
+    c.st_mut().w().set_houses(tile, n);
+    Ok(())
 }
 
 pub fn add_house<C: HostCtx>(c: &mut C, tile: i32, n: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().add_house(tile, n)
-    })
+    Ok({ c.st_mut().w().add_house(tile, n) })
 }
 
 pub fn mortgaged_of<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().mortgaged_of(tile)
-    })
+    Ok({ c.st().wr().mortgaged_of(tile) })
 }
 
 pub fn set_mortgaged<C: HostCtx>(c: &mut C, tile: i32, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_mortgaged(tile, v);
-        Ok(())
+    c.st_mut().w().set_mortgaged(tile, v);
+    Ok(())
 }
 
 pub fn set_owner<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_owner(tile, player_id);
-        Ok(())
+    c.st_mut().w().set_owner(tile, player_id);
+    Ok(())
 }
 
 pub fn dist<C: HostCtx>(c: &mut C, a: i32, b: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().dist(a, b)
-    })
+    Ok({ c.st().wr().dist(a, b) })
 }
 
 pub fn tile_forward<C: HostCtx>(c: &mut C, a: i32, b: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().tile_forward(a, b)
-    })
+    Ok({ c.st().wr().tile_forward(a, b) })
 }
 
 pub fn neighbor<C: HostCtx>(c: &mut C, player_id: i32, dir: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().neighbor(player_id, dir)
-    })
+    Ok({ c.st().wr().neighbor(player_id, dir) })
 }
 
 pub fn players_on_count<C: HostCtx>(c: &mut C, tile: i32, except: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().players_on_count(tile, except)
-    })
+    Ok({ c.st().wr().players_on_count(tile, except) })
 }
 
-pub fn players_on_at<C: HostCtx>(c: &mut C, tile: i32, except: i32, index: i32) -> Result<i32, HostErr> {
-    Ok({
-            c.st().wr().players_on_at(tile, except, index)
-    })
+pub fn players_on_at<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    except: i32,
+    index: i32,
+) -> Result<i32, HostErr> {
+    Ok({ c.st().wr().players_on_at(tile, except, index) })
 }
 
 pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
@@ -802,21 +798,26 @@ pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostEr
 }
 
 pub fn draw_event<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::DrawEvent { player_id };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+    {
+        let req = HostRequest::DrawEvent { player_id };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
-pub fn pay_rent<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, half: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::PayRent {
-                player_id,
-                tile,
-                half: half != 0,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+pub fn pay_rent<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    half: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::PayRent {
+            player_id,
+            tile,
+            half: half != 0,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 /// `charge_rent(payer, tile, milli_scale) -> paid` -- a rent-shaped 「收费」 at
@@ -840,159 +841,212 @@ pub fn charge_rent<C: HostCtx>(
 }
 
 pub fn offer_buy<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::OfferBuy { player_id, tile };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+    {
+        let req = HostRequest::OfferBuy { player_id, tile };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 pub fn offer_force_buy<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::OfferForceBuy { player_id, tile };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+    {
+        let req = HostRequest::OfferForceBuy { player_id, tile };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 pub fn offer_build<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::OfferBuildOne { player_id, tile };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+    {
+        let req = HostRequest::OfferBuildOne { player_id, tile };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+    }
 }
 
 pub fn add_to_hand<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let card = guest_str(c, p, n)?;
-            c.st_mut().w().add_to_hand(player_id, &card);
-            Ok(())
+    let card = guest_str(c, p, n)?;
+    c.st_mut().w().add_to_hand(player_id, &card);
+    Ok(())
 }
 
-pub fn add_to_deck<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, shuffle: i32) -> Result<(), HostErr> {
-            let card = guest_str(c, p, n)?;
-            c.st_mut().w().add_to_deck(player_id, &card, shuffle != 0);
-            Ok(())
+pub fn add_to_deck<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    shuffle: i32,
+) -> Result<(), HostErr> {
+    let card = guest_str(c, p, n)?;
+    c.st_mut().w().add_to_deck(player_id, &card, shuffle != 0);
+    Ok(())
 }
 
-pub fn add_to_deck_at<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, pos: i32) -> Result<(), HostErr> {
-            let card = guest_str(c, p, n)?;
-            c.st_mut().w().add_to_deck_at(player_id, &card, pos);
-            Ok(())
+pub fn add_to_deck_at<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    pos: i32,
+) -> Result<(), HostErr> {
+    let card = guest_str(c, p, n)?;
+    c.st_mut().w().add_to_deck_at(player_id, &card, pos);
+    Ok(())
 }
 
-pub fn take_card<C: HostCtx>(c: &mut C, player_id: i32, pile: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let pile = crate::CardPile::from_i32(pile)
-                .ok_or_else(|| HostErr::trap(format!("bad card pile {pile}")))?;
-            let id = guest_str(c, p, n)?;
-            Ok(c.st_mut().w().take_card(player_id, pile, &id) as i32)
+pub fn take_card<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    pile: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let pile = crate::CardPile::from_i32(pile)
+        .ok_or_else(|| HostErr::trap(format!("bad card pile {pile}")))?;
+    let id = guest_str(c, p, n)?;
+    Ok(c.st_mut().w().take_card(player_id, pile, &id) as i32)
 }
 
-pub fn cards_in<C: HostCtx>(c: &mut C, player_id: i32, pile: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let pile = crate::CardPile::from_i32(pile)
-                .ok_or_else(|| HostErr::trap(format!("bad card pile {pile}")))?;
-            let list = c.st().wr().cards_in(player_id, pile);
-            let bytes =
-                postcard::to_allocvec(&list).map_err(|e| HostErr::trap(format!("cards_in encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn cards_in<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    pile: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let pile = crate::CardPile::from_i32(pile)
+        .ok_or_else(|| HostErr::trap(format!("bad card pile {pile}")))?;
+    let list = c.st().wr().cards_in(player_id, pile);
+    let bytes =
+        postcard::to_allocvec(&list).map_err(|e| HostErr::trap(format!("cards_in encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
 pub fn to_discard<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let card = guest_str(c, p, n)?;
-            c.st_mut().w().to_discard(player_id, &card);
-            Ok(())
+    let card = guest_str(c, p, n)?;
+    c.st_mut().w().to_discard(player_id, &card);
+    Ok(())
 }
 
 pub fn hand_count<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, p, n)?;
-            Ok(c.st().wr().hand_count(player_id, &card))
+    let card = guest_str(c, p, n)?;
+    Ok(c.st().wr().hand_count(player_id, &card))
 }
 
-pub fn discard_count<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, p, n)?;
-            Ok(c.st().wr().discard_count(player_id, &card))
+pub fn discard_count<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, p, n)?;
+    Ok(c.st().wr().discard_count(player_id, &card))
 }
 
 pub fn hand_size<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().hand_size(player_id)
-    })
+    Ok({ c.st().wr().hand_size(player_id) })
 }
 
 pub fn deck_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().deck_count(player_id)
-    })
+    Ok({ c.st().wr().deck_count(player_id) })
 }
 
 pub fn discard_size<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().discard_size(player_id)
-    })
+    Ok({ c.st().wr().discard_size(player_id) })
 }
 
-pub fn discard_from_hand<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, p, n)?;
-            Ok(c.st_mut().w().discard_from_hand(player_id, &card))
+pub fn discard_from_hand<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, p, n)?;
+    Ok(c.st_mut().w().discard_from_hand(player_id, &card))
 }
 
-pub fn shuffle_into_deck<C: HostCtx>(c: &mut C, player_id: i32, hand: i32, discard: i32) -> Result<i32, HostErr> {
+pub fn shuffle_into_deck<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    hand: i32,
+    discard: i32,
+) -> Result<i32, HostErr> {
     Ok({
-            c.st_mut()
-                .w()
-                .shuffle_into_deck(player_id, hand != 0, discard != 0)
+        c.st_mut()
+            .w()
+            .shuffle_into_deck(player_id, hand != 0, discard != 0)
     })
 }
 
 pub fn unplace_card<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().unplace_card()
-    })
+    Ok({ c.st_mut().w().unplace_card() })
 }
 
 pub fn event_expire<C: HostCtx>(c: &mut C, ip: i32, il: i32, removed: i32) -> Result<(), HostErr> {
-            let id = guest_str(c, ip, il)?;
-            c.st_mut().w().event_expire(&id, removed != 0);
-            Ok(())
+    let id = guest_str(c, ip, il)?;
+    c.st_mut().w().event_expire(&id, removed != 0);
+    Ok(())
 }
 
 pub fn event_is_active<C: HostCtx>(c: &mut C, ip: i32, il: i32) -> Result<i32, HostErr> {
-            let id = guest_str(c, ip, il)?;
-            Ok(c.st().wr().event_is_active(&id) as i32)
+    let id = guest_str(c, ip, il)?;
+    Ok(c.st().wr().event_is_active(&id) as i32)
 }
 
-pub fn event_deck_push<C: HostCtx>(c: &mut C, ip: i32, il: i32, face_down: i32) -> Result<(), HostErr> {
-            let id = guest_str(c, ip, il)?;
-            c.st_mut().w().event_deck_push(&id, face_down != 0);
-            Ok(())
+pub fn event_deck_push<C: HostCtx>(
+    c: &mut C,
+    ip: i32,
+    il: i32,
+    face_down: i32,
+) -> Result<(), HostErr> {
+    let id = guest_str(c, ip, il)?;
+    c.st_mut().w().event_deck_push(&id, face_down != 0);
+    Ok(())
 }
 
 pub fn event_banish<C: HostCtx>(c: &mut C, ip: i32, il: i32) -> Result<(), HostErr> {
-            let id = guest_str(c, ip, il)?;
-            c.st_mut().w().event_banish(&id);
-            Ok(())
+    let id = guest_str(c, ip, il)?;
+    c.st_mut().w().event_banish(&id);
+    Ok(())
 }
 
-pub fn placed_cards<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let names = c.st().wr().placed_cards(player_id);
-            let bytes = postcard::to_allocvec(&names)
-                .map_err(|e| HostErr::trap(format!("placed_cards encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn placed_cards<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let names = c.st().wr().placed_cards(player_id);
+    let bytes = postcard::to_allocvec(&names)
+        .map_err(|e| HostErr::trap(format!("placed_cards encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
-pub fn card_text_mentions<C: HostCtx>(c: &mut C, cptr: i32, cl: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cptr, cl)?;
-            let needle = guest_str(c, np, nl)?;
-            Ok(c.st().wr().card_text_mentions(&card, &needle) as i32)
+pub fn card_text_mentions<C: HostCtx>(
+    c: &mut C,
+    cptr: i32,
+    cl: i32,
+    np: i32,
+    nl: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
+    let needle = guest_str(c, np, nl)?;
+    Ok(c.st().wr().card_text_mentions(&card, &needle) as i32)
 }
 
 /// One declared static property of the card rule `id` (`CardDef::props`);
 /// `0` when the card does not declare it. The generic guest face of
 /// `CardRules::card_prop` / `Ruleset::card_prop`.
-pub fn card_prop<C: HostCtx>(c: &mut C, ip: i32, il: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
+pub fn card_prop<C: HostCtx>(
+    c: &mut C,
+    ip: i32,
+    il: i32,
+    kp: i32,
+    kl: i32,
+) -> Result<i32, HostErr> {
     let id = guest_str(c, ip, il)?;
     let key = guest_str(c, kp, kl)?;
     let rules = c
@@ -1003,8 +1057,6 @@ pub fn card_prop<C: HostCtx>(c: &mut C, ip: i32, il: i32, kp: i32, kl: i32) -> R
     Ok(rules.card_prop(&id, &key))
 }
 
-
-
 pub fn is_placed<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().is_placed())
 }
@@ -1014,130 +1066,157 @@ pub fn self_tile<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn set_self_tile<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().set_self_tile(tile) as i32
-    })
+    Ok({ c.st_mut().w().set_self_tile(tile) as i32 })
 }
 
 pub fn self_face_down<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().self_face_down() as i32
-    })
+    Ok({ c.st().wr().self_face_down() as i32 })
 }
 
 pub fn set_self_face_down<C: HostCtx>(c: &mut C, on: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().set_self_face_down(on != 0) as i32
-    })
+    Ok({ c.st_mut().w().set_self_face_down(on != 0) as i32 })
 }
 
 pub fn self_immune<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().self_immune() as i32
-    })
+    Ok({ c.st().wr().self_immune() as i32 })
 }
 
 pub fn set_self_immune<C: HostCtx>(c: &mut C, on: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().set_self_immune(on != 0) as i32
-    })
+    Ok({ c.st_mut().w().set_self_immune(on != 0) as i32 })
 }
 
-
-
 pub fn self_prop<C: HostCtx>(c: &mut C, kp: i32, kl: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            Ok(c.st().wr().self_prop(&key))
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st().wr().self_prop(&key))
 }
 
 pub fn set_self_prop<C: HostCtx>(c: &mut C, kp: i32, kl: i32, v: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            Ok(c.st_mut().w().set_self_prop(&key, v))
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st_mut().w().set_self_prop(&key, v))
 }
 
 pub fn tile_prop<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            Ok(c.st().wr().tile_prop(tile, &key))
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st().wr().tile_prop(tile, &key))
 }
 
-pub fn set_tile_prop<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32, v: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            Ok(c.st_mut().w().set_tile_prop(tile, &key, v))
+pub fn set_tile_prop<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    kp: i32,
+    kl: i32,
+    v: i32,
+) -> Result<i32, HostErr> {
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st_mut().w().set_tile_prop(tile, &key, v))
 }
 
 pub fn prop_at<C: HostCtx>(c: &mut C, uid: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            Ok(c.st().wr().prop_at(uid, &key))
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st().wr().prop_at(uid, &key))
 }
 
-pub fn set_prop_at<C: HostCtx>(c: &mut C, uid: i32, kp: i32, kl: i32, v: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            Ok(c.st_mut().w().set_prop_at(uid, &key, v))
+pub fn set_prop_at<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    kp: i32,
+    kl: i32,
+    v: i32,
+) -> Result<i32, HostErr> {
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st_mut().w().set_prop_at(uid, &key, v))
 }
 
-
-
-
-
-pub fn state_get<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, field: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, p, n)?;
-            Ok(match field {
-                1 => c.st().wr().state_min(player_id, &key),
-                2 => c.st().wr().state_max(player_id, &key),
-                3 => match c.st().wr().state_expires(player_id, &key) {
-                    None => 0,
-                    Some(game_core::state::Tick::TurnStart) => 1,
-                    Some(game_core::state::Tick::TurnEnd) => 2,
-                },
-                _ => c.st().wr().state_get(player_id, &key),
-            })
+pub fn state_get<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    field: i32,
+) -> Result<i32, HostErr> {
+    let key = guest_str(c, p, n)?;
+    Ok(match field {
+        1 => c.st().wr().state_min(player_id, &key),
+        2 => c.st().wr().state_max(player_id, &key),
+        3 => match c.st().wr().state_expires(player_id, &key) {
+            None => 0,
+            Some(game_core::state::Tick::TurnStart) => 1,
+            Some(game_core::state::Tick::TurnEnd) => 2,
+        },
+        _ => c.st().wr().state_get(player_id, &key),
+    })
 }
 
-pub fn state_set<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, field: i32, v: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, p, n)?;
-            Ok(match field {
-                1 => {
-                    let max = c.st().wr().state_max(player_id, &key);
-                    c.st_mut().w().state_set_bounds(player_id, &key, v, max);
-                    v
-                }
-                2 => {
-                    let min = c.st().wr().state_min(player_id, &key);
-                    c.st_mut().w().state_set_bounds(player_id, &key, min, v);
-                    v
-                }
-                3 => {
-                    let e = match v {
-                        1 => Some(game_core::state::Tick::TurnStart),
-                        2 => Some(game_core::state::Tick::TurnEnd),
-                        _ => None,
-                    };
-                    c.st_mut().w().state_set_expires(player_id, &key, e);
-                    v
-                }
-                _ => c.st_mut().w().state_set(player_id, &key, v),
-            })
+pub fn state_set<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    field: i32,
+    v: i32,
+) -> Result<i32, HostErr> {
+    let key = guest_str(c, p, n)?;
+    Ok(match field {
+        1 => {
+            let max = c.st().wr().state_max(player_id, &key);
+            c.st_mut().w().state_set_bounds(player_id, &key, v, max);
+            v
+        }
+        2 => {
+            let min = c.st().wr().state_min(player_id, &key);
+            c.st_mut().w().state_set_bounds(player_id, &key, min, v);
+            v
+        }
+        3 => {
+            let e = match v {
+                1 => Some(game_core::state::Tick::TurnStart),
+                2 => Some(game_core::state::Tick::TurnEnd),
+                _ => None,
+            };
+            c.st_mut().w().state_set_expires(player_id, &key, e);
+            v
+        }
+        _ => c.st_mut().w().state_set(player_id, &key, v),
+    })
 }
 
-pub fn state_add<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, delta: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, p, n)?;
-            Ok(c.st_mut().w().state_add(player_id, &key, delta))
+pub fn state_add<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    delta: i32,
+) -> Result<i32, HostErr> {
+    let key = guest_str(c, p, n)?;
+    Ok(c.st_mut().w().state_add(player_id, &key, delta))
 }
 
 pub fn slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, p, n)?;
-            Ok(c.st().wr().slot(player_id, &key))
+    let key = guest_str(c, p, n)?;
+    Ok(c.st().wr().slot(player_id, &key))
 }
 
-pub fn set_slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, v: i32) -> Result<(), HostErr> {
-            let key = guest_str(c, p, n)?;
-            c.st_mut().w().set_slot(player_id, &key, v);
-            Ok(())
+pub fn set_slot<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    v: i32,
+) -> Result<(), HostErr> {
+    let key = guest_str(c, p, n)?;
+    c.st_mut().w().set_slot(player_id, &key, v);
+    Ok(())
 }
 
-pub fn inc_slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, by: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, p, n)?;
-            Ok(c.st_mut().w().inc_slot(player_id, &key, by))
+pub fn inc_slot<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    by: i32,
+) -> Result<i32, HostErr> {
+    let key = guest_str(c, p, n)?;
+    Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
 // `group_pool` / `add_group_pool` remain on the guest surface: a named pool on
@@ -1159,43 +1238,60 @@ pub fn add_group_pool<C: HostCtx>(
     Ok(c.st_mut().w().add_group_pool(player_id, &name, n, max))
 }
 
-pub fn group_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let s = c.st().wr().group_skill_id(player_id).unwrap_or_default();
-            let bytes =
-                postcard::to_allocvec(&s).map_err(|e| HostErr::trap(format!("group_skill encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn group_skill<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let s = c.st().wr().group_skill_id(player_id).unwrap_or_default();
+    let bytes =
+        postcard::to_allocvec(&s).map_err(|e| HostErr::trap(format!("group_skill encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
-pub fn persona_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let s = c
-                .st()
-                .wr()
-                .persona_skill_id(player_id)
-                .unwrap_or_default();
-            let bytes = postcard::to_allocvec(&s)
-                .map_err(|e| HostErr::trap(format!("persona_skill encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn persona_skill<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let s = c.st().wr().persona_skill_id(player_id).unwrap_or_default();
+    let bytes = postcard::to_allocvec(&s)
+        .map_err(|e| HostErr::trap(format!("persona_skill encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
-pub fn group_skills<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let list = c.st().wr().group_skills(player_id);
-            let bytes = postcard::to_allocvec(&list)
-                .map_err(|e| HostErr::trap(format!("group_skills encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn group_skills<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let list = c.st().wr().group_skills(player_id);
+    let bytes = postcard::to_allocvec(&list)
+        .map_err(|e| HostErr::trap(format!("group_skills encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
-pub fn add_group_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, extra: i32) -> Result<i32, HostErr> {
-            let id = guest_str(c, p, n)?;
-            Ok(c.st_mut().w().add_group_skill(player_id, &id, extra != 0))
+pub fn add_group_skill<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    extra: i32,
+) -> Result<i32, HostErr> {
+    let id = guest_str(c, p, n)?;
+    Ok(c.st_mut().w().add_group_skill(player_id, &id, extra != 0))
 }
 
 pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
@@ -1264,10 +1360,10 @@ pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Re
 }
 
 pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::RaiseBought { player_id, tile };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+    {
+        let req = HostRequest::RaiseBought { player_id, tile };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 /// Pack a `DealValue` (BuyAssign) raise result into the single answer log
@@ -1290,10 +1386,7 @@ pub fn pack_deal(cancelled: bool, owner: i32, houses: i32, mortgaged: bool) -> i
     } else {
         (houses + 1).clamp(1, 15)
     };
-    ((cancelled as i32) & 1)
-        | ((h & 15) << 1)
-        | (((mortgaged as i32) & 1) << 5)
-        | (o << 6)
+    ((cancelled as i32) & 1) | ((h & 15) << 1) | (((mortgaged as i32) & 1) << 5) | (o << 6)
 }
 
 /// Inverse of [`pack_deal`].
@@ -1379,33 +1472,33 @@ pub fn gain_marker<C: HostCtx>(
     p: i32,
     l: i32,
 ) -> Result<i32, HostErr> {
-            let why = guest_msg(c, p, l)?;
-            // Marker window: `markerGain` opens before the markers move.
-            //
-            // The pause is a **trap**, not the sentinel: `ctx::gain_marker`
-            // returns `Result<i32, Prompt>` and a great many bodies discard
-            // that result (`ctx::gain_marker(...);`). With the sentinel the body
-            // would catch the `Err(Prompt)` and keep going, which the replay
-            // model's `finish` boundary check traps ("card published a prompt
-            // and kept going" -- the card goes out) while the inline answer
-            // model (`docs/BOT.md` §3.2) answers and the body completes. A
-            // trap tears the stack before the body can swallow the pause, so
-            // both models replay / answer the same body.
-            if n > 0 {
-                let ok = crate::inline::request_or_pause(
-                    c,
-                    crate::HostRequest::Marker {
-                        player_id,
-                        name: name.to_string(),
-                        delta: n,
-                    },
-                    crate::inline::Pause::Trap,
-                )?;
-                if ok != 1 {
-                    return Ok(ok);
-                }
-            }
-            Ok(c.st_mut().w().gain_marker(player_id, name, n, why))
+    let why = guest_msg(c, p, l)?;
+    // Marker window: `markerGain` opens before the markers move.
+    //
+    // The pause is a **trap**, not the sentinel: `ctx::gain_marker`
+    // returns `Result<i32, Prompt>` and a great many bodies discard
+    // that result (`ctx::gain_marker(...);`). With the sentinel the body
+    // would catch the `Err(Prompt)` and keep going, which the replay
+    // model's `finish` boundary check traps ("card published a prompt
+    // and kept going" -- the card goes out) while the inline answer
+    // model (`docs/BOT.md` §3.2) answers and the body completes. A
+    // trap tears the stack before the body can swallow the pause, so
+    // both models replay / answer the same body.
+    if n > 0 {
+        let ok = crate::inline::request_or_pause(
+            c,
+            crate::HostRequest::Marker {
+                player_id,
+                name: name.to_string(),
+                delta: n,
+            },
+            crate::inline::Pause::Trap,
+        )?;
+        if ok != 1 {
+            return Ok(ok);
+        }
+    }
+    Ok(c.st_mut().w().gain_marker(player_id, name, n, why))
 }
 
 /// Legacy layered write. New guests use the split form (`gate` + `state_add`
@@ -1467,15 +1560,15 @@ pub fn clear_move_skip<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), Host
 }
 
 pub fn give_extra_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
-        c.st_mut().w().give_extra_turn(player_id);
-        Ok(())
+    c.st_mut().w().give_extra_turn(player_id);
+    Ok(())
 }
 
 /// Generic "end this player's turn now" latch. `turn_start` honors it after
 /// the `turnStartBefore` / `turnStart` raises (auto-skip pacing).
 pub fn end_turn_now<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
-        c.st_mut().w().end_turn_now(player_id);
-        Ok(())
+    c.st_mut().w().end_turn_now(player_id);
+    Ok(())
 }
 
 /// Teleport with the move's `main` flag named and **no** abnormal window
@@ -1487,27 +1580,27 @@ pub fn teleport_as<C: HostCtx>(
     resolve: i32,
     as_main: i32,
 ) -> Result<(), HostErr> {
-            {
-                let st = c.st_mut();
-                if st.answers.get(st.next_answer).is_some() {
-                    let answer = st.next_answer;
-                    st.w().after_host(answer);
-                    st.next_answer += 1;
-                    return Ok(());
-                }
-            }
-            let make = || HostRequest::TeleportAs {
-                player_id,
-                tile,
-                resolve: resolve != 0,
-                as_main: as_main != 0,
-            };
-            if crate::inline::request_or_inline(c, make())?.is_some() {
-                return Ok(());
-            }
-            let st = c.st_mut();
-            st.host_request = Some(make());
-            Err(HostErr::NeedInput)
+    {
+        let st = c.st_mut();
+        if st.answers.get(st.next_answer).is_some() {
+            let answer = st.next_answer;
+            st.w().after_host(answer);
+            st.next_answer += 1;
+            return Ok(());
+        }
+    }
+    let make = || HostRequest::TeleportAs {
+        player_id,
+        tile,
+        resolve: resolve != 0,
+        as_main: as_main != 0,
+    };
+    if crate::inline::request_or_inline(c, make())?.is_some() {
+        return Ok(());
+    }
+    let st = c.st_mut();
+    st.host_request = Some(make());
+    Err(HostErr::NeedInput)
 }
 
 /// [`log`] with an explicit event kind (the engine's own skip / over lines use
@@ -1520,10 +1613,10 @@ pub fn log_as<C: HostCtx>(
     p: i32,
     n: i32,
 ) -> Result<(), HostErr> {
-            let kind = guest_str(c, kind_p, kind_n)?;
-            let msg = guest_msg(c, p, n)?;
-            c.st_mut().w().log_as(player_id, &kind, msg);
-            Ok(())
+    let kind = guest_str(c, kind_p, kind_n)?;
+    let msg = guest_msg(c, p, n)?;
+    c.st_mut().w().log_as(player_id, &kind, msg);
+    Ok(())
 }
 
 /// The payer's gate. Not out, and the `PayGate` conditions of the standing
@@ -1548,9 +1641,7 @@ pub fn can_pay<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
 }
 
 pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().cant_move(player_id)
-    })
+    Ok({ c.st().wr().cant_move(player_id) })
 }
 
 /// Generic marker spend. The name is data; opens `markerSpend` with that name.
@@ -1562,26 +1653,26 @@ pub fn spend_marker<C: HostCtx>(
     p: i32,
     l: i32,
 ) -> Result<i32, HostErr> {
-            let why = guest_msg(c, p, l)?;
-            // Marker window (user ruling 2026-10-07): `markerSpend` opens
-            // **before** the markers move. A cancelled link spends nothing.
-            if n > 0 {
-                let ok = crate::inline::request_or_pause(
-                    c,
-                    crate::HostRequest::Marker {
-                        player_id,
-                        name: name.to_string(),
-                        delta: -n,
-                    },
-                    crate::inline::Pause::Sentinel,
-                )?;
-                // Propagate the pause sentinel to the guest (`asked()` turns it
-                // into `Err(Prompt)`); `0` means a counteraction cancelled it.
-                if ok != 1 {
-                    return Ok(ok);
-                }
-            }
-            Ok(c.st_mut().w().spend_marker(player_id, name, n, why))
+    let why = guest_msg(c, p, l)?;
+    // Marker window (user ruling 2026-10-07): `markerSpend` opens
+    // **before** the markers move. A cancelled link spends nothing.
+    if n > 0 {
+        let ok = crate::inline::request_or_pause(
+            c,
+            crate::HostRequest::Marker {
+                player_id,
+                name: name.to_string(),
+                delta: -n,
+            },
+            crate::inline::Pause::Sentinel,
+        )?;
+        // Propagate the pause sentinel to the guest (`asked()` turns it
+        // into `Err(Prompt)`); `0` means a counteraction cancelled it.
+        if ok != 1 {
+            return Ok(ok);
+        }
+    }
+    Ok(c.st_mut().w().spend_marker(player_id, name, n, why))
 }
 
 pub fn turn_player<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -1597,41 +1688,51 @@ pub fn turn_key<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn persona_is<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().persona_is(player_id, &name))
+    let name = guest_str(c, p, n)?;
+    Ok(c.st().wr().persona_is(player_id, &name))
 }
 
 pub fn set_persona<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let name = guest_str(c, p, n)?;
-            c.st_mut().w().set_persona(player_id, &name);
-            Ok(())
+    let name = guest_str(c, p, n)?;
+    c.st_mut().w().set_persona(player_id, &name);
+    Ok(())
 }
 
 pub fn in_group<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().in_group(player_id, &name))
+    let name = guest_str(c, p, n)?;
+    Ok(c.st().wr().in_group(player_id, &name))
 }
-
-
 
 pub fn do_move_roll<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-            Ok(c.st_mut().w().do_move_roll(player_id))
+    Ok(c.st_mut().w().do_move_roll(player_id))
 }
 
-pub fn tok_names<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let prefix = guest_str(c, p, n)?;
-            let names = c.st().wr().tok_names(player_id, &prefix);
-            let bytes =
-                postcard::to_allocvec(&names).map_err(|e| HostErr::trap(format!("tok_names encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn tok_names<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let prefix = guest_str(c, p, n)?;
+    let names = c.st().wr().tok_names(player_id, &prefix);
+    let bytes = postcard::to_allocvec(&names)
+        .map_err(|e| HostErr::trap(format!("tok_names encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
-pub fn unplace_card_named<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cptr, cl)?;
-            Ok(c.st_mut().w().unplace_card_named(player_id, &card) as i32)
+pub fn unplace_card_named<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
+    Ok(c.st_mut().w().unplace_card_named(player_id, &card) as i32)
 }
 
 pub fn can_build_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
@@ -1640,9 +1741,14 @@ pub fn can_build_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
     Ok((c.st().wr().can_build_on(player_id, tile) && pay_gate_open(c, player_id)) as i32)
 }
 
-pub fn card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cptr, cl)?;
-            Ok(c.st().wr().card_face_down(player_id, &card) as i32)
+pub fn card_face_down<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
+    Ok(c.st().wr().card_face_down(player_id, &card) as i32)
 }
 
 pub fn extreme<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -1650,35 +1756,45 @@ pub fn extreme<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn set_extreme<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_extreme(v);
+    c.st_mut().w().set_extreme(v);
     Ok(())
 }
 
 pub fn play_from_hand<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().play_from_hand() as i32
-    })
+    Ok({ c.st().wr().play_from_hand() as i32 })
 }
 
-pub fn gain_fixed<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            // V4 (`NEGATION-AUDIT`): Tritone's 「立刻获得此次失去的资金金额」 is
-            // money movement and goes through the same `Money` pipeline as any
-            // other gain -- the `effect` counteraction window, the modifier stages and
-            // the `pay` settlement all see it. (It used to debit/credit the
-            // world copy directly, outside every 支付阶段 window.)
-            gain(c, player_id, amount, p, n)
+pub fn gain_fixed<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    amount: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    // V4 (`NEGATION-AUDIT`): Tritone's 「立刻获得此次失去的资金金额」 is
+    // money movement and goes through the same `Money` pipeline as any
+    // other gain -- the `effect` counteraction window, the modifier stages and
+    // the `pay` settlement all see it. (It used to debit/credit the
+    // world copy directly, outside every 支付阶段 window.)
+    gain(c, player_id, amount, p, n)
 }
 
-pub fn set_card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, down: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cptr, cl)?;
-            Ok(c.st_mut()
-                .w()
-                .set_card_face_down(player_id, &card, down != 0) as i32)
+pub fn set_card_face_down<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    down: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
+    Ok(c.st_mut()
+        .w()
+        .set_card_face_down(player_id, &card, down != 0) as i32)
 }
 
 pub fn clear_dice<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
-        c.st_mut().w().clear_dice();
-        Ok(())
+    c.st_mut().w().clear_dice();
+    Ok(())
 }
 
 /// The first field instance of `card` on `player_id`'s seat, or -1.
@@ -1695,7 +1811,13 @@ fn field_uid_of<C: HostCtx>(c: &C, player_id: i32, card: &str) -> i32 {
 /// 「不受任何效果影响」 on a named placed card. Resolved through the instance
 /// (`is_immune_at` / `set_immune_at`): the card name is not an identity, so
 /// this hits the first field copy.
-pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, on: i32) -> Result<i32, HostErr> {
+pub fn set_card_immune<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    on: i32,
+) -> Result<i32, HostErr> {
     let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
@@ -1704,7 +1826,12 @@ pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32
     Ok(c.st_mut().w().set_immune_at(uid, on != 0) as i32)
 }
 
-pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
+pub fn card_immune<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+) -> Result<i32, HostErr> {
     let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
@@ -1713,7 +1840,13 @@ pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) ->
     Ok(c.st().wr().is_immune_at(uid) as i32)
 }
 
-pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, tile: i32) -> Result<i32, HostErr> {
+pub fn set_card_tile<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    tile: i32,
+) -> Result<i32, HostErr> {
     let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
@@ -1722,295 +1855,344 @@ pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, 
     Ok(c.st_mut().w().set_tile_at(uid, tile) as i32)
 }
 
-pub fn place_card_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, cptr: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cptr, cl)?;
-            let note = guest_msg(c, p, n)?;
-            Ok(c.st_mut().w().place_card_on(player_id, tile, &card, note))
+pub fn place_card_on<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    cptr: i32,
+    cl: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
+    let note = guest_msg(c, p, n)?;
+    Ok(c.st_mut().w().place_card_on(player_id, tile, &card, note))
 }
 
-pub fn place_card_at<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cptr, cl)?;
-            let note = guest_msg(c, p, n)?;
-            Ok(c.st_mut().w().place_card(player_id, &card, note))
+pub fn place_card_at<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cptr: i32,
+    cl: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
+    let note = guest_msg(c, p, n)?;
+    Ok(c.st_mut().w().place_card(player_id, &card, note))
 }
 
 pub fn set_dest<C: HostCtx>(c: &mut C, dest: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_dest(dest);
-        Ok(())
+    c.st_mut().w().set_dest(dest);
+    Ok(())
 }
 
 pub fn set_transfer_to_dest<C: HostCtx>(c: &mut C, to: i32, dest: i32) -> Result<(), HostErr> {
-            c.st_mut().w().set_transfer_to_dest(to, dest);
-            Ok(())
+    c.st_mut().w().set_transfer_to_dest(to, dest);
+    Ok(())
 }
 
 pub fn send_to_dest<C: HostCtx>(c: &mut C, dest: i32) -> Result<i32, HostErr> {
-        Ok(c.st_mut().w().send_to_dest(dest).unwrap_or(-1))
+    Ok(c.st_mut().w().send_to_dest(dest).unwrap_or(-1))
 }
 
 pub fn transfer_to_dest<C: HostCtx>(c: &mut C, to: i32, dest: i32) -> Result<i32, HostErr> {
-        Ok(c.st_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
+    Ok(c.st_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
 }
 
 pub fn rent_unit_mult<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().rent_unit_mult()
-    })
+    Ok({ c.st().wr().rent_unit_mult() })
 }
 
 pub fn add_rent_unit_bonus<C: HostCtx>(c: &mut C, n: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().add_rent_unit_bonus(n)
-    })
+    Ok({ c.st_mut().w().add_rent_unit_bonus(n) })
 }
 
 pub fn teleport_to<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<(), HostErr> {
-            // A position write with no settle (`resolve: false`).
-            // Paused like `card_move` rather than written to the run's world
-            // copy: a host routine that follows (`card_move`) runs against the
-            // live world, and a copy-only write left the move starting from
-            // the pre-teleport tile -- then the replay re-executed the write
-            // and `Done`'s `swap_world` teleported the player back over the
-            // move that had already run. The engine applies the gate + the
-            // write once; the replay reads the logged answer and skips. In
-            // simulation mode the engine applies it inline and the guest
-            // continues on the same world.
-            {
-                let st = c.st_mut();
-                if st.answers.get(st.next_answer).is_some() {
-                    let answer = st.next_answer;
-                    st.w().after_host(answer);
-                    st.next_answer += 1;
-                    return Ok(());
-                }
-            }
-            if crate::inline::request_or_inline(c, HostRequest::Teleport { player_id, tile })?.is_some()
-            {
-                return Ok(());
-            }
-            let st = c.st_mut();
-            st.host_request = Some(HostRequest::Teleport { player_id, tile });
-            Err(HostErr::NeedInput)
+    // A position write with no settle (`resolve: false`).
+    // Paused like `card_move` rather than written to the run's world
+    // copy: a host routine that follows (`card_move`) runs against the
+    // live world, and a copy-only write left the move starting from
+    // the pre-teleport tile -- then the replay re-executed the write
+    // and `Done`'s `swap_world` teleported the player back over the
+    // move that had already run. The engine applies the gate + the
+    // write once; the replay reads the logged answer and skips. In
+    // simulation mode the engine applies it inline and the guest
+    // continues on the same world.
+    {
+        let st = c.st_mut();
+        if st.answers.get(st.next_answer).is_some() {
+            let answer = st.next_answer;
+            st.w().after_host(answer);
+            st.next_answer += 1;
+            return Ok(());
+        }
+    }
+    if crate::inline::request_or_inline(c, HostRequest::Teleport { player_id, tile })?.is_some() {
+        return Ok(());
+    }
+    let st = c.st_mut();
+    st.host_request = Some(HostRequest::Teleport { player_id, tile });
+    Err(HostErr::NeedInput)
 }
 
 pub fn gate<C: HostCtx>(c: &mut C, player_id: i32, kind: i32) -> Result<i32, HostErr> {
-            let Some(kind) = crate::AbKind::from_i32(kind) else {
-                return Err(HostErr::trap(format!("gate: unknown abnormal kind {kind}")));
-            };
-            Ok(abnormal_gate(c, player_id, kind)? as i32)
+    let Some(kind) = crate::AbKind::from_i32(kind) else {
+        return Err(HostErr::trap(format!("gate: unknown abnormal kind {kind}")));
+    };
+    Ok(abnormal_gate(c, player_id, kind)? as i32)
 }
 
 pub fn abnormal_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().abnormal_count(player_id)
-    })
+    Ok({ c.st().wr().abnormal_count(player_id) })
 }
 
 pub fn targeted_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().targeted_count(player_id)
-    })
+    Ok({ c.st().wr().targeted_count(player_id) })
 }
 
 pub fn gains_this_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().gains_this_turn(player_id)
-    })
+    Ok({ c.st().wr().gains_this_turn(player_id) })
 }
 
-pub fn designations<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let list = c.st().wr().designations(player_id);
-            let bytes = postcard::to_allocvec(&list)
-                .map_err(|e| HostErr::trap(format!("designations encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+pub fn designations<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostErr> {
+    let list = c.st().wr().designations(player_id);
+    let bytes = postcard::to_allocvec(&list)
+        .map_err(|e| HostErr::trap(format!("designations encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
 pub fn cancel_designation<C: HostCtx>(c: &mut C, seat: i32) -> Result<(), HostErr> {
-        c.st_mut().w().cancel_designation(seat);
-        Ok(())
+    c.st_mut().w().cancel_designation(seat);
+    Ok(())
 }
 
 pub fn designation_cancelled<C: HostCtx>(c: &mut C, seat: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().designation_cancelled(seat) as i32
-    })
+    Ok({ c.st().wr().designation_cancelled(seat) as i32 })
 }
 
-pub fn target<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, single: i32) -> Result<i32, HostErr> {
-            // Paused like `gate`: the engine runs the targeting pipeline (it
-            // raises hooks and opens the `target` counteraction window) and the replay
-            // reads its answer.
-                        {
-                let req = HostRequest::Target {
-                player_id,
-                tile,
-                single: single != 0,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+pub fn target<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    single: i32,
+) -> Result<i32, HostErr> {
+    // Paused like `gate`: the engine runs the targeting pipeline (it
+    // raises hooks and opens the `target` counteraction window) and the replay
+    // reads its answer.
+    {
+        let req = HostRequest::Target {
+            player_id,
+            tile,
+            single: single != 0,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 pub fn card_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-            // The card shaped the plan and wants the move to run *now*.
-            // Paused like the others: the engine runs `Cx::card_move`
-            // (which may prompt) and the replay reads the answer. The plan is
-            // captured here because the run's world copy is discarded on pause
-            // (in simulation mode it is not -- the engine runs the move against
-            // the guest's own world and the body continues).
-            {
-                let st = c.st_mut();
-                if let Some(&ok) = st.answers.get(st.next_answer) {
-                    let answer = st.next_answer;
-                    st.w().after_host(answer);
-                    st.next_answer += 1;
-                    return Ok(ok);
-                }
-            }
-            let plan = c.st().wr().move_plan();
-            let req = HostRequest::Move { player_id, plan };
-            if let Some(ok) = crate::inline::request_or_inline(c, req.clone())? {
-                return Ok(ok);
-            }
-            let st = c.st_mut();
-            st.host_request = Some(req);
-            Err(HostErr::NeedInput)
+    // The card shaped the plan and wants the move to run *now*.
+    // Paused like the others: the engine runs `Cx::card_move`
+    // (which may prompt) and the replay reads the answer. The plan is
+    // captured here because the run's world copy is discarded on pause
+    // (in simulation mode it is not -- the engine runs the move against
+    // the guest's own world and the body continues).
+    {
+        let st = c.st_mut();
+        if let Some(&ok) = st.answers.get(st.next_answer) {
+            let answer = st.next_answer;
+            st.w().after_host(answer);
+            st.next_answer += 1;
+            return Ok(ok);
+        }
+    }
+    let plan = c.st().wr().move_plan();
+    let req = HostRequest::Move { player_id, plan };
+    if let Some(ok) = crate::inline::request_or_inline(c, req.clone())? {
+        return Ok(ok);
+    }
+    let st = c.st_mut();
+    st.host_request = Some(req);
+    Err(HostErr::NeedInput)
 }
 
-pub fn roll_ask<C: HostCtx>(c: &mut C, player_id: i32, count: i32, sides: i32, source: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::Roll {
-                player_id,
-                count,
-                sides,
-                source,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+pub fn roll_ask<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    count: i32,
+    sides: i32,
+    source: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::Roll {
+            player_id,
+            count,
+            sides,
+            source,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
-pub fn card_settle_at<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, main: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::SettleAt {
-                player_id,
-                tile,
-                main: main != 0,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+pub fn card_settle_at<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    main: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::SettleAt {
+            player_id,
+            tile,
+            main: main != 0,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 pub fn card_buy<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::Buy {
-                player_id,
-                tile,
-                kind: 2, // `BuyKind::Card` -- the legacy `card_buy` shape.
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+    {
+        let req = HostRequest::Buy {
+            player_id,
+            tile,
+            kind: 2, // `BuyKind::Card` -- the legacy `card_buy` shape.
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 pub fn buy<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, kind: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::Buy {
-                player_id,
-                tile,
-                kind,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+    {
+        let req = HostRequest::Buy {
+            player_id,
+            tile,
+            kind,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
-pub fn buy_quotes<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, buf: i32, n: i32, out: i32) -> Result<i32, HostErr> {
-            let bytes = c.read_guest( buf, n)?;
-            let tiles: Vec<i32> = bytes
-                .chunks_exact(4)
-                .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-                .collect();
-            // HOST-07: the same hook-aware quote `buy` charges
-            // (`CardWorld::buy_quotes` → `CardRules::buy_quote`), so the
-            // guest's preview is the price the commit will take (quote ==
-            // charge). Still a query -- no pause, no world write.
-            let quotes = c.st().wr().buy_quotes(player_id, kind, &tiles);
-            let bytes = postcard::to_allocvec(&quotes)
-                .map_err(|e| HostErr::trap(format!("buy_quotes encode: {e}")))?;
-            c.write_guest(out, &bytes)?;
-            Ok(bytes.len() as i32)
+pub fn buy_quotes<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    kind: i32,
+    buf: i32,
+    n: i32,
+    out: i32,
+) -> Result<i32, HostErr> {
+    let bytes = c.read_guest(buf, n)?;
+    let tiles: Vec<i32> = bytes
+        .chunks_exact(4)
+        .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .collect();
+    // HOST-07: the same hook-aware quote `buy` charges
+    // (`CardWorld::buy_quotes` → `CardRules::buy_quote`), so the
+    // guest's preview is the price the commit will take (quote ==
+    // charge). Still a query -- no pause, no world write.
+    let quotes = c.st().wr().buy_quotes(player_id, kind, &tiles);
+    let bytes = postcard::to_allocvec(&quotes)
+        .map_err(|e| HostErr::trap(format!("buy_quotes encode: {e}")))?;
+    c.write_guest(out, &bytes)?;
+    Ok(bytes.len() as i32)
 }
 
-pub fn ai_agent_choice<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, n: i32) -> Result<i32, HostErr> {
-            let bytes = c.read_guest( buf, n)?;
-            let tiles: Vec<i32> = bytes
-                .chunks_exact(4)
-                .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-                .collect();
-                        {
-                let req = HostRequest::AiAgentChoice { player_id, tiles };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+pub fn ai_agent_choice<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let bytes = c.read_guest(buf, n)?;
+    let tiles: Vec<i32> = bytes
+        .chunks_exact(4)
+        .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .collect();
+    {
+        let req = HostRequest::AiAgentChoice { player_id, tiles };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
-pub fn acquire<C: HostCtx>(c: &mut C, player_id: i32, from: i32, tile: i32, price: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::Acquire {
-                player_id,
-                from,
-                tile,
-                price,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+pub fn acquire<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    from: i32,
+    tile: i32,
+    price: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::Acquire {
+            player_id,
+            from,
+            tile,
+            price,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
-pub fn agent_offer<C: HostCtx>(c: &mut C, player_id: i32, agent: i32, tile: i32, kind: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::AgentOffer {
-                player_id,
-                agent,
-                tile,
-                kind,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+pub fn agent_offer<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    agent: i32,
+    tile: i32,
+    kind: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::AgentOffer {
+            player_id,
+            agent,
+            tile,
+            kind,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 pub fn linger<C: HostCtx>(c: &mut C, player_id: i32, expires: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::Linger {
-                player_id,
-                expires,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+    {
+        let req = HostRequest::Linger { player_id, expires };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 pub fn card_build<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::Build { player_id, tile };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+    {
+        let req = HostRequest::Build { player_id, tile };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
-pub fn card_offer_build<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, n: i32) -> Result<i32, HostErr> {
-            let bytes = c.read_guest( buf, n)?;
-            let tiles: Vec<i32> = bytes
-                .chunks_exact(4)
-                .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-                .collect();
-                        {
-                let req = HostRequest::OfferBuild { player_id, tiles };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+pub fn card_offer_build<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let bytes = c.read_guest(buf, n)?;
+    let tiles: Vec<i32> = bytes
+        .chunks_exact(4)
+        .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .collect();
+    {
+        let req = HostRequest::OfferBuild { player_id, tiles };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 pub fn card_mortgage<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::Mortgage { player_id, tile };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
+    {
+        let req = HostRequest::Mortgage { player_id, tile };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
 }
 
 /// Mechanism half of a mortgage the tile rule already approved.
@@ -2106,8 +2288,8 @@ pub fn assign_deed<C: HostCtx>(
 }
 
 pub fn placed_tile<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let id = guest_str(c, p, n)?;
-            Ok(c.st().wr().placed_tile(player_id, &id))
+    let id = guest_str(c, p, n)?;
+    Ok(c.st().wr().placed_tile(player_id, &id))
 }
 
 pub fn play_doubled<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2115,79 +2297,90 @@ pub fn play_doubled<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn set_play_doubled<C: HostCtx>(c: &mut C, n: i32) -> Result<(), HostErr> {
-            c.st_mut().w().set_play_doubled(n);
-            Ok(())
+    c.st_mut().w().set_play_doubled(n);
+    Ok(())
 }
 
 pub fn trig_cards<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let list = c.st().wr().trigger().cards;
-            let bytes =
-                postcard::to_allocvec(&list).map_err(|e| HostErr::trap(format!("trig_cards encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                c.write_guest( buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+    let list = c.st().wr().trigger().cards;
+    let bytes = postcard::to_allocvec(&list)
+        .map_err(|e| HostErr::trap(format!("trig_cards encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
 pub fn opt_int<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().options.push(PromptOption::Int(v));
+    c.st_mut().options.push(PromptOption::Int(v));
     Ok(())
 }
 
 pub fn opt_str<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<(), HostErr> {
-            let s = guest_msg(c, p, n)?;
-            c.st_mut().options.push(PromptOption::Str(s));
-            Ok(())
+    let s = guest_msg(c, p, n)?;
+    c.st_mut().options.push(PromptOption::Str(s));
+    Ok(())
 }
 
 pub fn opt_tile<C: HostCtx>(c: &mut C, tile: i32, lp: i32, ll: i32) -> Result<(), HostErr> {
-            let label = guest_msg(c, lp, ll)?;
-            c.st_mut().options.push(PromptOption::Tile { tile, label });
-            Ok(())
+    let label = guest_msg(c, lp, ll)?;
+    c.st_mut().options.push(PromptOption::Tile { tile, label });
+    Ok(())
 }
 
 pub fn opt_price<C: HostCtx>(c: &mut C, price: i32) -> Result<(), HostErr> {
-        c.st_mut().prices.push(price);
+    c.st_mut().prices.push(price);
     Ok(())
 }
 
 pub fn opt_ai<C: HostCtx>(c: &mut C, ai: i32) -> Result<(), HostErr> {
-        c.st_mut().ai_hint = ai;
+    c.st_mut().ai_hint = ai;
     Ok(())
 }
 
-pub fn ask<C: HostCtx>(c: &mut C, kind: i32, player_id: i32, tp: i32, tl: i32, xp: i32, xl: i32) -> Result<i32, HostErr> {
-            let kind =
-                PromptKind::from_i32(kind).ok_or_else(|| HostErr::trap(format!("bad prompt kind {kind}")))?;
-            let title = guest_msg(c, tp, tl)?;
-            let text = guest_msg(c, xp, xl)?;
-            let (options, prices, ai_hint, answer_slot) = {
-                let st = c.st_mut();
-                let options = std::mem::take(&mut st.options);
-                if kind != PromptKind::YesNo && options.is_empty() {
-                    return Err(HostErr::trap(format!("{} prompt with no options", kind.as_str())));
-                }
-                let prices = std::mem::take(&mut st.prices);
-                let ai_hint = std::mem::replace(&mut st.ai_hint, -1);
-                (options, prices, ai_hint, st.next_answer)
-            };
-            // Like `pay`: the pause is the sentinel as the return value, so
-            // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
-            // In simulation mode the provider answers inline (or declines and
-            // this pauses, tree-relevant prompts only).
-            crate::inline::prompt_or_pause(
-                c,
-                Prompt {
-                    kind,
-                    player_id,
-                    title,
-                    text,
-                    options,
-                    answer_slot,
-                    prices,
-                    ai_hint,
-                },
-            )
+pub fn ask<C: HostCtx>(
+    c: &mut C,
+    kind: i32,
+    player_id: i32,
+    tp: i32,
+    tl: i32,
+    xp: i32,
+    xl: i32,
+) -> Result<i32, HostErr> {
+    let kind = PromptKind::from_i32(kind)
+        .ok_or_else(|| HostErr::trap(format!("bad prompt kind {kind}")))?;
+    let title = guest_msg(c, tp, tl)?;
+    let text = guest_msg(c, xp, xl)?;
+    let (options, prices, ai_hint, answer_slot) = {
+        let st = c.st_mut();
+        let options = std::mem::take(&mut st.options);
+        if kind != PromptKind::YesNo && options.is_empty() {
+            return Err(HostErr::trap(format!(
+                "{} prompt with no options",
+                kind.as_str()
+            )));
+        }
+        let prices = std::mem::take(&mut st.prices);
+        let ai_hint = std::mem::replace(&mut st.ai_hint, -1);
+        (options, prices, ai_hint, st.next_answer)
+    };
+    // Like `pay`: the pause is the sentinel as the return value, so
+    // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
+    // In simulation mode the provider answers inline (or declines and
+    // this pauses, tree-relevant prompts only).
+    crate::inline::prompt_or_pause(
+        c,
+        Prompt {
+            kind,
+            player_id,
+            title,
+            text,
+            options,
+            answer_slot,
+            prices,
+            ai_hint,
+        },
+    )
 }
 
 /// The raise's [`TriggerKind`] wire **spelling** (`TriggerKind::spelling`).
@@ -2198,9 +2391,7 @@ pub fn trig_kind<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> 
 }
 
 pub fn trig_player<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().player_id
-    })
+    Ok({ c.st().wr().trigger().player_id })
 }
 
 pub fn trig_target<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2220,9 +2411,7 @@ pub fn trig_step<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_by_card<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().by_card.unwrap_or(-1)
-    })
+    Ok({ c.st().wr().trigger().by_card.unwrap_or(-1) })
 }
 
 pub fn trig_pay_is_rent<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2269,11 +2458,7 @@ pub fn trig_settle_redirect<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 pub fn trig_move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     // 1 when no move (matches CoreTrigger::new / MoveSnap / guest docs).
-    Ok(c.st()
-        .wr()
-        .trigger()
-        .mv
-        .map_or(1, |m| m.dir.as_i32()))
+    Ok(c.st().wr().trigger().mv.map_or(1, |m| m.dir.as_i32()))
 }
 
 pub fn trig_move_remaining<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2289,12 +2474,7 @@ pub fn trig_move_total<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_move_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st()
-        .wr()
-        .trigger()
-        .mv
-        .and_then(|m| m.roll)
-        .unwrap_or(-1))
+    Ok(c.st().wr().trigger().mv.and_then(|m| m.roll).unwrap_or(-1))
 }
 
 pub fn trig_roll_source<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2306,11 +2486,7 @@ pub fn trig_buy_kind<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_seller<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st()
-        .wr()
-        .trigger()
-        .buy
-        .map_or(-1, |b| b.seller.as_i32()))
+    Ok(c.st().wr().trigger().buy.map_or(-1, |b| b.seller.as_i32()))
 }
 
 pub fn trig_price<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2318,7 +2494,7 @@ pub fn trig_price<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_set_price<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_price(v);
+    c.st_mut().w().set_trigger_price(v);
     Ok(())
 }
 
@@ -2365,50 +2541,48 @@ pub fn trig_deal_mortgaged<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_set_deal_mortgaged<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_deal_mortgaged(v);
+    c.st_mut().w().set_trigger_deal_mortgaged(v);
     Ok(())
 }
 
 pub fn trig_set_reason<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<(), HostErr> {
-        let reason = guest_str(c, p, n)?;
-        c.st_mut().w().set_trigger_reason(&reason);
-        Ok(())
+    let reason = guest_str(c, p, n)?;
+    c.st_mut().w().set_trigger_reason(&reason);
+    Ok(())
 }
 
 pub fn trig_set_move_roll<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_move_roll(v);
+    c.st_mut().w().set_trigger_move_roll(v);
     Ok(())
 }
 
 pub fn trig_set_pay_amount<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_value(v);
+    c.st_mut().w().set_trigger_value(v);
     Ok(())
 }
 
 pub fn trig_set_pay_target<C: HostCtx>(c: &mut C, to: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_target(to);
+    c.st_mut().w().set_trigger_target(to);
     Ok(())
 }
 
 pub fn trig_set_cancelled<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_cancelled();
+    c.st_mut().w().set_trigger_cancelled();
     Ok(())
 }
 
 pub fn trig_set_negate_effect<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_negate_effect();
+    c.st_mut().w().set_trigger_negate_effect();
     Ok(())
 }
 
 pub fn trig_set_spare<C: HostCtx>(c: &mut C, seat: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_spare(seat);
+    c.st_mut().w().set_trigger_spare(seat);
     Ok(())
 }
 
 pub fn trig_cancelled<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().is_cancelled() as i32
-    })
+    Ok({ c.st().wr().trigger().is_cancelled() as i32 })
 }
 
 pub fn trig_seq<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2416,15 +2590,11 @@ pub fn trig_seq<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_answers<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().answers as i32
-    })
+    Ok({ c.st().wr().trigger().answers as i32 })
 }
 
 pub fn trig_effect_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().effects.len() as i32
-    })
+    Ok({ c.st().wr().trigger().effects.len() as i32 })
 }
 
 /// The effect `i`'s kind **spelling**. Two-call out-buffer like [`trig_name`].
@@ -2499,8 +2669,8 @@ pub fn declare_effect<C: HostCtx>(
 }
 
 pub fn trig_card_is<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
-            let id = guest_str(c, p, n)?;
-            Ok(c.st().wr().trig_card_is(&id))
+    let id = guest_str(c, p, n)?;
+    Ok(c.st().wr().trig_card_is(&id))
 }
 
 pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Result<i32, HostErr> {
@@ -2568,7 +2738,12 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
     }
 }
 
-pub fn card_replayable<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+pub fn card_replayable<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
     let id = guest_str(c, p, n)?;
     let rules = c
         .st()
@@ -2630,19 +2805,19 @@ pub fn card_replayable<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) ->
 }
 
 pub fn schedule_turn_end<C: HostCtx>(c: &mut C, player_id: i32, mode: i32) -> Result<(), HostErr> {
-            c.st_mut()
-                .w()
-                .schedule_turn_end(player_id, mode & 1 != 0, mode & 2 != 0);
+    c.st_mut()
+        .w()
+        .schedule_turn_end(player_id, mode & 1 != 0, mode & 2 != 0);
     Ok(())
 }
 
 pub fn set_no_money_loss<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_no_money_loss(player_id);
+    c.st_mut().w().set_no_money_loss(player_id);
     Ok(())
 }
 
 pub fn set_fixed_roll<C: HostCtx>(c: &mut C, n: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_fixed_roll(n);
+    c.st_mut().w().set_fixed_roll(n);
     Ok(())
 }
 
@@ -2651,13 +2826,11 @@ pub fn fixed_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn set_next_steps<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), HostErr> {
-    Ok(c.st_mut().w().set_next_steps(player_id, n),)
+    Ok(c.st_mut().w().set_next_steps(player_id, n))
 }
 
 pub fn turn_main_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().turn_main_steps()
-    })
+    Ok({ c.st().wr().turn_main_steps() })
 }
 
 /// Generic marker-cap move. The name is data; dumb storage fold.
@@ -2672,104 +2845,133 @@ pub fn add_marker_max<C: HostCtx>(
 
 pub fn set_roller<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
     // Flatten boundary: wire `i32` -> typed. Negative = no claim.
-    c.st_mut()
-        .w()
-        .set_roller(if v >= 0 { Some(game_kinds::Seat(v)) } else { None });
+    c.st_mut().w().set_roller(if v >= 0 {
+        Some(game_kinds::Seat(v))
+    } else {
+        None
+    });
     Ok(())
 }
 
 pub fn set_steps<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_steps(v);
+    c.st_mut().w().set_steps(v);
     Ok(())
 }
 
 pub fn set_reverse<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_reverse(v != 0);
+    c.st_mut().w().set_reverse(v != 0);
     Ok(())
 }
 
 pub fn set_signed<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_signed(v != 0);
+    c.st_mut().w().set_signed(v != 0);
     Ok(())
 }
 
 pub fn set_stop_at<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
     // Flatten boundary: wire `i32` -> `Option<Tile>`. Negative = clear.
-    c.st_mut()
-        .w()
-        .set_stop_at(if v >= 0 { Some(game_kinds::Tile(v)) } else { None });
+    c.st_mut().w().set_stop_at(if v >= 0 {
+        Some(game_kinds::Tile(v))
+    } else {
+        None
+    });
     Ok(())
 }
 
 pub fn set_parity<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_parity(v);
+    c.st_mut().w().set_parity(v);
     Ok(())
 }
 
 pub fn set_resolve<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_resolve(v != 0);
+    c.st_mut().w().set_resolve(v != 0);
     Ok(())
 }
 
 pub fn set_no_buy<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_no_buy(v != 0);
+    c.st_mut().w().set_no_buy(v != 0);
     Ok(())
 }
 
 pub fn set_kind<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_kind(v);
+    c.st_mut().w().set_kind(v);
     Ok(())
 }
 
 pub fn set_trigger_target<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_target(v);
+    c.st_mut().w().set_trigger_target(v);
     Ok(())
 }
 
 pub fn set_trigger_cancelled<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
-        c.st_mut().w().set_trigger_cancelled();
+    c.st_mut().w().set_trigger_cancelled();
     Ok(())
 }
 
 pub fn set_teleport_to<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
     // Flatten boundary: wire `i32` -> `Option<Tile>`. Negative = walk / clear.
-    c.st_mut()
-        .w()
-        .set_teleport_to(if v >= 0 { Some(game_kinds::Tile(v)) } else { None });
+    c.st_mut().w().set_teleport_to(if v >= 0 {
+        Some(game_kinds::Tile(v))
+    } else {
+        None
+    });
     Ok(())
 }
 
 pub fn set_start<C: HostCtx>(c: &mut C, t: i32, p: i32, n: i32) -> Result<(), HostErr> {
     let why = guest_str(c, p, n)?;
     // Flatten boundary: wire `i32` -> `Option<Tile>`. Negative = own tile.
-    c.st_mut()
-        .w()
-        .set_start(if t >= 0 { Some(game_kinds::Tile(t)) } else { None }, &why);
+    c.st_mut().w().set_start(
+        if t >= 0 {
+            Some(game_kinds::Tile(t))
+        } else {
+            None
+        },
+        &why,
+    );
     Ok(())
 }
 
-pub fn set_base_dice<C: HostCtx>(c: &mut C, count: i32, sides: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let why = guest_str(c, p, n)?;
-            c.st_mut().w().set_base_dice(count, sides, &why);
-            Ok(())
+pub fn set_base_dice<C: HostCtx>(
+    c: &mut C,
+    count: i32,
+    sides: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostErr> {
+    let why = guest_str(c, p, n)?;
+    c.st_mut().w().set_base_dice(count, sides, &why);
+    Ok(())
 }
 
-pub fn add_base_dice<C: HostCtx>(c: &mut C, count: i32, sides: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let why = guest_str(c, p, n)?;
-            c.st_mut().w().add_base_dice(count, sides, &why);
-            Ok(())
+pub fn add_base_dice<C: HostCtx>(
+    c: &mut C,
+    count: i32,
+    sides: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostErr> {
+    let why = guest_str(c, p, n)?;
+    c.st_mut().w().add_base_dice(count, sides, &why);
+    Ok(())
 }
 
-pub fn add_extra_dice<C: HostCtx>(c: &mut C, count: i32, sides: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let why = guest_str(c, p, n)?;
-            c.st_mut().w().add_extra_dice(count, sides, &why);
-            Ok(())
+pub fn add_extra_dice<C: HostCtx>(
+    c: &mut C,
+    count: i32,
+    sides: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostErr> {
+    let why = guest_str(c, p, n)?;
+    c.st_mut().w().add_extra_dice(count, sides, &why);
+    Ok(())
 }
 
 pub fn set_tag<C: HostCtx>(c: &mut C, kp: i32, kl: i32, v: i32) -> Result<(), HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            c.st_mut().w().set_tag(&key, v);
-            Ok(())
+    let key = guest_str(c, kp, kl)?;
+    c.st_mut().w().set_tag(&key, v);
+    Ok(())
 }
 
 /// v78: `set_tag` with the key as an intern id. The host stores the id as the
@@ -2790,64 +2992,66 @@ pub fn recorded_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 pub fn set_min_roll<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
     // Flatten boundary: wire `i32` -> `Option<i32>`. `0` = no floor.
-    c.st_mut().w().set_min_roll(if v > 0 { Some(v) } else { None });
+    c.st_mut()
+        .w()
+        .set_min_roll(if v > 0 { Some(v) } else { None });
     Ok(())
 }
 
 pub fn set_extra_steps<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_extra_steps(v);
+    c.st_mut().w().set_extra_steps(v);
     Ok(())
 }
 
 pub fn move_tag<C: HostCtx>(c: &mut C, kp: i32, kl: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, kp, kl)?;
-            Ok(c.st().wr().move_tag(&key))
+    let key = guest_str(c, kp, kl)?;
+    Ok(c.st().wr().move_tag(&key))
 }
 
 pub fn set_settle_tile<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_settle_tile(v);
+    c.st_mut().w().set_settle_tile(v);
     Ok(())
 }
 
 pub fn set_pay_factor<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_pay_factor(v);
+    c.st_mut().w().set_pay_factor(v);
     Ok(())
 }
 
 pub fn set_rent_factor<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_rent_factor(v);
+    c.st_mut().w().set_rent_factor(v);
     Ok(())
 }
 
 pub fn set_can_build<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_can_build(v != 0);
+    c.st_mut().w().set_can_build(v != 0);
     Ok(())
 }
 
 /// HOST-08: `set_no_build(on)` ≡ `set_can_build(!on)` -- one plan flag.
 pub fn set_no_build<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_no_build(v != 0);
+    c.st_mut().w().set_no_build(v != 0);
     Ok(())
 }
 
 /// HOST-08: this move may build away from the landing.
 pub fn set_build_anywhere<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_build_anywhere(v != 0);
+    c.st_mut().w().set_build_anywhere(v != 0);
     Ok(())
 }
 
 pub fn set_settle_as_agent<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_settle_as_agent(v != 0);
+    c.st_mut().w().set_settle_as_agent(v != 0);
     Ok(())
 }
 
 pub fn plan_add_follower<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().plan_add_follower(v);
+    c.st_mut().w().plan_add_follower(v);
     Ok(())
 }
 
 pub fn set_more_steps<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
-        c.st_mut().w().set_more_steps(v);
+    c.st_mut().w().set_more_steps(v);
     Ok(())
 }
 
@@ -2857,9 +3061,7 @@ pub fn move_stop_at<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn move_stopped<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().move_stopped() as i32
-    })
+    Ok({ c.st().wr().move_stopped() as i32 })
 }
 
 pub fn move_parity<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2867,9 +3069,7 @@ pub fn move_parity<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn move_resolve<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().move_resolve() as i32
-    })
+    Ok({ c.st().wr().move_resolve() as i32 })
 }
 
 pub fn move_kind<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2881,9 +3081,7 @@ pub fn move_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn move_remaining<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().move_remaining()
-    })
+    Ok({ c.st().wr().move_remaining() })
 }
 
 pub fn move_total<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -2894,7 +3092,6 @@ pub fn move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().move_dir())
 }
 
-
 // -- cross-card messages ----------------------------------------------------
 
 /// Resolve `Target` to the receiver instance uids that could answer, in field
@@ -2903,10 +3100,7 @@ pub fn move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 /// (`tile:circle`), a mark owner (`mark:cp`), an active event, a status host.
 /// They all live in the one `BOARD_OWNER` list, so the id is what
 /// disambiguates.
-fn resolve_receivers<C: HostCtx>(
-    c: &C,
-    target: &abi::Target,
-) -> Vec<(i32, String)> {
+fn resolve_receivers<C: HostCtx>(c: &C, target: &abi::Target) -> Vec<(i32, String)> {
     let w = c.st().wr();
     match target {
         abi::Target::Uid(uid) => {
@@ -3027,7 +3221,8 @@ pub fn send<C: HostCtx>(
         nested.msg_name = name.clone();
         nested.msg = payload.clone();
         nested.msg_reply = 0;
-        let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, false);
+        let (res, inner, left) =
+            c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, false);
         let st = c.st_mut();
         st.world = inner.world;
         if let Some(w) = st.world.as_mut() {

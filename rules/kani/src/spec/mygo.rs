@@ -159,7 +159,8 @@ pub fn haneoka_effects_ok(effects: &[Effect], player: i32, tile: i32, r: i32, ca
             return false;
         }
         if !matches!(effects[i], Effect::PlaceCard { player: p, dest, card: c }
-            if p == player && dest == DEST_FIELD && c == card) {
+            if p == player && dest == DEST_FIELD && c == card)
+        {
             return false;
         }
         i += 1;
@@ -168,14 +169,22 @@ pub fn haneoka_effects_ok(effects: &[Effect], player: i32, tile: i32, r: i32, ca
 }
 
 /// MUTANT: for r >= 10 demands an extra Draw even on the house-only band.
-pub fn haneoka_effects_ok_mutant(effects: &[Effect], player: i32, tile: i32, r: i32, card: u8) -> bool {
+pub fn haneoka_effects_ok_mutant(
+    effects: &[Effect],
+    player: i32,
+    tile: i32,
+    r: i32,
+    card: u8,
+) -> bool {
     if r < 10 {
         // mutant: ineffective branch should have an effect (wrong)
         return effects.len() == 1;
     }
     haneoka_effects_ok(effects, player, tile, r, card) && {
         // mutant wants an extra Draw always
-        effects.iter().any(|e| matches!(e, Effect::Draw { player: p, .. } if *p == player))
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::Draw { player: p, .. } if *p == player))
             || r < 15
     }
 }
@@ -243,10 +252,13 @@ pub fn rainday_02_stay_ok(effects: &[Effect], after: usize, zone: &[bool]) -> bo
 /// MUTANT: demands a stay for a player outside the zone.
 pub fn rainday_02_stay_ok_mutant(effects: &[Effect], after: usize, zone: &[bool]) -> bool {
     let _ = zone;
-    effects[after..].iter().any(|e| matches!(e, Effect::GiveStay { .. })) && {
-        // wrong: require a stay even when the zone is empty
-        true
-    }
+    effects[after..]
+        .iter()
+        .any(|e| matches!(e, Effect::GiveStay { .. }))
+        && {
+            // wrong: require a stay even when the zone is empty
+            true
+        }
 }
 
 // ===========================================================================
@@ -275,12 +287,7 @@ pub fn hitoshizuku_pay_amount(kinds: i32) -> i32 {
 /// gain is `GainMoney { player: user, n: 1000*kinds(user) }` when kinds(user)>0.
 /// The clear leg itself is a sequence of GiveStay / GiveStun / SetState.
 /// Bounded while (slice iterators are an SSA cliff).
-pub fn hitoshizuku_money_ok(
-    effects: &[Effect],
-    user: i32,
-    kinds: &[i32],
-    n_players: i32,
-) -> bool {
+pub fn hitoshizuku_money_ok(effects: &[Effect], user: i32, kinds: &[i32], n_players: i32) -> bool {
     let mut pays = 0;
     let mut gains = 0;
     let mut i = 0usize;

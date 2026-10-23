@@ -1,7 +1,7 @@
 //! `CRYCHIC:一起演奏音乐的命运共同体` -- C# `CardFateTogether` (MatchHost.cs:3050-3061):
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:一起演奏音乐的命运共同体`）:
-//! > 一起演奏音乐的命运共同体 
+//! > 一起演奏音乐的命运共同体
 //! >  ：
 //! > （1）[手] 直到你的下回合开始，每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。
 //! > （2）若此卡打出后
@@ -10,9 +10,9 @@
 //!
 //! until your next turn start, hop to the next player's tile on every rent collection.
 
-use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const FATE_TOGETHER: CardDef = CardDef::new(
     "CRYCHIC:一起演奏音乐的命运共同体",

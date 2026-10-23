@@ -3,9 +3,10 @@
 //! 事件文本（`CardMeta` beside the rule body, id `火种燃尽之后会怎么样呢？`）:
 //! > （1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。
 
-use bandori_std::kind::Actions;
-use bandori_std::state_key; use card_sdk::abi::{AbKind, ActionKind, MarkFilter, TriggerKind};
 use bandori_std::ctx::{self, trigger};
+use bandori_std::kind::Actions;
+use bandori_std::state_key;
+use card_sdk::abi::{AbKind, ActionKind, MarkFilter, TriggerKind};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{all_players, keep};
@@ -78,7 +79,9 @@ fn on_out_applies(_player_id: i32) -> bool {
     match trigger::kind() {
         // exile (ruleset 21) or bankruptcy
         k if k == bandori_std::kind::Exile.as_trigger() || k == TriggerKind::Bankrupt => true,
-        TriggerKind::Abnormal => trigger::abnormal_kind() == Some(bandori_std::kind::abnormal::Exile),
+        TriggerKind::Abnormal => {
+            trigger::abnormal_kind() == Some(bandori_std::kind::abnormal::Exile)
+        }
         _ => false,
     }
 }
@@ -98,7 +101,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
             // One row per copy (`place_mark_new`): the old `add_mark` pushed a
             // fresh row, and tests pin separate rows when two players share a
             // tile.
-            ctx::place_mark(at, EMBER, "", -1, ctx::self_uid(), 1, &note, card_sdk::abi::Stack::Fresh);
+            ctx::place_mark(
+                at,
+                EMBER,
+                "",
+                -1,
+                ctx::self_uid(),
+                1,
+                &note,
+                card_sdk::abi::Stack::Fresh,
+            );
         }
     }
     ctx::log(player_id, &note);
@@ -127,7 +139,16 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
             if at >= 0 {
                 // Fresh row per copy (`place_mark_new`): two players sharing a
                 // neighbour must land as separate rows, not one stacked count.
-                ctx::place_mark(at, EMBER, "", -1, ctx::self_uid(), 1, &note, card_sdk::abi::Stack::Fresh);
+                ctx::place_mark(
+                    at,
+                    EMBER,
+                    "",
+                    -1,
+                    ctx::self_uid(),
+                    1,
+                    &note,
+                    card_sdk::abi::Stack::Fresh,
+                );
             }
         }
     }
@@ -163,7 +184,11 @@ fn on_settle(_owner: i32) -> card_sdk::Asked {
     let who = trigger::player_id();
     let n = ctx::count_marks(at, &MarkFilter::any().kind(EMBER).owner(-1));
     // 「失去10资金」 per copy. `n > 0` is [`on_settle_applies`].
-    ctx::pay(who, n * 10, &Msg::new("log.event.embers_burn").i("n", n as i64))?;
+    ctx::pay(
+        who,
+        n * 10,
+        &Msg::new("log.event.embers_burn").i("n", n as i64),
+    )?;
     Ok(())
 }
 

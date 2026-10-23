@@ -37,9 +37,9 @@
 //! the effect's intended X, so a listener still sees the pre-flip face-down
 //! count. A cancelled / aborted raise leaves the counters untouched.
 
-use card_sdk::{CardDef, Prompt};
 use bandori_std::ctx;
 use bandori_std::kind;
+use card_sdk::{CardDef, Prompt};
 
 /// The board-owned P✽P粉丝 rule. One instance on `BOARD_OWNER`, `tile = -1`.
 /// No hooks of its own: the once-per-match deal is a creator call from the
@@ -90,8 +90,7 @@ pub fn initial_grant_once(exclude_group: &str) -> Result<i32, Prompt> {
 pub fn already_granted() -> bool {
     // Seat 0 is the canonical flag seat; also accept any seat holding the
     // stamp so a world that lost seat 0 still dedupes.
-    ctx::state::get(0, ONCE) > 0
-        || (0..ctx::player_count()).any(|p| ctx::state::get(p, ONCE) > 0)
+    ctx::state::get(0, ONCE) > 0 || (0..ctx::player_count()).any(|p| ctx::state::get(p, ONCE) > 0)
 }
 
 // ------------------------------------------------------------- counters

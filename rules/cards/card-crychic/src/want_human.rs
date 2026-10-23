@@ -1,7 +1,7 @@
 //! `CRYCHIC:想要成为人类` -- C# `CardWantHuman` (MatchHost.cs:2502-2583): place the
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要成为人类`）:
-//! > 想要成为人类 
+//! > 想要成为人类
 //! >  ：
 //! > （1）将此卡置于场上并从1-20间选择并声明X，将其写下。每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶。
 //! > （2）[自动]若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部奇迹水晶并使你下次的移动掷骰结果额外增加20-X；若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶。
@@ -9,9 +9,9 @@
 //! Sheet 2026-10-06 新卡组卡 M2: 「小于等于X」 (was 「小于X」) -- roll == X
 //! also banks a crystal.
 
-use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",

@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use crate::data::{CardData, PersonaData, GameData};
+use crate::data::{CardData, GameData, PersonaData};
 use crate::msg::Msg;
 
 /// Cards per deck.
@@ -39,7 +39,9 @@ pub fn can_use(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
 pub fn shares_exclusives(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
     data.group_shares_exclusives(c)
         && card.exclusive()
-        && data.persona(&card.owner).is_some_and(|o| o.group == c.group)
+        && data
+            .persona(&card.owner)
+            .is_some_and(|o| o.group == c.group)
 }
 
 /// Cards `c` may use: exclusives first, then group cards, then general cards

@@ -7,7 +7,9 @@
 
 use std::sync::OnceLock;
 
-pub use wasmtime::{Caller, Engine, Instance, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
+pub use wasmtime::{
+    Caller, Engine, Instance, Linker, Module, Store, StoreLimits, StoreLimitsBuilder,
+};
 use wasmtime::{Config, InstancePre};
 
 /// Ceiling on one instance's linear memory. A card run allocates a handful of

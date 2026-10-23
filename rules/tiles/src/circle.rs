@@ -30,8 +30,8 @@
 //! TODO(规则书): the stunned player's card-only reward is a ruling, not book
 //! text (`回合階段&註釋` `C44` blocks the money half; `团技能` `D13` forces the
 //! card half).
-use card_sdk::abi::{prop, text_slot, ActionKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{prop, text_slot, ActionKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
 use card_sdk::{Action, CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词). Matches `game_core::engine::world::CIRCLE_MONEY`.

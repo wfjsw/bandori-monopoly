@@ -1,14 +1,14 @@
 //! `Mor:夏日合宿` -- C# `CardSummerCamp` (MatchHost.cs:4584-4643): stay untargetable
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:夏日合宿`）:
-//! > 夏日合宿： 
+//! > 夏日合宿：
 //! >  打出此卡，直到下个自己的回合开始前，你只会被自己发动的效果指定。当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌
 //!
 //! by others until your next turn, then draw if nothing was blocked.
 
-use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";
 

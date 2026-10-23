@@ -23,8 +23,11 @@ pub fn data() -> GameData {
             .expect("roster fixture"),
     )
     .expect("roster fixture parses");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-        .expect("data/ should load -- run tools/asset-pipe/extract.py")
+    GameData::load(
+        |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+        roster,
+    )
+    .expect("data/ should load -- run tools/asset-pipe/extract.py")
 }
 
 /// [`data`], wrapped for the match engine.

@@ -19,9 +19,9 @@
 //! invoked skill's cost, not a rule -- the sheet's `思路` column is play advice
 //! and is not implemented.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The 「角色标记」 namespace every consumer agrees on (NNM's `角色标记:*` too).
 /// A mark's name is `角色标记:<skill id>`, so (3) can hand the id to `play_card`.
@@ -48,20 +48,33 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         On::Play("", None, Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
         // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
-        On::Action(Action::CardUsed("actor != owner && trigger_card != 0 && charge(owner) >= 1", None, Some(on_skill_applies), on_skill)),
+        On::Action(Action::CardUsed(
+            "actor != owner && trigger_card != 0 && charge(owner) >= 1",
+            None,
+            Some(on_skill_applies),
+            on_skill,
+        )),
         On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, tick)),
     ],
 )
-    .silent(&[1, 2])
-    .quiet_when_empty(&[5])
-    // 「（初始2，上限2）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 2)]);
+.silent(&[1, 2])
+.quiet_when_empty(&[5])
+// 「（初始2，上限2）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 2),
+    (bandori_std::fire::FIRE_CAP, 2),
+]);
 
 /// Residual guard for [`on_skill`]: the CD and the 「每种角色标记上限1」 cap.
 /// Pure reads -- the same instant as the body (`run_hook` runs both on one
@@ -105,7 +118,10 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// [`on_skill_applies`] decide applicability; the body is the offer.
 fn on_skill(player_id: i32) -> card_sdk::Asked {
     let Some(id) = ctx::trigger::cards().into_iter().next() else {
-        debug_assert!(false, "on_skill_applies admitted but the trigger has no skill id");
+        debug_assert!(
+            false,
+            "on_skill_applies admitted but the trigger has no skill id"
+        );
         return Ok(());
     };
     if id.is_empty() {

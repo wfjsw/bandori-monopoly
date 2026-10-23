@@ -15,17 +15,12 @@ use game_core::data::{GameData, Roster};
 
 /// Path to the checked-in fixture (from this crate's manifest dir).
 fn fixture_path() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../game-core/tests/fixtures/roster.json")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json")
 }
 
 fn checked_in_fixture() -> String {
-    std::fs::read_to_string(fixture_path()).unwrap_or_else(|e| {
-        panic!(
-            "roster fixture missing ({}): {e}",
-            fixture_path().display()
-        )
-    })
+    std::fs::read_to_string(fixture_path())
+        .unwrap_or_else(|e| panic!("roster fixture missing ({}): {e}", fixture_path().display()))
 }
 
 /// The synthetic fixture parses and is internally consistent.

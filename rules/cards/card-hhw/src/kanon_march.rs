@@ -7,7 +7,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, MoveKind};
-use card_sdk::{Action, CardDef, ctx, key, Msg, On};
+use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
 /// 「水母标记」.

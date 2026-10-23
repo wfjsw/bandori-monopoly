@@ -51,8 +51,8 @@ pub const STATUS_NO_HAND: CardDef = CardDef::new(
         On::Filter(Filter::PlayGate(NO_HAND_HELD, None, refuse)),
     ],
 )
-    .board_role("status")
-    .gate_msgs(&[(FilterKind::PlayGate.gate_id(), "err.play_no_hand")]);
+.board_role("status")
+.gate_msgs(&[(FilterKind::PlayGate.gate_id(), "err.play_no_hand")]);
 
 /// The condition under which `noHand` closes the play gate.
 pub const NO_HAND_HELD: &str = "state(actor,'noHand') > 0";

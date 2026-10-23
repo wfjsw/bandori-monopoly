@@ -71,7 +71,9 @@ pub fn believe_02_amount_paid(book_pre_money: i32) -> i32 {
 
 /// Exact money effect of a successful cost: PayMoney(player, 800).
 pub fn believe_02_log_ok(effects: &[Effect], player: i32) -> bool {
-    effects.iter().any(|e| matches!(e, Effect::PayMoney { player: p, n } if *p == player && *n == 800))
+    effects
+        .iter()
+        .any(|e| matches!(e, Effect::PayMoney { player: p, n } if *p == player && *n == 800))
 }
 
 /// MUTANT: cost is 80.
@@ -123,9 +125,7 @@ pub fn believe_04_log_ok(effects: &[Effect], player: i32) -> bool {
     for e in effects {
         match e {
             Effect::TakeFromPile {
-                player: p,
-                pile: 0,
-                ..
+                player: p, pile: 0, ..
             } if *p == player => takes += 1,
             Effect::AddToHand { player: p, .. } if *p == player => adds += 1,
             _ => {}

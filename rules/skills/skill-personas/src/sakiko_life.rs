@@ -16,9 +16,10 @@
 //! 「每回合开始时自动打出一张抽牌堆顶端的牌」 is a free `play_card` of the
 //! deck's top card at each of this player's turn starts.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state, trigger, CardPile};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「每获得一层停留，眩晕，你获得1500资金」.
 const BOUNTY: i32 = 1500;
@@ -31,22 +32,40 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
         // exists only at the pot cap. 状态2's auto-play still has to run
         // whenever state is 2, so the residual is the disjunction.
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, Some(state2_or_fire_capped), at_turn_start)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            Some(state2_or_fire_capped),
+            at_turn_start,
+        )),
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
-        On::Action(Action::PassTile("actor == owner && move.main && slot('skillState') != 2", None, None, on_pass_player)),
+        On::Action(Action::PassTile(
+            "actor == owner && move.main && slot('skillState') != 2",
+            None,
+            None,
+            on_pass_player,
+        )),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
         // raised. The guard keeps 状态1 and this player as the *recipient*
         // (`trigger::target()`), not the causer.
-        On::Action(Action::Abnormal("target == owner", None, Some(im_hit), on_abnormal)),
+        On::Action(Action::Abnormal(
+            "target == owner",
+            None,
+            Some(im_hit),
+            on_abnormal,
+        )),
     ],
 )
-    .silent(&[0, 1])
-    // 「（初始0，上限3）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 3)]);
+.silent(&[0, 1])
+// 「（初始0，上限3）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 0),
+    (bandori_std::fire::FIRE_CAP, 3),
+]);
 
 /// The `Abnormal` hook's guard: this player is the *recipient* of the effect
 /// (`trigger::target()`), still in 状态1.
@@ -157,7 +176,11 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     // = the causer. 「受到…影响」 names the recipient.
     if !matches!(
         trigger::abnormal_kind(),
-        Some(bandori_std::kind::abnormal::Stay | bandori_std::kind::abnormal::Stun | bandori_std::kind::abnormal::Exile)
+        Some(
+            bandori_std::kind::abnormal::Stay
+                | bandori_std::kind::abnormal::Stun
+                | bandori_std::kind::abnormal::Exile
+        )
     ) {
         return Ok(());
     }

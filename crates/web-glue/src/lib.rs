@@ -13,22 +13,22 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{EventData, GroupData, CardData, PersonaData, GameData, Roster};
+use game_core::data::{CardData, EventData, GameData, GroupData, PersonaData, Roster};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
-use game_core::rng::Seed256;
-use player_meta::decks as saved_decks;
-use player_meta::profile::{PlayerProfile, Seen};
-use player_meta::progression;
 use game_core::record::{
     decode_record, encode_record_zst, parse_header, parse_header_bytes, parse_record, EngineStamp,
     MatchSetup, RecordedMatch, Replayer, RECORD_VERSION,
 };
+use game_core::rng::Seed256;
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 use game_rules::WasmRules;
+use player_meta::decks as saved_decks;
+use player_meta::profile::{PlayerProfile, Seen};
+use player_meta::progression;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -121,12 +121,12 @@ fn persona<'a>(d: &'a GameData, name: &str) -> Result<&'a PersonaData, JsError> 
 }
 
 /// Build `GameData` from a [`load_data`] payload plus a roster, and install it.
-fn build_data(
-    files: &HashMap<String, String>,
-    roster: Roster,
-) -> Result<Arc<GameData>, JsError> {
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()), roster)
-        .map_err(|e| JsError::new(&e))?;
+fn build_data(files: &HashMap<String, String>, roster: Roster) -> Result<Arc<GameData>, JsError> {
+    let d = GameData::load(
+        |f| files.get(f).cloned().ok_or_else(|| "missing".to_string()),
+        roster,
+    )
+    .map_err(|e| JsError::new(&e))?;
     Ok(Arc::new(d))
 }
 
@@ -142,7 +142,12 @@ fn bind_rules(set: game_rules::Ruleset, data: Arc<GameData>) {
 
 /// Roster of the built ruleset, or empty when none is built yet.
 fn roster() -> Roster {
-    SET.with(|s| s.borrow().as_ref().map(|set| set.roster()).unwrap_or_default())
+    SET.with(|s| {
+        s.borrow()
+            .as_ref()
+            .map(|set| set.roster())
+            .unwrap_or_default()
+    })
 }
 
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
@@ -453,11 +458,7 @@ pub fn deck_rename(
 /// Delete deck `slot` (a chosen default pointing at it falls back to the
 /// preset). Returns the updated profile.
 #[wasm_bindgen]
-pub fn deck_delete(
-    profile_json: &str,
-    persona_name: &str,
-    slot: i32,
-) -> Result<String, JsError> {
+pub fn deck_delete(profile_json: &str, persona_name: &str, slot: i32) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     saved_decks::delete(&mut p, persona(&d, persona_name)?, slot);
@@ -518,8 +519,7 @@ pub fn profile_create(
 #[wasm_bindgen]
 pub fn profile_load(profile_json: &str) -> Result<String, JsError> {
     let d = data()?;
-    let p = PlayerProfile::from_json(&d, profile_json)
-        .map_err(|e| JsError::new(&e.to_string()))?;
+    let p = PlayerProfile::from_json(&d, profile_json).map_err(|e| JsError::new(&e.to_string()))?;
     Ok(json(&p))
 }
 
@@ -706,8 +706,8 @@ pub fn ruleset_pre_eval(
     candidate_json: &str,
 ) -> Result<bool, JsError> {
     use game_rules::cond_pre::{CandidateCtx, WindowCtx};
-    let win: WindowCtx = serde_json::from_str(window_json)
-        .map_err(|e| JsError::new(&format!("window: {e}")))?;
+    let win: WindowCtx =
+        serde_json::from_str(window_json).map_err(|e| JsError::new(&format!("window: {e}")))?;
     let cand: CandidateCtx = serde_json::from_str(candidate_json)
         .map_err(|e| JsError::new(&format!("candidate: {e}")))?;
     let set = RULES
@@ -717,10 +717,11 @@ pub fn ruleset_pre_eval(
         .ruleset()
         .card(card)
         .ok_or_else(|| JsError::new(&format!("no card {card:?}")))?;
-    let pre = set
-        .ruleset()
-        .pre_at(handle, entry)
-        .ok_or_else(|| JsError::new(&format!("card {card:?} entry {entry} declares no condition")))?;
+    let pre = set.ruleset().pre_at(handle, entry).ok_or_else(|| {
+        JsError::new(&format!(
+            "card {card:?} entry {entry} declares no condition"
+        ))
+    })?;
     Ok(pre.eval(&win, &cand))
 }
 
@@ -826,8 +827,7 @@ impl SoloMatch {
     /// for uniformity; the UI does not display the commitment (a local
     /// commitment proves nothing -- `docs/FAIRNESS.md` "solo").
     pub fn set_fair(&mut self, fair_json: &str) -> Result<(), JsError> {
-        let fair: game_core::fair::Fairness =
-            parse("fair", fair_json)?;
+        let fair: game_core::fair::Fairness = parse("fair", fair_json)?;
         self.m.set_fair(fair);
         Ok(())
     }
@@ -836,8 +836,8 @@ impl SoloMatch {
     /// restarts at the snapshot and is marked `partial`; use
     /// [`SoloMatch::restore_with_record`] to keep the log.
     pub fn restore(json: &str) -> Result<SoloMatch, JsError> {
-        let m = Match::restore(data()?, rules()?, json)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let m =
+            Match::restore(data()?, rules()?, json).map_err(|e| JsError::new(&e.to_string()))?;
         Ok(SoloMatch {
             m: RecordedMatch::from_snapshot(m),
         })
@@ -1169,7 +1169,12 @@ pub fn fair_commit(
 ) -> Result<String, JsError> {
     let seed = game_core::fair::unhex32(seed_hex).map_err(|e| JsError::new(&e))?;
     let salt = game_core::fair::unhex32(salt_hex).map_err(|e| JsError::new(&e))?;
-    Ok(game_core::fair::commit_hex(&seed, &salt, bundle, ruleset_sha256))
+    Ok(game_core::fair::commit_hex(
+        &seed,
+        &salt,
+        bundle,
+        ruleset_sha256,
+    ))
 }
 
 /// The derived match seed: `SHA-256(seed, sorted nonces)`

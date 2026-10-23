@@ -141,7 +141,8 @@ fn m2_settle_time_clause_runs_without_a_body_replace() {
     // rent on the landing may net against it; the observable is the gain log.
     let keys = t.recent_keys(30);
     assert!(
-        keys.iter().any(|k| k.contains("gain") || k.contains("endless_journey")),
+        keys.iter()
+            .any(|k| k.contains("gain") || k.contains("endless_journey")),
         "「触发结算时」 pays out when the body runs: {} -> {} keys={:?}",
         m1,
         t.money(1),
@@ -174,12 +175,7 @@ fn m4_a_pass_by_not_an_overlap_triggers_kaoru() {
     t.dice(&[5]); // 7 -> 8,9,10,11,12: passes 10 mid-route, ends on 12
     t.roll(1).unwrap();
     drain(&mut t);
-    assert_eq!(
-        t.pos(1),
-        12,
-        "the walk ended past P0: pos={}",
-        t.pos(1)
-    );
+    assert_eq!(t.pos(1), 12, "the walk ended past P0: pos={}", t.pos(1));
     assert!(
         t.charge(0) > before,
         "「被[经过]」 grants the pot on a mid-route pass: fire={} -> {} keys={:?}",
@@ -210,8 +206,7 @@ fn m4_kokoro_force_stop_stops_a_passer() {
     // Accept the force-stop offer.
     let mut offered = false;
     while let Some(p) = t.prompt() {
-        if format!("{p:?}").contains("kokoro_practice_force")
-            || format!("{p:?}").contains("force")
+        if format!("{p:?}").contains("kokoro_practice_force") || format!("{p:?}").contains("force")
         {
             offered = true;
             let _ = t.answer_one(0);
@@ -219,7 +214,11 @@ fn m4_kokoro_force_stop_stops_a_passer() {
             t.decline();
         }
     }
-    assert!(offered, "the force-stop offer came up: {:?}", t.recent_keys(20));
+    assert!(
+        offered,
+        "the force-stop offer came up: {:?}",
+        t.recent_keys(20)
+    );
     assert_eq!(
         t.pos(1),
         10,
@@ -362,7 +361,6 @@ fn q7_settle_before_relocation_settles_at_the_new_tile() {
     );
 }
 
-
 // =====================================================================
 // R4 -- 要乐奈 (2) 「其他人…转移到该格上以免除当次付款」
 // =====================================================================
@@ -417,7 +415,12 @@ fn rana_parfait_transfer_voids_the_space_payment() {
         "the unit landed on Space: {:?}",
         t.marks_on(tile("Space"))
     );
-    assert_eq!(t.money(2), money_before, "no payment ran: {:?}", t.recent_keys(12));
+    assert_eq!(
+        t.money(2),
+        money_before,
+        "no payment ran: {:?}",
+        t.recent_keys(12)
+    );
     assert_eq!(t.money(1), owner_before, "the owner received nothing");
 }
 
@@ -433,7 +436,11 @@ fn rana_parfait_transfer_declined_pays_the_rent() {
     t.dice(&[1]);
     t.roll(2).unwrap();
     let p = t.expect_prompt();
-    assert!(p.title.key().contains("rana_parking_title"), "{:?}", p.title);
+    assert!(
+        p.title.key().contains("rana_parking_title"),
+        "{:?}",
+        p.title
+    );
     t.answer(2, 1).unwrap(); // no
     drain(&mut t);
     assert_eq!(t.token(2, "抹茶芭菲"), 1, "the held unit stayed");
@@ -446,7 +453,11 @@ fn rana_parfait_transfer_declined_pays_the_rent() {
         0,
         "nothing landed on Space"
     );
-    assert!(t.money(2) < money_before, "the rent was paid: {:?}", t.recent_keys(12));
+    assert!(
+        t.money(2) < money_before,
+        "the rent was paid: {:?}",
+        t.recent_keys(12)
+    );
 }
 
 /// Holds none: no ask at all, the payment just runs.
@@ -468,5 +479,9 @@ fn rana_parfait_transfer_not_offered_without_a_held_unit() {
         );
         t.decline();
     }
-    assert!(t.money(2) < money_before, "the rent was paid: {:?}", t.recent_keys(12));
+    assert!(
+        t.money(2) < money_before,
+        "the rent was paid: {:?}",
+        t.recent_keys(12)
+    );
 }

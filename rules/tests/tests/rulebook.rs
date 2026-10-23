@@ -89,7 +89,11 @@ fn add_stay(t: &mut Table, who: usize, n: i32) {
     let w = t.m.world_mut();
     w.apply_layer(p, bandori_std::state_key::STAY, n);
     w.state_set_flags(p, bandori_std::state_key::STAY, 1 | 2);
-    w.state_set_expires(p, bandori_std::state_key::STAY, Some(game_core::state::Tick::TurnEnd));
+    w.state_set_expires(
+        p,
+        bandori_std::state_key::STAY,
+        Some(game_core::state::Tick::TurnEnd),
+    );
 }
 
 fn add_stun(t: &mut Table, who: usize, n: i32) {
@@ -97,7 +101,11 @@ fn add_stun(t: &mut Table, who: usize, n: i32) {
     let w = t.m.world_mut();
     w.apply_layer(p, bandori_std::state_key::STUN, n);
     w.state_set_flags(p, bandori_std::state_key::STUN, 1 | 2);
-    w.state_set_expires(p, bandori_std::state_key::STUN, Some(game_core::state::Tick::TurnEnd));
+    w.state_set_expires(
+        p,
+        bandori_std::state_key::STUN,
+        Some(game_core::state::Tick::TurnEnd),
+    );
 }
 
 fn add_exile(t: &mut Table, who: usize, n: i32, to: usize) {
@@ -107,7 +115,11 @@ fn add_exile(t: &mut Table, who: usize, n: i32, to: usize) {
     let w = t.m.world_mut();
     w.apply_layer(p, bandori_std::state_key::EXILE, n);
     w.state_set_flags(p, bandori_std::state_key::EXILE, 1 | 2);
-    w.state_set_expires(p, bandori_std::state_key::EXILE, Some(game_core::state::Tick::TurnStart));
+    w.state_set_expires(
+        p,
+        bandori_std::state_key::EXILE,
+        Some(game_core::state::Tick::TurnStart),
+    );
     if n > 0 {
         t.set_state(who, "exileTo", to as i32);
         t.set_state(who, "exileHold", 0);
@@ -190,7 +202,11 @@ fn gf04_empty_draw_reshuffles_the_discard() {
     drain(&mut t);
     assert_eq!(t.hand(0).len(), 1, "drew one after the reshuffle");
     assert!(t.discard(0).is_empty(), "the discard was consumed");
-    assert_eq!(t.draw_pile(0).len(), 2, "the rest went back on the draw pile");
+    assert_eq!(
+        t.draw_pile(0).len(),
+        2,
+        "the rest went back on the draw pile"
+    );
 }
 
 // 规则书 游戏流程 5 (bold): 「抵押拥有的地契，抵押后[获得]地契购买价格50%的资金」.
@@ -202,7 +218,11 @@ fn gf05_mortgage_pays_fifty_percent_of_the_price() {
     t.set_money(0, 1_000);
     t.mortgage(0, land).unwrap();
     assert!(t.mortgaged(land), "the deed is now mortgaged");
-    assert_eq!(t.money(0), 1_000 + price(land) / 2, "gained 50% of the price");
+    assert_eq!(
+        t.money(0),
+        1_000 + price(land) / 2,
+        "gained 50% of the price"
+    );
     assert_eq!(t.money(0), 1_000 + 1_500, "购物中心 is 3000 -> 1500");
 }
 
@@ -234,7 +254,10 @@ fn gf07_main_move_is_1d20_and_the_path_skips_the_start() {
     // G-SETTLE-06/07: the settle of the unowned 水族馆 IS the optional buy
     // prompt (the buy itself is the prompt's yes).
     assert!(
-        t.prompt().is_some() || t.recent_keys(12).iter().any(|k| k.contains("land") || k.contains("buy")),
+        t.prompt().is_some()
+            || t.recent_keys(12)
+                .iter()
+                .any(|k| k.contains("land") || k.contains("buy")),
         "the end tile settled: prompt={:?} keys={:?}",
         t.dump_prompt(),
         t.recent_keys(12)
@@ -292,7 +315,12 @@ fn s04_passing_circle_from_away_gives_the_reward() {
     t.roll(0).unwrap();
     // The reward asks money-or-card; take the money half.
     let p = t.expect_prompt();
-    assert_eq!(p.title.key(), "ask.pass_reward.title", "{}", t.dump_prompt());
+    assert_eq!(
+        p.title.key(),
+        "ask.pass_reward.title",
+        "{}",
+        t.dump_prompt()
+    );
     t.answer_one(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), tile("CiRCLE"), "ended on CiRCLE");
@@ -320,7 +348,8 @@ fn s05_no_reward_when_the_move_started_on_circle() {
     let keys = t.keys_since(mark);
     // The wrap [经过]'d CiRCLE -- the reward step was reached and declined.
     assert!(
-        keys.iter().any(|k| k.contains("pass") || k.contains("pass_reward") || k.contains("land")),
+        keys.iter()
+            .any(|k| k.contains("pass") || k.contains("pass_reward") || k.contains("land")),
         "the wrap passed CiRCLE: {keys:?}"
     );
     assert_eq!(
@@ -440,7 +469,10 @@ fn s08_build_costs_the_house_and_respects_the_cap() {
     );
     // Cap reached: the fourth build is refused (no settle build offer).
     settle_on(&mut t, 0, land);
-    assert!(t.build(0).is_err() || t.houses(land) == 3, "购物中心 caps at 3");
+    assert!(
+        t.build(0).is_err() || t.houses(land) == 3,
+        "购物中心 caps at 3"
+    );
     assert_eq!(t.houses(land), 3);
 }
 
@@ -614,7 +646,7 @@ fn s12d_agent_build_only_in_own_group() {
     let agent = tile("主要街道"); // group 1
     let own_group = tile("偶像经纪公司"); // group 1
     let other = tile("花咲川女子学院"); // group 2
-    // 「该格获得所有颜色」 widens 同色 for the buy branch.
+                                        // 「该格获得所有颜色」 widens 同色 for the buy branch.
     for f in t.m.world_mut().st.board_field.iter_mut() {
         if f.tile == other as i32 {
             f.props.insert("anyColor".into(), 1);
@@ -678,14 +710,13 @@ fn s05c_no_reward_prop_suppresses_and_is_consumed() {
     assert_eq!(t.money(0), before, "no CiRCLE reward while suppressed");
     // The tile-side arm is consumed, so the next pass is not vetoed by a
     // stale prop (`event:协助CiRCLE重建` re-arms for that reason).
-    let armed = t
-        .m
-        .world()
-        .st
-        .board_field
-        .iter()
-        .filter(|f| f.tile == tile("CiRCLE") as i32)
-        .any(|f| f.props.get("noReward").copied().unwrap_or(0) > 0);
+    let armed =
+        t.m.world()
+            .st
+            .board_field
+            .iter()
+            .filter(|f| f.tile == tile("CiRCLE") as i32)
+            .any(|f| f.props.get("noReward").copied().unwrap_or(0) > 0);
     assert!(!armed, "NO_REWARD was consumed by the reward step");
 }
 
@@ -728,7 +759,11 @@ fn t01_stun_skips_operate_and_main_move() {
     // The turn auto-ends: no 运营, no roll.
     assert!(t.prompt().is_none(), "nothing to do while stunned");
     assert_ne!(t.turn(), 0, "the stunned turn was skipped on");
-    assert_eq!(t.state(0, "stun"), 0, "window 18 dropped a layer at 结束阶段");
+    assert_eq!(
+        t.state(0, "stun"),
+        0,
+        "window 18 dropped a layer at 结束阶段"
+    );
 }
 
 // 行动阶段 7: 「停留效果发动：跳过主要移动阶段」.
@@ -741,7 +776,11 @@ fn t02_stay_skips_the_main_move() {
     assert!(t.m.world().st.skip_move, "the main move is marked skipped");
     t.end(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.state(0, "stay"), 0, "window 18 dropped the stay at 结束阶段");
+    assert_eq!(
+        t.state(0, "stay"),
+        0,
+        "window 18 dropped the stay at 结束阶段"
+    );
 }
 
 /// `stage::OPS` = 2 (state.rs) -- the 运营阶段.
@@ -763,7 +802,11 @@ fn t03_exile_drops_at_the_turn_start() {
     assert_ne!(t.turn(), 0, "the exiled turn was skipped on");
     // The following turn start drops the last layer.
     t.begin_turn(0);
-    assert_eq!(t.state(0, "exile"), 0, "the second start drops the last layer");
+    assert_eq!(
+        t.state(0, "exile"),
+        0,
+        "the second start drops the last layer"
+    );
 }
 
 // 行动阶段 1: when the last 除外 layer goes, 「获得该状态的效果会写明状态结束后
@@ -790,7 +833,10 @@ fn t05_pass_fires_per_step_and_never_for_the_start() {
     assert_eq!(t.pos(0), 13, "walked 11, 12, 13");
     // G-SETTLE-06/07: the settle of the end tile may open a buy/build prompt.
     assert!(
-        t.prompt().is_some() || t.recent_keys(12).iter().any(|k| k.contains("land") || k.contains("buy")),
+        t.prompt().is_some()
+            || t.recent_keys(12)
+                .iter()
+                .any(|k| k.contains("land") || k.contains("buy")),
         "the end tile settled: prompt={:?} keys={:?}",
         t.dump_prompt(),
         t.recent_keys(12)
@@ -815,7 +861,8 @@ fn t06_overlap_fires_after_a_walk_onto_a_shared_tile() {
     assert_eq!(t.pos(0), 13, "P0 ended on P1's tile");
     let keys = t.keys_since(mark);
     assert!(
-        keys.iter().any(|k| k.contains("passPlayer") || k.contains("overlap")),
+        keys.iter()
+            .any(|k| k.contains("passPlayer") || k.contains("overlap")),
         "the [重叠] window fired on the shared end tile: {keys:?}"
     );
 }
@@ -846,7 +893,12 @@ fn t06b_same_tile_teleport_fires_overlap_then_settle() {
     t.give_play(0, "通用:@Tsugu ycm").unwrap();
     t.answer(0, 1).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), b, "原地[传送]: the piece never left ({})", t.dump_prompt());
+    assert_eq!(
+        t.pos(0),
+        b,
+        "原地[传送]: the piece never left ({})",
+        t.dump_prompt()
+    );
     let keys = t.keys_since(mark);
     let overlap = keys.iter().position(|k| k.contains("overlap"));
     let settle = keys
@@ -886,7 +938,8 @@ fn t06c_zero_step_move_fires_overlap() {
     assert_eq!(t.pos(0), 10, "0-step move stayed put");
     let keys = t.keys_since(mark);
     assert!(
-        keys.iter().any(|k| k.contains("passPlayer") || k.contains("overlap")),
+        keys.iter()
+            .any(|k| k.contains("passPlayer") || k.contains("overlap")),
         "the [重叠] window fired on a 0-step move: {keys:?}"
     );
     // TODO(规则书): `E14` names only [重叠] for the 0-step case. Whether [经过]
@@ -1016,7 +1069,10 @@ fn b02_bankruptcy_frees_the_deeds_and_auctions_three() {
         .into_iter()
         .filter(|k| k.contains("auction"))
         .collect();
-    assert!(!auctions.is_empty(), "the leftover auction ran: {auctions:?}");
+    assert!(
+        !auctions.is_empty(),
+        "the leftover auction ran: {auctions:?}"
+    );
 }
 
 // 规则书 专有名词 10 [拍卖]: 「最低喊价金额为100，最低单次太高喊价金额为100」.
@@ -1045,7 +1101,10 @@ fn b03_auction_min_bid_and_increment_are_100() {
     let other = t.asked().into_iter().find(|&s| s != bidder).unwrap();
     let r = t.answer(other, 150);
     assert!(r.is_err(), "150 is below the 100 increment: {r:?}");
-    assert!(t.answer(other, 200).is_ok(), "200 = 100 + the 100 increment");
+    assert!(
+        t.answer(other, 200).is_ok(),
+        "200 = 100 + the 100 increment"
+    );
 }
 
 // 规则书 正规模式 4: 「仅剩一名[存活]玩家时游戏结束，那名玩家获胜」.
@@ -1217,11 +1276,7 @@ fn auction_winner_may_mortgage_to_fund_the_bid() {
     // The leftover auction prompt is open -- do not drain it away.
     let p = t.expect_prompt();
     assert_eq!(p.kind, "auction", "a live auction: {}", t.dump_prompt());
-    assert!(
-        t.asked().contains(&1),
-        "P1 is a bidder: {:?}",
-        t.asked()
-    );
+    assert!(t.asked().contains(&1), "P1 is a bidder: {:?}", t.asked());
     // P1 bids 100 even though they hold 50 -- 抵押 funds the difference.
     assert!(t.answer(1, 100).is_ok(), "the short bid is accepted");
     // P2 passes; the auction closes on P1's 100. (`value < 0` is a pass.)
@@ -1259,7 +1314,9 @@ fn auction_winner_may_mortgage_to_fund_the_bid() {
         won.len(),
         1,
         "exactly one auctioned deed is awarded to the bidder: owners {:?}",
-        mine.iter().map(|&x| (data().tiles[x].name.clone(), t.owner(x))).collect::<Vec<_>>()
+        mine.iter()
+            .map(|&x| (data().tiles[x].name.clone(), t.owner(x)))
+            .collect::<Vec<_>>()
     );
     assert!(t.mortgaged(fund), "the funding deed is mortgaged");
     // 50 + 500 (抵押) - 100 (bid) = 450.

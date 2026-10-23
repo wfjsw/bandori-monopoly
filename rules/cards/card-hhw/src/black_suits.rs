@@ -12,9 +12,9 @@
 //! `tile:agent` body. It is not an after-hook: a body replace must not leave a
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
-use card_sdk::abi::{ChainKind, ActionKind, MarkFilter};
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
 /// (C# `H.AddMark(..., "黑衣人的补给", ...)`).
@@ -61,7 +61,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             player_id,
             ctx::self_uid(),
             1,
-            &Msg::new(key!("black_suits_crystal_note")), card_sdk::abi::Stack::Fresh);
+            &Msg::new(key!("black_suits_crystal_note")),
+            card_sdk::abi::Stack::Fresh,
+        );
         ctx::log(
             player_id,
             &Msg::new(key!("black_suits_placed"))
@@ -80,7 +82,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // as the stand-in for C# `BlackSuitFx` (same pattern as `HHW:育美标记`).
         if !ctx::is_placed() {
             ctx::set_dest(ctx::Dest::Field);
-            ctx::place_card(player_id, "HHW:黑衣人的补给", &Msg::new(key!("black_suits_attach")));
+            ctx::place_card(
+                player_id,
+                "HHW:黑衣人的补给",
+                &Msg::new(key!("black_suits_attach")),
+            );
         }
     }
     Ok(())
@@ -105,7 +111,12 @@ fn sync_circle_instance(group: i32) {
         .find(|(uid, id)| id == "tile:circle" && ctx::tile_at(*uid) == Some(group))
         .map(|(uid, _)| uid);
     if has && borrowed.is_none() {
-        ctx::place_card_on(-1, group, "tile:circle", &Msg::new(key!("black_suits_attach")));
+        ctx::place_card_on(
+            -1,
+            group,
+            "tile:circle",
+            &Msg::new(key!("black_suits_attach")),
+        );
     } else if !has {
         if let Some(uid) = borrowed {
             ctx::unplace_at(uid);

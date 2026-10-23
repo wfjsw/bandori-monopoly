@@ -127,11 +127,7 @@ fn key_get(p: i32, key: intern::NameId) -> i32 {
 
 /// Sparse 2-seat play world on `dispatch`, then `f` for the card-specific
 /// fields. In-place only — no `reset_world` full-struct copy.
-fn sparse2(
-    dispatch: card_sdk::kani_host::Backend,
-    user: i32,
-    f: impl FnOnce(&mut world::World),
-) {
+fn sparse2(dispatch: card_sdk::kani_host::Backend, user: i32, f: impl FnOnce(&mut world::World)) {
     host::install_backend(dispatch);
     crate::harness::sparse_play_world(crate::harness::SparsePlay {
         used_seats: 2,
@@ -260,7 +256,10 @@ fn vocalist_01_iff_at(user: i32) {
         post.pay_amount == 0,
         "C-CRYCHIC-vocalist-01: payment waived"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (waive is at rewrite time)");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money (waive is at rewrite time)"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 

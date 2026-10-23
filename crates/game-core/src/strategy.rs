@@ -26,12 +26,12 @@
 //! an empty book). Field names are snake_case, like [`crate::deck_book`].
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{PersonaData, GameData};
+use crate::data::{GameData, PersonaData};
 use crate::state::MatchState;
 
 /// File format version (`StrategyBook::version`). Bump on any schema change; a

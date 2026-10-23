@@ -59,10 +59,7 @@ async fn main() {
             None
         }
     };
-    let roster = ruleset
-        .as_ref()
-        .map(|s| s.roster())
-        .unwrap_or_default();
+    let roster = ruleset.as_ref().map(|s| s.roster()).unwrap_or_default();
     let data = Arc::new(
         GameData::load(
             |f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()),
@@ -116,9 +113,13 @@ async fn main() {
         // Root-parallel searches per decision. Default = the request-worker
         // count; the outer deadline (`budget + 1.5 s`, `docs/BOT.md` §5 B7)
         // leaves room for one iteration overrun at this fan-out.
-        let search_threads: usize = arg("--bot-search-threads", "BOT_SEARCH_THREADS", &threads.to_string())
-            .parse()
-            .unwrap_or(threads);
+        let search_threads: usize = arg(
+            "--bot-search-threads",
+            "BOT_SEARCH_THREADS",
+            &threads.to_string(),
+        )
+        .parse()
+        .unwrap_or(threads);
         match server::botsvc::BotService::start(
             PathBuf::from(&bot_exe),
             data_dir.clone(),
@@ -128,9 +129,7 @@ async fn main() {
         ) {
             Ok(b) => Some(b),
             Err(e) => {
-                eprintln!(
-                    "bot-service failed to start ({e}) -- advanced bots play as standard"
-                );
+                eprintln!("bot-service failed to start ({e}) -- advanced bots play as standard");
                 None
             }
         }
@@ -152,7 +151,10 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
         .expect("bind");
-    eprintln!("listening on {}", listener.local_addr().expect("local addr"));
+    eprintln!(
+        "listening on {}",
+        listener.local_addr().expect("local addr")
+    );
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;

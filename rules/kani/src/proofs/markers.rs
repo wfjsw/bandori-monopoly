@@ -24,7 +24,6 @@ use crate::invoke;
 use crate::spec::markers as spec;
 use crate::world::{self, Effect, Mark, World, MAX_PLAYERS};
 
-
 /// Call the unmodified `on_land` body of `mark:cp` via its `CardDef` (no
 /// registry scan — see `proofs::tiles::call_settle`).
 fn call_mark_cp_land(player: i32) {
@@ -245,7 +244,10 @@ pub fn mark_cp_land_tile_cp_visible_to_count_marks() {
 
     // `count_marks` is modeled: the mark we installed must be visible.
     let n = card_sdk::ctx::count_marks(tile, &card_sdk::abi::MarkFilter::any());
-    crate::kassert!(n >= 1, "the installed [CP点] must be visible to count_marks");
+    crate::kassert!(
+        n >= 1,
+        "the installed [CP点] must be visible to count_marks"
+    );
     kani::cover!(n == 1, "exactly one unit");
 
     // The full guard still cannot admit while `mark_src_at` is a stub.

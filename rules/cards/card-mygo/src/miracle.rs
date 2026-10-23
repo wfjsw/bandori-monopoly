@@ -11,9 +11,9 @@
 //! instead of money when building; after passing every other player once,
 //! collect the "last three digits" purse of the crystal-closest rival.
 
-use card_sdk::abi::{counter, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{counter, ActionKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",

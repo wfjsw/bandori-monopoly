@@ -5,8 +5,8 @@
 //! > [反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡，使目标玩家的此次移动数-X，X为对方原本预计路径上你拥有的格子数，对方此次结算的支付减半。
 //!
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const REPAINT: CardDef = CardDef::new(

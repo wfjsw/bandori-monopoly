@@ -267,7 +267,8 @@ fn kasumi_02_world() -> (World, i32) {
         w.charge[owner as usize] = kani::any();
         kani::assume(w.charge[owner as usize] >= 1 && w.charge[owner as usize] <= 5);
         // can_use reads keyed state `fire`; keep it in lockstep with the pot.
-        w.player_keys[owner as usize].set(crate::intern::intern("charge"), w.charge[owner as usize]);
+        w.player_keys[owner as usize]
+            .set(crate::intern::intern("charge"), w.charge[owner as usize]);
         // owns ≥1 tile
         w.tiles[3].owner = owner;
         w.trig_player = owner;
@@ -571,7 +572,12 @@ pub fn megumi_skill_02_leaf_iff() {
         "C-PPP-megumi-skill-02: spend 4 fire"
     );
     crate::kassert!(
-        spec::megumi_02_money_ok(pre_money[0], pre_money[1], post.money[me as usize], post.money[other as usize]),
+        spec::megumi_02_money_ok(
+            pre_money[0],
+            pre_money[1],
+            post.money[me as usize],
+            post.money[other as usize]
+        ),
         "C-PPP-megumi-skill-02: +500 / +2000"
     );
     crate::kassert!(
@@ -670,7 +676,10 @@ pub fn rimi_skill_01_turn_end_iff() {
         post.charge[me as usize] == spec::rimi_01_fire_after(pre_fire),
         "C-PPP-rimi-skill-01: fire after payout"
     );
-    crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame others' fire");
+    crate::kassert!(
+        spec::frame_others_fire(&pre, &post, me),
+        "frame others' fire"
+    );
 }
 
 /// NO-OP: latch 0 ⇒ guard rejects.
@@ -778,8 +787,17 @@ pub fn rimi_skill_02_wrong_class_is_reachable() {
     let at = 30;
     // Agents (from data/board.json kind=agent): 4,12,17,23,28,31,34,39,41,46,59
     let is_agent = |t: i32| {
-        t == 4 || t == 12 || t == 17 || t == 23 || t == 28 || t == 31 || t == 34
-            || t == 39 || t == 41 || t == 46 || t == 59
+        t == 4
+            || t == 12
+            || t == 17
+            || t == 23
+            || t == 28
+            || t == 31
+            || t == 34
+            || t == 39
+            || t == 41
+            || t == 46
+            || t == 59
     };
     let is_property = |t: i32| {
         // properties include 星空齿科 (6) and 星之鼓动山丘 (44) and others;
@@ -976,16 +994,16 @@ pub fn saaya_skill_02_shave_iff() {
             "C-PPP-saaya-skill-02: spend 5 fire"
         );
     } else {
-        crate::kassert!(
-            log_n == 0,
-            "C-PPP-saaya-skill-02: declined ⇒ empty log"
-        );
+        crate::kassert!(log_n == 0, "C-PPP-saaya-skill-02: declined ⇒ empty log");
         crate::kassert!(
             post.pay_amount == pre_amount && post.charge[me as usize] == pre_fire,
             "C-PPP-saaya-skill-02: declined ⇒ untouched"
         );
     }
-    crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame others' fire");
+    crate::kassert!(
+        spec::frame_others_fire(&pre, &post, me),
+        "frame others' fire"
+    );
 }
 
 /// MUTANT: shave one extra. Companion.
@@ -1054,10 +1072,7 @@ pub fn aoki_skill_01_iff() {
 #[kani::unwind(8)]
 pub fn aoki_skill_01_noop() {
     crate::kassert!(!spec::aoki_01_applies(0, 0, spec::TILE_RYUSEIDO), "self");
-    crate::kassert!(
-        !spec::aoki_01_applies(1, 0, 10),
-        "not at 流星堂"
-    );
+    crate::kassert!(!spec::aoki_01_applies(1, 0, 10), "not at 流星堂");
 }
 
 /// MUTANT: +2 fire. Companion.
@@ -1103,7 +1118,11 @@ pub fn aoki_skill_02_turn_end_iff() {
         w.charge[me as usize] = 0;
         w.charge_max = [2; MAX_PLAYERS];
         w.pos[me as usize] = kani::any();
-        kani::assume(w.pos[me as usize] >= 0 && w.pos[me as usize] < 60 && w.pos[me as usize] != spec::TILE_RYUSEIDO);
+        kani::assume(
+            w.pos[me as usize] >= 0
+                && w.pos[me as usize] < 60
+                && w.pos[me as usize] != spec::TILE_RYUSEIDO,
+        );
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_ARISA_PASSED), 1);
         w.deck_n = 3;
@@ -1151,10 +1170,13 @@ pub fn aoki_skill_02_noop_end_on_station() {
     // The body's `set_slot` pushes a SetState bookkeeping effect; the clause
     // effects (draw + fire) must be absent.
     let effects = effects_of(&logbuf, log_n);
-    let has_clause = effects.iter().any(|e| {
-        matches!(e, Effect::Draw { .. } | Effect::GainFire { .. })
-    });
-    crate::kassert!(!has_clause, "C-PPP-aoki-skill-02: no-op ⇒ no clause effects");
+    let has_clause = effects
+        .iter()
+        .any(|e| matches!(e, Effect::Draw { .. } | Effect::GainFire { .. }));
+    crate::kassert!(
+        !has_clause,
+        "C-PPP-aoki-skill-02: no-op ⇒ no clause effects"
+    );
 }
 
 /// MUTANT: fire without the draw. Companion.
@@ -1178,10 +1200,7 @@ pub fn aoki_skill_02_mutant_no_draw() {
     world::reset_world(w);
     invoke::unwrap_done(skill_personas::arisa_bonsai::at_turn_end_kani(me));
     let (logbuf, log_n) = take_log();
-    crate::kassert!(
-        log_n == 1,
-        "mutant: card must not match a fire-only spec"
-    );
+    crate::kassert!(log_n == 1, "mutant: card must not match a fire-only spec");
 }
 
 // ===========================================================================
@@ -1295,10 +1314,7 @@ pub fn band_skill_01a_sticker_iff() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn band_skill_01a_noop_other() {
-    crate::kassert!(
-        !band_pass_guard(1, 1, 0),
-        "other actor must not admit"
-    );
+    crate::kassert!(!band_pass_guard(1, 1, 0), "other actor must not admit");
 }
 
 /// MUTANT: two stickers. Companion.
@@ -1593,10 +1609,7 @@ pub fn band_skill_03c_buy_gate_iff() {
     // ABI v75/77 pure GateValue: the body RETURNS `allowed: Some(false)` and the
     // host denies the buy. Stage moved out of `trig_cancelled` (the old Gate
     // body cancelled the trigger itself).
-    let out = skill_groups::poppin::lock_hill_kani(
-        me,
-        card_sdk::GateValue::default(),
-    );
+    let out = skill_groups::poppin::lock_hill_kani(me, card_sdk::GateValue::default());
     crate::kassert!(
         spec::band_03c_gate_denied(out.allowed),
         "C-PPP-band-03c: hill buy must be cancelled while PPP lives"

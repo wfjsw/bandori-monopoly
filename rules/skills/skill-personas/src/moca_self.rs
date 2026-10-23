@@ -15,9 +15,9 @@
 //! Sheet 2026-10-17 drops the old 「该效果对每个玩家的被动技能和卡存在2次使用cd」
 //! per-source cooldown; the offer is now unbounded apart from the pot.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;
 
@@ -29,12 +29,26 @@ pub const MOCA_SELF: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
         // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…」 -- the
         // offer exists only for another seat, with a pot to spend. Fire is CEL.
-        On::Action(Action::CardPlayed("charge(owner) >= 1", None, Some(other_seat), on_card)),
-        On::Action(Action::CardUsed("charge(owner) >= 1", None, Some(other_seat), on_skill)),
+        On::Action(Action::CardPlayed(
+            "charge(owner) >= 1",
+            None,
+            Some(other_seat),
+            on_card,
+        )),
+        On::Action(Action::CardUsed(
+            "charge(owner) >= 1",
+            None,
+            Some(other_seat),
+            on_skill,
+        )),
     ],
-).silent(&[0, 1])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+)
+.silent(&[0, 1])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")

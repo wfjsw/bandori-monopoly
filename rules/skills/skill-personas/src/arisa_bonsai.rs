@@ -10,9 +10,10 @@
 //! event draw there; (2) is this player's own pass that did not end there; (3)
 //! is a press on passing it.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 fn station() -> i32 {
     ctx::tile_named("流星堂")

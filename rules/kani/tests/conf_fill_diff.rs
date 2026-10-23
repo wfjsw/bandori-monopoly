@@ -40,8 +40,8 @@ use rules_cond_ir::eval::eval_node;
 use rules_cond_ir::nodes::Kind;
 use rules_cond_ir::Val;
 use rules_kani::generated::cond_irs::{self, eval_id, BY_ID, GUARD_COUNT};
-use rules_kani::ir_fill::{self, TriggerOverlay, TILE_NAMES};
 use rules_kani::intern;
+use rules_kani::ir_fill::{self, TriggerOverlay, TILE_NAMES};
 use rules_kani::world::{self as kworld, World as KWorld};
 
 // ---------------------------------------------------------------------------
@@ -323,7 +323,11 @@ impl SnapSrc for Fixture {
                 resolve: true,
                 tags: Vec::new(),
                 main: m.main,
-                dir: if m.dir < 0 { Dir::Backward } else { Dir::Forward },
+                dir: if m.dir < 0 {
+                    Dir::Backward
+                } else {
+                    Dir::Forward
+                },
                 from: 0,
                 remaining: m.remaining as i32,
                 total: m.remaining as i32,
@@ -422,7 +426,12 @@ impl SnapSrc for Fixture {
             "exile" => s.exile,
             "noHand" => s.no_hand,
             "unstoppable" => s.unstoppable,
-            other => s.slots.iter().find(|(n, _)| *n == other).map(|(_, v)| *v).unwrap_or(0),
+            other => s
+                .slots
+                .iter()
+                .find(|(n, _)| *n == other)
+                .map(|(_, v)| *v)
+                .unwrap_or(0),
         }
     }
     fn state_entries(&self, p: i32) -> Vec<(String, i32)> {
@@ -675,19 +684,20 @@ fn geometry_value(fx: &Fixture, fid: i64, a: i64, b: i64) -> i64 {
         if seat < 0 {
             -1
         } else {
-            fx.seats.get(seat as usize).map(|s| s.pos as i64).unwrap_or(-1)
+            fx.seats
+                .get(seat as usize)
+                .map(|s| s.pos as i64)
+                .unwrap_or(-1)
         }
     };
     let out = |seat: i64| -> bool {
-        seat < 0
-            || fx
-                .seats
-                .get(seat as usize)
-                .map(|s| s.out)
-                .unwrap_or(true)
+        seat < 0 || fx.seats.get(seat as usize).map(|s| s.out).unwrap_or(true)
     };
     let exile = |seat: i64| -> i64 {
-        fx.seats.get(seat as usize).map(|s| s.exile as i64).unwrap_or(1)
+        fx.seats
+            .get(seat as usize)
+            .map(|s| s.exile as i64)
+            .unwrap_or(1)
     };
     let owner_of = |tile: i64| -> i64 {
         fx.tiles
@@ -757,12 +767,7 @@ fn geometry_value(fx: &Fixture, fid: i64, a: i64, b: i64) -> i64 {
             // (me, them) — `them`'s 1..=|move.roll| forward path.
             let me = a;
             let them = b;
-            let roll = fx
-                .trig
-                .mv
-                .as_ref()
-                .and_then(|m| m.roll)
-                .unwrap_or(-1);
+            let roll = fx.trig.mv.as_ref().and_then(|m| m.roll).unwrap_or(-1);
             if roll < 0 {
                 return 0;
             }
@@ -1119,7 +1124,6 @@ fn all_fixtures() -> Vec<Fixture> {
     ]
 }
 
-
 /// Index of a guard by its source string. Not a hardcoded id: this branch
 /// adds guards, which shifts the generated table's indices.
 fn guard_index(src: &str) -> usize {
@@ -1137,9 +1141,18 @@ fn guard_index(src: &str) -> usize {
 /// whose `src` field is that string, for every entry.
 #[test]
 fn guard_ids_are_stable() {
-    assert_eq!(GUARD_COUNT, BY_ID.len(), "generated table size matches the table");
+    assert_eq!(
+        GUARD_COUNT,
+        BY_ID.len(),
+        "generated table size matches the table"
+    );
     for (i, g) in BY_ID.iter().enumerate() {
-        assert_eq!(g.id, i, "GuardIr.id must equal BY_ID index for {src:?}", src = g.src);
+        assert_eq!(
+            g.id,
+            i,
+            "GuardIr.id must equal BY_ID index for {src:?}",
+            src = g.src
+        );
         assert_eq!(
             cond_irs::guard_id_const(g.src),
             i,
@@ -1154,15 +1167,23 @@ fn guard_ids_are_stable() {
         );
     }
     // Compile-time macro agrees on a sample of every shape class.
-    assert_eq!(rules_kani::guard_id!("actor == owner && value > 0"), guard_index("actor == owner && value > 0"));
+    assert_eq!(
+        rules_kani::guard_id!("actor == owner && value > 0"),
+        guard_index("actor == owner && value > 0")
+    );
     assert_eq!(rules_kani::guard_id!("false"), guard_index("false"));
     assert_eq!(
         rules_kani::guard_id!(
             "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"
         ),
-        guard_index("actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0")
+        guard_index(
+            "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"
+        )
     );
-    assert_eq!(rules_kani::guard_id!("card.placed"), guard_index("card.placed"));
+    assert_eq!(
+        rules_kani::guard_id!("card.placed"),
+        guard_index("card.placed")
+    );
 }
 
 /// The differential: every fixture × every seat × all 139 guards.
@@ -1207,13 +1228,19 @@ fn fixtures_flip_the_guards_they_target() {
 
     let f1 = fx_aya_poorest_value();
     assert!(prod_eval(aya, &f1, 0), "fixture 1: aya guard should hold");
-    assert!(ir_eval(guard_index(aya), &f1, 0), "fixture 1: IR aya guard should hold");
+    assert!(
+        ir_eval(guard_index(aya), &f1, 0),
+        "fixture 1: IR aya guard should hold"
+    );
 
     let f2 = fx_aya_value_zero_richest();
     assert!(!prod_eval(aya, &f2, 0), "fixture 2: value==0 → aya false");
 
     let f3 = fx_tile_kinds();
-    assert!(prod_eval(is_start, &f3, 0) == false, "tile 8 is ring, not circle");
+    assert!(
+        prod_eval(is_start, &f3, 0) == false,
+        "tile 8 is ring, not circle"
+    );
     // Circle tile 0:
     let mut f3b = f3.clone();
     f3b.trig.tile = 0;
@@ -1297,8 +1324,16 @@ fn fill_diff_state_fns() {
             1,
             false,
         ),
-        ("state(owner,'stun') + state(owner,'stunStart') == 4", 0, true),
-        ("state(owner,'stun') + state(owner,'stunStart') == 1", 1, true),
+        (
+            "state(owner,'stun') + state(owner,'stunStart') == 4",
+            0,
+            true,
+        ),
+        (
+            "state(owner,'stun') + state(owner,'stunStart') == 1",
+            1,
+            true,
+        ),
         (
             "state(owner,'exile') == 0 && state(owner,'unstoppable') == 0",
             0,

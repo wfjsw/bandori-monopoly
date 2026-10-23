@@ -11,9 +11,9 @@
 //! whichever of the player's deeds gives the largest such product before the
 //! quarter is taken. 「分摊支付」 is the split-pay the vocabulary already has.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
 const PAREO: &str = "PAREO标记";
@@ -24,7 +24,12 @@ pub const NUMAZU_MAID: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart("", None, None, at_start)),
         // （2）「所有你拥有的格子中取最高值」 -- the offer exists only when some
         // deed carries a positive `build_cost × houses`. Derived scan, residual.
-        On::Action(Action::HouseAdded("actor == owner && tok('PAREO标记') >= 1", None, Some(has_house_product), on_built)),
+        On::Action(Action::HouseAdded(
+            "actor == owner && tok('PAREO标记') >= 1",
+            None,
+            Some(has_house_product),
+            on_built,
+        )),
         // （2）'s offer is also a press, so a card can run it out of turn
         // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
         // On::Play's gate is `Option<Msg>` (WhyNot), not a bool residual.

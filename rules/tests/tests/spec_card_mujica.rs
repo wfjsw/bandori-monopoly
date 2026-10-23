@@ -399,7 +399,8 @@ fn rain_miss_self_stun(step: &Step<'_>) -> Result<(), String> {
     let user = step.player_of_act();
     let mut any_gained = false;
     for i in 0..step.pre.st.players.len() {
-        let g = step.post.st.players[i].state_get("stay") - step.pre.st.players[i].state_get("stay");
+        let g =
+            step.post.st.players[i].state_get("stay") - step.pre.st.players[i].state_get("stay");
         if g > 0 {
             any_gained = true;
         }
@@ -447,7 +448,13 @@ fn rain_contract() {
         t.play(0, RAIN).map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
 
-        let expect = if roll <= 3 { 2 } else if roll <= 12 { 1 } else { 0 };
+        let expect = if roll <= 3 {
+            2
+        } else if roll <= 12 {
+            1
+        } else {
+            0
+        };
         let stay1 = t.state(1, "stay");
         if stay1 != expect {
             return Err(format!("P1 roll {roll}: stay {stay1}, expected {expect}"));
@@ -458,7 +465,10 @@ fn rain_contract() {
         }
         if expect == 0 {
             if t.state(0, "stun") != 1 {
-                return Err(format!("miss: user stun {}, expected 1", t.state(0, "stun")));
+                return Err(format!(
+                    "miss: user stun {}, expected 1",
+                    t.state(0, "stun")
+                ));
             }
             if t.money(0) != 10_000 + 1000 {
                 return Err(format!("miss: user money {}, expected 11000", t.money(0)));
@@ -554,14 +564,16 @@ fn saki_move_forces_three_tiles() {
         t.set_pos(1, start as usize);
         t.give(0, &[SAKI_MOVE]);
         let pre = t.snapshot_world();
-        t.play(0, SAKI_MOVE).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, SAKI_MOVE)
+            .map_err(|e| format!("play rejected: {e}"))?;
         // Target P1 (option index 1: the prompt lists self first).
         let p = t.expect_prompt();
         let who = p
             .options
             .iter()
             .position(|o| format!("{o:?}").contains("PlayerId(1)"))
-            .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt())) as i32;
+            .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()))
+            as i32;
         t.answer(0, who).map_err(|e| format!("pick target: {e}"))?;
         // Direction: option 0 is forward.
         t.answer(0, 0).map_err(|e| format!("pick direction: {e}"))?;
@@ -615,7 +627,8 @@ fn saki_move_halves_settle_pay() {
         t.set_money(1, 5000);
         t.give(0, &[SAKI_MOVE]);
         let _ = rng;
-        t.play(0, SAKI_MOVE).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, SAKI_MOVE)
+            .map_err(|e| format!("play rejected: {e}"))?;
         // Pick P1, forward.
         t.answer(0, 1).map_err(|e| format!("pick: {e}"))?;
         t.answer(0, 0).map_err(|e| format!("dir: {e}"))?;
@@ -661,7 +674,8 @@ fn sparkler_places_two_crystals() {
         let mut t = Table::vanilla(2);
         t.give(0, &[SPARKLER]);
         let pre = t.snapshot_world();
-        t.play(0, SPARKLER).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, SPARKLER)
+            .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
         if !t.on_field(0, SPARKLER) {
             return Err(format!("card not on field: {:?}", t.field_ids(0)));
@@ -974,7 +988,14 @@ fn look_away_only_moves_counteractors() {
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "pos:P1", "pos:P2"],
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "pos:P0",
+                "pos:P1",
+                "pos:P2",
+            ],
         )
     })
     .expect("C-MUJICA-视线-01");
@@ -1003,7 +1024,8 @@ fn welcome_switches_designated_state() {
             .options
             .iter()
             .position(|o| format!("{o:?}").contains("PlayerId(1)"))
-            .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt())) as i32;
+            .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()))
+            as i32;
         t.answer(0, k).map_err(|e| format!("pick: {e}"))?;
         drain(&mut t);
         let s = t.state(1, "skillState");
@@ -1268,7 +1290,10 @@ fn uika_no_memory_offers_no_choice() {
         drain(&mut t);
         // No choice prompt should have been offered.
         let keys = t.keys_since(mark);
-        if keys.iter().any(|k| k.contains("uika_fearless_choice") || k.contains("draw_choice")) {
+        if keys
+            .iter()
+            .any(|k| k.contains("uika_fearless_choice") || k.contains("draw_choice"))
+        {
             return Err(format!("gate closed but a choice opened: {keys:?}"));
         }
         Ok(())
@@ -1320,10 +1345,7 @@ fn umiri_takes_holders_band_skill() {
         if !t.on_field(1, UMIRI) {
             return Err(format!("（海铃） not on P1: {:?}", t.field_ids(1)));
         }
-        let took = t
-            .skills(0)
-            .iter()
-            .any(|s| s.contains("星之鼓动"));
+        let took = t.skills(0).iter().any(|s| s.contains("星之鼓动"));
         if !took {
             return Err(format!(
                 "C-MUJICA-海铃-03: user did not take the holder's band skill: {:?}",

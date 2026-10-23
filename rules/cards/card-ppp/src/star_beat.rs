@@ -9,7 +9,7 @@
 //! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
 use card_sdk::abi::MoveKind;
-use card_sdk::{Action, CardDef, ctx, key, Msg, On};
+use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",

@@ -27,14 +27,23 @@ fn rest(t: &mut Table) {
         }
         t.m.tick(0.25);
     }
-    panic!("rest: the match did not come to rest: {:?}", t.m.state().step);
+    panic!(
+        "rest: the match did not come to rest: {:?}",
+        t.m.state().step
+    );
 }
 
 fn answer_q(t: &mut Table, who: usize, value: i32) -> Result<(), String> {
     let p = t.prompt().expect("answer_q: no prompt");
-    let r = t
-        .m
-        .act(who as i32 + 1, &NetMessage { prompt: p.id, value, ..NetMessage::act("answer") })
+    let r =
+        t.m.act(
+            who as i32 + 1,
+            &NetMessage {
+                prompt: p.id,
+                value,
+                ..NetMessage::act("answer")
+            },
+        )
         .map_err(|e| e.key().to_string());
     rest(t);
     r
@@ -43,8 +52,19 @@ fn answer_q(t: &mut Table, who: usize, value: i32) -> Result<(), String> {
 fn decline_q(t: &mut Table) {
     let p = t.prompt().expect("decline_q: no prompt");
     for who in t.asked() {
-        let v = if p.kind == "tile" { p.items.len() as i32 } else { p.fallback };
-        let _ = t.m.act(who as i32 + 1, &NetMessage { prompt: p.id, value: v, ..NetMessage::act("answer") });
+        let v = if p.kind == "tile" {
+            p.items.len() as i32
+        } else {
+            p.fallback
+        };
+        let _ = t.m.act(
+            who as i32 + 1,
+            &NetMessage {
+                prompt: p.id,
+                value: v,
+                ..NetMessage::act("answer")
+            },
+        );
     }
     rest(t);
 }
@@ -114,7 +134,8 @@ fn want_to_be_human_crystal_on_roll_equal_to_x() {
             .unwrap_or((p.options.len().saturating_sub(1)) as i32);
         if let Some(o) = p.options.get(k as usize) {
             if let Some(n) = format!("{o:?}")
-                .split("I(").nth(1)
+                .split("I(")
+                .nth(1)
                 .and_then(|s| s.split(')').next())
                 .and_then(|s| s.parse::<i32>().ok())
             {
@@ -179,7 +200,15 @@ fn haruhikage_draw_special(money: i32, spare: &[&str]) -> Option<String> {
     let mut t = Table::vanilla(2);
     t.set_money(0, money);
     t.set_hand(0, spare);
-    t.set_draw(0, &["CRYCHIC:春日影", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.set_draw(
+        0,
+        &[
+            "CRYCHIC:春日影",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
     drain(&mut t);
     t.give(0, &["通用:10次招募（1回限定）"]);
     let r = t.play(0, "通用:10次招募（1回限定）");
@@ -218,11 +247,18 @@ fn haruhikage_special_offered_when_hand_le_5() {
 fn haruhikage_special_not_offered_when_hand_over_5() {
     // 6 spare cards + the drawn 春日影 = 7, which is over 「不多于5张」.
     let spare = [
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
     ];
     let got = haruhikage_draw_special(25_000, &spare);
-    assert!(got.is_none(), "hand over 5 must not offer the [特]: {got:?}");
+    assert!(
+        got.is_none(),
+        "hand over 5 must not offer the [特]: {got:?}"
+    );
 }
 
 #[test]
@@ -230,7 +266,10 @@ fn haruhikage_special_not_offered_under_assets() {
     // 4 spare cards (hand ≤ 5 holds) but assets under 20000.
     let spare = ["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"];
     let got = haruhikage_draw_special(3_000, &spare);
-    assert!(got.is_none(), "assets under 20000 must not offer the [特]: {got:?}");
+    assert!(
+        got.is_none(),
+        "assets under 20000 must not offer the [特]: {got:?}"
+    );
 }
 
 /// 规则书（2）: 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 -- against a
@@ -247,10 +286,19 @@ fn haruhikage_counteracts_a_rent_payment() {
     t.set_pos(1, (blue + 59) % 60);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.counteract_offered("CRYCHIC:春日影"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("CRYCHIC:春日影"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "CRYCHIC:春日影").unwrap();
     drain(&mut t);
-    assert_eq!(t.money(1), 10_000, "the rent was cancelled: keys={:?}", t.recent_keys(15));
+    assert_eq!(
+        t.money(1),
+        10_000,
+        "the rent was cancelled: keys={:?}",
+        t.recent_keys(15)
+    );
     assert_eq!(t.money(0), 10_000, "the payee received nothing");
 }
 
@@ -265,10 +313,19 @@ fn haruhikage_counteracts_a_move_roll() {
     t.set_pos(0, 0);
     t.dice(&[3, 11]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("CRYCHIC:春日影"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("CRYCHIC:春日影"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "CRYCHIC:春日影").unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), 11, "the reroll became the move: keys={:?}", t.recent_keys(15));
+    assert_eq!(
+        t.pos(0),
+        11,
+        "the reroll became the move: keys={:?}",
+        t.recent_keys(15)
+    );
 }
 
 /// 规则书（2）: the SettleBefore branch is 丰川祥子（CRYCHIC）'s step-toward --
@@ -303,9 +360,22 @@ fn haruhikage_counteracts_settle_before() {
             t.decline();
         }
     }
-    assert!(saw_move_roll, "the diceRollResult window came up first: {:?}", t.recent_keys(20));
-    assert!(saw_settle, "the settleBefore window came up: {:?}", t.recent_keys(20));
-    assert_eq!(t.pos(0), 2, "stepped one tile toward P1: keys={:?}", t.recent_keys(15));
+    assert!(
+        saw_move_roll,
+        "the diceRollResult window came up first: {:?}",
+        t.recent_keys(20)
+    );
+    assert!(
+        saw_settle,
+        "the settleBefore window came up: {:?}",
+        t.recent_keys(20)
+    );
+    assert_eq!(
+        t.pos(0),
+        2,
+        "stepped one tile toward P1: keys={:?}",
+        t.recent_keys(15)
+    );
 }
 
 /// 规则书（2）: each branch has its own window -- the card is not offered where
@@ -368,7 +438,11 @@ fn want_to_grab_gives_stay() {
     t.give_play(0, "CRYCHIC:想要抓住...").unwrap();
     drain(&mut t);
     // 规则书: 「获得一层[停留]」
-    assert!(t.state(0, "stay") >= 1, "gained 停留: {}", t.state(0, "stay"));
+    assert!(
+        t.state(0, "stay") >= 1,
+        "gained 停留: {}",
+        t.state(0, "stay")
+    );
 }
 
 // -- CRYCHIC:优雅的呐喊 ------------------------------------------------
@@ -482,7 +556,11 @@ fn if_only_it_lasted_hand_effect() {
     drain(&mut t);
     // 规则书: 「[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金」
     if r.is_ok() {
-        assert!(t.money(0) > 10_000, "gained money from crystal removal: {}", t.money(0));
+        assert!(
+            t.money(0) > 10_000,
+            "gained money from crystal removal: {}",
+            t.money(0)
+        );
     }
 }
 
@@ -502,12 +580,34 @@ fn if_only_it_lasted_discards_at_hand_7() {
     drain(&mut t);
     // Keep the draw pile non-empty so 「当抽卡区抽光时将弃卡区洗卡并放回抽卡区」
     // does not shuffle the discard away.
-    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.set_draw(
+        0,
+        &[
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
     // 规则书: 「[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆」
     // set_hand is a seam; force a real hand change at >= 7 so the check fires.
-    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.set_hand(
+        0,
+        &[
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
     t.discard_card(0, "R:[衍生] 压").ok();
     // Trigger a state change that checks hand size (e.g. end of turn).
     t.dice(&[3]);
@@ -516,8 +616,7 @@ fn if_only_it_lasted_discards_at_hand_7() {
     t.end(0).ok();
     drain(&mut t);
     // 规则书: 「[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆」.
-    let in_discard = (0..2)
-        .any(|w| t.discard(w).iter().any(|c| c.contains("如果能一直持续")));
+    let in_discard = (0..2).any(|w| t.discard(w).iter().any(|c| c.contains("如果能一直持续")));
     assert!(
         in_discard,
         "the card is in a discard: field={:?} d0={:?} d1={:?} draw0={:?} draw1={:?}",
@@ -569,7 +668,12 @@ fn debut_success_blocks_money_decrease() {
     t.set_pos(1, 9);
     t.own(1, &[5]);
     // Just verify the card played and money hasn't dropped below the start.
-    assert!(t.money(0) >= m0, "money did not decrease: {} >= {}", t.money(0), m0);
+    assert!(
+        t.money(0) >= m0,
+        "money did not decrease: {} >= {}",
+        t.money(0),
+        m0
+    );
 }
 
 #[test]
@@ -646,7 +750,7 @@ fn soyo_crychic_card_special_on_draw() {
     // Draw the card (e.g. landing on CiRCLE or a draw effect).
     t.set_pos(0, 30);
     t.dice(&[30]); // actually main move is 1d20; let's just end and let the next draw happen.
-    // Simpler: just put it in hand and verify.
+                   // Simpler: just put it in hand and verify.
     t.give(0, &["CRYCHIC:（soyo）回到曾经"]);
     assert!(t.hand(0).contains(&"CRYCHIC:（soyo）回到曾经".to_string()));
 }
@@ -659,7 +763,9 @@ fn riki_crychic_card_is_counter() {
     t.set_character_raw(0, "椎名立希（CRYCHIC）");
     t.give(0, &["CRYCHIC:（立希）即便比不上..."]);
     // 规则书: 「[反击] 进入移动阶段后，触发结算前可打出，进行一次重骰」
-    assert!(t.hand(0).contains(&"CRYCHIC:（立希）即便比不上...".to_string()));
+    assert!(t
+        .hand(0)
+        .contains(&"CRYCHIC:（立希）即便比不上...".to_string()));
 }
 
 // =====================================================================
@@ -797,7 +903,11 @@ fn soyo_cancel_arms_one_teleport_to_the_payment_tile() {
         "teleported to the cancelled-payment tile: keys={:?}",
         t.recent_keys(15)
     );
-    assert_eq!(t.state(0, "skill.soyoCrychic.armed"), 0, "the latch is one-shot");
+    assert_eq!(
+        t.state(0, "skill.soyoCrychic.armed"),
+        0,
+        "the latch is one-shot"
+    );
     // Exactly once: the next main move after that walks again.
     t.end(0).unwrap();
     drain(&mut t);
@@ -807,7 +917,12 @@ fn soyo_cancel_arms_one_teleport_to_the_payment_tile() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), 23, "the teleport does not repeat: keys={:?}", t.recent_keys(10));
+    assert_eq!(
+        t.pos(0),
+        23,
+        "the teleport does not repeat: keys={:?}",
+        t.recent_keys(10)
+    );
 }
 
 // =====================================================================
@@ -837,7 +952,10 @@ fn crychic_band_skill_hand_limit_none() {
     }
     // 规则书: 「你的手牌数没有上限」
     assert_eq!(t.p(0).hand_limit(), None, "no hand limit");
-    assert!(!t.p(0).over_hand(99), "no hand count is over an absent limit");
+    assert!(
+        !t.p(0).over_hand(99),
+        "no hand count is over an absent limit"
+    );
 }
 
 #[test]
@@ -849,15 +967,28 @@ fn crychic_band_skill_blocks_at_hand_6() {
         decline_q(&mut t);
     }
     // 规则书: 「任何时刻拥有手牌数大于等于6时，你无法获得或失去资金，无法从手中打出任何牌」
-    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.set_hand(
+        0,
+        &[
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
     // With 6 cards, playing should be blocked.
     let r = t.play(0, "R:[衍生] 压");
     // 规则书: 「无法从手中打出任何牌」
     // The play may be refused or the money effect suppressed.
     drain(&mut t);
     // Just verify the state is consistent.
-    assert!(t.hand(0).len() >= 5, "hand size tracked: {}", t.hand(0).len());
+    assert!(
+        t.hand(0).len() >= 5,
+        "hand size tracked: {}",
+        t.hand(0).len()
+    );
 }
 
 // =====================================================================
@@ -874,8 +1005,17 @@ fn interaction_band_hand_limit_vs_draw() {
         decline_q(&mut t);
     }
     // Fill hand to 6.
-    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.set_hand(
+        0,
+        &[
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
     // 规则书: 「任何时刻拥有手牌数大于等于6时，你无法获得或失去资金」
     let m0 = t.money(0);
     // Try to gain money via 黑色生日.
@@ -885,7 +1025,12 @@ fn interaction_band_hand_limit_vs_draw() {
     drain(&mut t);
     // The money gain should be blocked (or the play refused).
     // Just verify consistency.
-    assert!(t.money(0) == m0 || t.money(0) > m0, "money: {} (was {})", t.money(0), m0);
+    assert!(
+        t.money(0) == m0 || t.money(0) > m0,
+        "money: {} (was {})",
+        t.money(0),
+        m0
+    );
 }
 
 #[test]
@@ -903,7 +1048,12 @@ fn interaction_debut_success_vs_rent() {
     t.roll(0).ok();
     drain(&mut t);
     // 规则书: 「本回合内你的资金不会下降」
-    assert!(t.money(0) >= m0, "money did not decrease: {} (was {})", t.money(0), m0);
+    assert!(
+        t.money(0) >= m0,
+        "money did not decrease: {} (was {})",
+        t.money(0),
+        m0
+    );
 }
 
 #[test]
@@ -1050,7 +1200,11 @@ const SHOUT: &str = "CRYCHIC:（灯）内心的呐喊";
 fn place_shout_at(t: &mut Table, who: usize, tile: i32) {
     t.place_raw(who, SHOUT);
     let w = t.m.world_mut();
-    let f = w.st.players[who].field.iter_mut().find(|f| f.card == SHOUT).unwrap();
+    let f = w.st.players[who]
+        .field
+        .iter_mut()
+        .find(|f| f.card == SHOUT)
+        .unwrap();
     f.tile = tile;
 }
 
@@ -1126,9 +1280,17 @@ fn tomori_shout_pulls_to_the_controllers_own_tile_with_settle() {
     t.set_fire(0, 1, 10);
     t.set_money(1, 5000);
     run_shout_move(&mut t, (deed + 20) % 60, 8, true);
-    assert_eq!(t.pos(1), deed, "pulled onto the controller's own tile, not the card's tile");
+    assert_eq!(
+        t.pos(1),
+        deed,
+        "pulled onto the controller's own tile, not the card's tile"
+    );
     let paid = 5000 - t.money(1);
-    assert!(paid > 0, "the destination settle ran (rent paid); keys={:?}", t.recent_keys(20));
+    assert!(
+        paid > 0,
+        "the destination settle ran (rent paid); keys={:?}",
+        t.recent_keys(20)
+    );
     // Baseline: the same landing without the pull.
     let mut b = Table::vanilla(2);
     b.clean();
@@ -1174,7 +1336,10 @@ fn crychic_band_2_spares_the_field_copy_but_sweeps_other_crychic_cards() {
         }
         let _ = t.answer_one(0);
     }
-    assert!(!t.on_field(0, "CRYCHIC:想要成为人类"), "other CRYCHIC cards are swept");
+    assert!(
+        !t.on_field(0, "CRYCHIC:想要成为人类"),
+        "other CRYCHIC cards are swept"
+    );
     let n: usize = t
         .draw_pile(0)
         .into_iter()

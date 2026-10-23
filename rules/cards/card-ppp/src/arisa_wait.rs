@@ -1,7 +1,7 @@
 //! `PPP:（有咲）等等等一下` -- C# `CardArisaWait` (MatchHost.cs:9085-9188): the
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（有咲）等等等一下`）:
-//! > （有咲）等等等一下： 
+//! > （有咲）等等等一下：
 //! > [手]：
 //! >  将此卡放置在[使用者]的[场地]。
 //! > [持续]：
@@ -11,9 +11,9 @@
 //! > （2）事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。
 //!
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:（有咲）等等等一下";
 

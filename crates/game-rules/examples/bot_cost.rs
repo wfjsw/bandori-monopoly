@@ -67,7 +67,9 @@ impl CardRules for CountingRules {
         self.c.settle.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.settle_tile(cx, player, tile, main);
-        self.c.entry_ns.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        self.c
+            .entry_ns
+            .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
     fn ai_play(&self, cx: &Cx, player: usize, card: &str) -> bool {
@@ -77,21 +79,27 @@ impl CardRules for CountingRules {
         self.c.play.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.play(cx, player, card);
-        self.c.entry_ns.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        self.c
+            .entry_ns
+            .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
     fn event(&self, cx: &mut Cx, player: usize, id: &str) -> Flow<bool> {
         self.c.event.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.event(cx, player, id);
-        self.c.entry_ns.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        self.c
+            .entry_ns
+            .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
     fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
         self.c.counteract.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.counteract(cx, t);
-        self.c.entry_ns.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        self.c
+            .entry_ns
+            .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
     fn hand_note(&self, cx: &Cx, player: usize, card: &str) -> game_core::msg::Msg {
@@ -272,12 +280,7 @@ fn rollouts(
 /// [`Match::fork`] clone and run bots `depth` more rounds with the answer
 /// provider installed, so every prompt is answered inline and each routine /
 /// card body runs once instead of once per pause.
-fn rollouts_inline(
-    base: &Match,
-    start_round: i32,
-    depth: i32,
-    iters: u32,
-) -> (f64, f64) {
+fn rollouts_inline(base: &Match, start_round: i32, depth: i32, iters: u32) -> (f64, f64) {
     use game_core::engine::HeuristicProvider;
     let mut secs = 0.0;
     let mut rounds = 0.0;
@@ -307,7 +310,12 @@ fn rollouts_inline(
 }
 
 /// Run one game, cloning the world at rounds 10 / 50 / 150 on the way.
-fn clone_at_stages(data: &Arc<GameData>, rules: Arc<dyn CardRules>, members: &[RoomMember], seed: u64) {
+fn clone_at_stages(
+    data: &Arc<GameData>,
+    rules: Arc<dyn CardRules>,
+    members: &[RoomMember],
+    seed: u64,
+) {
     let mut m = Match::new(
         data.clone(),
         rules,
@@ -528,7 +536,10 @@ fn main() {
 
     // ---- 4. Depth-N rollouts forked from a mid-game state ---------------
     println!("rollouts (fork via save/restore + N rounds of bot play):");
-    for (label, rules) in [("StubRules", stub.clone() as Arc<dyn CardRules>), ("WasmRules", counting.clone())] {
+    for (label, rules) in [
+        ("StubRules", stub.clone() as Arc<dyn CardRules>),
+        ("WasmRules", counting.clone()),
+    ] {
         // Find a seed whose game is still alive at round 30; snapshot there.
         let mut snap = None;
         for seed in 0..8u64 {
@@ -555,19 +566,16 @@ fn main() {
         };
         print!("  {label} (seed {seed}, round {start_round}): ");
         let iters = if label == "WasmRules" {
-            if games <= 5 { 5 } else { 15 }
+            if games <= 5 {
+                5
+            } else {
+                15
+            }
         } else {
             60
         };
         for depth in [1, 2, 3, 5, 10] {
-            let (secs, played) = rollouts(
-                &data,
-                rules.clone(),
-                &snap,
-                start_round,
-                depth,
-                iters,
-            );
+            let (secs, played) = rollouts(&data, rules.clone(), &snap, start_round, depth, iters);
             let us = secs * 1e6;
             print!(
                 "N={depth}: {:.0} µs ({:.0}/s, {:.1} rounds) ",

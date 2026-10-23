@@ -8,9 +8,9 @@
 //! that card's effect runs. 「[手]效果中的一个数字」 is `ctx::n(k, value)` -- the
 //! play's own numbers are already tagged for a doubling to target.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, CardPile};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CIRCLE_STAFF: CardDef = CardDef::new(
     "skill:CiRCLE:后勤人员的努力",
@@ -20,7 +20,12 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
     // 「在你打出的"通用"卡生效时，可额外弃一张牌」 -- the offer exists only
     // for a 通用 card and with something to discard. Prefix is a residual
     // (string match on the played id); hand size is CEL.
-    &[On::Action(Action::Card("actor == owner && hand(owner) >= 1", None, Some(is_general_card), on_played))],
+    &[On::Action(Action::Card(
+        "actor == owner && hand(owner) >= 1",
+        None,
+        Some(is_general_card),
+        on_played,
+    ))],
 );
 
 /// Residual guard for [`on_played`]: the played card is a 通用 one (a card's

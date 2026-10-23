@@ -1,4 +1,4 @@
-.boot { position: absolute; inset: 0; cursor: pointer; }
+.boot { position: absolute; inset: 0; }
 .art { position: absolute; inset: 0; background: center / cover no-repeat var(--white); }
 .panel { position: absolute; left: 50px; bottom: 50px; width: 460px; max-width: calc(100% - 24px); box-sizing: border-box; background: rgba(246, 242, 243, 0.92); border-radius: var(--r-2xl); padding: 20px 26px; display: flex; flex-direction: column; gap: 12px; align-items: center; box-shadow: var(--shadow); }
 .logo { max-width: 260px; max-height: 80px; }
@@ -7,7 +7,7 @@
 .progress div { height: 100%; background: var(--pink); transition: width 0.2s; }
 .status { font-size: 18px; }
 .error { font-size: 16px; color: var(--danger); text-align: center; }
-.createBack { position: absolute; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; cursor: default; }
+.createBack { position: absolute; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; }
 /* A phone keyboard covers the lower half: keep the dialog in the top. */
 @media (pointer: coarse) { .createBack { align-items: flex-start; padding-top: 24px; box-sizing: border-box; } }
 .create { width: 560px; max-width: calc(100% - 24px); box-sizing: border-box; background: var(--surface); border-radius: var(--r-2xl); padding: 0 0 26px; display: flex; flex-direction: column; gap: 16px; align-items: center; overflow: hidden; box-shadow: var(--pop-shadow); }

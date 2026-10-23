@@ -13,9 +13,9 @@ use game_core::net::RoomMember;
 mod common;
 use common::data_arc as data;
 use game_core::record::{
-    decode_record, encode_record_gz, encode_record_json, encode_record_zst, expand_record,
-    is_gzip, is_zstd, parse_header_bytes, parse_record, sniff_record, EngineStamp, MatchSetup,
-    RecordedMatch, ReplayError, RecordEncoding, RECORD_VERSION,
+    decode_record, encode_record_gz, encode_record_json, encode_record_zst, expand_record, is_gzip,
+    is_zstd, parse_header_bytes, parse_record, sniff_record, EngineStamp, MatchSetup,
+    RecordEncoding, RecordedMatch, ReplayError, RECORD_VERSION,
 };
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
@@ -54,7 +54,7 @@ fn run_bot_game(seed: u64, n: i32, max_rounds: i32) -> game_core::record::Record
         seed,
         seed256: None,
         weights: ScoreWeights::default(),
-            clock: None,
+        clock: None,
         ..Default::default()
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
@@ -115,8 +115,14 @@ fn expand_record_yields_the_same_json_from_every_framing() {
     let file = run_bot_game(3, 2, 2);
     let json = encode_record_json(&file);
     let want = json.as_bytes();
-    assert_eq!(expand_record(encode_record_zst(&file).as_slice()).unwrap(), want);
-    assert_eq!(expand_record(encode_record_gz(&file).as_slice()).unwrap(), want);
+    assert_eq!(
+        expand_record(encode_record_zst(&file).as_slice()).unwrap(),
+        want
+    );
+    assert_eq!(
+        expand_record(encode_record_gz(&file).as_slice()).unwrap(),
+        want
+    );
     assert_eq!(expand_record(want).unwrap(), want);
 }
 
@@ -132,7 +138,10 @@ fn zstd_frames_are_standard() {
     let json = encode_record_json(&file).into_bytes();
     for (label, zst) in [
         ("reference / native", encode_record_zst(&file)),
-        ("structured-zstd / browser", game_core::record::zst_encode_pure(&json)),
+        (
+            "structured-zstd / browser",
+            game_core::record::zst_encode_pure(&json),
+        ),
     ] {
         let back = zstd::stream::decode_all(&zst[..])
             .unwrap_or_else(|e| panic!("reference zstd decodes {label} frame: {e}"));
@@ -165,7 +174,10 @@ fn corrupt_input_is_corrupt_not_format() {
     assert!(decode_record(&fake).is_err(), "garbage behind the magic");
     // Plain JSON that is not a record: Format (magic) or Corrupt (body).
     let err = parse_record("{}").unwrap_err();
-    assert!(matches!(err, ReplayError::Corrupt(_) | ReplayError::Format(_)));
+    assert!(matches!(
+        err,
+        ReplayError::Corrupt(_) | ReplayError::Format(_)
+    ));
 }
 
 // ---------------------------------------------------------------- portable tail
@@ -197,7 +209,10 @@ fn trailing_portable_section_is_ignored() {
     let header2 = parse_header_bytes(&with_tail).expect("portable header");
     assert_eq!(header, header2, "header is the same with a portable tail");
     let file2 = decode_record(&with_tail).expect("portable decode");
-    assert_eq!(file.check, file2.check, "body check is the same with a portable tail");
+    assert_eq!(
+        file.check, file2.check,
+        "body check is the same with a portable tail"
+    );
     assert_eq!(file.body.final_hash, file2.body.final_hash);
 
     // Trailing junk (not even a skippable frame) is ignored too -- that is
@@ -320,7 +335,10 @@ fn report_sizes(label: &str, file: &game_core::record::RecordFile) {
         gz.len(),
         ratio(gz.len()),
     );
-    assert!(shipped.len() < json.len() / 3, "{label}: zstd well under a third of the JSON");
+    assert!(
+        shipped.len() < json.len() / 3,
+        "{label}: zstd well under a third of the JSON"
+    );
     // The browser encoder must remain in the reference's league -- that is the
     // whole point of swapping `ruzstd` out for `structured-zstd` -- and must
     // clearly beat the gzip it replaced.

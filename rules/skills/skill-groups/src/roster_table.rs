@@ -2,8 +2,8 @@
 //! metadata rows defined beside each band-skill rule. Rebuild after lifting a band.
 
 use alloc::vec::Vec;
-use card_sdk::meta::MetaRow;
 use bandori_std::roster::GroupDef;
+use card_sdk::meta::MetaRow;
 
 pub use super::afterglow::BAND as AFTERGLOW;
 pub use super::ave_mujica::BAND as AVE_MUJICA;

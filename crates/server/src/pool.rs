@@ -363,7 +363,8 @@ impl Pool {
 
     /// `value` is whether the ack released a clock hold.
     pub fn anim_done(&self, state: &str, member: i32, seq: i32) -> Result<Out<bool>, String> {
-        let v = self.call(json!({"op": "anim_done", "state": state, "member": member, "seq": seq}))?;
+        let v =
+            self.call(json!({"op": "anim_done", "state": state, "member": member, "seq": seq}))?;
         let (state, checkpoint, ended) = split(&v)?;
         let released = v.get("released").and_then(Value::as_bool).unwrap_or(false);
         Ok(Out {

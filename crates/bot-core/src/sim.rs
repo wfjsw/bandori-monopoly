@@ -16,7 +16,7 @@ use crate::clock::Instant;
 use game_core::data::GameData;
 use game_core::engine::{CardRules, HeuristicProvider, Match};
 use game_core::net::NetMessage;
-use game_core::state::{MatchState, stage};
+use game_core::state::{stage, MatchState};
 
 use crate::action::{self, Action, Surface};
 use crate::determinize::{determinize_value, DeterminizerRng};
@@ -72,7 +72,12 @@ pub trait Simulator {
     fn legal_actions(&mut self, fork: &Self::Fork, seat: usize) -> Vec<Action>;
 
     /// Apply one abstracted action at the current decision.
-    fn apply(&mut self, fork: &mut Self::Fork, seat: usize, action: &Action) -> Result<(), SimError>;
+    fn apply(
+        &mut self,
+        fork: &mut Self::Fork,
+        seat: usize,
+        action: &Action,
+    ) -> Result<(), SimError>;
 
     /// Advance to the searching seat's next decision, the horizon, or the end.
     ///
@@ -194,7 +199,14 @@ impl Simulator for MatchSim {
         let st = fork.state();
         let hand = fork.hand_of(self.member);
         let extra = fork.view_extra_typed(self.member);
-        action::legal_actions_with_cost(&self.data, &st, &hand, &extra.playable, &extra.est_cost, seat)
+        action::legal_actions_with_cost(
+            &self.data,
+            &st,
+            &hand,
+            &extra.playable,
+            &extra.est_cost,
+            seat,
+        )
     }
 
     fn apply(&mut self, fork: &mut Match, seat: usize, action: &Action) -> Result<(), SimError> {

@@ -13,9 +13,9 @@
 //! route marker that walks 流星堂 -> 大阪中之岛公园 as its user passes it, then
 //! taxes settles from the owner's field.
 
-use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
+use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
@@ -163,7 +163,10 @@ fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
             .player_id("target", payer)
             .n("money", due as i64),
     );
-    PayAddValue { value: v.value + due, ..v }
+    PayAddValue {
+        value: v.value + due,
+        ..v
+    }
 }
 
 /// `Fx.SettleBody` -- the non-rent side of (3): a settle on 梦开始的地方 (or on

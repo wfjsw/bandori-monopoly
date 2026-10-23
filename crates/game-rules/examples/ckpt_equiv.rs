@@ -118,7 +118,9 @@ fn main() {
     // First bare arg is the games count only when it is not the out path.
     let out = raw
         .iter()
-        .find(|a| !a.starts_with("--") && (a.ends_with(".txt") || a.contains('/') || a.contains('\\')))
+        .find(|a| {
+            !a.starts_with("--") && (a.ends_with(".txt") || a.contains('/') || a.contains('\\'))
+        })
         .cloned()
         .unwrap_or_else(|| "target/scratch/ckpt.txt".to_string());
     let games = args.first().copied().unwrap_or(8) as u32;
@@ -190,7 +192,8 @@ fn main() {
                 if let Some(dir) = &dump_dir {
                     let _ = std::fs::create_dir_all(dir);
                     let _ = std::fs::write(
-                        Path::new(dir).join(format!("seed{seed}-turn{}-round{}.json", st.turn, st.round)),
+                        Path::new(dir)
+                            .join(format!("seed{seed}-turn{}-round{}.json", st.turn, st.round)),
                         &save,
                     );
                 }
@@ -236,7 +239,10 @@ fn main() {
         }
     }
 
-    lines.push(format!("TOTAL games={games} players={players} max_rounds={max_rounds} mentality={}", mentality.as_str()));
+    lines.push(format!(
+        "TOTAL games={games} players={players} max_rounds={max_rounds} mentality={}",
+        mentality.as_str()
+    ));
     lines.push(format!("TOTAL turns={total_turns}"));
     lines.push(format!("TOTAL prompts={prompts:?}"));
     lines.push(format!("TOTAL kinds={kinds:?}"));

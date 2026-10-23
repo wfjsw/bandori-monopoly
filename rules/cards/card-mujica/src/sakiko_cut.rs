@@ -1,7 +1,7 @@
 //! `Mujica:（祥子）斩断留恋，忘却一切` -- C# `CardSakikoCut` (MatchHost.cs:5744-5814):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（祥子）斩断留恋，忘却一切`）:
-//! > （祥子）斩断留恋，忘却一切： 
+//! > （祥子）斩断留恋，忘却一切：
 //! >  抵押一张你拥有且未抵押的最贵地契并弃置一张手牌（若无手牌则弃掉下一张抽到的牌），立刻传送至任意可购买或已拥有的格子并触发结算，作为你的主要移动。若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡
 //!
 //! mortgage your best deed, discard a hand card, teleport with settle as main move.

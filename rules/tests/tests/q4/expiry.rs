@@ -131,7 +131,9 @@ fn expiry_one_raw(rule: &str, seed: u64) -> ExpiryRun {
         .by_rule
         .get(rule)
         .map(|f| {
-            f.triggers.iter().any(|t| t.starts_with("Hook") || t.starts_with("AtEnd"))
+            f.triggers
+                .iter()
+                .any(|t| t.starts_with("Hook") || t.starts_with("AtEnd"))
                 || f.reads.iter().any(|r| r.starts_with("turn."))
         })
         .unwrap_or(false);
@@ -166,15 +168,16 @@ fn expiry_one_raw(rule: &str, seed: u64) -> ExpiryRun {
     }
 
     // Anything the activation scheduled for a turn end must be gone.
-    let scheduled_leak = t
-        .m
-        .world()
-        .scheduled
-        .iter()
-        .filter(|s| s.card == rule)
-        .count();
+    let scheduled_leak =
+        t.m.world()
+            .scheduled
+            .iter()
+            .filter(|s| s.card == rule)
+            .count();
     if scheduled_leak > 0 {
-        leaked.push(format!("scheduled x{scheduled_leak} still standing for {rule}"));
+        leaked.push(format!(
+            "scheduled x{scheduled_leak} still standing for {rule}"
+        ));
     }
 
     // Turn-ctx the activation touched must match the control after the

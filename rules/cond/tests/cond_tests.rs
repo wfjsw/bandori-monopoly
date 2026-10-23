@@ -118,19 +118,28 @@ fn parse_error_on_empty() {
 #[test]
 fn unknown_variable_rejected() {
     let err = compile("bogus == 1").unwrap_err();
-    assert!(matches!(err, CondError::UnknownVar(ref s) if s == "bogus"), "{err:?}");
+    assert!(
+        matches!(err, CondError::UnknownVar(ref s) if s == "bogus"),
+        "{err:?}"
+    );
 }
 
 #[test]
 fn unknown_field_rejected() {
     let err = compile("owner.bogus >= 1").unwrap_err();
-    assert!(matches!(err, CondError::UnknownVar(ref s) if s == "owner.bogus"), "{err:?}");
+    assert!(
+        matches!(err, CondError::UnknownVar(ref s) if s == "owner.bogus"),
+        "{err:?}"
+    );
 }
 
 #[test]
 fn unknown_function_rejected() {
     let err = compile("frobnicate(owner)").unwrap_err();
-    assert!(matches!(err, CondError::UnknownFn(ref s) if s == "frobnicate"), "{err:?}");
+    assert!(
+        matches!(err, CondError::UnknownFn(ref s) if s == "frobnicate"),
+        "{err:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +163,10 @@ fn float_literal_zero_rejected() {
 #[test]
 fn double_call_rejected() {
     let err = compile("value >= double(1)").unwrap_err();
-    assert!(matches!(err, CondError::FloatOp(ref s) if s == "double"), "{err:?}");
+    assert!(
+        matches!(err, CondError::FloatOp(ref s) if s == "double"),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -177,7 +189,10 @@ fn int_division_allowed() {
 
 #[test]
 fn kind_is_a_window_variable() {
-    let c = compile("kind == DiceRollResult && move.roll < 6 || kind != DiceRollResult && value >= 500").unwrap();
+    let c = compile(
+        "kind == DiceRollResult && move.roll < 6 || kind != DiceRollResult && value >= 500",
+    )
+    .unwrap();
     let mut w = win();
     w.kind = rules_cond::trig::DiceRollResult.to_string();
     w.mv.roll = Some(3);
@@ -317,8 +332,7 @@ fn state_function() {
     w.players[1].state.insert("unstoppable".into(), 2);
 
     // state(owner,'stay') > 0 && state(owner,'unstoppable') == 0 — seat 0.
-    let cond =
-        compile("state(owner,'stay') > 0 && state(owner,'unstoppable') == 0").unwrap();
+    let cond = compile("state(owner,'stay') > 0 && state(owner,'unstoppable') == 0").unwrap();
     assert!(cond.eval(&w, &cand(0)));
     // owner = 1: stay=0, unstoppable=2 -> false
     assert!(!cond.eval(&w, &cand(1)));
@@ -379,9 +393,15 @@ fn tile_named() {
 #[test]
 fn tile_kind_predicates() {
     // `win()` stamps tile 0 with kind "circle".
-    assert!(compile("tile_is(0, \"circle\")").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("tile_is(1, \"circle\")").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("tile_is(0, \"ring\")").unwrap().eval(&win(), &cand(0)));
+    assert!(compile("tile_is(0, \"circle\")")
+        .unwrap()
+        .eval(&win(), &cand(0)));
+    assert!(!compile("tile_is(1, \"circle\")")
+        .unwrap()
+        .eval(&win(), &cand(0)));
+    assert!(!compile("tile_is(0, \"ring\")")
+        .unwrap()
+        .eval(&win(), &cand(0)));
 }
 
 #[test]
@@ -435,7 +455,9 @@ fn move_tag_lookup() {
     w.mv.tags.push(("fireRoll".to_string(), 1));
     assert!(cond.eval(&w, &cand(0)));
     assert!(cond_flat.eval(&w, &cand(0)));
-    assert!(!compile("move.tag('other') != 0").unwrap().eval(&w, &cand(0)));
+    assert!(!compile("move.tag('other') != 0")
+        .unwrap()
+        .eval(&w, &cand(0)));
 }
 
 #[test]
@@ -444,15 +466,21 @@ fn trigger_card_matches_card_id() {
     // `trigger_card == card.id`.
     let mut w = win();
     w.trigger_card = 42;
-    assert!(compile("trigger_card == card.id").unwrap().eval(&w, &cand(0)));
+    assert!(compile("trigger_card == card.id")
+        .unwrap()
+        .eval(&w, &cand(0)));
     // No card on the trigger -> 0, never a real card id.
-    assert!(!compile("trigger_card == card.id").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("trigger_card == card.id")
+        .unwrap()
+        .eval(&win(), &cand(0)));
 
     // A card-id literal is the same `id_of` hash.
     let lit = rules_cond::id_of("CRYCHIC:春日影");
     let mut w = win();
     w.trigger_card = lit;
-    assert!(compile(&format!("trigger_card == {lit}")).unwrap().eval(&w, &cand(0)));
+    assert!(compile(&format!("trigger_card == {lit}"))
+        .unwrap()
+        .eval(&w, &cand(0)));
 }
 
 #[test]
@@ -463,10 +491,14 @@ fn counter_name_and_counter_is() {
     let mut w = win();
     w.name = "cp".to_string();
     assert!(compile("counter_is('cp')").unwrap().eval(&w, &cand(0)));
-    assert!(!compile("counter_is('crystals')").unwrap().eval(&w, &cand(0)));
+    assert!(!compile("counter_is('crystals')")
+        .unwrap()
+        .eval(&w, &cand(0)));
     // The hash form mirrors `trigger_card`.
     let h = rules_cond::id_of("cp");
-    assert!(compile(&format!("counter_name == {h}")).unwrap().eval(&w, &cand(0)));
+    assert!(compile(&format!("counter_name == {h}"))
+        .unwrap()
+        .eval(&w, &cand(0)));
     // Empty name -> 0, and `counter_is` is false for every spelling.
     assert!(!compile("counter_is('cp')").unwrap().eval(&win(), &cand(0)));
 }
@@ -482,11 +514,17 @@ fn card_counter_lookup() {
     c.card_counters.insert("crystals".to_string(), 2);
     c.card_counters.insert("星星贴纸".to_string(), 3);
     assert!(compile("card.counter('cp') == 6").unwrap().eval(&win(), &c));
-    assert!(compile("card.counter('crystals') == 2").unwrap().eval(&win(), &c));
-    assert!(compile("card.counter('星星贴纸') == 3").unwrap().eval(&win(), &c));
+    assert!(compile("card.counter('crystals') == 2")
+        .unwrap()
+        .eval(&win(), &c));
+    assert!(compile("card.counter('星星贴纸') == 3")
+        .unwrap()
+        .eval(&win(), &c));
     assert!(compile("card_counter('cp') == 6").unwrap().eval(&win(), &c));
     // Missing names answer 0 (same as `tok`).
-    assert!(compile("card.counter('抹茶芭菲') == 0").unwrap().eval(&win(), &c));
+    assert!(compile("card.counter('抹茶芭菲') == 0")
+        .unwrap()
+        .eval(&win(), &c));
 }
 
 #[test]
@@ -523,7 +561,9 @@ fn character_is_name_form() {
 
     let cond = compile("persona_is(owner, '三角初华（Sumimi）')").unwrap();
     assert!(cond.eval(&w, &c));
-    assert!(!compile("persona_is(owner, '纯田真奈')").unwrap().eval(&w, &c));
+    assert!(!compile("persona_is(owner, '纯田真奈')")
+        .unwrap()
+        .eval(&w, &c));
 }
 
 #[test]
@@ -578,11 +618,7 @@ fn window_scope_reuse_matches_oneshot() {
     let scope = WindowScope::new(&w);
     for owner in [0i64, 1, 2] {
         let c = cand(owner);
-        assert_eq!(
-            scope.eval(&cond, &c),
-            cond.eval(&w, &c),
-            "owner={owner}"
-        );
+        assert_eq!(scope.eval(&cond, &c), cond.eval(&w, &c), "owner={owner}");
     }
 }
 
@@ -655,7 +691,10 @@ fn wire_version_mismatch_fails_loudly() {
     assert_eq!(bytes[0], 1, "cel::wire::FORMAT_VERSION");
     bytes[0] = 2;
     match rules_cond::Cond::from_bytes(&bytes) {
-        Err(CondError::WireVersion { found: 2, expected: 1 }) => {}
+        Err(CondError::WireVersion {
+            found: 2,
+            expected: 1,
+        }) => {}
         other => panic!("expected WireVersion 2/1, got {other:?}"),
     }
 }
@@ -728,7 +767,9 @@ fn vocab_matches_schema_lists() {
         for dotted in std::iter::once(n.cel).chain(n.aliases.iter().copied()) {
             if let Some((root, field)) = dotted.split_once('.') {
                 assert!(
-                    roots.iter().any(|(r, fs)| *r == root && fs.contains(&field)),
+                    roots
+                        .iter()
+                        .any(|(r, fs)| *r == root && fs.contains(&field)),
                     "VOCAB {dotted} missing from struct_roots"
                 );
             }
@@ -788,10 +829,14 @@ fn plan_fixed_roll_null_when_unset() {
     // `plan.fixed_roll` binds `null` when no card fixed this turn's roll --
     // the sports_talent / kaoru_thief / soyo_clear / kanon_lost
     // `roll_plan_unfixed` residual is `plan.fixed_roll == null`.
-    assert!(compile("plan.fixed_roll == null").unwrap().eval(&win(), &cand(0)));
+    assert!(compile("plan.fixed_roll == null")
+        .unwrap()
+        .eval(&win(), &cand(0)));
     let mut w = win();
     w.plan_fixed_roll = Some(10);
-    assert!(!compile("plan.fixed_roll == null").unwrap().eval(&w, &cand(0)));
+    assert!(!compile("plan.fixed_roll == null")
+        .unwrap()
+        .eval(&w, &cand(0)));
     assert!(compile("plan.fixed_roll == 10").unwrap().eval(&w, &cand(0)));
 }
 
@@ -825,7 +870,9 @@ fn dist_ring_distance() {
     assert!(compile("dist(11, 0) == 1").unwrap().eval(&w, &cand(0)));
     assert!(compile("dist(1, 1) == 0").unwrap().eval(&w, &cand(0)));
     // your_light's shape: `dist(pos(owner), tile_named('学校')) > 20`.
-    assert!(compile("dist(pos(owner), 0) <= 20").unwrap().eval(&w, &cand(0)));
+    assert!(compile("dist(pos(owner), 0) <= 20")
+        .unwrap()
+        .eval(&w, &cand(0)));
 }
 
 #[test]
@@ -834,14 +881,18 @@ fn players_on_counts_present_standers() {
     // *other* present stander on 5 (except seat 0 is not on 5 anyway).
     let mut w = geo_win(12, &[5, 5, 0, 5], &[-1; 12]);
     w.players[2].out = 1; // seat 2 is out -> not present
-    // seats 0,1,3 on tile 5. players_on(5, 0) = {1, 3} = 2.
+                          // seats 0,1,3 on tile 5. players_on(5, 0) = {1, 3} = 2.
     assert!(compile("players_on(5, 0) == 2").unwrap().eval(&w, &cand(0)));
     // players_on(5, -1) excludes nobody: 3 present standers (0,1,3).
-    assert!(compile("players_on(5, -1) == 3").unwrap().eval(&w, &cand(0)));
+    assert!(compile("players_on(5, -1) == 3")
+        .unwrap()
+        .eval(&w, &cand(0)));
     // lisa_bond's shape: `players_on(owner.pos, owner) > 0`.
     let mut c = cand(0);
     c.owner_pos = 5;
-    assert!(compile("players_on(owner.pos, owner) > 0").unwrap().eval(&w, &c));
+    assert!(compile("players_on(owner.pos, owner) > 0")
+        .unwrap()
+        .eval(&w, &c));
 }
 
 #[test]
@@ -862,11 +913,19 @@ fn others_within_radius() {
     // dist(0,2)=2, dist(0,5)=5, dist(0,11)=1. within r=2 -> seats at dist 1..=2
     // = seat 2 (dist 2) and seat 3 (dist 1) = 2.
     let w = geo_win(12, &[0, 2, 5, 11], &[-1; 12]);
-    assert!(compile("others_within(0, 2) == 2").unwrap().eval(&w, &cand(0)));
-    assert!(compile("others_within(0, 5) == 3").unwrap().eval(&w, &cand(0)));
-    assert!(compile("others_within(0, 0) == 0").unwrap().eval(&w, &cand(0)));
+    assert!(compile("others_within(0, 2) == 2")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(compile("others_within(0, 5) == 3")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(compile("others_within(0, 0) == 0")
+        .unwrap()
+        .eval(&w, &cand(0)));
     // haruhikage's shape.
-    assert!(compile("others_within(owner, 5) > 0").unwrap().eval(&w, &cand(0)));
+    assert!(compile("others_within(owner, 5) > 0")
+        .unwrap()
+        .eval(&w, &cand(0)));
 }
 
 #[test]
@@ -875,9 +934,15 @@ fn owned_within_radius() {
     // tile 0 (d 0), tile 1 (d 1), tile 6 (d 6) -> tiles 0,1 = 2.
     let owners = [0, 0, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1];
     let w = geo_win(12, &[0, 3, 6, 9], &owners);
-    assert!(compile("owned_within(0, 3) == 2").unwrap().eval(&w, &cand(0)));
-    assert!(compile("owned_within(0, 6) == 3").unwrap().eval(&w, &cand(0)));
-    assert!(compile("owned_within(1, 0) == 0").unwrap().eval(&w, &cand(0)));
+    assert!(compile("owned_within(0, 3) == 2")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(compile("owned_within(0, 6) == 3")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(compile("owned_within(1, 0) == 0")
+        .unwrap()
+        .eval(&w, &cand(0)));
 }
 
 #[test]
@@ -912,27 +977,53 @@ fn gains_and_targeted_counters() {
     let mut w = win();
     w.players[0].gains = 3;
     w.players[1].targeted = 2;
-    assert!(compile("gains_this_turn(0) == 3").unwrap().eval(&w, &cand(0)));
-    assert!(compile("gains_this_turn(owner) == 3").unwrap().eval(&w, &cand(0)));
-    assert!(compile("targeted_count(1) == 2").unwrap().eval(&w, &cand(0)));
-    assert!(compile("targeted_count(owner) >= 2").unwrap().eval(&w, &cand(1)));
+    assert!(compile("gains_this_turn(0) == 3")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(compile("gains_this_turn(owner) == 3")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(compile("targeted_count(1) == 2")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(compile("targeted_count(owner) >= 2")
+        .unwrap()
+        .eval(&w, &cand(1)));
     // hagumi_marks / centrifugal shapes.
-    assert!(compile("gains_this_turn(owner) > 0").unwrap().eval(&w, &cand(0)));
-    assert!(!compile("targeted_count(owner) >= 2").unwrap().eval(&w, &cand(0)));
+    assert!(compile("gains_this_turn(owner) > 0")
+        .unwrap()
+        .eval(&w, &cand(0)));
+    assert!(!compile("targeted_count(owner) >= 2")
+        .unwrap()
+        .eval(&w, &cand(0)));
 }
 
 #[test]
 fn repeated_digits_predicate() {
     // no_breakup's `cant_play` filter: money with a repeated digit.
-    assert!(compile("repeated_digits(44)").unwrap().eval(&win(), &cand(0)));
-    assert!(compile("repeated_digits(-444)").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("repeated_digits(1234)").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("repeated_digits(123)").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("repeated_digits(0)").unwrap().eval(&win(), &cand(0)));
+    assert!(compile("repeated_digits(44)")
+        .unwrap()
+        .eval(&win(), &cand(0)));
+    assert!(compile("repeated_digits(-444)")
+        .unwrap()
+        .eval(&win(), &cand(0)));
+    assert!(!compile("repeated_digits(1234)")
+        .unwrap()
+        .eval(&win(), &cand(0)));
+    assert!(!compile("repeated_digits(123)")
+        .unwrap()
+        .eval(&win(), &cand(0)));
+    assert!(!compile("repeated_digits(0)")
+        .unwrap()
+        .eval(&win(), &cand(0)));
     // no_breakup's shape: `!repeated_digits(money(owner))`.
     let mut w = win();
     w.players[0].money = 1223;
-    assert!(compile("repeated_digits(money(owner))").unwrap().eval(&w, &cand(0)));
+    assert!(compile("repeated_digits(money(owner))")
+        .unwrap()
+        .eval(&w, &cand(0)));
     w.players[0].money = 1234;
-    assert!(!compile("repeated_digits(money(owner))").unwrap().eval(&w, &cand(0)));
+    assert!(!compile("repeated_digits(money(owner))")
+        .unwrap()
+        .eval(&w, &cand(0)));
 }

@@ -3,7 +3,7 @@
 //! refuses rulesets built against a different version.
 
 #[cfg(target_arch = "wasm32")]
-use alloc::{boxed::Box, borrow::Cow, format, string::String, string::ToString, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, format, string::String, string::ToString, vec::Vec};
 #[cfg(not(target_arch = "wasm32"))]
 use std::borrow::Cow;
 
@@ -795,7 +795,6 @@ use std::borrow::Cow;
 ///      RECORD_VERSION unchanged.
 pub const ABI_VERSION: i32 = 96;
 
-
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -1398,7 +1397,9 @@ impl BuyKind {
 /// [`FilterKind`]: this module is the **wire codec only** (`from_i32` /
 /// `as_i32`). The game names of the kinds and their frozen webui wire
 /// strings live in `bandori-std::abnormal`, not here.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 #[repr(transparent)]
 pub struct AbKind(pub i32);
@@ -1509,7 +1510,9 @@ impl<'de> serde::Deserialize<'de> for KindNs {
 /// `spelling` and `from_str` map those two spellings. `is_filter` is the side
 /// declaration for engine ids; the host treats `OnKind::Filter` /
 /// `OnKind::Action` as authoritative for ruleset kinds (see [`Self::is_filter`]).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct TriggerKind {
     /// The id space this id lives in.
     pub ns: KindNs,
@@ -1522,7 +1525,9 @@ pub struct TriggerKind {
 /// A listener may emit effects and does not rewrite the triggering value. Ids
 /// are the same [`TriggerKind`] every kind view uses. Kind/variant agreement is a
 /// compile error: an action entry takes these constants, never filter kinds.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct ActionKind(pub TriggerKind);
 
 /// Filter-kind view of the shared wire ids: pure value transforms
@@ -1536,7 +1541,9 @@ pub struct ActionKind(pub TriggerKind);
 /// Ids are the same [`TriggerKind`] every kind view uses. Kind/variant
 /// agreement is a compile error: a filter entry takes these constants (via
 /// the `filter_kinds!` constructors), never action kinds.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct FilterKind(pub TriggerKind);
 
 /// Counteraction-window selectors (`On::Counteract`). Same wire ids as
@@ -1546,7 +1553,6 @@ pub struct FilterKind(pub TriggerKind);
 pub type ChainKind = TriggerKind;
 
 impl ActionKind {
-
     /// Unset. Never raised; the parse fallback and Default.
     pub const None: Self = Self(TriggerKind::None);
 
@@ -1921,7 +1927,9 @@ impl ActionKind {
     pub const PaySplitMulBefore: Self = Self(TriggerKind::PaySplitMulBefore);
 
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
-    pub const fn engine(id: i32) -> Self { Self(TriggerKind::engine(id)) }
+    pub const fn engine(id: i32) -> Self {
+        Self(TriggerKind::engine(id))
+    }
 
     /// Ruleset-namespace kind. Same id as [`TriggerKind::ruleset`].
     pub const fn ruleset(key: &'static str, id: i32) -> Self {
@@ -1929,32 +1937,43 @@ impl ActionKind {
     }
 
     /// View this id in the wire namespace.
-    pub const fn as_trigger(self) -> TriggerKind { self.0 }
+    pub const fn as_trigger(self) -> TriggerKind {
+        self.0
+    }
 
     /// View a wire id as this side (no side check -- the consts pin the set).
-    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k) }
+    pub const fn from_trigger(k: TriggerKind) -> Self {
+        Self(k)
+    }
 
     /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
-    pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
+    pub fn spelling(self) -> Cow<'static, str> {
+        self.as_trigger().spelling()
+    }
 
     /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
     /// const is always `false` and a `FilterKind` const always `true`; a raw
     /// `Self(k)` still reports the wire fact.
-    pub const fn is_filter(self) -> bool { self.as_trigger().is_filter() }
+    pub const fn is_filter(self) -> bool {
+        self.as_trigger().is_filter()
+    }
 }
 
 impl From<ActionKind> for TriggerKind {
     #[inline(always)]
-    fn from(k: ActionKind) -> Self { k.as_trigger() }
+    fn from(k: ActionKind) -> Self {
+        k.as_trigger()
+    }
 }
 
 impl From<TriggerKind> for ActionKind {
     #[inline(always)]
-    fn from(k: TriggerKind) -> Self { ActionKind::from_trigger(k) }
+    fn from(k: TriggerKind) -> Self {
+        ActionKind::from_trigger(k)
+    }
 }
 
 impl FilterKind {
-
     /// Filter. A settled payment leg is about to settle its amount, after the
     /// Combined stages and any split divide. Payload: value = the running
     /// figure, target = payee, the pay flag. No prompt (use
@@ -2118,7 +2137,9 @@ impl FilterKind {
     pub const TargetableGate: Self = Self(TriggerKind::TargetableGate);
 
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
-    pub const fn engine(id: i32) -> Self { Self(TriggerKind::engine(id)) }
+    pub const fn engine(id: i32) -> Self {
+        Self(TriggerKind::engine(id))
+    }
 
     /// Ruleset-namespace kind. Same id as [`TriggerKind::ruleset`].
     pub const fn ruleset(key: &'static str, id: i32) -> Self {
@@ -2126,34 +2147,47 @@ impl FilterKind {
     }
 
     /// View this id in the wire namespace.
-    pub const fn as_trigger(self) -> TriggerKind { self.0 }
+    pub const fn as_trigger(self) -> TriggerKind {
+        self.0
+    }
 
     /// View a wire id as this side (no side check -- the consts pin the set).
-    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k) }
+    pub const fn from_trigger(k: TriggerKind) -> Self {
+        Self(k)
+    }
 
     /// Wire spelling (camelCase generic, or `"r:{key}:{id}"` for a ruleset-declared id).
-    pub fn spelling(self) -> Cow<'static, str> { self.as_trigger().spelling() }
+    pub fn spelling(self) -> Cow<'static, str> {
+        self.as_trigger().spelling()
+    }
 
     /// Engine gate id for `gate_msgs` / `gate_skip_msgs` (the manifest's
     /// `(i32, key)` pairs). Engine gates only -- ruleset kinds have no gate id.
-    pub const fn gate_id(self) -> i32 { self.0.id }
+    pub const fn gate_id(self) -> i32 {
+        self.0.id
+    }
 
     /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
     /// const is always `false` and a `FilterKind` const always `true`; a raw
     /// `Self(k)` still reports the wire fact.
-    pub const fn is_filter(self) -> bool { self.as_trigger().is_filter() }
+    pub const fn is_filter(self) -> bool {
+        self.as_trigger().is_filter()
+    }
 }
 
 impl From<FilterKind> for TriggerKind {
     #[inline(always)]
-    fn from(k: FilterKind) -> Self { k.as_trigger() }
+    fn from(k: FilterKind) -> Self {
+        k.as_trigger()
+    }
 }
 
 impl From<TriggerKind> for FilterKind {
     #[inline(always)]
-    fn from(k: TriggerKind) -> Self { FilterKind::from_trigger(k) }
+    fn from(k: TriggerKind) -> Self {
+        FilterKind::from_trigger(k)
+    }
 }
-
 
 #[allow(non_upper_case_globals)]
 impl TriggerKind {
@@ -2481,14 +2515,20 @@ impl TriggerKind {
 
     /// Engine-namespace kind. The fixed generic raise points.
     pub const fn engine(id: i32) -> Self {
-        Self { ns: KindNs::Engine, id }
+        Self {
+            ns: KindNs::Engine,
+            id,
+        }
     }
 
     /// Ruleset-namespace kind. Rule-defined raise points, keyed by the
     /// ruleset's stable name; they cannot collide with a future engine id or
     /// with another ruleset's ids.
     pub const fn ruleset(key: &'static str, id: i32) -> Self {
-        Self { ns: KindNs::Ruleset(key), id }
+        Self {
+            ns: KindNs::Ruleset(key),
+            id,
+        }
     }
 
     /// Is this a filter kind? Filter kinds are modifier-pipeline /
@@ -2769,7 +2809,11 @@ mod tests {
     /// (`move.kind == Teleport && move.by_skill`).
     #[test]
     fn skill_teleport_id_18_is_retired_forever() {
-        assert_eq!(TriggerKind::engine(18).spelling(), "", "id 18 must remain unnamed");
+        assert_eq!(
+            TriggerKind::engine(18).spelling(),
+            "",
+            "id 18 must remain unnamed"
+        );
         assert_eq!(
             TriggerKind::from_str("skillTeleport"),
             TriggerKind::None,
@@ -2786,15 +2830,24 @@ mod tests {
     /// CEL `kind` is that spelling (v91); there is no int pack.
     #[test]
     fn namespaced_wire_spelling() {
-        assert_eq!(TriggerKind::ruleset("bandori", 21).spelling(), "r:bandori:21");
-        assert_eq!(TriggerKind::ruleset("bandori", 107).spelling(), "r:bandori:107");
+        assert_eq!(
+            TriggerKind::ruleset("bandori", 21).spelling(),
+            "r:bandori:21"
+        );
+        assert_eq!(
+            TriggerKind::ruleset("bandori", 107).spelling(),
+            "r:bandori:107"
+        );
         assert_eq!(
             TriggerKind::from_str("r:bandori:21"),
             TriggerKind::ruleset("bandori", 21)
         );
         // Bare decimals are not spellings -- only "r:{key}:{id}" parses.
         assert_eq!(TriggerKind::from_str("21"), TriggerKind::None);
-        assert_eq!(TriggerKind::from_str("paySplitAdd"), TriggerKind::engine(55));
+        assert_eq!(
+            TriggerKind::from_str("paySplitAdd"),
+            TriggerKind::engine(55)
+        );
         // Engine and ruleset with the same numeric id are different kinds.
         assert_ne!(TriggerKind::engine(21), TriggerKind::ruleset("bandori", 21));
         assert_eq!(TriggerKind::ruleset("bandori", 21).ns, KindNs::BANDORI);

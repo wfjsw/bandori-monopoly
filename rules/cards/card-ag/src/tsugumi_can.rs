@@ -7,8 +7,8 @@
 //!
 //! play as @Tsugu ycm, or counteract to force a range-card's dice to max/min.
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TSUGUMI_CAN: CardDef = CardDef::new(

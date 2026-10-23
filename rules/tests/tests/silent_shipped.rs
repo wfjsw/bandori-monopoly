@@ -17,7 +17,10 @@ fn shipped_declare_cap_entries_are_silent() {
         ("skill:花园多惠:花园警察，出警！", 0),
         ("skill:宇田川巴:豚骨酱油拉面大姐", 1),
     ] {
-        let idx = r.ruleset().card(id).unwrap_or_else(|| panic!("{id} loaded"));
+        let idx = r
+            .ruleset()
+            .card(id)
+            .unwrap_or_else(|| panic!("{id} loaded"));
         let info = &r.ruleset().cards()[idx as usize];
         assert_eq!(
             info.on[entry].presentation,

@@ -7,8 +7,8 @@
 //! after an abnormal-move effect, copy the step count of your last non-teleport
 //! main move onto the next one.
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx;
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ORDINARY: CardDef = CardDef::new(

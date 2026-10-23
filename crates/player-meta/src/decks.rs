@@ -3,9 +3,9 @@
 //!
 //! (id 0 = the read-only preset.)
 
+use crate::profile::{sanitize_deck_name, DeckChoice, PlayerProfile, SavedDeck};
 use game_core::data::{GameData, PersonaData};
 use game_core::deck; // clean, preset, SIZE
-use crate::profile::{sanitize_deck_name, DeckChoice, PlayerProfile, SavedDeck};
 
 /// Saved custom decks per persona -- an arbitrary number, bounded so one
 /// profile cannot grow without limit.
@@ -14,9 +14,7 @@ pub const DECKS_MAX: usize = 100;
 // --- DeckService: named saved decks on the profile --------------------------------
 
 fn find<'p>(p: &'p PlayerProfile, c: &PersonaData, id: i32) -> Option<&'p SavedDeck> {
-    p.decks
-        .iter()
-        .find(|d| d.persona == c.name && d.slot == id)
+    p.decks.iter().find(|d| d.persona == c.name && d.slot == id)
 }
 
 /// Saved custom decks of `c`, in display order. Id 0 (the preset) is not one.

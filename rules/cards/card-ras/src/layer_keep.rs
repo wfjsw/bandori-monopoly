@@ -7,10 +7,10 @@
 //! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{ChainKind, ActionKind};
+use card_sdk::abi::{ActionKind, ChainKind};
 
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const LAYER_KEEP: CardDef = CardDef::new(
     "RAS:（和奏瑞依）寄于指尖的执念",
@@ -98,10 +98,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// die is written by the fire-pot reroll path to the `layerUnused` slot and
 /// picked up by the `DiceRollAfter` hook.
 fn counter_fire(player_id: i32) -> card_sdk::Asked {
-    ctx::log(
-        player_id,
-        &Msg::new(key!("layer_keep_counter")),
-    );
+    ctx::log(player_id, &Msg::new(key!("layer_keep_counter")));
     Ok(())
 }
 

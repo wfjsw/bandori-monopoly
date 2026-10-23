@@ -104,7 +104,10 @@ fn band_02_crystal_on_16_iff_at(user: i32) {
         post_c == spec::skills_mygo::band_02_crystals_after(pre_c),
         "C-MYGO-band-02: crystals must be min(pre+1, 1) under the roll cap"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money unchanged"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
 
@@ -185,7 +188,10 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
             "C-MYGO-band-04: gain logs exactly one AddCounter(+1) (SetState audit tolerated)"
         );
     }
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money unchanged"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 

@@ -33,14 +33,16 @@ fn rest(t: &mut Table) {
         }
         t.m.tick(0.25);
     }
-    panic!("rest: the match did not come to rest: {:?}", t.m.state().step);
+    panic!(
+        "rest: the match did not come to rest: {:?}",
+        t.m.state().step
+    );
 }
 
 fn answer_q(t: &mut Table, who: usize, value: i32) -> Result<(), String> {
     let p = t.prompt().expect("answer_q: no prompt");
-    let r = t
-        .m
-        .act(
+    let r =
+        t.m.act(
             who as i32 + 1,
             &NetMessage {
                 prompt: p.id,
@@ -240,10 +242,7 @@ fn tomoe_savior_buy_listener_pays_the_chuchu_bonus() {
             continue;
         }
         if p.kind == "player" {
-            let k = t
-                .option("P0")
-                .or_else(|| t.option("宇田川巴"))
-                .unwrap_or(0);
+            let k = t.option("P0").or_else(|| t.option("宇田川巴")).unwrap_or(0);
             answer_q(&mut t, 2, k).unwrap();
             continue;
         }
@@ -256,7 +255,11 @@ fn tomoe_savior_buy_listener_pays_the_chuchu_bonus() {
         t.field_ids(0)
     );
     // The card sits on P0's field but belongs to the player who played it.
-    let fc = t.field(0).into_iter().find(|f| f.card == "RAS:（chuchu）演奏我的音乐吧").unwrap();
+    let fc = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == "RAS:（chuchu）演奏我的音乐吧")
+        .unwrap();
     assert_eq!((fc.owner, fc.user), (2, 2), "owner kept on placement");
     // P1 mortgages; P0 buys the deed back through tomoe_savior.
     t.begin_turn(1);
@@ -278,7 +281,11 @@ fn tomoe_savior_buy_listener_pays_the_chuchu_bonus() {
         t.recent_keys(16)
     );
     // It hopped to P1 (next in order, skipping its user P2) and is still P2's.
-    let fc = t.field(1).into_iter().find(|f| f.card == "RAS:（chuchu）演奏我的音乐吧").expect("hopped to P1");
+    let fc = t
+        .field(1)
+        .into_iter()
+        .find(|f| f.card == "RAS:（chuchu）演奏我的音乐吧")
+        .expect("hopped to P1");
     assert_eq!((fc.owner, fc.user), (2, 2), "owner kept across the hop");
 }
 
@@ -322,8 +329,16 @@ fn tomoe_savior_on_your_own_mortgage_pays_twice_and_unmortgages() {
     t.counteract(0, "AG:（巴）商店街的救世主").unwrap();
     drain(&mut t);
     // 「额外获得一份抵押收益并将地契翻回」
-    assert!(!t.mortgaged(shop), "the deed is flipped back: events {:?}", t.recent_keys(12));
-    assert_eq!(t.money(0), 10_000 + 1_000 + 1_000, "two mortgage payouts (2000/2 each)");
+    assert!(
+        !t.mortgaged(shop),
+        "the deed is flipped back: events {:?}",
+        t.recent_keys(12)
+    );
+    assert_eq!(
+        t.money(0),
+        10_000 + 1_000 + 1_000,
+        "two mortgage payouts (2000/2 each)"
+    );
 }
 
 // =====================================================================
@@ -379,7 +394,9 @@ fn mutsumi_never_2_runs_the_band_skill_2() {
     // 「获得角色对应的"MyGO"或"Ave Mujica"乐队技能卡」
     let skills = t.skills(0);
     assert!(
-        skills.iter().any(|s| s.contains("MyGO") || s.contains("Mujica")),
+        skills
+            .iter()
+            .any(|s| s.contains("MyGO") || s.contains("Mujica")),
         "gained the MyGO / Ave Mujica band skill: {skills:?}"
     );
     // 「向抽牌堆中加入角色对应的自选"MyGO"或"Ave Mujica"卡至抽牌堆中总共有10张卡」
@@ -391,10 +408,22 @@ fn mutsumi_never_2_runs_the_band_skill_2() {
         "filled to 10 then drew 2: {:?}",
         t.draw_pile(0)
     );
-    assert_eq!(t.hand(0).len(), 1, "drew 2 then discarded 1: {:?}", t.hand(0));
-    assert_eq!(t.discard(0).len(), 1, "「然后弃一张卡」: {:?}", t.discard(0));
+    assert_eq!(
+        t.hand(0).len(),
+        1,
+        "drew 2 then discarded 1: {:?}",
+        t.hand(0)
+    );
+    assert_eq!(
+        t.discard(0).len(),
+        1,
+        "「然后弃一张卡」: {:?}",
+        t.discard(0)
+    );
     assert!(
-        t.draw_pile(0).iter().all(|c| c.contains("Mujica") || c.contains("MyGO")),
+        t.draw_pile(0)
+            .iter()
+            .all(|c| c.contains("Mujica") || c.contains("MyGO")),
         "the fill is MyGO / Ave Mujica cards: {:?}",
         t.draw_pile(0)
     );
@@ -463,7 +492,9 @@ fn mutsumi_never_2_runs_the_band_skill_2_on_a_crystal_shortfall() {
     // The (2) body still runs on the shortfall: the successor band skill arrives.
     let skills = t.skills(0);
     assert!(
-        skills.iter().any(|s| s.contains("MyGO") || s.contains("Mujica")),
+        skills
+            .iter()
+            .any(|s| s.contains("MyGO") || s.contains("Mujica")),
         "「不足3个则改为全部消耗」 -- the (2) ran with 1 crystal: {skills:?}"
     );
     assert_eq!(
@@ -547,7 +578,12 @@ fn umiri_take_does_not_stack_the_same_band_skill() {
         "the card moved one seat forward: p2={:?}",
         t.field_ids(2)
     );
-    let copies: Vec<_> = t.field_ids(0).iter().filter(|c| c.contains("Afterglow")).cloned().collect();
+    let copies: Vec<_> = t
+        .field_ids(0)
+        .iter()
+        .filter(|c| c.contains("Afterglow"))
+        .cloned()
+        .collect();
     assert_eq!(
         copies.len(),
         1,
@@ -559,7 +595,12 @@ fn umiri_take_does_not_stack_the_same_band_skill() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     accept_buy(&mut t);
-    assert_eq!(t.houses(cheap), 1, "one free house, not two: {:?}", t.recent_keys(10));
+    assert_eq!(
+        t.houses(cheap),
+        1,
+        "one free house, not two: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 // 规则书: 「但不视为那个乐队的角色」 -- the taken band skill does not make the user

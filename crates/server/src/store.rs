@@ -162,8 +162,13 @@ pub trait CrossState: Send + Sync {
     // dead process's streams vanish on their own.
 
     /// Note (or refresh) one live stream of `member` in `room`.
-    fn presence_set(&self, room: &str, member: i32, stream: &str, ttl_ms: u64)
-        -> Result<(), StoreError>;
+    fn presence_set(
+        &self,
+        room: &str,
+        member: i32,
+        stream: &str,
+        ttl_ms: u64,
+    ) -> Result<(), StoreError>;
     /// That one stream closed.
     fn presence_del(&self, room: &str, member: i32, stream: &str) -> Result<(), StoreError>;
     /// Every stream of `member` is gone (the member left the room).

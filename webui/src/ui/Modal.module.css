@@ -63,7 +63,7 @@
   flex-direction: column;
   background: var(--surface);
   border-radius: var(--r-2xl);
-  padding: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-4);
   box-shadow: var(--pop-shadow);
   animation: pop 0.18s ease-out;
 }

@@ -259,8 +259,7 @@ pub fn fire_bird_place_log_ok(effects: &[Effect], player: i32, card: u8) -> bool
                 card: c
             } if p == player && c == card
         )
-        && (effects.len() == 2
-            || matches!(effects[2], Effect::AddCounter { .. }))
+        && (effects.len() == 2 || matches!(effects[2], Effect::AddCounter { .. }))
 }
 
 /// Post: money -1600, card on the user's field.
@@ -301,13 +300,12 @@ pub fn fire_bird_burn_crystals() -> i32 {
 /// `AddCounter` under the current host.
 pub fn fire_bird_burn_log_ok(effects: &[Effect], player: i32) -> bool {
     let pay = fire_bird_burn_pay();
-    effects.iter().any(|e| matches!(e, Effect::PayMoney { player: p, n } if *p == player && *n == pay))
-        && effects.iter().all(|e| {
-            matches!(
-                e,
-                Effect::PayMoney { .. } | Effect::AddCounter { .. }
-            )
-        })
+    effects
+        .iter()
+        .any(|e| matches!(e, Effect::PayMoney { player: p, n } if *p == player && *n == pay))
+        && effects
+            .iter()
+            .all(|e| matches!(e, Effect::PayMoney { .. } | Effect::AddCounter { .. }))
 }
 
 /// MUTANT: wants a 400 gain.

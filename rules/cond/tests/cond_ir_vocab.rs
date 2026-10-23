@@ -2,7 +2,7 @@
 //! Adding a VOCAB scalar without extending `rules-cond-ir::vars` fails here.
 
 use rules_cond::vocab::{Scope, Ty, VOCAB};
-use rules_cond_ir::vars::{VarTy, VARS, SCALAR_COUNT};
+use rules_cond_ir::vars::{VarTy, SCALAR_COUNT, VARS};
 
 #[test]
 fn ir_vars_match_vocab() {

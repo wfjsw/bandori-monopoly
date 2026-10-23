@@ -11,9 +11,9 @@
 //! > （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。
 //!
 
-use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 const ID: &str = "通用:[衍生]FEVER!";
 
@@ -86,7 +86,10 @@ fn x_of(player_id: i32) -> i32 {
 /// unchanged without logging.
 fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     if trigger::target() != player_id || v.value <= 0 {
-        return PayAddValue { value: v.value, ..v };
+        return PayAddValue {
+            value: v.value,
+            ..v
+        };
     }
     let x = x_of(player_id);
     let out = (v.value + x).max(0);

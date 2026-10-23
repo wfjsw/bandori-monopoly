@@ -54,7 +54,7 @@ fn setup(members: Vec<RoomMember>, seed: u64) -> MatchSetup {
         seed256: None,
         seed,
         weights: ScoreWeights::default(),
-            clock: None,
+        clock: None,
         ..Default::default()
     }
 }
@@ -107,7 +107,10 @@ fn assert_round_trip(
 ) -> String {
     let json = serde_json::to_string(file).unwrap();
     let parsed = parse_record(&json).unwrap_or_else(|e| panic!("{label}: {e}"));
-    assert_eq!(parsed.header.total_ticks, file.header.total_ticks, "{label}");
+    assert_eq!(
+        parsed.header.total_ticks, file.header.total_ticks,
+        "{label}"
+    );
     let mut rp = Replayer::new(data(), rules(), &parsed, false)
         .unwrap_or_else(|e| panic!("{label}: load: {e}"));
     let mut guard = 0u32;
@@ -118,7 +121,11 @@ fn assert_round_trip(
         assert!(guard < 500_000, "{label}: replay stuck");
     }
     let save = rp.match_ref().save();
-    assert_eq!(hash_save(&save), file.body.final_hash, "{label}: final hash");
+    assert_eq!(
+        hash_save(&save),
+        file.body.final_hash,
+        "{label}: final hash"
+    );
     assert_eq!(
         rp.status().tick,
         file.header.total_ticks,
@@ -150,12 +157,7 @@ fn round_trip_across_seeds_players_and_mentalities() {
                 member(i, true, m)
             })
             .collect();
-        let mut rm = RecordedMatch::new(
-            data(),
-            rules(),
-            setup(members, seed),
-            MatchMode::Casual,
-        );
+        let mut rm = RecordedMatch::new(data(), rules(), setup(members, seed), MatchMode::Casual);
         rm.quick_start();
         let mut rng = Rng::new(seed ^ 0xD1CE);
         let mut events = Vec::new();
@@ -191,12 +193,7 @@ fn round_trip_with_a_scripted_human() {
         let members: Vec<RoomMember> = (1..=n)
             .map(|i| member(i, i != 1, BotMentality::Chaos))
             .collect();
-        let mut rm = RecordedMatch::new(
-            data(),
-            rules(),
-            setup(members, seed),
-            MatchMode::Casual,
-        );
+        let mut rm = RecordedMatch::new(data(), rules(), setup(members, seed), MatchMode::Casual);
         rm.quick_start();
         let mut rng = Rng::new(seed ^ 0xF00D);
         let mut events = Vec::new();
@@ -319,13 +316,7 @@ fn partial_snapshot_records() {
 
 #[test]
 fn corruption_is_corrupt_and_unknown_format_is_format() {
-    let (file, events) = run_bot_game(
-        3,
-        3,
-        BotMentality::Standard,
-        &mut |_| 3,
-        6,
-    );
+    let (file, events) = run_bot_game(3, 3, BotMentality::Standard, &mut |_| 3, 6);
     assert!(!events.is_empty());
     let json = serde_json::to_string(&file).unwrap();
 
@@ -435,12 +426,7 @@ fn tampered_act_is_caught_as_divergence_at_the_next_checkpoint() {
         member(2, true, BotMentality::Chaos),
         member(3, true, BotMentality::Standard),
     ];
-    let mut rm = RecordedMatch::new(
-        data(),
-        rules(),
-        setup(members, 11),
-        MatchMode::Casual,
-    );
+    let mut rm = RecordedMatch::new(data(), rules(), setup(members, 11), MatchMode::Casual);
     rm.quick_start();
     let mut rng = Rng::new(11);
     let mut last_id = 0;
@@ -520,12 +506,7 @@ fn rejected_acts_replay_to_the_same_err() {
         member(1, false, BotMentality::Standard),
         member(2, true, BotMentality::Chaos),
     ];
-    let mut rm = RecordedMatch::new(
-        data(),
-        rules(),
-        setup(members, 21),
-        MatchMode::Casual,
-    );
+    let mut rm = RecordedMatch::new(data(), rules(), setup(members, 21), MatchMode::Casual);
     rm.quick_start();
     let mut rng = Rng::new(21);
     let mut last_id = 0;
@@ -579,9 +560,7 @@ fn rejected_acts_replay_to_the_same_err() {
 
 #[test]
 fn seek_equals_a_linear_replay() {
-    let (file, events) = run_bot_game(9, 4, BotMentality::Chaos, &mut |r| {
-        1 + r.below(6) as u8
-    }, 10);
+    let (file, events) = run_bot_game(9, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
     let total = file.header.total_ticks;
     assert!(total > 50, "need a game long enough to seek in");
 
@@ -634,12 +613,7 @@ fn u64_and_f32_values_are_bit_exact() {
         member(1, true, BotMentality::Standard),
         member(2, true, BotMentality::Standard),
     ];
-    let mut rm = RecordedMatch::new(
-        data(),
-        rules(),
-        setup(members, big),
-        MatchMode::Casual,
-    );
+    let mut rm = RecordedMatch::new(data(), rules(), setup(members, big), MatchMode::Casual);
     rm.quick_start();
     let mut rng = Rng::new(big);
     let mut events = Vec::new();
@@ -683,7 +657,7 @@ fn u64_and_f32_values_are_bit_exact() {
         seed: 1,
         seed256: None,
         weights: w,
-            clock: None,
+        clock: None,
         ..Default::default()
     };
     let body = game_core::record::RecordBody {
@@ -751,12 +725,7 @@ fn recorder_json_round_trips_through_restore() {
         member(1, false, BotMentality::Standard),
         member(2, true, BotMentality::Chaos),
     ];
-    let mut rm = RecordedMatch::new(
-        data(),
-        rules(),
-        setup(members, 31),
-        MatchMode::Casual,
-    );
+    let mut rm = RecordedMatch::new(data(), rules(), setup(members, 31), MatchMode::Casual);
     rm.quick_start();
     for _ in 0..25 {
         rm.tick_steps(2);
@@ -764,8 +733,7 @@ fn recorder_json_round_trips_through_restore() {
     let save = rm.inner().save();
     let rec_json = rm.recorder_json();
 
-    let mut restored =
-        RecordedMatch::restore(data(), rules(), &save, &rec_json).expect("restore");
+    let mut restored = RecordedMatch::restore(data(), rules(), &save, &rec_json).expect("restore");
     assert_eq!(restored.inner().save(), save);
     // Continue both by the same 25 steps: the restored recorder picks the log
     // up where it left off and produces the same record.
@@ -810,12 +778,7 @@ fn origin_and_header_fields_survive() {
 #[test]
 fn solo_preset_personas_round_trip() {
     let d = data();
-    let personas: Vec<String> = d
-        .personas
-        .iter()
-        .take(4)
-        .map(|c| c.name.clone())
-        .collect();
+    let personas: Vec<String> = d.personas.iter().take(4).map(|c| c.name.clone()).collect();
     assert!(personas.len() >= 2, "need at least two personas in data");
     for seed in [1u64, 42, 999, 31337] {
         for n in 2..=4usize {
@@ -887,7 +850,8 @@ fn ruleset_mismatch_is_named_and_non_fatal() {
     }
     let mut file = rm.export(stamp(), "x");
     // Pretend the record was written under a real ruleset build.
-    file.header.engine.ruleset_sha256 = "49a58b82416cca44f11a1a45986ac651a2052ab59704989470789439d914911c".into();
+    file.header.engine.ruleset_sha256 =
+        "49a58b82416cca44f11a1a45986ac651a2052ab59704989470789439d914911c".into();
     seal(&mut file);
 
     // `want` is the record's stamp, `got` is this engine's (StubRules -> "stub").
@@ -927,12 +891,7 @@ fn round_trip_1000_seeds() {
                 )
             })
             .collect();
-        let mut rm = RecordedMatch::new(
-            data(),
-            rules(),
-            setup(members, seed),
-            MatchMode::Casual,
-        );
+        let mut rm = RecordedMatch::new(data(), rules(), setup(members, seed), MatchMode::Casual);
         rm.quick_start();
         let mut rng = Rng::new(seed ^ 0xD1CE);
         let mut events = Vec::new();
@@ -1167,7 +1126,11 @@ fn index_reports_how_far_it_has_reached() {
     let (file, _) = run_bot_game(9, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
     let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
     let first = rp.index(5);
-    assert!(!first.done && first.tick > 0 && first.tick <= 5, "tick {}", first.tick);
+    assert!(
+        !first.done && first.tick > 0 && first.tick <= 5,
+        "tick {}",
+        first.tick
+    );
     let last = rp.index(10_000_000);
     assert!(last.done);
     assert_eq!(last.tick, file.header.total_ticks);

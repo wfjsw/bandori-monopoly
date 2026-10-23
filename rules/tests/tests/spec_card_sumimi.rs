@@ -95,7 +95,9 @@ pub fn c_sumimi_idolband_reset(step: &Step<'_>) -> Result<(), String> {
         ));
     }
     if pre >= 3000 && post != pre {
-        return Err(format!("money {pre} -> {post}, expected no effect at >=3000"));
+        return Err(format!(
+            "money {pre} -> {post}, expected no effect at >=3000"
+        ));
     }
     Ok(())
 }
@@ -150,7 +152,8 @@ fn idolband_resets_money_to_3000() {
         t.give(0, &[IDOL_BAND]);
         let pre = t.snapshot_world();
         t.observe(IDOL_BAND_CLAUSES);
-        t.play(0, IDOL_BAND).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, IDOL_BAND)
+            .map_err(|e| format!("play rejected: {e}"))?;
         if t.money(0) != 3000 {
             return Err(format!("money {} -> {}, expected 3000", money, t.money(0)));
         }
@@ -180,7 +183,8 @@ fn idolband_noop_at_3000_or_above() {
         t.set_money(0, money);
         t.give(0, &[IDOL_BAND]);
         t.observe(IDOL_BAND_CLAUSES);
-        t.play(0, IDOL_BAND).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, IDOL_BAND)
+            .map_err(|e| format!("play rejected: {e}"))?;
         if t.money(0) != money {
             return Err(format!(
                 "money {money} -> {}, expected no effect at >=3000",
@@ -206,7 +210,10 @@ fn idolband_gate_redeem_blocks_play() {
     let r = t.play(0, IDOL_BAND);
     drain(&mut t);
     if r.is_ok() {
-        panic!("play allowed after a redeem this turn: {r:?} money={}", t.money(0));
+        panic!(
+            "play allowed after a redeem this turn: {r:?} money={}",
+            t.money(0)
+        );
     }
 }
 
@@ -479,7 +486,9 @@ pub fn c_sumimi_twodonuts_exile(step: &Step<'_>) -> Result<(), String> {
         .map(|p| p.state_get("exileHold"))
         .unwrap_or(0);
     if hold != 1 {
-        return Err(format!("exileHold = {hold}, expected the duration-grant marker"));
+        return Err(format!(
+            "exileHold = {hold}, expected the duration-grant marker"
+        ));
     }
     Ok(())
 }
@@ -720,13 +729,18 @@ fn sweetescape_gate_low_charge_sum_refused() {
 fn band_exclusive_only_matching_character() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "纯田真奈");
-    t.give(0, &[
-        "Sumimi:（真奈）歌唱大赛5连冠",
-        "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
-    ]);
+    t.give(
+        0,
+        &[
+            "Sumimi:（真奈）歌唱大赛5连冠",
+            "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
+        ],
+    );
     let hand = t.hand(0);
     assert!(hand.iter().any(|c| c == "Sumimi:（真奈）歌唱大赛5连冠"));
-    assert!(hand.iter().any(|c| c == "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励"));
+    assert!(hand
+        .iter()
+        .any(|c| c == "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励"));
     let r = t.play(0, "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励");
     drain(&mut t);
     assert!(
@@ -885,7 +899,10 @@ fn mana_shop_pay_spends_pot_and_halves_spending() {
     }
     drain(&mut t);
     if !offered {
-        panic!("no mana_donut offer on passing 购物中心: {}", t.dump_prompt());
+        panic!(
+            "no mana_donut offer on passing 购物中心: {}",
+            t.dump_prompt()
+        );
     }
     if t.charge(0) != 0 {
         panic!("fire {}, expected 0 after 「消耗一个火罐」", t.charge(0));
@@ -1019,8 +1036,7 @@ fn heretheworld_places_on_two_play_turn() {
     t.give(0, &["通用:GREAT", "通用:10次招募（1回限定）"]);
     t.play(0, "通用:GREAT").expect("play 1");
     drain(&mut t);
-    t.play(0, "通用:10次招募（1回限定）")
-        .expect("play 2");
+    t.play(0, "通用:10次招募（1回限定）").expect("play 2");
     // Look for the [反击] window on the second play.
     let mut declared = false;
     while let Some(p) = t.prompt() {

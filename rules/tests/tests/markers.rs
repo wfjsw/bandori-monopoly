@@ -29,8 +29,7 @@ fn fans(t: &Table, who: usize) -> (i32, i32) {
 /// CHARGE / tempFire writes are kernel-only.
 #[test]
 fn fire_numbers_are_on_the_skill_def() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../skills/skill-personas/src");
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../skills/skill-personas/src");
     let mut offenders = Vec::new();
     let mut declared = 0usize;
     for entry in std::fs::read_dir(&dir).expect("skill-personas/src") {
@@ -135,9 +134,11 @@ fn kernel_actuals_overflow_shape() {
     assert_eq!(got, 0, "cap 1/1 refused the grant");
     assert_eq!(missed, 2, "both pots missed");
     // The caller's clause: missed * 500资金.
-    t.m
-        .world_mut()
-        .gain_money(0, missed * 500, game_core::msg::Msg::new("two_donuts_overflow"));
+    t.m.world_mut().gain_money(
+        0,
+        missed * 500,
+        game_core::msg::Msg::new("two_donuts_overflow"),
+    );
     assert_eq!(t.p(0).money, before + 1000);
 }
 
@@ -155,7 +156,11 @@ fn fans_initial_grant_is_once_per_match() {
     // 丸山彩's +5 face-up); the band clause （1） only deals **face-down** fans
     // to non-Palettes seats. Check the face-down row for the once-flag.
     let t = Table::new(&["丸山彩", "白鹭千圣", "户山香澄"]);
-    assert_eq!(fans(&t, 0).1, 0, "PP character is excluded 「非Pastel✽Palettes角色」");
+    assert_eq!(
+        fans(&t, 0).1,
+        0,
+        "PP character is excluded 「非Pastel✽Palettes角色」"
+    );
     assert_eq!(fans(&t, 1).1, 0, "PP character is excluded");
     assert_eq!(
         fans(&t, 2),

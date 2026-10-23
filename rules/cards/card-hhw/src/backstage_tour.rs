@@ -12,14 +12,19 @@ use alloc::string::String;
 use bandori_std::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const BACKSTAGE_TOUR: CardDef =
-    CardDef::new("HHW:出发！后台之旅！", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const BACKSTAGE_TOUR: CardDef = CardDef::new(
+    "HHW:出发！后台之旅！",
+    &[On::Play("", None, Some(cant_play), play)],
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"出发！后台之旅！"#)
         .raw_name(r#"出发！后台之旅！"#)
         .tags(&[])
         .text(r#"看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金"#)
         // sheet cell F4
-        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]),
+);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBackstageTour.WhyNot` refuses the play when the draw pile and the

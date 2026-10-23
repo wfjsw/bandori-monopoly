@@ -23,7 +23,7 @@
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use game_core::data::{EventData, GroupData, CardData, PersonaData};
+use game_core::data::{CardData, EventData, GroupData, PersonaData};
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -68,9 +68,18 @@ fn main() {
         }
         None => {
             print!("// ===== cards.json =====\n{}", cards_json(&roster.cards));
-            print!("// ===== personas.json =====\n{}", personas_json(&roster.personas));
-            print!("// ===== groups.json =====\n{}", groups_json(&roster.groups));
-            print!("// ===== events.json =====\n{}", events_json(&roster.events));
+            print!(
+                "// ===== personas.json =====\n{}",
+                personas_json(&roster.personas)
+            );
+            print!(
+                "// ===== groups.json =====\n{}",
+                groups_json(&roster.groups)
+            );
+            print!(
+                "// ===== events.json =====\n{}",
+                events_json(&roster.events)
+            );
         }
     }
 }

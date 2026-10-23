@@ -210,7 +210,12 @@ pub fn popipapapipopa_c1_crystals_after(pre: i32) -> i32 {
 }
 
 /// True iff the log matches "add 1 crystal when under the cap, else nothing".
-pub fn popipapapipopa_c1_log_ok(effects: &[Effect], owner: i32, key: u16, pre_crystals: i32) -> bool {
+pub fn popipapapipopa_c1_log_ok(
+    effects: &[Effect],
+    owner: i32,
+    key: u16,
+    pre_crystals: i32,
+) -> bool {
     let after = popipapapipopa_c1_crystals_after(pre_crystals);
     if after == pre_crystals {
         // cap reached: no effect
@@ -344,8 +349,7 @@ pub fn bang_dream_02_pos_is_owned(pos: i32, owned: &[i32], n_owned: usize) -> bo
 /// Exactly one Teleport on this leg (the optional house is a separate
 /// prompt and is not required).
 pub fn bang_dream_02_log_ok(effects: &[Effect], player: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::Teleport { player: p, .. } if p == player)
+    effects.len() == 1 && matches!(effects[0], Effect::Teleport { player: p, .. } if p == player)
 }
 
 /// Mutant: reference wants a GainMoney(1) side-effect the book does not name.

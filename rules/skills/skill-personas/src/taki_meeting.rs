@@ -12,9 +12,10 @@
 //! on the band or the player. 「每回合限一次」 is a latch, which is what the
 //! keyed state is for.
 
-use bandori_std::state_key; use card_sdk::abi::{counter, AbKind, ActionKind};
 use bandori_std::ctx::{self, state, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{counter, AbKind, ActionKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Latch for 「每回合限一次」.
 const USED: &str = "skill.takiMeeting.used";
@@ -26,12 +27,20 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         On::Action(Action::Abnormal("", None, None, on_abnormal)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, reset)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            reset,
+        )),
     ],
 )
-    .silent(&[1, 2, 4])
-    // 「（初始0，上限5）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 5)]);
+.silent(&[1, 2, 4])
+// 「（初始0，上限5）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 0),
+    (bandori_std::fire::FIRE_CAP, 5),
+]);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

@@ -8,8 +8,8 @@
 //!
 //! Counteraction-only (`Normal => false`).
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MASHIRO_PAY: CardDef = CardDef::new(

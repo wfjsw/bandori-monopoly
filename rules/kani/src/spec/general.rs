@@ -181,8 +181,7 @@ pub fn fever_02_amount(pre_amount: i32, x: i32) -> i32 {
 
 /// Exactly one logged effect: the pay-amount rewrite.
 pub fn fever_02_log_ok(effects: &[Effect], expected_to: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::SetPayAmount { to } if to == expected_to)
+    effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == expected_to)
 }
 
 /// MUTANT of [`fever_x`]: off-by-one high.
@@ -561,12 +560,7 @@ pub fn money_is(post: &Snapshot, player: i32, expected: i32) -> bool {
 }
 
 /// Frame: every other player's money is unchanged.
-pub fn others_money_unchanged(
-    pre: &Snapshot,
-    post: &Snapshot,
-    n: i32,
-    except: i32,
-) -> bool {
+pub fn others_money_unchanged(pre: &Snapshot, post: &Snapshot, n: i32, except: i32) -> bool {
     let mut p = 0i32;
     while p < n && p < MAX_PLAYERS as i32 {
         if p != except && pre.money[p as usize] != post.money[p as usize] {

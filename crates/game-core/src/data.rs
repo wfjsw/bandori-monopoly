@@ -291,7 +291,10 @@ pub fn default_rule_param(name: &str) -> i32 {
 /// [`crate::record::MatchSetup`] leaves `rule_params` empty to mean.
 pub fn default_rule_params() -> std::collections::BTreeMap<String, i32> {
     let mut m = std::collections::BTreeMap::new();
-    m.insert("rentUnitMult".to_string(), default_rule_param("rentUnitMult"));
+    m.insert(
+        "rentUnitMult".to_string(),
+        default_rule_param("rentUnitMult"),
+    );
     m
 }
 

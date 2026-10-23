@@ -1,7 +1,7 @@
 //! `MyGO:即使迷茫着` -- C# `CardEvenLost` (MatchHost.cs:6259-6307): [反击] place
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:即使迷茫着`）:
-//! > 即使迷茫着： 
+//! > 即使迷茫着：
 //! >  
 //! > （1）[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。
 //! > （2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。
@@ -9,8 +9,8 @@
 //! this card in play when another player's card hits you; a placed action later
 //! discards it to move as many tiles as your hand size.
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx;
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(
