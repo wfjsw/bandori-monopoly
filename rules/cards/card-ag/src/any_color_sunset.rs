@@ -5,15 +5,20 @@
 //! >  投掷1d6并根据结果获得对应效果: 若为1则立刻获得1500资金，若为2则从弃牌堆中选择一张牌放置到抽牌堆顶，若为3则抽一张牌，若为4则可选择补满火罐或者获得2000资金，若为5则从弃牌堆中选择一张牌加入手牌，若为6则选择1-5中的3个效果触发（若结果严格大于6，则从1开始重新计数）
 //!
 //! 1d6 picks one of five effects (6 = pick three of them).
-//! 
+//!
+//! The 6-branch is **one** multi-select of 3 distinct effects from {1..5}
+//! (「3个效果」 names three effects, not one effect thrice) -- a bitmask
+//! cannot name the same effect twice. The three trigger in ascending face
+//! order (1 before 2 before …): the text specifies no order and a single
+//! multiselect has none, so ascending is the deterministic reading.
+//!
 //! Reviewed 10/23/2026
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use bandori_std::{ctx, filled_msgs};
-use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
+use bandori_std::ctx;
+use card_sdk::{key, CardDef, CardText, Msg, On};
 
 pub const ANY_COLOR_SUNSET: CardDef =
     CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, None, play)]).meta(&card_sdk::meta::CardMeta::new()
@@ -33,31 +38,27 @@ fn play(player_id: i32) -> card_sdk::Asked {
         apply(player_id, k)?;
         return Ok(());
     }
-    // 规则书: 「若为6则选择1-5中的3个效果触发」
-    let mut left: [bool; 5] = [true; 5];
-    for n in 0..3 {
-        let mut options: [Msg; 5] = filled_msgs!(5, opt_key(1));
-        let mut ids: [i32; 5] = [0; 5];
-        let mut len = 0usize;
-        for x in 1..=5 {
-            if left[(x - 1) as usize] {
-                options[len] = Msg::new(opt_key(x));
-                ids[len] = x;
-                len += 1;
-            }
-        }
-        if len == 0 {
-            break;
-        }
-        let pick = ctx::ask_pick(
-            player_id,
-            &Msg::new(key!("any_color_sunset_title")),
-            &Msg::new(key!("any_color_sunset_pick")).i("n", n as i64 + 1),
-            &options[..len],
-        )?;
-        let k = ids[pick.min(len - 1)];
-        left[(k - 1) as usize] = false;
-        apply(player_id, k)?;
+    // 规则书: 「若为6则选择1-5中的3个效果触发」 -- one multi-select of 3 of the
+    // five effects. Distinctness is the multiselect's own shape (a bitmask
+    // cannot name the same effect twice).
+    let options: [Msg; 5] = [
+        Msg::new(opt_key(1)),
+        Msg::new(opt_key(2)),
+        Msg::new(opt_key(3)),
+        Msg::new(opt_key(4)),
+        Msg::new(opt_key(5)),
+    ];
+    let picks = ctx::ask_pick_multi(
+        player_id,
+        &Msg::new(key!("any_color_sunset_title")),
+        &Msg::new(key!("any_color_sunset_pick")),
+        &options,
+        3,
+    )?;
+    // Ascending face order -- see the module doc. The decode already returns
+    // ascending indices; `apply` takes the 1-based effect number.
+    for k in picks {
+        apply(player_id, k as i32 + 1)?;
     }
     Ok(())
 }

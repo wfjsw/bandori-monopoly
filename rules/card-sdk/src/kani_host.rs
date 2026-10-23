@@ -357,6 +357,8 @@ pub enum Op {
     // v89: state flag word + post-commit raise with opaque wire name.
     state_set_flags = 333,
     raise_after = 334,
+    // v97: multi-select choice -- how many of the pushed options the ask wants.
+    opt_count = 335,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

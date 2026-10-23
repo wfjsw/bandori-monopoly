@@ -392,6 +392,27 @@ function clampAnswer(p: MatchPrompt, v: number): number {
   return Math.min(Math.max(0, v), Math.max(0, max));
 }
 
+/** A `"multi"` answer is a bitmask naming exactly `count` options out of
+ *  `0..options.len()` -- never an option index, so it must not be clamped.
+ *  Mirrors the engine's `valid_multi_mask` (`engine/cx.rs`). */
+function validMultiMask(p: MatchPrompt, v: number): boolean {
+  const n = Math.min(p.options.length, 31);
+  if (v < 0 || n <= 0 || (v >>> n) !== 0) return false;
+  let ones = 0;
+  for (let x = v; x; x >>>= 1) ones += x & 1;
+  return ones === p.count;
+}
+
+/** A usable multi mask: the prompt's fallback (the engine sets a valid one --
+ *  the first `count` options), else those first `count` bits rebuilt. */
+function multiMask(p: MatchPrompt): number {
+  if (validMultiMask(p, p.fallback)) return p.fallback;
+  const want = Math.max(0, Math.min(p.count, Math.min(p.options.length, 31)));
+  let mask = 0;
+  for (let k = 0; k < want; k++) mask |= 1 << k;
+  return mask;
+}
+
 /** Is this prompt one of the engine's yes/no offers with a known policy? */
 function offerKind(p: MatchPrompt): "buy" | "build" | "force_buy" | "" {
   const title = p.title.k ?? "";
@@ -422,6 +443,9 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
   if (ai) {
     if (p.kind === "mortgage" || p.kind === "pick") return { act: "answer", prompt: p.id, cards: ai.picked };
     if (p.kind === "auction") return auctionCommand(view, p, ai.worth, ctx, "bot", params);
+    // A multi answer is a bitmask; clamping it to an option index would
+    // destroy e.g. `0b0111`. Take the precomputed mask when it is valid.
+    if (p.kind === "multi") return { act: "answer", prompt: p.id, value: validMultiMask(p, ai.answer) ? ai.answer : multiMask(p) };
     return { act: "answer", prompt: p.id, value: clampAnswer(p, ai.answer) };
   }
 
@@ -432,6 +456,9 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
       return { act: "answer", prompt: p.id, cards: autoMortgage(view.state, tiles, p.items, p.bid) };
     case "pick":
       return { act: "answer", prompt: p.id, cards: p.items.slice(0, Math.max(0, p.count)) };
+    case "multi":
+      // The engine's AI answer is the fallback mask (the first `count`).
+      return { act: "answer", prompt: p.id, value: multiMask(p) };
     case "tile": {
       const t = p.items.map(Number);
       const pickIdx =
@@ -510,6 +537,17 @@ function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Comman
       const cards: string[] = [];
       while (rest.length && cards.length < n) cards.push(rest.splice(Math.floor(random() * rest.length) % rest.length, 1)[0]);
       return { act: "answer", prompt: p.id, cards };
+    }
+    case "multi": {
+      // A random valid mask: `count` distinct options (mirror
+      // `chaos_multi_pick` in `engine/cx.rs`).
+      const n = Math.min(p.options.length, 31);
+      const want = Math.max(0, Math.min(p.count, n));
+      if (want <= 0) return { act: "answer", prompt: p.id, value: multiMask(p) };
+      const pool = Array.from({ length: n }, (_, i) => i);
+      let mask = 0;
+      for (let k = 0; k < want; k++) mask |= 1 << pool.splice(Math.floor(random() * pool.length) % pool.length, 1)[0];
+      return { act: "answer", prompt: p.id, value: mask };
     }
     case "tile": {
       // Never "none" while a target exists.

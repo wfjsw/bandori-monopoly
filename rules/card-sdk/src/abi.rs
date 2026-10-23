@@ -796,7 +796,14 @@ use std::borrow::Cow;
 ///      `PaySplitAdd` and `PaySplitMul` (规则书 支付阶段 3 「支付计算后」).
 ///      Source-only for the wire: `ManifestOn` is unchanged. SAVE_VERSION /
 ///      RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 96;
+/// v97: **multi-select choice**. New import `ruleset_opt_count(n)` pushes how
+///      many of the following options the ask wants; `PromptKind::ChoiceMulti
+///      = 7` (wire `"multi"`) asks for exactly that many distinct options. The
+///      ask answer is a **bitmask** (bit *i* = option *i*) in the same single
+///      `i32` the answer log and `ruleset_ask` already carry -- no wire or
+///      answer-log shape change. Guest API: `ctx::ask_pick_multi`. SAVE_VERSION
+///      / RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 97;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1293,6 +1300,11 @@ pub enum PromptKind {
     /// Pick a tile the player then **walks** to (`ask_tile_walk`): answered
     /// like `Tile`, but the board lights the path as well as the tile.
     TileWalk = 6,
+    /// Exactly `count` of the pushed options (`ask_pick_multi`). The answer is
+    /// a **bitmask** (bit *i* = option *i*), carried in the single `i32` the
+    /// answer log and `ruleset_ask` already speak. Distinctness is the mask's
+    /// own shape -- the same bit cannot be set twice.
+    ChoiceMulti = 7,
 }
 
 impl PromptKind {
@@ -1305,6 +1317,7 @@ impl PromptKind {
             4 => Self::Card,
             5 => Self::TileId,
             6 => Self::TileWalk,
+            7 => Self::ChoiceMulti,
             _ => return None,
         })
     }
@@ -1320,6 +1333,7 @@ impl PromptKind {
             // Same UI as `Tile` -- only the recorded answer differs.
             Self::TileId => "tile",
             Self::TileWalk => "tile",
+            Self::ChoiceMulti => "multi",
         }
     }
 }

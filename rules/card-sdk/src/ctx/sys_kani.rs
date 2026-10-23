@@ -733,6 +733,10 @@ pub fn opt_ai(ai: i32) {
     kani_host::call_unit(Op::opt_ai, [ai, 0, 0, 0, 0, 0]);
 }
 
+pub fn opt_count(count: i32) {
+    kani_host::call_unit(Op::opt_count, [count, 0, 0, 0, 0, 0]);
+}
+
 pub fn ask(
     kind: i32,
     player_id: i32,

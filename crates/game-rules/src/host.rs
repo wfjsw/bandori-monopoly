@@ -319,6 +319,9 @@ pub struct Prompt {
     pub prices: Vec<i32>,
     /// The AI's preferred index on a tile ask (`opt_ai`); -1 = let the host fill.
     pub ai_hint: i32,
+    /// How many of the options a multi-select wants (`opt_count` /
+    /// `ask_pick_multi`). 0 = unused (every other prompt kind).
+    pub count: i32,
 }
 
 /// Engine work a card effect needs mid-run (it may open counteraction windows or
@@ -2490,6 +2493,8 @@ pub struct HostState<W, R = DefaultRules> {
     pub prices: Vec<i32>,
     /// The AI's preferred index for the next tile ask (`opt_ai`); -1 = unset.
     pub ai_hint: i32,
+    /// How many options the next multi-select ask wants (`opt_count`); 0 = unset.
+    pub count: i32,
     pub asked: Option<Prompt>,
     pub host_request: Option<HostRequest>,
     pub depth: u32,
@@ -2539,6 +2544,7 @@ impl<W, R: RulesHandle> HostState<W, R> {
             options: vec![],
             prices: vec![],
             ai_hint: -1,
+            count: 0,
             asked: None,
             host_request: None,
             depth,
@@ -4597,6 +4603,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "opt_ai", |mut c: C<W>, ai: i32| -> Result<(), Error> {
         hostfns::opt_ai(&mut c, ai).map_err(HostErr::into_err)
     })?;
+    l.func_wrap(m, "opt_count", |mut c: C<W>, n: i32| -> Result<(), Error> {
+        hostfns::opt_count(&mut c, n).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "ask",
@@ -5142,6 +5151,7 @@ impl HostState<NullWorld> {
             options: vec![],
             prices: vec![],
             ai_hint: -1,
+            count: 0,
             asked: None,
             host_request: None,
             depth: 0,

@@ -6878,6 +6878,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
         answer_slot: _,
         prices,
         ai_hint,
+        count,
     } = p;
     match kind {
         PromptKind::YesNo => Ask::choice(
@@ -6898,6 +6899,24 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 })
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
+        }
+        PromptKind::ChoiceMulti => {
+            let labels: Vec<Msg> = options
+                .into_iter()
+                .map(|o| match o {
+                    PromptOption::Str(m) => m,
+                    PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
+                    PromptOption::Tile { label, .. } => label,
+                })
+                .collect();
+            let n = labels.len().min(31) as i32;
+            // Guest 0 is treated as 1; anything past the option list clamps.
+            let want = count.clamp(1, n.max(1));
+            let mut ask = Ask::multi(players, title, text, labels, want, 15.0);
+            if ai_hint >= 0 {
+                ask = ask.with_ai(|_| ai_hint);
+            }
+            ask
         }
         PromptKind::Tile | PromptKind::TileId | PromptKind::TileWalk => {
             // Bare-Int options keep the auto `ask.tileOption` labels so

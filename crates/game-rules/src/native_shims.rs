@@ -296,6 +296,8 @@ pub trait HostOps {
     fn op_opt_price(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_opt_ai`
     fn op_opt_ai(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_opt_count`
+    fn op_opt_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_ask`
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_kind` (p, n) -- two-call out-buffer spelling
@@ -1200,6 +1202,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_opt_ai(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::opt_ai(self, a[0])?;
+        Ok(0)
+    }
+
+    fn op_opt_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::opt_count(self, a[0])?;
         Ok(0)
     }
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -3210,6 +3217,14 @@ pub unsafe extern "C-unwind" fn ruleset_opt_price(price: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_opt_ai(ai: i32) {
     with_host(|h| match h.op_opt_ai([ai, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_opt_count(n: i32) {
+    with_host(|h| match h.op_opt_count([n, 0, 0, 0, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })

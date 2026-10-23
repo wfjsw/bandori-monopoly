@@ -170,8 +170,9 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
           {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
+          {p.kind === "multi" && <MultiOptions p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
           {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? namesOf(view.state).playerId(p.bidder) : ""} answer={answer} auto={auto} />}
-          {p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "pick" && p.kind !== "auction" && !returnsGroup && (
+          {p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "pick" && p.kind !== "multi" && p.kind !== "auction" && !returnsGroup && (
             <Options p={p} answer={answer} auto={auto} names={namesOf(view.state)} />
           )}
         </div>
@@ -490,6 +491,36 @@ function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto
   );
 }
 
+/**
+ * `multi`: exactly `count` of the labeled effects, answered as a bitmask in
+ * `value` (bit *i* = option *i*). The options are effect labels, not cards --
+ * a checklist of text rows, never a `CardGrid`.
+ */
+function MultiOptions({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
+  const [picked, setPicked] = useState<number[]>([]);
+  const toggle = (k: number) => setPicked(picked.includes(k) ? picked.filter((x) => x !== k) : picked.length < p.count ? [...picked, k] : picked);
+  return (
+    <>
+      <div className={s.checks}>
+        {p.options.map((o, i) => (
+          <label key={i} className={s.check}>
+            <input type="checkbox" disabled={auto} checked={picked.includes(i)} onChange={() => toggle(i)} />
+            {fmtMsg(o, names)}
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        className={cx(s.opt, s.optMain, s.cardConfirm)}
+        disabled={auto || picked.length !== p.count}
+        onClick={() => void answer({ value: picked.reduce((a, k) => a | (1 << k), 0) })}
+      >
+        <span className={s.confirmLabel}>{tr("prompt.pickCards", { n: picked.length, total: p.count })}</span>
+      </button>
+    </>
+  );
+}
+
 /** Prompts whose options are cards: they render as card tiles (or the
  *  multi-select grid), never as text-only buttons. */
 export function isCardChoice(p: MatchPrompt): boolean {
@@ -497,7 +528,9 @@ export function isCardChoice(p: MatchPrompt): boolean {
   // source labels together, including the fire cost, instead of presenting
   // only the card as a large card-picking panel.
   if (p.text.k === "ask.counteract.move_extension" || p.text.k === "ask.counteract.move_extension_payment") return false;
-  return p.kind === "pick" || (p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "auction" && p.options.some((o) => optionCard(o) !== null));
+  // `"multi"` names effect labels; a `{{card}}` argument on one is decoration,
+  // not "play this card".
+  return p.kind === "pick" || (p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "multi" && p.kind !== "auction" && p.options.some((o) => optionCard(o) !== null));
 }
 
 /** Cards laid out like the hand, but larger, with a detail panel: hovering

@@ -2338,6 +2338,13 @@ pub fn opt_ai<C: HostCtx>(c: &mut C, ai: i32) -> Result<(), HostErr> {
     Ok(())
 }
 
+/// How many of the pushed options a multi-select ask wants (`ask_pick_multi`).
+/// Pushed before `ask`, like `opt_price` / `opt_ai`.
+pub fn opt_count<C: HostCtx>(c: &mut C, n: i32) -> Result<(), HostErr> {
+    c.st_mut().count = n;
+    Ok(())
+}
+
 pub fn ask<C: HostCtx>(
     c: &mut C,
     kind: i32,
@@ -2351,7 +2358,7 @@ pub fn ask<C: HostCtx>(
         .ok_or_else(|| HostErr::trap(format!("bad prompt kind {kind}")))?;
     let title = guest_msg(c, tp, tl)?;
     let text = guest_msg(c, xp, xl)?;
-    let (options, prices, ai_hint, answer_slot) = {
+    let (options, prices, ai_hint, count, answer_slot) = {
         let st = c.st_mut();
         let options = std::mem::take(&mut st.options);
         if kind != PromptKind::YesNo && options.is_empty() {
@@ -2362,7 +2369,8 @@ pub fn ask<C: HostCtx>(
         }
         let prices = std::mem::take(&mut st.prices);
         let ai_hint = std::mem::replace(&mut st.ai_hint, -1);
-        (options, prices, ai_hint, st.next_answer)
+        let count = std::mem::replace(&mut st.count, 0);
+        (options, prices, ai_hint, count, st.next_answer)
     };
     // Like `pay`: the pause is the sentinel as the return value, so
     // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
@@ -2379,6 +2387,7 @@ pub fn ask<C: HostCtx>(
             answer_slot,
             prices,
             ai_hint,
+            count,
         },
     )
 }
