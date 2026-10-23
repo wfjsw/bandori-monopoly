@@ -814,6 +814,29 @@ when the mark can be the source of truth; where the rule needs a value the
 mark does not carry (a counterpart player, an engine-owned return tile), keep
 that storage and add the mark as the displayed record.
 
+## Activation arguments (`declare`, ABI v98) + cross-card applicability
+
+Two entry-level mechanisms, designed together — see **`docs/ACTIVATION.md`**.
+
+* **`On::….declare(fn(i32) -> Declared)`** collects a decision *before* the
+  activation commits and hands the result to the body as its second parameter
+  (`fn(i32, i32) -> Asked`). `Declared = Result<Option<i32>, Prompt>`;
+  `Ok(None)` declines and the entry does not fire at all. This is the only
+  correct home for a choice that is part of *declaring* an activation: the
+  point of no return is `hand.remove` (`play_from_hand` /
+  `build_round`), and a body ask runs after it. Generalises
+  `COUNTERACT_MOVE_EXTENSION` from one hard-coded tag to a per-entry
+  collector.
+* **`ctx::can_fire(player_id, id, kind, trigger)`** asks whether *another*
+  card's entry would admit — condition + residual guard / play gate through
+  `admits`, body never run, probe-mode (never prompts). `ctx::card_replayable`
+  is the `On::Play` spelling of it. Callable from a residual guard, from a
+  `declare`, and from a body.
+
+A card that wants another card's *effect* still uses `ctx::invoke_skill` /
+  `ctx::play_card` / `ctx::send` — `can_fire` is the query half beside them,
+  not a fourth effect seam.
+
 ## Cross-card messages (ABI v51)
 
 `ctx::send(Target, name, &Message)` is the generic cross-card channel.
