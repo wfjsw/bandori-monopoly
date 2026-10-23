@@ -23,7 +23,6 @@ pub const ANY_COLOR_SUNSET: CardDef =
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6并根据结果获得对应效果」; 「若结果严格大于6，则从1开始重新计数」
-    // -- C# `((H.Roll(i, 1, 6) - 1) % 6) + 1`.
     let raw = ctx::roll(player_id, 1, 6);
     let k = (raw - 1).rem_euclid(6) + 1;
     if k <= 5 {
@@ -34,24 +33,26 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若为6则选择1-5中的3个效果触发」
     let mut left: [bool; 5] = [true; 5];
     for n in 0..3 {
-        let mut options: Vec<Msg> = Vec::new();
-        let mut ids: Vec<i32> = Vec::new();
+        let mut options: [Msg; 5] = bandori_std::filled_msgs!(5, opt_key(1));
+        let mut ids: [i32; 5] = [0; 5];
+        let mut len = 0usize;
         for x in 1..=5 {
             if left[(x - 1) as usize] {
-                options.push(Msg::new(opt_key(x)));
-                ids.push(x);
+                options[len] = Msg::new(opt_key(x));
+                ids[len] = x;
+                len += 1;
             }
         }
-        if ids.is_empty() {
+        if len == 0 {
             break;
         }
         let pick = ctx::ask_pick(
             player_id,
             &Msg::new(key!("any_color_sunset_title")),
             &Msg::new(key!("any_color_sunset_pick")).i("n", n as i64 + 1),
-            &options,
+            &options[..len],
         )?;
-        let k = ids[pick.min(ids.len() - 1)];
+        let k = ids[pick.min(len - 1)];
         left[(k - 1) as usize] = false;
         apply(player_id, k)?;
     }

@@ -28,6 +28,19 @@ use card_sdk::ctx::{
 use card_sdk::msg::Msg;
 use card_sdk::Prompt;
 
+/// `[Msg; N]` with every slot `Msg::new(key)`: a fixed-size option buffer for
+/// allocation-free prompt lists (fill a prefix, pass `&buf[..len]`).
+#[macro_export]
+macro_rules! filled_msgs {
+    ($n:expr, $key:expr) => {{
+        let key: &str = $key;
+        ::core::array::from_fn::<$crate::__Msg, { $n }, _>(|_| $crate::__Msg::new(key))
+    }};
+}
+
+#[doc(hidden)]
+pub use card_sdk::msg::Msg as __Msg;
+
 /// Named-counter wire names this ruleset's cards use. The strings are ABI
 /// codes (the host matches on them); the *names* are game vocabulary.
 /// (Also kept as `card_sdk::abi::counter` so the wire module stays self-contained.)
