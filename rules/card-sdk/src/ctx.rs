@@ -2022,6 +2022,82 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
     }
 }
 
+/// Pick exactly `count` distinct options in one multi-select prompt. The answer
+/// is a bitmask (bit *i* = option *i*); the chosen indices come back
+/// **ascending**. `count` is clamped to `1..=options.len()`.
+///
+/// The decode never trusts the host: a mask with too few bits is padded with
+/// the lowest unset indices, too many keeps the lowest `count` set bits, so
+/// the result is always exactly `count` distinct in-range indices -- including
+/// under Kani's symbolic answers.
+pub fn ask_pick_multi(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    options: &[Msg],
+    count: u32,
+) -> Result<Vec<usize>, Prompt> {
+    let n = options.len().min(31);
+    let want = (count as usize).clamp(1, n.max(1));
+    #[cfg(kani)]
+    {
+        // Same bounded zero-loop push as `ask_pick`; 5 options (this card's
+        // widest multi) sit well under the 16-slot cap, so the existing
+        // proofs keep compiling.
+        const CAP: usize = 16;
+        let mut i = 0usize;
+        while i < CAP {
+            if let Some(o) = options.get(i) {
+                let (p, l) = mj(o);
+                unsafe { sys::opt_str(p, l) }
+            }
+            i += 1;
+        }
+        if options.len() > CAP {
+            kani::assert(false, "ask_pick_multi: more than 16 options under Kani");
+        }
+    }
+    #[cfg(not(kani))]
+    {
+        for o in options {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+    }
+    unsafe { sys::opt_count(want as i32) }
+    let mask = ask_raw(PromptKind::ChoiceMulti, player_id, title, text)?;
+    Ok(decode_multi_mask(mask, n, want))
+}
+
+/// Turn a multi-select answer mask into exactly `count` distinct indices in
+/// `0..n`, ascending. Pads short masks with the lowest unset indices; keeps
+/// the lowest `count` bits of a fat mask. Host answers that are negative or
+/// name bits past `n` are treated as empty and padded.
+fn decode_multi_mask(mask: i32, n: usize, count: usize) -> Vec<usize> {
+    let count = count.min(n);
+    let mut picked: Vec<usize> = Vec::with_capacity(count);
+    let bits = if mask < 0 { 0u32 } else { mask as u32 };
+    for i in 0..n {
+        if picked.len() >= count {
+            break;
+        }
+        if bits & (1u32 << i) != 0 {
+            picked.push(i);
+        }
+    }
+    // Pad with the lowest unset indices so the result is always `count` long.
+    for i in 0..n {
+        if picked.len() >= count {
+            break;
+        }
+        if bits & (1u32 << i) == 0 {
+            picked.push(i);
+        }
+    }
+    picked.sort_unstable();
+    picked
+}
+
 /// A yes/no ask.
 pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> Result<bool, Prompt> {
     Ok(ask_raw(PromptKind::YesNo, player_id, title, text)? == 0)

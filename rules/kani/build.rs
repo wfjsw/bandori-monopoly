@@ -152,6 +152,7 @@ const ARRAY_OPS: &[&str] = &[
     "opt_tile",
     "opt_price",
     "opt_ai",
+    "opt_count",
     "ask",
     "trig_player",
     "trig_target",

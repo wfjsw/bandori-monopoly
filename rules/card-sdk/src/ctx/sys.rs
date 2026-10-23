@@ -942,6 +942,12 @@ mod abi {
             link_name = "ruleset_opt_ai"
         )]
         pub fn opt_ai(ai: i32);
+        // v97: multi-select choice -- how many of the pushed options the ask wants.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_opt_count"
+        )]
+        pub fn opt_count(count: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_ask"
