@@ -770,12 +770,12 @@ impl Table {
             .insert(key.into(), v);
     }
 
-    /// Fire pots: `value` held, `max` cap.
+    /// Fire pots: `value` held, `max` cap. Arranges the held-token row
+    /// (`name = "charge"`, the persona-skill counter) directly.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
-        let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(bandori_std::state_key::CHARGE, value);
-        let min = p.state_min(bandori_std::state_key::CHARGE);
-        p.state_set_bounds(bandori_std::state_key::CHARGE, min, max);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, bandori_std::fire::KEY, value, -1, max);
     }
 
     /// Drive the fire kernel's gain policy (`bandori_std::fire::gain_clamped`,
@@ -783,12 +783,11 @@ impl Table {
     /// a dumb add -- the card implementation polices 「不能超过持有上限」.
     /// Returns how many landed.
     pub fn gain_fire(&mut self, who: usize, n: i32) -> i32 {
-        let p = &mut self.m.world_mut().st.players[who];
-        let have = p.state_get(bandori_std::state_key::CHARGE);
-        let cap = p.state_max(bandori_std::state_key::CHARGE);
+        let have = self.m.world().tok(who as i32, bandori_std::fire::KEY);
+        let cap = self.m.world().tok_max(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::gain_clamped(have, cap, n);
         if want > 0 {
-            p.state_add(bandori_std::state_key::CHARGE, want);
+            self.m.world_mut().gain_marker(who as i32, bandori_std::fire::KEY, want);
         }
         want
     }
@@ -800,12 +799,13 @@ impl Table {
         let cap = self
             .m
             .world_mut()
-            .add_marker_max(who as i32, bandori_std::state_key::CHARGE, n);
-        let p = &mut self.m.world_mut().st.players[who];
-        let have = p.state_get(bandori_std::state_key::CHARGE);
+            .add_marker_max(who as i32, bandori_std::fire::KEY, n);
+        let have = self.m.world().tok(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::pull_under_cap(have, cap);
         if have != want {
-            p.state_set(bandori_std::state_key::CHARGE, want);
+            self.m
+                .world_mut()
+                .set_tok(who as i32, bandori_std::fire::KEY, want, -1, 0);
         }
         cap
     }
@@ -1049,7 +1049,15 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, bandori_std::state_key::CHARGE)
+        // Fire is a held token of the persona-skill instance (MARKERS.md §7).
+        self.token(who, bandori_std::fire::KEY)
+    }
+
+    /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
+    pub fn charge_max(&self, who: usize) -> i32 {
+        self.m
+            .world()
+            .tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     /// A standing tile prop (`World::tile_prop`). Used to read per-player

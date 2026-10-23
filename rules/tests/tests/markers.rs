@@ -85,11 +85,11 @@ fn two_in_one_matches_the_pair_defs() {
     t.give(0, &["Sumimi:Sumimi是二人一体的"]);
     t.play(0, "Sumimi:Sumimi是二人一体的").expect("swap");
     assert_eq!(t.charge(0), 1, "mana 初始1");
-    assert_eq!(t.state_var(0, "charge").max, 2, "mana 上限2");
+    assert_eq!(t.charge_max(0), 2, "mana 上限2");
     t.give(0, &["Sumimi:Sumimi是二人一体的"]);
     t.play(0, "Sumimi:Sumimi是二人一体的").expect("swap back");
     assert_eq!(t.charge(0), 2, "hina 初始2");
-    assert_eq!(t.state_var(0, "charge").max, 2, "hina 上限2");
+    assert_eq!(t.charge_max(0), 2, "hina 上限2");
 }
 
 // =====================================================================
@@ -200,8 +200,8 @@ fn fire_regime_fill_drain_burn() {
     assert_eq!(got, 3, "fill_to_cap lands the room under the cap");
     assert_eq!(t.charge(0), 4);
     // drain 1 / burn_all: the spend path is `fire::regime::{drain,burn_all}` →
-    // `spend_charge`. Pin the storage fold here (a dumb value op).
-    t.m.world_mut().st.players[0].state_add("charge", -1);
+    // the pool spend verb. Pin the storage fold here (a dumb value op).
+    t.m.world_mut().set_tok(0, bandori_std::fire::KEY, 3, -1, 4);
     assert_eq!(t.charge(0), 3, "drain 1");
     t.set_fire(0, 0, 4);
     assert_eq!(t.charge(0), 0, "burn_all");
