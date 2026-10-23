@@ -10,10 +10,13 @@ import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
 import { bandLogo, charArt } from "./assets";
 import { cardFaceTitle } from "./cardFace";
-import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile } from "./types";
+import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile, Block } from "./types";
 
 /** Build-exported presentation fields (empty entries omitted). */
-const display = displayJson as DisplayFile;
+// JSON modules widen `t: "label"` to `t: string`, so the discriminated
+// `Block` union does not line up with the inferred shape; the export is
+// generated from `CardText` and matches `DisplayFile` at runtime.
+const display = displayJson as unknown as DisplayFile;
 
 /**
  * Current rules-book version, client-owned. Drives the rules NEW badge
@@ -169,6 +172,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       // build-time copy. Prefer it, but never blank a body the roster has.
       text: d.text ?? c.text ?? "",
       rawName: d.rawName ?? "",
+      ...(d.body ? { body: d.body } : {}),
       ...(d.counterReason ? { counterReason: d.counterReason } : {}),
     };
   });
@@ -202,6 +206,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       ...e,
       text: d.text ?? e.text ?? "",
       name: d.name ?? e.name ?? "",
+      ...(d.body ? { body: d.body } : {}),
     };
   });
   const homeLines = j("home_lines.json").personas ?? [];
@@ -276,6 +281,17 @@ export function cardText(id: string): string {
   const sk = skillCard(id);
   if (sk) return sk.text;
   return D.event(id.startsWith("event:") ? id.slice(6) : id)?.text ?? "";
+}
+
+/** The effect text of a card id as structured sections / bulletpoints, when
+ *  the display export carried them (cards and events do; skill stand-ins and
+ *  persona / group bodies do not and fall back to `parse(cardText(id))`). */
+export function cardBody(id: string): Block[] | undefined {
+  if (!id || !D) return undefined;
+  const c = D.card(id);
+  if (c?.body) return c.body;
+  const ev = D.event(id.startsWith("event:") ? id.slice(6) : id);
+  return ev?.body;
 }
 
 /** Why a [反击] card may be declared: its own trigger-condition clause

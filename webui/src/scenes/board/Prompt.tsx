@@ -8,7 +8,7 @@
 import { useRef, useState } from "react";
 import { cardArt } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D, cardTitle, cardText, cardColor, cardCounterReason } from "../../core/data";
+import { D, cardTitle, cardText, cardBody, cardColor, cardCounterReason } from "../../core/data";
 import { n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
 import { useCloseWhen, useMountEffect } from "../../hooks/mount";
@@ -146,7 +146,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
                 </div>
                 <div className={s.dTitle}>{cardTitle(cid)}</div>
                 {!!c?.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-                <div className={s.dText}><SkillBody text={cardText(cid)} /></div>
+                <div className={s.dText}><SkillBody blocks={cardBody(cid)} text={cardText(cid)} /></div>
                 <button type="button" className={s.dMore} onClick={() => showCard(cid)}>{tr("prompt.cardDetail")}</button>
               </div>
             );
@@ -532,7 +532,7 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
             <div className={s.dArt} style={{ borderColor: bandColor(c.group) }}><img src={cardArt(id)} alt="" /></div>
             <div className={s.dTitle}>{cardTitle(id)}</div>
             {!!c.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-            <div className={s.dText}><SkillBody text={c.text} /></div>
+            <div className={s.dText}><SkillBody blocks={c.body} text={c.text} /></div>
             <button type="button" className={s.dMore} onClick={() => showCard(id)}>{tr("prompt.cardDetail")}</button>
           </>
         ) : <div className={s.dEmpty}>{tr("prompt.cardHover")}</div>}
