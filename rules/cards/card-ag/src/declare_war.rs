@@ -1,4 +1,4 @@
-//! `AG:宣战布告` -- C# `CardDeclareWar` (MatchHost.cs:921-955):
+//! `AG:宣战布告`
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:宣战布告`）:
 //! > 宣战布告：

@@ -1,4 +1,4 @@
-//! `AG:绯红之魂` -- C# `CardCrimsonSoul` (MatchHost.cs:1583-1680):
+//! `AG:绯红之魂` 
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:绯红之魂`）:
 //! > 绯红之魂：
@@ -15,7 +15,7 @@
 //! > （3）此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。
 //!
 //! place with N crystals; spend a crystal to cut a payment by 1,000.
-//! 
+//!
 //! Reviewed 10/23/2026
 
 use bandori_std::ctx::{self, trigger};
@@ -53,7 +53,8 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
 )
 // TODO:  Bad looking API. 
 .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])
-.props(&[(card_sdk::abi::prop::EST_COST, 500)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::EST_COST, 500)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"绯红之魂"#)
         .raw_name(r#"绯红之魂"#)
         .tags(&[r#"手"#, r#"反击"#, r#"持续"#])
@@ -97,7 +98,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书[持续]（1）: 「[拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次
-/// [消耗]或[支付]金额减少1000」 
+/// [消耗]或[支付]金额减少1000」
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     // C# `H.AskYes(Seat, CardName, "要付 …：移除 1 个 [奇迹水晶] 让这次 −1,000 吗？…", r, p.amount >= 800)`.
@@ -199,7 +200,6 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(why).player_id("who", player_id));
     Ok(())
 }
-
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]

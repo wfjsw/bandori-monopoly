@@ -1,4 +1,4 @@
-//! `AG:无论是何种颜色的夕阳` -- C# `CardAnyColorSunset` (MatchHost.cs:1198-1285):
+//! `AG:无论是何种颜色的夕阳` 
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:无论是何种颜色的夕阳`）:
 //! > 无论是何种颜色的夕阳：
@@ -18,7 +18,7 @@ pub const ANY_COLOR_SUNSET: CardDef =
     CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, None, play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"无论是何种颜色的夕阳"#)
         .raw_name(r#"无论是何种颜色的夕阳"#)
-        .tags(&[])
+        .tags(&[r#"手"#])
         .text(r#"投掷1d6并根据结果获得对应效果: 若为1则立刻获得1500资金，若为2则从弃牌堆中选择一张牌放置到抽牌堆顶，若为3则抽一张牌，若为4则可选择补满火罐或者获得2000资金，若为5则从弃牌堆中选择一张牌加入手牌，若为6则选择1-5中的3个效果触发（若结果严格大于6，则从1开始重新计数）"#)
         // sheet cell C8
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
