@@ -44,6 +44,7 @@ pub mod abi;
 pub mod meta;
 pub mod msg;
 pub mod payload;
+pub mod text;
 
 /// Generic interned-name table (`u16` ids). Under `cfg(kani)` the ctx boundary
 /// interns every `&str` so the symbolic host never runs `memcmp`. Game
@@ -81,6 +82,9 @@ pub mod kinds;
 
 pub use kinds::{Action, ActionEntry, Filter, FilterEntry, FilterShape, KindInfo};
 pub use msg::Msg;
+pub use text::{
+    it, it_sub, items, para, sec, steps, CardText, TextBlock, TextItem, TextPiece, TextSection,
+};
 
 /// A locale key the client resolves (`key!` / `err.*` / `log.*` / `counter.*`).
 pub use abi::MsgKey;

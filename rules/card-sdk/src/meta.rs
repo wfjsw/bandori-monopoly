@@ -19,19 +19,23 @@ use alloc::string::{String, ToString};
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
 use alloc::vec::Vec;
 
+use crate::text::CardText;
+
 /// Authoring: one card's data-set metadata -- the row the deck builder, gallery
 /// and home screen read. Generic shape: the fields every roster row shares,
 /// plus a key/value map for game-specific slots (this game: `band`, `owner`).
 ///
-/// Multi-line CJK text is a plain (preferably raw) `&'static str` -- byte-exact
-/// newlines, full-width punctuation and trailing spaces round-trip untouched.
+/// Multi-line CJK text is a [`CardText`] -- sections and bulletpoints as data,
+/// not structure encoded in a flat string. The prose inside it is a plain
+/// (preferably raw) `&'static str` -- byte-exact newlines, full-width
+/// punctuation and trailing spaces round-trip untouched.
 ///
 /// ```ignore
 /// pub const CARD: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[...])
 ///     .meta(&CardMeta::new()
 ///         .name("Sumimi不会解散哦") // sheet cell B2
 ///         .raw_name("Sumimi不会解散哦")
-///         .text("当你本回合未进行过抵押/赎回操作且…")
+///         .text(CardText::para("当你本回合未进行过抵押/赎回操作且…"))
 ///         .tags(&["手"])
 ///         .fields(&[("group", "Sumimi"), ("owner", "")]));
 /// ```
@@ -46,9 +50,11 @@ pub struct CardMeta {
     /// character prefix the display name drops. Display-only: exported to
     /// `display.json`, not emitted on [`MetaRow`].
     pub raw_name: &'static str,
-    /// Rule text (the `text` column). Display-only: exported to
-    /// `display.json`, not emitted on [`MetaRow`].
-    pub text: &'static str,
+    /// Rule text (the `text` column): sections and bulletpoints as data.
+    /// Emitted on [`MetaRow`] in its `flat()` rulebook-string form (the ruleset
+    /// queries it at runtime, `card_text_mentions` / 「效果包含…」), and exported
+    /// to `display.json` both flat and as structured `body` blocks.
+    pub text: CardText,
     /// Deck-building tags (「手」 / 「衍生」 / ...).
     pub tags: &'static [&'static str],
     /// Derived / token card (not in the physical deck pool).
@@ -63,7 +69,7 @@ impl CardMeta {
         Self {
             name: "",
             raw_name: "",
-            text: "",
+            text: CardText::EMPTY,
             tags: &[],
             derived: false,
             fields: &[],
@@ -80,7 +86,7 @@ impl CardMeta {
         self
     }
 
-    pub const fn text(mut self, text: &'static str) -> Self {
+    pub const fn text(mut self, text: CardText) -> Self {
         self.text = text;
         self
     }
@@ -109,17 +115,18 @@ impl CardMeta {
             .unwrap_or("")
     }
 
-    /// Wire form, tagged `kind = "card"`. `text` is emitted: the ruleset
-    /// queries it at runtime (`card_text_mentions`, 「效果包含…」), so it is a
-    /// rule input as well as display. `raw_name` is display-only and remains
-    /// on the def for `display.json` (`docs/DISPLAY.md`).
+    /// Wire form, tagged `kind = "card"`. `text` is emitted in its `flat()`
+    /// rulebook-string form: the ruleset queries it at runtime
+    /// (`card_text_mentions`, 「效果包含…」), so it is a rule input as well as
+    /// display. `raw_name` is display-only and remains on the def for
+    /// `display.json` (`docs/DISPLAY.md`).
     pub fn to_row(&self, id: &str, ordinal: i32) -> MetaRow {
         MetaRow {
             kind: "card".to_string(),
             ordinal,
             id: id.to_string(),
             name: self.name.to_string(),
-            text: self.text.to_string(),
+            text: self.text.flat(),
             tags: self.tags.iter().map(|s| (*s).to_string()).collect(),
             derived: self.derived,
             fields: self
