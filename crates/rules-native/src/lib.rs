@@ -23,13 +23,13 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
 use card_sdk::abi::{export, ManifestOn, ManifestTileText, OnKind, ABI_VERSION};
-use game_rules::tile_class;
 use card_sdk::On;
-use game_rules::{
-    Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome,
-    RuleError, RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
-};
 use game_rules::hostfns;
+use game_rules::tile_class;
+use game_rules::{
+    Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome, RuleError,
+    RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
+};
 use game_rules::{CardWorld, Msg, RulesBridge};
 
 /// The linked ruleset table, as `ruleset!` publishes it on a native
@@ -133,9 +133,9 @@ impl NativeRulesHandle {
                 for o in &on {
                     for t in &o.triggers {
                         let tk = TriggerKind::from_str(t);
-                        declared.insert(tk).unwrap_or_else(|e| {
-                            panic!("{}: {e}", card.id)
-                        });
+                        declared
+                            .insert(tk)
+                            .unwrap_or_else(|e| panic!("{}: {e}", card.id));
                     }
                 }
                 let mut props: BTreeMap<String, i32> = card
@@ -147,16 +147,18 @@ impl NativeRulesHandle {
                 let _ = &mut props;
                 // Compile every condition once (docs/GUARDS.md §4.3), from the
                 // same strings the sandbox manifest carries. Fail-closed.
-                let mut row: Vec<Option<game_rules::CompiledPre>> = Vec::with_capacity(card.on.len());
+                let mut row: Vec<Option<game_rules::CompiledPre>> =
+                    Vec::with_capacity(card.on.len());
                 for o in card.on.iter() {
                     let src = o.condition();
-                    let compiled = if src.is_empty() {
-                        None
-                    } else {
-                        Some(game_rules::CompiledPre::compile(src).unwrap_or_else(|e| {
-                            panic!("{}: bad condition {src:?}: {e}", card.id)
-                        }))
-                    };
+                    let compiled =
+                        if src.is_empty() {
+                            None
+                        } else {
+                            Some(game_rules::CompiledPre::compile(src).unwrap_or_else(|e| {
+                                panic!("{}: bad condition {src:?}: {e}", card.id)
+                            }))
+                        };
                     row.push(compiled);
                 }
                 pre.push(row);
@@ -236,10 +238,7 @@ impl NativeRulesHandle {
                 }
             }
         }
-        h.finalize()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect()
+        h.finalize().iter().map(|b| format!("{b:02x}")).collect()
     }
 }
 
@@ -359,11 +358,7 @@ impl HostCtx for NativeHost {
         op: i32,
         player_id: i32,
         want_msg: bool,
-    ) -> (
-        Result<CallOut, HostErr>,
-        NativeHostState,
-        u64,
-    ) {
+    ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
         let fuel = self.fuel;
         let (res, state, left) = run_on(nested, card, entry, op, player_id, want_msg, fuel);
         (res, state, left)
@@ -381,9 +376,7 @@ fn quiet_control_flow_panics() {
     INSTALL.call_once(|| {
         let prev = take_hook();
         set_hook(Box::new(move |info: &PanicHookInfo<'_>| {
-            if info.payload().is::<NativeExit>()
-                || info.payload().is::<HostErr>()
-            {
+            if info.payload().is::<NativeExit>() || info.payload().is::<HostErr>() {
                 return;
             }
             prev(info);
@@ -438,20 +431,10 @@ fn run_on(
     player_id: i32,
     want_msg: bool,
     fuel: u64,
-) -> (
-    Result<CallOut, HostErr>,
-    NativeHostState,
-    u64,
-) {
+) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
     let rules = match nested.rules.clone() {
         Some(r) => r,
-        None => {
-            return (
-                Err(HostErr::trap("call_entry without rules")),
-                nested,
-                fuel,
-            )
-        }
+        None => return (Err(HostErr::trap("call_entry without rules")), nested, fuel),
     };
     let _depth = match DepthGuard::enter() {
         Ok(g) => g,
@@ -513,7 +496,9 @@ fn run_on(
                 let bytes = card_sdk::native::read(ptr as i32, len as usize);
                 match postcard::from_bytes::<card_sdk::msg::Msg>(&bytes) {
                     Ok(m) => Ok(CallOut::Msg(Some(game_rules::engine_msg(m)))),
-                    Err(_) => Err(HostErr::trap("cant_play: guest message is not Msg postcard")),
+                    Err(_) => Err(HostErr::trap(
+                        "cant_play: guest message is not Msg postcard",
+                    )),
                 }
             }
             other => other,
@@ -526,7 +511,10 @@ fn run_on(
 
 /// Fold a finished run's state into an [`Outcome`], the native counterpart of
 /// `host::finish`.
-fn finish(state: NativeHostState, res: Result<CallOut, HostErr>) -> Result<Outcome<Run>, RuleError> {
+fn finish(
+    state: NativeHostState,
+    res: Result<CallOut, HostErr>,
+) -> Result<Outcome<Run>, RuleError> {
     match res {
         Ok(_) => {
             if state.asked.is_some() || state.host_request.is_some() {
@@ -608,7 +596,15 @@ impl NativeModules {
             }
             let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
             let (res, _st, _fuel) = game_rules::inline::with_no_inline(|| {
-                run_on(state, card, entry, export::OP_GUARD, player_id, true, DEFAULT_FUEL)
+                run_on(
+                    state,
+                    card,
+                    entry,
+                    export::OP_GUARD,
+                    player_id,
+                    true,
+                    DEFAULT_FUEL,
+                )
             });
             let gate_ok = match res {
                 Ok(CallOut::Msg(_)) => false,
@@ -652,7 +648,15 @@ impl NativeModules {
             // A guard is a pure query: refuse inline answers (see
             // `game_rules::inline`).
             let (res, st, _fuel) = game_rules::inline::with_no_inline(|| {
-                run_on(st, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
+                run_on(
+                    st,
+                    card,
+                    entry,
+                    export::OP_GUARD,
+                    player_id,
+                    false,
+                    DEFAULT_FUEL,
+                )
             });
             state = Some(st);
             Ok(match res {
@@ -747,12 +751,12 @@ impl CardModules for NativeModules {
         if matches!(
             call,
             Call::AtEnd { .. }
-            | Call::DiceRollPlan { .. }
-            | Call::Settle { .. }
-            | Call::Mortgage { .. }
-            | Call::Redeem { .. }
-            | Call::Buy { .. }
-            | Call::Build { .. }
+                | Call::DiceRollPlan { .. }
+                | Call::Settle { .. }
+                | Call::Mortgage { .. }
+                | Call::Redeem { .. }
+                | Call::Buy { .. }
+                | Call::Build { .. }
         ) {
             let scope =
                 game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
@@ -766,12 +770,7 @@ impl CardModules for NativeModules {
                 return Ok(Outcome::Done(world.clone()));
             }
         }
-        let mut state = HostState::new(
-            self.index.clone(),
-            world.clone(),
-            answers.to_vec(),
-            0,
-        );
+        let mut state = HostState::new(self.index.clone(), world.clone(), answers.to_vec(), 0);
         // Body entry: the activation announcement goes here (mirrors
         // `Ruleset::run`), never for a bodyless drive.
         if let Some(cb) = on_body.as_deref_mut() {
@@ -806,8 +805,7 @@ impl CardModules for NativeModules {
         if entries.is_empty() {
             return Ok(None);
         }
-        let scope =
-            game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
+        let scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
         let cand = game_rules::cond_pre::fill_candidate(
             world,
             player_id,
@@ -818,70 +816,78 @@ impl CardModules for NativeModules {
         let mut announced = false;
         let mut ran_any = false;
         for entry in entries {
-        let mut state = Some(HostState::new(
-            self.index.clone(),
-            cur.clone(),
-            answers.to_vec(),
-            0,
-        ));
-        // v49: `On::Action` and `On::Gate` both carry the condition /
-        // residual-guard pair; a rejecting entry is skipped (and so never
-        // flashes).
-        {
-            // docs/GUARDS.md §4.4: every guard call goes through `admits`.
-            let pre = self.index.pre(card, entry);
-            let admitted = if self.entry_guard_is_none(card, entry) {
-                // G4 deleted the residual: the condition alone decides.
-                game_rules::cond_pre::admits_pre(pre, Some(&scope), &cand)
-            } else {
-                let asked: Result<bool, ()> =
-                    game_rules::cond_pre::admits(pre, Some(&scope), &cand, || {
-                        let st = state.take().expect("host state present");
-                        // A guard is a pure query: refuse inline answers (see
-                        // `game_rules::inline`).
-                        let (res, st, _fuel) = game_rules::inline::with_no_inline(|| {
-                            run_on(st, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
+            let mut state = Some(HostState::new(
+                self.index.clone(),
+                cur.clone(),
+                answers.to_vec(),
+                0,
+            ));
+            // v49: `On::Action` and `On::Gate` both carry the condition /
+            // residual-guard pair; a rejecting entry is skipped (and so never
+            // flashes).
+            {
+                // docs/GUARDS.md §4.4: every guard call goes through `admits`.
+                let pre = self.index.pre(card, entry);
+                let admitted = if self.entry_guard_is_none(card, entry) {
+                    // G4 deleted the residual: the condition alone decides.
+                    game_rules::cond_pre::admits_pre(pre, Some(&scope), &cand)
+                } else {
+                    let asked: Result<bool, ()> =
+                        game_rules::cond_pre::admits(pre, Some(&scope), &cand, || {
+                            let st = state.take().expect("host state present");
+                            // A guard is a pure query: refuse inline answers (see
+                            // `game_rules::inline`).
+                            let (res, st, _fuel) = game_rules::inline::with_no_inline(|| {
+                                run_on(
+                                    st,
+                                    card,
+                                    entry,
+                                    export::OP_GUARD,
+                                    player_id,
+                                    false,
+                                    DEFAULT_FUEL,
+                                )
+                            });
+                            state = Some(st);
+                            Ok(match res {
+                                Ok(CallOut::Code(0)) => false,
+                                Ok(_) => true,
+                                Err(_) => false,
+                            })
                         });
-                        state = Some(st);
-                        Ok(match res {
-                            Ok(CallOut::Code(0)) => false,
-                            Ok(_) => true,
-                            Err(_) => false,
-                        })
-                    });
-                matches!(asked, Ok(true))
-            };
-            if !admitted {
-                continue;
+                    matches!(asked, Ok(true))
+                };
+                if !admitted {
+                    continue;
+                }
+                announced = true;
             }
-            announced = true;
-        }
-        let mut state = state.take().expect("host state present");
-        if let Some(cb) = on_body.as_deref_mut() {
-            cb(state.w(), entry);
-        }
-        let (res, state, _fuel) = run_on(
-            state,
-            card,
-            entry,
-            export::OP_RUN,
-            player_id,
-            false,
-            DEFAULT_FUEL,
-        );
-        ran_any = true;
-        let outcome = finish(state, res)?;
-        match outcome {
-            Outcome::Done(w) => {
-                cur = w;
+            let mut state = state.take().expect("host state present");
+            if let Some(cb) = on_body.as_deref_mut() {
+                cb(state.w(), entry);
             }
-            paused => {
-                return Ok(Some(HookRun {
-                    announced,
-                    outcome: paused,
-                }));
+            let (res, state, _fuel) = run_on(
+                state,
+                card,
+                entry,
+                export::OP_RUN,
+                player_id,
+                false,
+                DEFAULT_FUEL,
+            );
+            ran_any = true;
+            let outcome = finish(state, res)?;
+            match outcome {
+                Outcome::Done(w) => {
+                    cur = w;
+                }
+                paused => {
+                    return Ok(Some(HookRun {
+                        announced,
+                        outcome: paused,
+                    }));
+                }
             }
-        }
         }
         if !ran_any {
             return Ok(None);
@@ -892,12 +898,7 @@ impl CardModules for NativeModules {
         }))
     }
 
-    fn can_counteract(
-        &self,
-        world: &Run,
-        card: i32,
-        player_id: i32,
-    ) -> Result<bool, RuleError> {
+    fn can_counteract(&self, world: &Run, card: i32, player_id: i32) -> Result<bool, RuleError> {
         let scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
         self.can_counteract_scoped(world, card, player_id, &scope)
     }
@@ -929,7 +930,15 @@ impl CardModules for NativeModules {
         game_rules::cond_pre::admits(pre, Some(scope), &cand, || {
             let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
             let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
-                run_on(state, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
+                run_on(
+                    state,
+                    card,
+                    entry,
+                    export::OP_GUARD,
+                    player_id,
+                    false,
+                    DEFAULT_FUEL,
+                )
             });
             // Same verdict / error surface as `Ruleset::can_counteract_scoped`:
             // a prompting guard is `GuardPrompted`, a trap propagates (callers
@@ -943,13 +952,7 @@ impl CardModules for NativeModules {
         })
     }
 
-
-    fn cant_play(
-        &self,
-        world: &Run,
-        card: i32,
-        player_id: i32,
-    ) -> Result<Option<Msg>, RuleError> {
+    fn cant_play(&self, world: &Run, card: i32, player_id: i32) -> Result<Option<Msg>, RuleError> {
         let info = self
             .index
             .card(card)
@@ -978,7 +981,15 @@ impl CardModules for NativeModules {
             || {
                 let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
                 let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
-                    run_on(state, card, entry, export::OP_GUARD, player_id, true, DEFAULT_FUEL)
+                    run_on(
+                        state,
+                        card,
+                        entry,
+                        export::OP_GUARD,
+                        player_id,
+                        true,
+                        DEFAULT_FUEL,
+                    )
                 });
                 match res {
                     Ok(CallOut::Msg(m)) => Ok(m),

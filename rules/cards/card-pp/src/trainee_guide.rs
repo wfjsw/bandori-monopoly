@@ -19,10 +19,11 @@
 //! (3) cash-in are live. The marks are this instance's `mono` / `dual`
 //! counters, so they die with it.
 
-use bandori_std::state_key; use card_sdk::abi::{prop, ActionKind};
-use skill_groups::fans;
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{prop, ActionKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
+use skill_groups::fans;
 
 const ID: &str = "PP:练习生解密指南";
 

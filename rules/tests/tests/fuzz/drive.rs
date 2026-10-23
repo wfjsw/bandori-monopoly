@@ -6,8 +6,8 @@ use game_core::msg::Msg;
 use game_core::net::NetMessage;
 use game_core::state::MatchEvent;
 
-use crate::common::{int_arg, Table};
 use super::rng::Rng;
+use crate::common::{int_arg, Table};
 
 /// One recorded answer, enough to replay.
 #[derive(Clone, Debug, PartialEq)]
@@ -63,12 +63,7 @@ pub enum AnswerMode {
 ///
 /// `rng` drives *action* choice only; answers use a parallel stream derived
 /// from the same seed so a replayed run consumes action randomness identically.
-pub fn drive(
-    t: &mut Table,
-    rng: &mut Rng,
-    turns: u32,
-    mode: AnswerMode,
-) -> Result<Trace, String> {
+pub fn drive(t: &mut Table, rng: &mut Rng, turns: u32, mode: AnswerMode) -> Result<Trace, String> {
     let mut tr = Trace::new();
     let mut replay = match mode {
         AnswerMode::Free => None,
@@ -184,7 +179,11 @@ fn drain_prompts(
                 .map(|(i, pl)| {
                     let s = &pl.state;
                     let get = |k: &str| s.get(k).map(|v| v.value).unwrap_or(0);
-                    let exp = |k: &str| s.get(k).map(|v| format!("{:?}", v.expires)).unwrap_or_else(|| "-".into());
+                    let exp = |k: &str| {
+                        s.get(k)
+                            .map(|v| format!("{:?}", v.expires))
+                            .unwrap_or_else(|| "-".into())
+                    };
                     format!(
                         "P{i}[stay={}({}) stun={}({}) stunStart={}({}) exile={} out={}]",
                         get("stay"),
@@ -235,8 +234,12 @@ fn drain_prompts(
     }
     Err(format!(
         "drain_prompts: prompts never stopped (last: {} / {}; hist: {:?})",
-        t.prompt().map(|p| p.title.key().to_string()).unwrap_or_default(),
-        t.prompt().map(|p| p.text.key().to_string()).unwrap_or_default(),
+        t.prompt()
+            .map(|p| p.title.key().to_string())
+            .unwrap_or_default(),
+        t.prompt()
+            .map(|p| p.text.key().to_string())
+            .unwrap_or_default(),
         hist.into_iter().collect::<Vec<_>>(),
     ))
 }
@@ -527,7 +530,11 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
         }
         for f in &p.field {
             if f.counters.get("crystals").copied().unwrap_or(0) < 0 {
-                return Err(format!("negative crystals {} on {}", f.counters.get("crystals").copied().unwrap_or(0), f.card));
+                return Err(format!(
+                    "negative crystals {} on {}",
+                    f.counters.get("crystals").copied().unwrap_or(0),
+                    f.card
+                ));
             }
         }
         for c in &p.tokens {
@@ -550,9 +557,7 @@ pub fn check_cards(t: &Table, known: &[String]) -> Result<(), String> {
     let w = t.m.world();
     let mut uids = std::collections::BTreeSet::new();
     let is_known = |c: &str| -> bool {
-        c.starts_with("skill:")
-            || c.starts_with("TEST:")
-            || known.iter().any(|k| k == c)
+        c.starts_with("skill:") || c.starts_with("TEST:") || known.iter().any(|k| k == c)
     };
     for (i, h) in w.hidden.iter().enumerate() {
         for zone in [&h.hand, &h.draw, &h.discard] {

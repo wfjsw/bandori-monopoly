@@ -177,7 +177,12 @@ fn duobang_highest_takes_diff_x50_from_lowest() {
     let mut t = Table::vanilla(3);
     // three 1d20s: 18 / 16 / 12 → P0 takes (18-12)*50=300 from P2.
     draw_event_quiet(&mut t, 0, "对邦", &[18, 16, 12]);
-    assert_eq!(t.money(0), 10_000 + 300, "highest: +(18-12)x50: {:?}", t.recent_keys(12));
+    assert_eq!(
+        t.money(0),
+        10_000 + 300,
+        "highest: +(18-12)x50: {:?}",
+        t.recent_keys(12)
+    );
     assert_eq!(t.money(1), 10_000, "middle pays nothing");
     assert_eq!(t.money(2), 10_000 - 300, "lowest pays (18-12)x50");
 }
@@ -239,7 +244,10 @@ fn tsurumaki_estate_grants_only_the_auctioned_tile() {
     let extra: Vec<usize> = (0..60)
         .filter(|&i| i != estate && t.owner(i).is_some())
         .collect();
-    assert!(extra.is_empty(), "only the auctioned tile changes hands: {extra:?}");
+    assert!(
+        extra.is_empty(),
+        "only the auctioned tile changes hands: {extra:?}"
+    );
 }
 
 #[test]
@@ -272,7 +280,11 @@ fn lulu_teleport_is_optional_and_costs_500() {
     draw_event_card(&mut t, 0, "很噜的感觉", &[]);
     let p = t.expect_prompt();
     let asked = t.asked();
-    assert!(!asked.is_empty(), "the text says 可选择: {}", t.dump_prompt());
+    assert!(
+        !asked.is_empty(),
+        "the text says 可选择: {}",
+        t.dump_prompt()
+    );
     for who in asked {
         // option 0 = take the teleport; the fallback declines.
         let v = if who == 0 { 0 } else { p.fallback };
@@ -287,7 +299,12 @@ fn lulu_teleport_is_optional_and_costs_500() {
     }
     t.settle();
     drain(&mut t);
-    assert_eq!(t.pos(0), tile("快餐店"), "P0 teleported: {:?}", t.recent_keys(12));
+    assert_eq!(
+        t.pos(0),
+        tile("快餐店"),
+        "P0 teleported: {:?}",
+        t.recent_keys(12)
+    );
     assert_eq!(t.money(0), 10_000 - 500, "the teleport costs 500");
     assert_eq!(t.pos(1), 10, "P1 declined");
     assert_eq!(t.money(1), 10_000, "declining is free");
@@ -299,7 +316,11 @@ fn lulu_decline_leaves_everyone_put() {
     t.set_pos(1, 10);
     draw_event_card(&mut t, 0, "很噜的感觉", &[]);
     drain(&mut t);
-    assert_eq!(t.pos(0), tile("CiRCLE 咖啡厅"), "declined: still on the corner");
+    assert_eq!(
+        t.pos(0),
+        tile("CiRCLE 咖啡厅"),
+        "declined: still on the corner"
+    );
     assert_eq!(t.pos(1), 10);
     assert_eq!(t.money(0), 10_000, "no charge without the teleport");
     assert_eq!(t.money(1), 10_000);
@@ -328,7 +349,12 @@ fn habinel_exile_ticks_away_at_turn_start() {
     // 「每名玩家回合开始时移除1层[除外]」 -- every player's start ticks every
     // counter, so P1's next start already drops P0 by 1.
     until_turn(&mut t, 1);
-    assert_eq!(t.state(0, "exile"), 1, "P1's start removes 1: {}", t.state(0, "exile"));
+    assert_eq!(
+        t.state(0, "exile"),
+        1,
+        "P1's start removes 1: {}",
+        t.state(0, "exile")
+    );
     until_turn(&mut t, 0);
     assert_eq!(t.state(0, "exile"), 0, "P0's start removes the last");
 }
@@ -395,7 +421,11 @@ fn this_hand_move_triggers_no_tile_settle() {
     draw_event_card(&mut t, 0, "这只手我不会放开", &[1, 1, 1, 3, 1, 1]);
     drain(&mut t);
     assert_eq!(t.pos(1), shop, "P1 moved onto the shop: {}", t.pos(1));
-    assert!(t.prompt().is_none(), "no settle on the landing: {}", t.dump_prompt());
+    assert!(
+        t.prompt().is_none(),
+        "no settle on the landing: {}",
+        t.dump_prompt()
+    );
     assert_eq!(t.owner(shop), None, "no free buy");
 }
 
@@ -414,7 +444,11 @@ fn pico_swap_rotates_positions() {
     let corner = tile("CiRCLE 咖啡厅");
     assert_eq!(t.pos(0), 10, "P0 → next (P1): {:?}", t.recent_keys(12));
     assert_eq!(t.pos(1), 20, "P1 → next (P2)");
-    assert_eq!(t.pos(2), corner, "P2 → first (P0, who landed on the corner)");
+    assert_eq!(
+        t.pos(2),
+        corner,
+        "P2 → first (P0, who landed on the corner)"
+    );
 }
 
 #[test]
@@ -443,10 +477,17 @@ fn pico_swap_skips_exiled_players() {
 fn circle_rebuild_plays_with_five_crystals() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
-    assert!(t.event_in_play("协助CiRCLE重建"), "placed on the board: {:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("协助CiRCLE重建"),
+        "placed on the board: {:?}",
+        t.st().event_active
+    );
     let crystals = t.event_crystals("协助CiRCLE重建").unwrap_or(0);
     assert_eq!(crystals, 5, "5 奇迹水晶 on the instance");
-    assert!(!t.event_discard().iter().any(|e| e == "协助CiRCLE重建"), "still in play");
+    assert!(
+        !t.event_discard().iter().any(|e| e == "协助CiRCLE重建"),
+        "still in play"
+    );
 }
 
 // EVENTS.md: the active row mirrors the instance's crystals into `counter`.
@@ -455,7 +496,10 @@ fn circle_rebuild_counter_mirrors_the_crystals() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
     let row = t.active_event("协助CiRCLE重建").unwrap();
-    assert_eq!(row.counter, 5, "the active view mirrors the crystals: {row:?}");
+    assert_eq!(
+        row.counter, 5,
+        "the active view mirrors the crystals: {row:?}"
+    );
 }
 
 #[test]
@@ -495,7 +539,9 @@ fn circle_rebuild_moves_the_pass_reward_off_circle() {
     drain(&mut t);
     let keys = t.recent_keys(16);
     assert!(
-        !keys.iter().any(|k| k.contains("pass_reward") || k.contains("land_start")),
+        !keys
+            .iter()
+            .any(|k| k.contains("pass_reward") || k.contains("land_start")),
         "the CiRCLE reward is gone while the rebuild is up: {keys:?}"
     );
     assert_eq!(t.money(1), before, "no CiRCLE payout: {}", t.money(1));
@@ -521,9 +567,16 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
             .unwrap_or(0);
         if k < 4 {
             assert_eq!(left, 5 - (k + 1), "pass {} decrements one crystal", k + 1);
-            assert!(t.event_in_play("协助CiRCLE重建"), "still up after pass {}", k + 1);
+            assert!(
+                t.event_in_play("协助CiRCLE重建"),
+                "still up after pass {}",
+                k + 1
+            );
         } else {
-            assert!(!t.event_in_play("协助CiRCLE重建"), "0 crystals → off the board");
+            assert!(
+                !t.event_in_play("协助CiRCLE重建"),
+                "0 crystals → off the board"
+            );
             assert!(
                 t.event_discard().iter().any(|e| e == "协助CiRCLE重建"),
                 "放入事件弃牌: {:?}",
@@ -541,7 +594,11 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
 fn circle_rebuild_pays_the_reward_on_a_cafe_pass() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
-    assert!(t.event_in_play("协助CiRCLE重建"), "{:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("协助CiRCLE重建"),
+        "{:?}",
+        t.st().event_active
+    );
     until_turn(&mut t, 1);
     // Three steps from two behind the cafe: across it (a [经过]), landing past.
     t.set_pos(1, (tile("CiRCLE 咖啡厅") + 58) % 60);
@@ -580,7 +637,11 @@ fn circle_rebuild_restores_the_reward_after_it_expires() {
         drain(&mut t);
         t.set_state(1, "stay", 0);
     }
-    assert!(!t.event_in_play("协助CiRCLE重建"), "{:?}", t.st().event_active);
+    assert!(
+        !t.event_in_play("协助CiRCLE重建"),
+        "{:?}",
+        t.st().event_active
+    );
     assert!(
         t.event_discard().iter().any(|e| e == "协助CiRCLE重建"),
         "放入事件弃牌: {:?}",
@@ -620,7 +681,11 @@ fn circle_rebuild_leaves_charge_replenish_on_the_real_circle() {
     t.begin_turn(0);
     drain(&mut t);
     draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
-    assert!(t.event_in_play("协助CiRCLE重建"), "{:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("协助CiRCLE重建"),
+        "{:?}",
+        t.st().event_active
+    );
     assert_eq!(t.charge(0), 2, "初始2");
     // A pass of the real CiRCLE still replenishes, even though its [经过]
     // reward has migrated away.
@@ -630,7 +695,11 @@ fn circle_rebuild_leaves_charge_replenish_on_the_real_circle() {
     t.roll(0).unwrap();
     drain(&mut t);
     t.set_state(0, "stay", 0);
-    assert_eq!(t.charge(0), 3, "「每次[经过]CiRCLE时获得一个[火罐]」 still fires");
+    assert_eq!(
+        t.charge(0),
+        3,
+        "「每次[经过]CiRCLE时获得一个[火罐]」 still fires"
+    );
     // A pass of the cafe does not -- the cafe inherited CiRCLE's effects, not
     // everyone else's CiRCLE-keyed ones.
     until_turn(&mut t, 0);
@@ -684,7 +753,11 @@ fn front_or_back_split_is_shared_by_the_half() {
     draw_event_quiet(&mut t, 0, "前场队还是后场队？", &[5, 4, 20]);
     assert_eq!(t.money(0), 10_000);
     assert_eq!(t.money(1), 10_000);
-    assert_eq!(t.money(2), 10_000 + 1_000, "the sole 31–60 player takes it all");
+    assert_eq!(
+        t.money(2),
+        10_000 + 1_000,
+        "the sole 31–60 player takes it all"
+    );
 }
 
 // =====================================================================
@@ -699,7 +772,10 @@ fn ex_quest_resolves_and_files_away() {
     // 1d4 = 3 → X = 29; then 3d20 per player (6 dice).
     draw_event_quiet(&mut t, 0, "EX任务挑战", &[3, 20, 20, 20, 10, 10, 10]);
     assert!(!t.event_in_play("EX任务挑战"), "one-shot");
-    assert!(t.event_discard().iter().any(|e| e == "EX任务挑战"), "filed away");
+    assert!(
+        t.event_discard().iter().any(|e| e == "EX任务挑战"),
+        "filed away"
+    );
 }
 
 // The skin swap itself is cosmetic (「技能相同」) -- there is no skin state in
@@ -710,7 +786,8 @@ fn ex_quest_high_roll_logs_the_eligibility() {
     draw_event_quiet(&mut t, 0, "EX任务挑战", &[4, 20, 20, 20, 10, 10, 10]);
     let keys = t.recent_keys(20);
     assert!(
-        keys.iter().any(|k| k.contains("skin") || k.contains("ex_quest")),
+        keys.iter()
+            .any(|k| k.contains("skin") || k.contains("ex_quest")),
         "the eligibility is at least logged: {keys:?}"
     );
 }
@@ -727,8 +804,16 @@ fn bear_cookie_pushes_chart_rush_face_down() {
     draw_event_quiet(&mut t, 0, "发送熊饼表情", &[]);
     assert!(!t.event_in_play("发送熊饼表情"), "one-shot");
     // 「背面朝上放置于事件牌堆顶部」 -- the public top view shows it face down.
-    assert!(t.st().event_top.iter().any(|e| e == "冲榜"), "eventTop: {:?}", t.st().event_top);
-    assert_eq!(t.event_deck().first().map(String::as_str), Some("冲榜"), "deck top");
+    assert!(
+        t.st().event_top.iter().any(|e| e == "冲榜"),
+        "eventTop: {:?}",
+        t.st().event_top
+    );
+    assert_eq!(
+        t.event_deck().first().map(String::as_str),
+        Some("冲榜"),
+        "deck top"
+    );
 }
 
 #[test]
@@ -738,7 +823,9 @@ fn bear_cookie_next_draw_is_chart_rush() {
     // The next event draw is the face-down 冲榜.
     until_turn(&mut t, 1);
     t.set_pos(1, (tile("流星堂") + 59) % 60);
-    t.dice(&[1, /* 冲榜's Xd20: X = lost pots + 1 = 1 per player */ 5, 5]);
+    t.dice(&[
+        1, /* 冲榜's Xd20: X = lost pots + 1 = 1 per player */ 5, 5,
+    ]);
     t.roll(1).unwrap();
     drain(&mut t);
     assert!(
@@ -800,13 +887,26 @@ fn asukayama_teleports_and_assigns_the_status_spread() {
     // landing 1 + P1's 1d20 = 7.
     draw_event_quiet(&mut t, 1, "飞鸟山之战", &[7]);
     let park = tile("飞鸟山公园");
-    assert_eq!(t.pos(0), park, "everyone teleports: {:?}", t.recent_keys(16));
+    assert_eq!(
+        t.pos(0),
+        park,
+        "everyone teleports: {:?}",
+        t.recent_keys(16)
+    );
     // 「然后抽到此卡的玩家移动1d20」: the drawer leaves the park again.
     assert_eq!(t.pos(1), (park + 7) % 60, "the drawer then moves 1d20");
     assert_eq!(t.pos(2), park);
     assert_eq!(t.pos(3), park);
-    assert_eq!(t.state(0, "stun") + t.state(0, "stunStart"), 2, "previous: 2[眩晕]");
-    assert!(t.state(2, "noHand") > 0, "next: no hand cards: {}", t.state(2, "noHand"));
+    assert_eq!(
+        t.state(0, "stun") + t.state(0, "stunStart"),
+        2,
+        "previous: 2[眩晕]"
+    );
+    assert!(
+        t.state(2, "noHand") > 0,
+        "next: no hand cards: {}",
+        t.state(2, "noHand")
+    );
     assert_eq!(t.state(3, "exile"), 1, "the rest: 1[除外]");
 }
 
@@ -901,10 +1001,17 @@ fn asukayama_does_not_chain_lost_chase() {
 fn hallucination_stays_until_the_drawer_next_turn_start() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "幻觉来了", &[]);
-    assert!(t.event_in_play("幻觉来了"), "placed on the board: {:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("幻觉来了"),
+        "placed on the board: {:?}",
+        t.st().event_active
+    );
     // Still up through the rest of the drawer's turn and P1's turn.
     pass(&mut t, 0);
-    assert!(t.event_in_play("幻觉来了"), "still up before the drawer's next start");
+    assert!(
+        t.event_in_play("幻觉来了"),
+        "still up before the drawer's next start"
+    );
     until_turn(&mut t, 0);
     assert!(
         !t.event_in_play("幻觉来了"),
@@ -950,7 +1057,11 @@ fn hallucination_rolls_by_the_previous_player() {
 fn pool_bug_plays_and_pushes_fix_note() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "卡池BUG", &[]);
-    assert!(t.event_in_play("卡池BUG"), "placed: {:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("卡池BUG"),
+        "placed: {:?}",
+        t.st().event_active
+    );
     assert!(
         t.st().event_top.iter().any(|e| e == "修复公告"),
         "face-down 修复公告 on top: {:?}",
@@ -983,7 +1094,9 @@ fn pool_bug_still_allows_cheap_builds() {
         .tiles
         .iter()
         .enumerate()
-        .find(|(_, t)| t.kind == game_core::data::TileKind("property".into()) && t.house > 0 && t.house < 1500)
+        .find(|(_, t)| {
+            t.kind == game_core::data::TileKind("property".into()) && t.house > 0 && t.house < 1500
+        })
         .map(|(i, _)| i)
         .expect("a cheap property");
     t.own(0, &[cheap]);
@@ -1023,9 +1136,16 @@ fn pool_bug_files_away_on_the_next_event() {
 fn aao_stays_until_the_drawer_next_turn_end() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "A！A！O！", &[]);
-    assert!(t.event_in_play("A！A！O！"), "placed: {:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("A！A！O！"),
+        "placed: {:?}",
+        t.st().event_active
+    );
     pass(&mut t, 0);
-    assert!(t.event_in_play("A！A！O！"), "not yet: P0's turn just ended");
+    assert!(
+        t.event_in_play("A！A！O！"),
+        "not yet: P0's turn just ended"
+    );
     until_turn(&mut t, 0);
     assert!(t.event_in_play("A！A！O！"), "up during P0's next turn");
     pass(&mut t, 0);
@@ -1062,7 +1182,11 @@ fn marina_box_pays_500_and_may_gain_1200_on_a_circle_pass() {
     // 1d10 = 8 ≥ 6 → the passer gains 1200. The 500 is the 「[消耗]」 -- the
     // 「可」 is opt-in, so take 「消耗」 explicitly (option 1).
     draw_event_quiet(&mut t, 0, "麻里奈小姐的礼物箱", &[]);
-    assert!(t.event_in_play("麻里奈小姐的礼物箱"), "{:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("麻里奈小姐的礼物箱"),
+        "{:?}",
+        t.st().event_active
+    );
     until_turn(&mut t, 1);
     t.set_pos(1, (tile("CiRCLE") + 58) % 60);
     t.dice(&[2, 8]); // walk 2 past CiRCLE, then the 1d10
@@ -1100,7 +1224,11 @@ fn marina_box_no_gain_below_six() {
             t.decline();
         }
     }
-    assert_eq!(t.money(1), 10_000 + 2_000 - 500, "reward 2000, paid 500, rolled 3, no bonus");
+    assert_eq!(
+        t.money(1),
+        10_000 + 2_000 - 500,
+        "reward 2000, paid 500, rolled 3, no bonus"
+    );
 }
 
 #[test]
@@ -1112,7 +1240,10 @@ fn marina_box_expires_at_the_drawer_third_turn_start() {
     // P1's, P0's (3rd).
     pass(&mut t, 0);
     until_turn(&mut t, 0);
-    assert!(t.event_in_play("麻里奈小姐的礼物箱"), "still up at the drawer's 2nd start");
+    assert!(
+        t.event_in_play("麻里奈小姐的礼物箱"),
+        "still up at the drawer's 2nd start"
+    );
     pass(&mut t, 0);
     until_turn(&mut t, 0);
     assert!(
@@ -1153,21 +1284,35 @@ fn marina_box_spend_is_optional() {
 fn bangdream_chan_is_placed_on_the_board() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "元祖！邦多利酱", &[]);
-    assert!(t.event_in_play("元祖！邦多利酱"), "placed: {:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("元祖！邦多利酱"),
+        "placed: {:?}",
+        t.st().event_active
+    );
     // Still up through the drawer's next turn.
     pass(&mut t, 0);
     until_turn(&mut t, 0);
-    assert!(t.event_in_play("元祖！邦多利酱"), "still up at the drawer's 2nd turn");
+    assert!(
+        t.event_in_play("元祖！邦多利酱"),
+        "still up at the drawer's 2nd turn"
+    );
 }
 
 #[test]
 fn bangdream_chan_stays_until_the_drawer_third_turn_start() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "元祖！邦多利酱", &[]);
-    assert!(t.event_in_play("元祖！邦多利酱"), "{:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("元祖！邦多利酱"),
+        "{:?}",
+        t.st().event_active
+    );
     pass(&mut t, 0);
     until_turn(&mut t, 0);
-    assert!(t.event_in_play("元祖！邦多利酱"), "still up at the drawer's 2nd start");
+    assert!(
+        t.event_in_play("元祖！邦多利酱"),
+        "still up at the drawer's 2nd start"
+    );
     pass(&mut t, 0);
     until_turn(&mut t, 0);
     assert!(
@@ -1186,7 +1331,12 @@ fn bangdream_chan_shortens_the_clocks() {
     draw_event_quiet(&mut t, 0, "元祖！邦多利酱", &[]);
     pass(&mut t, 0);
     until_turn(&mut t, 1);
-    assert_eq!((t.st().base_time, t.st().bonus_time), (15.0, 5.0), "{:?}", t.st().event_active);
+    assert_eq!(
+        (t.st().base_time, t.st().bonus_time),
+        (15.0, 5.0),
+        "{:?}",
+        t.st().event_active
+    );
     until_turn(&mut t, 0);
     pass(&mut t, 0);
     until_turn(&mut t, 0);
@@ -1222,7 +1372,10 @@ fn heat_head_subtracts_a_d6_in_phase_two() {
     // End the drawer's next turn → phase 2 (−1d6).
     until_turn(&mut t, 0);
     pass(&mut t, 0);
-    assert!(t.event_in_play("超燃甩头"), "phase 2 up after the drawer's turn end");
+    assert!(
+        t.event_in_play("超燃甩头"),
+        "phase 2 up after the drawer's turn end"
+    );
     until_turn(&mut t, 1);
     t.set_pos(1, 30);
     t.dice(&[10, 4]); // 10 − d6(4) = 6
@@ -1263,7 +1416,10 @@ fn surprise_duel_stays_until_the_drawer_second_next_turn_start() {
     assert!(t.event_in_play("意外的对邦"), "{:?}", t.st().event_active);
     pass(&mut t, 0);
     until_turn(&mut t, 0);
-    assert!(t.event_in_play("意外的对邦"), "not yet at the drawer's 2nd start");
+    assert!(
+        t.event_in_play("意外的对邦"),
+        "not yet at the drawer's 2nd start"
+    );
     pass(&mut t, 0);
     until_turn(&mut t, 0);
     assert!(
@@ -1313,7 +1469,11 @@ fn surprise_duel_aims_others_at_the_drawer() {
 fn forbidden_moca_halves_move_dice_then_is_permanently_removed() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "Forbidden Moca", &[]);
-    assert!(t.event_in_play("Forbidden Moca"), "{:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("Forbidden Moca"),
+        "{:?}",
+        t.st().event_active
+    );
     // 「场上所有移动掷骰/2」 -- P1's 1d20 of 10 walks 5.
     until_turn(&mut t, 1);
     t.set_pos(1, 30);
@@ -1323,7 +1483,10 @@ fn forbidden_moca_halves_move_dice_then_is_permanently_removed() {
     assert_eq!(t.pos(1), 35, "/2 on the move dice: {}", t.pos(1));
     // 「在你的下个回合结束时永久移除」 -- P0's next turn end.
     until_turn(&mut t, 0);
-    assert!(t.event_in_play("Forbidden Moca"), "still up during the drawer's turn");
+    assert!(
+        t.event_in_play("Forbidden Moca"),
+        "still up during the drawer's turn"
+    );
     pass(&mut t, 0);
     assert!(
         !t.event_in_play("Forbidden Moca"),
@@ -1363,7 +1526,10 @@ fn school_time_moves_to_the_school_and_grants_exile() {
         .iter()
         .enumerate()
         .filter(|(_, x)| {
-            x.name.contains("学院") || x.name.contains("学园") || x.name.contains("中学") || x.name.contains("学校")
+            x.name.contains("学院")
+                || x.name.contains("学园")
+                || x.name.contains("中学")
+                || x.name.contains("学校")
         })
         .map(|(i, _)| i)
         .collect();
@@ -1396,9 +1562,23 @@ fn tears_same_color_costs_the_next_700() {
     draw_event_quiet(&mut t, 0, "泪水的含义", &[]);
     // Pairings in action order: P0→P1 (same → P1 pays P0 700),
     // P1→P2 (diff → P1 pays P2 300), P2→P0 (diff → P2 pays P0 300).
-    assert_eq!(t.money(0), 10_000 + 700 + 300, "P0 receives 700 then 300: {}", t.money(0));
-    assert_eq!(t.money(1), 10_000 - 700 - 300, "P1 pays 700 then 300: {}", t.money(1));
-    assert_eq!(t.money(2), 10_000 + 300 - 300, "P2 receives 300 then pays 300");
+    assert_eq!(
+        t.money(0),
+        10_000 + 700 + 300,
+        "P0 receives 700 then 300: {}",
+        t.money(0)
+    );
+    assert_eq!(
+        t.money(1),
+        10_000 - 700 - 300,
+        "P1 pays 700 then 300: {}",
+        t.money(1)
+    );
+    assert_eq!(
+        t.money(2),
+        10_000 + 300 - 300,
+        "P2 receives 300 then pays 300"
+    );
 }
 
 #[test]
@@ -1412,7 +1592,11 @@ fn tears_all_different_pays_300_around_the_table() {
     t.own(2, &[g10[0]]);
     draw_event_quiet(&mut t, 0, "泪水的含义", &[]);
     // Every pairing is a colour mismatch: each current pays the next 300.
-    assert_eq!(t.money(0), 10_000 - 300 + 300, "pays P1 300, receives 300 from P2");
+    assert_eq!(
+        t.money(0),
+        10_000 - 300 + 300,
+        "pays P1 300, receives 300 from P2"
+    );
     assert_eq!(t.money(1), 10_000 - 300 + 300);
     assert_eq!(t.money(2), 10_000 - 300 + 300);
 }
@@ -1480,7 +1664,11 @@ fn chart_rush_loses_fire_and_ranks_the_rolls() {
     assert_eq!(t.charge(0), 0, "all [火罐] lost");
     assert_eq!(t.charge(1), 0);
     assert_eq!(t.charge(2), 0);
-    assert_eq!(t.money(0), 10_000 + 2_000, "1st: 2000 (or a card -- see below)");
+    assert_eq!(
+        t.money(0),
+        10_000 + 2_000,
+        "1st: 2000 (or a card -- see below)"
+    );
     assert_eq!(t.money(2), 10_000 + 1_500, "2nd: 1500");
     assert_eq!(t.money(1), 10_000 + 1_000, "3rd: 1000");
 }
@@ -1495,7 +1683,11 @@ fn chart_rush_ties_take_the_higher_tier() {
     // Tied 1st/2nd → both get the 1st tier's 2000 (例：1，2，2，4).
     draw_event_card(&mut t, 0, "冲榜", &[20, 20, 20, 20, 5, 5]);
     take_chart_rush_first_prize(&mut t);
-    assert_eq!(t.money(0), 10_000 + 2_000, "tied highest takes the higher tier");
+    assert_eq!(
+        t.money(0),
+        10_000 + 2_000,
+        "tied highest takes the higher tier"
+    );
     assert_eq!(t.money(1), 10_000 + 2_000);
     assert_eq!(t.money(2), 10_000 + 1_000, "3rd tier is 1000");
 }
@@ -1544,7 +1736,12 @@ fn fix_note_halves_the_build_on_the_designated_tiles() {
     t.build(0).expect("the build goes through");
     drain(&mut t);
     let full = data().tiles[land].house;
-    assert_eq!(t.money(0), before - full / 2, "加盖金额减半: spent {}", before - t.money(0));
+    assert_eq!(
+        t.money(0),
+        before - full / 2,
+        "加盖金额减半: spent {}",
+        before - t.money(0)
+    );
 }
 
 #[test]
@@ -1582,7 +1779,12 @@ fn fix_note_removes_itself_after_the_designated_builds() {
 fn lost_chase_strictly_highest_pushes_end_it_all() {
     let mut t = Table::vanilla(2);
     // P0 5d20 = 50; P1 5d20 = 25.
-    draw_event_quiet(&mut t, 0, "迷子的追逐", &[10, 10, 10, 10, 10, 5, 5, 5, 5, 5]);
+    draw_event_quiet(
+        &mut t,
+        0,
+        "迷子的追逐",
+        &[10, 10, 10, 10, 10, 5, 5, 5, 5, 5],
+    );
     assert_eq!(
         t.event_deck().first().map(String::as_str),
         Some("让我来结束一切"),
@@ -1595,7 +1797,12 @@ fn lost_chase_strictly_highest_pushes_end_it_all() {
 fn lost_chase_not_strictly_highest_pushes_never_ends() {
     let mut t = Table::vanilla(2);
     // P0 5d20 = 25; P1 5d20 = 50.
-    draw_event_quiet(&mut t, 0, "迷子的追逐", &[5, 5, 5, 5, 5, 10, 10, 10, 10, 10]);
+    draw_event_quiet(
+        &mut t,
+        0,
+        "迷子的追逐",
+        &[5, 5, 5, 5, 5, 10, 10, 10, 10, 10],
+    );
     assert_eq!(
         t.event_deck().first().map(String::as_str),
         Some("一切不会结束"),
@@ -1717,10 +1924,18 @@ fn embers_places_copies_on_every_player_tile() {
     t.set_pos(1, 20);
     t.set_pos(2, 40);
     draw_event_quiet(&mut t, 0, "火种燃尽之后会怎么样呢？", &[]);
-    assert!(t.event_in_play("火种燃尽之后会怎么样呢？"), "{:?}", t.st().event_active);
+    assert!(
+        t.event_in_play("火种燃尽之后会怎么样呢？"),
+        "{:?}",
+        t.st().event_active
+    );
     for who in 0..3 {
         let on = t.marks_on(t.pos(who));
-        assert!(!on.is_empty(), "a copy on P{who}'s tile: marks={:?}", t.marks());
+        assert!(
+            !on.is_empty(),
+            "a copy on P{who}'s tile: marks={:?}",
+            t.marks()
+        );
     }
 }
 
@@ -1762,14 +1977,27 @@ fn embers_settle_header_owns_its_loss_line() {
     let recent = &t.m.world().recent;
     for (i, e) in recent.iter().enumerate() {
         if log_key(e) == "log.effect_applied" {
-            let kids = recent.iter().filter(|c| c.parent == e.id && c.id != e.id).count();
+            let kids = recent
+                .iter()
+                .filter(|c| c.parent == e.id && c.id != e.id)
+                .count();
             let nothing = e.results.iter().any(|r| r.key() == "log.effect_nothing");
-            assert!(!(nothing && kids > 0) && !(kids == 0 && !nothing), "header {i}: kids={kids}");
+            assert!(
+                !(nothing && kids > 0) && !(kids == 0 && !nothing),
+                "header {i}: kids={kids}"
+            );
         }
     }
-    let lose = recent.iter().find(|e| log_key(e) == "log.lose").expect("lose line");
+    let lose = recent
+        .iter()
+        .find(|e| log_key(e) == "log.lose")
+        .expect("lose line");
     let hdr = recent.iter().find(|e| e.id == lose.parent);
-    assert!(hdr.is_some(), "loss line must hang under a header: {:?}", t.recent_keys(20));
+    assert!(
+        hdr.is_some(),
+        "loss line must hang under a header: {:?}",
+        t.recent_keys(20)
+    );
 }
 
 #[test]
@@ -1783,7 +2011,11 @@ fn embers_copies_are_removed_on_exile() {
         let w = t.m.world_mut();
         w.apply_layer(1, bandori_std::state_key::EXILE, 1);
         w.state_set_flags(1, bandori_std::state_key::EXILE, 1 | 2);
-        w.state_set_expires(1, bandori_std::state_key::EXILE, Some(game_core::state::Tick::TurnStart));
+        w.state_set_expires(
+            1,
+            bandori_std::state_key::EXILE,
+            Some(game_core::state::Tick::TurnStart),
+        );
     }
     if !t.marks().is_empty() {
         until_turn(&mut t, 1);
@@ -1799,7 +2031,10 @@ fn embers_copies_are_removed_on_exile() {
             "log.outcome.mark_remove" => panic!("per-tile removal line should be collapsed"),
             "log.outcome.mark_remove_all" => {
                 let kind = format!("{:?}", e.msg.a.get("kind"));
-                assert!(!kind.contains("log.mark.none"), "unnamed mark removed: {kind}");
+                assert!(
+                    !kind.contains("log.mark.none"),
+                    "unnamed mark removed: {kind}"
+                );
             }
             "log.event.embers_clear" => {
                 assert!(e.msg.a.contains_key("event"), "clear line names no event");

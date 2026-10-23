@@ -41,8 +41,7 @@ pub fn g_settle_02_draw_one_ok_mutant_two(effects: &[Effect], player: i32) -> bo
 
 /// MUTANT: the reference wrongly attributes the draw to another seat.
 pub fn g_settle_02_draw_one_ok_mutant_wrong_player(effects: &[Effect], player: i32) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::Draw { player: p, n: 1 } if p != player)
+    effects.len() == 1 && matches!(effects[0], Effect::Draw { player: p, n: 1 } if p != player)
 }
 
 // ===========================================================================
@@ -200,11 +199,16 @@ pub const CIRCLE_MONEY: i32 = 2000;
 /// Pass gate: 「[经过]CiRCLE且[移动起点]不为CiRCLE」.
 /// `start < 0` = no move in flight (a card calling the reward outright) —
 /// the clause does not bar it (reading recorded in `rules/tiles/src/circle.rs`).
-pub fn circle_pass_pays(at: i32, self_tile: i32, mover: i32, exile: i32, start: i32, start_is_start: bool, at_is_start: bool) -> bool {
-    at == self_tile
-        && mover >= 0
-        && exile <= 0
-        && !(start >= 0 && start_is_start && at_is_start)
+pub fn circle_pass_pays(
+    at: i32,
+    self_tile: i32,
+    mover: i32,
+    exile: i32,
+    start: i32,
+    start_is_start: bool,
+    at_is_start: bool,
+) -> bool {
+    at == self_tile && mover >= 0 && exile <= 0 && !(start >= 0 && start_is_start && at_is_start)
 }
 
 /// Money half: exactly one `GainMoney` of 2000 to the mover.
@@ -234,7 +238,13 @@ pub fn circle_reward_effects_ok(effects: &[Effect], mover: i32, pick: i32) -> bo
 
 /// Frame: money of every seat outside `a`/`b` is unchanged; used by rent /
 /// force-buy / buy legs (G-MONEY-01 「only named players change」).
-pub fn frame_others_money_unchanged(pre: &[i32; 4], post: &[i32; 4], a: i32, b: i32, n: i32) -> bool {
+pub fn frame_others_money_unchanged(
+    pre: &[i32; 4],
+    post: &[i32; 4],
+    a: i32,
+    b: i32,
+    n: i32,
+) -> bool {
     for i in 0..n {
         let i = i as usize;
         if (i as i32) != a && (i as i32) != b && pre[i] != post[i] {

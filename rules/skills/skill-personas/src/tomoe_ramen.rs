@@ -16,9 +16,10 @@
 //! -- which the direction check makes impossible on the approach side, so the
 //! pot refund fires on the wrap-around overshoot.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;
 
@@ -37,9 +38,13 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
     ],
-).silent(&[1, 2])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+)
+.silent(&[1, 2])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")

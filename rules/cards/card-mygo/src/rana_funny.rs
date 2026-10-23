@@ -7,9 +7,9 @@
 //! plant this card on the current tile; passers-by who do not settle there
 //! grow a miracle crystal on it, and at 5+ the next foreign passer is trapped.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RANA_FUNNY: CardDef = CardDef::new(
     "MyGO:（乐奈）有趣的女人",

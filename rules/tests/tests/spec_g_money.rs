@@ -314,7 +314,10 @@ fn force_buy_is_double_price_plus_houses_and_stays_mortgaged() {
         settle_on(&mut t, 0, land);
         let p = t.expect_prompt();
         if p.kind != "choice" {
-            return Err(format!("G-MONEY-07: expected a force-buy prompt, got {}", t.dump_prompt()));
+            return Err(format!(
+                "G-MONEY-07: expected a force-buy prompt, got {}",
+                t.dump_prompt()
+            ));
         }
         t.answer_one(0).unwrap();
         drain(&mut t);
@@ -613,12 +616,7 @@ fn build_costs_the_marked_house_fee() {
         frame(
             &pre,
             t.world(),
-            &[
-                "money:P0",
-                &format!("houses:T{land}"),
-                "pos:P0",
-                "roll:P0",
-            ],
+            &["money:P0", &format!("houses:T{land}"), "pos:P0", "roll:P0"],
         )
     })
     .expect("G-MONEY-12 build cost");

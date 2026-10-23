@@ -15,31 +15,41 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
         On::Play("", None, None, chisato_mask),
-        On::Action(Action::Reshuffled("", None, Some(reshuffled_guard), reshuffled)),
+        On::Action(Action::Reshuffled(
+            "",
+            None,
+            Some(reshuffled_guard),
+            reshuffled,
+        )),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
 // play's designations (`Card.Def.Targeting`), so 网络链接异常 「取消其对目标
 // 之一的[指定]」 can drop one leg of the split.
-.props(&[(card_sdk::abi::prop::DESIGNATES, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::DESIGNATES, 1)])
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"微笑的铁假面"#)
         .raw_name(r#"[白鹭千圣]微笑的铁假面"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手]：
+        .text(
+            r#"[手]：
 将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。
 [持续]：
 （1）[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。
-（2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#)
+（2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#,
+        )
         // sheet cell D18
-        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"白鹭千圣"#)]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"白鹭千圣"#)]),
+);
 
 fn chisato_mask(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」

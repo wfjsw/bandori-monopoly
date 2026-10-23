@@ -134,9 +134,7 @@ fn every_sys_import_has_a_native_symbol() {
 fn wasm32_linked_drops_the_ruleset_import_module() {
     let block = sys_block();
     assert!(
-        block.contains(
-            r#"all(target_arch = "wasm32", not(feature = "native-rules"))"#
-        ),
+        block.contains(r#"all(target_arch = "wasm32", not(feature = "native-rules"))"#),
         "rules/card-sdk/src/ctx/sys.rs must gate `link(wasm_import_module = \"ruleset\")` \
          on `all(target_arch = \"wasm32\", not(feature = \"native-rules\"))` so the \
          linked monolith has no `ruleset` import module (docs/BOT.md §3.6). \

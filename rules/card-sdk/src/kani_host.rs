@@ -369,7 +369,9 @@ static mut BACKEND: Option<Backend> = None;
 
 /// Install the symbolic host. Call once at the top of every proof.
 pub fn install(f: Backend) {
-    unsafe { BACKEND = Some(f); }
+    unsafe {
+        BACKEND = Some(f);
+    }
 }
 
 /// Dispatch one import to the installed backend.

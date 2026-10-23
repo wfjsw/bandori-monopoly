@@ -1,16 +1,16 @@
 //! `Mor:迷茫之蝶们的三全音` -- C# `CardTritone` (MatchHost.cs:4524-4583): loan the
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:迷茫之蝶们的三全音`）:
-//! > 迷茫之蝶们的三全音： 
+//! > 迷茫之蝶们的三全音：
 //! > [反击] 任意时刻当你将要失去或支付资金时打出此卡，立刻获得此次失去的资金金额，此卡放置在场上，三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金
 //!
 //! pay amount back in three turns (crystal decay).
 //!
 //! Counteraction-only (`Normal => false`): the player is about to lose or pay money.
 
-use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TRITONE: CardDef = CardDef::new(
     "Mor:迷茫之蝶们的三全音",

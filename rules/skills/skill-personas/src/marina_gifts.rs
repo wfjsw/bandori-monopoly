@@ -16,14 +16,19 @@
 //! 「一次」 is per occurrence: a player passes a given CiRCLE at most once per
 //! move, so there is nothing to latch.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const MARINA_GIFTS: CardDef = CardDef::new(
     "skill:月岛麻里奈:礼物还有好多好多哟",
     // 「其他玩家经过CiRCLE时」 -- another player's pass onto CiRCLE.
-    &[On::Action(Action::Pass("actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")", None, None, on_pass))],
+    &[On::Action(Action::Pass(
+        "actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")",
+        None,
+        None,
+        on_pass,
+    ))],
 );
 
 /// The cost of the offer, named in the clause.

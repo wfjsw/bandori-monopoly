@@ -31,7 +31,7 @@
 
 mod common;
 
-use common::{int_arg, tile, data, Table};
+use common::{data, int_arg, tile, Table};
 use game_core::msg::Arg;
 use game_core::state::MatchEvent;
 
@@ -117,11 +117,26 @@ fn the_initial_user_is_asked_first() {
     t.give(2, &["TEST:probe"]);
     t.play(0, "TEST:aimer").unwrap();
     // Seat order (ruling 2026-10-07): 0 (initial user), 1, 2.
-    assert_eq!(t.asked(), vec![0], "the initial user first: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![0],
+        "the initial user first: {}",
+        t.dump_prompt()
+    );
     t.decline();
-    assert_eq!(t.asked(), vec![1], "then the next seat: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![1],
+        "then the next seat: {}",
+        t.dump_prompt()
+    );
     t.decline();
-    assert_eq!(t.asked(), vec![2], "then the last seat: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![2],
+        "then the last seat: {}",
+        t.dump_prompt()
+    );
     t.decline();
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());
     assert_eq!(
@@ -158,7 +173,12 @@ fn one_seat_declares_twice_in_one_visit_before_the_next_seat_is_asked() {
     );
     t.counteract(1, "TEST:probe").unwrap();
     // Only now (no eligible card left) does priority advance.
-    assert_eq!(t.asked(), vec![2], "only then the next seat: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![2],
+        "only then the next seat: {}",
+        t.dump_prompt()
+    );
     t.counteract(2, "TEST:probe").unwrap();
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());
     // All three answered X and settle LIFO: P2's probe is the newest
@@ -227,7 +247,12 @@ fn a_seat_with_no_eligible_card_is_skipped_without_a_prompt() {
     // P1 holds nothing at all.
     t.give(2, &["TEST:probe"]);
     t.play(0, "TEST:aimer").unwrap();
-    assert_eq!(t.asked(), vec![0], "the initial user first: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![0],
+        "the initial user first: {}",
+        t.dump_prompt()
+    );
     t.decline();
     assert_eq!(
         t.asked(),
@@ -276,7 +301,12 @@ fn a_later_seats_declaration_re_opens_an_earlier_seat() {
     t.counteract(1, "TEST:probe").unwrap();
     // Lap 2 carried P1's declaration, so one more lap runs: P0 still holds its
     // probe and is asked once more; P2 is spent and skipped.
-    assert_eq!(t.asked(), vec![0], "lap 3 re-opens P0 again: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![0],
+        "lap 3 re-opens P0 again: {}",
+        t.dump_prompt()
+    );
     t.decline();
     // Lap 3 brought no declaration -- quiet lap, so X's round is closed and the
     // declared probes settle LIFO. Each probe body moves money, and the money
@@ -293,7 +323,12 @@ fn a_later_seats_declaration_re_opens_an_earlier_seat() {
         t.decline();
     }
     // LIFO: P1's later declaration settles before P2's earlier one.
-    assert_eq!(who_of(&t, "probe_fired"), vec![1, 2], "LIFO: {:?}", ev_args(&t, "probe_fired", "n"));
+    assert_eq!(
+        who_of(&t, "probe_fired"),
+        vec![1, 2],
+        "LIFO: {:?}",
+        ev_args(&t, "probe_fired", "n")
+    );
 }
 
 // ruling 2026-10-07: 「for it to advance to next player」 / round closing --
@@ -312,7 +347,12 @@ fn the_round_closes_after_a_quiet_lap() {
     // second probe; P2 passes and keeps its probe.
     assert_eq!(t.asked(), vec![1], "{}", t.dump_prompt());
     t.counteract(1, "TEST:probe").unwrap();
-    assert_eq!(t.asked(), vec![1], "exhaust / abandon in one visit: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![1],
+        "exhaust / abandon in one visit: {}",
+        t.dump_prompt()
+    );
     t.decline();
     assert_eq!(t.asked(), vec![2], "{}", t.dump_prompt());
     t.decline();
@@ -340,7 +380,11 @@ fn the_round_closes_after_a_quiet_lap() {
         );
         t.decline();
     }
-    assert_eq!(who_of(&t, "probe_fired"), vec![1], "only the declared probe ran");
+    assert_eq!(
+        who_of(&t, "probe_fired"),
+        vec![1],
+        "only the declared probe ran"
+    );
 }
 
 // =====================================================================
@@ -400,7 +444,7 @@ fn counters_resolve_newest_first() {
     t.play(0, "TEST:aimer").unwrap();
     t.counteract(1, "TEST:probe").unwrap(); // older
     t.counteract(2, "TEST:probe").unwrap(); // newer
-    // Newest first: P2 saw n=0 and took 100; P1 saw n=1 and took 200.
+                                            // Newest first: P2 saw n=0 and took 100; P1 saw n=1 and took 200.
     assert_eq!(
         who_of(&t, "probe_fired"),
         vec![2, 1],
@@ -411,7 +455,11 @@ fn counters_resolve_newest_first() {
             .collect::<Vec<_>>()
     );
     assert_eq!(t.money(2), 10_100, "the newer counter settled first (+100)");
-    assert_eq!(t.money(1), 10_200, "the older counter settled second (+200)");
+    assert_eq!(
+        t.money(1),
+        10_200,
+        "the older counter settled second (+200)"
+    );
     assert_eq!(t.money(0), 9_700, "X's player paid both cuts");
     // Both settled before X: the effect still landed.
     assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1]);
@@ -444,7 +492,11 @@ fn lifo_resolution_with_multiple_links_from_one_seat() {
         "newest first: {:?}",
         ev_args(&t, "probe_fired", "n")
     );
-    assert_eq!(ev_args(&t, "probe_fired", "n"), vec![0, 1, 2], "n = settle order");
+    assert_eq!(
+        ev_args(&t, "probe_fired", "n"),
+        vec![0, 1, 2],
+        "n = settle order"
+    );
     assert_eq!(t.money(2), 10_100, "newest: +100");
     assert_eq!(t.money(1), 10_500, "P1's second +200, first +300");
     assert_eq!(t.money(0), 9_400, "X's player paid all three cuts");
@@ -662,7 +714,11 @@ fn chain_trigger(t: &Table, r#type: &str) -> String {
                 m.key().starts_with("log.why."),
                 "the trigger is a why phrase, not {m:?}"
             );
-            assert_ne!(m.key(), "log.why.generic", "a pay timing has a real phrase: {m:?}");
+            assert_ne!(
+                m.key(),
+                "log.why.generic",
+                "a pay timing has a real phrase: {m:?}"
+            );
             m.key().to_string()
         }
         other => panic!("{type} line must carry a nested trigger Msg: {other:?}", type = r#type),
@@ -705,5 +761,9 @@ fn a_non_card_timing_names_itself_in_the_chain_log() {
         .collect();
     assert_eq!(l2.len(), 1, "the counter is link 2: {l2:?}");
     assert_eq!(l2[0].msg.key(), "log.chain_link");
-    assert!(l2[0].card.ends_with("TEST:probe"), "link 2 is the probe: {:?}", l2[0].card);
+    assert!(
+        l2[0].card.ends_with("TEST:probe"),
+        "link 2 is the probe: {:?}",
+        l2[0].card
+    );
 }

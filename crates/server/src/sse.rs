@@ -196,9 +196,9 @@ async fn pump(
             if gone_room && dissolved.is_none() {
                 let _ = tx
                     .send(
-                        Event::default()
-                            .event("dissolve")
-                            .data(serde_json::json!({ "reason": "room.dissolved_empty" }).to_string()),
+                        Event::default().event("dissolve").data(
+                            serde_json::json!({ "reason": "room.dissolved_empty" }).to_string(),
+                        ),
                     )
                     .await;
                 break;

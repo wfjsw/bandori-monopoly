@@ -61,15 +61,26 @@ fn one_of_us_designation_marks_appear_and_die_with_the_card() {
     t.answer_tile(0, FUJIMI).unwrap();
     skip_all(&mut t);
     assert!(t.on_field(0, "AG:ONE OF US"), "field {:?}", t.field_ids(0));
-    let uid = field_card(&t, 0, "AG:ONE OF US").expect("field instance").uid;
+    let uid = field_card(&t, 0, "AG:ONE OF US")
+        .expect("field instance")
+        .uid;
     assert!(uid > 0, "field uid {uid}");
     // One [指定] mark per deed, owned by the field card's instance.
     let mine = designates_on(&t, HILL, uid);
     assert_eq!(mine.len(), 1, "mine designates: {:?}", t.marks());
     assert_eq!(mine[0].category, mark_category::DESIGNATE);
     assert_eq!(mine[0].kind, mark_kind::DESIGNATE);
-    assert_eq!(mine[0].instance, Some(uid), "instance = the field card: {:?}", mine[0]);
-    assert_eq!(mine[0].owner, 0, "label colour = the designating seat: {:?}", mine[0]);
+    assert_eq!(
+        mine[0].instance,
+        Some(uid),
+        "instance = the field card: {:?}",
+        mine[0]
+    );
+    assert_eq!(
+        mine[0].owner, 0,
+        "label colour = the designating seat: {:?}",
+        mine[0]
+    );
     let theirs = designates_on(&t, FUJIMI, uid);
     assert_eq!(theirs.len(), 1, "theirs designates: {:?}", t.marks());
     assert_eq!(theirs[0].instance, Some(uid), "{:?}", theirs[0]);
@@ -82,14 +93,15 @@ fn one_of_us_designation_marks_appear_and_die_with_the_card() {
         .collect();
     let mut sorted = all.clone();
     sorted.sort_unstable();
-    assert_eq!(sorted, vec![FUJIMI as i32, HILL as i32], "exactly the pair: {all:?}");
+    assert_eq!(
+        sorted,
+        vec![FUJIMI as i32, HILL as i32],
+        "exactly the pair: {all:?}"
+    );
     // 规则书: the designation lasts while the card is in play -- leaving the
     // field destroys the instance's units (`destroy_instance_units`).
     assert!(
-        t.m
-            .world_mut()
-            .unplace_card(0, "AG:ONE OF US")
-            .is_some(),
+        t.m.world_mut().unplace_card(0, "AG:ONE OF US").is_some(),
         "unplace the field card"
     );
     assert!(!t.on_field(0, "AG:ONE OF US"), "field {:?}", t.field_ids(0));
@@ -121,7 +133,11 @@ fn no_road_designation_mark_appears_and_dies_with_the_card() {
     t.answer(0, k).unwrap();
     assert_eq!(t.state(0, "exile"), 2, "two [除外] layers");
     assert_eq!(t.state(0, "exileTo"), 10, "the engine-owned return tile");
-    assert!(t.on_field(0, "MyGO:无路矢"), "field stand-in: {:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "MyGO:无路矢"),
+        "field stand-in: {:?}",
+        t.field_ids(0)
+    );
     let uid = field_card(&t, 0, "MyGO:无路矢")
         .expect("field instance")
         .uid;
@@ -133,10 +149,7 @@ fn no_road_designation_mark_appears_and_dies_with_the_card() {
     assert_eq!(marks[0].owner, 0, "{:?}", marks[0]);
     // Leaving the field destroys the instance's units.
     assert!(
-        t.m
-            .world_mut()
-            .unplace_card(0, "MyGO:无路矢")
-            .is_some(),
+        t.m.world_mut().unplace_card(0, "MyGO:无路矢").is_some(),
         "unplace the field card"
     );
     assert!(

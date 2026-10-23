@@ -18,9 +18,10 @@
 //! reads. 「主动移动经过任何玩家都将向其收取200资金」 is `PassPlayer`, and
 //! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 /// 「回忆地块」 -- the three the clause names.
 const MEMORY: [&str; 3] = ["小豆岛", "武道馆", "旧古河庭园"];
@@ -65,8 +66,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
 /// Residual guard for [`at_turn_start`]: 状态2 (the cap write must run) or
 /// the memory latch is clear (the 状态2 offer). Dynamic key.
 fn state2_or_clean(player_id: i32) -> bool {
-    state::get(player_id, state_key::SKILL_STATE) == 2
-        || state::get(player_id, DIRTY) == 0
+    state::get(player_id, state_key::SKILL_STATE) == 2 || state::get(player_id, DIRTY) == 0
 }
 
 /// 状态1's entry offer, and 状态2's cap.
@@ -99,8 +99,14 @@ fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     // 规则书: 「移动改为10+1d10」 -- the d20 becomes a d10 and a flat 10 rides
     // along; the summed roll is the walk's length (`set_steps` would pin the
     // walk to 10 and drop the die).
-    v.base = Some(Dice { count: 1, sides: 10 });
-    v.extra = Some(Dice { count: 10, sides: 0 });
+    v.base = Some(Dice {
+        count: 1,
+        sides: 10,
+    });
+    v.extra = Some(Dice {
+        count: 10,
+        sides: 0,
+    });
     v
 }
 
@@ -114,7 +120,9 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// sets the latch. `actor == owner` and the three named tiles are the condition.
 fn on_settle(player_id: i32) -> card_sdk::Asked {
     debug_assert!(ctx::trigger::player_id() == player_id);
-    debug_assert!(MEMORY.iter().any(|&n| ctx::trigger::tile() == ctx::tile_named(n)));
+    debug_assert!(MEMORY
+        .iter()
+        .any(|&n| ctx::trigger::tile() == ctx::tile_named(n)));
     state::set(player_id, DIRTY, 1);
     state::set(player_id, MEMO_DIRTY, 1);
     Ok(())

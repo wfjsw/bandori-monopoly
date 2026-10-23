@@ -15,9 +15,10 @@
 //! move at turn start」) and the engine reads; see the TODO below for the piece
 //! that is not expressible yet.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 use super::ran_red::REST_TURNS;
 
@@ -33,13 +34,25 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
         // Pure plan reshape; the one-shot latch / CiRCLE-veto arming ride
         // DiceRollAfter (the next event after the plan, before the walk).
-        On::Filter(Filter::DiceRollPlan("actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan)),
-        On::Action(Action::DiceRollAfter("actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, None, on_plan_after)),
+        On::Filter(Filter::DiceRollPlan(
+            "actor == owner && slot('skill.tsugumiPlain.owed') != 0",
+            None,
+            on_plan,
+        )),
+        On::Action(Action::DiceRollAfter(
+            "actor == owner && slot('skill.tsugumiPlain.owed') != 0",
+            None,
+            None,
+            on_plan_after,
+        )),
     ],
 )
-    .silent(&[1, 2])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+.silent(&[1, 2])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")
@@ -64,7 +77,10 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     // 「进行一次双倍掷骰的移动，向后移动经过CiRCLE时不获得CiRCLE奖励」 --
     // the owed move's own shape.
-    v.base = Some(Dice { count: 2, sides: 20 });
+    v.base = Some(Dice {
+        count: 2,
+        sides: 20,
+    });
     v.reverse = Some(true);
     v
 }

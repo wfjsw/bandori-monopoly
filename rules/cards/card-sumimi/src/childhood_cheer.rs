@@ -17,28 +17,36 @@
 //! `settleBefore`+`settleAfter`+`teleported` triple that missed a
 //! 「不触发结算」 walk.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
     "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
     &[
         On::Play("", None, Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
-        On::Action(Action::MoveAfter("actor == owner && move.main && card.placed", None, None, after_move)),
+        On::Action(Action::MoveAfter(
+            "actor == owner && move.main && card.placed",
+            None,
+            None,
+            after_move,
+        )),
         // The body-top `!is_placed` early-out is the condition now: a card the
         // move already landed (or that otherwise left the field) has nothing
         // left to discard, so the callback must not run (or flash) for it.
         On::Action(Action::AtEnd("card.placed", None, None, at_end)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"儿时玩伴的鼓励"#)
         .raw_name(r#"(初华（Sumimi）)儿时玩伴的鼓励"#)
         .tags(&[])
         .text(r#"可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。"#)
         // sheet cell L9
-        .fields(&[("group", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]));
+        .fields(&[("group", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]),
+);
 
 const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 

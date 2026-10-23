@@ -116,11 +116,7 @@ pub struct TriggerBuy {
 impl TriggerBuy {
     /// A buy payload with no deal rewrite yet (`deal_owner` remains `None`, so
     /// the commit keeps its default owner).
-    pub fn new(
-        kind: super::play::purchase::BuyKind,
-        seller: i32,
-        price: i32,
-    ) -> Self {
+    pub fn new(kind: super::play::purchase::BuyKind, seller: i32, price: i32) -> Self {
         Self {
             kind,
             seller: Payee::from_i32(seller),
@@ -599,13 +595,7 @@ pub trait CardRules: Send + Sync {
     /// log for a non-deed. `WasmRules` overrides this to run the tile's
     /// **rule instances** (`docs/TILES.md`) and falls back to this default for
     /// a tile with none.
-    fn settle_tile(
-        &self,
-        cx: &mut Cx,
-        player_id: usize,
-        tile: usize,
-        main: bool,
-    ) -> Flow<()> {
+    fn settle_tile(&self, cx: &mut Cx, player_id: usize, tile: usize, main: bool) -> Flow<()> {
         cx.land_at_built_in(player_id, tile, main)
     }
 

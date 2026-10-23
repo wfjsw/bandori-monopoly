@@ -12,30 +12,45 @@
 //! place this card on your field; it then fakes your house counts up to your
 //! best tile and pays out when one of your non-RiNG tiles collects rent.
 
-use card_sdk::abi::{prop, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{prop, ActionKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RINGING_BLOOM: CardDef = CardDef::new(
     "R:（燐子）Ringing Bloom",
     &[
         On::Play("", None, None, play),
-        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, None, pay_after)),
+        On::Action(Action::PayAfter(
+            "card.placed && pay_is_rent && target == owner",
+            None,
+            None,
+            pay_after,
+        )),
         // 规则书（2）: 「视为」 is continuous -- it tracks the max as houses move.
         // `HouseAdded` covers the rise path; there is no `HouseRemoved` kind yet,
         // so a raze of the max tile is not tracked (see the TODO on `apply_view`).
-        On::Action(Action::HouseAdded("card.placed && actor == owner", None, None, on_house_added)),
+        On::Action(Action::HouseAdded(
+            "card.placed && actor == owner",
+            None,
+            None,
+            on_house_added,
+        )),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::SONG, 1)])
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"Ringing Bloom"#)
         .raw_name(r#"（燐子）Ringing Bloom"#)
         .tags(&[])
-        .text(r#"（1）将此卡放置于自身场上
+        .text(
+            r#"（1）将此卡放置于自身场上
 （2）你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此效果影响获得额外房屋数的格子收费减半
-（3）你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。"#)
+（3）你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。"#,
+        )
         // sheet cell E12
-        .fields(&[("group", r#"Roselia"#), ("owner", r#"白金燐子"#)]));
+        .fields(&[("group", r#"Roselia"#), ("owner", r#"白金燐子"#)]),
+);
 
 const ID: &str = "R:（燐子）Ringing Bloom";
 

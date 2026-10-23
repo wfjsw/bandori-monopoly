@@ -19,14 +19,8 @@ fn set_draw_n(t: &mut Table, who: usize, n: usize) {
 fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
     let d = data();
     let props = rules().card_props(card);
-    t.m.world_mut().place_card_on(
-        &d,
-        who as i32,
-        tile as i32,
-        card,
-        Msg::default(),
-        props,
-    );
+    t.m.world_mut()
+        .place_card_on(&d, who as i32, tile as i32, card, Msg::default(), props);
 }
 
 fn drain(t: &mut Table) {
@@ -187,11 +181,7 @@ fn m03_eve_then_yolo() {
         t.p(0).tokens
     );
     assert_eq!(t.pos(0), 8, "4 + 2 + 2");
-    assert_eq!(
-        t.state(0, "ppFansUp"),
-        3,
-        "flipped 2 of the 5 face-up fans"
-    );
+    assert_eq!(t.state(0, "ppFansUp"), 3, "flipped 2 of the 5 face-up fans");
 }
 
 // =====================================================================
@@ -345,7 +335,10 @@ fn m06b_reunion_stops_on_passing() {
     }
     let pos = t.pos(0);
     eprintln!("m06b record: pos = {pos} (want just past 10)");
-    assert!(pos >= 10 && pos <= 15, "stops on passing P1 at 10, pos = {pos}");
+    assert!(
+        pos >= 10 && pos <= 15,
+        "stops on passing P1 at 10, pos = {pos}"
+    );
 }
 
 // =====================================================================
@@ -418,7 +411,10 @@ fn m08_ran_undoes_forced_move() {
             }
         }
     }
-    assert!(saw_counteract, "像往常一样 window must open for the forced move");
+    assert!(
+        saw_counteract,
+        "像往常一样 window must open for the forced move"
+    );
     // P0 rolls their main move, then ends the turn so 像往常一样's undo fires.
     drain(&mut t);
     t.dice(&[1]);
@@ -598,8 +594,7 @@ fn m12a_yukina_forced_stop() {
     t.dice(&[5]);
     t.roll(1).unwrap();
     while let Some(p) = t.prompt() {
-        if format!("{p:?}").contains("kokoro_practice_force")
-            || format!("{p:?}").contains("force")
+        if format!("{p:?}").contains("kokoro_practice_force") || format!("{p:?}").contains("force")
         {
             let _ = t.answer_one(0);
         } else {
@@ -674,7 +669,11 @@ fn m13_unstoppable_refuses_stop() {
                 .map(|x| x as i32)
                 .unwrap_or(0);
             t.answer(1, k).unwrap();
-            eprintln!("m13 after answer k={k}: pos1 = {} events = {:?}", t.pos(1), t.recent_keys(10));
+            eprintln!(
+                "m13 after answer k={k}: pos1 = {} events = {:?}",
+                t.pos(1),
+                t.recent_keys(10)
+            );
         } else {
             let k = t.option("refuse").or_else(|| t.option("拒绝"));
             if let Some(k) = k {
@@ -690,7 +689,10 @@ fn m13_unstoppable_refuses_stop() {
     // never offered; the tile prompt falls back to its first item).
     let pos = t.pos(1);
     let dist = pos.min(60 - pos);
-    assert!((1..=4).contains(&dist), "P1 moved 1..=4 tiles from 0: pos={pos}");
+    assert!(
+        (1..=4).contains(&dist),
+        "P1 moved 1..=4 tiles from 0: pos={pos}"
+    );
 }
 
 // =====================================================================
@@ -867,7 +869,10 @@ fn m18_plain_and_ordinary() {
             }
         }
     }
-    assert!(saw_counteract, "普通与理所当然 window must open for the forced move");
+    assert!(
+        saw_counteract,
+        "普通与理所当然 window must open for the forced move"
+    );
     // On P0's next turn, a loaded d20 of 15 moves 7 (the recorded distance).
     let before = t.pos(0);
     until_turn(&mut t, 0);
@@ -1008,11 +1013,7 @@ fn m22_mygo_band_move1() {
         t.decline();
     }
     assert_eq!(t.pos(0), 1, "moves 1");
-    assert_eq!(
-        t.crystals(0, &band),
-        Some(0),
-        "the band crystal is spent"
-    );
+    assert_eq!(t.crystals(0, &band), Some(0), "the band crystal is spent");
     assert_eq!(
         t.crystals(0, "CRYCHIC:想要成为人类"),
         Some(0),
@@ -1299,7 +1300,11 @@ fn m29_circle_reward_winners() {
     // 弦卷心「（2）[经过]CiRCLE时额外获得1500资金」. The CiRCLE reward's money
     // half (「[获得]2000资金」) also lands (the prompt fallback), so P1 nets
     // 10000 + 2000 + 1500. P0/P2 are vetoed by their band skills (2)/(3).
-    assert_eq!(t.money(1), 10_000 + 2000 + 1500, "reward 2000 + kkr's extra 1500");
+    assert_eq!(
+        t.money(1),
+        10_000 + 2000 + 1500,
+        "reward 2000 + kkr's extra 1500"
+    );
     assert_eq!(t.money(0), 10_000, "PPP band (2) vetoes the CiRCLE reward");
     assert_eq!(t.money(2), 10_000, "PP band (3) vetoes the CiRCLE reward");
 }

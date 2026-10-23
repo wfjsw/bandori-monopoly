@@ -26,9 +26,9 @@
 //! 原本的一半」 -- rides on the forced landing. The half-price is a pay bend on
 //! that settle, which is what `PaySplitMul` is.
 
-use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// Settle this player owes at their own next turn end, from （2）.
 const DUE: &str = "skill.tomoriPoem.due";
@@ -41,24 +41,42 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
     &[
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_DEED, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_DEED,
+            None,
+            None,
+            on_pass,
+        )),
         // （2）/（3） applicability: a landing within five tiles of the other
         // party. `actor == owner` is （3） (own landing near someone else);
         // `actor != owner` is （2） (someone else's landing near us). Both arms
         // live in the residual guard -- the CEL `pre` only needs a real tile.
         // The pot-cost split and the fire balance stay residual (dynamic).
         // `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
-        On::Action(Action::SettleBefore("tile.id >= 0", None, Some(before_settle_applies), before_settle)),
+        On::Action(Action::SettleBefore(
+            "tile.id >= 0",
+            None,
+            Some(before_settle_applies),
+            before_settle,
+        )),
         On::Filter(Filter::PaySplitMul("", Some(half), on_pay)),
-        On::Action(Action::TurnEnd("actor == owner && slot('skill.tomoriPoem.due') != 0", None, None, at_turn_end)),
+        On::Action(Action::TurnEnd(
+            "actor == owner && slot('skill.tomoriPoem.due') != 0",
+            None,
+            None,
+            at_turn_end,
+        )),
         // Drop the once-per-move latch when the move is fully resolved (after
         // any settle), so the next move gets a fresh press.
         On::Action(Action::MoveResolved("", None, None, clear_acted)),
     ],
 )
-    .silent(&[0, 1])
-    // 「（初始4，上限4）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 4), (bandori_std::fire::FIRE_CAP, 4)]);
+.silent(&[0, 1])
+// 「（初始4，上限4）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 4),
+    (bandori_std::fire::FIRE_CAP, 4),
+]);
 
 /// 「在此技能影响下的支付价格变为原本的一半」 -- only the payments of the
 /// player this skill moved.
@@ -108,9 +126,7 @@ fn before_settle_applies(player_id: i32) -> bool {
     // （3）「当你的[移动终点]位于其他玩家的前后五格内时」 -- this player's
     // landing within five of some other player.
     (0..ctx::player_count()).any(|p| {
-        p != player_id
-            && !ctx::player_out(p)
-            && ctx::dist(landing, ctx::player_pos(p)) <= 5
+        p != player_id && !ctx::player_out(p) && ctx::dist(landing, ctx::player_pos(p)) <= 5
     })
 }
 

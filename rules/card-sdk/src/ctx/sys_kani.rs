@@ -95,8 +95,6 @@ pub fn tile_in(player_id: i32, tile: i32, class_ptr: i32, class_len: i32) -> i32
     kani_host::call_i32(Op::tile_in, [player_id, tile, class_ptr, class_len, 0, 0])
 }
 
-
-
 pub fn tile_group(tile: i32) -> i32 {
     kani_host::call_i32(Op::tile_group, [tile, 0, 0, 0, 0, 0])
 }
@@ -411,15 +409,48 @@ pub fn card_counter(player_id: i32, cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
     kani_host::call_i32(Op::card_counter, [player_id, cp, cl, np, nl, 0])
 }
 
-pub fn add_card_counter(player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
+pub fn add_card_counter(
+    player_id: i32,
+    cp: i32,
+    cl: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
     kani_host::call_i32(Op::add_card_counter, [player_id, cp, cl, np, nl, n])
 }
 
-pub fn place_mark(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
+pub fn place_mark(
+    tile: i32,
+    kp: i32,
+    kl: i32,
+    cp: i32,
+    cl: i32,
+    owner: i32,
+    src: i32,
+    count: i32,
+    stack: i32,
+    np: i32,
+    nl: i32,
+) -> i32 {
     kani_host::call_i32(Op::place_mark, [tile, kp, kl, cp, cl, owner])
 }
 
-pub fn place_mark_pair(a: i32, b: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
+pub fn place_mark_pair(
+    a: i32,
+    b: i32,
+    kp: i32,
+    kl: i32,
+    cp: i32,
+    cl: i32,
+    owner: i32,
+    src: i32,
+    count: i32,
+    stack: i32,
+    np: i32,
+    nl: i32,
+) -> i32 {
     kani_host::call_i32(Op::place_mark_pair, [a, b, kp, kl, cp, cl])
 }
 
@@ -463,8 +494,19 @@ pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32) {
     kani_host::call_unit(Op::set_held_name, [np, nl, player_id, v, 0, 0]);
 }
 
-pub fn move_units(np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32) -> i32 {
-    kani_host::call_i32(Op::move_units, [np, nl, from_tile, from_player, to_tile, to_player])
+pub fn move_units(
+    np: i32,
+    nl: i32,
+    from_tile: i32,
+    from_player: i32,
+    to_tile: i32,
+    to_player: i32,
+    n: i32,
+) -> i32 {
+    kani_host::call_i32(
+        Op::move_units,
+        [np, nl, from_tile, from_player, to_tile, to_player],
+    )
 }
 
 pub fn self_uid() -> i32 {
@@ -579,12 +621,32 @@ pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32) -> i32 {
     kani_host::call_i32(Op::raise, [player_id, kind_p, kind_l, value, 0, 0])
 }
 
-pub fn gain_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32 {
-    kani_host::call_i32(Op::gain_marker, [player_id, name_p, name_l, n, why_p, why_l])
+pub fn gain_marker(
+    player_id: i32,
+    name_p: i32,
+    name_l: i32,
+    n: i32,
+    why_p: i32,
+    why_l: i32,
+) -> i32 {
+    kani_host::call_i32(
+        Op::gain_marker,
+        [player_id, name_p, name_l, n, why_p, why_l],
+    )
 }
 
-pub fn spend_marker(player_id: i32, name_p: i32, name_l: i32, n: i32, why_p: i32, why_l: i32) -> i32 {
-    kani_host::call_i32(Op::spend_marker, [player_id, name_p, name_l, n, why_p, why_l])
+pub fn spend_marker(
+    player_id: i32,
+    name_p: i32,
+    name_l: i32,
+    n: i32,
+    why_p: i32,
+    why_l: i32,
+) -> i32 {
+    kani_host::call_i32(
+        Op::spend_marker,
+        [player_id, name_p, name_l, n, why_p, why_l],
+    )
 }
 
 pub fn add_marker_max(player_id: i32, name_p: i32, name_l: i32, n: i32) -> i32 {
@@ -671,8 +733,18 @@ pub fn opt_ai(ai: i32) {
     kani_host::call_unit(Op::opt_ai, [ai, 0, 0, 0, 0, 0]);
 }
 
-pub fn ask(kind: i32, player_id: i32, title_ptr: i32, title_len: i32, text_ptr: i32, text_len: i32) -> i32 {
-    kani_host::call_i32(Op::ask, [kind, player_id, title_ptr, title_len, text_ptr, text_len])
+pub fn ask(
+    kind: i32,
+    player_id: i32,
+    title_ptr: i32,
+    title_len: i32,
+    text_ptr: i32,
+    text_len: i32,
+) -> i32 {
+    kani_host::call_i32(
+        Op::ask,
+        [kind, player_id, title_ptr, title_len, text_ptr, text_len],
+    )
 }
 
 pub fn trig_kind(p: i32, n: i32) -> i32 {
@@ -872,7 +944,10 @@ pub fn trig_effect_value(i: i32) -> i32 {
 }
 
 pub fn declare_effect(kind_p: i32, kind_l: i32, target: i32, from: i32, tile: i32, value: i32) {
-    kani_host::call_unit(Op::declare_effect, [kind_p, kind_l, target, from, tile, value]);
+    kani_host::call_unit(
+        Op::declare_effect,
+        [kind_p, kind_l, target, from, tile, value],
+    );
 }
 
 pub fn trig_card_is(ptr: i32, len: i32) -> i32 {
@@ -1151,14 +1226,11 @@ pub fn pay_build(player_id: i32, tile: i32, amount: i32) -> i32 {
     kani_host::call_i32(Op::pay_build, [player_id, tile, amount, 0, 0, 0])
 }
 
-pub fn assign_deed(
-    player_id: i32,
-    tile: i32,
-    owner: i32,
-    houses: i32,
-    mortgaged: i32,
-) -> i32 {
-    kani_host::call_i32(Op::assign_deed, [player_id, tile, owner, houses, mortgaged, 0])
+pub fn assign_deed(player_id: i32, tile: i32, owner: i32, houses: i32, mortgaged: i32) -> i32 {
+    kani_host::call_i32(
+        Op::assign_deed,
+        [player_id, tile, owner, houses, mortgaged, 0],
+    )
 }
 
 pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
@@ -1172,7 +1244,6 @@ pub fn card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32 {
 pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::gain_fixed, [player_id, amount, ptr, len, 0, 0])
 }
-
 
 pub fn paid_in_settle() -> i32 {
     kani_host::call_i32(Op::paid_in_settle, [0, 0, 0, 0, 0, 0])
@@ -1214,7 +1285,6 @@ pub fn turn_start_pos(player_id: i32) -> i32 {
     kani_host::call_i32(Op::turn_start_pos, [player_id, 0, 0, 0, 0, 0])
 }
 
-
 pub fn unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32 {
     kani_host::call_i32(Op::unplace_card_named, [player_id, cp, cl, 0, 0, 0])
 }
@@ -1250,7 +1320,6 @@ pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32 {
 pub fn do_move_roll(player_id: i32) -> i32 {
     kani_host::call_i32(Op::do_move_roll, [player_id, 0, 0, 0, 0, 0])
 }
-
 
 pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::placed_cards, [player_id, buf, cap, 0, 0, 0])

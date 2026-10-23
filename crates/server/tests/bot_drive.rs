@@ -16,16 +16,19 @@ use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{stage, BotMentality};
 use game_core::MatchMode;
-use server::botsvc::BotService;
 use server::apply_bot_answer;
+use server::botsvc::BotService;
 
 fn data() -> Arc<GameData> {
     // No ruleset in this harness: the three legacy JSON files are the bridge.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -77,9 +80,7 @@ fn parked_searchable() -> (Match, i32) {
         let st = m.state();
         let me = st.player_of(1);
         let at = (st.prompt.id > 0 && st.prompt.waiting(me))
-            || (!st.busy
-                && st.turn == me
-                && (st.step == stage::OPS || st.step == stage::END));
+            || (!st.busy && st.turn == me && (st.step == stage::OPS || st.step == stage::END));
         if st.phase == "play" && at {
             let view = bot_service::BotSeatView::from_match(&m, 1);
             let acts = bot_service::bot_action::legal_actions(
@@ -144,7 +145,10 @@ async fn a_refused_service_answer_falls_back_without_reasking() {
         "exactly one fallback -- never re-ask the service: {seen:?}"
     );
     assert_eq!(seen[0], refused, "the service's answer goes first");
-    assert_eq!(seen[1], heuristic, "then the heuristic, not a second search");
+    assert_eq!(
+        seen[1], heuristic,
+        "then the heuristic, not a second search"
+    );
 
     // The cached answer is gone: the next decide re-searches instead of
     // replaying the refused one (`reused: false`).

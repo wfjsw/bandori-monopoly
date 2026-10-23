@@ -13,25 +13,38 @@
 //! face replaces or is discarded at the player's choice; the choice is the
 //! whole point of spending the pot.
 
-use card_sdk::abi::{roll_source, ActionKind};
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{roll_source, ActionKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RAISE_EFFORT: CardDef = CardDef::new(
     "skill:和奏瑞依:一次又一次竭尽全力",
     &[
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
         // （2）「进行任意掷骰后，可选择使用一个[火罐]再投一次」 -- only with a
         // pot to spend. `fixed_roll` is derived plan state outside the CEL
         // schema (docs/GUARDS.md §4.2c): residual guard.
-        On::Action(Action::DiceRollAfter("actor == owner && charge(owner) >= 1", None, Some(roll_unfixed), on_roll)),
+        On::Action(Action::DiceRollAfter(
+            "actor == owner && charge(owner) >= 1",
+            None,
+            Some(roll_unfixed),
+            on_roll,
+        )),
     ],
 )
-    .silent(&[0, 1])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+.silent(&[0, 1])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

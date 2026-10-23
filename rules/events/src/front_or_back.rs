@@ -31,7 +31,9 @@ fn play(_player_id: i32) -> card_sdk::Asked {
         let face = roll(p, 1, 20);
         ctx::log(
             p,
-            &Msg::new("log.event.dice").player_id("who", p).i("n", face as i64),
+            &Msg::new("log.event.dice")
+                .player_id("who", p)
+                .i("n", face as i64),
         );
         let t = ctx::player_pos(p);
         if (0..30).contains(&t) {

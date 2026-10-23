@@ -23,9 +23,10 @@
 
 use alloc::vec::Vec;
 
-use bandori_std::state_key; use card_sdk::abi::{Flash, ActionKind, MoveKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, Flash, MoveKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The tile the clause names.
 fn hill() -> i32 {
@@ -47,8 +48,11 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
 // （1） gains a [火罐] -- owner-self-only, but the rulebook describes it
 // happening and the player should see the clause fire. `Always` beats Auto.
 .flash(&[(2, Flash::Always)])
-    // 「（初始0，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 1)]);
+// 「（初始0，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 0),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 /// 「初始0，上限1」 -- this skill states the fire-pot cap. It is a *consumer*
 /// deciding the bound; the engine only holds it.

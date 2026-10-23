@@ -21,8 +21,8 @@
 use card_sdk::CardDef;
 
 /// The board-owned [不可阻挡] rule. One instance on `BOARD_OWNER`, `tile = -1`.
-pub const STATUS_UNSTOPPABLE: CardDef = CardDef::new("status:unstoppable", &[])
-    .board_role("status");
+pub const STATUS_UNSTOPPABLE: CardDef =
+    CardDef::new("status:unstoppable", &[]).board_role("status");
 
 /// Does [不可阻挡] suppress a new [晕眩] / [除外] layer?
 /// (「也不会获得新的层数；无法获得新的[除外]层数」.)

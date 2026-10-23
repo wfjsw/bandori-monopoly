@@ -77,10 +77,7 @@ impl Ctx {
                 None
             }
         };
-        let roster = ruleset
-            .as_ref()
-            .map(|s| s.roster())
-            .unwrap_or_default();
+        let roster = ruleset.as_ref().map(|s| s.roster()).unwrap_or_default();
         let data = Arc::new(
             GameData::load(
                 |f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()),
@@ -118,11 +115,7 @@ impl Ctx {
             format: RECORD_VERSION,
             save_version: SAVE_VERSION,
             abi: game_rules::ABI_VERSION as u32,
-            ruleset_sha256: self
-                .rules
-                .ruleset_sha256()
-                .unwrap_or("stub")
-                .to_string(),
+            ruleset_sha256: self.rules.ruleset_sha256().unwrap_or("stub").to_string(),
             data_sha256: self.data_sha256.clone(),
             engine: "game-core".into(),
             build: env!("CARGO_PKG_VERSION").into(),
@@ -211,11 +204,9 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             // legacy path is record restore only -- `MatchSetup::clock: None`).
             let clock: game_core::clock::ClockSettings = match req.get("clock") {
                 None | Some(Value::Null) => Default::default(),
-                Some(c) => {
-                    serde_json::from_value::<game_core::clock::ClockSettings>(c.clone())
-                        .map_err(|e| format!("clock: {e}"))?
-                        .sanitized()
-                }
+                Some(c) => serde_json::from_value::<game_core::clock::ClockSettings>(c.clone())
+                    .map_err(|e| format!("clock: {e}"))?
+                    .sanitized(),
             };
             // Prefer the derived 256-bit seed (every new match,
             // `docs/FAIRNESS.md`); a bare u64 `seed` is the legacy path, kept
@@ -225,8 +216,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             mode.check_seats(members.len())?;
             let mut m = match req.get("seed256").and_then(Value::as_str) {
                 Some(hex) => {
-                    let key = game_core::fair::unhex32(hex)
-                        .map_err(|e| format!("seed256: {e}"))?;
+                    let key = game_core::fair::unhex32(hex).map_err(|e| format!("seed256: {e}"))?;
                     Match::new_seeded_with_clock(
                         ctx.data.clone(),
                         ctx.rules.clone(),

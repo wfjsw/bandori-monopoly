@@ -319,7 +319,8 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut iv = tokio::time::interval(Duration::from_millis(1000 / TICK_HZ));
         iv.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        let mut ticks: std::collections::HashMap<String, RoomTick> = std::collections::HashMap::new();
+        let mut ticks: std::collections::HashMap<String, RoomTick> =
+            std::collections::HashMap::new();
         loop {
             iv.tick().await;
             // The lobby list is the store's, not this process's cache.
@@ -484,7 +485,11 @@ async fn probe_one(
         return false;
     };
     // The seat's own decision supersedes any speculative search in flight.
-    server.bot_drive.lock().unwrap().cancel_ponder(room_id, member);
+    server
+        .bot_drive
+        .lock()
+        .unwrap()
+        .cancel_ponder(room_id, member);
     let budget = server
         .bot_budget_ms
         .unwrap_or_else(|| botsvc::budget_ms(state, prompt_id));

@@ -63,10 +63,7 @@ crate::host_subset!(dice_cast_subset {
 });
 
 /// Same reads as `host::dispatch` `Op::turn_key`; rest is the loud subset.
-fn dice_cast_dispatch(
-    op: card_sdk::kani_host::Op,
-    a: card_sdk::kani_host::Args,
-) -> i64 {
+fn dice_cast_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Args) -> i64 {
     match op {
         card_sdk::kani_host::Op::turn_key => world::with_world(|w| w.turn_key) as i64,
         other => dice_cast_subset(other, a),
@@ -108,10 +105,7 @@ crate::host_subset!(doll_garden_subset {
 
 /// Same reads as `host::dispatch` `Op::stay_of` / `Op::stun_of`; rest is the
 /// loud subset.
-fn doll_garden_dispatch(
-    op: card_sdk::kani_host::Op,
-    a: card_sdk::kani_host::Args,
-) -> i64 {
+fn doll_garden_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Args) -> i64 {
     match op {
         card_sdk::kani_host::Op::stay_of => {
             let p = a[0];
@@ -175,11 +169,7 @@ fn effects_of(buf: &mut [Effect; world::MAX_LOG]) -> usize {
 
 /// In-place 2-seat world on `dispatch`, then `f` for the card-specific fields.
 /// No `reset_world` full-struct copy (SSA cliff).
-fn sparse2(
-    dispatch: card_sdk::kani_host::Backend,
-    user: i32,
-    f: impl FnOnce(&mut world::World),
-) {
+fn sparse2(dispatch: card_sdk::kani_host::Backend, user: i32, f: impl FnOnce(&mut world::World)) {
     host::install_backend(dispatch);
     world::with_world_mut(|w| {
         w.n_players = 2;
@@ -224,7 +214,13 @@ fn black_bday_low_iff_at(user: i32) {
         "C-MUJICA-黑色生日-01: exactly one PayTo(other→user, 800) plus the latch"
     );
     crate::kassert!(
-        spec::black_bday_low_post_ok(&post, other, user, pre.money[other as usize], pre.money[user as usize]),
+        spec::black_bday_low_post_ok(
+            &post,
+            other,
+            user,
+            pre.money[other as usize],
+            pre.money[user as usize]
+        ),
         "C-MUJICA-黑色生日-01: money moved 800"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
@@ -270,7 +266,13 @@ fn black_bday_high_iff_at(user: i32) {
         "C-MUJICA-黑色生日-02: exactly two PayTo(other→user, 200) plus the latch"
     );
     crate::kassert!(
-        spec::black_bday_high_post_ok(&post, other, user, pre.money[other as usize], pre.money[user as usize]),
+        spec::black_bday_high_post_ok(
+            &post,
+            other,
+            user,
+            pre.money[other as usize],
+            pre.money[user as usize]
+        ),
         "C-MUJICA-黑色生日-02: money moved 400"
     );
 }
@@ -798,7 +800,13 @@ pub fn welcome_toggle_arithmetic_iff() {
     let to = spec::welcome_next_state(cur, has_state2);
     if has_state2 {
         crate::kassert!(
-            to == if cur == 1 { 2 } else if cur == 2 { 1 } else { cur },
+            to == if cur == 1 {
+                2
+            } else if cur == 2 {
+                1
+            } else {
+                cur
+            },
             "C-MUJICA-欢迎-02: skillState toggles 1↔2"
         );
     } else {
@@ -811,10 +819,7 @@ pub fn welcome_toggle_arithmetic_iff() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn welcome_no_state2_mutant_is_detected() {
-    crate::kassert!(
-        spec::welcome_next_state(0, false) == 0,
-        "no 状态2 → no-op"
-    );
+    crate::kassert!(spec::welcome_next_state(0, false) == 0, "no 状态2 → no-op");
     crate::kassert!(
         spec::welcome_next_state_mutant(0, false) == 2,
         "mutant would force 状态2"
@@ -980,7 +985,10 @@ pub fn saki_move_dest_is_three_tiles() {
     } else {
         (((from - 3) % 60) + 60) % 60
     };
-    crate::kassert!(dest == expected, "C-MUJICA-祥移动-01: dest is from±3 mod 60");
+    crate::kassert!(
+        dest == expected,
+        "C-MUJICA-祥移动-01: dest is from±3 mod 60"
+    );
 }
 
 /// MUTANT: 4-tile walk.

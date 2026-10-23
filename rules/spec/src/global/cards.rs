@@ -27,14 +27,7 @@ use spec_kit::{Clause, Step};
 /// transition -- they live as scenario tests in `tests/g_cards.rs` and are
 /// documented in the area doc under their own IDs.
 pub const CLAUSES: &[Clause] = &[
-    G_CARDS_01,
-    G_CARDS_03,
-    G_CARDS_04,
-    G_CARDS_05,
-    G_CARDS_06,
-    G_CARDS_11,
-    G_CARDS_12,
-    G_CARDS_13,
+    G_CARDS_01, G_CARDS_03, G_CARDS_04, G_CARDS_05, G_CARDS_06, G_CARDS_11, G_CARDS_12, G_CARDS_13,
 ];
 
 // G-CARDS-02 is **not** armed on the soak (see [`G_CARDS_02`]): a "pure" draw
@@ -122,12 +115,11 @@ fn counts(w: &World, i: usize, id: &str) -> (usize, usize, usize) {
     } else {
         player_discard
     };
-    let player_field = w
-        .st
-        .players
-        .get(i)
-        .map(|p| p.field.iter().filter(|f| f.card == id).count())
-        .unwrap_or(0);
+    let player_field =
+        w.st.players
+            .get(i)
+            .map(|p| p.field.iter().filter(|f| f.card == id).count())
+            .unwrap_or(0);
     let field = if is_event {
         player_field
             + w.st
@@ -286,12 +278,7 @@ pub fn g_cards_02(step: &Step<'_>) -> Result<(), String> {
     if !pure_pile_window(step) {
         return Ok(());
     }
-    let n = step
-        .pre
-        .st
-        .players
-        .len()
-        .max(step.post.st.players.len());
+    let n = step.pre.st.players.len().max(step.post.st.players.len());
     for i in 0..n {
         let pre = pile_multiset(step.pre, i);
         let post = pile_multiset(step.post, i);
@@ -360,7 +347,12 @@ pub fn g_cards_03(step: &Step<'_>) -> Result<(), String> {
     // 「使用后的非[持续]手卡进入弃卡区」 does not send them to the player's
     // discard. The soak can arrange an event id into a hand and play it; the
     // body's `keep()` / 「放入事件弃牌」 / 「永久移除」 owns where it lands.
-    if id.starts_with("event:") || step.data.event(id.strip_prefix("event:").unwrap_or(id)).is_some() {
+    if id.starts_with("event:")
+        || step
+            .data
+            .event(id.strip_prefix("event:").unwrap_or(id))
+            .is_some()
+    {
         return Ok(());
     }
     // Card effects override (特别注意 3): a body that places itself on the
@@ -442,12 +434,7 @@ pub fn g_cards_04(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     for who in reshuffled {
-        let pre_draw = step
-            .pre
-            .hidden
-            .get(who)
-            .map(|h| h.draw.len())
-            .unwrap_or(0);
+        let pre_draw = step.pre.hidden.get(who).map(|h| h.draw.len()).unwrap_or(0);
         let pre_discard = step
             .pre
             .hidden
@@ -683,13 +670,10 @@ pub fn g_cards_12(step: &Step<'_>) -> Result<(), String> {
         .map(|e| e.card.as_str())
         .collect();
     for id in drawn {
-        let text = step
-            .data
-            .event(id)
-            .map(|e| e.text.as_str())
-            .unwrap_or("");
+        let text = step.data.event(id).map(|e| e.text.as_str()).unwrap_or("");
         // Card-effect overrides: stay on the board, or leave the game.
-        if text.contains("放置于场地中央") || text.contains("永久移除") || text.contains("[移除]") {
+        if text.contains("放置于场地中央") || text.contains("永久移除") || text.contains("[移除]")
+        {
             continue;
         }
         // Derived events are 「永久移除」 rather than recycled (engine +
@@ -780,9 +764,7 @@ pub fn g_cards_13(step: &Step<'_>) -> Result<(), String> {
         // Nothing to shuffle; the engine logs nothing in this case. A log
         // with both piles empty is still a book violation of "shuffle the
         // discard" (there was no discard).
-        return Err(
-            "event pile reshuffled with an empty discard (nothing to shuffle)".into(),
-        );
+        return Err("event pile reshuffled with an empty discard (nothing to shuffle)".into());
     }
     Ok(())
 }

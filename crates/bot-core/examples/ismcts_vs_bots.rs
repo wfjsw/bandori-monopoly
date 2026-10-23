@@ -41,10 +41,13 @@ fn data() -> Arc<GameData> {
     // bot-core must not grow a hard dep on the card crates, so the roster
     // comes from the generated roster fixture (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -303,7 +306,16 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
                 }
                 m.tick(0.25);
                 if o.ponder {
-                    ponder_next(&data, &rules, &m, member, seat, o, &mut ponder_cache, &mut s);
+                    ponder_next(
+                        &data,
+                        &rules,
+                        &m,
+                        member,
+                        seat,
+                        o,
+                        &mut ponder_cache,
+                        &mut s,
+                    );
                 }
                 continue;
             }
@@ -326,7 +338,16 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
                     }
                     m.tick(0.25);
                     if o.ponder {
-                        ponder_next(&data, &rules, &m, member, seat, o, &mut ponder_cache, &mut s);
+                        ponder_next(
+                            &data,
+                            &rules,
+                            &m,
+                            member,
+                            seat,
+                            o,
+                            &mut ponder_cache,
+                            &mut s,
+                        );
                     }
                     continue;
                 }
@@ -376,7 +397,16 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
             }
             m.tick(0.25);
             if o.ponder {
-                ponder_next(&data, &rules, &m, member, seat, o, &mut ponder_cache, &mut s);
+                ponder_next(
+                    &data,
+                    &rules,
+                    &m,
+                    member,
+                    seat,
+                    o,
+                    &mut ponder_cache,
+                    &mut s,
+                );
             }
         }
         let (r, sc, rd) = end_summary(&m);
@@ -419,13 +449,8 @@ fn ponder_next(
     if cache.contains_key(&key) {
         return;
     }
-    let searched = bot_core::action::legal_actions(
-        data,
-        &pred.state,
-        &pred.hand,
-        &pred.playable,
-        seat,
-    );
+    let searched =
+        bot_core::action::legal_actions(data, &pred.state, &pred.hand, &pred.playable, seat);
     if bot_core::action::trivial_decision(&searched).is_some() {
         return;
     }
@@ -491,11 +516,7 @@ fn print_run(label: &str, o: &Opts, s: &RunStats) {
     );
     println!(
         "  seat0 rank {:.2}, score {:.0}, wins {}/{}, rounds {:.0}",
-        s.rank,
-        s.score,
-        s.wins,
-        o.games,
-        s.rounds
+        s.rank, s.score, s.wins, o.games, s.rounds
     );
     println!(
         "  surfaces: delegated {}, searched {} | failbacks: delegated-act {}, search-heuristic {}, search-act-refused {}",
@@ -595,10 +616,7 @@ fn main() {
             profile: o.profile,
             ..o
         };
-        let new = Opts {
-            legacy: false,
-            ..o
-        };
+        let new = Opts { legacy: false, ..o };
         let s_old = run_ismcts(&data, rules.clone(), &old);
         print_run("legacy", &old, &s_old);
         let s_new = run_ismcts(&data, rules.clone(), &new);

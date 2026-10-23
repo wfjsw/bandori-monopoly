@@ -58,11 +58,7 @@ fn self_crystals() -> i32 {
 
 /// Sparse 2-seat play world on `dispatch`, then `f` for the skill-specific
 /// fields. In-place only — no `reset_world` full-struct copy.
-fn sparse2(
-    dispatch: card_sdk::kani_host::Backend,
-    user: i32,
-    f: impl FnOnce(&mut world::World),
-) {
+fn sparse2(dispatch: card_sdk::kani_host::Backend, user: i32, f: impl FnOnce(&mut world::World)) {
     host::install_backend(dispatch);
     crate::harness::sparse_play_world(crate::harness::SparsePlay {
         used_seats: 2,
@@ -192,7 +188,6 @@ mod tomori_spend {
         kani::cover!(!wrong, "one-effect mutant disagrees");
         crate::kassert!(!wrong, "mutant (non-empty log) must NOT match");
     }
-
 }
 
 #[cfg(feature = "skills-personas")]
@@ -274,7 +269,10 @@ mod soyo_cancel {
             post.pay_amount == 0,
             "C-CRYCHIC-soyoskill-01: pending pay amount is 0"
         );
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (waive at rewrite time)");
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "frame: money (waive at rewrite time)"
+        );
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     }
 
@@ -371,13 +369,7 @@ fn band_01_iff_at(user: i32) {
     let effects = &ebuf[..log_n];
 
     crate::kassert!(
-        spec::band_01_log_ok(
-            effects,
-            user,
-            seen_key,
-            limit_key,
-            hand
-        ),
+        spec::band_01_log_ok(effects, user, seen_key, limit_key, hand),
         "C-CRYCHIC-band-01: SetState{handLimit, i32::MAX} + SetState{SEEN, hand}"
     );
     // Book value is observable through the fixed host.
@@ -442,7 +434,11 @@ fn band_03_crossing_iff_at(user: i32) {
 
     // Filter to the AddCounter for the crystal key (the body also rewrites
     // SEEN via `state_set`, which is a second effect).
-    let mut crystal_effects = [Effect::AddCounter { owner: -1, key: 0, n: 0 }; 4];
+    let mut crystal_effects = [Effect::AddCounter {
+        owner: -1,
+        key: 0,
+        n: 0,
+    }; 4];
     let mut cn = 0usize;
     let mut i = 0usize;
     while i < log_n {
@@ -511,10 +507,7 @@ pub fn band_03_no_crossing_noop() {
     let has_crystal = effects
         .iter()
         .any(|e| matches!(e, Effect::AddCounter { .. }));
-    crate::kassert!(
-        !has_crystal,
-        "C-CRYCHIC-band-03: no crystal when SEEN != 4"
-    );
+    crate::kassert!(!has_crystal, "C-CRYCHIC-band-03: no crystal when SEEN != 4");
     kani::cover!(true, "no-crossing path");
 }
 
@@ -536,7 +529,11 @@ pub fn band_03_mutant_is_detected() {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
     // Filter to the AddCounter for the crystal key.
-    let mut crystal_effects = [Effect::AddCounter { owner: -1, key: 0, n: 0 }; 4];
+    let mut crystal_effects = [Effect::AddCounter {
+        owner: -1,
+        key: 0,
+        n: 0,
+    }; 4];
     let mut cn = 0usize;
     let mut i = 0usize;
     while i < log_n {

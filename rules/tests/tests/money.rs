@@ -113,7 +113,10 @@ fn negative_gain_modifier_shrinks_the_gain() {
         "gain stays in [0, 2000]: {gained} (events {:?})",
         t.recent_keys(6)
     );
-    assert!(t.money(0) >= 10_000, "money never drops from a net-positive gain");
+    assert!(
+        t.money(0) >= 10_000,
+        "money never drops from a net-positive gain"
+    );
 }
 
 // =====================================================================
@@ -135,7 +138,12 @@ fn two_sided_negative_final_reverses_the_payment() {
     t.give_play(0, "TEST:xfer1000").unwrap();
     skip_all(&mut t);
     // Original settles at 0; the reverse is P1 paying P0 500.
-    assert_eq!(t.money(0), 10_500, "P0 receives the reverse: {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        10_500,
+        "P0 receives the reverse: {:?}",
+        t.recent_keys(8)
+    );
     assert_eq!(t.money(1), 9_500, "P1 pays the reverse");
 }
 
@@ -152,7 +160,12 @@ fn one_sided_negative_gain_becomes_a_loss() {
     t.give_play(0, "TEST:gain1000").unwrap();
     skip_all(&mut t);
     // 1000 gain → −500 → original 0 → reverse: P0 loses 500.
-    assert_eq!(t.money(0), 9_500, "the gain reversed into a loss: {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        9_500,
+        "the gain reversed into a loss: {:?}",
+        t.recent_keys(8)
+    );
 }
 
 /// The mirror: one-sided 「[消耗]」 (A→bank) driven negative becomes a gain.
@@ -163,7 +176,12 @@ fn one_sided_negative_loss_becomes_a_gain() {
     t.give_play(0, "TEST:lose1000").unwrap();
     skip_all(&mut t);
     // 1000 loss → −500 → original 0 → reverse: P0 gains 500.
-    assert_eq!(t.money(0), 10_500, "the loss reversed into a gain: {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        10_500,
+        "the loss reversed into a gain: {:?}",
+        t.recent_keys(8)
+    );
 }
 
 /// The reverse child runs the full pipeline including the Q1 shortfall path:
@@ -182,7 +200,11 @@ fn reversal_shortfall_raises_funds_then_bankrupts() {
     t.set_money(0, 10_000);
     t.give_play(0, "TEST:xfer1000").unwrap();
     skip_all(&mut t);
-    assert!(t.p(1).bankrupt, "the reverse payer is out: {:?}", t.recent_keys(10));
+    assert!(
+        t.p(1).bankrupt,
+        "the reverse payer is out: {:?}",
+        t.recent_keys(10)
+    );
     assert_eq!(t.money(1), 0, "every fund left the bankrupt seat");
 }
 
@@ -243,10 +265,19 @@ fn card_shortfall_may_be_funded_by_mortgage() {
     t.give_play(0, "通用:登上武道馆").unwrap();
     // The raise-funds path opens the mortgage offer before going under.
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "mortgage", "the mortgage offer: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "mortgage",
+        "the mortgage offer: {}",
+        t.dump_prompt()
+    );
     t.answer_items(1, &[&land.to_string()]).unwrap();
     skip_all(&mut t);
-    assert!(!t.p(1).bankrupt, "P1 stays in: events {:?}", t.recent_keys(10));
+    assert!(
+        !t.p(1).bankrupt,
+        "P1 stays in: events {:?}",
+        t.recent_keys(10)
+    );
     assert!(t.mortgaged(land), "the deed is mortgaged");
     // 1000 + 1500 (抵押) - 2000 (paid) = 500.
     assert_eq!(t.money(1), 500, "mortgage funded the payment");
@@ -302,7 +333,11 @@ fn self_payment_leaves_money_unchanged_when_affordable() {
     let mark = t.mark();
     t.give_play(0, "TEST:selfCharge").unwrap();
     skip_all(&mut t);
-    assert_eq!(t.money(0), 10_000, "the debit and the credit cancel (zero net)");
+    assert_eq!(
+        t.money(0),
+        10_000,
+        "the debit and the credit cancel (zero net)"
+    );
     let keys = t.keys_since(mark);
     assert!(
         keys.iter().any(|k| k.contains("pay_add_any")),
@@ -345,12 +380,21 @@ fn self_payment_may_be_funded_by_mortgage() {
     t.give_play(0, "TEST:selfCharge").unwrap();
     // The raise-funds path opens the mortgage offer before going under.
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "mortgage", "the mortgage offer: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "mortgage",
+        "the mortgage offer: {}",
+        t.dump_prompt()
+    );
     let idx: Vec<String> = deeds.iter().map(|d| d.to_string()).collect();
     let picks: Vec<&str> = idx.iter().map(|s| s.as_str()).collect();
     t.answer_items(0, &picks).unwrap();
     skip_all(&mut t);
-    assert!(!t.p(0).bankrupt, "P0 stays in: events {:?}", t.recent_keys(10));
+    assert!(
+        !t.p(0).bankrupt,
+        "P0 stays in: events {:?}",
+        t.recent_keys(10)
+    );
     // Debit and credit cancel: the money is the cash plus the 抵押 proceeds.
     assert_eq!(
         t.money(0),
@@ -380,7 +424,11 @@ fn gacha10_playable_while_short_then_bankrupts() {
         t.recent_keys(6)
     );
     skip_all(&mut t);
-    assert!(t.p(0).bankrupt, "the in-body 消耗 bankrupts: {:?}", t.recent_keys(10));
+    assert!(
+        t.p(0).bankrupt,
+        "the in-body 消耗 bankrupts: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 /// 规则书（Fire bird）: 「支付1600资金将此卡放置在自己场地上…」 -- the pay is
@@ -400,10 +448,19 @@ fn fire_bird_playable_while_short_then_mortgages() {
     );
     // Q1: the 1600 shortfall opens the mortgage offer (规则书 L76).
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "mortgage", "the mortgage offer: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "mortgage",
+        "the mortgage offer: {}",
+        t.dump_prompt()
+    );
     t.answer_items(0, &[&land.to_string()]).unwrap();
     skip_all(&mut t);
-    assert!(!t.p(0).bankrupt, "mortgage funded it: {:?}", t.recent_keys(10));
+    assert!(
+        !t.p(0).bankrupt,
+        "mortgage funded it: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 /// 规则书（绯红之魂）: 「选择[消耗]1到5次500资金…」 -- playable while short; the
@@ -425,7 +482,11 @@ fn crimson_soul_playable_while_short_then_bankrupts() {
         }
     }
     skip_all(&mut t);
-    assert!(t.p(0).bankrupt, "the in-body 消耗 bankrupts: {:?}", t.recent_keys(10));
+    assert!(
+        t.p(0).bankrupt,
+        "the in-body 消耗 bankrupts: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 /// 规则书（因为我一直相信着你）: 「至少有另一张手牌时可发动，消耗800资金…」 --
@@ -442,7 +503,11 @@ fn believe_you_playable_while_short_then_bankrupts() {
         t.recent_keys(6)
     );
     skip_all(&mut t);
-    assert!(t.p(0).bankrupt, "the in-body 消耗 bankrupts: {:?}", t.recent_keys(10));
+    assert!(
+        t.p(0).bankrupt,
+        "the in-body 消耗 bankrupts: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 /// 规则书（kkr 前往笑容集结的地方）: 「支付10000资金（视为买地花费）…」 --
@@ -462,7 +527,11 @@ fn kokoro_circle_playable_while_short_then_bankrupts() {
         t.recent_keys(6)
     );
     skip_all(&mut t);
-    assert!(t.p(0).bankrupt, "the in-body 支付 bankrupts: {:?}", t.recent_keys(10));
+    assert!(
+        t.p(0).bankrupt,
+        "the in-body 支付 bankrupts: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 /// 规则书（蝴蝶飞舞的星月夜）: 「支付X次1000的的资金…」 -- playable while short;
@@ -484,7 +553,11 @@ fn starry_night_playable_while_short_then_bankrupts() {
         }
     }
     skip_all(&mut t);
-    assert!(t.p(0).bankrupt, "the in-body 支付 bankrupts: {:?}", t.recent_keys(10));
+    assert!(
+        t.p(0).bankrupt,
+        "the in-body 支付 bankrupts: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 // =====================================================================
@@ -514,13 +587,24 @@ fn marker_spend_window_cancels_the_spend() {
         }
         let _ = p;
     }
-    let trap: Vec<_> = t.events_since(0).into_iter()
+    let trap: Vec<_> = t
+        .events_since(0)
+        .into_iter()
         .filter(|e| e.msg.key().contains("card_trap"))
         .map(|e| format!("{:?}", e.msg))
         .collect();
-    assert!(denied, "the markerSpend window opened: {:?} traps {:?}", t.recent_keys(10), trap);
+    assert!(
+        denied,
+        "the markerSpend window opened: {:?} traps {:?}",
+        t.recent_keys(10),
+        trap
+    );
     // Nothing was spent: the +5 gain landed, the -3 was cancelled.
-    assert_eq!(t.token(0, "TEST:tok"), 5, "the cancelled spend moved nothing");
+    assert_eq!(
+        t.token(0, "TEST:tok"),
+        5,
+        "the cancelled spend moved nothing"
+    );
 }
 
 /// Marker ownership (user ruling 2026-10-07): a marker is owned by the rule
@@ -539,7 +623,7 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
         let w = t.m.world_mut();
         w.note_marker_owner("抹茶芭菲", "skill:要乐奈:投币式停车场的猫");
         w.set_tok(1, "抹茶芭菲", 2, -1); // arrange-only row; name-keyed lookup
-        // One parfait row on Space (fresh row, owner seat 1).
+                                         // One parfait row on Space (fresh row, owner seat 1).
         w.place_mark(
             -1,
             "抹茶芭菲",
@@ -548,7 +632,9 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
             1,
             -1,
             1,
-            Default::default(), true);
+            Default::default(),
+            true,
+        );
         // A neutral [CP点] row on CiRCLE -- units of the standing `mark:cp`
         // counter, so they outlive any placer.
         w.place_mark(
@@ -559,7 +645,9 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
             game_core::state::BOARD_OWNER,
             -1,
             1,
-            Default::default(), true);
+            Default::default(),
+            true,
+        );
     }
     // P0 is forced under by a rent they cannot cover.
     t.set_money(0, 0);
@@ -571,9 +659,15 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
     t.roll(0).unwrap();
     skip_all(&mut t);
     assert!(t.p(0).bankrupt, "P0 is out: {:?}", t.recent_keys(12));
-    assert_eq!(t.token(1, "抹茶芭菲"), 0, "the other player's copy is cleared");
+    assert_eq!(
+        t.token(1, "抹茶芭菲"),
+        0,
+        "the other player's copy is cleared"
+    );
     assert!(
-        t.marks_on(tile("Space")).iter().all(|m| m.kind != "抹茶芭菲"),
+        t.marks_on(tile("Space"))
+            .iter()
+            .all(|m| m.kind != "抹茶芭菲"),
         "the tile copy is cleared: {:?}",
         t.marks_on(tile("Space"))
     );
@@ -597,7 +691,7 @@ fn misaki_may_counteract_with_zero_fire() {
     let mut t = Table::vanilla(3);
     t.give(0, &["HHW:（美咲）"]);
     t.set_fire(0, 0, 3); // empty pot
-    // A rival standing 2 tiles ahead of P0.
+                         // A rival standing 2 tiles ahead of P0.
     t.set_pos(0, 10);
     t.set_pos(1, 12);
     t.give_play(0, "TEST:fireRoll").unwrap();
@@ -665,7 +759,11 @@ fn rainbow_half_then_pay_add_rounds_once_at_settle() {
     t.give(0, &["Mor:秘密与青春的虹彩"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:秘密与青春的虹彩"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
     skip_all(&mut t);
     // 140 → half fold 70 → +100 = 170 → ceil10 = 170.

@@ -161,7 +161,10 @@ pub(crate) fn buy(player_id: i32) -> card_sdk::Asked {
         .tile("tile", at)
         .n("price", price as i64);
     if houses > 0 {
-        text = text.msg("extra", &Msg::new("log.part.incl_houses").i("h", houses as i64));
+        text = text.msg(
+            "extra",
+            &Msg::new("log.part.incl_houses").i("h", houses as i64),
+        );
     }
     ctx::log(player_id, &text);
     // `bought` (Fx) -- the owner is set. `buyAfter` -- the deed has changed hands.

@@ -11,9 +11,8 @@ use game_core::net::NetMessage;
 
 /// Use `who`'s `skill` with an explicit `value` (e.g. X for a fire-count skill).
 fn skill_with(t: &mut Table, who: usize, skill: &str, x: i32) -> Result<(), String> {
-    let r = t
-        .m
-        .act(
+    let r =
+        t.m.act(
             who as i32 + 1,
             &NetMessage {
                 card: skill.into(),
@@ -64,14 +63,8 @@ fn until_turn(t: &mut Table, who: usize) {
 fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
     let d = data();
     let props = rules().card_props(card);
-    t.m.world_mut().place_card_on(
-        &d,
-        who as i32,
-        tile as i32,
-        card,
-        Msg::default(),
-        props,
-    );
+    t.m.world_mut()
+        .place_card_on(&d, who as i32, tile as i32, card, Msg::default(), props);
 }
 
 /// Drain, declaring `card` as `who` whenever it is offered.
@@ -151,7 +144,11 @@ fn g26_popipa_crystals_and_kasumi_fire_on_one_settle() {
     drain_playing(&mut t, 0, "PPP:[衍生]Popipapapipopa");
     drain(&mut t);
     // P0 gains 1 fire from the hill settle regardless.
-    assert_eq!(t.charge(0), 1, "Kasumi's (1) gives 1 fire on the hill settle");
+    assert_eq!(
+        t.charge(0),
+        1,
+        "Kasumi's (1) gives 1 fire on the hill settle"
+    );
     // The rent is reduced by 150 per crystal spent (3 -> 450).
     assert_eq!(
         t.money(1),
@@ -260,7 +257,10 @@ fn g29_maya_look_at_top_inside_the_draw_curve() {
     set_draw_n(&mut t, 0, 8);
     t.set_hand(0, &["R:[衍生] 觉悟"]);
     // Put 春日影 on top of the draw pile so it is drawn and auto-played.
-    t.set_draw(0, &["CRYCHIC:春日影", FILL, FILL, FILL, FILL, FILL, FILL, FILL]);
+    t.set_draw(
+        0,
+        &["CRYCHIC:春日影", FILL, FILL, FILL, FILL, FILL, FILL, FILL],
+    );
     // Trigger a draw (CiRCLE reward).
     t.set_pos(0, 59);
     t.dice(&[2]);
@@ -319,7 +319,11 @@ fn g30_smile_parade_swap_with_a_field_card_in_place() {
     // still replaces the settle -- the swap changes what the tile *is*, not
     // what is on it. No rent moved (Space is unowned; a swapped-in agent body
     // would at least prompt).
-    assert_eq!(t.money(1), 10_000, "Parking Space replaced the settle (no rent)");
+    assert_eq!(
+        t.money(1),
+        10_000,
+        "Parking Space replaced the settle (no rent)"
+    );
     // 规则书 (3): 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
     // the parade is on Space and P1 just settled there, so it goes to the
     // discard (「任何玩家」 includes a non-owner).
@@ -405,7 +409,9 @@ fn g31_aya_fan_flip_leaves_the_rabbit_marks() {
         1,
         -1,
         1,
-        Msg::default(), true);
+        Msg::default(),
+        true,
+    );
     t.m.world_mut().place_mark(
         -1,
         "多惠兔子",
@@ -414,7 +420,9 @@ fn g31_aya_fan_flip_leaves_the_rabbit_marks() {
         1,
         -1,
         1,
-        Msg::default(), true);
+        Msg::default(),
+        true,
+    );
     assert_eq!(t.marks_on(mark_tile).len(), 2);
     // P0 pays a rent on a tile past the mark tile... no: land on a tile that
     // does not pass the marks, so only the fan flip happens here.
@@ -456,7 +464,11 @@ fn g31_aya_fan_flip_leaves_the_rabbit_marks() {
     t.dice(&[1]);
     t.roll(1).unwrap();
     drain(&mut t);
-    assert_eq!(t.marks_on(mark_tile).len(), 0, "the pass removes the rabbits");
+    assert_eq!(
+        t.marks_on(mark_tile).len(),
+        0,
+        "the pass removes the rabbits"
+    );
     assert_eq!(t.charge(1), 2, "多惠 gains 1 fire per rabbit");
 }
 

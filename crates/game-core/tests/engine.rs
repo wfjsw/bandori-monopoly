@@ -110,7 +110,10 @@ fn bot_games_play_to_the_end_and_rank_everyone() {
         // Something actually happened.
         let all = m.events_since(0);
         let kinds = |k: &str| all.iter().filter(|e| e.r#type == k).count();
-        assert!(kinds("diceRollBefore") > 0 && kinds("turn") > 0, "seed {seed}");
+        assert!(
+            kinds("diceRollBefore") > 0 && kinds("turn") > 0,
+            "seed {seed}"
+        );
         // Survivors are ranked by score.
         let mut alive: Vec<_> = st.players.iter().filter(|s| !s.out()).collect();
         alive.sort_by_key(|s| s.rank);
@@ -328,7 +331,10 @@ fn pick_timeout_ignores_a_stolen_preselect() {
     let got = m.state().players[later].persona.clone();
     assert_ne!(got, x, "a stolen preselect must not fire");
     let st = m.state();
-    assert!(data().persona(&got).is_some(), "result is a real persona: {got}");
+    assert!(
+        data().persona(&got).is_some(),
+        "result is a real persona: {got}"
+    );
     assert!(!st.bans.contains(&got), "result is not banned: {got}");
     assert_eq!(
         st.players.iter().filter(|p| p.persona == got).count(),
@@ -348,7 +354,10 @@ fn pick_timeout_without_preselect_is_random_free() {
     let st = m.state();
     let got = st.players[turn].persona.clone();
     assert!(!got.is_empty(), "timeout still picks something");
-    assert!(data().persona(&got).is_some(), "result is a real persona: {got}");
+    assert!(
+        data().persona(&got).is_some(),
+        "result is a real persona: {got}"
+    );
     assert!(!st.bans.contains(&got), "result is not banned: {got}");
     assert_eq!(
         st.players.iter().filter(|p| p.persona == got).count(),
@@ -759,7 +768,12 @@ fn an_advanced_bot_seat_gets_its_vote_cast_by_the_engine() {
         },
     )
     .unwrap();
-    assert_eq!(m.state().vote.id, 1, "the vote is open: {:?}", m.state().vote);
+    assert_eq!(
+        m.state().vote.id,
+        1,
+        "the vote is open: {:?}",
+        m.state().vote
+    );
     assert_eq!(
         m.state().vote.players.len(),
         3,

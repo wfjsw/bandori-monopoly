@@ -46,7 +46,11 @@ fn declaration_pays_500_and_draws() {
     skip_all(&mut t);
     // 规则书: 「被[指定]的玩家[支付][使用者]500」 — P0 pays P1 500.
     // 规则书: 「[使用者]抽1张卡」 — P1 draws.
-    assert!(t.hand(1).contains(&"通用:GREAT".to_string()), "hand {:?}", t.hand(1));
+    assert!(
+        t.hand(1).contains(&"通用:GREAT".to_string()),
+        "hand {:?}",
+        t.hand(1)
+    );
     // Budokan also resolved: P1 paid P0 2000 (2-player X). Net P0 +2000-500.
     assert_eq!(t.money(0), 11_500, "events {:?}", t.recent_keys(8));
     assert_eq!(t.money(1), 8_500);
@@ -227,7 +231,12 @@ fn soul_counter_reduces_a_payment() {
         t.answer(0, 0).unwrap(); // yes, spend the crystal
     }
     skip_all(&mut t);
-    eprintln!("money: {} {} crystals={:?}", t.money(0), t.money(1), t.crystals(0, "AG:绯红之魂"));
+    eprintln!(
+        "money: {} {} crystals={:?}",
+        t.money(0),
+        t.money(1),
+        t.crystals(0, "AG:绯红之魂")
+    );
     // 1520 - 1000 = 520 transferred.
     assert!(t.money(0) < 10_000, "counter fired: {}", t.money(0));
 }
@@ -255,7 +264,12 @@ fn soul_leaves_when_empty() {
         t.answer(0, 0).unwrap(); // yes, spend the crystal
     }
     skip_all(&mut t);
-    eprintln!("field={:?} discard={:?} crystals={:?}", t.field_ids(0), t.discard(0), t.crystals(0, "AG:绯红之魂"));
+    eprintln!(
+        "field={:?} discard={:?} crystals={:?}",
+        t.field_ids(0),
+        t.discard(0),
+        t.crystals(0, "AG:绯红之魂")
+    );
     let gone = !t.on_field(0, "AG:绯红之魂");
     let empty = t.crystals(0, "AG:绯红之魂") == Some(0);
     assert!(gone || empty, "card left or crystals drained");
@@ -292,7 +306,11 @@ fn soul_last_crystal_still_pays_the_payee_500() {
         "payee keeps the 500 on the last-crystal spend: {}",
         t.money(1)
     );
-    assert_eq!(t.money(0), 10_000 - 500 - 520, "P0: crystal load + reduced rent");
+    assert_eq!(
+        t.money(0),
+        10_000 - 500 - 520,
+        "P0: crystal load + reduced rent"
+    );
     // Rule (3): the empty card is discarded.
     assert!(
         !t.on_field(0, "AG:绯红之魂"),
@@ -315,7 +333,12 @@ fn sky_fires_on_draw() {
     t.play(0, "通用:10次招募（1回限定）").unwrap();
     skip_all(&mut t);
     // 3 cards when drawn → 3×600 = 1800 on top of the recruit's -1500.
-    assert_eq!(t.money(0), 10_000 - 1_500 + 1_800, "events {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        10_000 - 1_500 + 1_800,
+        "events {:?}",
+        t.recent_keys(8)
+    );
 }
 
 // =====================================================================
@@ -344,7 +367,11 @@ fn moca_card_places_with_three_crystals() {
     skip_all(&mut t);
     t.end(0).unwrap();
     let x = t.crystals(0, "AG:（摩卡）0.5倍速").unwrap();
-    assert!(x < 3, "a crystal was removed: {x} events {:?}", t.recent_keys(8));
+    assert!(
+        x < 3,
+        "a crystal was removed: {x} events {:?}",
+        t.recent_keys(8)
+    );
 }
 
 // 规则书: 「(2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半」
@@ -682,7 +709,10 @@ fn moca_skill_teleports_to_the_actor() {
     skip_all(&mut t);
     eprintln!("pos0={} fire={}", t.pos(0), t.charge(0));
     // 「你可以消耗一个[火罐]传送到其所在格子」.
-    assert!(offered, "我行我素 (2) window must open when another plays a card");
+    assert!(
+        offered,
+        "我行我素 (2) window must open when another plays a card"
+    );
     assert!(took, "the teleport must be offered");
     assert_eq!(t.pos(0), 30, "teleported to the actor");
     assert_eq!(t.charge(0), 0, "spent 1 fire");
@@ -742,19 +772,28 @@ fn himari_end_turn_keys(rest: i32, fire: i32) -> Vec<String> {
 #[test]
 fn himari_rest_tick_logs_count() {
     let keys = himari_end_turn_keys(0, 0);
-    assert!(keys.iter().any(|k| k.contains("afterglow_rest_count")), "{keys:?}");
+    assert!(
+        keys.iter().any(|k| k.contains("afterglow_rest_count")),
+        "{keys:?}"
+    );
 }
 
 #[test]
 fn himari_rest_tick_logs_gain() {
     let keys = himari_end_turn_keys(3, 0);
-    assert!(keys.iter().any(|k| k.contains("log.gain_charge")), "{keys:?}");
+    assert!(
+        keys.iter().any(|k| k.contains("log.gain_charge")),
+        "{keys:?}"
+    );
 }
 
 #[test]
 fn himari_rest_tick_logs_cap() {
     let keys = himari_end_turn_keys(3, 1);
-    assert!(keys.iter().any(|k| k.contains("log.gain_charge_capped")), "{keys:?}");
+    assert!(
+        keys.iter().any(|k| k.contains("log.gain_charge_capped")),
+        "{keys:?}"
+    );
 }
 
 // 规则书: 白金燐子「（1）每次[经过]CiRCLE时获得三个[火罐]（上限3）」 -- at the cap the
@@ -770,7 +809,10 @@ fn rinko_pass_circle_at_cap_logs_refusal() {
     t.roll(0).unwrap();
     skip_all(&mut t);
     let keys = t.recent_keys(24);
-    assert!(keys.iter().any(|k| k.contains("log.gain_charge_capped")), "{keys:?}");
+    assert!(
+        keys.iter().any(|k| k.contains("log.gain_charge_capped")),
+        "{keys:?}"
+    );
 }
 
 // 规则书: 羽泽鸫「（2）当你进行主要移动时，你可以失去一个[火罐]使本次移动反向」
@@ -844,7 +886,11 @@ fn band_free_house_skipped_when_build_refused() {
     t.roll(0).unwrap();
     accept_buy(&mut t);
     assert_eq!(t.owner(FUJIMI), Some(0), "the buy itself still lands");
-    assert_eq!(t.houses(FUJIMI), 0, "no free house when the build is refused");
+    assert_eq!(
+        t.houses(FUJIMI),
+        0,
+        "no free house when the build is refused"
+    );
     let keys = t.recent_keys(16);
     assert!(
         !keys.iter().any(|k| k.contains("afterglow_free_house")),

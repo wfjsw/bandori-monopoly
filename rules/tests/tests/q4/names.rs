@@ -79,7 +79,10 @@ pub fn collect(sample: usize, seed: u64) -> NameLog {
         };
         for d in deltas {
             if let Some(name) = name_of(&d.path) {
-                log.writes.entry(name.clone()).or_default().insert(rule.clone());
+                log.writes
+                    .entry(name.clone())
+                    .or_default()
+                    .insert(rule.clone());
                 log.all_names.insert(name);
             }
         }

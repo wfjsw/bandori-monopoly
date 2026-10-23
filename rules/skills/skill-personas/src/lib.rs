@@ -48,8 +48,8 @@
 
 extern crate alloc;
 
+use card_sdk::kinds::Action;
 use card_sdk::CardDef;
-use card_sdk::kinds::{Action};
 
 /// 「初始N，上限M」 -- declare this seat's fire pots from **this skill's own**
 /// `CardDef` props (`bandori_std::fire::{FIRE_INITIAL, FIRE_CAP}`, written by

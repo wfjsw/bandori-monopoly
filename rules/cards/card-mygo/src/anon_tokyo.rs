@@ -15,9 +15,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, Filter, key, Msg, On, PayAddValue};
+use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
+use card_sdk::{key, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
@@ -179,7 +179,9 @@ fn link_rent(player_id: i32, v: PayAddValue) -> PayAddValue {
     // (`TileMark.partner`, placed by `place_mark_pair`).
     let other = ctx::mark_partner(
         tile,
-        &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
+        &MarkFilter::any()
+            .kind(key!("anon_tokyo_mark"))
+            .owner(player_id),
     );
     if other < 0 {
         return v;

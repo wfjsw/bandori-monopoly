@@ -20,11 +20,13 @@ use server::Server;
 
 fn data() -> Arc<GameData> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -161,14 +163,15 @@ async fn a_room_on_a_is_listable_joinable_and_startable_on_b() {
     let (s, list) = guest.get("/api/rooms").await;
     assert_eq!(s, StatusCode::OK);
     assert!(
-        list.as_array().unwrap().iter().any(|r| r["id"] == id.as_str()),
+        list.as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["id"] == id.as_str()),
         "room created on A is listable on B: {list}"
     );
 
     // Join on B.
-    let joined = guest
-        .ok(&format!("/api/rooms/{id}/join"), json!({}))
-        .await;
+    let joined = guest.ok(&format!("/api/rooms/{id}/join"), json!({})).await;
     assert_eq!(joined["you"].as_i64().unwrap(), 2);
 
     // Start on B, with the **host's** token (the session table is shared).
@@ -177,9 +180,17 @@ async fn a_room_on_a_is_listable_joinable_and_startable_on_b() {
         .ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
     let host_on_b = host.on(&base_b);
-    host_on_b.ok(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": format!("{:064x}", 1) }))
+    host_on_b
+        .ok(
+            &format!("/api/rooms/{id}/nonce"),
+            json!({ "nonce": format!("{:064x}", 1) }),
+        )
         .await;
-    guest.ok(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": format!("{:064x}", 2) }))
+    guest
+        .ok(
+            &format!("/api/rooms/{id}/nonce"),
+            json!({ "nonce": format!("{:064x}", 2) }),
+        )
         .await;
     let started = host_on_b
         .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
@@ -215,8 +226,11 @@ async fn a_match_started_on_a_can_be_acted_on_via_b() {
         .await;
     host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
-    host.ok(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": format!("{:064x}", 1) }))
-        .await;
+    host.ok(
+        &format!("/api/rooms/{id}/nonce"),
+        json!({ "nonce": format!("{:064x}", 1) }),
+    )
+    .await;
     host.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
 
@@ -265,8 +279,11 @@ async fn ticks_run_once_per_quantum_across_two_tickers() {
         .await;
     host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
-    host.ok(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": format!("{:064x}", 1) }))
-        .await;
+    host.ok(
+        &format!("/api/rooms/{id}/nonce"),
+        json!({ "nonce": format!("{:064x}", 1) }),
+    )
+    .await;
     host.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
     let handle = {
@@ -305,7 +322,8 @@ async fn a_member_streaming_on_b_is_not_reaped_by_a() {
     let store = dummy::Store::new();
     // Short presence timeout so the reaper would fire quickly if it were wrong.
     let (base_a, sa, ta) = spawn(&store, |s| s.presence_timeout = Duration::from_millis(400)).await;
-    let (base_b, _sb, tb) = spawn(&store, |s| s.presence_timeout = Duration::from_millis(400)).await;
+    let (base_b, _sb, tb) =
+        spawn(&store, |s| s.presence_timeout = Duration::from_millis(400)).await;
 
     let host = Client::new(&base_a, "Host").await;
     let id = host.ok("/api/rooms", json!({ "name": "Presence" })).await["room"]["id"]
@@ -353,8 +371,11 @@ async fn a_rebuilt_server_resumes_a_match_mid_play() {
         .await;
     host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
-    host.ok(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": format!("{:064x}", 1) }))
-        .await;
+    host.ok(
+        &format!("/api/rooms/{id}/nonce"),
+        json!({ "nonce": format!("{:064x}", 1) }),
+    )
+    .await;
     host.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
     {
@@ -408,10 +429,7 @@ async fn concurrent_joins_on_two_servers_get_distinct_member_ids() {
     let a = Client::new(&base_a, "A1").await;
     let b = Client::new(&base_b, "B1").await;
     let path = format!("/api/rooms/{id}/join");
-    let (ra, rb) = tokio::join!(
-        a.post(&path, json!({})),
-        b.post(&path, json!({})),
-    );
+    let (ra, rb) = tokio::join!(a.post(&path, json!({})), b.post(&path, json!({})),);
     assert_eq!(ra.0, StatusCode::OK, "{ra:?}");
     assert_eq!(rb.0, StatusCode::OK, "{rb:?}");
     let ida = ra.1["you"].as_i64().unwrap();
@@ -439,8 +457,11 @@ async fn concurrent_acts_on_two_servers_serialise() {
         .await;
     host.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
-    host.ok(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": format!("{:064x}", 1) }))
-        .await;
+    host.ok(
+        &format!("/api/rooms/{id}/nonce"),
+        json!({ "nonce": format!("{:064x}", 1) }),
+    )
+    .await;
     host.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
     {

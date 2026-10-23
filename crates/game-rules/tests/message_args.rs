@@ -254,7 +254,10 @@ fn name_helpers_never_text_a_known_key() {
     ] {
         walk_msg(&m, "helper", &mut bad);
     }
-    assert!(bad.is_empty(), "helpers leaked internal keys as Text: {bad:?}");
+    assert!(
+        bad.is_empty(),
+        "helpers leaked internal keys as Text: {bad:?}"
+    );
     // Known keys resolve to their own i18n names (wire keys, kept verbatim).
     assert_eq!(counter_name("bonus").key(), "log.counter.bonus");
     assert_eq!(state_key_name("handLimit").key(), "log.state.hand_limit");

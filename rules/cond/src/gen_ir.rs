@@ -54,7 +54,7 @@ pub fn generate(rules_dir: &Path) -> (String, usize) {
     out.push_str("// `BY_ID[id]` indexes by **const id** (never a string scan).\n");
     out.push_str("// `guard_id!(\"src\")` resolves at const time; unknown strings are a\n");
     out.push_str("// compile error via `guard_id_const`.\n\n");
-        out.push_str("use rules_cond_ir::nodes::{Kind, Node};\n");
+    out.push_str("use rules_cond_ir::nodes::{Kind, Node};\n");
     out.push_str("use rules_cond_ir::{IrCtx, Program};\n\n");
     out.push_str("/// Lowered guard programs, one per distinct inventory condition.\n");
     out.push_str("/// `SRC` is the CEL string; `PROGRAM` is its IR.\n");

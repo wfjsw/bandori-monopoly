@@ -583,9 +583,7 @@ fn fill_geometry_bins(c: &mut IrCtx, w: &World) {
             w.pos[s as usize] as i64
         }
     };
-    let out = |s: i64| -> bool {
-        s < 0 || s as usize >= world::MAX_PLAYERS || w.out[s as usize]
-    };
+    let out = |s: i64| -> bool { s < 0 || s as usize >= world::MAX_PLAYERS || w.out[s as usize] };
     let exile = |s: i64| -> i64 {
         if s < 0 || s as usize >= world::MAX_PLAYERS {
             1
@@ -724,14 +722,8 @@ fn fill_named(c: &mut IrCtx, w: &World, owner: i32) {
         }
     });
     // Pilot fan views (same keys, guaranteed present even if the map is empty).
-    c.named_set(
-        ID_TOK_PP_POS,
-        w.fans_pos[owner as usize] as i64,
-    );
-    c.named_set(
-        ID_TOK_PP_NEG,
-        w.fans_neg[owner as usize] as i64,
-    );
+    c.named_set(ID_TOK_PP_POS, w.fans_pos[owner as usize] as i64);
+    c.named_set(ID_TOK_PP_NEG, w.fans_neg[owner as usize] as i64);
 }
 
 /// Fill an [`IrCtx`] from the general world + candidate card.
@@ -856,7 +848,11 @@ pub fn fill_from_world(
     // Overlay still wins when it left its documented default behind.
     c.set_scalar(
         VarId::MoveRoll,
-        if ov.move_roll != -1 { ov.move_roll } else { move_roll },
+        if ov.move_roll != -1 {
+            ov.move_roll
+        } else {
+            move_roll
+        },
     );
     c.set_scalar(
         VarId::MoveKind,
@@ -874,13 +870,14 @@ pub fn fill_from_world(
             move_remaining
         },
     );
-    c.set_scalar(
-        VarId::MoveMain,
-        if ov.move_main { 1 } else { move_main },
-    );
+    c.set_scalar(VarId::MoveMain, if ov.move_main { 1 } else { move_main });
     c.set_scalar(
         VarId::MoveDir,
-        if ov.move_dir != 1 { ov.move_dir } else { move_dir },
+        if ov.move_dir != 1 {
+            ov.move_dir
+        } else {
+            move_dir
+        },
     );
     // No World/overlay field yet; `move.by_skill` reads false (absent move).
     c.set_scalar(VarId::MoveBySkill, 0);
@@ -917,18 +914,12 @@ pub fn fill_from_world(
         VarId::OwnerCharacter,
         id_of_name_id(NameId(w.persona_id[op])),
     );
-    c.set_scalar(
-        VarId::OwnerBand,
-        id_of_name_id(NameId(w.group_id[op])),
-    );
+    c.set_scalar(VarId::OwnerBand, id_of_name_id(NameId(w.group_id[op])));
     c.set_scalar(VarId::OwnerTiles, owned_tiles(w, owner));
     c.set_scalar(VarId::CardId, card);
     c.set_scalar(VarId::CardPlaced, card_placed as i64);
     // `card.tile` is a plain Int: -1 = with owner, -2 = not placed (Finding F3).
-    c.set_scalar(
-        VarId::CardTile,
-        if card_placed { card_tile } else { -2 },
-    );
+    c.set_scalar(VarId::CardTile, if card_placed { card_tile } else { -2 });
 
     fill_seat(&mut c, w);
     fill_board_sets(&mut c, w);
@@ -1233,7 +1224,10 @@ pub fn fill_for_guard(
             }
         };
     }
-    set_if!(VarId::Kind, rules_cond_ir::ctx::id_of(ov.kind.unwrap_or(w.trig_kind)));
+    set_if!(
+        VarId::Kind,
+        rules_cond_ir::ctx::id_of(ov.kind.unwrap_or(w.trig_kind))
+    );
     set_if!(VarId::Actor, w.trig_player as i64);
     set_if!(VarId::Target, w.trig_target as i64);
     set_if!(VarId::Value, ov.value.unwrap_or(w.trig_value as i64));
@@ -1292,10 +1286,7 @@ pub fn fill_for_guard(
                 VarId::TileMortgaged,
                 w.tiles[tile as usize].mortgaged as i64
             );
-            set_if!(
-                VarId::TilePrice,
-                board::TILES[tile as usize].price as i64
-            );
+            set_if!(VarId::TilePrice, board::TILES[tile as usize].price as i64);
         } else {
             set_if!(VarId::TileOwner, -1);
             set_if!(VarId::TileHouses, 0);
@@ -1317,11 +1308,19 @@ pub fn fill_for_guard(
     };
     set_if!(
         VarId::MoveRoll,
-        if ov.move_roll != -1 { ov.move_roll } else { move_roll }
+        if ov.move_roll != -1 {
+            ov.move_roll
+        } else {
+            move_roll
+        }
     );
     set_if!(
         VarId::MoveKind,
-        if ov.move_kind != -1 { ov.move_kind } else { move_kind }
+        if ov.move_kind != -1 {
+            ov.move_kind
+        } else {
+            move_kind
+        }
     );
     set_if!(
         VarId::MoveRemaining,
@@ -1334,7 +1333,11 @@ pub fn fill_for_guard(
     set_if!(VarId::MoveMain, if ov.move_main { 1 } else { move_main });
     set_if!(
         VarId::MoveDir,
-        if ov.move_dir != 1 { ov.move_dir } else { move_dir }
+        if ov.move_dir != 1 {
+            ov.move_dir
+        } else {
+            move_dir
+        }
     );
     set_if!(VarId::MoveBySkill, 0);
     let chain_n = (ov.chain_n as usize).min(4);
@@ -1359,10 +1362,7 @@ pub fn fill_for_guard(
     set_if!(VarId::OwnerTiles, owned_tiles(w, owner));
     set_if!(VarId::CardId, card);
     set_if!(VarId::CardPlaced, card_placed as i64);
-    set_if!(
-        VarId::CardTile,
-        if card_placed { card_tile } else { -2 }
-    );
+    set_if!(VarId::CardTile, if card_placed { card_tile } else { -2 });
 
     // Seats: only the rows the guard reads.
     let seat_lo = if needs.seat_arg_symbolic || needs.seat_const < 0 {
@@ -1502,9 +1502,8 @@ pub fn fill_for_guard(
     // matches) and (b) pulled in `fill_geometry_bins` for `TileIs` (the
     // kokoro_02 1800 s cliff). Derive the masks from the enum.
     let fid_bit = |f: FnId| 1u64 << (f as u64);
-    let needs_sets = (needs.fns
-        & (fid_bit(FnId::TileIs) | fid_bit(FnId::TileIn) | fid_bit(FnId::Blocked)))
-        != 0;
+    let needs_sets =
+        (needs.fns & (fid_bit(FnId::TileIs) | fid_bit(FnId::TileIn) | fid_bit(FnId::Blocked))) != 0;
     if needs_sets {
         fill_board_sets(&mut c, w);
     }

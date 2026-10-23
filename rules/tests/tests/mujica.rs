@@ -30,14 +30,23 @@ fn rest(t: &mut Table) {
         }
         t.m.tick(0.25);
     }
-    panic!("rest: the match did not come to rest: {:?}", t.m.state().step);
+    panic!(
+        "rest: the match did not come to rest: {:?}",
+        t.m.state().step
+    );
 }
 
 fn answer_q(t: &mut Table, who: usize, value: i32) -> Result<(), String> {
     let p = t.prompt().expect("answer_q: no prompt");
-    let r = t
-        .m
-        .act(who as i32 + 1, &NetMessage { prompt: p.id, value, ..NetMessage::act("answer") })
+    let r =
+        t.m.act(
+            who as i32 + 1,
+            &NetMessage {
+                prompt: p.id,
+                value,
+                ..NetMessage::act("answer")
+            },
+        )
         .map_err(|e| e.key().to_string());
     rest(t);
     r
@@ -46,8 +55,19 @@ fn answer_q(t: &mut Table, who: usize, value: i32) -> Result<(), String> {
 fn decline_q(t: &mut Table) {
     let p = t.prompt().expect("decline_q: no prompt");
     for who in t.asked() {
-        let v = if p.kind == "tile" { p.items.len() as i32 } else { p.fallback };
-        let _ = t.m.act(who as i32 + 1, &NetMessage { prompt: p.id, value: v, ..NetMessage::act("answer") });
+        let v = if p.kind == "tile" {
+            p.items.len() as i32
+        } else {
+            p.fallback
+        };
+        let _ = t.m.act(
+            who as i32 + 1,
+            &NetMessage {
+                prompt: p.id,
+                value: v,
+                ..NetMessage::act("answer")
+            },
+        );
     }
     rest(t);
 }
@@ -184,7 +204,11 @@ fn dice_cast_places_on_field() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "Mujica:骰子已经掷下").unwrap();
     // 规则书: 「将此卡放置于自身场上」
-    let n = t.field(0).iter().filter(|f| f.card == "Mujica:骰子已经掷下").count();
+    let n = t
+        .field(0)
+        .iter()
+        .filter(|f| f.card == "Mujica:骰子已经掷下")
+        .count();
     assert_eq!(n, 1, "exactly one copy on the field");
 }
 
@@ -247,8 +271,12 @@ fn sparkler_last_crystal_goes_to_owner_discard() {
     t.end(0).unwrap();
     drain(&mut t);
     // 规则书: 「最后一个奇迹水晶移除后将此卡置入弃牌堆」
-    assert!(t.draw_pile(0).contains(&"Mujica:燃尽前的线香花火".to_string()),
-        "owner's discard: {:?}", t.draw_pile(0));
+    assert!(
+        t.draw_pile(0)
+            .contains(&"Mujica:燃尽前的线香花火".to_string()),
+        "owner's discard: {:?}",
+        t.draw_pile(0)
+    );
 }
 
 #[test]
@@ -267,7 +295,10 @@ fn sparkler_last_crystal_grants_stun() {
     // 规则书: 「立刻使你获得2层[眩晕]」
     // The end-of-turn decay may eat one layer in the same window.
     let stun = t.state(0, "stun");
-    assert!((1..=2).contains(&stun), "stun layers (1 = same-window decay), got {stun}");
+    assert!(
+        (1..=2).contains(&stun),
+        "stun layers (1 = same-window decay), got {stun}"
+    );
 }
 
 // -- Mujica:祥，移动 ---------------------------------------------------
@@ -388,7 +419,11 @@ fn saki_move_halves_a_forced_stop_and_pay() {
     // Forced stop at the hill. （香澄） shapes 地租 280 → 140; 祥，移动 then
     // halves that shaped 支付价格 → 70.
     assert_eq!(t.pos(1), hill, "forced to stop at the hill");
-    assert_eq!(t.money(1), 10_000 - 70, "shaped payment 140 (香澄 half) halved to 70 (stacked 1/4)");
+    assert_eq!(
+        t.money(1),
+        10_000 - 70,
+        "shaped payment 140 (香澄 half) halved to 70 (stacked 1/4)"
+    );
 }
 
 // -- Mujica:会被骗着买水晶的人 -----------------------------------------
@@ -410,9 +445,17 @@ fn crystal_move_from_band_to_skill_card() {
     answer_opt(&mut t, 0, "skill:若叶睦");
     drain(&mut t);
     // 规则书: 「将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上」
-    assert_eq!(t.crystals(0, &band), Some(2), "one crystal left the band pool");
+    assert_eq!(
+        t.crystals(0, &band),
+        Some(2),
+        "one crystal left the band pool"
+    );
     let skill = t.skill_id(0, "若叶睦");
-    assert_eq!(t.crystals(0, &skill), Some(1), "skill card received a crystal");
+    assert_eq!(
+        t.crystals(0, &skill),
+        Some(1),
+        "skill card received a crystal"
+    );
 }
 
 #[test]
@@ -429,7 +472,11 @@ fn crystal_move_opens_source_and_target_prompts() {
     t.give_play(0, "Mujica:会被骗着买水晶的人").unwrap();
     // 规则书: 「将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上」
     assert!(t.prompt().is_some(), "source prompt expected");
-    assert!(t.option("crystal_swap_band").is_some(), "band pool as source: {}", t.dump_prompt());
+    assert!(
+        t.option("crystal_swap_band").is_some(),
+        "band pool as source: {}",
+        t.dump_prompt()
+    );
     answer_opt(&mut t, 0, "crystal_swap_band");
     assert!(t.prompt().is_some(), "target prompt expected");
     drain(&mut t);
@@ -441,7 +488,11 @@ fn crystal_move_no_crystals_is_noop() {
     let r = t.give_play(0, "Mujica:会被骗着买水晶的人");
     assert!(r.is_ok());
     // 规则书: (implicit) nothing to move → no effect
-    assert!(t.prompt().is_none(), "no prompt when nothing to swap: {}", t.dump_prompt());
+    assert!(
+        t.prompt().is_none(),
+        "no prompt when nothing to swap: {}",
+        t.dump_prompt()
+    );
 }
 
 // -- Mujica:人偶的箱庭 --------------------------------------------------
@@ -498,15 +549,19 @@ fn eyes_locked_is_a_counter() {
             drain(&mut t);
             // 规则书: 「使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算]」
             // p2 should have been forced to move.
-            assert!(t.pos(2) != 10 || t.money(2) != 10_000,
-                "p2 was affected by the forced move");
+            assert!(
+                t.pos(2) != 10 || t.money(2) != 10_000,
+                "p2 was affected by the forced move"
+            );
             return;
         }
     }
     drain(&mut t);
     // If no counter chain formed, the test still validates the cards are in hand.
-    assert!(t.hand(0).contains(&"Mujica:无法将视线移开".to_string())
-        || !t.hand(0).contains(&"Mujica:无法将视线移开".to_string()));
+    assert!(
+        t.hand(0).contains(&"Mujica:无法将视线移开".to_string())
+            || !t.hand(0).contains(&"Mujica:无法将视线移开".to_string())
+    );
 }
 
 #[test]
@@ -538,11 +593,19 @@ fn hina_redefine_applies_to_the_move_roll() {
         let d = t.dump_prompt();
         if d.contains("draw") || d.contains("抽") {
             // skip the draw option; look for the other one
-            let k = t.option("1-6").or(t.option("定义")).or(t.option("掷骰")).unwrap_or(1);
+            let k = t
+                .option("1-6")
+                .or(t.option("定义"))
+                .or(t.option("掷骰"))
+                .unwrap_or(1);
             let _ = t.answer(0, k);
             redefined = true;
         } else {
-            let k = t.option("1-6").or(t.option("定义")).or(t.option("掷骰")).unwrap_or(0);
+            let k = t
+                .option("1-6")
+                .or(t.option("定义"))
+                .or(t.option("掷骰"))
+                .unwrap_or(0);
             let _ = t.answer(0, k);
             redefined = true;
         }
@@ -579,7 +642,11 @@ fn hina_fearless_sadness_gate_blocks() {
     t.give_play(0, "Mujica:（初华）我，无畏悲伤").unwrap();
     drain(&mut t);
     // 规则书: 「打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]」 -- gate not met
-    assert!(t.hand(0).is_empty(), "no draw without the gate: {:?}", t.hand(0));
+    assert!(
+        t.hand(0).is_empty(),
+        "no draw without the gate: {:?}",
+        t.hand(0)
+    );
 }
 
 #[test]
@@ -612,7 +679,11 @@ fn hina_fearless_sadness_after_memory_tile() {
         assert_eq!(t.hand(0).len(), 1, "drew 1 card");
     } else {
         // gate not recognized
-        assert!(t.hand(0).is_empty(), "expected a prompt or no draw: {}", t.dump_prompt());
+        assert!(
+            t.hand(0).is_empty(),
+            "expected a prompt or no draw: {}",
+            t.dump_prompt()
+        );
     }
 }
 
@@ -627,7 +698,10 @@ fn saki_cut_ties_mortgages_and_teleports() {
     t.play(0, "Mujica:（祥子）斩断留恋，忘却一切").unwrap();
     drain(&mut t);
     // 规则书: 「抵押一张你拥有且未抵押的最贵地契并弃置一张手牌…立刻传送至任意可购买或已拥有的格子并触发结算，作为你的主要移动」
-    assert!(t.mortgaged(5), "most expensive deed (tile 5, price 1600) mortgaged");
+    assert!(
+        t.mortgaged(5),
+        "most expensive deed (tile 5, price 1600) mortgaged"
+    );
     assert!(t.hand(0).is_empty(), "hand discarded: {:?}", t.hand(0));
 }
 
@@ -640,7 +714,13 @@ fn saki_cut_ties_card_ends_in_discard() {
     t.play(0, "Mujica:（祥子）斩断留恋，忘却一切").unwrap();
     drain(&mut t);
     // The card is used up (non-[持续] hand card → discard).
-    assert!(t.discard(0).contains(&"Mujica:（祥子）斩断留恋，忘却一切".to_string()) || !t.hand(0).contains(&"Mujica:（祥子）斩断留恋，忘却一切".to_string()));
+    assert!(
+        t.discard(0)
+            .contains(&"Mujica:（祥子）斩断留恋，忘却一切".to_string())
+            || !t
+                .hand(0)
+                .contains(&"Mujica:（祥子）斩断留恋，忘却一切".to_string())
+    );
 }
 
 // -- Mujica:#J11 --------------------------------------------------------
@@ -664,7 +744,11 @@ fn j11_decays_one_crystal_per_turn() {
     t.end(0).unwrap();
     drain(&mut t);
     // 规则书: 「每回合结束时移除1个」
-    assert_eq!(t.crystals(0, "Mujica:#J11"), Some(1), "one crystal burned, one left");
+    assert_eq!(
+        t.crystals(0, "Mujica:#J11"),
+        Some(1),
+        "one crystal burned, one left"
+    );
 }
 
 // =====================================================================
@@ -714,8 +798,10 @@ fn hina_skill_state2_prompt_at_turn_start() {
     // A prompt offering 状態2 should appear.
     if t.prompt().is_some() {
         let dump = t.dump_prompt();
-        assert!(dump.contains("imprisoned") || dump.contains("状态") || dump.contains("enter"),
-            "prompt should be about entering 状態2: {dump}");
+        assert!(
+            dump.contains("imprisoned") || dump.contains("状态") || dump.contains("enter"),
+            "prompt should be about entering 状態2: {dump}"
+        );
         decline_q(&mut t);
     }
     drain(&mut t);
@@ -968,9 +1054,7 @@ fn welcome_to_ave_mujica_switches_state() {
             let k = t
                 .option("PlayerId(1)")
                 .or_else(|| t.option("P1"))
-                .unwrap_or_else(|| {
-                    panic!("no option for player 1 among {:?}", p.options)
-                });
+                .unwrap_or_else(|| panic!("no option for player 1 among {:?}", p.options));
             designated = Some(1usize);
             answer_q(&mut t, 0, k).unwrap();
         } else {
@@ -982,7 +1066,11 @@ fn welcome_to_ave_mujica_switches_state() {
     // 「转换任意一名玩家的状态」 — the designated player switches.
     assert_eq!(designated, Some(1), "the prompt offers a player to switch");
 
-    assert_eq!(t.state(1, "skillState"), 2, "丰川祥子's state switched to 2");
+    assert_eq!(
+        t.state(1, "skillState"),
+        2,
+        "丰川祥子's state switched to 2"
+    );
 }
 
 /// 规则书（2）: 「[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态」
@@ -1033,7 +1121,11 @@ fn welcome_counter_on_other_state_switch() {
         "a different player's state switch opens clause (2): {}",
         t.dump_prompt()
     );
-    assert_eq!(t.state(1, "skillState"), 2, "P1 toggled 1→2 before the counter");
+    assert_eq!(
+        t.state(1, "skillState"),
+        2,
+        "P1 toggled 1→2 before the counter"
+    );
     // P2 is the counter user; the re-toggle list is P2 + everyone who switched.
     let s0 = t.state(0, "skillState");
     let s1 = t.state(1, "skillState");
@@ -1049,7 +1141,11 @@ fn welcome_counter_on_other_state_switch() {
     // Re-toggle includes every player who switched this turn (P0 seam + P1)
     // plus the counter user (P2).
     if s0 == 1 || s0 == 2 {
-        assert_eq!(t.state(0, "skillState"), if s0 == 2 { 1 } else { 2 }, "P0 re-toggled");
+        assert_eq!(
+            t.state(0, "skillState"),
+            if s0 == 2 { 1 } else { 2 },
+            "P0 re-toggled"
+        );
     }
     assert_eq!(
         t.state(1, "skillState"),
@@ -1087,7 +1183,8 @@ fn umirin_card_places_on_next_player() {
     assert!(
         t.on_field(1, "Mujica:（海铃）"),
         "card on next player's field: p0={:?} p1={:?}",
-        t.field_ids(0), t.field_ids(1)
+        t.field_ids(0),
+        t.field_ids(1)
     );
 }
 

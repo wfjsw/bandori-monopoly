@@ -5,9 +5,7 @@ use crate::abi::{export, pack, ManifestEntry, ManifestOn, ManifestTileText};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::meta::{ordinal_of, MetaDoc, MetaRow, RosterSources};
-use crate::{
-    CardDef, CounteractEntry, MessageEntry, On, PlayEntry, RuleEntry,
-};
+use crate::{CardDef, CounteractEntry, MessageEntry, On, PlayEntry, RuleEntry};
 
 /// The card manifest, `postcard`-encoded (ABI v5 -- the guest hand-writes no
 /// JSON at all: messages and manifests both travel as serde bytes).
@@ -347,7 +345,11 @@ macro_rules! ruleset_card {
 /// Guest panic handler: trap. The host turns the trap into "this card is out",
 /// the same contract as a malformed message -- a card never gets to show a raw
 /// panic to players.
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 #[panic_handler]
 fn on_panic(_info: &core::panic::PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
@@ -365,10 +367,18 @@ fn on_panic(_info: &core::panic::PanicInfo) -> ! {
 /// memory and the ceiling is soft. The one concession to reuse is
 /// `realloc`: when the block being resized is the most recent allocation it is
 /// grown (or shrunk) in place, which is what `Vec`/`String` resizing wants.
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 struct Bump;
 
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 #[global_allocator]
 static ALLOC: Bump = Bump;
 
@@ -379,20 +389,36 @@ static ALLOC: Bump = Bump;
 /// stop a runaway effect, and the guest hitting its own ceiling first keeps
 /// the failure deterministic. Growth past this returns null and the run
 /// aborts into the panic handler, which traps and takes the card out cleanly.
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 const MAX_MEMORY: usize = 16 * 1024 * 1024;
 
 /// One wasm page of linear memory.
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 const PAGE: usize = 64 * 1024;
 
 /// Bump cursor: the absolute address of the next free byte. `0` means "not
 /// started yet" -- the first allocation latches [`__heap_base`]. Nothing in
 /// the guest reads this for control flow, so it remains deterministic.
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 static mut CURSOR: usize = 0;
 
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 extern "C" {
     /// Linker-provided (rust-lld): the first address past data, bss and the
     /// wasm shadow stack. The heap starts here; below it is not ours.
@@ -403,7 +429,11 @@ extern "C" {
 /// pages. Returns `false` if the host refused (its own per-instance limit) --
 /// `memory.grow` reports failure with `-1` instead of trapping, so we turn it
 /// into the allocator's null contract here.
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 fn ensure_mem(end: usize) -> bool {
     let have = core::arch::wasm32::memory_size::<0>() * PAGE;
     if end <= have {
@@ -418,7 +448,11 @@ fn ensure_mem(end: usize) -> bool {
     core::arch::wasm32::memory_grow::<0>(pages) != usize::MAX
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "guest", not(feature = "native-rules")))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "guest",
+    not(feature = "native-rules")
+))]
 unsafe impl core::alloc::GlobalAlloc for Bump {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         let align = layout.align().max(1);
@@ -465,7 +499,8 @@ unsafe impl core::alloc::GlobalAlloc for Bump {
         }
         // Otherwise the default strategy: a fresh block and a copy. (Still
         // leaky, like `dealloc` -- the module is re-instantiated per run.)
-        let new_layout = match core::alloc::Layout::from_size_align(new_size, layout.align().max(1)) {
+        let new_layout = match core::alloc::Layout::from_size_align(new_size, layout.align().max(1))
+        {
             Ok(l) => l,
             Err(_) => return core::ptr::null_mut(),
         };

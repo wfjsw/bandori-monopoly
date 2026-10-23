@@ -7,8 +7,8 @@
 //!
 //! swap to the other Sumimi character (play or [反击] after own move roll).
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx;
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_IN_ONE: CardDef = CardDef::new(

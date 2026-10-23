@@ -43,9 +43,7 @@ pub fn firepot_01_grant_log_ok(effects: &[Effect], owner: i32) -> bool {
 /// A non-granting tick produces no clause effects. The body clears the rest
 /// counter via `state::set` which pushes `SetState` bookkeeping — ignore it.
 pub fn firepot_01_idle_log_ok(effects: &[Effect]) -> bool {
-    effects
-        .iter()
-        .all(|e| matches!(e, Effect::SetState { .. }))
+    effects.iter().all(|e| matches!(e, Effect::SetState { .. }))
 }
 
 /// MUTANT: grants at rest 0 (the card does not — every-other-turn is wrong).

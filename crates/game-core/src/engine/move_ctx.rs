@@ -220,7 +220,10 @@ impl Default for MoveCtx {
             teleport_to: None,
             resolve: true,
             base: vec![Roll {
-                dice: Dice { count: 1, sides: 20 },
+                dice: Dice {
+                    count: 1,
+                    sides: 20,
+                },
                 why: String::new(),
             }],
             dice: Vec::new(),
@@ -344,9 +347,15 @@ mod tests {
             crate::rng::Rng::new(1),
         );
         w.set_no_build(true);
-        assert!(!w.turn.plan.can_build, "set_no_build(true) => can_build=false");
+        assert!(
+            !w.turn.plan.can_build,
+            "set_no_build(true) => can_build=false"
+        );
         w.set_no_build(false);
-        assert!(w.turn.plan.can_build, "set_no_build(false) => can_build=true");
+        assert!(
+            w.turn.plan.can_build,
+            "set_no_build(false) => can_build=true"
+        );
         w.set_build_anywhere(true);
         assert!(w.turn.plan.build_anywhere);
         w.set_build_anywhere(false);

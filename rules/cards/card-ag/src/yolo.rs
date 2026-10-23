@@ -1,14 +1,14 @@
 //! `AG:Y.O.L.O` -- C# `CardYolo` (MatchHost.cs:956-987).
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:Y.O.L.O`）:
-//! > Y.O.L.O： 
+//! > Y.O.L.O：
 //! >  你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字
 //!
 //! Sheet 2026-10-06 新卡组卡 C3: 「你的**任意**掷骰结算前」 (was 「你的掷骰
 //! 结算前」) -- any of the user's rolls, not only the main move roll.
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const YOLO: CardDef = CardDef::new(
@@ -17,18 +17,22 @@ pub const YOLO: CardDef = CardDef::new(
     // clause are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
-        "actor == owner && (move.roll != null || value >= 0)", None,
+        "actor == owner && (move.roll != null || value >= 0)",
+        None,
         None,
         counteract,
     )],
 )
-    .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::SONG, 1)])
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"Y.O.L.O"#)
         .raw_name(r#"Y.O.L.O"#)
         .tags(&[])
         .text(r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#)
         // sheet cell C3
-        .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
+        .fields(&[("group", r#"Afterglow"#), ("owner", "")]),
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).

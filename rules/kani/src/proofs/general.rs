@@ -67,7 +67,10 @@ pub fn recruit_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:10次招募（1回限定）"), player));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("通用:10次招募（1回限定）"),
+        player,
+    ));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -88,8 +91,14 @@ pub fn recruit_01_iff() {
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-recruit-01: frame other money"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-recruit-01: frame pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "C-GEN-recruit-01: frame fire");
+    crate::kassert!(
+        world::arr4_eq(post.pos, pre.pos),
+        "C-GEN-recruit-01: frame pos"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.charge, pre.charge),
+        "C-GEN-recruit-01: frame fire"
+    );
     crate::kassert!(post.stay == pre.stay, "C-GEN-recruit-01: frame stay");
 }
 
@@ -102,7 +111,10 @@ pub fn recruit_01_mutant_is_detected() {
     let player = w.trig_player;
     kani::assume(w.money[player as usize] >= 1500);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:10次招募（1回限定）"), player));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("通用:10次招募（1回限定）"),
+        player,
+    ));
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
     crate::kassert!(
@@ -201,13 +213,15 @@ pub fn perfect_01_02_03_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]PERFECT"), player));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("通用:[衍生]PERFECT"),
+        player,
+    ));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
     let post_dest = world::with_world(|ww| ww.dest);
-    let (post_discard_n, post_discard) =
-        world::with_world(|ww| (ww.discard_n, ww.discard_pile));
+    let (post_discard_n, post_discard) = world::with_world(|ww| (ww.discard_n, ww.discard_pile));
     let post_discard_fever = intern_count(&post_discard, post_discard_n, "通用:[衍生]FEVER!");
 
     kani::cover!(pre_discard_fever == 0, "no pre-existing FEVER!");
@@ -231,7 +245,10 @@ pub fn perfect_01_02_03_iff() {
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-perfect: frame other money"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-perfect: frame pos");
+    crate::kassert!(
+        world::arr4_eq(post.pos, pre.pos),
+        "C-GEN-perfect: frame pos"
+    );
     crate::kassert!(post.stay == pre.stay, "C-GEN-perfect: frame stay");
 }
 
@@ -243,7 +260,10 @@ pub fn perfect_01_mutant_is_detected() {
     let mut w = symbolic_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]PERFECT"), player));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("通用:[衍生]PERFECT"),
+        player,
+    ));
     let (log_n, logbuf) = take_log();
     crate::kassert!(
         !spec::perfect_01_log_ok_mutant(&logbuf[..log_n], player),
@@ -268,7 +288,10 @@ pub fn fever_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]FEVER!"), player));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("通用:[衍生]FEVER!"),
+        player,
+    ));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -282,7 +305,10 @@ pub fn fever_01_iff() {
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-fever-01: frame money"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-fever-01: frame pos");
+    crate::kassert!(
+        world::arr4_eq(post.pos, pre.pos),
+        "C-GEN-fever-01: frame pos"
+    );
     crate::kassert!(post.stay == pre.stay, "C-GEN-fever-01: frame stay");
     // Post: one field instance owned by the player.
     let (field_n, owner0) = world::with_world(|ww| {
@@ -291,7 +317,10 @@ pub fn fever_01_iff() {
         (n, o)
     });
     crate::kassert!(field_n == 1, "C-GEN-fever-01: exactly one field instance");
-    crate::kassert!(owner0 == player, "C-GEN-fever-01: instance owned by the user");
+    crate::kassert!(
+        owner0 == player,
+        "C-GEN-fever-01: instance owned by the user"
+    );
 }
 
 /// MUTANT companion: dest Graveyard must not match.
@@ -303,7 +332,10 @@ pub fn fever_01_mutant_is_detected() {
     let player = w.trig_player;
     w.field_n = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]FEVER!"), player));
+    invoke::unwrap_done(invoke::play_idx(
+        crate::card_id!("通用:[衍生]FEVER!"),
+        player,
+    ));
     let (log_n, logbuf) = take_log();
     let this_card = world::card_slot_of("通用:[衍生]FEVER!");
     crate::kassert!(
@@ -360,12 +392,19 @@ pub fn fever_04_turn_start_iff() {
     let player = w.trig_player;
     let admitted = fever_guard_admits(&w, player, true);
     kani::cover!(admitted, "card.placed admits");
-    crate::kassert!(admitted, "C-GEN-fever-04: placed card must pass card.placed");
+    crate::kassert!(
+        admitted,
+        "C-GEN-fever-04: placed card must pass card.placed"
+    );
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
+    invoke::unwrap_done(invoke::hook_only_idx(
+        crate::card_id!("通用:[衍生]FEVER!"),
+        "TurnStart",
+        player,
+    ));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -381,8 +420,14 @@ pub fn fever_04_turn_start_iff() {
         post_dest == spec::DEST_GRAVEYARD,
         "C-GEN-fever-04: dest must be Graveyard (弃卡区)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "C-GEN-fever-04: frame money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-fever-04: frame pos");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "C-GEN-fever-04: frame money"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.pos, pre.pos),
+        "C-GEN-fever-04: frame pos"
+    );
     crate::kassert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
 }
 
@@ -403,13 +448,20 @@ pub fn fever_04_wrong_turn_noop() {
     // The host admits (`card.placed`); the body itself must no-op because
     // `trigger::player_id() != player_id`.
     crate::kassert!(admitted, "C-GEN-fever-04: placed card passes the guard");
-    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
+    invoke::unwrap_done(invoke::hook_only_idx(
+        crate::card_id!("通用:[衍生]FEVER!"),
+        "TurnStart",
+        player,
+    ));
     let post = world::snapshot();
     let (log_n, _) = take_log();
     let post_dest = world::with_world(|ww| ww.dest);
     crate::kassert!(log_n == 0, "C-GEN-fever-04: wrong turn start is a no-op");
     crate::kassert!(post_dest == pre_dest, "C-GEN-fever-04: dest untouched");
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "C-GEN-fever-04: frame money");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "C-GEN-fever-04: frame money"
+    );
     crate::kassert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
 }
 
@@ -421,7 +473,10 @@ pub fn fever_04_not_placed_guard_rejects() {
     let w = fever_turn_start_world(false, true);
     let player = w.trig_player;
     let admitted = fever_guard_admits(&w, player, false);
-    crate::kassert!(!admitted, "C-GEN-fever-04: unplaced card must fail card.placed");
+    crate::kassert!(
+        !admitted,
+        "C-GEN-fever-04: unplaced card must fail card.placed"
+    );
 }
 
 /// MUTANT companion: dest Banished must not match.
@@ -432,7 +487,11 @@ pub fn fever_04_mutant_is_detected() {
     let w = fever_turn_start_world(true, true);
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
+    invoke::unwrap_done(invoke::hook_only_idx(
+        crate::card_id!("通用:[衍生]FEVER!"),
+        "TurnStart",
+        player,
+    ));
     let post_dest = world::with_world(|ww| ww.dest);
     crate::kassert!(
         !spec::fever_04_dest_ok_mutant(post_dest),
@@ -609,11 +668,7 @@ pub fn rain_x_range() {
     kani::cover!(x == 2, "min");
     kani::cover!(x == 4, "max");
     kani::cover!(x == 1, "below (impossible on 2d2)");
-    assert_eq!(
-        in_range,
-        x >= 2 && x <= 4,
-        "2d2 sum is in 2..=4"
-    );
+    assert_eq!(in_range, x >= 2 && x <= 4, "2d2 sum is in 2..=4");
 }
 
 // ===========================================================================
@@ -648,8 +703,14 @@ pub fn encore_01_leaf_quiet_frame() {
         spec::encore_01_log_ok(&logbuf[..log_n]),
         "C-GEN-encore-01: no Effect entries (negation is trig_negate)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "C-GEN-encore-01: frame money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-encore-01: frame pos");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "C-GEN-encore-01: frame money"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.pos, pre.pos),
+        "C-GEN-encore-01: frame pos"
+    );
     crate::kassert!(post.stay == pre.stay, "C-GEN-encore-01: frame stay");
     // Documented host gap (not a body finding):
     let negate = world::with_world(|ww| ww.trig_negate);
@@ -679,16 +740,22 @@ pub fn clearcp_settle_amount() {
         crate::kassert!(spec::clearcp_after_settle(n), "5 is post one settle");
     }
     if n == 0 {
-        crate::kassert!(spec::clearcp_graveyards_at_zero(n), "0 triggers the graveyard");
+        crate::kassert!(
+            spec::clearcp_graveyards_at_zero(n),
+            "0 triggers the graveyard"
+        );
     }
     // Pinned amount.
-    crate::kassert!(spec::clearcp_02_effects_ok(
-        &[Effect::GainMoney {
-            player: settler,
-            n: 800
-        }],
-        settler
-    ), "settle pays the settler 800");
+    crate::kassert!(
+        spec::clearcp_02_effects_ok(
+            &[Effect::GainMoney {
+                player: settler,
+                n: 800
+            }],
+            settler
+        ),
+        "settle pays the settler 800"
+    );
     crate::kassert!(
         !spec::clearcp_02_effects_ok_mutant(
             &[Effect::GainMoney {

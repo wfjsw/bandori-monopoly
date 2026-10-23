@@ -10,14 +10,7 @@ use spec_kit::{Clause, Step};
 
 /// Movement clauses.
 pub const CLAUSES: &[Clause] = &[
-    G_MOVE_01,
-    G_MOVE_02,
-    G_MOVE_03,
-    G_MOVE_05,
-    G_MOVE_06,
-    G_MOVE_07,
-    G_MOVE_08,
-    G_MOVE_10,
+    G_MOVE_01, G_MOVE_02, G_MOVE_03, G_MOVE_05, G_MOVE_06, G_MOVE_07, G_MOVE_08, G_MOVE_10,
     G_MOVE_11,
 ];
 
@@ -53,7 +46,9 @@ pub fn segment_path(from: i32, to: i32, value: i32, n: usize) -> Result<Vec<i32>
     }
     let steps = value.unsigned_abs().min(n as u32 * 4) as i32;
     if steps == 0 {
-        return Err(format!("walk segment {from} -> {to} by {value}: unrepresentable step count"));
+        return Err(format!(
+            "walk segment {from} -> {to} by {value}: unrepresentable step count"
+        ));
     }
     let mut path = Vec::with_capacity(steps as usize);
     for k in 1..=steps {
@@ -85,7 +80,11 @@ pub fn segment_path(from: i32, to: i32, value: i32, n: usize) -> Result<Vec<i32>
 /// Segments chain (`from` of the next equals `to` of the previous) when the
 /// walk is split mid-route (a [经过] that opens a prompt). Returns the tiles
 /// in visit order -- start excluded, end included.
-pub fn walk_path(events: &[game_core::state::MatchEvent], who: i32, n: usize) -> Result<Vec<i32>, String> {
+pub fn walk_path(
+    events: &[game_core::state::MatchEvent],
+    who: i32,
+    n: usize,
+) -> Result<Vec<i32>, String> {
     let mut path = Vec::new();
     for e in events {
         if e.player_id != who {
@@ -157,9 +156,7 @@ pub fn circle_reward_in(events: &[game_core::state::MatchEvent]) -> bool {
         let k = spec_kit::event_key(e);
         // The reward's own lines only. `log.land_start` is the CiRCLE
         // landing *settle* (「[结算]是：抽取一张手卡」), not [CiRCLE奖励].
-        k.contains("circle_money")
-            || k.contains("circle_card")
-            || k.contains("ask.pass_reward")
+        k.contains("circle_money") || k.contains("circle_card") || k.contains("ask.pass_reward")
     })
 }
 
@@ -197,8 +194,7 @@ pub fn circle_reward_modified(step: &Step<'_>, _circle: usize) -> bool {
 /// (G-MOVE-06 iff, G-MOVE-10, G-MOVE-11) skip otherwise.
 pub fn window_rewritten(events: &[game_core::state::MatchEvent]) -> bool {
     events.iter().any(|e| {
-        matches!(e.r#type.as_str(), "card" | "effect")
-            || spec_kit::event_key(e).contains("effect")
+        matches!(e.r#type.as_str(), "card" | "effect") || spec_kit::event_key(e).contains("effect")
     })
 }
 
@@ -490,16 +486,15 @@ pub fn g_move_06(step: &Step<'_>) -> Result<(), String> {
             && step
                 .events
                 .iter()
-                .filter(|e| e.r#type == "diceRollBefore" || e.r#type == "move" || e.r#type == "teleport")
+                .filter(|e| {
+                    e.r#type == "diceRollBefore" || e.r#type == "move" || e.r#type == "teleport"
+                })
                 .count()
                 == 0
-            && !step
-                .events
-                .iter()
-                .any(|e| {
-                    let k = spec_kit::event_key(e);
-                    k.contains("land") || k.contains("rent") || k.contains("pay")
-                });
+            && !step.events.iter().any(|e| {
+                let k = spec_kit::event_key(e);
+                k.contains("land") || k.contains("rent") || k.contains("pay")
+            });
         if money_line && !rewritten {
             let delta = step.post_money(who) as i64 - step.pre_money(who) as i64;
             if bare_answer && delta != 2000 {
@@ -647,7 +642,11 @@ pub fn g_move_08(step: &Step<'_>) -> Result<(), String> {
     // one (`err.roll_main_used`) and a card's second 主要移动 early-outs; both
     // leave no walk. So: at most one `roll` walk event, and a window with no
     // walk must not have moved anyone (「多次触发［主要移动］时无效」).
-    let rolls = step.events.iter().filter(|e| e.r#type == "diceRollBefore").count();
+    let rolls = step
+        .events
+        .iter()
+        .filter(|e| e.r#type == "diceRollBefore")
+        .count();
     if rolls > 1 {
         return Err(format!(
             "one [主要移动] per turn, but the window logged {rolls} roll walks"
@@ -742,7 +741,9 @@ pub fn g_move_10(step: &Step<'_>) -> Result<(), String> {
         }
         let at = p.pos;
         let sharing: Vec<usize> = (0..step.post.st.players.len())
-            .filter(|&o| o != who && !step.post.st.players[o].out() && step.post.st.players[o].pos == at)
+            .filter(|&o| {
+                o != who && !step.post.st.players[o].out() && step.post.st.players[o].pos == at
+            })
             .collect();
         if sharing.is_empty() {
             continue;
@@ -816,7 +817,8 @@ pub fn g_move_11(step: &Step<'_>) -> Result<(), String> {
     }
     // Indices of the observable classes. The CiRCLE *reward* is a [经过]
     // step (行动阶段 12), not a settle (15) -- `log.land_*` is the settle.
-    let walk_is = |e: &game_core::state::MatchEvent| e.r#type == "diceRollBefore" || e.r#type == "move";
+    let walk_is =
+        |e: &game_core::state::MatchEvent| e.r#type == "diceRollBefore" || e.r#type == "move";
     let settle_is = |e: &game_core::state::MatchEvent| {
         let k = spec_kit::event_key(e);
         k.contains("land") || k.contains("rent")
@@ -836,7 +838,12 @@ pub fn g_move_11(step: &Step<'_>) -> Result<(), String> {
                     step.event_keys()
                 ));
             }
-            if step.events.iter().enumerate().any(|(j, s)| j < i && settle_is(s)) {
+            if step
+                .events
+                .iter()
+                .enumerate()
+                .any(|(j, s)| j < i && settle_is(s))
+            {
                 return Err(format!(
                     "settle line before [重叠] (行动阶段 13 then 15): {:?}",
                     step.event_keys()
@@ -895,7 +902,9 @@ pub fn verify_circle_payout(
         1 => {
             let d = post_hand[who] - pre_hand[who];
             if d != 1 {
-                return Err(format!("[CiRCLE奖励] card half: hand delta {d}, expected 1"));
+                return Err(format!(
+                    "[CiRCLE奖励] card half: hand delta {d}, expected 1"
+                ));
             }
             for i in 0..pre_money.len() {
                 if post_money[i] != pre_money[i] {
@@ -938,9 +947,14 @@ pub fn verify_one_main_move(
     if pre_pos.len() != post_pos.len() {
         return Err("pre/post pos arity mismatch".into());
     }
-    let rolls = events.iter().filter(|e| e.r#type == "diceRollBefore").count();
+    let rolls = events
+        .iter()
+        .filter(|e| e.r#type == "diceRollBefore")
+        .count();
     if rolls > 1 {
-        return Err(format!("one [主要移动] per turn, window logged {rolls} roll walks"));
+        return Err(format!(
+            "one [主要移动] per turn, window logged {rolls} roll walks"
+        ));
     }
     let walks = events
         .iter()
@@ -999,7 +1013,8 @@ pub fn verify_overlap(
 /// settle line (`land*` / `rent`). The CiRCLE *reward* is a [经过] line
 /// (行动阶段 12), not a settle (15).
 pub fn verify_timing_order(events: &[game_core::state::MatchEvent]) -> Result<(), String> {
-    let walk_is = |e: &game_core::state::MatchEvent| e.r#type == "diceRollBefore" || e.r#type == "move";
+    let walk_is =
+        |e: &game_core::state::MatchEvent| e.r#type == "diceRollBefore" || e.r#type == "move";
     let settle_is = |e: &game_core::state::MatchEvent| {
         let k = spec_kit::event_key(e);
         k.contains("land") || k.contains("rent")
@@ -1015,7 +1030,11 @@ pub fn verify_timing_order(events: &[game_core::state::MatchEvent]) -> Result<()
                     events.iter().map(spec_kit::event_key).collect::<Vec<_>>()
                 ));
             }
-            if events.iter().enumerate().any(|(j, s)| j < i && settle_is(s)) {
+            if events
+                .iter()
+                .enumerate()
+                .any(|(j, s)| j < i && settle_is(s))
+            {
                 return Err(format!(
                     "settle line before [重叠] (行动阶段 13 then 15): {:?}",
                     events.iter().map(spec_kit::event_key).collect::<Vec<_>>()

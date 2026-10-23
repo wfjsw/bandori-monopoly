@@ -50,14 +50,7 @@ pub fn table_rent_at(step: &Step<'_>, tile: usize) -> Option<i32> {
     if t.kind.as_str() == "ring" || t.rent.is_empty() {
         return None;
     }
-    let h = step
-        .pre
-        .st
-        .houses
-        .get(tile)
-        .copied()
-        .unwrap_or(0)
-        .max(0) as usize;
+    let h = step.pre.st.houses.get(tile).copied().unwrap_or(0).max(0) as usize;
     Some(t.rent[h.min(t.rent.len() - 1)])
 }
 
@@ -118,13 +111,17 @@ fn has_funding_or_auction(step: &Step<'_>) -> bool {
 /// (BuyAdd / BuyMul / BuySet on a previously played card). Amount clauses
 /// skip those; scenario tests cover the clean figure.
 fn has_lingering_modifiers(step: &Step<'_>) -> bool {
-    step.pre.st.players.iter().any(|p| {
-        p.field
+    step.pre
+        .st
+        .players
+        .iter()
+        .any(|p| p.field.iter().any(|f| !f.card.starts_with("skill:")))
+        || step
+            .pre
+            .st
+            .board_field
             .iter()
-            .any(|f| !f.card.starts_with("skill:"))
-    }) || step.pre.st.board_field.iter().any(|f| {
-        !f.card.starts_with("tile:") && !f.card.starts_with("mark:")
-    })
+            .any(|f| !f.card.starts_with("tile:") && !f.card.starts_with("mark:"))
 }
 
 /// Same-colour buyable tiles of an agent tile, in board (「从前到后」) order.
@@ -410,8 +407,7 @@ pub fn g_settle_05(step: &Step<'_>) -> Result<(), String> {
         .any(|e| e.r#type == "event" && !e.card.is_empty());
     if !any_event {
         return Err(
-            "event deck empty and discard non-empty, but no event was drawn (no reshuffle)"
-                .into(),
+            "event deck empty and discard non-empty, but no event was drawn (no reshuffle)".into(),
         );
     }
     Ok(())
@@ -569,7 +565,9 @@ pub fn g_settle_07(step: &Step<'_>) -> Result<(), String> {
         let pre_h = step.pre.st.houses.get(t).copied().unwrap_or(0);
         let post_h = step.post.st.houses.get(t).copied().unwrap_or(0);
         if post_h != pre_h + 1 {
-            return Err(format!("houses on {t} went {pre_h} -> {post_h}, expected +1"));
+            return Err(format!(
+                "houses on {t} went {pre_h} -> {post_h}, expected +1"
+            ));
         }
     }
     Ok(())
@@ -705,11 +703,12 @@ pub fn g_settle_10(step: &Step<'_>) -> Result<(), String> {
             .board_field
             .iter()
             .any(|f| f.tile == t as i32 && f.props.contains_key("rentHouses"))
-            || step.pre.st.players.iter().any(|p| {
-                p.field
-                    .iter()
-                    .any(|f| f.props.contains_key("rentHouses"))
-            });
+            || step
+                .pre
+                .st
+                .players
+                .iter()
+                .any(|p| p.field.iter().any(|f| f.props.contains_key("rentHouses")));
         if overridden {
             continue;
         }
@@ -777,7 +776,10 @@ pub fn g_settle_11(step: &Step<'_>) -> Result<(), String> {
         // Whole-window money deltas are only meaningful on a clean leg.
         let other_money = step.events.iter().any(|x| {
             x.r#type != "forcebuy"
-                && matches!(x.r#type.as_str(), "pay" | "rent" | "lose" | "gain" | "buy" | "build")
+                && matches!(
+                    x.r#type.as_str(),
+                    "pay" | "rent" | "lose" | "gain" | "buy" | "build"
+                )
         });
         if !other_money && !has_card_activation(step) {
             let d_buyer = step.post_money(who) as i64 - step.pre_money(who) as i64;
@@ -852,7 +854,10 @@ pub fn g_settle_12(step: &Step<'_>) -> Result<(), String> {
         let owner = e.other.max(0) as usize;
         let other_money = step.events.iter().any(|x| {
             x.r#type != "forcebuy"
-                && matches!(x.r#type.as_str(), "pay" | "rent" | "lose" | "gain" | "buy" | "build")
+                && matches!(
+                    x.r#type.as_str(),
+                    "pay" | "rent" | "lose" | "gain" | "buy" | "build"
+                )
         });
         if !other_money {
             let d_owner = step.post_money(owner) as i64 - step.pre_money(owner) as i64;
@@ -1104,10 +1109,7 @@ pub fn g_settle_14(step: &Step<'_>) -> Result<(), String> {
                     .unwrap_or(-1);
                 // Same-colour as some agent is hard to know here; just require
                 // the window also carried an agent announce, else skip.
-                step.events
-                    .iter()
-                    .any(|x| key_of(x).contains("agent"))
-                    && g >= 0
+                step.events.iter().any(|x| key_of(x).contains("agent")) && g >= 0
             }
         }
     });
@@ -1146,7 +1148,6 @@ pub fn g_settle_14(step: &Step<'_>) -> Result<(), String> {
 // scenario-only: the per-act window cannot see "which mortgage funded the
 // build". See `tests/g_settle.rs`
 // `g_settle_09_upgrade_cannot_be_funded_by_mortgaging_that_deed`.
-
 
 // ---------------------------------------------------------------------------
 // pure verifiers (addendum: iff contracts)
@@ -1190,7 +1191,9 @@ pub fn verify_draw_one(
     allow_reward: bool,
 ) -> Result<(), String> {
     let _ = data;
-    let landed = events.iter().any(|e| land_keys.contains(&event_key_str(e).as_str()));
+    let landed = events
+        .iter()
+        .any(|e| land_keys.contains(&event_key_str(e).as_str()));
     if !landed {
         return Ok(());
     }
@@ -1236,7 +1239,9 @@ pub fn verify_draw_one_then_event(
         .map(|e| e.value as i64)
         .sum();
     if draws != 1 {
-        return Err(format!("WRONG: cafe/流星堂 drew {draws} hand cards, expected 1"));
+        return Err(format!(
+            "WRONG: cafe/流星堂 drew {draws} hand cards, expected 1"
+        ));
     }
     let evs = events
         .iter()
@@ -1249,18 +1254,16 @@ pub fn verify_draw_one_then_event(
     let v = events.iter().position(|e| e.r#type == "event");
     if let (Some(d), Some(v)) = (d, v) {
         if d > v {
-            return Err(format!("WRONG: event before hand draw (draw@{d} event@{v})"));
+            return Err(format!(
+                "WRONG: event before hand draw (draw@{d} event@{v})"
+            ));
         }
     }
     Ok(())
 }
 
 /// G-SETTLE-04: the drawn event is in no hand and is filed away.
-pub fn verify_event_zone(
-    _pre: &World,
-    post: &World,
-    events: &[MatchEvent],
-) -> Result<(), String> {
+pub fn verify_event_zone(_pre: &World, post: &World, events: &[MatchEvent]) -> Result<(), String> {
     for e in events {
         if e.r#type != "event" || e.card.is_empty() {
             continue;
@@ -1276,7 +1279,9 @@ pub fn verify_event_zone(
             || post.event_deck.iter().any(|c| c == id)
             || post.st.event_active.iter().any(|a| a.id == id);
         if !filed {
-            return Err(format!("LESS: drawn event {id} is nowhere after the window"));
+            return Err(format!(
+                "LESS: drawn event {id} is nowhere after the window"
+            ));
         }
     }
     Ok(())
@@ -1295,7 +1300,10 @@ pub fn verify_event_reshuffle(
     if !pre.event_deck.is_empty() || pre.event_discard.is_empty() {
         return Ok(());
     }
-    if !events.iter().any(|e| e.r#type == "event" && !e.card.is_empty()) {
+    if !events
+        .iter()
+        .any(|e| e.r#type == "event" && !e.card.is_empty())
+    {
         return Err("LESS: empty deck + non-empty discard, but no event drawn".into());
     }
     Ok(())
@@ -1366,7 +1374,9 @@ pub fn verify_build(
             return Err(format!("MORE: build on tile {t} not owned by P{who}"));
         }
         if pre.st.mortgaged.get(t).copied().unwrap_or(false) {
-            return Err(format!("MORE: build on mortgaged tile {t} (5.2: no effect)"));
+            return Err(format!(
+                "MORE: build on mortgaged tile {t} (5.2: no effect)"
+            ));
         }
         let Some(tile) = data.tiles.get(t) else {
             continue;
@@ -1415,9 +1425,7 @@ pub fn verify_level_cap(
         let cap = tile.rent.len().saturating_sub(1) as i32;
         let post_h = post.st.houses.get(t).copied().unwrap_or(0);
         if post_h > cap {
-            return Err(format!(
-                "MORE: houses on {t} = {post_h} exceeds cap {cap}"
-            ));
+            return Err(format!("MORE: houses on {t} = {post_h} exceeds cap {cap}"));
         }
     }
     for t in 0..data.tiles.len() {
@@ -1480,9 +1488,11 @@ pub fn verify_rent_amount(
             .board_field
             .iter()
             .any(|f| f.tile == t as i32 && f.props.contains_key("rentHouses"))
-            || pre.st.players.iter().any(|p| {
-                p.field.iter().any(|f| f.props.contains_key("rentHouses"))
-            });
+            || pre
+                .st
+                .players
+                .iter()
+                .any(|p| p.field.iter().any(|f| f.props.contains_key("rentHouses")));
         if overridden {
             continue;
         }
@@ -1522,9 +1532,7 @@ pub fn verify_force_buy(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        let want = 2
-            * (tile.price
-                + pre.st.houses.get(t).copied().unwrap_or(0) * tile.house);
+        let want = 2 * (tile.price + pre.st.houses.get(t).copied().unwrap_or(0) * tile.house);
         if e.value != want {
             return Err(format!(
                 "WRONG: force-buy of {t} charged {}, expected 2x = {want}",
@@ -1533,7 +1541,9 @@ pub fn verify_force_buy(
         }
         let who = e.player_id.max(0) as usize;
         if post.st.owners.get(t).copied().unwrap_or(-1) != who as i32 {
-            return Err(format!("LESS: tile {t} not owned by P{who} after force-buy"));
+            return Err(format!(
+                "LESS: tile {t} not owned by P{who} after force-buy"
+            ));
         }
         if !post.st.mortgaged.get(t).copied().unwrap_or(false) {
             return Err(format!(
@@ -1559,9 +1569,7 @@ pub fn verify_force_buy_immune(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        let want = 2
-            * (tile.price
-                + pre.st.houses.get(t).copied().unwrap_or(0) * tile.house);
+        let want = 2 * (tile.price + pre.st.houses.get(t).copied().unwrap_or(0) * tile.house);
         if e.value != want {
             return Err(format!(
                 "WRONG: force-buy of {t} charged {} under modifiers, expected fixed 2x = {want}",

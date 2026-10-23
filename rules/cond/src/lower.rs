@@ -12,11 +12,11 @@
 //! The lowerer runs on the host only (feature `lower`); production wasm and
 //! the live host path never see it.
 
-use cel::common::ast::{Expr, IdedExpr, LiteralValue};
 use cel::common::ast::operators;
+use cel::common::ast::{Expr, IdedExpr, LiteralValue};
 use rules_cond_ir::nodes::{Kind, Node};
 use rules_cond_ir::vars::by_flat;
-use rules_cond_ir::{ctx::FnId, ctx::id_of};
+use rules_cond_ir::{ctx::id_of, ctx::FnId};
 
 use crate::kinds;
 use crate::vocab::{self, Scope};
@@ -90,9 +90,7 @@ fn lower_expr(e: &IdedExpr, nodes: &mut Vec<Node>) -> Result<u16, CondError> {
 
 fn lower_lit(lit: &LiteralValue, nodes: &mut Vec<Node>) -> Result<u16, CondError> {
     match lit {
-        LiteralValue::Boolean(b) => {
-            push(nodes, Node::leaf_const_bool(*b.inner()))
-        }
+        LiteralValue::Boolean(b) => push(nodes, Node::leaf_const_bool(*b.inner())),
         LiteralValue::Int(i) => push(nodes, Node::leaf_const_int(*i.inner())),
         LiteralValue::Null => push(nodes, Node::leaf_null()),
         // String literals only appear as function arguments and are baked to
@@ -249,9 +247,9 @@ fn fn_id_of(name: &str) -> Option<FnId> {
 fn fn_arity(fid: FnId) -> usize {
     use FnId::*;
     match fid {
-        Slot | Tok | MoveTag | CardCounter | CounterIs | TileNamed | Money | Fire | Crystals | Hand | Pos | Character | Band
-        | Tiles | Blocked | ChainHas | ChainHits | GainsThisTurn | TargetedCount
-        | RepeatedDigits | Between => 1,
+        Slot | Tok | MoveTag | CardCounter | CounterIs | TileNamed | Money | Fire | Crystals
+        | Hand | Pos | Character | Band | Tiles | Blocked | ChainHas | ChainHits
+        | GainsThisTurn | TargetedCount | RepeatedDigits | Between => 1,
         CharacterIs | BandIs | Neighbor | Dist | PlayersOn | NextDist | OthersWithin
         | OwnedWithin | OnPath | TileIs | TileAttr | State => 2,
         TileIn => 3,

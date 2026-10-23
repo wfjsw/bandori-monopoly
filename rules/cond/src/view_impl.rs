@@ -5,7 +5,7 @@
 //! `LiveSnap`) can implement [`CondView`] directly and skip the eager fill.
 
 use crate::ctx::{CandidateCtx, WindowCtx};
-use crate::view::{CondView};
+use crate::view::CondView;
 
 /// The view a condition evaluates against: window + candidate overlay.
 pub struct SnapshotView<'a> {
@@ -258,7 +258,11 @@ impl CondView for SnapshotView<'_> {
         self.win.tile_classes.clone()
     }
     fn slot_table(&self) -> Vec<(String, i64)> {
-        self.cand.slots.iter().map(|(k, v)| (k.clone(), *v)).collect()
+        self.cand
+            .slots
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
     }
     fn tok_named_table(&self) -> Vec<(String, i64)> {
         self.cand
@@ -278,7 +282,11 @@ impl CondView for SnapshotView<'_> {
         self.cand.blocked_groups.clone()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
-        self.win.tile_ids.iter().map(|(k, v)| (k.clone(), *v)).collect()
+        self.win
+            .tile_ids
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
     }
     fn tile_kind_list(&self, kind: &str) -> Vec<i64> {
         self.win
@@ -335,10 +343,7 @@ impl CondView for SnapshotView<'_> {
         // `ctx::players_on` counts present (`!out && exile == 0`) standers.
         (0..self.win.seat_count())
             .filter(|&s| {
-                s != except
-                    && self.out(s) == 0
-                    && self.exile(s) == 0
-                    && self.pos(s) == tile
+                s != except && self.out(s) == 0 && self.exile(s) == 0 && self.pos(s) == tile
             })
             .count() as i64
     }
@@ -400,8 +405,10 @@ impl CondView for SnapshotView<'_> {
             return 0;
         }
         (0..self.win.tile_count)
-            .filter(|&t| self.win.tile_owners.get(t as usize).copied().unwrap_or(-1) == p
-                && self.dist(pos, t) <= radius)
+            .filter(|&t| {
+                self.win.tile_owners.get(t as usize).copied().unwrap_or(-1) == p
+                    && self.dist(pos, t) <= radius
+            })
             .count() as i64
     }
     fn on_path(&self, me: i64, them: i64) -> i64 {

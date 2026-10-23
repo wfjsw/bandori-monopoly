@@ -16,8 +16,8 @@
 //! The [特] discard hook banishes the accident when this card enters a discard.
 
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
 use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
@@ -30,22 +30,32 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
         // dispatch (guerrilla / mygo): the hook fires when *this* card is the
         // one that entered the discard. Banishing the *other* card does not
         // re-enter this hook (the raise names the discarded card's id).
-        On::Action(Action::Discarded(card_sdk::pre::MINE, None, None, on_discarded)),
+        On::Action(Action::Discarded(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            on_discarded,
+        )),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"重叠的声音"#)
         .raw_name(r#"[衍生]重叠的声音"#)
         .derived(true)
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
-        .text(r#"[特]：
+        .text(
+            r#"[特]：
 此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上的“初次演出事故”（如果有）。
 [手]：
 依次进行以下操作：
 1. [移除]此卡和[使用者][场地]上的“初次演出事故”（如果有）；
 2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
-3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。"#)
+3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。"#,
+        )
         // sheet cell D5
-        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
+);
 
 /// C# `CardOverlappingVoices.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -60,7 +70,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 /// (same field-leave semantics as `find_card` + `unplace_at`).
 fn banish_accident(player_id: i32) {
     if ctx::unplace_card_named(player_id, "PP:初次演出事故") {
-        ctx::log(player_id, &Msg::new(key!("overlapping_voices_removed_accident")));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("overlapping_voices_removed_accident")),
+        );
     }
 }
 

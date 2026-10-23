@@ -15,9 +15,9 @@
 //!   player's own `rollAfter`, which is before the walk runs, and the choice is
 //!   `trigger::set_move_roll` between the two totals.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「你以外玩家中上一次进行的移动掷骰结果」.
 const LAST_OTHER: &str = "skill.takiCrychic.lastOther";
@@ -29,12 +29,22 @@ const USED: &str = "skill.takiCrychic.used";
 pub const TAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:椎名立希（CRYCHIC）:克服劣等感",
     &[
-        On::Action(Action::TurnStartBefore("actor == owner && slot('skill.takiCrychic.armed') == 0", None, None, at_turn_start)),
+        On::Action(Action::TurnStartBefore(
+            "actor == owner && slot('skill.takiCrychic.armed') == 0",
+            None,
+            None,
+            at_turn_start,
+        )),
         On::Action(Action::DiceRollAfter("", None, None, on_roll)),
-        On::Action(Action::CardUsed(card_sdk::pre::MINE, None, None, on_skill_used)),
+        On::Action(Action::CardUsed(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            on_skill_used,
+        )),
     ],
 )
-    .silent(&[0, 2]);
+.silent(&[0, 2]);
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, USED, 0);

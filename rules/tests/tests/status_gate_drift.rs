@@ -99,11 +99,21 @@ fn cel_gates_are_the_whole_answer() {
 #[test]
 fn status_gate_filters_speak_gate_value() {
     use card_sdk::kinds::{Filter, FilterShape};
-    for name in ["ActGate", "PayGate", "MoveGate", "OnBoardGate", "TargetableGate"] {
+    for name in [
+        "ActGate",
+        "PayGate",
+        "MoveGate",
+        "OnBoardGate",
+        "TargetableGate",
+    ] {
         let k = Filter::KINDS
             .iter()
             .find(|k| k.name == name)
             .unwrap_or_else(|| panic!("Filter::{name} declared"));
-        assert_eq!(k.shape, FilterShape::Gate, "Filter::{name} is a GateValue fold");
+        assert_eq!(
+            k.shape,
+            FilterShape::Gate,
+            "Filter::{name} is a GateValue fold"
+        );
     }
 }

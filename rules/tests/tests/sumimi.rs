@@ -27,14 +27,23 @@ fn rest(t: &mut Table) {
         }
         t.m.tick(0.25);
     }
-    panic!("rest: the match did not come to rest: {:?}", t.m.state().step);
+    panic!(
+        "rest: the match did not come to rest: {:?}",
+        t.m.state().step
+    );
 }
 
 fn answer_q(t: &mut Table, who: usize, value: i32) -> Result<(), String> {
     let p = t.prompt().expect("answer_q: no prompt");
-    let r = t
-        .m
-        .act(who as i32 + 1, &NetMessage { prompt: p.id, value, ..NetMessage::act("answer") })
+    let r =
+        t.m.act(
+            who as i32 + 1,
+            &NetMessage {
+                prompt: p.id,
+                value,
+                ..NetMessage::act("answer")
+            },
+        )
         .map_err(|e| e.key().to_string());
     rest(t);
     r
@@ -43,8 +52,19 @@ fn answer_q(t: &mut Table, who: usize, value: i32) -> Result<(), String> {
 fn decline_q(t: &mut Table) {
     let p = t.prompt().expect("decline_q: no prompt");
     for who in t.asked() {
-        let v = if p.kind == "tile" { p.items.len() as i32 } else { p.fallback };
-        let _ = t.m.act(who as i32 + 1, &NetMessage { prompt: p.id, value: v, ..NetMessage::act("answer") });
+        let v = if p.kind == "tile" {
+            p.items.len() as i32
+        } else {
+            p.fallback
+        };
+        let _ = t.m.act(
+            who as i32 + 1,
+            &NetMessage {
+                prompt: p.id,
+                value: v,
+                ..NetMessage::act("answer")
+            },
+        );
     }
     rest(t);
 }
@@ -129,8 +149,11 @@ fn idol_and_band_gate_redeem_blocks() {
     // If the redeem happened, the card should be refused.
     if t.money(0) < 3000 {
         // redeem happened (money dropped) but the card was refused
-        assert!(r.is_err() || t.money(0) != 3000,
-            "card refused after redeem or no reset: {r:?} money={}", t.money(0));
+        assert!(
+            r.is_err() || t.money(0) != 3000,
+            "card refused after redeem or no reset: {r:?} money={}",
+            t.money(0)
+        );
     }
 }
 
@@ -155,7 +178,11 @@ fn two_donuts_each_gives_exile() {
     t.give_play(0, "Sumimi:一人两个甜甜圈").unwrap();
     drain(&mut t);
     // 规则书: 「获得[除外]直至你原本所在格子被其他玩家经过」
-    assert!(t.state(0, "exile") > 0, "gained [除外]: {}", t.state(0, "exile"));
+    assert!(
+        t.state(0, "exile") > 0,
+        "gained [除外]: {}",
+        t.state(0, "exile")
+    );
 }
 
 // -- Sumimi:现在她是Sumimi的小初啦 -------------------------------------
@@ -167,7 +194,9 @@ fn now_shes_sumimi_hina_counter() {
     t.give(0, &["Sumimi:现在她是Sumimi的小初啦"]);
     // This is a [反击] card; it triggers when money loss exceeds tile rent.
     // Hard to set up precisely; just verify it's in hand and playable as a counter.
-    assert!(t.hand(0).contains(&"Sumimi:现在她是Sumimi的小初啦".to_string()));
+    assert!(t
+        .hand(0)
+        .contains(&"Sumimi:现在她是Sumimi的小初啦".to_string()));
 }
 
 // -- Sumimi:Sumimi是二人一体的 ------------------------------------------
@@ -180,7 +209,10 @@ fn sumimi_is_two_in_one_swaps_character() {
     drain(&mut t);
     // 规则书: 「将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
     let ch = t.p(0).persona.clone();
-    assert!(ch.contains("初华") || ch.contains("真奈"), "character swapped: {ch}");
+    assert!(
+        ch.contains("初华") || ch.contains("真奈"),
+        "character swapped: {ch}"
+    );
 }
 
 // -- Sumimi:Here the world ----------------------------------------------
@@ -229,8 +261,10 @@ fn childhood_friend_starts_from_shodoshima() {
         let pos = t.pos(0);
         // Accept either: the engine may or may not apply the start-from effect
         // when played during OPS rather than at the dice-roll moment.
-        assert!(pos == 28 || pos == 53,
-            "from 小豆岛 would be 28, from current would be 53; got {pos}");
+        assert!(
+            pos == 28 || pos == 53,
+            "from 小豆岛 would be 28, from current would be 53; got {pos}"
+        );
     }
 }
 
@@ -242,7 +276,9 @@ fn mana_singing_contest_counter() {
     t.set_character_raw(0, "纯田真奈");
     t.give(0, &["Sumimi:（真奈）歌唱大赛5连冠"]);
     // 规则书: [反击] when you or your tiles are about to be affected
-    assert!(t.hand(0).contains(&"Sumimi:（真奈）歌唱大赛5连冠".to_string()));
+    assert!(t
+        .hand(0)
+        .contains(&"Sumimi:（真奈）歌唱大赛5连冠".to_string()));
 }
 
 // -- Sumimi:#L11 ---------------------------------------------------------
@@ -283,9 +319,12 @@ fn l12_hand_places_and_caps_hand() {
     // The card should end up on the field; if not, it may be in discard.
     let on_field = t.on_field(0, "Sumimi:#L12");
     let in_discard = t.discard(0).contains(&"Sumimi:#L12".to_string());
-    assert!(on_field || in_discard,
+    assert!(
+        on_field || in_discard,
         "card on field ({on_field}) or in discard ({in_discard}); field={:?} discard={:?}",
-        t.field_ids(0), t.discard(0));
+        t.field_ids(0),
+        t.discard(0)
+    );
 }
 
 // =====================================================================
@@ -340,23 +379,39 @@ fn mana_half_window_lasts_through_next_turn_end() {
         }
     }
     drain(&mut t);
-    assert_eq!(t.state(0, "skill.manaDonut.half"), 2, "window armed at 2 layers");
+    assert_eq!(
+        t.state(0, "skill.manaDonut.half"),
+        2,
+        "window armed at 2 layers"
+    );
     // The arming turn's end takes only the first layer. `end` runs
     // `end_turn` -> `tick_state(TurnEnd)`; `begin_turn` skips that.
     t.end(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.state(0, "skill.manaDonut.half"), 1, "still armed after the arming turn's end");
+    assert_eq!(
+        t.state(0, "skill.manaDonut.half"),
+        1,
+        "still armed after the arming turn's end"
+    );
     // Walk the table back around to P0: the window must hold across it.
     t.begin_turn(0);
     drain(&mut t);
-    assert_eq!(t.state(0, "skill.manaDonut.half"), 1, "still armed across the table");
+    assert_eq!(
+        t.state(0, "skill.manaDonut.half"),
+        1,
+        "still armed across the table"
+    );
     // P0's next turn end is where the window dies. `end` needs a main move.
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);
     t.end(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.state(0, "skill.manaDonut.half"), 0, "window closed at the end of the owner's next turn");
+    assert_eq!(
+        t.state(0, "skill.manaDonut.half"),
+        0,
+        "window closed at the end of the owner's next turn"
+    );
 }
 
 /// 规则书: 「你的资金消耗减半」 -- only the owner's own spending is halved.
@@ -384,7 +439,11 @@ fn mana_half_only_halves_own_spending() {
     t.dice(&[6]);
     t.roll(1).unwrap();
     drain(&mut t);
-    assert_eq!(t.money(1), 10_000 - rent, "P1's rent is full -- P0's window is not theirs");
+    assert_eq!(
+        t.money(1),
+        10_000 - rent,
+        "P1's rent is full -- P0's window is not theirs"
+    );
 }
 
 // -- skill:三角初华（Sumimi）:成为偶像 ---------------------------------
@@ -454,7 +513,10 @@ fn interaction_two_donuts_exile_blocks_move() {
     drain(&mut t);
     // The player either stayed (correct) or moved (engine divergence).
     // Assert only what's unambiguous: the exile state is present.
-    assert!(t.state(0, "exile") > 0, "[除外] persists after the move attempt");
+    assert!(
+        t.state(0, "exile") > 0,
+        "[除外] persists after the move attempt"
+    );
 }
 
 // 规则书 (Sumimi:一人两个甜甜圈)（1）: 「获得[除外]直至你原本所在格子被其他玩家
@@ -477,10 +539,16 @@ fn two_donuts_exile_holds_across_owner_turns() {
             "the hold does not peel a layer at owner turn start {round}: keys={:?}",
             t.recent_keys(20)
         );
-        assert_eq!(t.state(0, "exileHold"), 1, "the hold marker stays (round {round})");
+        assert_eq!(
+            t.state(0, "exileHold"),
+            1,
+            "the hold marker stays (round {round})"
+        );
         assert_ne!(t.turn(), 0, "the exiled turn was skipped (round {round})");
         assert!(
-            t.recent_keys(40).iter().any(|k| k.contains("exiled_skip_hold")),
+            t.recent_keys(40)
+                .iter()
+                .any(|k| k.contains("exiled_skip_hold")),
             "log.exiled_skip_hold at owner turn start {round}: keys={:?}",
             t.recent_keys(40)
         );
@@ -506,8 +574,17 @@ fn two_donuts_exile_ends_at_the_pass_and_money_is_not_blocked() {
     t.dice(&[10]);
     t.roll(1).unwrap();
     // The pass already ended the exile -- before the (2) settle window.
-    assert_eq!(t.state(0, "exile"), 0, "exile ends at the pass: keys={:?}", t.recent_keys(20));
-    assert_eq!(t.state(0, "exileHold"), 0, "hold marker cleared at the pass");
+    assert_eq!(
+        t.state(0, "exile"),
+        0,
+        "exile ends at the pass: keys={:?}",
+        t.recent_keys(20)
+    );
+    assert_eq!(
+        t.state(0, "exileHold"),
+        0,
+        "hold marker cleared at the pass"
+    );
     // Let the (2) window run (decline the optional settle-teleport).
     drain(&mut t);
     assert!(
@@ -532,17 +609,33 @@ fn layered_exile_still_ticks_per_turn_start() {
         let w = t.m.world_mut();
         w.apply_layer(0, bandori_std::state_key::EXILE, 2);
         w.state_set_flags(0, bandori_std::state_key::EXILE, 1 | 2);
-        w.state_set_expires(0, bandori_std::state_key::EXILE, Some(game_core::state::Tick::TurnStart));
+        w.state_set_expires(
+            0,
+            bandori_std::state_key::EXILE,
+            Some(game_core::state::Tick::TurnStart),
+        );
     }
     assert_eq!(t.state(0, "exile"), 2, "two layers");
     assert_eq!(t.state(0, "exileHold"), 0, "a layered grant is not a hold");
     t.begin_turn(0);
     drain(&mut t);
-    assert_eq!(t.state(0, "exile"), 1, "one layer peeled at the owner turn start");
-    assert_ne!(t.turn(), 0, "the exiled turn was skipped while layers remain");
+    assert_eq!(
+        t.state(0, "exile"),
+        1,
+        "one layer peeled at the owner turn start"
+    );
+    assert_ne!(
+        t.turn(),
+        0,
+        "the exiled turn was skipped while layers remain"
+    );
     t.begin_turn(0);
     drain(&mut t);
-    assert_eq!(t.state(0, "exile"), 0, "the second start drops the last layer");
+    assert_eq!(
+        t.state(0, "exile"),
+        0,
+        "the second start drops the last layer"
+    );
     assert_eq!(t.state(0, "exileHold"), 0);
 }
 

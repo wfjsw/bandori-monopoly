@@ -132,7 +132,8 @@ pub fn kokoro_01_opening_1000_iff() {
         "C-HHW-kokoro-01: log is the latch + GainMoney(1000)"
     );
     crate::kassert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount(),
+        post.money[owner as usize]
+            == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount(),
         "C-HHW-kokoro-01: money rises by exactly 1000"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
@@ -157,7 +158,8 @@ pub fn kokoro_01_mutant_500() {
     invoke::unwrap_done(skill_personas::kasumi_group::at_start_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
+        post.money[owner as usize]
+            == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
         "mutant: card must not match +500"
     );
 }
@@ -177,7 +179,8 @@ pub fn kokoro_01_mutant_is_detected() {
     invoke::unwrap_done(skill_personas::kasumi_group::at_start_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
+        post.money[owner as usize]
+            != pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
         "mutant +500 must disagree with the card"
     );
 }
@@ -240,7 +243,8 @@ pub fn kokoro_02_circle_pass_1500_iff() {
         "C-HHW-kokoro-02: log is exactly GainMoney(1500)"
     );
     crate::kassert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount(),
+        post.money[owner as usize]
+            == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount(),
         "C-HHW-kokoro-02: money rises by exactly 1500 extra"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
@@ -279,7 +283,8 @@ pub fn kokoro_02_mutant_2000() {
     invoke::unwrap_done(skill_personas::kasumi_group::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
+        post.money[owner as usize]
+            == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
         "mutant: card must not match +2000"
     );
 }
@@ -298,7 +303,8 @@ pub fn kokoro_02_mutant_is_detected() {
     invoke::unwrap_done(skill_personas::kasumi_group::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
+        post.money[owner as usize]
+            != pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
         "mutant +2000 must disagree"
     );
 }
@@ -551,7 +557,10 @@ pub fn band_01_accepted_doubles_iff() {
         }
     }
     crate::kassert!(ok_amount, "C-HHW-band-01: amount becomes 2×");
-    crate::kassert!(ok_crystal, "C-HHW-band-01: band card gains exactly 1 crystal");
+    crate::kassert!(
+        ok_crystal,
+        "C-HHW-band-01: band card gains exactly 1 crystal"
+    );
     crate::kassert!(
         post.pay_amount == spec::skills_hhw::band_01_amount(pre_amount),
         "C-HHW-band-01: post pay_amount is double"

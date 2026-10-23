@@ -13,9 +13,9 @@
 //! place on Space, hand its houses to your other tiles, settle becomes a
 //! turn-end [停留].
 
-use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";
 
@@ -27,20 +27,35 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
     &[
         On::Play("", None, Some(cant_play), play),
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
-        On::Action(Action::SettleBody("", None, Some(counteract_guard), counteract)),
-        On::Action(Action::TurnEndAfter("", None, Some(counteract_guard), counteract)),
+        On::Action(Action::SettleBody(
+            "",
+            None,
+            Some(counteract_guard),
+            counteract,
+        )),
+        On::Action(Action::TurnEndAfter(
+            "",
+            None,
+            Some(counteract_guard),
+            counteract,
+        )),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"Parking Space"#)
         .raw_name(r#"[都筑诗船]Parking Space"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手]：
+        .text(
+            r#"[手]：
 将此卡放置于“Space”格子上，将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）。
 [持续]：
 （1）此卡所在格子的[结算]改为回合结束后获得一层[停留]。
-（2）位于此卡所在格子上的玩家无法使用角色及乐队技能。"#)
+（2）位于此卡所在格子上的玩家无法使用角色及乐队技能。"#,
+        )
         // sheet cell A15
-        .fields(&[("group", r#"通用"#), ("owner", r#"都筑诗船"#)]));
+        .fields(&[("group", r#"通用"#), ("owner", r#"都筑诗船"#)]),
+);
 
 /// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile
 /// (`没有 Space`).
@@ -70,7 +85,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
             player_id,
             ctx::self_uid(),
             1,
-            &Msg::new(key!("parking_space_note")), card_sdk::abi::Stack::Fresh);
+            &Msg::new(key!("parking_space_note")),
+            card_sdk::abi::Stack::Fresh,
+        );
     }
     // 规则书[手]: 「将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）」
     // -- C# takes `H.State.houses[s]` houses off the Space tile (only when the

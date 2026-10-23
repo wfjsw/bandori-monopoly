@@ -3,8 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `修复公告`）:
 //! > 前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后将此卡移除。
 
-use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{prop, ActionKind};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};

@@ -3,8 +3,9 @@
 //! 事件文本（`CardMeta` beside the rule body, id `飞鸟山之战`）:
 //! > 所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，行动序列上在抽到此卡的玩家的上一位玩家获得2层回合开始时减少一层的[眩晕]，行动序列上在抽到此卡的玩家的下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家获得1层在回合开始时移除的[除外]
 
-use bandori_std::state_key; use card_sdk::abi::{MoveKind};
 use bandori_std::ctx::{self, plan};
+use bandori_std::state_key;
+use card_sdk::abi::MoveKind;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
@@ -51,7 +52,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let face = roll(player_id, 1, 20);
     ctx::log(
         player_id,
-        &Msg::new("log.event.dice").player_id("who", player_id).i("n", face as i64),
+        &Msg::new("log.event.dice")
+            .player_id("who", player_id)
+            .i("n", face as i64),
     );
     // 「抽到此卡的玩家移动1d20」 -- `card_move` of the rolled length; the landing
     // settles (`MoveCtx.Resolve` defaults to true). Reset the plan the teleport
@@ -73,7 +76,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
         rules_status::stun::add_start(prev, 2);
         ctx::log(
             prev,
-            &Msg::new("log.event.asukayama_stun").player_id("who", prev).i("n", 2),
+            &Msg::new("log.event.asukayama_stun")
+                .player_id("who", prev)
+                .i("n", 2),
         );
     }
     if next >= 0 {
@@ -91,7 +96,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
         }
         // 「其余玩家获得1层在回合开始时移除的[除外]」
         rules_status::exile::send(p, 1, -1);
-        ctx::log(p, &Msg::new("log.event.asukayama_exile").player_id("who", p));
+        ctx::log(
+            p,
+            &Msg::new("log.event.asukayama_exile").player_id("who", p),
+        );
     }
     Ok(())
 }

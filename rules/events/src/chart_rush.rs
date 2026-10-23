@@ -33,7 +33,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let face = roll(p, lost + 1, 20);
         ctx::log(
             player_id,
-            &Msg::new("log.event.dice").player_id("who", p).i("n", face as i64),
+            &Msg::new("log.event.dice")
+                .player_id("who", p)
+                .i("n", face as i64),
         );
         faces.push((p, face));
     }

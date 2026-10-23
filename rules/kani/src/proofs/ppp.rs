@@ -20,8 +20,8 @@
 //! `*_kani` body calls keep CBMC's call graph at ONE body (no `call_body_idx`
 //! trampoline IF-chain).
 
-use crate::host;
 use crate::harness::{self, SparsePlay};
+use crate::host;
 use crate::invoke;
 use crate::ir_fill::{self, TriggerOverlay};
 use crate::spec;
@@ -182,7 +182,8 @@ fn popipa_01_iff_at(user: i32) {
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let dest = world::with_world(|ww| ww.dest);
-    let deck_pipopa = world::with_world(|ww| spec::ppp::deck_count_named(ww, spec::ppp::CARD_PIPOPA));
+    let deck_pipopa =
+        world::with_world(|ww| spec::ppp::deck_count_named(ww, spec::ppp::CARD_PIPOPA));
     let hand_n = world::with_world(|ww| ww.hand_n as i32);
 
     crate::kassert!(
@@ -222,7 +223,6 @@ pub fn popipa_01_iff() {
 pub fn popipa_01_user1_iff() {
     popipa_01_iff_at(1);
 }
-
 
 /// MUTANT: reference wants +1100. Card must not match.
 #[kani::proof]
@@ -301,7 +301,6 @@ pub fn pipopa_01_user1_iff() {
     pipopa_01_iff_at(1);
 }
 
-
 /// MUTANT: reference wants a 2000 gain.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
@@ -316,7 +315,11 @@ pub fn pipopa_01_mutant_money_2000() {
     invoke::unwrap_done(card_ppp::pipopa::pipopa_kani(user));
     let (logbuf, log_n) = log_slice();
     crate::kassert!(
-        spec::ppp::pipopa_effects_ok_mutant(effects_of(&logbuf, log_n), player, POPIPAPAPIPOPA_SLOT),
+        spec::ppp::pipopa_effects_ok_mutant(
+            effects_of(&logbuf, log_n),
+            player,
+            POPIPAPAPIPOPA_SLOT
+        ),
         "mutant: card must not match the +2000 spec"
     );
 }
@@ -401,7 +404,6 @@ pub fn signpost_02_lose_1000_at_end_user1_iff() {
     signpost_02_lose_1000_at_end_iff_at(1);
 }
 
-
 /// MUTANT: reference wants a 500 loss.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
@@ -461,8 +463,14 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
     // Frame on this leg: money / pos / fire untouched *by the crystal add*.
     // The (02) teleport leg may move `pos`; that is not this clause's effect.
     let post = world::snapshot();
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-01: money is frame");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "bang-dream-01: fire is frame");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "bang-dream-01: money is frame"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.charge, pre.charge),
+        "bang-dream-01: fire is frame"
+    );
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
@@ -480,7 +488,6 @@ pub fn bang_dream_01_crystal_iff() {
 pub fn bang_dream_01_crystal_user1_iff() {
     bang_dream_01_crystal_iff_at(1);
 }
-
 
 /// MUTANT: reference wants +2 crystals. Card must not match.
 #[kani::proof]
@@ -580,8 +587,14 @@ fn bang_dream_02_teleport_owned_iff_at(user: i32) {
             crate::kassert!(post.pos[p] == pre.pos[p], "bang-dream-02: others unmoved");
         }
     }
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-02: money is frame");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "bang-dream-02: fire is frame");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "bang-dream-02: money is frame"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.charge, pre.charge),
+        "bang-dream-02: fire is frame"
+    );
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
@@ -599,7 +612,6 @@ pub fn bang_dream_02_teleport_owned_iff() {
 pub fn bang_dream_02_teleport_owned_user1_iff() {
     bang_dream_02_teleport_owned_iff_at(1);
 }
-
 
 /// MUTANT: reference wants an extra GainMoney(1) on the teleport leg.
 #[kani::proof]
@@ -687,7 +699,12 @@ fn popipapapipopa_c1_crystal_on_pass_iff_at(user: i32) {
         "popipapapipopa-c1: crystals rise by exactly 1 under the cap"
     );
     crate::kassert!(
-        spec::ppp::popipapapipopa_c1_log_ok(effects_of(&logbuf, log_n), player, key.0, pre_crystals),
+        spec::ppp::popipapapipopa_c1_log_ok(
+            effects_of(&logbuf, log_n),
+            player,
+            key.0,
+            pre_crystals
+        ),
         "popipapapipopa-c1: log is exactly AddCounter(+1) under the cap"
     );
 }
@@ -707,7 +724,6 @@ pub fn popipapapipopa_c1_crystal_on_pass_iff() {
 pub fn popipapapipopa_c1_crystal_on_pass_user1_iff() {
     popipapapipopa_c1_crystal_on_pass_iff_at(1);
 }
-
 
 /// MUTANT: reference wants +2 crystals per pass.
 #[kani::proof]
@@ -834,7 +850,6 @@ pub fn popipapapipopa_c2_pay_reduce_iff() {
 pub fn popipapapipopa_c2_pay_reduce_user1_iff() {
     popipapapipopa_c2_pay_reduce_iff_at(1);
 }
-
 
 /// MUTANT: reference floors the cut at 1 instead of 0.
 #[kani::proof]
@@ -967,7 +982,10 @@ fn auction_off_01_at(user: i32, match_id: bool) {
             post_field_n == pre_field_n && post_charge_max == pre_charge_max,
             "auction-off-01 (blocked): field / charge_max untouched"
         );
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "auction-off-01 (blocked): money frame");
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "auction-off-01 (blocked): money frame"
+        );
     }
     let _ = (logbuf, post);
 }
@@ -1024,7 +1042,10 @@ fn star_beat_01_layer_iff_at(user: i32) {
     // Money is not moved by the layer grant itself (option 1 may grant
     // stickers; option 2 may walk — both are other clauses).
     let post = world::snapshot();
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "star-beat-01: money is frame");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "star-beat-01: money is frame"
+    );
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
@@ -1042,7 +1063,6 @@ pub fn star_beat_01_layer_iff() {
 pub fn star_beat_01_layer_user1_iff() {
     star_beat_01_layer_iff_at(1);
 }
-
 
 /// MUTANT: reference wants +2 layers.
 #[kani::proof]
@@ -1121,7 +1141,6 @@ pub fn wait_aoki_01_place_on_field_user1_iff() {
     wait_aoki_01_place_on_field_iff_at(1);
 }
 
-
 /// MUTANT: reference wants the card banished instead of placed.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
@@ -1183,7 +1202,12 @@ fn random_star_01_place_and_deck_bottom_iff_at(user: i32) {
         }
     });
     crate::kassert!(
-        spec::ppp::random_star_01_effects_ok(effects_of(&logbuf, log_n), player, PPP_SLOT, PPP_SLOT),
+        spec::ppp::random_star_01_effects_ok(
+            effects_of(&logbuf, log_n),
+            player,
+            PPP_SLOT,
+            PPP_SLOT
+        ),
         "random-star-01: log must be exactly PlaceCard(self, Field)"
     );
     crate::kassert!(
@@ -1212,7 +1236,6 @@ pub fn random_star_01_place_and_deck_bottom_user1_iff() {
     random_star_01_place_and_deck_bottom_iff_at(1);
 }
 
-
 /// MUTANT: reference wants two auction cards at the bottom.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST)]
@@ -1237,7 +1260,8 @@ pub fn random_star_01_mutant_two_auctions() {
         }
     });
     let last_two_equal = world::with_world(|ww| {
-        ww.deck_n >= 2 && ww.deck_pile[ww.deck_n as usize - 1] == ww.deck_pile[ww.deck_n as usize - 2]
+        ww.deck_n >= 2
+            && ww.deck_pile[ww.deck_n as usize - 1] == ww.deck_pile[ww.deck_n as usize - 2]
     });
     crate::kassert!(
         spec::ppp::random_star_01_deck_bottom_ok_mutant(deck_n, last_two_equal, auction_id, last),
@@ -1290,7 +1314,10 @@ fn star_beat_03_stickers_iff_at(user: i32) {
         "star-beat-03: AddToken(+2) iff option 1 was picked"
     );
     let post = world::snapshot();
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "star-beat-03: money is frame");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "star-beat-03: money is frame"
+    );
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
@@ -1308,7 +1335,6 @@ pub fn star_beat_03_stickers_iff() {
 pub fn star_beat_03_stickers_user1_iff() {
     star_beat_03_stickers_iff_at(1);
 }
-
 
 /// MUTANT: reference wants +1 sticker on option 1.
 #[kani::proof]

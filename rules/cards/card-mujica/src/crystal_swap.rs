@@ -12,18 +12,23 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::counter;
 use bandori_std::ctx;
+use card_sdk::abi::counter;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const CRYSTAL_SWAP: CardDef =
-    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play("", None, None, crystal_swap)]).meta(&card_sdk::meta::CardMeta::new()
+pub const CRYSTAL_SWAP: CardDef = CardDef::new(
+    "Mujica:会被骗着买水晶的人",
+    &[On::Play("", None, None, crystal_swap)],
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"会被骗着买水晶的人"#)
         .raw_name(r#"会被骗着买水晶的人"#)
         .tags(&[])
         .text(r#"将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上。"#)
         // sheet cell J13
-        .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
+        .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]),
+);
 
 /// One pool entry: a card instance on some player's field.
 ///

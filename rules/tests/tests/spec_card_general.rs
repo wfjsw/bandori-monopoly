@@ -170,8 +170,14 @@ pub fn c_gen_great_01(step: &Step<'_>) -> Result<(), String> {
     // 「[移除]：将卡移除出游戏」 -- the card is in no zone at all.
     let in_any = step.post.hidden[who].hand.iter().any(|c| c == "通用:GREAT")
         || step.post.hidden[who].draw.iter().any(|c| c == "通用:GREAT")
-        || step.post.hidden[who].discard.iter().any(|c| c == "通用:GREAT")
-        || step.post.st.players[who].field.iter().any(|f| f.card == "通用:GREAT");
+        || step.post.hidden[who]
+            .discard
+            .iter()
+            .any(|c| c == "通用:GREAT")
+        || step.post.st.players[who]
+            .field
+            .iter()
+            .any(|f| f.card == "通用:GREAT");
     if in_any {
         return Err("GREAT still in a zone after [移除]".into());
     }
@@ -276,7 +282,8 @@ fn great_contract() {
 
         let pre = t.snapshot_world();
         t.observe(GREAT_CLAUSES);
-        t.play(0, "通用:GREAT").map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, "通用:GREAT")
+            .map_err(|e| format!("play rejected: {e}"))?;
 
         if t.money(0) as i64 - money as i64 != 2000 {
             return Err(format!("money {}, expected {money}+2000", t.money(0)));
@@ -287,7 +294,8 @@ fn great_contract() {
         if t.hand(0).iter().any(|c| c == "通用:GREAT") {
             return Err("GREAT still in hand".into());
         }
-        let perfect = t.draw_pile(0)
+        let perfect = t
+            .draw_pile(0)
             .iter()
             .filter(|c| c.as_str() == "通用:[衍生]PERFECT")
             .count();
@@ -332,9 +340,18 @@ pub fn c_gen_perfect_01(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let in_any = step.post.hidden[who].hand.iter().any(|c| c == "通用:[衍生]PERFECT")
-        || step.post.hidden[who].draw.iter().any(|c| c == "通用:[衍生]PERFECT")
-        || step.post.hidden[who].discard.iter().any(|c| c == "通用:[衍生]PERFECT")
+    let in_any = step.post.hidden[who]
+        .hand
+        .iter()
+        .any(|c| c == "通用:[衍生]PERFECT")
+        || step.post.hidden[who]
+            .draw
+            .iter()
+            .any(|c| c == "通用:[衍生]PERFECT")
+        || step.post.hidden[who]
+            .discard
+            .iter()
+            .any(|c| c == "通用:[衍生]PERFECT")
         || step.post.st.players[who]
             .field
             .iter()
@@ -460,7 +477,8 @@ fn perfect_contract() {
 
         let pre = t.snapshot_world();
         t.observe(PERFECT_CLAUSES);
-        t.play(0, "通用:[衍生]PERFECT").map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, "通用:[衍生]PERFECT")
+            .map_err(|e| format!("play rejected: {e}"))?;
 
         if t.money(0) as i64 - money as i64 != 3000 {
             return Err(format!("money {}, expected {money}+3000", t.money(0)));
@@ -492,7 +510,6 @@ fn perfect_contract() {
     .expect("PERFECT contract");
 }
 
-
 // =====================================================================
 // 通用:[衍生]FEVER!
 // =====================================================================
@@ -520,9 +537,10 @@ pub fn c_gen_fever_01(step: &Step<'_>) -> Result<(), String> {
         .find(|f| f.card == "通用:[衍生]FEVER!");
     match f {
         None => Err("FEVER! not on the user's [场地]".into()),
-        Some(f) if f.owner != who as i32 || f.user != who as i32 => {
-            Err(format!("FEVER! owner/user {}/{}, expected {who}", f.owner, f.user))
-        }
+        Some(f) if f.owner != who as i32 || f.user != who as i32 => Err(format!(
+            "FEVER! owner/user {}/{}, expected {who}",
+            f.owner, f.user
+        )),
         Some(_) => Ok(()),
     }
 }
@@ -795,11 +813,7 @@ pub fn c_gen_budokan_01(step: &Step<'_>) -> Result<(), String> {
     let n_players = step.pre.st.players.len();
     // 「[使用者]以外的[存活]玩家」 -- not bankrupt and not left the game.
     let alive_others = (0..n_players)
-        .filter(|&i| {
-            i != who
-                && !step.pre.st.players[i].bankrupt
-                && !step.pre.st.players[i].left
-        })
+        .filter(|&i| i != who && !step.pre.st.players[i].bankrupt && !step.pre.st.players[i].left)
         .count();
     let x = budokan_x(alive_others);
     let mut expect = vec![0i64; n_players];
@@ -1029,7 +1043,11 @@ fn tsugu_ge22_draws() {
             t.answer(0, 0).map_err(|e| format!("choice: {e}"))?;
         }
         skip_all(&mut t);
-        if !t.hand(0).iter().any(|c| c == "通用:GREAT" || c == "通用:安可") {
+        if !t
+            .hand(0)
+            .iter()
+            .any(|c| c == "通用:GREAT" || c == "通用:安可")
+        {
             return Err(format!("no draw landed: hand {:?}", t.hand(0)));
         }
         let d = t.money(0) as i64 - money as i64;
@@ -1140,7 +1158,11 @@ fn tsugu_lt26_choice() {
             .map_err(|e| format!("play rejected: {e}"))?;
         let p = t.expect_prompt();
         if p.options.len() != 2 {
-            return Err(format!("choice arity {}, expected 2: {}", p.options.len(), t.dump_prompt()));
+            return Err(format!(
+                "choice arity {}, expected 2: {}",
+                p.options.len(),
+                t.dump_prompt()
+            ));
         }
         if case % 2 == 0 {
             t.answer(0, 0).map_err(|e| format!("gain: {e}"))?;
@@ -1158,7 +1180,9 @@ fn tsugu_lt26_choice() {
             }
             // 并[结算]: the unowned-buy offer for the landing tile appears.
             let p = t.expect_prompt();
-            if !(p.kind == "tile" || p.title.key().contains("buy") || p.title.key().contains("agent"))
+            if !(p.kind == "tile"
+                || p.title.key().contains("buy")
+                || p.title.key().contains("agent"))
             {
                 return Err(format!("no settle offer: {}", t.dump_prompt()));
             }
@@ -1229,8 +1253,7 @@ pub fn c_gen_party_03(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a THANKS PARTY play.
 pub fn c_gen_party_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step.act_is_card("通用:CiRCLE THANKS PARTY!")
-    {
+    if !step.act_is_card("通用:CiRCLE THANKS PARTY!") {
         return Ok(());
     }
     let allowed = [
@@ -1274,11 +1297,7 @@ fn party_x1_extra_turn() {
         while t.prompt().is_some() {
             for who in t.asked() {
                 if who != 0 {
-                    let _ = t.decline_one(
-                        who,
-                        t.expect_prompt().id,
-                        t.expect_prompt().fallback,
-                    );
+                    let _ = t.decline_one(who, t.expect_prompt().id, t.expect_prompt().fallback);
                 } else {
                     break;
                 }
@@ -1352,7 +1371,10 @@ fn party_x2_roll_miss_pays_nobody() {
             ));
         }
         if t.money(2) as i64 - base[2] != 0 {
-            return Err(format!("P2 delta {}, expected 0", t.money(2) as i64 - base[2]));
+            return Err(format!(
+                "P2 delta {}, expected 0",
+                t.money(2) as i64 - base[2]
+            ));
         }
         Ok(())
     })
@@ -1531,7 +1553,8 @@ fn marina_counters_extra_effect() {
         t.play(0, "通用:该清CP了")
             .map_err(|e| format!("cp play: {e}"))?;
         if t.prompt().is_some() {
-            t.answer_tile(0, CIRCLE).map_err(|e| format!("cp tile: {e}"))?;
+            t.answer_tile(0, CIRCLE)
+                .map_err(|e| format!("cp tile: {e}"))?;
         }
         skip_all(&mut t);
         if t.marks_on(CIRCLE).is_empty() {
@@ -1649,8 +1672,7 @@ pub fn c_gen_parking_03(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a Parking Space play.
 pub fn c_gen_parking_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step.act_is_card("通用:[都筑诗船]Parking Space")
-    {
+    if !step.act_is_card("通用:[都筑诗船]Parking Space") {
         return Ok(());
     }
     let who = step.player_of_act();
@@ -1669,7 +1691,7 @@ pub fn c_gen_parking_frame(step: &Step<'_>) -> Result<(), String> {
         "owner:T".into(),
         format!("state:P"),
         "mark:".into(),
-            "pool:".into(),
+        "pool:".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
     frame(step.pre, step.post, &allowed)
@@ -1754,10 +1776,7 @@ fn parking_replaces_settle_and_blocks_skills() {
         t.roll(1).map_err(|e| format!("roll: {e}"))?;
         skip_all(&mut t);
         if t.owner(SPACE) != Some(0) {
-            return Err(format!(
-                "Space ownership changed: {:?}",
-                t.owner(SPACE)
-            ));
+            return Err(format!("Space ownership changed: {:?}", t.owner(SPACE)));
         }
         // 「[结算]改为」: no rent changed hands.
         if t.money(0) != m0 || t.money(1) != m1 {
@@ -1921,8 +1940,7 @@ fn harvest_moves_and_settles() {
         }
         // 「并[结算]」: the settle offer must be open before we decline it.
         let p = t.expect_prompt();
-        if p.kind != "tile" && !p.title.key().contains("buy") && !p.title.key().contains("agent")
-        {
+        if p.kind != "tile" && !p.title.key().contains("buy") && !p.title.key().contains("agent") {
             return Err(format!("no settle/buy offer: {}", t.dump_prompt()));
         }
         skip_all(&mut t);
@@ -2144,9 +2162,10 @@ pub fn c_gen_clearcp_frame(step: &Step<'_>) -> Result<(), String> {
         .events
         .iter()
         .any(|e| e.card.contains("该清CP了") || e.card.contains("clear_cp"));
-    let spends_cp = step.events.iter().any(|e| {
-        e.msg.key().contains("cp") || (e.r#type == "gain" && e.value == 800)
-    });
+    let spends_cp = step
+        .events
+        .iter()
+        .any(|e| e.msg.key().contains("cp") || (e.r#type == "gain" && e.value == 800));
     if !touches_card && !spends_cp {
         return Ok(());
     }
@@ -2163,7 +2182,7 @@ pub fn c_gen_clearcp_frame(step: &Step<'_>) -> Result<(), String> {
         "pool:P".to_string(),
         "fprop:P".to_string(),
         "mark:".into(),
-            "pool:".into(),
+        "pool:".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
     frame(step.pre, step.post, &allowed)
@@ -2238,7 +2257,10 @@ fn clearcp_settle_pays() {
             ));
         }
         if !t.marks_on(NO_HOUSE_TILE).is_empty() {
-            return Err(format!("tile mark remains: {:?}", t.marks_on(NO_HOUSE_TILE)));
+            return Err(format!(
+                "tile mark remains: {:?}",
+                t.marks_on(NO_HOUSE_TILE)
+            ));
         }
         if !t.on_field(0, "通用:该清CP了") {
             return Err("card should stay (on-card CP not empty)".into());
@@ -2358,8 +2380,7 @@ pub fn c_gen_rain_01(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a rain play.
 pub fn c_gen_rain_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step.act_is_card("通用:雨啊，快点来吧")
-    {
+    if !step.act_is_card("通用:雨啊，快点来吧") {
         return Ok(());
     }
     let allowed = [

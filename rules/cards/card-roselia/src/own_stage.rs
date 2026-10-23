@@ -1,14 +1,14 @@
 //! `R:选择自己的舞台` -- C# `CardOwnStage` (MatchHost.cs:10710-10745): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:选择自己的舞台`）:
-//! > 选择自己的舞台： 
+//! > 选择自己的舞台：
 //! > [反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算
 //!
 //! on an abnormal move (not [除外]): choose whether this move (or the end of a
 //! movement-locked turn) settles.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
 use bandori_std::ctx::{self, AbKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(

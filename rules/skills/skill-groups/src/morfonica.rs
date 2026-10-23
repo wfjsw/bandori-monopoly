@@ -8,10 +8,11 @@
 //! option cycling 1000 / 1500 / 2000 by how many times the money option has been
 //! taken -- a counter this skill owns, not the board's.
 
-use bandori_std::kind::Actions;
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::kind::Actions;
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「选择[获得]资金次数」 -- how many times the money option has been taken.
 const TAKEN: &str = "skill.morfonica.moneyTaken";
@@ -21,10 +22,20 @@ pub const MORFONICA: CardDef = CardDef::new(
     &[
         // （1）「一次性失去2000以上资金」 -- the size and direction of the pay
         // are the condition (`value` / `target`, docs/GUARDS.md §4.2).
-        On::Action(Action::PayAfter("actor == owner && value >= 2000 && target != owner", None, None, after_pay)),
+        On::Action(Action::PayAfter(
+            "actor == owner && value >= 2000 && target != owner",
+            None,
+            None,
+            after_pay,
+        )),
         // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
         // half of the CiRCLE pick.
-        On::Action(Actions::PassRewardAffected("actor == owner && value == 0", None, None, on_circle)),
+        On::Action(Actions::PassRewardAffected(
+            "actor == owner && value == 0",
+            None,
+            None,
+            on_circle,
+        )),
     ],
 );
 

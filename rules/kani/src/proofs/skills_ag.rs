@@ -174,7 +174,10 @@ pub fn firepot_01_user1_tick_iff() {
 #[kani::unwind(80)]
 pub fn firepot_01_mutant_is_detected() {
     // pre_rest = 0: the card does not grant; the mutant (grant at +1>=2) does.
-    crate::kassert!(spec::skills_ag::firepot_01_grants(0) == false, "card: no grant at rest 0");
+    crate::kassert!(
+        spec::skills_ag::firepot_01_grants(0) == false,
+        "card: no grant at rest 0"
+    );
     crate::kassert!(
         spec::skills_ag::firepot_01_grants_mutant(0),
         "mutant: claims a grant at rest 0"
@@ -252,7 +255,10 @@ pub fn moca_02_teleport_iff() {
             spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: CD / no-fire gate is a no-op"
         );
-        crate::kassert!(post.pos[owner as usize] != src_pos || pre_fire == 0, "no teleport when gated");
+        crate::kassert!(
+            post.pos[owner as usize] != src_pos || pre_fire == 0,
+            "no teleport when gated"
+        );
         return;
     }
     // Not gated: the body asks yes/no (symbolic). Both answers are legal.
@@ -262,7 +268,12 @@ pub fn moca_02_teleport_iff() {
             "C-AG-moca-02: exactly Teleport(owner → src tile)"
         );
         crate::kassert!(
-            spec::skills_ag::moca_02_post_ok(post.pos[owner as usize], post.charge[owner as usize], src_pos, pre_fire),
+            spec::skills_ag::moca_02_post_ok(
+                post.pos[owner as usize],
+                post.charge[owner as usize],
+                src_pos,
+                pre_fire
+            ),
             "C-AG-moca-02: on the actor's tile with fire −1"
         );
     } else {
@@ -270,7 +281,10 @@ pub fn moca_02_teleport_iff() {
             spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: declined offer is a no-op"
         );
-        crate::kassert!(post.charge[owner as usize] == pre_fire, "decline leaves fire");
+        crate::kassert!(
+            post.charge[owner as usize] == pre_fire,
+            "decline leaves fire"
+        );
         let _ = src;
     }
 }
@@ -353,7 +367,10 @@ pub fn ran_02_mutant_is_detected() {
     invoke::unwrap_done(skill_personas::ran_red::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.charge[player as usize]);
     crate::kassert!(post_fire == 0, "card spends exactly 1");
-    crate::kassert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
+    crate::kassert!(
+        post_fire != 1 - 2,
+        "mutant (spend 2) is impossible from fire=1"
+    );
 }
 // ===========================================================================
 // Pure formula harnesses (no invoke) — cheap, run first under the slot cap.

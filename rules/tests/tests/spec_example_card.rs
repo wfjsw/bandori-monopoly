@@ -52,9 +52,10 @@ pub fn g_general_10draw_money(step: &Step<'_>) -> Result<(), String> {
     // Only fire on a play of this card. `kind == "play"` is
     // `game_core::state::card_trigger::PLAY`; an empty kind is a bare
     // activation with no trigger tag.
-    let played = step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == CARD && (e.kind == "play" || e.kind.is_empty())
-    });
+    let played = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "card" && e.card == CARD && (e.kind == "play" || e.kind.is_empty()));
     if !played {
         return Ok(());
     }
@@ -70,7 +71,10 @@ pub fn g_general_10draw_money(step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for the play: only the user's money and card zones move.
 pub fn card_10draw_frame(step: &Step<'_>) -> Result<(), String> {
-    let played = step.events.iter().any(|e| e.r#type == "card" && e.card == CARD);
+    let played = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "card" && e.card == CARD);
     if !played {
         return Ok(());
     }

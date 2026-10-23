@@ -38,7 +38,10 @@ fn s(v: &str) -> (i32, i32) {
     {
         let id = crate::intern::intern(v);
         #[cfg(kani)]
-        kani::assert(id.is_valid(), "name intern table exhausted or name too long");
+        kani::assert(
+            id.is_valid(),
+            "name intern table exhausted or name too long",
+        );
         (crate::intern::encode_handle(id), v.len() as i32)
     }
     #[cfg(not(kani))]
@@ -632,7 +635,10 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
                 }
             };
         }
-        push!(0); push!(1); push!(2); push!(3);
+        push!(0);
+        push!(1);
+        push!(2);
+        push!(3);
         if payers.len() > 4 {
             kani::assert(false, "split_pay: more than 4 payers under Kani");
         }
@@ -653,7 +659,10 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
                 }
             };
         }
-        leg!(0); leg!(1); leg!(2); leg!(3);
+        leg!(0);
+        leg!(1);
+        leg!(2);
+        leg!(3);
         return Ok(moved);
     }
     #[cfg(not(kani))]
@@ -705,7 +714,10 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
                 }
             };
         }
-        draw1!(); draw1!(); draw1!(); draw1!();
+        draw1!();
+        draw1!();
+        draw1!();
+        draw1!();
         if n.max(0) > 4 {
             kani::assert(false, "draw: more than 4 cards under Kani");
         }
@@ -1151,7 +1163,19 @@ pub fn place_mark(
     let (cp, cl) = s(category);
     let (np, nl) = mj(note);
     unsafe {
-        sys::place_mark(tile, kp, kl, cp, cl, owner, src, count, stack as i32, np, nl)
+        sys::place_mark(
+            tile,
+            kp,
+            kl,
+            cp,
+            cl,
+            owner,
+            src,
+            count,
+            stack as i32,
+            np,
+            nl,
+        )
     }
 }
 
@@ -1178,7 +1202,20 @@ pub fn place_mark_pair(
     let (cp, cl) = s(category);
     let (np, nl) = mj(note);
     unsafe {
-        sys::place_mark_pair(a, b, kp, kl, cp, cl, owner, src, count, stack as i32, np, nl) != 0
+        sys::place_mark_pair(
+            a,
+            b,
+            kp,
+            kl,
+            cp,
+            cl,
+            owner,
+            src,
+            count,
+            stack as i32,
+            np,
+            nl,
+        ) != 0
     }
 }
 
@@ -1275,7 +1312,9 @@ pub fn designated_tiles() -> alloc::vec::Vec<i32> {
     let f = crate::abi::MarkFilter::any()
         .category(crate::abi::mark::DESIGNATE_CATEGORY)
         .instance(self_uid());
-    (0..tile_count()).filter(|&t| count_marks(t, &f) > 0).collect()
+    (0..tile_count())
+        .filter(|&t| count_marks(t, &f) > 0)
+        .collect()
 }
 
 /// Does **this** instance currently designate `tile`?
@@ -1878,7 +1917,12 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
 
 /// [`ask_tile`] for a pick the player then walks to: the board lights the
 /// path to the hovered tile as well as the tile itself.
-pub fn ask_tile_walk(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
+pub fn ask_tile_walk(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    tiles: &[i32],
+) -> Result<i32, Prompt> {
     #[cfg(kani)]
     {
         if let Some(&t) = tiles.get(0) {
@@ -2045,7 +2089,10 @@ pub fn ask_player_cards(
                 }
             };
         }
-        push!(0); push!(1); push!(2); push!(3);
+        push!(0);
+        push!(1);
+        push!(2);
+        push!(3);
         if n == 0 {
             return Ok(-1);
         }
@@ -2085,7 +2132,10 @@ pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Resu
                 }
             };
         }
-        opt!(0); opt!(1); opt!(2); opt!(3);
+        opt!(0);
+        opt!(1);
+        opt!(2);
+        opt!(3);
         if cards.len() > 4 {
             kani::assert(false, "ask_card: more than 4 cards under Kani");
         }
@@ -2935,7 +2985,6 @@ pub mod effect {
 
 // ------------------------------------------------------------- placement & skills
 
-
 /// Take a *named* card off the player's field. True when it was there.
 /// [`unplace_card`] is the special case where the named card is the one running.
 #[cfg_attr(kani, inline(always))]
@@ -2991,7 +3040,6 @@ pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
 pub fn do_move_roll(player_id: i32) -> i32 {
     unsafe { sys::do_move_roll(player_id) }
 }
-
 
 /// Is this card in play at the player?
 /// Ids of the player's placed field cards, in placement order.
@@ -3218,7 +3266,6 @@ pub fn card_prop(id: &str, key: &str) -> i32 {
 pub fn gain_fixed(player_id: i32, amount: i32, why: &Msg) -> Result<i32, Prompt> {
     gain(player_id, amount, why)
 }
-
 
 /// What this turn's [触发结算]s have cost the player so far.
 #[cfg_attr(kani, inline(always))]

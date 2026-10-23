@@ -1,7 +1,7 @@
 //! `Mor:秘密与青春的虹彩` -- C# `CardSecretRainbow` (MatchHost.cs:5178-5220): halve a
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:秘密与青春的虹彩`）:
-//! > 秘密与青春的虹彩：[反击] 
+//! > 秘密与青春的虹彩：[反击]
 //! > （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。
 //! > （2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。
 //!
@@ -10,8 +10,8 @@
 //! Counteraction-only (`Normal => false`). Grades are static data shipped with
 //! the rule (see [`GRADES`] below).
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new(

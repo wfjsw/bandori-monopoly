@@ -17,9 +17,7 @@ fn native_shims_are_linked() {
 
 #[test]
 fn board_hash_table_is_sound() {
-    use rules_kani::board::{
-        tile_named, tile_named_bytes, TILE_NAME_HASHES, TILE_NAMES,
-    };
+    use rules_kani::board::{tile_named, tile_named_bytes, TILE_NAMES, TILE_NAME_HASHES};
     for i in 0..60 {
         assert_eq!(
             tile_named(TILE_NAMES[i]),
@@ -72,10 +70,7 @@ fn intern_fixed_loop_bounds() {
     let a = card_sdk::intern::intern("PP:[丸山彩]憧憬的前方");
     let b = card_sdk::intern::intern("PP:[丸山彩]憧憬的前方");
     assert_eq!(a, b);
-    assert_eq!(
-        card_sdk::intern::resolve_str(a),
-        "PP:[丸山彩]憧憬的前方"
-    );
+    assert_eq!(card_sdk::intern::resolve_str(a), "PP:[丸山彩]憧憬的前方");
     let long = "x".repeat(52);
     assert!(card_sdk::intern::intern(&long).is_valid());
     let too_long = "y".repeat(card_sdk::intern::MAX_NAME + 1);

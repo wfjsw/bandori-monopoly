@@ -208,10 +208,7 @@ fn flash_then_ask_yes_flashes_once_before_the_prompt() {
         "the body paused at ask_yes: {before:?}"
     );
     let at_prompt = t.events_since(mark);
-    let f: Vec<_> = at_prompt
-        .iter()
-        .filter(|e| e.r#type == "flash")
-        .collect();
+    let f: Vec<_> = at_prompt.iter().filter(|e| e.r#type == "flash").collect();
     assert_eq!(
         f.len(),
         1,

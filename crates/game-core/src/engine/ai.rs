@@ -270,9 +270,7 @@ impl Cx<'_> {
         if self.is_chaos(i) {
             let mut deeds: Vec<usize> = (0..self.data.tiles.len())
                 .filter(|&t| self.w.st.owners[t] == i as i32 && self.w.st.mortgaged[t])
-                .filter(|&t| {
-                    self.w.st.players[i].money - self.redeem_cost(t) >= CHAOS_RESERVE
-                })
+                .filter(|&t| self.w.st.players[i].money - self.redeem_cost(t) >= CHAOS_RESERVE)
                 .collect();
             if deeds.is_empty() {
                 return None;

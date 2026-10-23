@@ -6,9 +6,9 @@
 //!
 //! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
-use card_sdk::abi::{FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{CardDef, DealValue, Filter, key, Msg, On};
+use card_sdk::abi::FilterKind;
+use card_sdk::{key, CardDef, DealValue, Filter, Msg, On};
 
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
     "PPP:迷宫般的仓库",

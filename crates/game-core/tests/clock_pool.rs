@@ -321,7 +321,10 @@ fn a_larger_base_refill_lifts_the_cap() {
     to_human_ops(&mut m, 1);
     let st = m.state();
     // First turn: (15 + 30).min(max(15, 30)) = 30.
-    assert_eq!(st.base_time, 30.0, "cap-lift keeps the larger refill: {st:?}");
+    assert_eq!(
+        st.base_time, 30.0,
+        "cap-lift keeps the larger refill: {st:?}"
+    );
 }
 
 // ---------------------------------------------------------------- per-seat
@@ -506,12 +509,7 @@ fn canon_omits_a_default_clock_and_appends_a_custom_one() {
         bot: true,
         ..Default::default()
     }];
-    let default = CanonSettings::new(
-        MatchMode::Casual,
-        0.05,
-        &ScoreWeights::default(),
-        &members,
-    );
+    let default = CanonSettings::new(MatchMode::Casual, 0.05, &ScoreWeights::default(), &members);
     let s = default.canon();
     assert!(
         !s.contains("clock,"),

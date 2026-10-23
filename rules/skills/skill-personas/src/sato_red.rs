@@ -11,9 +11,10 @@
 //! outside it. The extra dice are `add_extra_dice`, which rides along on the
 //! plan rather than replacing its base -- 「额外添加」, not 「变更为」.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const SATO_RED: CardDef = CardDef::new(
     "skill:佐藤益木:与燃烧的红色一起驰骋",

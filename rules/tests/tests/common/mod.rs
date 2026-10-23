@@ -17,8 +17,8 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use game_core::data::{GameData, Roster};
-use game_core::engine::Match;
 use game_core::engine::CardRules;
+use game_core::engine::Match;
 use game_core::msg::{Arg, Msg};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
@@ -35,10 +35,12 @@ pub fn data() -> Arc<GameData> {
     static DATA: OnceLock<Arc<GameData>> = OnceLock::new();
     DATA.get_or_init(|| {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-        let roster = Roster::from_fixture(&std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
+        let roster = Roster::from_fixture(
+            &std::fs::read_to_string(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
+            )
+            .expect("roster fixture"),
         )
-        .expect("roster fixture"))
         .expect("roster fixture parses");
         Arc::new(
             GameData::load(
@@ -194,7 +196,12 @@ impl Table {
     /// opening run to P0's 运营. `mode` matters for prompt deadlines -- Solo
     /// never forces a local seat's answer, Casual (online) times out to the
     /// fallback after the prompt's clock + `REMOTE_GRACE`.
-    pub fn with_data(data: Arc<game_core::data::GameData>, chars: &[&str], seed: u64, mode: MatchMode) -> Self {
+    pub fn with_data(
+        data: Arc<game_core::data::GameData>,
+        chars: &[&str],
+        seed: u64,
+        mode: MatchMode,
+    ) -> Self {
         let n = chars.len();
         assert!((2..=10).contains(&n), "2..=10 players");
         let members: Vec<RoomMember> = (1..=n as i32)
@@ -279,7 +286,10 @@ impl Table {
             }
             self.m.tick(0.25);
         }
-        panic!("settle: the match did not come to rest: {:?}", self.m.state().step);
+        panic!(
+            "settle: the match did not come to rest: {:?}",
+            self.m.state().step
+        );
     }
 
     /// [`Table::settle`], answering every prompt that comes up with its
@@ -300,7 +310,12 @@ impl Table {
                     ..NetMessage::act("answer")
                 };
                 if p.kind == "pick" || p.kind == "mortgage" {
-                    msg.cards = p.items.iter().take(p.count.max(0) as usize).cloned().collect();
+                    msg.cards = p
+                        .items
+                        .iter()
+                        .take(p.count.max(0) as usize)
+                        .cloned()
+                        .collect();
                 }
                 let _ = self.m.act(who as i32 + 1, &msg);
             }
@@ -372,8 +387,11 @@ impl Table {
     /// Accept the settle's optional buy (「可选择[消耗]…获得格子地契和拥有权」).
     /// There is no END-step `act buy` any more -- the settle prompt IS the buy.
     pub fn buy(&mut self, who: usize) -> Result<(), String> {
-        let p = self.prompt().ok_or_else(|| "no buy prompt open".to_string())?;
-        if !format!("{:?}", p.title).contains("buy") && !format!("{:?}", p.title).contains("ask.buy")
+        let p = self
+            .prompt()
+            .ok_or_else(|| "no buy prompt open".to_string())?;
+        if !format!("{:?}", p.title).contains("buy")
+            && !format!("{:?}", p.title).contains("ask.buy")
         {
             return Err(format!("open prompt is not a buy: {}", self.dump_prompt()));
         }
@@ -384,11 +402,16 @@ impl Table {
     /// There is no END-step `act build` any more -- the settle prompt IS the build.
     pub fn build(&mut self, who: usize) -> Result<(), String> {
         let _ = who;
-        let p = self.prompt().ok_or_else(|| "no build prompt open".to_string())?;
+        let p = self
+            .prompt()
+            .ok_or_else(|| "no build prompt open".to_string())?;
         if !format!("{:?}", p.title).contains("build")
             && !format!("{:?}", p.title).contains("ask.build")
         {
-            return Err(format!("open prompt is not a build: {}", self.dump_prompt()));
+            return Err(format!(
+                "open prompt is not a build: {}",
+                self.dump_prompt()
+            ));
         }
         self.answer_one(0)
     }
@@ -616,7 +639,13 @@ impl Table {
             // turn starts, so a stray Returns is not a clean field. A test
             // that wants Returns places it itself.
             p.field.retain(|f| f.card.starts_with("skill:"));
-            for k in [bandori_std::state_key::STAY, bandori_std::state_key::STUN, bandori_std::state_key::STUN_START, bandori_std::state_key::EXILE, bandori_std::state_key::NO_HAND] {
+            for k in [
+                bandori_std::state_key::STAY,
+                bandori_std::state_key::STUN,
+                bandori_std::state_key::STUN_START,
+                bandori_std::state_key::EXILE,
+                bandori_std::state_key::NO_HAND,
+            ] {
                 p.state.remove(k);
             }
             // A start-time gate like the fire pots: a band skill's 「无法获取
@@ -636,8 +665,7 @@ impl Table {
             p.state_set("ppFansUp", 0);
             p.state_set("ppFansDown", 0);
             p.state_set("mark.pp_fans.initial", 0);
-            p.tokens
-                .retain(|t| !t.name.starts_with("P✽P粉丝"));
+            p.tokens.retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
         for f in w.st.board_field.iter_mut() {
             f.props.remove(prop::NO_REWARD);
@@ -694,7 +722,8 @@ impl Table {
 
     /// Replace the draw pile; `top_first[0]` is drawn first.
     pub fn set_draw(&mut self, who: usize, top_first: &[&str]) {
-        self.m.world_mut().hidden[who].draw = top_first.iter().rev().map(|s| s.to_string()).collect();
+        self.m.world_mut().hidden[who].draw =
+            top_first.iter().rev().map(|s| s.to_string()).collect();
     }
 
     pub fn set_discard(&mut self, who: usize, cards: &[&str]) {
@@ -709,15 +738,18 @@ impl Table {
         let w = self.m.world_mut();
         use game_core::state::{state_flag, Tick};
         let (flags, tick): (u8, Option<Tick>) = match key {
-            bandori_std::state_key::STAY | bandori_std::state_key::STUN => {
-                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnEnd))
-            }
-            bandori_std::state_key::STUN_START => {
-                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnStart))
-            }
-            bandori_std::state_key::EXILE => {
-                (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, Some(Tick::TurnStart))
-            }
+            bandori_std::state_key::STAY | bandori_std::state_key::STUN => (
+                state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,
+                Some(Tick::TurnEnd),
+            ),
+            bandori_std::state_key::STUN_START => (
+                state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,
+                Some(Tick::TurnStart),
+            ),
+            bandori_std::state_key::EXILE => (
+                state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,
+                Some(Tick::TurnStart),
+            ),
             bandori_std::state_key::NO_HAND | bandori_std::state_key::UNSTOPPABLE => {
                 (state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED, None)
             }
@@ -733,7 +765,9 @@ impl Table {
     }
 
     pub fn set_state_var(&mut self, who: usize, key: &str, v: StateVar) {
-        self.m.world_mut().st.players[who].state.insert(key.into(), v);
+        self.m.world_mut().st.players[who]
+            .state
+            .insert(key.into(), v);
     }
 
     /// Fire pots: `value` held, `max` cap.
@@ -903,7 +937,12 @@ impl Table {
 
     /// The draw pile, top first.
     pub fn draw_pile(&self, who: usize) -> Vec<String> {
-        self.m.world().hidden[who].draw.iter().rev().cloned().collect()
+        self.m.world().hidden[who]
+            .draw
+            .iter()
+            .rev()
+            .cloned()
+            .collect()
     }
 
     pub fn discard(&self, who: usize) -> Vec<String> {
@@ -924,7 +963,10 @@ impl Table {
 
     /// Crystals on `who`'s first field copy of `card` (None if not placed).
     pub fn crystals(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+        self.field(who)
+            .iter()
+            .find(|f| f.card == card)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
@@ -942,7 +984,10 @@ impl Table {
     /// 2026-10-07: the CP points attached to the card). This is the number the
     /// view's field-card counter badge shows.
     pub fn cp_on_card(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("cp").copied().unwrap_or(0))
+        self.field(who)
+            .iter()
+            .find(|f| f.card == card)
+            .map(|f| f.counters.get("cp").copied().unwrap_or(0))
     }
 
     /// Arbitrary on-card counter on `who`'s first field copy of `card`
@@ -1046,13 +1091,7 @@ impl Table {
 
     /// The last `n` event keys (for assertion messages).
     pub fn recent_keys(&self, n: usize) -> Vec<String> {
-        let all: Vec<String> = self
-            .m
-            .world()
-            .recent
-            .iter()
-            .map(|e| log_key(e))
-            .collect();
+        let all: Vec<String> = self.m.world().recent.iter().map(|e| log_key(e)).collect();
         all[all.len().saturating_sub(n)..].to_vec()
     }
 }

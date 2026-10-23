@@ -8,14 +8,14 @@ use std::sync::Arc;
 mod common;
 use common::data_arc as data;
 
+#[cfg(debug_assertions)]
+use game_core::record::{EngineStamp, RecordedMatch, Replayer, RECORD_VERSION};
 use game_core::{
     engine::{Match, StubRules},
     net::{NetMessage, RoomMember},
     scoring::ScoreWeights,
     MatchMode,
 };
-#[cfg(debug_assertions)]
-use game_core::record::{EngineStamp, RecordedMatch, Replayer, RECORD_VERSION};
 
 fn game(mode: MatchMode) -> Match {
     let mut m = Match::new(
@@ -217,17 +217,25 @@ fn deed_cheats_use_the_tile_rule_primitives() {
         .expect("a buyable tile");
     m.act(1, &cheat("buy", tile as i32, me as i32)).unwrap();
     assert_eq!(
-        m.state().owners[tile], me as i32,
+        m.state().owners[tile],
+        me as i32,
         "the buy cheat committed the deed"
     );
     // Build one house on it.
     m.act(1, &cheat("build", tile as i32, me as i32)).unwrap();
     assert_eq!(m.state().houses[tile], 1, "the build cheat raised a house");
     // Mortgage and redeem it (the same deed-economics primitives).
-    m.act(1, &cheat("mortgage", tile as i32, me as i32)).unwrap();
-    assert!(m.state().mortgaged[tile], "the mortgage cheat flipped the flag");
+    m.act(1, &cheat("mortgage", tile as i32, me as i32))
+        .unwrap();
+    assert!(
+        m.state().mortgaged[tile],
+        "the mortgage cheat flipped the flag"
+    );
     m.act(1, &cheat("redeem", tile as i32, me as i32)).unwrap();
-    assert!(!m.state().mortgaged[tile], "the redeem cheat cleared the flag");
+    assert!(
+        !m.state().mortgaged[tile],
+        "the redeem cheat cleared the flag"
+    );
     assert!(m.state().debug_open);
 }
 

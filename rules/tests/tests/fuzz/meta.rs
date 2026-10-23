@@ -1,9 +1,9 @@
 //! Metamorphic checks: paired runs from the same seed that must land in
 //! related final states.
 
-use crate::common::Table;
 use super::drive::{drive, AnswerMode};
 use super::rng::Rng;
+use crate::common::Table;
 
 /// Determinism: same seed + same answer sequence -> identical save JSON.
 pub fn check_determinism(seed: u64, turns: u32) -> Result<(), String> {
@@ -14,7 +14,12 @@ pub fn check_determinism(seed: u64, turns: u32) -> Result<(), String> {
 
     let (mut t2, _c2) = super::gen::arrange(seed);
     let mut r2 = Rng::new(seed ^ 0xA5A5);
-    let tr2 = drive(&mut t2, &mut r2, turns, AnswerMode::Replay(tr1.answers.clone()))?;
+    let tr2 = drive(
+        &mut t2,
+        &mut r2,
+        turns,
+        AnswerMode::Replay(tr1.answers.clone()),
+    )?;
     let s2 = t2.m.save();
 
     // The replay run must also have consumed exactly the same answers.
@@ -34,8 +39,10 @@ pub fn check_determinism(seed: u64, turns: u32) -> Result<(), String> {
             .unwrap_or(s1.len().min(s2.len()));
         return Err(format!(
             "determinism: save JSON differs at byte {at}\n  a: {}\n  b: {}",
-            s1.get(at.saturating_sub(40)..(at + 40).min(s1.len())).unwrap_or(""),
-            s2.get(at.saturating_sub(40)..(at + 40).min(s2.len())).unwrap_or("")
+            s1.get(at.saturating_sub(40)..(at + 40).min(s1.len()))
+                .unwrap_or(""),
+            s2.get(at.saturating_sub(40)..(at + 40).min(s2.len()))
+                .unwrap_or("")
         ));
     }
     Ok(())
@@ -59,16 +66,17 @@ pub fn check_save_restore(seed: u64, turns: u32) -> Result<(), String> {
     // Branch B: restore and continue with the same answers and the same
     // action stream.
     let mut t2 = Table {
-        m: game_core::engine::Match::restore(
-            crate::common::data(),
-            crate::common::rules(),
-            &saved,
-        )
-        .map_err(|e| format!("restore: {}", e.key()))?,
+        m: game_core::engine::Match::restore(crate::common::data(), crate::common::rules(), &saved)
+            .map_err(|e| format!("restore: {}", e.key()))?,
         n: t.n,
     };
     let mut r_b = Rng::new(seed ^ 0x1111);
-    let tr_b = drive(&mut t2, &mut r_b, turns - prefix, AnswerMode::Replay(tr_a.answers.clone()))?;
+    let tr_b = drive(
+        &mut t2,
+        &mut r_b,
+        turns - prefix,
+        AnswerMode::Replay(tr_a.answers.clone()),
+    )?;
     let b = t2.m.save();
 
     if tr_a.answers != tr_b.answers {
@@ -82,8 +90,10 @@ pub fn check_save_restore(seed: u64, turns: u32) -> Result<(), String> {
             .unwrap_or(a.len().min(b.len()));
         return Err(format!(
             "save/restore: final states differ at byte {at}\n  a: {}\n  b: {}",
-            a.get(at.saturating_sub(40)..(at + 40).min(a.len())).unwrap_or(""),
-            b.get(at.saturating_sub(40)..(at + 40).min(b.len())).unwrap_or("")
+            a.get(at.saturating_sub(40)..(at + 40).min(a.len()))
+                .unwrap_or(""),
+            b.get(at.saturating_sub(40)..(at + 40).min(b.len()))
+                .unwrap_or("")
         ));
     }
     Ok(())

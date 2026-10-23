@@ -9,9 +9,10 @@
 use alloc::vec::Vec;
 
 use alloc::string::String;
-use bandori_std::state_key; use card_sdk::abi::prop;
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::prop;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",

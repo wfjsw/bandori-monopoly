@@ -15,14 +15,8 @@ const FILL: &str = "R:[衍生] 觉悟";
 fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
     let d = data();
     let props = rules().card_props(card);
-    t.m.world_mut().place_card_on(
-        &d,
-        who as i32,
-        tile as i32,
-        card,
-        Msg::default(),
-        props,
-    );
+    t.m.world_mut()
+        .place_card_on(&d, who as i32, tile as i32, card, Msg::default(), props);
 }
 
 fn give_n(t: &mut Table, who: usize, card: &str, n: usize) {
@@ -141,10 +135,14 @@ fn l01_counter_war_five_links_deep() {
             // Round on X: only the wars land here. The 网络链接异常 cards wait
             // for the counters-to-counters rounds (C5 shows they *could* cancel
             // one of X's designations; L1's chain uses them deeper instead).
-            if t.counteract_offered("AG:宣战布告") && asked[0] == 1 && !declared.contains(&"A") {
+            if t.counteract_offered("AG:宣战布告") && asked[0] == 1 && !declared.contains(&"A")
+            {
                 declared.push("A");
                 t.counteract(1, "AG:宣战布告").unwrap();
-            } else if t.counteract_offered("AG:宣战布告") && asked[0] == 2 && !declared.contains(&"B") {
+            } else if t.counteract_offered("AG:宣战布告")
+                && asked[0] == 2
+                && !declared.contains(&"B")
+            {
                 declared.push("B");
                 t.counteract(2, "AG:宣战布告").unwrap();
             } else {
@@ -154,7 +152,10 @@ fn l01_counter_war_five_links_deep() {
             // Rounds on B (newest first) then A. C answers B (the first war
             // round). E answers A -- gated on D already declared so it does not
             // fire on B's quiet lap (which re-offers P3 after C lands).
-            if t.counteract_offered("通用:网络链接异常") && asked[0] == 0 && !declared.contains(&"C") {
+            if t.counteract_offered("通用:网络链接异常")
+                && asked[0] == 0
+                && !declared.contains(&"C")
+            {
                 declared.push("C");
                 t.counteract(0, "通用:网络链接异常").unwrap();
             } else if t.counteract_offered("通用:网络链接异常")
@@ -170,7 +171,10 @@ fn l01_counter_war_five_links_deep() {
         } else if answered == "通用:网络链接异常" {
             // Round on C: D answers C (negating it whole -- C is a [手] with no
             // [指定]).
-            if t.counteract_offered("通用:网络链接异常") && asked[0] == 2 && !declared.contains(&"D") {
+            if t.counteract_offered("通用:网络链接异常")
+                && asked[0] == 2
+                && !declared.contains(&"D")
+            {
                 declared.push("D");
                 t.counteract(2, "通用:网络链接异常").unwrap();
             } else {
@@ -239,18 +243,25 @@ fn l02_one_walk_several_pass_effects() {
     t.own(1, &[t48]);
     t.own(0, &[tile("星之鼓动山丘")]);
     // （香澄） card on 44 (the hill tile its effect keys on), placed by P1.
-    place_on_tile(&mut t, 1, "PPP:（香澄）大家我都喜欢哦", tile("星之鼓动山丘"));
+    place_on_tile(
+        &mut t,
+        1,
+        "PPP:（香澄）大家我都喜欢哦",
+        tile("星之鼓动山丘"),
+    );
     // （乐奈） on 48 with 5 crystals.
     place_on_tile(&mut t, 2, "MyGO:（乐奈）有趣的女人", t48);
     t.set_crystals(2, "MyGO:（乐奈）有趣的女人", 5);
     // Random Star on P0's field; 2 stickers.
     t.place_raw(0, "PPP:仓库里的Random Star");
-    t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
-        name: "星星贴纸".into(),
-        value: 2,
-    
-        instance: None,
-    });
+    t.m.world_mut().st.players[0]
+        .tokens
+        .push(game_core::state::Counter {
+            name: "星星贴纸".into(),
+            value: 2,
+
+            instance: None,
+        });
     // 安可 in hand from the start, so the 香澄 forced stop can be countered.
     t.give(0, &["通用:安可"]);
     t.set_pos(0, 38);
@@ -291,9 +302,16 @@ fn l02_one_walk_several_pass_effects() {
         t.discard(0)
     );
     // （乐奈）有趣的女人 forces a stop on 48 at half rent; 安可 undoes the 香澄 stop.
-    assert!(answered_encore, "安可 must be offered for the 香澄 forced stop");
+    assert!(
+        answered_encore,
+        "安可 must be offered for the 香澄 forced stop"
+    );
     assert_eq!(t.pos(0), 48, "P0 ends on 山吹面包房");
-    assert_eq!(t.money(0), 10_000 - rent(t48, 0) / 2, "half rent on the forced settle");
+    assert_eq!(
+        t.money(0),
+        10_000 - rent(t48, 0) / 2,
+        "half rent on the forced settle"
+    );
 }
 
 // =====================================================================
@@ -579,7 +597,11 @@ fn l07_extra_turn_cascade() {
         t.turn()
     );
     // 「你的回合结束后自动移除一个奇迹水晶」 — both decay by 1 at turn end.
-    assert_eq!(t.crystals(0, "Mujica:燃尽前的线香花火"), Some(1), "线香 2→1");
+    assert_eq!(
+        t.crystals(0, "Mujica:燃尽前的线香花火"),
+        Some(1),
+        "线香 2→1"
+    );
     assert_eq!(t.crystals(0, "HHW:运动的天赋"), Some(2), "运动 3→2");
     // Extra turn B: roll pays 运动的天赋 700, re-rolls until >= 10 (600 each).
     t.dice(&[3, 12]);

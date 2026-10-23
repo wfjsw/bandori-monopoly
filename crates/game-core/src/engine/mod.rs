@@ -35,23 +35,23 @@ pub use tile_text::compose as compose_tile_texts;
 
 pub use ai::{
     bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_play_card, bot_wants_redeem,
-    wants_buy, wants_build, wants_redeem, BUY_RESERVE, BUILD_RESERVE, CHAOS_COUNTER_CHANCE,
+    wants_build, wants_buy, wants_redeem, BUILD_RESERVE, BUY_RESERVE, CHAOS_COUNTER_CHANCE,
     CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN, PLAY_CARD_CHANCE, REDEEM_RESERVE,
 };
-pub use cx::{Answered, AnswerProvider, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, AI_UNSET};
+pub use cx::{AnswerProvider, Answered, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, AI_UNSET};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
-pub use play::{Paid, Pay, PayEvent, PayKind};
 pub use play::purchase;
+pub use play::MAX_SETTLE_DEPTH;
+pub use play::{Paid, Pay, PayEvent, PayKind};
 pub use rules::{
     CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, StubRules,
     TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
 };
-pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, World};
-pub use play::MAX_SETTLE_DEPTH;
 pub use work::{
     AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,
     WorkItem,
 };
+pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, World};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
 /// `bot-cost` feature is on; nothing behavioural either way.
@@ -118,7 +118,14 @@ pub mod rtimer {
     }
 
     pub fn reset() {
-        for s in [&STATE_NS, &VIEW_EXTRA_NS, &LOG_NS, &WORLD_COPY_NS, &TICK_NS, &ACT_NS] {
+        for s in [
+            &STATE_NS,
+            &VIEW_EXTRA_NS,
+            &LOG_NS,
+            &WORLD_COPY_NS,
+            &TICK_NS,
+            &ACT_NS,
+        ] {
             s.store(0, Ordering::Relaxed);
         }
     }
@@ -476,7 +483,11 @@ impl Match {
         Self::restore_saved(data, rules, s)
     }
 
-    fn restore_saved(data: Arc<GameData>, rules: Arc<dyn CardRules>, s: Saved) -> Result<Self, Msg> {
+    fn restore_saved(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        s: Saved,
+    ) -> Result<Self, Msg> {
         if s.version != SAVE_VERSION {
             return Err(Msg::new("err.save_version"));
         }
@@ -866,11 +877,8 @@ impl Match {
                     && !live_skip
                     && !main_moved
                     && st.roller == st.turn;
-                st.can_end_here = my_turn
-                    && !st.busy
-                    && st.step != stage::MOVE
-                    && !owes_roll
-                    && !over_hand;
+                st.can_end_here =
+                    my_turn && !st.busy && st.step != stage::MOVE && !owes_roll && !over_hand;
             }
         }
         // Deed-popup tile texts (`docs/TILES.md` 「Tile text」): composed from
@@ -1015,8 +1023,12 @@ impl Match {
         if !self.prompt_uses_pool(l) {
             return;
         }
-        let Some(seat) = self.player_index(member) else { return };
-        let Some(k) = l.ask.view.player_index(seat as i32) else { return };
+        let Some(seat) = self.player_index(member) else {
+            return;
+        };
+        let Some(k) = l.ask.view.player_index(seat as i32) else {
+            return;
+        };
         if l.answers[k] >= 0 || self.auto_player(seat) {
             return;
         }
@@ -1133,9 +1145,10 @@ impl Match {
                 let id = l.ask.view.id;
                 let waiting = id > 0
                     && seat.is_some_and(|s| {
-                        l.ask.view.player_index(s).is_some_and(|k| {
-                            l.answers.get(k).copied().unwrap_or(-1) < 0
-                        })
+                        l.ask
+                            .view
+                            .player_index(s)
+                            .is_some_and(|k| l.answers.get(k).copied().unwrap_or(-1) < 0)
                     });
                 (id, waiting)
             }
@@ -1192,7 +1205,12 @@ impl Match {
     /// An unknown member (or a spectator / replay viewer with no seat) gets
     /// the seat-independent reading: base price, base rent, force-buy.
     pub fn tile_quotes(&self, member: i32) -> Vec<Option<crate::state::TileQuote>> {
-        purchase::tile_quotes(&self.data, &self.world, &*self.rules, self.player_index(member))
+        purchase::tile_quotes(
+            &self.data,
+            &self.world,
+            &*self.rules,
+            self.player_index(member),
+        )
     }
 
     /// Per-viewer extras the client's 托管 autopilot reads on top of [`Match::state`].
@@ -1270,9 +1288,9 @@ impl Match {
         // the answer is a pure query of the (unchanged) state within this loop.
         let mut memo: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
         for c in &self.world.hidden[i].hand {
-            let ok = *memo.entry(c.as_str()).or_insert_with(|| {
-                cx.cant_play(i, c, false).is_none()
-            });
+            let ok = *memo
+                .entry(c.as_str())
+                .or_insert_with(|| cx.cant_play(i, c, false).is_none());
             playable.push(ok);
             est_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
         }
@@ -1379,7 +1397,8 @@ impl Match {
             }
             "mortgage" => {
                 let need = prompt.bid;
-                let deeds: Vec<usize> = prompt.items.iter().filter_map(|s| s.parse().ok()).collect();
+                let deeds: Vec<usize> =
+                    prompt.items.iter().filter_map(|s| s.parse().ok()).collect();
                 let picked = if deeds.is_empty() {
                     cx.auto_mortgage(i, need)
                 } else {
@@ -1400,15 +1419,25 @@ impl Match {
                 let t = prompt.tile;
                 let title = prompt.title.key();
                 let policy: Option<i32> = match title {
-                    "ask.buy.title" if t >= 0 => Some(if cx.ai_wants_buy(i, t as usize) { 0 } else { 1 }),
-                    "ask.build.title" if t >= 0 => Some(if cx.ai_wants_build(i, t as usize) { 0 } else { 1 }),
+                    "ask.buy.title" if t >= 0 => {
+                        Some(if cx.ai_wants_buy(i, t as usize) { 0 } else { 1 })
+                    }
+                    "ask.build.title" if t >= 0 => Some(if cx.ai_wants_build(i, t as usize) {
+                        0
+                    } else {
+                        1
+                    }),
                     "ask.force_buy.title" if t >= 0 => {
                         let price = if prompt.price >= 0 {
                             prompt.price
                         } else {
                             purchase::quote_native(&self.data, &self.world.st, t as usize).max(0)
                         };
-                        Some(if cx.ai_wants_force_buy(i, price) { 0 } else { 1 })
+                        Some(if cx.ai_wants_force_buy(i, price) {
+                            0
+                        } else {
+                            1
+                        })
                     }
                     "ask.agent.title" => {
                         let tiles: Vec<usize> =
@@ -1648,12 +1677,7 @@ impl Match {
             Err(Halt(HaltKind::Suspended)) => {
                 self.world = w;
                 self.pending = None;
-                let mut cx = Cx::new(
-                    self.world.clone(),
-                    &self.data,
-                    &*self.rules,
-                    &[],
-                );
+                let mut cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
                 let _ = cx.drain_work();
                 self.world = cx.into_world();
                 self.changed = true;
@@ -1754,8 +1778,7 @@ impl Match {
     /// themselves.
     fn auto_vote(&self, player_id: usize) -> bool {
         let p = &self.world.st.players[player_id];
-        p.ai
-            || p.bot
+        p.ai || p.bot
             || self
                 .deferred
                 .iter()
@@ -1928,8 +1951,7 @@ impl Match {
                 // bans something if anything is left. A human seat (time-out)
                 // never bans.
                 let chaos = cx.is_chaos(turn);
-                let pick = if cx.w.st.players[turn].auto_setup()
-                    && (chaos || cx.w.rng.chance(0.5))
+                let pick = if cx.w.st.players[turn].auto_setup() && (chaos || cx.w.rng.chance(0.5))
                 {
                     cx.random_persona(false)
                 } else {
@@ -2817,18 +2839,12 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
                 // rejects them with a clear reason rather than failing to
                 // deserialize the record.
                 "buy" | "build" => {
-                    cx.w.log(
-                        "text",
-                        i as i32,
-                        Msg::new("err.buy_build_at_settle"),
-                    );
+                    cx.w.log("text", i as i32, Msg::new("err.buy_build_at_settle"));
                     Ok(())
                 }
                 "mortgage" => cx.deed_mortgage(i, m.value as usize, 0).map(|_| ()),
 
-                "redeem" => {
-                    cx.deed_redeem(i, m.value as usize).map(|_| ())
-                }
+                "redeem" => cx.deed_redeem(i, m.value as usize).map(|_| ()),
                 "play" => cx.play_from_hand(i, &m.card),
                 "skill" => cx.use_skill(i, &m.card),
                 "discard" => cx.discard(i, &m.card),
@@ -2885,9 +2901,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if !cx.w.gate_open(cx.rules, Gate::OnBoard, i) {
                 return Some(cx.rules.gate_refusal_msg(Gate::OnBoard, i));
             }
-            if !cx.w.gate_open(cx.rules, Gate::Act, i)
-                && !cx.rules.card_act_exemption(&m.card)
-            {
+            if !cx.w.gate_open(cx.rules, Gate::Act, i) && !cx.rules.card_act_exemption(&m.card) {
                 return Some(cx.rules.gate_refusal_msg(Gate::Act, i));
             }
             // The rule's own gate (`On::Play`'s), so the cost check remains in the
@@ -2924,7 +2938,10 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
                 return Some(Msg::new("err.moving"));
             }
             if cx.over_hand(i) {
-                return Some(Msg::new("err.over_hand").i("limit", i64::from(cx.w.st.players[i].hand_limit().unwrap_or_default())));
+                return Some(Msg::new("err.over_hand").i(
+                    "limit",
+                    i64::from(cx.w.st.players[i].hand_limit().unwrap_or_default()),
+                ));
             }
             None
         }

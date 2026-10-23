@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use game_core::data::{event_rule_id};
+use game_core::data::event_rule_id;
 use game_core::engine::{CardRules, Cx, Dest, Flow, Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -146,7 +146,10 @@ fn event_deck_push_puts_it_on_top() {
     m.quick_start();
     let top_before = m.world().event_deck.last().cloned();
     m.world_mut().event_deck_push("冲榜", true);
-    assert_eq!(m.world().event_deck.last().map(String::as_str), Some("冲榜"));
+    assert_eq!(
+        m.world().event_deck.last().map(String::as_str),
+        Some("冲榜")
+    );
     assert!(m.state().event_top.iter().any(|e| e == "冲榜"));
     let _ = top_before;
 }
@@ -179,7 +182,12 @@ fn event_banish_removes_it_from_the_deck() {
     let d = data();
     m.quick_start();
     let n_before = m.world().event_deck.len();
-    let id = m.world().event_deck.last().cloned().expect("deck non-empty");
+    let id = m
+        .world()
+        .event_deck
+        .last()
+        .cloned()
+        .expect("deck non-empty");
     m.world_mut().bind_event(&d, &OneEvent, 0, &id);
     m.world_mut().event_banish(&id);
     assert!(!m.world().event_deck.iter().any(|e| e == &id));

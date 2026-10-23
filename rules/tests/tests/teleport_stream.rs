@@ -99,7 +99,11 @@ fn replay_moves(events: &[MatchEvent], who: i32, start: i32) -> i32 {
                     }
                 }
                 let end = ((e.from + e.value) % tiles + tiles) % tiles;
-                assert_eq!(e.to, end, "walk end {} != from+value {} ({:?})", e.to, end, e);
+                assert_eq!(
+                    e.to, end,
+                    "walk end {} != from+value {} ({:?})",
+                    e.to, end, e
+                );
                 pos = end;
                 last = Some(e);
             }
@@ -146,7 +150,8 @@ fn moves_since(t: &Table, mark: i32, who: usize) -> Vec<MatchEvent> {
     t.events_since(mark)
         .into_iter()
         .filter(|e| {
-            e.player_id == who as i32 && matches!(e.r#type.as_str(), "diceRollBefore" | "move" | "teleport")
+            e.player_id == who as i32
+                && matches!(e.r#type.as_str(), "diceRollBefore" | "move" | "teleport")
         })
         .collect()
 }
@@ -169,7 +174,12 @@ fn pure_wings_roll_stream_starts_at_the_teleport_destination() {
     // must still announce itself from the jump's destination -- never from 5.
     assert_walks_start_at(&ev, 0, &[5 + 20], "pure_wings");
     let end = replay_moves(&ev, 0, 5 + 20);
-    assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+    assert_eq!(
+        end,
+        t.pos(0) as i32,
+        "stream ends where the engine did: {:?}",
+        ev
+    );
     assert_eq!(t.pos(0), 5 + 20 + 3, "pos={} stream={:?}", t.pos(0), ev);
 }
 
@@ -261,11 +271,21 @@ fn asukayama_other_players_land_on_the_park_without_a_stale_walk() {
     // not announce a walk for them at all -- a walk would have to start at the
     // park, never at their pre-teleport tile.
     let ev = moves_since(&t, mark, 2);
-    assert_eq!(t.pos(2), park, "P2 stands on the park: {:?}", t.recent_keys(16));
+    assert_eq!(
+        t.pos(2),
+        park,
+        "P2 stands on the park: {:?}",
+        t.recent_keys(16)
+    );
     assert_walks_start_at(&ev, 2, &[park as i32], "asukayama other");
     if !ev.is_empty() {
         let end = replay_moves(&ev, 2, park as i32);
-        assert_eq!(end, t.pos(2) as i32, "stream ends where the engine did: {:?}", ev);
+        assert_eq!(
+            end,
+            t.pos(2) as i32,
+            "stream ends where the engine did: {:?}",
+            ev
+        );
     }
 }
 
@@ -299,7 +319,12 @@ fn two_donuts_settle_teleport_stream_is_continuous() {
             t.decline();
         }
     }
-    assert_eq!(t.pos(0), 12, "the settle-teleport lands on 12: {:?}", t.recent_keys(20));
+    assert_eq!(
+        t.pos(0),
+        12,
+        "the settle-teleport lands on 12: {:?}",
+        t.recent_keys(20)
+    );
     // P0's movement stream: the return jump is a bare `teleport_to` (no event);
     // the settle-teleport is a `card_move` teleport (logged). Any walk P0 got
     // must start at a tile the stream left them on (12 or the pre-jump 10).
@@ -307,12 +332,22 @@ fn two_donuts_settle_teleport_stream_is_continuous() {
     assert_walks_start_at(&ev, 0, &[10, 12], "two_donuts holder");
     if !ev.is_empty() {
         let end = replay_moves(&ev, 0, 10);
-        assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+        assert_eq!(
+            end,
+            t.pos(0) as i32,
+            "stream ends where the engine did: {:?}",
+            ev
+        );
     }
     // P1's walk must also be continuous from where P1 started.
     let ev1 = moves_since(&t, mark, 1);
     let end1 = replay_moves(&ev1, 1, 5);
-    assert_eq!(end1, t.pos(1) as i32, "P1 stream ends where the engine did: {:?}", ev1);
+    assert_eq!(
+        end1,
+        t.pos(1) as i32,
+        "P1 stream ends where the engine did: {:?}",
+        ev1
+    );
 }
 
 // =====================================================================
@@ -366,7 +401,12 @@ fn my_own_problem_counteraction_stream_is_continuous() {
     let ev2 = moves_since(&t, mark2, 0);
     assert_walks_start_at(&ev2, 0, &[before as i32], "my_own_problem next roll");
     let end2 = replay_moves(&ev2, 0, before as i32);
-    assert_eq!(end2, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev2);
+    assert_eq!(
+        end2,
+        t.pos(0) as i32,
+        "stream ends where the engine did: {:?}",
+        ev2
+    );
     assert_eq!(
         t.pos(0),
         (before + 3) % 60,
@@ -390,14 +430,24 @@ fn tele_nosettle_card_move_stream_is_continuous() {
     let start = t.pos(0);
     t.give_play(0, "TEST:tele_nosettle").unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), 25, "teleports 5 ahead, no settle: {:?}", t.recent_keys(16));
+    assert_eq!(
+        t.pos(0),
+        25,
+        "teleports 5 ahead, no settle: {:?}",
+        t.recent_keys(16)
+    );
     let ev = moves_since(&t, mark, 0);
     assert!(
         ev.iter().any(|e| e.r#type == "teleport"),
         "the teleport move is announced: {ev:?}"
     );
     let end = replay_moves(&ev, 0, start as i32);
-    assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+    assert_eq!(
+        end,
+        t.pos(0) as i32,
+        "stream ends where the engine did: {:?}",
+        ev
+    );
 }
 
 // =====================================================================
@@ -450,7 +500,12 @@ fn ras_skill_teleport_then_next_roll_stream_is_continuous() {
         // The main move became a teleport to a livehouse; then the turn ends.
         let ev = moves_since(&t, mark, 0);
         let end = replay_moves(&ev, 0, house as i32);
-        assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+        assert_eq!(
+            end,
+            t.pos(0) as i32,
+            "stream ends where the engine did: {:?}",
+            ev
+        );
     }
     // Whichever branch landed, the next main roll must start from the current
     // pos -- not from the pre-teleport tile.
@@ -465,7 +520,12 @@ fn ras_skill_teleport_then_next_roll_stream_is_continuous() {
     drain(&mut t);
     let ev = moves_since(&t, mark2, 0);
     let end = replay_moves(&ev, 0, before as i32);
-    assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+    assert_eq!(
+        end,
+        t.pos(0) as i32,
+        "stream ends where the engine did: {:?}",
+        ev
+    );
     assert_eq!(
         t.pos(0),
         (before + 4) % 60,
@@ -507,7 +567,12 @@ fn tomori_inner_shout_settle_redirect_then_next_roll() {
     }
     let ev = moves_since(&t, mark, 1);
     let end = replay_moves(&ev, 1, start as i32);
-    assert_eq!(end, t.pos(1) as i32, "stream ends where the engine did: {:?}", ev);
+    assert_eq!(
+        end,
+        t.pos(1) as i32,
+        "stream ends where the engine did: {:?}",
+        ev
+    );
     // If the pull landed, P1 stands on 30 and the next roll walks from there.
     if t.pos(1) == 30 {
         until_turn(&mut t, 1);
@@ -522,7 +587,12 @@ fn tomori_inner_shout_settle_redirect_then_next_roll() {
         drain(&mut t);
         let ev2 = moves_since(&t, mark2, 1);
         let end2 = replay_moves(&ev2, 1, before as i32);
-        assert_eq!(end2, t.pos(1) as i32, "stream ends where the engine did: {:?}", ev2);
+        assert_eq!(
+            end2,
+            t.pos(1) as i32,
+            "stream ends where the engine did: {:?}",
+            ev2
+        );
         assert_eq!(
             t.pos(1),
             (before + 3) % 60,
@@ -560,7 +630,12 @@ fn circle_approach_then_settle_teleport_stream_is_continuous() {
     }
     let ev = moves_since(&t, mark, 0);
     let end = replay_moves(&ev, 0, start as i32);
-    assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+    assert_eq!(
+        end,
+        t.pos(0) as i32,
+        "stream ends where the engine did: {:?}",
+        ev
+    );
     assert_eq!(t.pos(0), 3, "walked 57 -> 0 -> 3: {:?}", ev);
 }
 
@@ -587,7 +662,12 @@ fn mygo_start_teleport_then_main_roll_stream_is_continuous() {
     drain(&mut t);
     let ev = moves_since(&t, mark, 0);
     let end = replay_moves(&ev, 0, start as i32);
-    assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+    assert_eq!(
+        end,
+        t.pos(0) as i32,
+        "stream ends where the engine did: {:?}",
+        ev
+    );
     assert_eq!(
         t.pos(0),
         (start + 4) % 60,
@@ -638,7 +718,11 @@ fn pass_tile_teleport_does_not_send_the_walk_back_to_the_old_tile() {
         .iter()
         .find(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"))
         .expect("the 1-step walk is announced");
-    assert_eq!(walk.from, 20, "the walk starts at the pre-walk tile: {:?}", ev);
+    assert_eq!(
+        walk.from, 20,
+        "the walk starts at the pre-walk tile: {:?}",
+        ev
+    );
     assert_eq!(walk.to, 21, "the walk ends at the step's landing: {:?}", ev);
     let hook_log = all
         .iter()
@@ -679,7 +763,10 @@ fn pass_tile_teleport_then_card_move_walks_from_the_destination() {
     draw_event_card(&mut t, 1, "飞鸟山之战", &[7]);
     drain(&mut t);
     let ev = moves_since(&t, mark, 1);
-    let jump = ev.iter().find(|e| e.r#type == "teleport").expect("a teleport event");
+    let jump = ev
+        .iter()
+        .find(|e| e.r#type == "teleport")
+        .expect("a teleport event");
     assert_eq!(jump.to, park as i32, "the jump lands on the park: {ev:?}");
     let walk_after = ev
         .iter()
@@ -730,7 +817,12 @@ fn sayo_extension_after_a_teleport_walks_from_the_destination() {
     // itself from the jump's destination (25), never from 5.
     assert_walks_start_at(&ev, 0, &[5 + 20], "sayo after teleport");
     let end = replay_moves(&ev, 0, 5 + 20);
-    assert_eq!(end, t.pos(0) as i32, "stream ends where the engine did: {:?}", ev);
+    assert_eq!(
+        end,
+        t.pos(0) as i32,
+        "stream ends where the engine did: {:?}",
+        ev
+    );
     if extended {
         // 5 -> 25 (jump) -> 25+3+2 = 30 with the +2 extension.
         assert_eq!(

@@ -60,15 +60,12 @@ impl CardRules for Probe {
                     t.kind
                 );
             }
-            self.seen
-                .lock()
-                .unwrap()
-                .push(match t.kind.as_str() {
-                    "reshuffled" => "reshuffled",
-                    "drawn" => "drawn",
-                    "drew" => "drew",
-                    _ => unreachable!(),
-                });
+            self.seen.lock().unwrap().push(match t.kind.as_str() {
+                "reshuffled" => "reshuffled",
+                "drawn" => "drawn",
+                "drew" => "drew",
+                _ => unreachable!(),
+            });
         }
         Ok(())
     }

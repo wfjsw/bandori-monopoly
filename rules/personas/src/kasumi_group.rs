@@ -1,8 +1,7 @@
 use bandori_std::roster::PersonaDef;
 
 /// Roster character row for this skill's owner (ABI v63).
-pub const CHARACTER: PersonaDef =
-PersonaDef::new(r#"弦卷心"#)
+pub const CHARACTER: PersonaDef = PersonaDef::new(r#"弦卷心"#)
     .display(r#"弦卷心"#)
     .group(r#"Hello, Happy World!"#)
     .color(r#"#FFEE22"#)

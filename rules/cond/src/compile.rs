@@ -22,7 +22,8 @@ pub(crate) fn shared_env() -> Arc<Env> {
     // schema needs only the scalar conversions and the string predicates
     // (`size`/`contains`/`startsWith`/`endsWith`) plus the functions
     // `install_functions` adds. See cel `Env::with_minimal_stdlib`.
-    ENV.get_or_init(|| Arc::new(Env::default().with_minimal_stdlib())).clone()
+    ENV.get_or_init(|| Arc::new(Env::default().with_minimal_stdlib()))
+        .clone()
 }
 
 /// A compiled condition. Built once per guarded entry at load time
@@ -71,7 +72,9 @@ impl Cond {
 #[cfg(feature = "compile")]
 pub fn compile(src: &str) -> Result<Cond, CondError> {
     let env = shared_env();
-    let program = env.compile(src).map_err(|e| CondError::Parse(e.to_string()))?;
+    let program = env
+        .compile(src)
+        .map_err(|e| CondError::Parse(e.to_string()))?;
     let rewritten = schema::lint_and_rewrite(program.expression())?;
     Ok(Cond::from_expr(rewritten, src.to_string()))
 }
@@ -124,13 +127,11 @@ impl Cond {
     pub fn from_bytes(bytes: &[u8]) -> Result<Cond, CondError> {
         let compiled: cel::wire::Compiled =
             postcard::from_bytes(bytes).map_err(|e| CondError::WireDecode(e.to_string()))?;
-        compiled
-            .check()
-            .map_err(|e| match e {
-                cel::wire::WireError::Version { found, expected } => {
-                    CondError::WireVersion { found, expected }
-                }
-            })?;
+        compiled.check().map_err(|e| match e {
+            cel::wire::WireError::Version { found, expected } => {
+                CondError::WireVersion { found, expected }
+            }
+        })?;
         let src = compiled.source().unwrap_or("").to_string();
         Ok(Cond::from_expr(compiled.expression().clone(), src))
     }

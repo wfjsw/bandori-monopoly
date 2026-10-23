@@ -15,10 +15,11 @@
 //! `trigger::set_cancelled`. 「使用角色/团技能的[主]效果或使用手牌的[手]效果」
 //! is the `card` chain for a hand play and `skillUsed` for a skill press.
 
-use bandori_std::state_key; use card_sdk::abi::{prop, ChainKind, ActionKind, MarkFilter};
 use bandori_std::ctx::{self, state, trigger};
 use bandori_std::kind::Actions;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{prop, ActionKind, ChainKind, MarkFilter};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind 「[多惠兔子]」.
 const RABBIT: &str = "多惠兔子";
@@ -28,27 +29,47 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     &[
         On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Actions::PassRewardAffected(card_sdk::pre::MINE, None, None, on_circle)),
+        On::Action(Actions::PassRewardAffected(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            on_circle,
+        )),
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
         // applicability (residual guard; `pre::MINE` already states the actor).
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, Some(on_pass_has_rabbits), on_pass)),
+        On::Action(Action::Pass(
+            card_sdk::pre::MINE,
+            None,
+            Some(on_pass_has_rabbits),
+            on_pass,
+        )),
         // （2） 「在其他玩家使用角色/团技能的[主]效果或使用手牌的[手]效果时你可以使用4个
         // [火罐]将其抵消」 -- a [反击] from the bound skill (always in play), so it
         // must be offered from the field (`COUNTERACT_FROM_FIELD`, the same shape
         // as 冰川纱夜（2）'s move-length counteraction).
-        On::Counteract(&[ChainKind::Card, card_sdk::abi::ActionKind::CardUsed.as_trigger()], "", None, Some(can_negate), negate),
+        On::Counteract(
+            &[
+                ChainKind::Card,
+                card_sdk::abi::ActionKind::CardUsed.as_trigger(),
+            ],
+            "",
+            None,
+            Some(can_negate),
+            negate,
+        ),
     ],
 )
-    // 「（初始2，上限4）」
-        .props(&[
-        (bandori_std::fire::FIRE_INITIAL, 2), (bandori_std::fire::FIRE_CAP, 4),
-        (prop::COUNTERACT_FROM_FIELD, 1),
-        // One cancel per activation: the skill stays in play, so without a
-        // group reservation the ring would re-offer it after the declaration
-        // (the seat keeps the floor until it passes).
-        (prop::COUNTERACT_GROUP, 1),
-    ])
-    .silent(&[0, 1]);
+// 「（初始2，上限4）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 2),
+    (bandori_std::fire::FIRE_CAP, 4),
+    (prop::COUNTERACT_FROM_FIELD, 1),
+    // One cancel per activation: the skill stays in play, so without a
+    // group reservation the ring would re-offer it after the declaration
+    // (the seat keeps the floor until it passes).
+    (prop::COUNTERACT_GROUP, 1),
+])
+.silent(&[0, 1]);
 
 /// 「初始2，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -76,7 +97,9 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         player_id,
         ctx::self_uid(),
         1,
-        &Msg::new(key!("tae_police_note")), card_sdk::abi::Stack::Fresh);
+        &Msg::new(key!("tae_police_note")),
+        card_sdk::abi::Stack::Fresh,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("tae_police_placed"))

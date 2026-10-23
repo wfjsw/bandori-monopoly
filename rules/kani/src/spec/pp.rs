@@ -123,9 +123,7 @@ pub fn chisato_mask_01_money_ok(effects: &[Effect], user: i32, total: i32) -> bo
     for e in effects {
         match e {
             Effect::PlaceCard {
-                player: p,
-                dest: 2,
-                ..
+                player: p, dest: 2, ..
             } if *p == user => saw_place = true,
             Effect::PayTo { from, to, n } if *to == user && *from != user => sum += *n,
             Effect::PayMoney { player: p, n } if *p != user => sum += *n,
@@ -355,9 +353,7 @@ pub fn no_expect_02_effects_ok(effects: &[Effect], player: i32) -> bool {
     for e in effects {
         match e {
             Effect::PlaceCard {
-                player: p,
-                dest: 2,
-                ..
+                player: p, dest: 2, ..
             } if *p == player => place += 1,
             Effect::Draw {
                 player: p, n: 1, ..
@@ -400,9 +396,7 @@ pub fn first_accident_01_effects_ok(effects: &[Effect], player: i32) -> bool {
     for e in effects {
         match e {
             Effect::PlaceCard {
-                player: p,
-                dest: 2,
-                ..
+                player: p, dest: 2, ..
             } if *p == player => place += 1,
             Effect::Draw {
                 player: p, n: 1, ..
@@ -640,7 +634,8 @@ pub fn frame_money(pre: &Snapshot, post: &Snapshot) -> bool {
 
 /// Fan views unchanged.
 pub fn frame_fans(pre: &Snapshot, post: &Snapshot) -> bool {
-    crate::world::arr4_eq(pre.fans_pos, post.fans_pos) && crate::world::arr4_eq(pre.fans_neg, post.fans_neg)
+    crate::world::arr4_eq(pre.fans_pos, post.fans_pos)
+        && crate::world::arr4_eq(pre.fans_neg, post.fans_neg)
 }
 
 /// Hand / discard bitsets unchanged.

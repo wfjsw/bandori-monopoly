@@ -38,7 +38,7 @@ use std::sync::{Arc, OnceLock};
 
 use game_core::data::{GameData, Roster};
 use game_core::engine::{
-    Answered, AnswerProvider, Ask, CardRules, Cx, Dest, Flow, Match, StubRules,
+    AnswerProvider, Answered, Ask, CardRules, Cx, Dest, Flow, Match, StubRules,
 };
 use game_core::msg::Msg;
 use game_core::net::RoomMember;
@@ -52,10 +52,12 @@ fn data() -> Arc<GameData> {
     static DATA: OnceLock<Arc<GameData>> = OnceLock::new();
     DATA.get_or_init(|| {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-        let roster = Roster::from_fixture(&std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
+        let roster = Roster::from_fixture(
+            &std::fs::read_to_string(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
+            )
+            .expect("roster fixture"),
         )
-        .expect("roster fixture"))
         .expect("roster fixture parses");
         Arc::new(
             GameData::load(

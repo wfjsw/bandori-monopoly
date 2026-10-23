@@ -179,12 +179,7 @@ pub fn e_draw_02_filed(step: &Step<'_>) -> Result<(), String> {
         .map(|e| e.card.as_str())
         .collect();
     for id in ids {
-        let stays = step
-            .post
-            .st
-            .event_active
-            .iter()
-            .any(|e| e.id == id);
+        let stays = step.post.st.event_active.iter().any(|e| e.id == id);
         let filed = step.post.event_discard.iter().any(|e| e == id);
         let banished = step.post.event_removed.iter().any(|e| e == id);
         if !stays && !filed && !banished {
@@ -221,7 +216,9 @@ pub fn e_draw_03_reshuffle(step: &Step<'_>) -> Result<(), String> {
     let post_empty = step.post.event_deck.is_empty();
     let pre_discard = step.pre.event_discard.len();
     let post_discard = step.post.event_discard.len();
-    if !(pre_empty && post_discard > 0 && post_discard < pre_discard + step.post.event_removed.len())
+    if !(pre_empty
+        && post_discard > 0
+        && post_discard < pre_discard + step.post.event_removed.len())
         && !(pre_empty && !post_empty && post_discard < pre_discard)
     {
         // Not a recycle window: either the deck never emptied, or nothing was
@@ -295,7 +292,10 @@ fn draw_reveals_and_files_the_one_shot() {
             return Err("对邦 should not stay in play".into());
         }
         if !t.event_discard().iter().any(|e| e == "对邦") {
-            return Err(format!("对邦 not in event_discard: {:?}", t.event_discard()));
+            return Err(format!(
+                "对邦 not in event_discard: {:?}",
+                t.event_discard()
+            ));
         }
         if t.event_deck().iter().any(|e| e == "对邦") {
             return Err("对邦 still in the event deck".into());
@@ -315,7 +315,22 @@ fn draw_reveals_and_files_the_one_shot() {
                 "对邦 sheet example (18-16)x50=100 not observed: d0={delta0} d1={delta1}"
             ));
         }
-        frame(&pre, t.world(), &allow(&["money:", "hand:P0", "draw:P0", "discard:P0", "hand_n:P0", "draw_n:P0", "discard_pub:P0", "pos:", "roll:P", "turn."]))
+        frame(
+            &pre,
+            t.world(),
+            &allow(&[
+                "money:",
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "hand_n:P0",
+                "draw_n:P0",
+                "discard_pub:P0",
+                "pos:",
+                "roll:P",
+                "turn.",
+            ]),
+        )
     })
     .expect("E-draw-01/02");
 }
@@ -377,8 +392,16 @@ fn duobang_sheet_example_18_vs_16_is_100() {
             &pre,
             t.world(),
             &allow(&[
-                "money:", "pos:", "hand:P0", "draw:P0", "discard:P0", "hand_n:P0",
-                "draw_n:P0", "discard_pub:P0", "roll:P", "turn.",
+                "money:",
+                "pos:",
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "hand_n:P0",
+                "draw_n:P0",
+                "discard_pub:P0",
+                "roll:P",
+                "turn.",
             ]),
         )
     })
@@ -431,7 +454,10 @@ fn estate_auction_grants_a_deed() {
             }
         }
         if estate.is_none() {
-            return Err(format!("E-estate-01: no tile-designated bid prompt: {}", t.dump_prompt()));
+            return Err(format!(
+                "E-estate-01: no tile-designated bid prompt: {}",
+                t.dump_prompt()
+            ));
         }
         // P0 bids index 2 (=2000), P1 bids index 1 (=1000).
         for bid_idx in [2, 1] {
@@ -445,7 +471,9 @@ fn estate_auction_grants_a_deed() {
         // Exactly one new deed under P0, paid for out of P0's money.
         let owned: Vec<usize> = (0..60).filter(|&k| t.owner(k) == Some(0)).collect();
         if owned.len() != 1 {
-            return Err(format!("E-estate-01: P0 owns {owned:?}, expected exactly 1 deed"));
+            return Err(format!(
+                "E-estate-01: P0 owns {owned:?}, expected exactly 1 deed"
+            ));
         }
         let spent = 10_000 - t.money(0);
         if spent <= 0 {
@@ -544,8 +572,16 @@ fn lulu_teleport_is_optional_and_costs_500() {
             &pre,
             t.world(),
             &allow(&[
-                "money:", "pos:", "hand:P0", "draw:P0", "discard:P0", "hand_n:P0",
-                "draw_n:P0", "discard_pub:P0", "roll:P", "turn.",
+                "money:",
+                "pos:",
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "hand_n:P0",
+                "draw_n:P0",
+                "discard_pub:P0",
+                "roll:P",
+                "turn.",
             ]),
         )
     })
@@ -573,7 +609,10 @@ fn lulu_decline_leaves_everyone_put() {
             ));
         }
         if t.money(0) != 4_000 {
-            return Err(format!("E-lulu-02: P0 charged {} on a decline", 4_000 - t.money(0)));
+            return Err(format!(
+                "E-lulu-02: P0 charged {} on a decline",
+                4_000 - t.money(0)
+            ));
         }
         Ok(())
     })
@@ -791,13 +830,12 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
                 e.counter = 1;
             }
         });
-        if let Some(f) = t
-            .m
-            .world_mut()
-            .st
-            .board_field
-            .iter_mut()
-            .find(|f| f.card == "event:协助CiRCLE重建")
+        if let Some(f) =
+            t.m.world_mut()
+                .st
+                .board_field
+                .iter_mut()
+                .find(|f| f.card == "event:协助CiRCLE重建")
         {
             f.counters.insert("crystals".into(), 1);
         }
@@ -827,10 +865,7 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
 
 /// The winning entry for `slot` in a tile's speaker list -- first claim wins,
 /// same as the settle body's `cancelled` bail (`docs/TILES.md` 「Tile text」).
-fn tile_text_winner<'a>(
-    speakers: &'a [TileTextEntry],
-    slot: &str,
-) -> Option<&'a TileTextEntry> {
+fn tile_text_winner<'a>(speakers: &'a [TileTextEntry], slot: &str) -> Option<&'a TileTextEntry> {
     speakers.iter().find(|e| e.slot == slot)
 }
 
@@ -884,8 +919,8 @@ fn circle_rebuild_swaps_tile_texts_on_play() -> Result<(), String> {
             settle.from, settle.key
         ));
     }
-    let pass = tile_text_winner(cafe, "pass")
-        .ok_or("E-circle-rebuild-06: cafe has no pass speaker")?;
+    let pass =
+        tile_text_winner(cafe, "pass").ok_or("E-circle-rebuild-06: cafe has no pass speaker")?;
     if pass.from != "event:协助CiRCLE重建" || pass.key != "deed.note.circlePass" {
         return Err(format!(
             "E-circle-rebuild-06: cafe pass {}/{} , expected event:协助CiRCLE重建/deed.note.circlePass",
@@ -910,13 +945,12 @@ fn circle_rebuild_reverts_tile_texts_on_expire() -> Result<(), String> {
             e.counter = 1;
         }
     });
-    if let Some(f) = t
-        .m
-        .world_mut()
-        .st
-        .board_field
-        .iter_mut()
-        .find(|f| f.card == "event:协助CiRCLE重建")
+    if let Some(f) =
+        t.m.world_mut()
+            .st
+            .board_field
+            .iter_mut()
+            .find(|f| f.card == "event:协助CiRCLE重建")
     {
         f.counters.insert("crystals".into(), 1);
     }
@@ -984,8 +1018,20 @@ fn circle_rebuild_tile_text_precedence() -> Result<(), String> {
     let st = t.st();
     let cases: [(&str, &str, &str, &str, Option<&str>); 5] = [
         // (tile name, settle from, settle key, pass key, pass from)
-        ("CiRCLE", "tile:circle", "deed.note.circleSettle", "deed.note.circlePass", Some("tile:circle")),
-        ("CiRCLE 咖啡厅", "tile:event", "deed.note.drawEvent", "", None),
+        (
+            "CiRCLE",
+            "tile:circle",
+            "deed.note.circleSettle",
+            "deed.note.circlePass",
+            Some("tile:circle"),
+        ),
+        (
+            "CiRCLE 咖啡厅",
+            "tile:event",
+            "deed.note.drawEvent",
+            "",
+            None,
+        ),
         ("流星堂", "tile:event", "deed.note.drawEvent", "", None),
         ("江户川乐器店", "tile:edogawa", "deed.note.draw", "", None),
         ("主要街道", "tile:agent", "deed.note.dealer", "", None),
@@ -1040,13 +1086,17 @@ fn circle_rebuild_tile_text_precedence() -> Result<(), String> {
             settles
         ));
     }
-    if settles[0].from != "event:协助CiRCLE重建" || settles[0].key != "deed.note.rebuildSettle" {
+    if settles[0].from != "event:协助CiRCLE重建" || settles[0].key != "deed.note.rebuildSettle"
+    {
         return Err(format!(
             "E-circle-rebuild-08: first CiRCLE settle {}/{} , expected event:协助CiRCLE重建/deed.note.rebuildSettle",
             settles[0].from, settles[0].key
         ));
     }
-    if !settles.iter().skip(1).any(|e| e.from == "tile:circle" && e.key == "deed.note.circleSettle")
+    if !settles
+        .iter()
+        .skip(1)
+        .any(|e| e.from == "tile:circle" && e.key == "deed.note.circleSettle")
     {
         return Err(format!(
             "E-circle-rebuild-08: tile:circle base not listed after the event: {:?}",
@@ -1067,7 +1117,11 @@ fn circle_rebuild_tile_text_precedence() -> Result<(), String> {
             settles[0].from, settles[0].key
         ));
     }
-    if !settles.iter().skip(1).any(|e| e.from == "tile:event" && e.key == "deed.note.drawEvent") {
+    if !settles
+        .iter()
+        .skip(1)
+        .any(|e| e.from == "tile:event" && e.key == "deed.note.drawEvent")
+    {
         return Err(format!(
             "E-circle-rebuild-08: tile:event base not listed after the event: {:?}",
             settles
@@ -1554,7 +1608,10 @@ fn fix_note_halves_the_designated_build_costs() {
         t.set_draw(0, &["通用:GREAT"]);
         draw_event_quiet(&mut t, 0, "修复公告", &[]);
         if !t.event_in_play("修复公告") {
-            return Err("E-fix-note-01: 修复公告 should stay active (「将此卡移除」 is after the builds)".into());
+            return Err(
+                "E-fix-note-01: 修复公告 should stay active (「将此卡移除」 is after the builds)"
+                    .into(),
+            );
         }
         // Designated: first 2 house=2000 tiles in board order = 1 (购物中心),
         // 3 (水族馆); first house=1500 = 2 (天文馆).
@@ -1612,7 +1669,9 @@ fn hallucination_stays_until_next_turn_start() {
         t.begin_turn(0);
         drain(&mut t);
         if t.event_in_play("幻觉来了") {
-            return Err("E-hallucination-01: still active after the drawer's next turn start".into());
+            return Err(
+                "E-hallucination-01: still active after the drawer's next turn start".into(),
+            );
         }
         if !t.event_discard().iter().any(|e| e == "幻觉来了") {
             return Err(format!(
@@ -1705,7 +1764,9 @@ fn aao_stays_until_next_turn_end() {
         // turn, then that turn's end is 「下回合结束时」.
         pass(&mut t, 0);
         if !t.event_in_play("A！A！O！") {
-            return Err("E-aao-01: expired when the draw turn ended; text says 下回合结束时".into());
+            return Err(
+                "E-aao-01: expired when the draw turn ended; text says 下回合结束时".into(),
+            );
         }
         until_turn(&mut t, 0);
         if !t.event_in_play("A！A！O！") {
@@ -2131,7 +2192,12 @@ fn lost_chase_strict_high_pushes_end_it_all() {
         let mut t = Table::vanilla(2);
         t.set_draw(0, &["通用:GREAT"]);
         // 5d20 each after the landing 1. Drawer wins strictly: 20*5 vs 1*5.
-        draw_event_quiet(&mut t, 0, "迷子的追逐", &[20, 20, 20, 20, 20, 1, 1, 1, 1, 1]);
+        draw_event_quiet(
+            &mut t,
+            0,
+            "迷子的追逐",
+            &[20, 20, 20, 20, 20, 1, 1, 1, 1, 1],
+        );
         if t.event_deck().first().map(String::as_str) != Some("让我来结束一切") {
             return Err(format!(
                 "E-lost-chase-01: deck top {:?}, expected 让我来结束一切",
@@ -2149,7 +2215,12 @@ fn lost_chase_not_high_pushes_never_ends() {
     forall(3, 0xE_1A02, |_rng, _i| {
         let mut t = Table::vanilla(2);
         t.set_draw(0, &["通用:GREAT"]);
-        draw_event_quiet(&mut t, 0, "迷子的追逐", &[1, 1, 1, 1, 1, 20, 20, 20, 20, 20]);
+        draw_event_quiet(
+            &mut t,
+            0,
+            "迷子的追逐",
+            &[1, 1, 1, 1, 1, 20, 20, 20, 20, 20],
+        );
         if t.event_deck().first().map(String::as_str) != Some("一切不会结束") {
             return Err(format!(
                 "E-lost-chase-02: deck top {:?}, expected 一切不会结束",
@@ -2195,7 +2266,10 @@ fn end_it_all_stays_permanently_and_banishes_three() {
             return Err("E-end-it-all-01: 「永久放置于场上」 -- should stay active".into());
         }
         let removed = t.event_removed();
-        let n = removed.iter().filter(|e| e.as_str() != "让我来结束一切").count();
+        let n = removed
+            .iter()
+            .filter(|e| e.as_str() != "让我来结束一切")
+            .count();
         if n < 3 {
             return Err(format!(
                 "E-end-it-all-01: only {n} events banished (removed {removed:?}), expected 3"
@@ -2510,7 +2584,12 @@ fn estate_grants_only_the_auctioned_tile() {
         let p = t.expect_prompt();
         let estate = match p.text.a.get("tile") {
             Some(Arg::Tile(n)) => *n as usize,
-            _ => return Err(format!("E-estate-03: prompt names no tile: {}", t.dump_prompt())),
+            _ => {
+                return Err(format!(
+                    "E-estate-03: prompt names no tile: {}",
+                    t.dump_prompt()
+                ))
+            }
         };
         for bid_idx in [2, 1] {
             if t.prompt().is_none() {

@@ -25,8 +25,8 @@
 //! Isolation: no stacked AG hooks beyond the one under proof. Host gaps that
 //! block other clauses are listed in `docs/rulebook/spec/kani/ag.md`.
 
-use crate::host;
 use crate::harness::{self, SparsePlay};
+use crate::host;
 use crate::intern;
 use crate::invoke;
 use crate::spec;
@@ -512,10 +512,7 @@ pub fn sky_02_mutant_is_detected() {
         !spec::ag::sky_02_log_ok_mutant(effects, user, n),
         "mutant (n*601) must not match"
     );
-    crate::kassert!(
-        spec::ag::sky_02_log_ok(effects, user, n),
-        "card pays n*600"
-    );
+    crate::kassert!(spec::ag::sky_02_log_ok(effects, user, n), "card pays n*600");
 }
 
 /// C-AG-sky-03 dedicated draw branch (hand < 3).
@@ -638,11 +635,11 @@ pub fn colors_01_02_03_04_play_user1_iff() {
 pub fn colors_02_mutant_is_detected() {
     // Force roll = 1 by a concrete answer is impossible (roll is symbolic).
     // Instead prove the two specs disagree on any GainMoney{1500} log.
-    let effects = [Effect::GainMoney {
-        player: 0,
-        n: 1500,
-    }];
-    crate::kassert!(spec::ag::colors_02_log_ok(&effects, 0), "true spec matches 1500");
+    let effects = [Effect::GainMoney { player: 0, n: 1500 }];
+    crate::kassert!(
+        spec::ag::colors_02_log_ok(&effects, 0),
+        "true spec matches 1500"
+    );
     crate::kassert!(
         !spec::ag::colors_02_log_ok_mutant(&effects, 0),
         "mutant (1501) must not match a 1500 gain"
@@ -887,7 +884,10 @@ pub fn soul_02_mutant_is_detected() {
         post_amount != spec::ag::soul_02_amount_mutant(amount),
         "mutant (+1) must not match"
     );
-    crate::kassert!(post_amount == spec::ag::soul_02_amount(amount), "card does max(pre-1000,0)");
+    crate::kassert!(
+        post_amount == spec::ag::soul_02_amount(amount),
+        "card does max(pre-1000,0)"
+    );
 }
 
 // ===========================================================================
@@ -1156,7 +1156,10 @@ pub fn soul_02_amount_formula() {
     kani::assume(amount >= 0 && amount <= 10_000);
     let to = spec::ag::soul_02_amount(amount);
     crate::kassert!(to == (amount - 1000).max(0), "max(pre-1000, 0)");
-    crate::kassert!(to != spec::ag::soul_02_amount_mutant(amount), "mutant disagrees");
+    crate::kassert!(
+        to != spec::ag::soul_02_amount_mutant(amount),
+        "mutant disagrees"
+    );
 }
 
 /// C-AG-sky-02 formula: n*600 for n >= 3.

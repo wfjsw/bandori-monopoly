@@ -17,9 +17,9 @@
 //! `settle_redirect` flag (`trigger::is_settle_redirect()`) marks the nested
 //! settle so neither hook re-enters (STACK-01 / SETTLE-01).
 
-use card_sdk::abi::{ChainKind, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";
 /// One-shot move tag armed by the (1) counteract: this move's endpoint settles
@@ -141,9 +141,7 @@ fn on_group() -> bool {
 /// and the counter name stay here (the name is not yet in the condition
 /// vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
-        && on_group()
+    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS && on_group()
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

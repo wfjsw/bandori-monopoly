@@ -56,9 +56,11 @@ fn end_quiet(t: &mut Table, who: usize) {
 }
 
 fn add_token(t: &mut Table, who: usize, name: &str, value: i32) {
-    t.m.world_mut().st.players[who]
-        .tokens
-        .push(Counter { name: name.into(), value, instance: None });
+    t.m.world_mut().st.players[who].tokens.push(Counter {
+        name: name.into(),
+        value,
+        instance: None,
+    });
 }
 
 // ============================================================ cards
@@ -98,7 +100,11 @@ fn tritone_gains_amount_and_places_with_crystals() {
     t.counteract(0, "Mor:迷茫之蝶们的三全音").unwrap();
     // the 140 rent is the 「此次失去的资金金额」: gained back on the spot
     assert_eq!(t.money(0), 10_000, "gains the 140 it just lost");
-    assert!(t.on_field(0, "Mor:迷茫之蝶们的三全音"), "{:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "Mor:迷茫之蝶们的三全音"),
+        "{:?}",
+        t.field_ids(0)
+    );
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(3));
 }
 
@@ -150,7 +156,11 @@ fn tritone_countdown_discards_and_pays_back() {
     decline_all(&mut t);
     t.end(0).unwrap();
     decline_all(&mut t);
-    assert!(!t.on_field(0, "Mor:迷茫之蝶们的三全音"), "{:?}", t.field_ids(0));
+    assert!(
+        !t.on_field(0, "Mor:迷茫之蝶们的三全音"),
+        "{:?}",
+        t.field_ids(0)
+    );
     assert_eq!(t.money(0), 10_000 - 140, "pays back the 140 it gained");
 }
 
@@ -223,7 +233,11 @@ fn starry_pays_x_times_1000_and_places_x_crystals() {
     assert_eq!(p.options.len(), 5, "X offers 1..5: {}", t.dump_prompt());
     t.answer_one(2).unwrap(); // X=3
     assert_eq!(t.money(0), 10_000 - 3 * 1000);
-    assert!(t.on_field(0, "Mor:蝴蝶飞舞的星月夜"), "{:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "Mor:蝴蝶飞舞的星月夜"),
+        "{:?}",
+        t.field_ids(0)
+    );
     assert_eq!(t.crystals(0, "Mor:蝴蝶飞舞的星月夜"), Some(3));
 }
 
@@ -249,7 +263,11 @@ fn starry_circle_pass_removes_crystal_and_pays_1000() {
     // The card's own DiceRollAfter offer (「可以放弃第一次的结果重骰一次」) pauses
     // the walk before it starts; decline it so the walk runs on the original 3.
     t.decline();
-    assert_eq!(t.crystals(0, "Mor:蝴蝶飞舞的星月夜"), Some(2), "one removed");
+    assert_eq!(
+        t.crystals(0, "Mor:蝴蝶飞舞的星月夜"),
+        Some(2),
+        "one removed"
+    );
     assert_eq!(t.money(0), 7000 + 1000, "each removed crystal pays 1000");
     decline_all(&mut t); // the CiRCLE-bonus choice
 }
@@ -264,7 +282,11 @@ fn starry_no_crystals_removes_the_card() {
     t.dice(&[3]); // one CiRCLE pass: the last crystal goes
     t.roll(0).unwrap();
     decline_all(&mut t);
-    assert!(!t.on_field(0, "Mor:蝴蝶飞舞的星月夜"), "{:?}", t.field_ids(0));
+    assert!(
+        !t.on_field(0, "Mor:蝴蝶飞舞的星月夜"),
+        "{:?}",
+        t.field_ids(0)
+    );
     assert_eq!(t.crystals(0, "Mor:蝴蝶飞舞的星月夜"), None);
 }
 
@@ -313,7 +335,11 @@ fn starry_even_roll_of_another_player_offers_crystal_removal() {
     assert!(t.prompt().is_some(), "{}", t.dump_prompt());
     t.answer_one(0).unwrap(); // pay 1000, remove a crystal
     decline_all(&mut t);
-    assert_eq!(t.money(0), 8000 - 1000 + 1000, "pay 1000, crystal payout 1000");
+    assert_eq!(
+        t.money(0),
+        8000 - 1000 + 1000,
+        "pay 1000, crystal payout 1000"
+    );
     assert_eq!(t.crystals(0, "Mor:蝴蝶飞舞的星月夜"), Some(1));
 }
 
@@ -386,7 +412,10 @@ fn courage_sums_3d20_for_the_tile_number() {
 fn courage_agent_tile_gives_1000() {
     // 规则书: 「若为地产商地块，获得1000资金」
     let mut t = Table::vanilla(2);
-    assert_eq!(data().tiles[tile("主要街道")].kind, game_core::data::TileKind("agent".into()));
+    assert_eq!(
+        data().tiles[tile("主要街道")].kind,
+        game_core::data::TileKind("agent".into())
+    );
     t.dice(&[2, 2, 1]); // sum 5 -> #5 = 主要街道 (agent)
     t.give_play(0, "Mor:勇气展翅高飞之时").unwrap();
     assert_eq!(t.money(0), 10_000 + 1000);
@@ -455,8 +484,10 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
         t.field_ids(0)
     );
     assert!(
-        t.discard(0).contains(&"Mor:（NNM）稍微努力了一下".to_string())
-            || t.draw_pile(0).contains(&"Mor:（NNM）稍微努力了一下".to_string()),
+        t.discard(0)
+            .contains(&"Mor:（NNM）稍微努力了一下".to_string())
+            || t.draw_pile(0)
+                .contains(&"Mor:（NNM）稍微努力了一下".to_string()),
         "card left the field for the discard; discard={:?} draw={:?}",
         t.discard(0),
         t.draw_pile(0)
@@ -523,7 +554,12 @@ fn toko_swaps_same_color_mortgaged_deeds_and_pays_difference() {
     t.give(0, &["Mor:（toko）"]);
     t.play(0, "Mor:（toko）").unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.options.len(), 1, "exactly one swap pair: {}", t.dump_prompt());
+    assert_eq!(
+        p.options.len(),
+        1,
+        "exactly one swap pair: {}",
+        t.dump_prompt()
+    );
     t.answer_one(0).unwrap();
     // swapped
     assert_eq!(t.owner(mine), Some(1));
@@ -602,7 +638,11 @@ fn centrifuge_offers_on_the_second_targeting() {
     );
     t.counteract(0, "Mor:离心力，不为所动").unwrap();
     // the shield is up (card on the field) until p0's next turn start
-    assert!(t.on_field(0, "Mor:离心力，不为所动"), "{:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "Mor:离心力，不为所动"),
+        "{:?}",
+        t.field_ids(0)
+    );
 }
 
 // --------------------------------------------------- 高贵的微蓝
@@ -664,7 +704,11 @@ fn again_hand_counter_places_on_field_and_loses_equal() {
     t.begin_turn(0);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("Mor:再次牵起手来"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:再次牵起手来"),
+        "{}",
+        t.dump_prompt()
+    );
     assert_eq!(t.asked(), vec![1]);
     t.counteract(1, "Mor:再次牵起手来").unwrap();
     // p0's 140 payment went through; p1 lost the same 140
@@ -904,7 +948,11 @@ fn rainbow_halves_a_payment_to_a_same_grade() {
     t.give(0, &["Mor:秘密与青春的虹彩"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:秘密与青春的虹彩"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
     assert_eq!(t.money(0), 10_000 - 70);
     assert_eq!(t.money(1), 10_000 + 70);
@@ -930,9 +978,17 @@ fn rainbow_cross_band_ppp_senior_pays_morfonica_junior() {
     t.give(0, &["Mor:秘密与青春的虹彩"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:秘密与青春的虹彩"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
-    assert_eq!(t.money(0), 10_000 - 70, "PPP senior pays a Morfonica junior: halved");
+    assert_eq!(
+        t.money(0),
+        10_000 - 70,
+        "PPP senior pays a Morfonica junior: halved"
+    );
     assert_eq!(t.money(1), 10_000 + 70);
 }
 
@@ -978,9 +1034,17 @@ fn rainbow_cross_band_morfonica_senior_pays_mygo_junior() {
     t.give(0, &["Mor:秘密与青春的虹彩"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:秘密与青春的虹彩"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
-    assert_eq!(t.money(0), 10_000 - 70, "Morfonica senior pays a MyGO junior: halved");
+    assert_eq!(
+        t.money(0),
+        10_000 - 70,
+        "Morfonica senior pays a MyGO junior: halved"
+    );
     assert_eq!(t.money(1), 10_000 + 70);
 }
 
@@ -997,7 +1061,11 @@ fn rainbow_halves_a_payment_from_a_senior_to_a_junior() {
     t.give(0, &["Mor:秘密与青春的虹彩"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:秘密与青春的虹彩"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
     assert_eq!(t.money(0), 10_000 - 70, "senior pays a junior: halved");
     assert_eq!(t.money(1), 10_000 + 70);
@@ -1042,7 +1110,11 @@ fn rainbow_senior_pays_you_at_1_5x() {
     t.give(0, &["Mor:秘密与青春的虹彩"]); // the payee (junior) holds
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:秘密与青春的虹彩"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
     assert_eq!(t.money(0), 10_000 + 210);
     assert_eq!(t.money(1), 10_000 - 210);
@@ -1061,7 +1133,11 @@ fn rainbow_same_grade_pays_you_at_1_5x() {
     t.give(0, &["Mor:秘密与青春的虹彩"]); // the payee holds
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:秘密与青春的虹彩"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
     assert_eq!(t.money(0), 10_000 + 210, "same-grade payer → 1.5x");
     assert_eq!(t.money(1), 10_000 - 210);
@@ -1290,7 +1366,7 @@ fn tsukushi_skill1_redirects_a_gain() {
     t.give_play(0, "R:[衍生] 压").unwrap();
     assert!(t.prompt().is_some(), "{}", t.dump_prompt());
     t.answer_one(0).unwrap(); // yes, redirect (「可以改为…」)
-    // the pick defaults to the first other player (p1)
+                              // the pick defaults to the first other player (p1)
     decline_all(&mut t);
     assert_eq!(t.money(0), 10_000, "the gain was redirected");
     assert_eq!(t.money(1), 11_000);
@@ -1354,7 +1430,11 @@ fn interaction_centrifuge_vs_toubudoukan() {
     assert!(!t.counteract_offered("Mor:离心力，不为所动"));
     decline_all(&mut t);
     t.play(1, "通用:登上武道馆").unwrap();
-    assert!(t.counteract_offered("Mor:离心力，不为所动"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("Mor:离心力，不为所动"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(0, "Mor:离心力，不为所动").unwrap();
     assert!(t.on_field(0, "Mor:离心力，不为所动"));
 }
@@ -1368,7 +1448,11 @@ fn interaction_net_error_negates_summer() {
     t.give(0, &["Mor:夏日合宿"]);
     t.give(1, &["通用:网络链接异常"]);
     t.play(0, "Mor:夏日合宿").unwrap();
-    assert!(t.counteract_offered("通用:网络链接异常"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("通用:网络链接异常"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "通用:网络链接异常").unwrap();
     assert!(!t.on_field(0, "Mor:夏日合宿"), "{:?}", t.field_ids(0));
 }
@@ -1402,7 +1486,11 @@ fn interaction_summer_shield_vs_foreign_targeting() {
     t.play(1, "通用:登上武道馆").unwrap();
     decline_all(&mut t);
     assert_eq!(t.money(0), 10_000, "shielded from the foreign effect");
-    assert_eq!(t.money(2), 10_000 - 1000, "the unshielded player still pays");
+    assert_eq!(
+        t.money(2),
+        10_000 - 1000,
+        "the unshielded player still pays"
+    );
 }
 
 #[test]
@@ -1421,7 +1509,11 @@ fn interaction_xuanzhan_and_centrifuge_answer_the_same_targeting() {
     t.begin_turn(2);
     t.play(2, "通用:登上武道馆").unwrap();
     // Play timing (and any per-targeting / payment windows) offer 宣战布告.
-    assert!(t.counteract_offered("AG:宣战布告"), "1st: {}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("AG:宣战布告"),
+        "1st: {}",
+        t.dump_prompt()
+    );
     decline_all(&mut t);
     t.play(2, "通用:登上武道馆").unwrap();
     // Second play: 宣战布告 on the play timing again, then 离心力 on the 2nd

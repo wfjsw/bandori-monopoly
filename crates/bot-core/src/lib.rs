@@ -32,7 +32,9 @@ pub mod view;
 pub use clock::Instant;
 
 pub use action::{action_priors, trivial_decision, Action, Surface, Trivial};
-pub use determinize::{determinize, determinize_json, DeterminizeError, DeterminizerRng, SampleReport};
+pub use determinize::{
+    determinize, determinize_json, DeterminizeError, DeterminizerRng, SampleReport,
+};
 pub use eval::{net_worth, relative_worth, terminal_value};
 pub use extras::{view_extras, ViewExtras};
 pub use ismcts::{

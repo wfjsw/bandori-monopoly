@@ -410,12 +410,11 @@ impl BotService {
             return Err(BotError::Timeout);
         }
         match &self.backend {
-            Backend::Child {
-                stdin, pending, ..
-            } => {
+            Backend::Child { stdin, pending, .. } => {
                 let (tx, rx) = oneshot::channel();
                 pending.lock().unwrap().insert(id, tx);
-                let line = serde_json::to_string(&req).map_err(|e| BotError::Down(e.to_string()))?;
+                let line =
+                    serde_json::to_string(&req).map_err(|e| BotError::Down(e.to_string()))?;
                 {
                     let mut w = stdin.lock().unwrap();
                     writeln!(w, "{line}").map_err(|e| BotError::Down(format!("write: {e}")))?;
@@ -480,10 +479,7 @@ pub fn decision_at(state: &game_core::state::MatchState, player_id: i32) -> Opti
         return None;
     }
     if state.prompt.id > 0 {
-        return state
-            .prompt
-            .waiting(player_id)
-            .then_some(state.prompt.id);
+        return state.prompt.waiting(player_id).then_some(state.prompt.id);
     }
     if state.busy || state.turn != player_id {
         return None;
@@ -514,7 +510,10 @@ mod tests {
         // real-ruleset iteration (0.4–1.3 s) finishing after the budget still
         // lands inside the deadline and does not fall back.
         assert_eq!(ask_timeout(0), Duration::from_millis(ITERATION_OVERRUN_MS));
-        assert_eq!(ask_timeout(800), Duration::from_millis(800 + ITERATION_OVERRUN_MS));
+        assert_eq!(
+            ask_timeout(800),
+            Duration::from_millis(800 + ITERATION_OVERRUN_MS)
+        );
         assert_eq!(
             ask_timeout(1_000),
             Duration::from_millis(1_000 + ITERATION_OVERRUN_MS)
@@ -531,7 +530,10 @@ mod tests {
         let mut d = Drive::default();
         let t1 = d.claim_ponder("R", 1).expect("first ponder claims");
         assert!(d.claim_ponder("R", 1).is_none(), "one in flight per seat");
-        assert!(d.claim_ponder("R", 2).is_some(), "other seats are independent");
+        assert!(
+            d.claim_ponder("R", 2).is_some(),
+            "other seats are independent"
+        );
         assert_eq!(d.ponders_in_flight(), 2);
         // The seat's own decision cancels / ignores the ponder.
         assert!(d.cancel_ponder("R", 1));
@@ -575,7 +577,12 @@ pub const PROBE_CLAIM_TTL_MS: u64 = 15_000;
 
 /// Claim `seat` for a probe, across processes. `false` when another process
 /// has it in flight or the post-probe cooldown has not expired.
-pub fn claim_seat(store: &dyn crate::store::CrossState, owner: &str, room: &str, member: i32) -> bool {
+pub fn claim_seat(
+    store: &dyn crate::store::CrossState,
+    owner: &str,
+    room: &str,
+    member: i32,
+) -> bool {
     if store
         .marker_live(&probe_wait_key(room, member))
         .unwrap_or(false)

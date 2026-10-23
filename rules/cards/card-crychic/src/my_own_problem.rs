@@ -1,7 +1,7 @@
 //! `CRYCHIC:是我自己的问题` -- C# `CardMyOwnProblem` (MatchHost.cs:2963-3017):
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:是我自己的问题`）:
-//! > 是我自己的问题 
+//! > 是我自己的问题
 //! >  ：[反击]
 //! > （1）主要移动结束时，[触发结算]前打出此卡，使自己额外远离绝对距离最近的玩家一格（若距离最近的玩家在身前则向后移动，若与其他玩家重合则可选择任意方向）。
 //! > （2）若受到[异常移动效果]影响，此卡不生效
@@ -10,8 +10,8 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::ChainKind;
 use bandori_std::ctx;
+use card_sdk::abi::ChainKind;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MY_OWN_PROBLEM: CardDef = CardDef::new(

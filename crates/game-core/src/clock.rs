@@ -151,7 +151,10 @@ mod tests {
         assert_eq!(c.pick_seconds, 250.0);
         assert_eq!(c.deck_seconds, ClockSettings::MAX);
         // Non-finite falls back to the field default, not the clamp bound.
-        assert_eq!(c.bankrupt_auction_time, ClockSettings::default().bankrupt_auction_time);
+        assert_eq!(
+            c.bankrupt_auction_time,
+            ClockSettings::default().bankrupt_auction_time
+        );
     }
 
     #[test]

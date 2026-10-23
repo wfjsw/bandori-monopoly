@@ -20,12 +20,24 @@ fn lock_acquire_is_exclusive_until_released() {
     let s = dummy();
     assert!(s.lock_acquire("match:R", "a", 10_000).unwrap());
     assert!(!s.lock_acquire("match:R", "b", 10_000).unwrap(), "held");
-    assert!(s.lock_renew("match:R", "a", 10_000).unwrap(), "owner renews");
-    assert!(!s.lock_renew("match:R", "b", 10_000).unwrap(), "not the owner");
+    assert!(
+        s.lock_renew("match:R", "a", 10_000).unwrap(),
+        "owner renews"
+    );
+    assert!(
+        !s.lock_renew("match:R", "b", 10_000).unwrap(),
+        "not the owner"
+    );
     s.lock_release("match:R", "b").unwrap();
-    assert!(!s.lock_acquire("match:R", "b", 10_000).unwrap(), "stale release is a no-op");
+    assert!(
+        !s.lock_acquire("match:R", "b", 10_000).unwrap(),
+        "stale release is a no-op"
+    );
     s.lock_release("match:R", "a").unwrap();
-    assert!(s.lock_acquire("match:R", "b", 10_000).unwrap(), "free after release");
+    assert!(
+        s.lock_acquire("match:R", "b", 10_000).unwrap(),
+        "free after release"
+    );
 }
 
 #[test]
@@ -34,7 +46,10 @@ fn lock_expires_on_its_ttl() {
     assert!(s.lock_acquire("tick:R", "a", 30).unwrap());
     assert!(!s.lock_acquire("tick:R", "b", 30).unwrap());
     std::thread::sleep(Duration::from_millis(60));
-    assert!(s.lock_acquire("tick:R", "b", 30).unwrap(), "TTL freed the lock");
+    assert!(
+        s.lock_acquire("tick:R", "b", 30).unwrap(),
+        "TTL freed the lock"
+    );
     // Renewing an expired lock fails -- it may already belong to somebody else.
     assert!(!s.lock_renew("tick:R", "a", 30).unwrap());
 }
@@ -42,27 +57,46 @@ fn lock_expires_on_its_ttl() {
 #[test]
 fn with_lock_runs_only_under_the_lock_and_releases() {
     let s = dummy();
-    let a = store::with_lock(&s, "room:R", "a", 10_000, Duration::from_millis(200), || {
-        assert!(
-            !s.lock_acquire("room:R", "b", 10_000).unwrap(),
-            "held for the body"
-        );
-        Ok(42)
-    })
+    let a = store::with_lock(
+        &s,
+        "room:R",
+        "a",
+        10_000,
+        Duration::from_millis(200),
+        || {
+            assert!(
+                !s.lock_acquire("room:R", "b", 10_000).unwrap(),
+                "held for the body"
+            );
+            Ok(42)
+        },
+    )
     .unwrap();
     assert_eq!(a, 42);
-    assert!(s.lock_acquire("room:R", "b", 10_000).unwrap(), "released after");
+    assert!(
+        s.lock_acquire("room:R", "b", 10_000).unwrap(),
+        "released after"
+    );
 }
 
 #[test]
 fn with_lock_fails_rather_than_running_unlocked() {
     let s = dummy();
     assert!(s.lock_acquire("room:R", "other", 10_000).unwrap());
-    let out: Result<(), String> =
-        store::with_lock(&s, "room:R", "me", 10_000, Duration::from_millis(80), || {
+    let out: Result<(), String> = store::with_lock(
+        &s,
+        "room:R",
+        "me",
+        10_000,
+        Duration::from_millis(80),
+        || {
             panic!("must not run unlocked");
-        });
-    assert!(out.is_err(), "lock failure is an error, never a fallthrough");
+        },
+    );
+    assert!(
+        out.is_err(),
+        "lock failure is an error, never a fallthrough"
+    );
 }
 
 #[test]
@@ -78,7 +112,11 @@ fn presence_keys_expire_and_count() {
     assert_eq!(s.presence_count("R", 1).unwrap(), 2);
     s.presence_clear("R", 1).unwrap();
     assert_eq!(s.presence_count("R", 1).unwrap(), 0);
-    assert_eq!(s.presence_count("R", 2).unwrap(), 1, "other members untouched");
+    assert_eq!(
+        s.presence_count("R", 2).unwrap(),
+        1,
+        "other members untouched"
+    );
     // TTL: the last key of member 2 goes away on its own.
     std::thread::sleep(Duration::from_millis(250));
     assert_eq!(s.presence_count("R", 2).unwrap(), 0, "expired");
@@ -91,7 +129,11 @@ fn presence_set_refreshes_a_live_key() {
     std::thread::sleep(Duration::from_millis(50));
     s.presence_set("R", 1, "s", 80).unwrap(); // keep-alive
     std::thread::sleep(Duration::from_millis(50));
-    assert_eq!(s.presence_count("R", 1).unwrap(), 1, "refreshed, still live");
+    assert_eq!(
+        s.presence_count("R", 1).unwrap(),
+        1,
+        "refreshed, still live"
+    );
     std::thread::sleep(Duration::from_millis(120));
     assert_eq!(s.presence_count("R", 1).unwrap(), 0, "and expires after");
 }
@@ -240,7 +282,10 @@ fn redis_live_primitives() {
     assert!(s.lock_renew("match:R", "a", 5_000).unwrap());
     assert!(!s.lock_renew("match:R", "b", 5_000).unwrap());
     s.lock_release("match:R", "b").unwrap();
-    assert!(!s.lock_acquire("match:R", "b", 5_000).unwrap(), "stale release");
+    assert!(
+        !s.lock_acquire("match:R", "b", 5_000).unwrap(),
+        "stale release"
+    );
     s.lock_release("match:R", "a").unwrap();
     assert!(s.lock_acquire("match:R", "b", 5_000).unwrap());
 
@@ -254,7 +299,9 @@ fn redis_live_primitives() {
 
     let rx = s.subscribe("notes").unwrap();
     s.publish("notes", "ping").unwrap();
-    let got = rx.recv_timeout(Duration::from_secs(2)).expect("pub/sub round-trip");
+    let got = rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("pub/sub round-trip");
     assert_eq!(got.payload, "ping");
 
     let meta = RecMeta {

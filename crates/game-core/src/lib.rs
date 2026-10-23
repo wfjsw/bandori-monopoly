@@ -64,7 +64,8 @@ impl MatchMode {
 
     /// Does `n` fall inside this mode's book seat bound?
     pub fn seats_ok(self, n: usize) -> bool {
-        self.seat_range().is_none_or(|(lo, hi)| (lo..=hi).contains(&n))
+        self.seat_range()
+            .is_none_or(|(lo, hi)| (lo..=hi).contains(&n))
     }
 
     /// Reject a seat count the book forbids. Empty `Err` text is impossible:

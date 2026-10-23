@@ -298,12 +298,7 @@ pub fn colors_02_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 
 /// Play body when the chosen `k` is fully paid (`paid == k*500`):
 /// place on field, pay `k*500`, `k` crystals on the card.
-pub fn soul_01_log_ok(
-    effects: &[Effect],
-    player: i32,
-    this_card: u8,
-    k: i32,
-) -> bool {
+pub fn soul_01_log_ok(effects: &[Effect], player: i32, this_card: u8, k: i32) -> bool {
     if effects.len() != 2 {
         return false;
     }

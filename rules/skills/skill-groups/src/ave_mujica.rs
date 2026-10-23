@@ -17,9 +17,10 @@
 //! figure is untouched. That is a per-party bend, which `PaySplitMul` carries as the
 //! amount seen from one side.
 
-use bandori_std::state_key; use card_sdk::abi::{counter, ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{counter, ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// Turns spent in 状态2. 「处于状态2的第三回合开始时」 reads this.
 const IN_TWO: &str = "skill.aveMujica.inTwo";
@@ -33,17 +34,41 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
         On::Play("", None, Some(can_halve), halve),
-        On::Action(Action::TurnStartBefore("slot('skillState') != 0", None, None, at_turn_start)),
+        On::Action(Action::TurnStartBefore(
+            "slot('skillState') != 0",
+            None,
+            None,
+            at_turn_start,
+        )),
         // Latch the PaySplitMul input for the PayAfter one-sided fixup. Rides
         // `PaySplitMulBefore` (v96) so the stored figure is the one the bend
         // Filter is about to see -- after any `PaySplitAdd` rewrite, before
         // `PaySplitMul`; see `latch_orig`.
-        On::Action(Action::PaySplitMulBefore("slot('skillState') == 2 && card.placed", None, None, latch_orig)),
-        On::Filter(Filter::PaySplitMul("slot('skillState') == 2 && card.placed", None, bend)),
+        On::Action(Action::PaySplitMulBefore(
+            "slot('skillState') == 2 && card.placed",
+            None,
+            None,
+            latch_orig,
+        )),
+        On::Filter(Filter::PaySplitMul(
+            "slot('skillState') == 2 && card.placed",
+            None,
+            bend,
+        )),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
         // figure, so the counterpart's side is restored here.
-        On::Action(Action::PayAfter("slot('skillState') == 2 && card.placed", None, None, after_bend)),
-        On::Action(Action::TurnEnd("actor == owner && slot('skillState') == 2", None, None, at_turn_end)),
+        On::Action(Action::PayAfter(
+            "slot('skillState') == 2 && card.placed",
+            None,
+            None,
+            after_bend,
+        )),
+        On::Action(Action::TurnEnd(
+            "actor == owner && slot('skillState') == 2",
+            None,
+            None,
+            at_turn_end,
+        )),
     ],
 );
 
@@ -100,10 +125,8 @@ fn on_state(player_id: i32) -> card_sdk::Asked {
     if bandori_std::fire::max(player_id) <= 0 {
         return Ok(());
     }
-    let got = bandori_std::fire::regime::fill_to_cap(
-        player_id,
-        &Msg::new(key!("ave_mujica_refill")),
-    )?;
+    let got =
+        bandori_std::fire::regime::fill_to_cap(player_id, &Msg::new(key!("ave_mujica_refill")))?;
     if got > 0 {
         ctx::log(player_id, &Msg::new(key!("ave_mujica_refill")));
     }

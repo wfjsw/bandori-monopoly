@@ -1,22 +1,25 @@
 //! wasmi host: loading a set of card modules, the `ruleset` import table, replay,
 //! and nested cross-module card calls.
 
-use std::fmt;
 #[cfg(feature = "sandbox")]
 use std::collections::HashMap;
+use std::fmt;
 #[cfg(feature = "sandbox")]
 use std::sync::Arc;
 
-use card_sdk::abi::{AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind};
 #[cfg(feature = "sandbox")]
 use card_sdk::abi::{self, export, ABI_VERSION, IMPORT_MODULE};
+use card_sdk::abi::{AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 // The engine behind the host: wasmi (an interpreter) in the browser, wasmtime
 // (the optimizing compiler) on the server. Same modules and same behaviour.
 // Compiled only with the `sandbox` feature -- the linked path (`native-rules`)
 // has no wasm engine at all.
-#[cfg(all(feature = "sandbox", any(target_arch = "wasm32", feature = "wasmi-native")))]
+#[cfg(all(
+    feature = "sandbox",
+    any(target_arch = "wasm32", feature = "wasmi-native")
+))]
 #[path = "be_wasmi.rs"]
 mod be;
 #[cfg(all(
@@ -141,7 +144,7 @@ impl CardInfo {
             .enumerate()
             .filter(|(_, o)| {
                 o.kind == kind as i32
-                && trigger.is_none_or(|t| o.triggers.iter().any(|s| s == &t.spelling()))
+                    && trigger.is_none_or(|t| o.triggers.iter().any(|s| s == &t.spelling()))
             })
             .map(|(i, _)| i as i32)
             .collect()
@@ -231,7 +234,11 @@ pub enum Call {
         reason: i32,
     },
     /// `On::Redeem` -- the rule's redeem body (规则书 基础规则 6).
-    Redeem { card: i32, player_id: i32, tile: i32 },
+    Redeem {
+        card: i32,
+        player_id: i32,
+        tile: i32,
+    },
     /// `On::Buy` -- the rule's buy body (v80). `kind` is the
     /// [`card_sdk::abi::BuyKind`] wire value; `reason` is the source
     /// (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction).
@@ -291,7 +298,10 @@ pub enum PromptOption {
     /// A labelled option (`ask_pick`).
     Str(crate::Msg),
     /// A tile ask option carrying its own label (`ask_tiles` / `opt_tile`).
-    Tile { tile: i32, label: crate::Msg },
+    Tile {
+        tile: i32,
+        label: crate::Msg,
+    },
 }
 
 /// A prompt the effect is blocked on -- the engine surfaces it to the
@@ -552,10 +562,7 @@ pub enum HostRequest {
     },
     /// Which option `player_id`'s AI would take among `tiles` on an agent offer
     /// (`ctx::ai_agent_choice`). Answers the index; `tiles.len()` = skip.
-    AiAgentChoice {
-        player_id: i32,
-        tiles: Vec<i32>,
-    },
+    AiAgentChoice { player_id: i32, tiles: Vec<i32> },
     /// A bank gain with the Pay's event `typ` and a replacement log line
     /// (`Pay::text`) -- `ctx::gain_typed`. Builds `Pay::new(amount, "gain")` so
     /// the 「支付」 scalars (`scale_settle_payment`) do not reach a print.
@@ -632,7 +639,10 @@ impl fmt::Display for RuleError {
                 entry,
                 source,
                 err,
-            } => write!(f, "card {card:?} entry {entry}: bad condition {source:?}: {err}"),
+            } => write!(
+                f,
+                "card {card:?} entry {entry}: bad condition {source:?}: {err}"
+            ),
         }
     }
 }
@@ -788,9 +798,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     let mut out = Vec::new();
     for (ci, c) in cards.iter().enumerate() {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind == OnKind::Filter as i32
-                && o.triggers.iter().any(|s| s == &kind.spelling())
-            {
+            if o.kind == OnKind::Filter as i32 && o.triggers.iter().any(|s| s == &kind.spelling()) {
                 out.push((ci as i32, ei as i32));
             }
         }
@@ -1012,11 +1020,7 @@ impl RulesetBuilder {
         // conditions (docs/GUARDS.md §8.2): a change in any lean `Cond` blob
         // must change the ruleset sha, so record stamps / bundle ids follow.
         // Sets without conditions keep the plain module-hash recipe.
-        let mut parts: Vec<String> = self
-            .modules
-            .iter()
-            .map(|m| m.sha256.clone())
-            .collect();
+        let mut parts: Vec<String> = self.modules.iter().map(|m| m.sha256.clone()).collect();
         parts.sort_unstable();
         let conds = crate::cond_pre::PrecompiledConds::collect(&self.cards, &pre);
         let cond_lines = conds.identity_lines();
@@ -1078,7 +1082,8 @@ fn compile_pre(
     };
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let compiled = crate::cond_pre::CompiledPre::compile(src).map_err(|e| bad(e.to_string()))?;
+        let compiled =
+            crate::cond_pre::CompiledPre::compile(src).map_err(|e| bad(e.to_string()))?;
         if let Some(blob) = precompiled {
             if compiled.blob != *blob {
                 return Err(bad(
@@ -1410,9 +1415,13 @@ impl Ruleset {
         // admission and are not re-checked at body time.)
         if matches!(
             call,
-            Call::AtEnd { .. } | Call::DiceRollPlan { .. } | Call::Settle { .. }
-                | Call::Mortgage { .. } | Call::Redeem { .. }
-                | Call::Buy { .. } | Call::Build { .. }
+            Call::AtEnd { .. }
+                | Call::DiceRollPlan { .. }
+                | Call::Settle { .. }
+                | Call::Mortgage { .. }
+                | Call::Redeem { .. }
+                | Call::Buy { .. }
+                | Call::Build { .. }
         ) {
             let pre = self
                 .inner
@@ -1427,8 +1436,17 @@ impl Ruleset {
             } else {
                 None
             };
-            let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
-            if !self.entry_admitted(world, card, entry, player_id, scope.as_ref(), &cand, answers)? {
+            let cand =
+                crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
+            if !self.entry_admitted(
+                world,
+                card,
+                entry,
+                player_id,
+                scope.as_ref(),
+                &cand,
+                answers,
+            )? {
                 return Ok(Outcome::Done(world.clone()));
             }
         }
@@ -1531,12 +1549,8 @@ impl Ruleset {
         // `card.placed` must answer for the **running instance** (the guest's
         // `ctx::is_placed()`): a game-start hook also runs for the same id
         // while it sits in a pile / hand (`uid = -1`).
-        let cand = crate::cond_pre::fill_candidate(
-            world,
-            player_id,
-            &info.id,
-            world.is_placed() != 0,
-        );
+        let cand =
+            crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
         let mut cur: W = world.clone();
         let mut announced = false;
         let mut ran_any = false;
@@ -1571,7 +1585,14 @@ impl Ruleset {
             if let Some(cb) = on_body.as_deref_mut() {
                 cb(store.data_mut().w(), entry);
             }
-            let res = call_card(&self.inner, &mut store, card, entry, export::OP_RUN, player_id);
+            let res = call_card(
+                &self.inner,
+                &mut store,
+                card,
+                entry,
+                export::OP_RUN,
+                player_id,
+            );
             let outcome = finish(store, res)?;
             ran_any = true;
             match outcome {
@@ -1611,7 +1632,11 @@ impl Ruleset {
 
     /// The compiled condition of `cards[card].on[entry]`, if it declares one.
     pub fn pre_at(&self, card: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
-        self.inner.pre.get(card as usize)?.get(entry as usize)?.as_ref()
+        self.inner
+            .pre
+            .get(card as usize)?
+            .get(entry as usize)?
+            .as_ref()
     }
 
     /// Every compiled guard condition of this set, keyed by `(card id, entry
@@ -1672,7 +1697,14 @@ impl Ruleset {
             crate::cond_pre::admits(pre, Some(scope), &cand, || {
                 let mut store = self.store(world.clone(), &[])?;
                 match crate::inline::with_no_inline(|| {
-                    call_card(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id)
+                    call_card(
+                        &self.inner,
+                        &mut store,
+                        card,
+                        entry,
+                        export::OP_GUARD,
+                        player_id,
+                    )
                 }) {
                     Ok(v) => Ok(v != 0),
                     Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
@@ -1783,7 +1815,14 @@ impl Ruleset {
                 // Hook-guard one and would invert the verdict.
                 let mut store = self.store(world.clone(), &[])?;
                 let gate_ok = match crate::inline::with_no_inline(|| {
-                    call_card_msg(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id)
+                    call_card_msg(
+                        &self.inner,
+                        &mut store,
+                        card,
+                        entry,
+                        export::OP_GUARD,
+                        player_id,
+                    )
                 }) {
                     Ok(None) => true,
                     Ok(Some(_)) => false,
@@ -2016,27 +2055,23 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// the play's own `card` raise.
     fn trigger_designates(&self, t: &crate::Trigger) -> bool {
         t.kind == crate::TriggerKind::Card
-            && t
-                .card
+            && t.card
                 .as_deref()
                 .and_then(|c| self.card(c))
                 .is_some_and(|idx| {
-                    self.cards()
-                        .get(idx as usize)
-                        .is_some_and(|info| {
-                            info.props
-                                .get(game_core::state::prop::DESIGNATES)
-                                .copied()
-                                .unwrap_or(0)
-                                != 0
-                        })
+                    self.cards().get(idx as usize).is_some_and(|info| {
+                        info.props
+                            .get(game_core::state::prop::DESIGNATES)
+                            .copied()
+                            .unwrap_or(0)
+                            != 0
+                    })
                 })
     }
     /// [`Self::counteracts_to`], plus the Effect-on-DESIGNATES-play rule.
     fn counteracts_to_play(&self, card: i32, t: &crate::Trigger) -> bool {
         self.counteracts_to(card, t.kind)
-            || (self.trigger_designates(t)
-                && self.counteracts_to(card, crate::TriggerKind::Effect))
+            || (self.trigger_designates(t) && self.counteracts_to(card, crate::TriggerKind::Effect))
     }
     /// The [`On::Counteract`] entry answering `t` (see
     /// [`Self::counteracts_to_play`]).
@@ -2054,7 +2089,9 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// Default scans the entry table (`CardInfo::hooks`); [`Ruleset`] overrides
     /// with the per-card `hook_mask` shift.
     fn hooks_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
-        self.cards().get(card as usize).is_some_and(|c| c.hooks(kind))
+        self.cards()
+            .get(card as usize)
+            .is_some_and(|c| c.hooks(kind))
     }
     /// Does the set declare any buy hook at all (fix C)? Default ORs
     /// [`Self::declares`] over [`BUY_HOOK_KINDS`]; [`Ruleset`] overrides with
@@ -2125,7 +2162,9 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// entry existing -- a gated entry whose gate currently refuses still has
     /// one. Passive / hook-only rules answer `false`.
     fn has_play_entry(&self, card: i32) -> bool {
-        self.cards().get(card as usize).is_some_and(|c| c.has_play())
+        self.cards()
+            .get(card as usize)
+            .is_some_and(|c| c.has_play())
     }
     /// Content hash of the loaded set; `None` when there is no module image
     /// (the native build -- the cards are compiled in).
@@ -2234,7 +2273,9 @@ impl CardModules for Ruleset {
         Ruleset::play_gate_vanishes(self, card)
     }
     fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
-        let Some(i) = gate_index(kind) else { return true };
+        let Some(i) = gate_index(kind) else {
+            return true;
+        };
         gate_open_over(
             self.inner.gates[i].iter().copied(),
             |c, e| CardModules::pre(self, c, e),
@@ -2318,7 +2359,7 @@ impl HostErr {
         matches!(self, HostErr::NeedInput)
     }
 
-#[cfg(feature = "sandbox")]
+    #[cfg(feature = "sandbox")]
     /// Convert to the wasm-engine error at the sandbox boundary.
     pub fn into_err(self) -> be::Error {
         match self {
@@ -2387,7 +2428,9 @@ impl RulesHandle for Arc<Inner> {
         self.pre.get(i as usize)?.get(entry as usize)?.as_ref()
     }
     fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
-        let Some(i) = gate_index(kind) else { return true };
+        let Some(i) = gate_index(kind) else {
+            return true;
+        };
         gate_open_over(
             self.gates[i].iter().copied(),
             |c, e| RulesHandle::pre(self, c, e),
@@ -2541,7 +2584,8 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
         be::write_guest(self, ptr, bytes).map_err(|e| HostErr::trap(be::error_text(&e)))
     }
     fn fuel(&mut self) -> Result<u64, HostErr> {
-        self.get_fuel().map_err(|e| HostErr::trap(be::error_text(&e)))
+        self.get_fuel()
+            .map_err(|e| HostErr::trap(be::error_text(&e)))
     }
     fn set_fuel(&mut self, v: u64) -> Result<(), HostErr> {
         Caller::set_fuel(self, v).map_err(|e| HostErr::trap(be::error_text(&e)))
@@ -2558,20 +2602,17 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
     ) -> (Result<CallOut, HostErr>, HostState<W>, u64) {
         let rules = match nested.rules.clone() {
             Some(r) => r,
-            None => {
-                return (
-                    Err(HostErr::trap("call_entry without rules")),
-                    nested,
-                    0,
-                )
-            }
+            None => return (Err(HostErr::trap("call_entry without rules")), nested, 0),
         };
         // Share the remaining fuel with the nested run (the same contract
         // `play_card` had when it built the store inline): a runaway nest
         // exhausts one budget, and the leftover is handed back to the caller.
         let fuel = self.fuel().unwrap_or(0);
         let mut store = new_store(&rules.engine, nested);
-        if let Err(e) = store.set_fuel(fuel).map_err(|e| HostErr::trap(be::error_text(&e))) {
+        if let Err(e) = store
+            .set_fuel(fuel)
+            .map_err(|e| HostErr::trap(be::error_text(&e)))
+        {
             let inner = store.into_data();
             return (Err(e), inner, fuel);
         }
@@ -2642,7 +2683,10 @@ fn call_card<W: CardWorld>(
         .call(&mut *store, (slot.local, entry, op, player_id))
         .and_then(fold_exit);
     #[cfg(feature = "bot-cost")]
-    bot_cost::GUEST_NS.fetch_add(t1.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+    bot_cost::GUEST_NS.fetch_add(
+        t1.elapsed().as_nanos() as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
     out
 }
 
@@ -2677,7 +2721,10 @@ fn call_card_msg<W: CardWorld>(
         .call(&mut *store, (slot.local, entry, op, player_id))
         .and_then(fold_exit)?;
     #[cfg(feature = "bot-cost")]
-    bot_cost::GUEST_NS.fetch_add(t1.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+    bot_cost::GUEST_NS.fetch_add(
+        t1.elapsed().as_nanos() as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
     if packed == 0 {
         return Ok(None);
     }
@@ -2762,8 +2809,8 @@ fn inspect(
             .and_then(|f| f.call(&mut store, ()))
             .map_err(|e| load(format!("{}: {e}", export::METADATA)))?;
         let (ptr, len) = abi::unpack(packed);
-        let bytes =
-            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        let bytes = read_mem(&inst, &mut store, ptr as i32, len as i32)
+            .map_err(|e| load(error_text(&e)))?;
         meta = crate::roster::decode_metadata(&bytes).map_err(load)?;
     }
     // Tile-class table (ABI v70) -- optional; empty means only the generic
@@ -2775,8 +2822,8 @@ fn inspect(
             .and_then(|f| f.call(&mut store, ()))
             .map_err(|e| load(format!("{}: {e}", export::CLASS_DEFS)))?;
         let (ptr, len) = abi::unpack(packed);
-        let bytes =
-            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        let bytes = read_mem(&inst, &mut store, ptr as i32, len as i32)
+            .map_err(|e| load(error_text(&e)))?;
         let defs: Vec<crate::tile_class::ClassDef> =
             postcard::from_bytes(&bytes).unwrap_or_default();
         crate::tile_class::set_class_defs(defs);
@@ -2790,8 +2837,8 @@ fn inspect(
             .and_then(|f| f.call(&mut store, ()))
             .map_err(|e| load(format!("{}: {e}", export::KIND_FLAGS)))?;
         let (ptr, len) = abi::unpack(packed);
-        let bytes =
-            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        let bytes = read_mem(&inst, &mut store, ptr as i32, len as i32)
+            .map_err(|e| load(error_text(&e)))?;
         let flags: Vec<(i32, bool)> = postcard::from_bytes(&bytes).unwrap_or_default();
         crate::kind_flags::set_kind_flags(flags);
     }
@@ -3004,25 +3051,52 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::flash_tile(&mut c, tile, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "tile_count",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::tile_count(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "tile_count", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::tile_count(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "place_mark",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::place_mark(&mut c, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         tile: i32,
+         kp: i32,
+         kl: i32,
+         cptr: i32,
+         cl: i32,
+         owner: i32,
+         src: i32,
+         count: i32,
+         stack: i32,
+         np: i32,
+         nl: i32|
+         -> Result<i32, Error> {
+            hostfns::place_mark(
+                &mut c, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl,
+            )
+            .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "place_mark_pair",
-        |mut c: C<W>, a: i32, b: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::place_mark_pair(&mut c, a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         a: i32,
+         b: i32,
+         kp: i32,
+         kl: i32,
+         cptr: i32,
+         cl: i32,
+         owner: i32,
+         src: i32,
+         count: i32,
+         stack: i32,
+         np: i32,
+         nl: i32|
+         -> Result<i32, Error> {
+            hostfns::place_mark_pair(
+                &mut c, a, b, kp, kl, cptr, cl, owner, src, count, stack, np, nl,
+            )
+            .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3112,8 +3186,17 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "add_card_counter",
-        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_card_counter(&mut c, player_id, cptr, cl, np, nl, n, max).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         player_id: i32,
+         cptr: i32,
+         cl: i32,
+         np: i32,
+         nl: i32,
+         n: i32,
+         max: i32|
+         -> Result<i32, Error> {
+            hostfns::add_card_counter(&mut c, player_id, cptr, cl, np, nl, n, max)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3147,17 +3230,31 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "move_units",
-        |mut c: C<W>, np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32| -> Result<i32, Error> {
-            hostfns::move_units(&mut c, np, nl, from_tile, from_player, to_tile, to_player, n).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         np: i32,
+         nl: i32,
+         from_tile: i32,
+         from_player: i32,
+         to_tile: i32,
+         to_player: i32,
+         n: i32|
+         -> Result<i32, Error> {
+            hostfns::move_units(
+                &mut c,
+                np,
+                nl,
+                from_tile,
+                from_player,
+                to_tile,
+                to_player,
+                n,
+            )
+            .map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "self_uid",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::self_uid(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "self_uid", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::self_uid(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "send",
@@ -3165,20 +3262,12 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::send(&mut c, tp, tl, np, nl, pp, pl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "msg_sender_uid",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::msg_sender_uid(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "msg_sender_seat",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::msg_sender_seat(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "msg_sender_uid", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::msg_sender_uid(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "msg_sender_seat", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::msg_sender_seat(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "msg_name",
@@ -3186,41 +3275,21 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::msg_name(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "msg_a",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::msg_a(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "msg_b",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::msg_b(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "msg_c",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::msg_c(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "msg_tile",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::msg_tile(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "msg_seat",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::msg_seat(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "msg_a", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::msg_a(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "msg_b", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::msg_b(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "msg_c", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::msg_c(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "msg_tile", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::msg_tile(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "msg_seat", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::msg_seat(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "msg_text",
@@ -3228,13 +3297,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::msg_text(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "msg_reply",
-        |mut c: C<W>, v: i32| -> Result<(), Error> {
-            hostfns::msg_reply(&mut c, v).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "msg_reply", |mut c: C<W>, v: i32| -> Result<(), Error> {
+        hostfns::msg_reply(&mut c, v).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_name",
@@ -3259,8 +3324,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "gain_typed",
-        |mut c: C<W>, player_id: i32, amount: i32, tp: i32, tl: i32, xp: i32, xl: i32| -> Result<i32, Error> {
-            hostfns::gain_typed(&mut c, player_id, amount, tp, tl, xp, xl).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         player_id: i32,
+         amount: i32,
+         tp: i32,
+         tl: i32,
+         xp: i32,
+         xl: i32|
+         -> Result<i32, Error> {
+            hostfns::gain_typed(&mut c, player_id, amount, tp, tl, xp, xl)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3298,13 +3371,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::pay_leg(&mut c, from, to, amount, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "player_count",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::player_count(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "player_count", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::player_count(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "player_out",
@@ -3417,13 +3486,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::tile_in(&mut c, player_id, tile, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "paid_in_settle",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::paid_in_settle(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "paid_in_settle", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::paid_in_settle(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "turn_rolls",
@@ -3753,13 +3818,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::shuffle_into_deck(&mut c, player_id, hand, discard).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "unplace_card",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::unplace_card(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "unplace_card", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::unplace_card(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "event_expire",
@@ -3809,20 +3870,12 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::card_prop(&mut c, ip, il, kp, kl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "is_placed",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::is_placed(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "self_tile",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::self_tile(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "is_placed", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::is_placed(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "self_tile", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::self_tile(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_self_tile",
@@ -3830,13 +3883,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_self_tile(&mut c, tile).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "self_face_down",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::self_face_down(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "self_face_down", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::self_face_down(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_self_face_down",
@@ -3844,13 +3893,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_self_face_down(&mut c, on).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "self_immune",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::self_immune(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "self_immune", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::self_immune(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_self_immune",
@@ -4009,19 +4054,31 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "gain_marker",
-        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, p: i32, len: i32| -> Result<i32, Error> {
+        |mut c: C<W>,
+         player_id: i32,
+         np: i32,
+         nl: i32,
+         n: i32,
+         p: i32,
+         len: i32|
+         -> Result<i32, Error> {
             let name = hostfns::guest_str(&mut c, np, nl).map_err(HostErr::into_err)?;
-            hostfns::gain_marker(&mut c, player_id, &name, n, p, len)
-                .map_err(HostErr::into_err)
+            hostfns::gain_marker(&mut c, player_id, &name, n, p, len).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "spend_marker",
-        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, p: i32, len: i32| -> Result<i32, Error> {
+        |mut c: C<W>,
+         player_id: i32,
+         np: i32,
+         nl: i32,
+         n: i32,
+         p: i32,
+         len: i32|
+         -> Result<i32, Error> {
             let name = hostfns::guest_str(&mut c, np, nl).map_err(HostErr::into_err)?;
-            hostfns::spend_marker(&mut c, player_id, &name, n, p, len)
-                .map_err(HostErr::into_err)
+            hostfns::spend_marker(&mut c, player_id, &name, n, p, len).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4044,7 +4101,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "state_set_flags",
         |mut c: C<W>, player_id: i32, kp: i32, kn: i32, flags: i32| -> Result<(), Error> {
             let key = hostfns::guest_str(&mut c, kp, kn).map_err(HostErr::into_err)?;
-            hostfns::state_set_flags(&mut c, player_id, &key, flags as u8).map_err(HostErr::into_err)
+            hostfns::state_set_flags(&mut c, player_id, &key, flags as u8)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4112,27 +4170,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::cant_move(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "turn_player",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::turn_player(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "round_no",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::round_no(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "turn_key",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::turn_key(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "turn_player", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::turn_player(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "round_no", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::round_no(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "turn_key", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::turn_key(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "persona_is",
@@ -4196,13 +4242,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_extreme(&mut c, v).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "play_from_hand",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::play_from_hand(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "play_from_hand", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::play_from_hand(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "gain_fixed",
@@ -4214,16 +4256,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         m,
         "set_card_face_down",
         |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, down: i32| -> Result<i32, Error> {
-            hostfns::set_card_face_down(&mut c, player_id, cptr, cl, down).map_err(HostErr::into_err)
+            hostfns::set_card_face_down(&mut c, player_id, cptr, cl, down)
+                .map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "clear_dice",
-        |mut c: C<W>| -> Result<(), Error> {
-            hostfns::clear_dice(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "clear_dice", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::clear_dice(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_card_immune",
@@ -4248,8 +4287,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "place_card_on",
-        |mut c: C<W>, player_id: i32, tile: i32, cptr: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::place_card_on(&mut c, player_id, tile, cptr, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         player_id: i32,
+         tile: i32,
+         cptr: i32,
+         cl: i32,
+         p: i32,
+         n: i32|
+         -> Result<i32, Error> {
+            hostfns::place_card_on(&mut c, player_id, tile, cptr, cl, p, n)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4287,13 +4334,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::transfer_to_dest(&mut c, to, dest).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "rent_unit_mult",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::rent_unit_mult(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "rent_unit_mult", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::rent_unit_mult(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "add_rent_unit_bonus",
@@ -4402,7 +4445,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "buy_quotes",
-        |mut c: C<W>, player_id: i32, kind: i32, buf: i32, n: i32, out: i32| -> Result<i32, Error> {
+        |mut c: C<W>,
+         player_id: i32,
+         kind: i32,
+         buf: i32,
+         n: i32,
+         out: i32|
+         -> Result<i32, Error> {
             hostfns::buy_quotes(&mut c, player_id, kind, buf, n, out).map_err(HostErr::into_err)
         },
     )?;
@@ -4504,13 +4553,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::placed_tile(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "play_doubled",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::play_doubled(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "play_doubled", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::play_doubled(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_play_doubled",
@@ -4525,13 +4570,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_cards(&mut c, buf, cap).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "opt_int",
-        |mut c: C<W>, v: i32| -> Result<(), Error> {
-            hostfns::opt_int(&mut c, v).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "opt_int", |mut c: C<W>, v: i32| -> Result<(), Error> {
+        hostfns::opt_int(&mut c, v).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "opt_str",
@@ -4553,17 +4594,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::opt_price(&mut c, price).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "opt_ai",
-        |mut c: C<W>, ai: i32| -> Result<(), Error> {
-            hostfns::opt_ai(&mut c, ai).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "opt_ai", |mut c: C<W>, ai: i32| -> Result<(), Error> {
+        hostfns::opt_ai(&mut c, ai).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "ask",
-        |mut c: C<W>, kind: i32, player_id: i32, tp: i32, tl: i32, xp: i32, xl: i32| -> Result<i32, Error> {
+        |mut c: C<W>,
+         kind: i32,
+         player_id: i32,
+         tp: i32,
+         tl: i32,
+         xp: i32,
+         xl: i32|
+         -> Result<i32, Error> {
             hostfns::ask(&mut c, kind, player_id, tp, tl, xp, xl).map_err(HostErr::into_err)
         },
     )?;
@@ -4574,62 +4618,30 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_kind(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "trig_player",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_player(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_target",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_target(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_tile",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_tile(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_value",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_value(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_step",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_step(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_by_card",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_by_card(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_pay_is_rent",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_pay_is_rent(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_move_kind",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_move_kind(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "trig_player", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_player(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_target", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_target(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_tile", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_tile(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_value", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_value(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_step", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_step(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_by_card", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_by_card(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_pay_is_rent", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_pay_is_rent(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_move_kind", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_move_kind(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_move_resolve",
@@ -4644,13 +4656,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_move_tag(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "trig_move_main",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_move_main(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "trig_move_main", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_move_main(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_settle_redirect",
@@ -4658,13 +4666,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_settle_redirect(&mut c).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "trig_move_dir",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_move_dir(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "trig_move_dir", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_move_dir(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_move_remaining",
@@ -4672,55 +4676,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_move_remaining(&mut c).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "trig_move_from",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_move_from(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_move_total",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_move_total(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_move_roll",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_move_roll(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_roll_source",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_roll_source(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_buy_kind",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_buy_kind(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_seller",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_seller(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_price",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_price(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "trig_move_from", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_move_from(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_move_total", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_move_total(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_move_roll", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_move_roll(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_roll_source", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_roll_source(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_buy_kind", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_buy_kind(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_seller", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_seller(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_price", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_price(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_set_price",
@@ -4728,13 +4704,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_set_price(&mut c, v).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "trig_deal_owner",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_deal_owner(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "trig_deal_owner", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_deal_owner(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_set_deal_owner",
@@ -4742,13 +4714,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_set_deal_owner(&mut c, v).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "trig_deal_houses",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_deal_houses(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "trig_deal_houses", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_deal_houses(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_set_deal_houses",
@@ -4819,27 +4787,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trig_set_spare(&mut c, seat).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "trig_cancelled",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_cancelled(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_seq",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_seq(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "trig_answers",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::trig_answers(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "trig_cancelled", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_cancelled(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_seq", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_seq(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_answers", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_answers(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "trig_effect_count",
@@ -4885,9 +4841,17 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "declare_effect",
-        |mut c: C<W>, kp: i32, kl: i32, target: i32, from: i32, tile: i32, value: i32| -> Result<(), Error> {
+        |mut c: C<W>,
+         kp: i32,
+         kl: i32,
+         target: i32,
+         from: i32,
+         tile: i32,
+         value: i32|
+         -> Result<(), Error> {
             let kind = hostfns::guest_str(&mut c, kp, kl).map_err(HostErr::into_err)?;
-            hostfns::declare_effect(&mut c, &kind, target, from, tile, value).map_err(HostErr::into_err)
+            hostfns::declare_effect(&mut c, &kind, target, from, tile, value)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4932,13 +4896,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_fixed_roll(&mut c, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "fixed_roll",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::fixed_roll(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "fixed_roll", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::fixed_roll(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_next_steps",
@@ -4946,13 +4906,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_next_steps(&mut c, player_id, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "turn_main_steps",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::turn_main_steps(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "turn_main_steps", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::turn_main_steps(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_roller",
@@ -4960,13 +4916,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_roller(&mut c, v).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "set_steps",
-        |mut c: C<W>, v: i32| -> Result<(), Error> {
-            hostfns::set_steps(&mut c, v).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "set_steps", |mut c: C<W>, v: i32| -> Result<(), Error> {
+        hostfns::set_steps(&mut c, v).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_reverse",
@@ -5023,13 +4975,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_build_anywhere(&mut c, v).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "set_kind",
-        |mut c: C<W>, v: i32| -> Result<(), Error> {
-            hostfns::set_kind(&mut c, v).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "set_kind", |mut c: C<W>, v: i32| -> Result<(), Error> {
+        hostfns::set_kind(&mut c, v).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_teleport_to",
@@ -5145,62 +5093,30 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_more_steps(&mut c, v).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "move_stop_at",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_stop_at(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_stopped",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_stopped(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_parity",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_parity(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_resolve",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_resolve(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_steps",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_steps(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_remaining",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_remaining(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_total",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_total(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_dir",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_dir(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "move_stop_at", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_stop_at(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "move_stopped", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_stopped(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "move_parity", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_parity(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "move_resolve", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_resolve(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "move_steps", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_steps(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "move_remaining", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_remaining(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "move_total", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_total(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "move_dir", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_dir(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "join_redirect_target",
@@ -5208,13 +5124,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::join_redirect_target(&mut c).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(
-        m,
-        "set_join_used",
-        |mut c: C<W>| -> Result<(), Error> {
-            hostfns::set_join_used(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
+    l.func_wrap(m, "set_join_used", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::set_join_used(&mut c).map_err(HostErr::into_err)
+    })?;
 
     Ok(l)
 }

@@ -55,7 +55,9 @@ pub fn kaoru_01_mark_arm_no_fire(effects: &[Effect], player: i32) -> bool {
 
 /// MUTANT: the pot arm also removes a mark (both arms at once).
 pub fn kaoru_01_pot_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
-    effects.iter().any(|e| matches!(e, Effect::GainFire { player: p, n } if *p == player && *n == 1))
+    effects
+        .iter()
+        .any(|e| matches!(e, Effect::GainFire { player: p, n } if *p == player && *n == 1))
         && effects.len() >= 2
 }
 

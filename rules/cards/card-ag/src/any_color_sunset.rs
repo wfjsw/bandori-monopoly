@@ -90,8 +90,8 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         // 规则书: 「若为4则可选择补满火罐或者获得2000资金」
         4 => {
             // C# offers 「补满火罐」 only when `H.HasFireSkill(i) && H.Fire(i) < H.FireMax(i)`.
-            let can_fire =
-                bandori_std::fire::max(player_id) > 0 && bandori_std::fire::get(player_id) < bandori_std::fire::max(player_id);
+            let can_fire = bandori_std::fire::max(player_id) > 0
+                && bandori_std::fire::get(player_id) < bandori_std::fire::max(player_id);
             let mut take_money = true;
             if can_fire {
                 let pick = ctx::ask_pick(
@@ -109,7 +109,11 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                 // 规则书: 「补满火罐」 -- C# `H.GainFire(i, H.FireMax(i) - fire, ...)`.
                 let need = bandori_std::fire::max(player_id) - bandori_std::fire::get(player_id);
                 if need > 0 {
-                    bandori_std::fire::gain(player_id, need, &Msg::new(key!("any_color_sunset_why")))?;
+                    bandori_std::fire::gain(
+                        player_id,
+                        need,
+                        &Msg::new(key!("any_color_sunset_why")),
+                    )?;
                 }
             } else {
                 // 规则书: 「获得2000资金」

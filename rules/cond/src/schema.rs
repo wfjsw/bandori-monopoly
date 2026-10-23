@@ -91,7 +91,10 @@ fn is_operator(name: &str) -> bool {
 }
 
 fn is_macro(name: &str) -> bool {
-    matches!(name, "has" | "all" | "exists" | "exists_one" | "map" | "filter")
+    matches!(
+        name,
+        "has" | "all" | "exists" | "exists_one" | "map" | "filter"
+    )
 }
 
 /// True when `name` is a known constant, a VOCAB flat identifier (including
@@ -288,11 +291,13 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                         id: ent.id,
                         expr: match &ent.expr {
                             cel::common::ast::EntryExpr::MapEntry(me) => {
-                                cel::common::ast::EntryExpr::MapEntry(cel::common::ast::MapEntryExpr {
-                                    key: rewrite(&me.key)?,
-                                    value: rewrite(&me.value)?,
-                                    optional: me.optional,
-                                })
+                                cel::common::ast::EntryExpr::MapEntry(
+                                    cel::common::ast::MapEntryExpr {
+                                        key: rewrite(&me.key)?,
+                                        value: rewrite(&me.value)?,
+                                        optional: me.optional,
+                                    },
+                                )
                             }
                             cel::common::ast::EntryExpr::StructField(sf) => {
                                 cel::common::ast::EntryExpr::StructField(

@@ -175,10 +175,19 @@ fn g19_manas_join_window_lets_a_third_party_drop_one() {
         t.money(2),
         t.money(3)
     );
-    assert_eq!(t.money(0), 10_000, "P0 is exempted (真奈's user): {}", t.money(0));
+    assert_eq!(
+        t.money(0),
+        10_000,
+        "P0 is exempted (真奈's user): {}",
+        t.money(0)
+    );
     assert_eq!(t.money(2), 10_000 - x, "P2 pays {x}");
     assert_eq!(t.money(3), 10_000 - x, "P3 pays {x}");
-    assert_eq!(t.hand(3).len(), 1, "P3 draws 1 (真奈's draw for the joiner)");
+    assert_eq!(
+        t.hand(3).len(),
+        1,
+        "P3 draws 1 (真奈's draw for the joiner)"
+    );
 }
 
 // =====================================================================
@@ -244,7 +253,12 @@ fn g21_summer_camp_immune_to_the_rains_zone() {
     // 火罐」 then grants a fire pot -- from P2's **own** stay, not from absorbing
     // P1's (this scenario has no [经过], so the absorb clause never runs). The
     // old `fire == 0` assertion was wrong on that point (test fix 2026-10-13).
-    assert_eq!(t.state(2, "stay"), 1, "P2 is in the zone: {}", t.state(2, "stay"));
+    assert_eq!(
+        t.state(2, "stay"),
+        1,
+        "P2 is in the zone: {}",
+        t.state(2, "stay")
+    );
     assert_eq!(t.charge(2), 1, "P2 gains 1 fire from its own stay");
 }
 
@@ -362,6 +376,10 @@ fn g24_unstoppable_still_loses_the_stay_to_a_clear() {
         "a clear is not a new layer: the stay goes",
     );
     // 1000 per cleared type: P1 had one type (stay).
-    assert_eq!(t.money(1), 10_000 - 1000, "P1 pays 1000 for the cleared stay");
+    assert_eq!(
+        t.money(1),
+        10_000 - 1000,
+        "P1 pays 1000 for the cleared stay"
+    );
     assert_eq!(t.money(0), 10_000 + 1000, "P0 receives it");
 }

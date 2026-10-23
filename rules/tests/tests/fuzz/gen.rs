@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::OnceLock;
 
-use crate::common::{characters, Table};
 use super::rng::Rng;
+use crate::common::{characters, Table};
 
 /// One rule's footprint.
 #[derive(Clone, Debug, Default)]
@@ -29,8 +29,8 @@ static FOOTPRINTS: OnceLock<Footprints> = OnceLock::new();
 
 pub fn footprints() -> &'static Footprints {
     FOOTPRINTS.get_or_init(|| {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../docs/rulebook/footprints.json");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/rulebook/footprints.json");
         let raw = std::fs::read_to_string(&path).expect("footprints.json");
         let v: serde_json::Value = serde_json::from_str(&raw).expect("footprints parse");
         let mut by_rule = BTreeMap::new();

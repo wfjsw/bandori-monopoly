@@ -34,7 +34,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 1..=len from the match RNG, mapped down to a 0-based index.
     let face = roll(player_id, 1, open.len() as i32);
     let tile = open[(face - 1).clamp(0, open.len() as i32 - 1) as usize];
-    ctx::log(player_id, &Msg::new("log.event.estate_tile").tile("tile", tile));
+    ctx::log(
+        player_id,
+        &Msg::new("log.event.estate_tile").tile("tile", tile),
+    );
 
     // 规则书: 「然后所有玩家进行竞价，出价最大的玩家支付选择数量的资金并获得
     // 该格子的地契」 -- sealed high-bid: everyone states a bid in turn order, the
@@ -75,13 +78,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let pick = ctx::ask_pick(
             p,
             &Msg::new("log.event.estate_bid_title").tile("tile", tile),
-            &Msg::new("log.event.estate_bid_ask").tile("tile", tile).n("n", max as i64),
+            &Msg::new("log.event.estate_bid_ask")
+                .tile("tile", tile)
+                .n("n", max as i64),
             &options,
         )?;
         let bid = steps[pick.min(steps.len() - 1)];
         ctx::log(
             player_id,
-            &Msg::new("log.event.estate_bid").player_id("who", p).n("n", bid as i64),
+            &Msg::new("log.event.estate_bid")
+                .player_id("who", p)
+                .n("n", bid as i64),
         );
         // TODO(规则书): 「出价最大」 does not break a tie. Earliest seat in turn
         // order keeps the deed here.

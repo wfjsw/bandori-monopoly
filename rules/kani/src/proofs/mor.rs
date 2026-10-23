@@ -68,11 +68,7 @@ fn effects_of(buf: &mut [Effect; world::MAX_LOG]) -> usize {
 
 /// Sparse 2-seat play world on `dispatch`, then `f` for the card-specific
 /// fields. In-place only — no `reset_world` full-struct copy.
-fn sparse2(
-    dispatch: card_sdk::kani_host::Backend,
-    user: i32,
-    f: impl FnOnce(&mut world::World),
-) {
+fn sparse2(dispatch: card_sdk::kani_host::Backend, user: i32, f: impl FnOnce(&mut world::World)) {
     host::install_backend(dispatch);
     crate::harness::sparse_play_world(crate::harness::SparsePlay {
         used_seats: 2,
@@ -257,7 +253,10 @@ fn xiaobai_01_iff_at(user: i32) {
         "C-MOR-xiaobai-01: payment becomes a pure loss (target = bank)"
     );
     // Frame: the counteruser's money is untouched by this body.
-    crate::kassert!(post.money[user as usize] == pre.money[user as usize], "frame: counteruser money");
+    crate::kassert!(
+        post.money[user as usize] == pre.money[user as usize],
+        "frame: counteruser money"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
@@ -291,7 +290,10 @@ pub fn xiaobai_01_mutant_is_detected() {
     let effects = &ebuf[..log_n];
     let mutant = spec::xiaobai_01_effects_ok_mutant(&effects, payee, amount);
     kani::cover!(!mutant, "mutant disagrees");
-    crate::kassert!(!mutant, "mutant: card must not take the full amount from the payee");
+    crate::kassert!(
+        !mutant,
+        "mutant: card must not take the full amount from the payee"
+    );
 }
 
 // ===========================================================================
@@ -529,7 +531,10 @@ fn garden_01_gain_iff_at(user: i32) {
         post.money[user as usize] >= pre.money[user as usize] + 100,
         "C-MOR-garden-01: user gains 100 (at least)"
     );
-    kani::cover!(post.money[user as usize] == pre.money[user as usize] + 100, "exactly +100");
+    kani::cover!(
+        post.money[user as usize] == pre.money[user as usize] + 100,
+        "exactly +100"
+    );
 }
 
 #[kani::proof]
@@ -646,7 +651,10 @@ fn courage_03_unowned_iff_at(user: i32) {
     let effects = &ebuf[..log_n];
 
     kani::cover!(effects.is_empty(), "unowned: no effects (book)");
-    kani::cover!(!effects.is_empty(), "agent misfire or pay branch (host bug)");
+    kani::cover!(
+        !effects.is_empty(),
+        "agent misfire or pay branch (host bug)"
+    );
 
     // Book: unowned (and not agent) ⇒ empty log, money unchanged.
     // The empty limb is sound whenever it fires; the non-empty limb is the
@@ -767,8 +775,14 @@ fn courage_02_agent_iff_at(user: i32) {
 
     // The 1000-gain arm is what the body takes when `is_agent(roll_tile)`
     // (off-by-one) fires. Cover both outcomes.
-    kani::cover!(spec::courage_02_effects_ok(effects, user), "agent arm (host bit)");
-    kani::cover!(!spec::courage_02_effects_ok(effects, user), "not the agent arm");
+    kani::cover!(
+        spec::courage_02_effects_ok(effects, user),
+        "agent arm (host bit)"
+    );
+    kani::cover!(
+        !spec::courage_02_effects_ok(effects, user),
+        "not the agent arm"
+    );
     if spec::courage_02_effects_ok(effects, user) {
         crate::kassert!(
             post.money[user as usize] == pre.money[user as usize] + 1000
@@ -1113,9 +1127,11 @@ fn starry_06_payout_iff_at(user: i32) {
             "C-MOR-starry-02: empty crystals ⇒ dest = Graveyard"
         );
     }
-    crate::kassert!(post.money[user as usize] == pre.money[user as usize] + 1000 * removed
-        || pre.money[user as usize] > i32::MAX - 1000 * removed,
-        "C-MOR-starry-06: post money = pre + 1000·removed");
+    crate::kassert!(
+        post.money[user as usize] == pre.money[user as usize] + 1000 * removed
+            || pre.money[user as usize] > i32::MAX - 1000 * removed,
+        "C-MOR-starry-06: post money = pre + 1000·removed"
+    );
 }
 
 #[kani::proof]
@@ -1344,7 +1360,9 @@ fn nnm_world(user: i32, crystals: i32) {
 fn nnm_05_empty_discard_iff_at(user: i32) {
     // Crystals just hit 0 (`value <= 0`, count is 0) on a placed instance.
     nnm_world(user, 0);
-    invoke::unwrap_done(card_morfonica::nanami_effort::on_crystals_changed_kani(user));
+    invoke::unwrap_done(card_morfonica::nanami_effort::on_crystals_changed_kani(
+        user,
+    ));
     kani::cover!(true, "body returned");
     let dest = world::with_world(|w| w.dest);
 
@@ -1417,7 +1435,9 @@ fn nnm_05_atend_at(user: i32) {
         w.field_n = 1;
         w.dest = 2;
     });
-    invoke::unwrap_done(card_morfonica::nanami_effort::discard_down_to_five_kani(user));
+    invoke::unwrap_done(card_morfonica::nanami_effort::discard_down_to_five_kani(
+        user,
+    ));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1427,7 +1447,9 @@ fn nnm_05_atend_at(user: i32) {
     // AtEnd only touches the hand; the field card stays. (4) is the
     // CounterChanged hook, not this entry.
     crate::kassert!(
-        !effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. })),
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::UnplaceCard { .. })),
         "C-MOR-nnm-05: AtEnd must not be the discard-on-empty path (and is not)"
     );
     crate::kassert!(
@@ -1617,9 +1639,15 @@ fn tritone_02_tick_iff_at(user: i32) {
             "C-MOR-tritone-02: owner pays back the loan (OPEN-三全音收款人: bank)"
         );
         let dest = world::with_world(|w| w.dest);
-        crate::kassert!(dest == 0, "C-MOR-tritone-02: empty crystals ⇒ dest = Graveyard");
+        crate::kassert!(
+            dest == 0,
+            "C-MOR-tritone-02: empty crystals ⇒ dest = Graveyard"
+        );
     } else {
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money on a decay-only tick");
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "frame: money on a decay-only tick"
+        );
         let dest = world::with_world(|w| w.dest);
         crate::kassert!(dest == 2, "frame: dest unchanged on a decay-only tick");
     }
@@ -1717,7 +1745,10 @@ fn noble_02_mark_iff_at(user: i32) {
         spec::noble_02_mark_ok(effects, pos),
         "C-MOR-noble-02: mark lands on the tile (OPEN-触发结算 not pinned)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (settle is a stub)");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money (settle is a stub)"
+    );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
@@ -1782,8 +1813,7 @@ pub fn noble_02_mutant_is_detected() {
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let mutant = log_n == 1
-        && matches!(effects[0], Effect::PlaceMark { tile, .. } if tile == 0);
+    let mutant = log_n == 1 && matches!(effects[0], Effect::PlaceMark { tile, .. } if tile == 0);
     kani::cover!(!mutant, "mutant disagrees");
     crate::kassert!(!mutant, "mutant: mark must not land on tile 0");
 }
@@ -1841,7 +1871,10 @@ fn again_02_cancel_iff_at(user: i32) {
         dest == 0,
         "C-MOR-again-02: card is sent to the discard (dest = Graveyard)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (cancel only)");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money (cancel only)"
+    );
 }
 
 #[kani::proof]
@@ -1934,7 +1967,10 @@ fn wing_01_teleport_iff_at(user: i32) {
         post.pos[user as usize] == want,
         "C-MOR-wing-01: user lands on the teleport destination"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (no settle)");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money (no settle)"
+    );
 }
 
 #[kani::proof]
@@ -1962,7 +1998,10 @@ pub fn wing_01_dir_stub_gap() {
     kani::assume(pos >= 0 && pos < 60);
     let book = spec::wing_01_dest(pos, 1); // forward
     let stub = spec::wing_01_dest(pos, 0); // Op::move_dir stub
-    kani::cover!(book != stub, "book forward ≠ stub (BLOCKED-HOST on Op::move_dir)");
+    kani::cover!(
+        book != stub,
+        "book forward ≠ stub (BLOCKED-HOST on Op::move_dir)"
+    );
     crate::kassert!(
         book != stub,
         "C-MOR-wing-01 BLOCKED-HOST: move_dir stub cannot express 「移动方向」"

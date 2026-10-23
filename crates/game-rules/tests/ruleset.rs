@@ -13,7 +13,6 @@
 mod testworld;
 use testworld::*;
 
-
 #[test]
 fn bad_handle_is_rejected() {
     let r = ruleset();
@@ -26,7 +25,9 @@ fn bad_handle_is_rejected() {
                 card: bad,
                 player_id: 0
             },
-            &[], None),
+            &[],
+            None
+        ),
         Err(RuleError::NoSuchCard(_))
     ));
 }
@@ -54,18 +55,20 @@ fn duplicate_card_ids_are_rejected() {
     assert!(matches!(b.build(), Err(RuleError::DuplicateCard(_))));
 }
 
-
 #[test]
 fn runaway_nesting_is_stopped() {
     let r = load(&["cards", "fixtures"]);
     let card = r.card("TEST:recurse").unwrap();
     let err = r
-        .run(&TestWorld::new(1), Call::Play { card, player_id: 0 }, &[], None)
+        .run(
+            &TestWorld::new(1),
+            Call::Play { card, player_id: 0 },
+            &[],
+            None,
+        )
         .unwrap_err();
     assert!(
         matches!(err, RuleError::Trap(ref m) if m.contains("nested deeper")),
         "{err}"
     );
 }
-
-

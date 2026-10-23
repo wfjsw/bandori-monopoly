@@ -27,9 +27,9 @@
 //! spends both kinds.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{counter, mark, ActionKind, MarkFilter, Message, Target, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{counter, mark, ActionKind, MarkFilter, Message, Target, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CLEAR_CP: CardDef = CardDef::new(
     "通用:该清CP了",
@@ -98,9 +98,7 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
     let mut free = Vec::new();
     for t in 0..n {
         let taken = (0..players).any(|s| !ctx::player_out(s) && ctx::player_pos(s) == t);
-        if !taken
-            && ctx::count_marks(t, &MarkFilter::any().category(mark::CP_CATEGORY)) == 0
-        {
+        if !taken && ctx::count_marks(t, &MarkFilter::any().category(mark::CP_CATEGORY)) == 0 {
             free.push(t);
         }
     }
@@ -169,7 +167,9 @@ fn place_tile_cp(tile: i32) -> card_sdk::Asked {
 /// Pure guard for [`spread`] -- the activation gate. `false` means the card is
 /// not activated at all.
 fn spread_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::kind() == TriggerKind::TurnStart && trigger::player_id() == player_id
+    ctx::is_placed()
+        && trigger::kind() == TriggerKind::TurnStart
+        && trigger::player_id() == player_id
 }
 
 /// 规则书（1）[特]: 「[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]

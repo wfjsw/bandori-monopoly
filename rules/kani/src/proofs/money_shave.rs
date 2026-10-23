@@ -165,11 +165,23 @@ pub fn aya_haruka_02_shave_iff() {
         );
     }
 
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money unchanged at rewrite time"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.pos, pre.pos),
+        "frame: positions unchanged"
+    );
+    crate::kassert!(
+        world::arr4_eq(post.charge, pre.charge),
+        "frame: fire unchanged"
+    );
     crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
-    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
+    crate::kassert!(
+        world::arr8b_eq(post.hand, pre.hand),
+        "frame: hand unchanged"
+    );
     crate::kassert!(post.discard == pre.discard, "frame: discard unchanged");
 }
 
@@ -215,7 +227,10 @@ pub fn aya_haruka_02_shave_poorest() {
         spec::aya_haruka_02_log_ok(effects, expected),
         "C-PP-aya-haruka-02: effect log must be exactly the pay-amount rewrite"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
+    crate::kassert!(
+        world::arr4_eq(post.money, pre.money),
+        "frame: money unchanged at rewrite time"
+    );
 }
 
 /// SPLIT of `aya_haruka_02_shave_iff` (not-poorest half): the body must
@@ -241,7 +256,10 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
-    crate::kassert!(log_n == 0, "C-PP-aya-haruka-02: non-poorest owner must produce no effects");
+    crate::kassert!(
+        log_n == 0,
+        "C-PP-aya-haruka-02: non-poorest owner must produce no effects"
+    );
     crate::kassert!(
         post.pay_amount == pre_amount,
         "C-PP-aya-haruka-02: non-poorest owner must not touch the amount"
@@ -273,10 +291,8 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
     };
     invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
     let post = world::snapshot();
-    let x = spec::aya_haruka_02_x_mutant(
-        pre.fans_pos[owner as usize],
-        pre.fans_neg[owner as usize],
-    );
+    let x =
+        spec::aya_haruka_02_x_mutant(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
     crate::kassert!(post.pay_amount == expected);
 }
@@ -303,10 +319,8 @@ pub fn aya_haruka_02_mutant_is_detected() {
     };
     invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
     let post = world::snapshot();
-    let x = spec::aya_haruka_02_x_mutant(
-        pre.fans_pos[owner as usize],
-        pre.fans_neg[owner as usize],
-    );
+    let x =
+        spec::aya_haruka_02_x_mutant(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
     // The card does X, the mutant wants X+1: they must differ.
     crate::kassert!(post.pay_amount != expected);

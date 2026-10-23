@@ -65,8 +65,14 @@ macro_rules! fire_pass_leaf_iff_at {
             post.charge[user as usize] == pre.charge[user as usize] + spec::fire_pass_gain(),
             "fire is pre+1"
         );
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "frame: money unchanged"
+        );
+        crate::kassert!(
+            world::arr4_eq(post.pos, pre.pos),
+            "frame: positions unchanged"
+        );
     }};
 }
 

@@ -38,11 +38,17 @@ fn plan_fixed_roll_matches_ctx() {
     // `CardWorld::fixed_roll` (-1 = unset). CEL binds `null` when unset.
     let mut w = world(12, &[0, 1, 2, 3], &[-1; 12]);
     assert_eq!(w.fixed_roll(), -1, "guest: unset");
-    assert!(ask(&w, "plan.fixed_roll == null", 0, "TEST:x", false), "CEL: null");
+    assert!(
+        ask(&w, "plan.fixed_roll == null", 0, "TEST:x", false),
+        "CEL: null"
+    );
 
     w.fixed_roll = Some(10);
     assert_eq!(w.fixed_roll(), 10, "guest: 10");
-    assert!(ask(&w, "plan.fixed_roll == 10", 0, "TEST:x", false), "CEL: 10");
+    assert!(
+        ask(&w, "plan.fixed_roll == 10", 0, "TEST:x", false),
+        "CEL: 10"
+    );
     assert!(!ask(&w, "plan.fixed_roll == null", 0, "TEST:x", false));
 }
 
@@ -74,17 +80,35 @@ fn card_tile_matches_ctx_self_tile() {
     assert_eq!(w.tile_at(0), 5, "guest self_tile raw");
     let cand = cond_pre::fill_candidate(&w, 0, "MyGO:（乐奈）有趣的女人", true);
     assert_eq!(cand.card_tile, Some(5), "snapshot");
-    assert!(ask(&w, "card.tile == 5", 0, "MyGO:（乐奈）有趣的女人", true));
+    assert!(ask(
+        &w,
+        "card.tile == 5",
+        0,
+        "MyGO:（乐奈）有趣的女人",
+        true
+    ));
 
     // With its owner: tile -1.
     w.field = vec![("MyGO:（乐奈）有趣的女人".to_string(), -1)];
     assert_eq!(w.tile_at(0), -1);
-    assert!(ask(&w, "card.tile == -1", 0, "MyGO:（乐奈）有趣的女人", true));
+    assert!(ask(
+        &w,
+        "card.tile == -1",
+        0,
+        "MyGO:（乐奈）有趣的女人",
+        true
+    ));
 
     // Not placed: the fill leaves `card_tile` None -> binds -2.
     let cand = cond_pre::fill_candidate(&w, 0, "MyGO:（乐奈）有趣的女人", false);
     assert_eq!(cand.card_tile, None);
-    assert!(ask(&w, "card.tile == -2", 0, "MyGO:（乐奈）有趣的女人", false));
+    assert!(ask(
+        &w,
+        "card.tile == -2",
+        0,
+        "MyGO:（乐奈）有趣的女人",
+        false
+    ));
 }
 
 // ------------------------------------------------------------- geometry
@@ -130,7 +154,13 @@ fn players_on_matches_ctx() {
     for (tile, except) in [(5, 0), (5, -1), (5, 1), (0, -1), (0, 2)] {
         let c = ref_players_on(&w, tile, except);
         assert!(
-            ask(&w, &format!("players_on({tile}, {except}) == {c}"), 0, "TEST:x", false),
+            ask(
+                &w,
+                &format!("players_on({tile}, {except}) == {c}"),
+                0,
+                "TEST:x",
+                false
+            ),
             "players_on({tile},{except}) should be {c}"
         );
     }
@@ -174,7 +204,13 @@ fn next_dist_matches_ctx() {
     for (p, dir) in [(0, 1), (0, -1), (1, 1), (1, -1), (2, 1)] {
         let d = ref_next_dist(&w, p, dir);
         assert!(
-            ask(&w, &format!("next_dist({p}, {dir}) == {d}"), 0, "TEST:x", false),
+            ask(
+                &w,
+                &format!("next_dist({p}, {dir}) == {d}"),
+                0,
+                "TEST:x",
+                false
+            ),
             "next_dist({p},{dir}) should be {d}"
         );
     }
@@ -207,7 +243,13 @@ fn others_within_matches_ctx() {
     for (p, r) in [(0, 0), (0, 1), (0, 2), (0, 5), (1, 3)] {
         let c = ref_others_within(&w, p, r);
         assert!(
-            ask(&w, &format!("others_within({p}, {r}) == {c}"), 0, "TEST:x", false),
+            ask(
+                &w,
+                &format!("others_within({p}, {r}) == {c}"),
+                0,
+                "TEST:x",
+                false
+            ),
             "others_within({p},{r}) should be {c}"
         );
     }
@@ -226,11 +268,21 @@ fn ref_owned_within(w: &TestWorld, p: i32, radius: i32) -> i32 {
 
 #[test]
 fn owned_within_matches_ctx() {
-    let w = world(12, &[0, 3, 6, 9], &[0, 0, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1]);
+    let w = world(
+        12,
+        &[0, 3, 6, 9],
+        &[0, 0, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1],
+    );
     for (p, r) in [(0, 0), (0, 3), (0, 6), (1, 1), (1, 4)] {
         let c = ref_owned_within(&w, p, r);
         assert!(
-            ask(&w, &format!("owned_within({p}, {r}) == {c}"), 0, "TEST:x", false),
+            ask(
+                &w,
+                &format!("owned_within({p}, {r}) == {c}"),
+                0,
+                "TEST:x",
+                false
+            ),
             "owned_within({p},{r}) should be {c}"
         );
     }
@@ -277,12 +329,22 @@ fn set_move(w: &mut TestWorld, roll: Option<i32>, dir: i32) {
 
 #[test]
 fn on_path_matches_ctx() {
-    let mut w = world(12, &[0, 2, 5, 9], &[-1, -1, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1]);
+    let mut w = world(
+        12,
+        &[0, 2, 5, 9],
+        &[-1, -1, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1],
+    );
     set_move(&mut w, Some(5), 1);
     for (me, them) in [(0, 1), (0, 2), (1, 0), (1, 1)] {
         let c = ref_on_path(&w, me, them, 5);
         assert!(
-            ask(&w, &format!("on_path({me}, {them}) == {c}"), 0, "TEST:x", false),
+            ask(
+                &w,
+                &format!("on_path({me}, {them}) == {c}"),
+                0,
+                "TEST:x",
+                false
+            ),
             "on_path({me},{them}) should be {c}"
         );
     }
@@ -354,7 +416,13 @@ fn repeated_digits_matches_reference() {
         (100, true),
     ] {
         assert!(
-            ask(&w_test(), &format!("repeated_digits({n}) == {want}"), 0, "TEST:x", false),
+            ask(
+                &w_test(),
+                &format!("repeated_digits({n}) == {want}"),
+                0,
+                "TEST:x",
+                false
+            ),
             "repeated_digits({n}) should be {want}"
         );
     }

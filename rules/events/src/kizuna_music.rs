@@ -3,8 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `Kizuna Music`）:
 //! > 触发此卡的玩家投掷X+1d20并所有玩家依次[传送]到投掷结果mod60所对应的格子并获得1层[除外]，X为所有玩家卡组里卡名为歌名的卡数量的总数
 
-use card_sdk::abi::{prop, CardPile};
 use bandori_std::ctx;
+use card_sdk::abi::{prop, CardPile};
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
@@ -41,12 +41,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let x = song_count();
     ctx::log(
         player_id,
-        &Msg::new("log.event.kizuna_x").player_id("who", player_id).i("n", x as i64),
+        &Msg::new("log.event.kizuna_x")
+            .player_id("who", player_id)
+            .i("n", x as i64),
     );
     let face = x + roll(player_id, 1, 20);
     ctx::log(
         player_id,
-        &Msg::new("log.event.dice").player_id("who", player_id).i("n", face as i64),
+        &Msg::new("log.event.dice")
+            .player_id("who", player_id)
+            .i("n", face as i64),
     );
     // 「投掷结果mod60所对应的格子」 -- the board is 60 tiles (0..=59).
     let dest = face.rem_euclid(60);

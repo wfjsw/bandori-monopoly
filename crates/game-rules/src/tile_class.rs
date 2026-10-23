@@ -176,7 +176,13 @@ pub fn class_rows(
     if world.tile_prop_keys(tile).any(is_class_prop) {
         return false;
     }
-    class_rows_plain(data, tile as i64, world.st.players.len() as i32, classes, out);
+    class_rows_plain(
+        data,
+        tile as i64,
+        world.st.players.len() as i32,
+        classes,
+        out,
+    );
     true
 }
 

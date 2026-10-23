@@ -7,9 +7,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{
-    arrange_rich, drain_first, footprints, quiet, surface_of, Finding, Severity,
-};
+use super::{arrange_rich, drain_first, footprints, quiet, surface_of, Finding, Severity};
 use crate::fuzz::rng::Rng;
 use crate::q4::snap::{diff, snapshot, Delta};
 
@@ -88,7 +86,11 @@ fn scoped_delta(deltas: &[Delta], rule: &str) -> Vec<(String, String, String)> {
         .filter_map(|d| {
             let s = surface_of(&d.path)?;
             if declared.contains(s) {
-                Some((s.to_string(), d.path.clone(), format!("{}->{}", d.before, d.after)))
+                Some((
+                    s.to_string(),
+                    d.path.clone(),
+                    format!("{}->{}", d.before, d.after),
+                ))
             } else {
                 None
             }
@@ -238,7 +240,10 @@ pub fn findings(runs: &[PairRun]) -> Vec<Finding> {
                 "unintended: disjoint pair {} x {} diverges on {} ({})",
                 r.a, r.b, path, detail
             ),
-            repro: format!("seed={} b_alone={} b_after_a={}", r.seed, r.b_alone_len, r.b_after_a_len),
+            repro: format!(
+                "seed={} b_alone={} b_after_a={}",
+                r.seed, r.b_alone_len, r.b_after_a_len
+            ),
             severity: severity_of(surf),
         });
     }

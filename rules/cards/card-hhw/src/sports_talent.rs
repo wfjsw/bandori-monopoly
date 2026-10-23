@@ -5,9 +5,9 @@
 //! >  将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。
 //!
 
-use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const ID: &str = "HHW:运动的天赋";
 

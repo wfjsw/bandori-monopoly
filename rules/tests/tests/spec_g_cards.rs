@@ -20,7 +20,7 @@ use rules_spec::global::cards::{
     g_cards_01, g_cards_06, g_cards_11, g_cards_12, pile_multiset, CLAUSES,
 };
 use rules_spec::table::settle_match;
-use rules_spec::{data, observe, rules, forall, Clause, StepAct, Table};
+use rules_spec::{data, forall, observe, rules, Clause, StepAct, Table};
 
 // ---------------------------------------------------------------------------
 // local helpers (the Table harness auto-answers the mulligan; these do not)
@@ -116,7 +116,11 @@ fn open_at_mulligan(chars: &[&str], top_first: &[&str]) -> Match {
 /// and redraw). Returns the observed step's clause result.
 fn answer_mulligan(m: &mut Match, who: usize, redo: bool) -> Result<(), String> {
     let p = m.state().prompt;
-    assert_eq!(p.kind, "mulligan", "expected the mulligan prompt: {:?}", p.title);
+    assert_eq!(
+        p.kind, "mulligan",
+        "expected the mulligan prompt: {:?}",
+        p.title
+    );
     let act = StepAct::Answer {
         who: who as i32 + 1,
         prompt: p.id,
@@ -154,7 +158,9 @@ fn card_with_tag(tag: &str, not_tag: Option<&str>) -> String {
         .iter()
         .find(|c| {
             c.tags.iter().any(|t| t == tag)
-                && not_tag.map(|n| !c.tags.iter().any(|t| t == n)).unwrap_or(true)
+                && not_tag
+                    .map(|n| !c.tags.iter().any(|t| t == n))
+                    .unwrap_or(true)
         })
         .unwrap_or_else(|| panic!("no card tagged {tag:?}"))
         .id
@@ -177,7 +183,6 @@ fn buyable(name: &str) -> usize {
         .position(|t| t.name == name && t.is_buyable())
         .unwrap_or_else(|| panic!("no buyable tile named {name:?}"))
 }
-
 
 /// A skill-free table at P0's 运营: named characters, skills stripped, board
 /// cleaned. Avoids the first-N-character presets (PPP:Returns and friends
@@ -331,13 +336,11 @@ fn g_cards_10_mulligan_keep_is_quiet_and_once() {
     assert_eq!(before.len(), 2);
     answer_mulligan_all(&mut m, None);
     assert_eq!(
-        m.world().hidden[0].hand, before,
+        m.world().hidden[0].hand,
+        before,
         "keep leaves the opening hand alone"
     );
-    assert_eq!(
-        m.state().prompt.id, 0,
-        "no second mulligan after the keep"
-    );
+    assert_eq!(m.state().prompt.id, 0, "no second mulligan after the keep");
     // A later turn must not re-offer.
     m.world_mut().next_turn_pending = true;
     settle_match(&mut m);
@@ -350,7 +353,12 @@ fn g_cards_10_mulligan_keep_is_quiet_and_once() {
 fn g_cards_10_mulligan_redraws_two_exactly_once() {
     // Seed P0's draw pile under the deal so the redo's shuffle is observable
     // as a multiset (order is random; names are not).
-    let top = ["通用:GREAT!", "通用:PERFECT!", "通用:FEVER!", "通用:THANKS PARTY!"];
+    let top = [
+        "通用:GREAT!",
+        "通用:PERFECT!",
+        "通用:FEVER!",
+        "通用:THANKS PARTY!",
+    ];
     let mut m = open_at_mulligan(&["美竹兰", "青叶摩卡"], &top);
     let hand_before: Vec<String> = m.world().hidden[0].hand.clone();
     let pile_before: Vec<String> = m.world().hidden[0].draw.clone();
@@ -363,7 +371,8 @@ fn g_cards_10_mulligan_redraws_two_exactly_once() {
     answer_mulligan_all(&mut m, Some(0));
     let after = piles(m.world(), 0);
     assert_eq!(
-        before, after,
+        before,
+        after,
         "mulligan is a wash-and-redraw: multiset conserved \
          (pre [{}] vs post [{}])",
         piles_str(&before),
@@ -499,7 +508,8 @@ fn g_cards_03_non_continuous_play_goes_to_discard() {
         t.set_discard(0, &["通用:FEVER!"]);
         let pre = piles(t.world(), 0);
         t.observe(CLAUSES);
-        t.play(0, &card).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, &card)
+            .map_err(|e| format!("play rejected: {e}"))?;
         let post = piles(t.world(), 0);
         // Non-[持续], no [移除] / return-to-hand: the triple is conserved and
         // the card sits in the discard.
@@ -556,7 +566,8 @@ fn g_cards_03_continuous_play_stays_on_the_field() {
         expect.remove(&card);
     }
     assert_eq!(
-        expect, post,
+        expect,
+        post,
         "hand+draw+discard loses exactly the [持续] card: \
          pre [{}] expect [{}] post [{}]",
         piles_str(&pre),
@@ -668,8 +679,18 @@ fn draw_with_reshuffle_after_a_lazy_header_logs_once_each() {
     assert_eq!(lands, 1, "exactly one landing line: {keys:?}");
     assert_eq!(reshuffles, 1, "exactly one reshuffle: {keys:?}");
     assert_eq!(draws, 1, "exactly one draw: {keys:?}");
-    assert_eq!(t.draw_pile(0).len(), 2, "reshuffle moved the 3, draw took 1: {:?}", t.draw_pile(0));
-    assert_eq!(t.discard(0).len(), 0, "discard emptied into the draw pile: {:?}", t.discard(0));
+    assert_eq!(
+        t.draw_pile(0).len(),
+        2,
+        "reshuffle moved the 3, draw took 1: {:?}",
+        t.draw_pile(0)
+    );
+    assert_eq!(
+        t.discard(0).len(),
+        0,
+        "discard emptied into the draw pile: {:?}",
+        t.discard(0)
+    );
     assert_eq!(t.hand(0).len(), 1, "one card drawn: {:?}", t.hand(0));
 }
 
@@ -753,11 +774,7 @@ fn g_cards_05_hand_play_outside_ops_is_refused() {
     let card = simple_hand_card();
     t.give(0, &[&card]);
     assert_eq!(t.turn(), 0, "vanilla starts on P0");
-    assert_eq!(
-        t.step(),
-        game_core::state::stage::OPS,
-        "P0 is in 运营"
-    );
+    assert_eq!(t.step(), game_core::state::stage::OPS, "P0 is in 运营");
     // Hand the turn to P1: P0's play is no longer P0's 运营.
     t.begin_turn(1);
     assert_eq!(t.turn(), 1);
@@ -781,10 +798,13 @@ fn g_cards_05_hand_play_in_move_stage_is_refused() {
     t.m.world_mut().st.step = game_core::state::stage::MOVE;
     // Drive the raw act: `Table::play` would settle, and a mid-move world is
     // not at rest. The refusal itself is the clause.
-    let r = t.m.act(1, &game_core::net::NetMessage {
-        card: card.clone(),
-        ..game_core::net::NetMessage::act("play")
-    });
+    let r = t.m.act(
+        1,
+        &game_core::net::NetMessage {
+            card: card.clone(),
+            ..game_core::net::NetMessage::act("play")
+        },
+    );
     assert!(
         r.is_err(),
         "a [手] play in the move stage must be refused, got {r:?}"
@@ -837,7 +857,9 @@ fn g_cards_06_limit_gate_anon_tokyo() {
     // The body designates a neighbouring tile and may prompt; accept the
     // play itself once the activation is logged.
     let keys = t.recent_keys(20);
-    let played = keys.iter().any(|k| k.contains("play") || k.contains("Anon"));
+    let played = keys
+        .iter()
+        .any(|k| k.contains("play") || k.contains("Anon"));
     if r.is_err() && !played {
         panic!("[限] X holds on 购物中心 but the play was refused: {r:?} keys={keys:?}");
     }
@@ -871,7 +893,8 @@ fn g_cards_11_event_draw_is_public_and_never_in_hand() {
     // never in a hand. The engine speaks the draw as `log.land_event` /
     // `log.event` / `card:event` depending on the path.
     assert!(
-        keys.iter().any(|k| k == "log.event" || k == "log.land_event" || k == "card:event"),
+        keys.iter()
+            .any(|k| k == "log.event" || k == "log.land_event" || k == "card:event"),
         "the event draw is logged (public): {keys:?}"
     );
     for who in 0..2 {
@@ -885,8 +908,8 @@ fn g_cards_11_event_draw_is_public_and_never_in_hand() {
     // The pile was a single card, so the same window then took that discard
     // as the new pile (G-CARDS-13) -- the event is in one of the two, never
     // in a hand and never in limbo.
-    let filed = t.event_discard().iter().any(|e| e == "对邦")
-        || t.event_deck().iter().any(|e| e == "对邦");
+    let filed =
+        t.event_discard().iter().any(|e| e == "对邦") || t.event_deck().iter().any(|e| e == "对邦");
     assert!(
         filed,
         "one-shot event filed to the event discard (or the reshuffled pile):          discard={:?} deck={:?} removed={:?}",
@@ -958,8 +981,7 @@ fn g_cards_13_event_discard_reshuffles_only_when_pile_empty() {
     // After 对邦 resolved and the pile emptied, the discard (对邦 + the old
     // 冲榜) becomes the new pile.
     assert!(
-        keys.iter().any(|k| k == "log.events_reshuffled")
-            || t.event_discard().is_empty(),
+        keys.iter().any(|k| k == "log.events_reshuffled") || t.event_discard().is_empty(),
         "the emptied pile took the discard: keys={keys:?} deck={:?} discard={:?}",
         t.event_deck(),
         t.event_discard()

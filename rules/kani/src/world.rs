@@ -102,14 +102,70 @@ pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
                 }
             };
         }
-        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-        step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-        step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-        step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-        step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-        step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-        step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-        step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+        step!(0);
+        step!(1);
+        step!(2);
+        step!(3);
+        step!(4);
+        step!(5);
+        step!(6);
+        step!(7);
+        step!(8);
+        step!(9);
+        step!(10);
+        step!(11);
+        step!(12);
+        step!(13);
+        step!(14);
+        step!(15);
+        step!(16);
+        step!(17);
+        step!(18);
+        step!(19);
+        step!(20);
+        step!(21);
+        step!(22);
+        step!(23);
+        step!(24);
+        step!(25);
+        step!(26);
+        step!(27);
+        step!(28);
+        step!(29);
+        step!(30);
+        step!(31);
+        step!(32);
+        step!(33);
+        step!(34);
+        step!(35);
+        step!(36);
+        step!(37);
+        step!(38);
+        step!(39);
+        step!(40);
+        step!(41);
+        step!(42);
+        step!(43);
+        step!(44);
+        step!(45);
+        step!(46);
+        step!(47);
+        step!(48);
+        step!(49);
+        step!(50);
+        step!(51);
+        step!(52);
+        step!(53);
+        step!(54);
+        step!(55);
+        step!(56);
+        step!(57);
+        step!(58);
+        step!(59);
+        step!(60);
+        step!(61);
+        step!(62);
+        step!(63);
         ok
     }
     if eq(b, CARD_AYA) {
@@ -763,8 +819,7 @@ pub struct World {
     /// predicate should set this from their own fixture.
     pub between_seat: [i32; MAX_PLAYERS],
 
-    
-// ---- prompt state ----
+    // ---- prompt state ----
     pub opt_n: i32,
     pub next_answer: usize,
     pub answers: [i32; MAX_ANSWERS],
@@ -1034,7 +1089,9 @@ impl World {
         }
     }
     pub fn field_cp(&self, uid: i32) -> i32 {
-        self.field_slot(uid).map(|f| f.props.get(NameId(1))).unwrap_or(0)
+        self.field_slot(uid)
+            .map(|f| f.props.get(NameId(1)))
+            .unwrap_or(0)
     }
     pub fn field_counter(&self, uid: i32, key: NameId) -> i32 {
         self.field_slot(uid).map(|f| f.props.get(key)).unwrap_or(0)
@@ -1303,26 +1360,24 @@ pub struct Snapshot {
 }
 
 pub fn snapshot() -> Snapshot {
-    with_world(|w| {
-        Snapshot {
-            n_players: w.n_players,
-            money: w.money,
-            out: w.out,
-            pos: w.pos,
-            charge: w.charge,
-            stay: w.stay,
-            stun: w.stun,
-            exile: w.exile,
-            fans_pos: w.fans_pos,
-            fans_neg: w.fans_neg,
-            hand_resonance: w.hand_resonance,
-            discard: w.discard,
-            hand: w.hand,
-            trig_player: w.trig_player,
-            trig_value: w.trig_value,
-            pay_amount: w.pay_amount,
-            log_n: w.log_n,
-        }
+    with_world(|w| Snapshot {
+        n_players: w.n_players,
+        money: w.money,
+        out: w.out,
+        pos: w.pos,
+        charge: w.charge,
+        stay: w.stay,
+        stun: w.stun,
+        exile: w.exile,
+        fans_pos: w.fans_pos,
+        fans_neg: w.fans_neg,
+        hand_resonance: w.hand_resonance,
+        discard: w.discard,
+        hand: w.hand,
+        trig_player: w.trig_player,
+        trig_value: w.trig_value,
+        pay_amount: w.pay_amount,
+        log_n: w.log_n,
     })
 }
 
@@ -1337,8 +1392,14 @@ pub fn arr4b_eq(a: [bool; 4], b: [bool; 4]) -> bool {
 }
 /// Element-wise `[bool; 8]` equality (`Snapshot::hand`).
 pub fn arr8b_eq(a: [bool; 8], b: [bool; 8]) -> bool {
-    a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
-        && a[4] == b[4] && a[5] == b[5] && a[6] == b[6] && a[7] == b[7]
+    a[0] == b[0]
+        && a[1] == b[1]
+        && a[2] == b[2]
+        && a[3] == b[3]
+        && a[4] == b[4]
+        && a[5] == b[5]
+        && a[6] == b[6]
+        && a[7] == b[7]
 }
 
 #[cfg(test)]

@@ -16,9 +16,9 @@
 //!
 //! place with N crystals; spend a crystal to cut a payment by 1,000.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "AG:绯红之魂";
 

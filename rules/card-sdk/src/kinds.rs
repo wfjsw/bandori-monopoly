@@ -719,11 +719,20 @@ mod tests {
     fn gate_value_drive_is_shared() {
         // `gate` is sugar for `payload(GateValue)` -- same drive.
         let g = Filter::ImmuneAll("", None, gate_body);
-        assert_eq!(g.drive as usize, drive_payload::<GateValue> as *const () as usize);
+        assert_eq!(
+            g.drive as usize,
+            drive_payload::<GateValue> as *const () as usize
+        );
         let p = Filter::PaySplitAdd("", None, |_p, v: PayAddValue| v);
-        assert_eq!(p.drive as usize, drive_payload::<PayAddValue> as *const () as usize);
+        assert_eq!(
+            p.drive as usize,
+            drive_payload::<PayAddValue> as *const () as usize
+        );
         let r = Filter::DiceRollValue("", None, |_p, v: RollValue| v);
-        assert_eq!(r.drive as usize, drive_payload::<RollValue> as *const () as usize);
+        assert_eq!(
+            r.drive as usize,
+            drive_payload::<RollValue> as *const () as usize
+        );
         let v = Filter::BuyAdd("", None, value_body);
         assert_eq!(v.drive as usize, drive_value as usize);
     }

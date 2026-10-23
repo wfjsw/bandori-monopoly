@@ -539,8 +539,15 @@ pub const BOARD_OWNER: i32 = -1;
 fn default_flags(key: &str) -> u8 {
     use state_flag::ENGINE_OWNED;
     match key {
-        key::HAND_LIMIT | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT
-        | key::REDEEMED | key::MORTGAGED | key::ABNORMAL_HIT | key::MOVE_EXEMPT
+        key::HAND_LIMIT
+        | key::START_HAND
+        | key::SKILL_STATE
+        | key::BUILT
+        | key::BOUGHT
+        | key::REDEEMED
+        | key::MORTGAGED
+        | key::ABNORMAL_HIT
+        | key::MOVE_EXEMPT
         | key::NO_COUNTERACT_TURN => ENGINE_OWNED,
         _ => 0,
     }
@@ -1179,7 +1186,6 @@ pub mod mark_kind {
     pub const DESIGNATE: &str = "mark:designate";
 }
 
-
 /// Wire shape of an optional card-instance id: the old field was an `i32`
 /// with `-1` = none. Serde keeps that spelling so `SAVE_VERSION` need not move.
 mod opt_i32_neg1 {
@@ -1261,8 +1267,7 @@ impl Default for TileMark {
     }
 }
 
-impl TileMark {
-}
+impl TileMark {}
 
 /// Named units held by a player. Under the bound-counter model
 /// these are units of some card instance's named counter, bound to a holder

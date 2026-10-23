@@ -455,13 +455,12 @@ fn run_match(
                     let line = req.to_string();
                     let view_bytes = line.len();
                     let (out, cpu, wall, _line) = wire_call(ctx, &line);
-                    let iterations = out
-                        .get("iterations")
-                        .and_then(Value::as_u64)
-                        .unwrap_or(0);
+                    let iterations = out.get("iterations").and_then(Value::as_u64).unwrap_or(0);
                     let reused = out.get("reused").and_then(Value::as_bool).unwrap_or(false);
-                    let heuristic =
-                        out.get("heuristic").and_then(Value::as_bool).unwrap_or(false);
+                    let heuristic = out
+                        .get("heuristic")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
                     st.reqs.push(ReqRec {
                         ponder: true,
                         surface,
@@ -540,9 +539,7 @@ fn run_match(
                 wall_ms: ms(wall),
                 cpu_ms: ms(cpu),
                 root_actions,
-                agrees_heuristic: answer
-                    .as_ref()
-                    .is_some_and(|a| *a == heuristic_msg),
+                agrees_heuristic: answer.as_ref().is_some_and(|a| *a == heuristic_msg),
                 view_bytes,
                 would_fallback: wall > botsvc::ask_timeout(budget),
                 act_refused: false,
@@ -649,14 +646,9 @@ fn main() {
     let rules_dir = std::path::PathBuf::from(arg("--rules", "dist/cards"));
     let matches: usize = arg("--matches", "1").parse().unwrap_or(1).max(1);
     let seed0: u64 = arg("--seed", "1").parse().unwrap_or(1);
-    let search_threads: usize = arg("--search-threads", "4")
-        .parse()
-        .unwrap_or(4)
-        .max(1);
+    let search_threads: usize = arg("--search-threads", "4").parse().unwrap_or(4).max(1);
     let max_rounds: i32 = arg("--max-rounds", "30").parse().unwrap_or(30);
-    let max_game_seconds: f64 = arg("--max-game-seconds", "1800")
-        .parse()
-        .unwrap_or(1800.0);
+    let max_game_seconds: f64 = arg("--max-game-seconds", "1800").parse().unwrap_or(1800.0);
     let budget_override: Option<u64> = arg("--budget-ms", "").parse().ok().filter(|&b| b > 0);
     let ponder_budget_ms: u64 = arg("--ponder-budget-ms", "300")
         .parse()
@@ -681,7 +673,11 @@ fn main() {
     println!(
         "ruleset: {} ({}), search-threads {}, ponder {}, ponder-budget {} ms, early-stop {}",
         ctx.rules.ruleset_sha256().unwrap_or("stub"),
-        if real { "real WasmRules" } else { "STUB -- no effects" },
+        if real {
+            "real WasmRules"
+        } else {
+            "STUB -- no effects"
+        },
         search_threads,
         if with_ponder { "on" } else { "off" },
         ponder_budget_ms,
@@ -854,9 +850,7 @@ fn main() {
             if rs.is_empty() {
                 0.0
             } else {
-                100.0
-                    * rs.iter().filter(|r| r.agrees_heuristic).count() as f64
-                    / rs.len() as f64
+                100.0 * rs.iter().filter(|r| r.agrees_heuristic).count() as f64 / rs.len() as f64
             }
         };
         println!(
@@ -942,9 +936,7 @@ fn main() {
         ponder.mean_cpu(),
         ponder_searched.calls
     );
-    println!(
-        "     (the live spawn_ponder path ticks every 200 ms per idle advanced seat)"
-    );
+    println!("     (the live spawn_ponder path ticks every 200 ms per idle advanced seat)");
     println!(
         "  3. obvious searched decides (1 legal action): {} calls, {:.1} CPU-s = {:.1}%",
         one_action.calls,
@@ -1051,7 +1043,8 @@ fn main() {
             let rules = ctx.rules.clone();
             let v = s.view.clone();
             let (seat, member) = (s.seat, s.member);
-            let factory = move || MatchSim::new(data.clone(), rules.clone(), v.clone(), seat, member);
+            let factory =
+                move || MatchSim::new(data.clone(), rules.clone(), v.clone(), seat, member);
             let out = tree.search_root_parallel(factory, seat, cfg, search_threads);
             total_wall += out.elapsed;
             total_iters += out.iterations;
@@ -1064,7 +1057,9 @@ fn main() {
             }
         }
         let cpu_anatomy = ms(process_cpu().saturating_sub(c0));
-        let sum = (fork + descent + rollout + evaluate + key).as_secs_f64().max(1e-9);
+        let sum = (fork + descent + rollout + evaluate + key)
+            .as_secs_f64()
+            .max(1e-9);
         let row = |name: &str, d: Duration| {
             println!(
                 "  {:<10} {:>8.2} CPU-s  {:>5.1}%   ({:.0} ms/sample)",
@@ -1133,7 +1128,7 @@ fn main() {
 fn dump_bot_cost() {
     use game_core::engine::bot_cost as gc;
     use game_rules::bot_cost as gr;
-    use game_rules::cond_pre::guard_cost as guard_cost;
+    use game_rules::cond_pre::guard_cost;
     let g = |v: &std::sync::atomic::AtomicU64| v.load(std::sync::atomic::Ordering::Relaxed);
     println!("-- bot-cost counters (whole run) --");
     println!(

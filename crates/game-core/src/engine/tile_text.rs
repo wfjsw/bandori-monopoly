@@ -218,12 +218,7 @@ fn push_speakers(
 
 /// The board tile a declaration speaks for: `""` = the instance's own
 /// `FieldCard::tile`, otherwise the board tile named in `data`.
-fn resolve_tile(
-    world: &World,
-    data: &GameData,
-    f: &FieldCard,
-    d: &TileTextDecl,
-) -> i32 {
+fn resolve_tile(world: &World, data: &GameData, f: &FieldCard, d: &TileTextDecl) -> i32 {
     if d.tile.is_empty() {
         return f.tile;
     }

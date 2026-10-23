@@ -11,70 +11,70 @@
 //!    effects (no less, no more);
 //! 4. includes a MUTANT whose disagreement is shown reachable.
 
+#[cfg(feature = "band-ag")]
+pub mod ag;
+pub mod cond_ops;
+#[cfg(feature = "band-crychic")]
+pub mod crychic;
+#[cfg(feature = "events")]
+pub mod events;
+#[cfg(feature = "band-general")]
+pub mod general;
+#[cfg(feature = "band-hhw")]
+pub mod hhw;
+pub mod hostops_smoke;
+#[cfg(feature = "tiles")]
+pub mod markers;
+#[cfg(feature = "band-pp")]
+pub mod money_shave;
+#[cfg(feature = "band-morfonica")]
+pub mod mor;
+#[cfg(feature = "band-mujica")]
+pub mod mujica;
+#[cfg(feature = "band-mygo")]
+pub mod mygo;
 #[cfg(feature = "band-pp")]
 pub mod pp;
 #[cfg(feature = "band-ppp")]
 pub mod ppp;
+#[cfg(feature = "band-pp")]
+pub mod prompt;
 #[cfg(feature = "band-roselia")]
 pub mod r;
-#[cfg(feature = "band-ag")]
-pub mod ag;
-#[cfg(feature = "band-hhw")]
-pub mod hhw;
-#[cfg(feature = "band-morfonica")]
-pub mod mor;
 #[cfg(feature = "band-ras")]
 pub mod ras;
-#[cfg(feature = "band-mygo")]
-pub mod mygo;
-#[cfg(feature = "band-mujica")]
-pub mod mujica;
-#[cfg(feature = "band-crychic")]
-pub mod crychic;
-#[cfg(all(feature = "band-sumimi", feature = "skills-personas"))]
-pub mod sumimi;
+#[cfg(all(feature = "band-ag", feature = "skills-personas"))]
+pub mod skills_ag;
+#[cfg(feature = "skills-groups")]
+pub mod skills_bands;
+#[cfg(feature = "skills-personas")]
+pub mod skills_characters;
+#[cfg(all(feature = "band-crychic", feature = "skills-groups"))]
+pub mod skills_crychic;
 #[cfg(feature = "band-general")]
-pub mod general;
-#[cfg(feature = "events")]
-pub mod events;
+pub mod skills_general;
+#[cfg(all(feature = "band-hhw", feature = "skills-personas"))]
+pub mod skills_hhw;
+#[cfg(all(feature = "band-morfonica", feature = "skills-groups"))]
+pub mod skills_mor;
+#[cfg(all(feature = "band-mujica", feature = "skills-groups"))]
+pub mod skills_mujica;
+#[cfg(all(feature = "band-mygo", feature = "skills-groups"))]
+pub mod skills_mygo;
 #[cfg(all(feature = "band-pp", feature = "skills-personas"))]
 pub mod skills_pp;
 #[cfg(all(feature = "band-ppp", feature = "skills-personas"))]
 pub mod skills_ppp;
 #[cfg(all(feature = "band-roselia", feature = "skills-personas"))]
 pub mod skills_r;
-#[cfg(all(feature = "band-ag", feature = "skills-personas"))]
-pub mod skills_ag;
-#[cfg(all(feature = "band-hhw", feature = "skills-personas"))]
-pub mod skills_hhw;
-#[cfg(all(feature = "band-morfonica", feature = "skills-groups"))]
-pub mod skills_mor;
 #[cfg(all(feature = "band-ras", feature = "skills-personas"))]
 pub mod skills_ras;
-#[cfg(all(feature = "band-mygo", feature = "skills-groups"))]
-pub mod skills_mygo;
-#[cfg(all(feature = "band-mujica", feature = "skills-groups"))]
-pub mod skills_mujica;
-#[cfg(all(feature = "band-crychic", feature = "skills-groups"))]
-pub mod skills_crychic;
 #[cfg(all(feature = "band-sumimi", feature = "skills-groups"))]
 pub mod skills_sumimi;
-#[cfg(feature = "band-general")]
-pub mod skills_general;
-#[cfg(feature = "tiles")]
-pub mod tiles;
-#[cfg(feature = "tiles")]
-pub mod markers;
-#[cfg(feature = "skills-groups")]
-pub mod skills_bands;
-#[cfg(feature = "skills-personas")]
-pub mod skills_characters;
-pub mod cond_ops;
-#[cfg(feature = "band-pp")]
-pub mod money_shave;
+#[cfg(all(feature = "band-sumimi", feature = "skills-personas"))]
+pub mod sumimi;
 #[cfg(feature = "band-ppp")]
 pub mod teleport;
-#[cfg(feature = "band-pp")]
-pub mod prompt;
+#[cfg(feature = "tiles")]
+pub mod tiles;
 pub mod wrong_guard;
-pub mod hostops_smoke;

@@ -32,7 +32,11 @@ fn place_and_land(t: &mut Table, card: &str) -> i32 {
     t.set_hand(1, &[]);
     t.give_play(0, card).unwrap();
     drain(t);
-    assert!(t.on_field(0, card), "the play places the card: {}", t.dump_prompt());
+    assert!(
+        t.on_field(0, card),
+        "the play places the card: {}",
+        t.dump_prompt()
+    );
     let mark = t.mark();
     t.set_pos(0, 0);
     t.dice(&[3]);
@@ -127,15 +131,17 @@ fn silent_plus_visible_effect_fires_the_debug_guard() {
     );
     // The money still moved -- the flag hides the flash, not the effect.
     assert!(
-        t.events_since(mark)
-            .iter()
-            .any(|e| e.r#type == "gain" || e.msg.key().contains("gain") || e.msg.key().contains("pay")),
+        t.events_since(mark).iter().any(|e| e.r#type == "gain"
+            || e.msg.key().contains("gain")
+            || e.msg.key().contains("pay")),
         "the pay is still in the stream: {}",
         t.recent_keys(30).join(", ")
     );
     let violations = take_silent_visible();
     assert!(
-        violations.iter().any(|(card, what)| card == "TEST:silentPay" && what.contains("pay")),
+        violations
+            .iter()
+            .any(|(card, what)| card == "TEST:silentPay" && what.contains("pay")),
         "the guard must record the violation: {violations:?}"
     );
 }
@@ -145,11 +151,26 @@ fn silent_plus_visible_effect_fires_the_debug_guard() {
 #[test]
 fn manifest_carries_the_silent_flag() {
     let r = rules();
-    let idx = r.ruleset().card("TEST:silentPair").expect("silentPair loaded");
+    let idx = r
+        .ruleset()
+        .card("TEST:silentPair")
+        .expect("silentPair loaded");
     let info = &r.ruleset().cards()[idx as usize];
-    assert_eq!(info.on[0].presentation, card_sdk::abi::Presentation::Visible, "the Play entry announces");
-    assert_eq!(info.on[1].presentation, card_sdk::abi::Presentation::Silent, "the bookkeeping hook is silent");
-    assert_eq!(info.on[2].presentation, card_sdk::abi::Presentation::Visible, "the sibling hook announces");
+    assert_eq!(
+        info.on[0].presentation,
+        card_sdk::abi::Presentation::Visible,
+        "the Play entry announces"
+    );
+    assert_eq!(
+        info.on[1].presentation,
+        card_sdk::abi::Presentation::Silent,
+        "the bookkeeping hook is silent"
+    );
+    assert_eq!(
+        info.on[2].presentation,
+        card_sdk::abi::Presentation::Visible,
+        "the sibling hook announces"
+    );
 }
 
 // Shipped-card silent-entry checks live in `rules/tests/tests/silent_shipped.rs`
@@ -206,14 +227,21 @@ fn quiet_when_empty_keeps_a_header_when_the_body_logged() {
     assert_eq!(ran[0].msg.key(), "log.effect_applied");
 }
 
-
 #[test]
 fn quiet_presentation_is_in_the_manifest() {
     let r = rules();
     let idx = r.ruleset().card("TEST:silentQuiet").expect("loaded");
     let info = &r.ruleset().cards()[idx as usize];
-    assert_eq!(info.on[1].presentation, card_sdk::abi::Presentation::QuietWhenEmpty, "entry 1");
-    assert_eq!(info.on[2].presentation, card_sdk::abi::Presentation::QuietWhenEmpty, "entry 2");
+    assert_eq!(
+        info.on[1].presentation,
+        card_sdk::abi::Presentation::QuietWhenEmpty,
+        "entry 1"
+    );
+    assert_eq!(
+        info.on[2].presentation,
+        card_sdk::abi::Presentation::QuietWhenEmpty,
+        "entry 2"
+    );
 }
 
 /// Ruling 1: an activation whose effects are owner-self-only keeps the log
@@ -236,12 +264,13 @@ fn self_only_activation_has_no_flash() {
         t.decline();
     }
     let ran = activations_since(&t, mark, "TEST:tileHook");
-    assert_eq!(ran.len(), 1, "the hook still announces: {}", t.recent_keys(20).join(", "));
-    assert!(
-        !ran[0].flash,
-        "a log-only hook is SelfOnly: {:?}",
-        ran[0]
+    assert_eq!(
+        ran.len(),
+        1,
+        "the hook still announces: {}",
+        t.recent_keys(20).join(", ")
     );
+    assert!(!ran[0].flash, "a log-only hook is SelfOnly: {:?}", ran[0]);
 }
 
 /// An activation that touches another player flashes.
@@ -265,7 +294,12 @@ fn cross_player_activation_flashes() {
         .into_iter()
         .filter(|e| e.r#type == "card" && e.card == "TEST:xfer1000")
         .collect();
-    assert_eq!(ran.len(), 1, "the play announces: {}", t.recent_keys(20).join(", "));
+    assert_eq!(
+        ran.len(),
+        1,
+        "the play announces: {}",
+        t.recent_keys(20).join(", ")
+    );
     assert!(
         ran[0].flash,
         "a transfer to another player must flash: {:?}",
@@ -299,7 +333,9 @@ fn declined_optional_prompt_leaves_no_trace() {
         t.recent_keys(25).join(", ")
     );
     assert!(
-        !t.events_since(mark).iter().any(|e| e.msg.key().contains("silent_ask")),
+        !t.events_since(mark)
+            .iter()
+            .any(|e| e.msg.key().contains("silent_ask")),
         "no log line either: {}",
         t.recent_keys(25).join(", ")
     );
@@ -336,7 +372,9 @@ fn accepted_optional_prompt_keeps_the_header() {
         t.recent_keys(25).join(", ")
     );
     assert!(
-        t.events_since(mark).iter().any(|e| e.msg.key().contains("silent_ask_taken")),
+        t.events_since(mark)
+            .iter()
+            .any(|e| e.msg.key().contains("silent_ask_taken")),
         "the effect line is present: {}",
         t.recent_keys(25).join(", ")
     );

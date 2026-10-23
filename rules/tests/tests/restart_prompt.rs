@@ -22,6 +22,13 @@ fn buy_prompt_answerable_after_restore() {
         m2.tick(0.1);
     }
     assert_eq!(m2.state().prompt.id, p.id, "tick changed prompt");
-    let r = m2.act(1, &NetMessage { prompt: p.id, value: 0, ..NetMessage::act("answer") });
+    let r = m2.act(
+        1,
+        &NetMessage {
+            prompt: p.id,
+            value: 0,
+            ..NetMessage::act("answer")
+        },
+    );
     assert!(r.is_ok(), "{:?}", r.err().map(|e| e.key().to_string()));
 }

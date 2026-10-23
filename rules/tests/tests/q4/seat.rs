@@ -94,7 +94,13 @@ fn person_delta(before: &Snap, after: &Snap, who: usize) -> BTreeMap<String, Str
 
 /// Run A and B as `a_seat` / `b_seat` on a symmetric board; return the
 /// bystander's personal delta.
-fn bystander_delta(a_rule: &str, b_rule: &str, seed: u64, a_seat: usize, b_seat: usize) -> BTreeMap<String, String> {
+fn bystander_delta(
+    a_rule: &str,
+    b_rule: &str,
+    seed: u64,
+    a_seat: usize,
+    b_seat: usize,
+) -> BTreeMap<String, String> {
     let mut t = symmetric(seed);
     quiet(&mut t);
     let faces: Vec<i32> = (0..8).map(|_| 3).collect();

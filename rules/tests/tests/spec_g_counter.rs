@@ -246,7 +246,12 @@ fn g_counter_03_two_counters_one_timing_settle_before_x() {
         "after one declaration the ring is still on X: {}",
         t.dump_prompt()
     );
-    assert_eq!(t.asked(), vec![2], "the next seat on X: {}", t.dump_prompt());
+    assert_eq!(
+        t.asked(),
+        vec![2],
+        "the next seat on X: {}",
+        t.dump_prompt()
+    );
     t.counteract(2, NET).unwrap();
     let _ = drain_counteract_ring(&mut t);
     t.settle();
@@ -559,4 +564,3 @@ fn turn_order_rank_walks_the_ring() {
     assert_eq!(turn_order_rank(2, 1, 3), 2);
     assert_eq!(turn_order_rank(2, 2, 3), 0);
 }
-

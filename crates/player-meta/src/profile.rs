@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use game_core::data::{PersonaData, GameData};
+use game_core::data::{GameData, PersonaData};
 use game_core::MatchMode;
 
 use crate::progression::{
@@ -357,11 +357,7 @@ impl PlayerProfile {
             MatchMode::Solo => self.solo_games += 1,
         }
         if !persona.is_empty() {
-            let i = match self
-                .persona_stats
-                .iter()
-                .position(|s| s.name == persona)
-            {
+            let i = match self.persona_stats.iter().position(|s| s.name == persona) {
                 Some(i) => i,
                 None => {
                     self.persona_stats.push(PersonaStat {

@@ -7,12 +7,12 @@
 //!
 //! A divergence is a FINDING — report it, do not paper over it.
 
+use rules_cond::vocab::Val as FillVal;
 use rules_cond::{compile, CandidateCtx, WindowCtx};
 use rules_cond_ir::ctx::{FnId, IrCtx, SeatField, SetId};
 use rules_cond_ir::eval::values_cmp;
 use rules_cond_ir::nodes::{Kind, Node};
 use rules_cond_ir::vars::{VarId, VarTy, VARS};
-use rules_cond::vocab::Val as FillVal;
 use rules_cond_ir::{spec, Val};
 
 // ---------------------------------------------------------------------------
@@ -83,10 +83,12 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: FillVal) {
     f.ir.set_scalar_ty(id, ty, raw, matches!(v, FillVal::Null));
     // Mirror into the cel snapshots by flat name.
     match id {
-        VarId::Kind => f.win.kind = match &v {
-            FillVal::Str(s) => s.clone(),
-            _ => String::new(),
-        },
+        VarId::Kind => {
+            f.win.kind = match &v {
+                FillVal::Str(s) => s.clone(),
+                _ => String::new(),
+            }
+        }
         VarId::Actor => f.win.actor = raw,
         VarId::Target => f.win.target = raw,
         VarId::Value => f.win.value = raw,
@@ -178,7 +180,14 @@ fn assert_agree(src: &str, f: &Fixture) {
 
 fn two_op_exprs(op: &str) -> Vec<String> {
     let mut out = Vec::new();
-    let lits = ["-9223372036854775808", "-1", "0", "1", "9223372036854775807", "null"];
+    let lits = [
+        "-9223372036854775808",
+        "-1",
+        "0",
+        "1",
+        "9223372036854775807",
+        "null",
+    ];
     // Also fold in a couple of context vars so OptInt/Bool paths are covered.
     let vars_a = ["actor", "value", "move_roll", "card_placed"];
     let vars_b = ["target", "value", "move_roll", "pay_is_rent"];
@@ -206,9 +215,7 @@ fn diff_operators_boundary_grid() {
     set_scalar(&mut f, VarId::PayIsRent, VarTy::Bool, FillVal::Bool(false));
 
     // Also sweep the vars over the boundary grid in a second pass.
-    let ops = [
-        "==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%",
-    ];
+    let ops = ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"];
     let mut cases = 0;
     for op in ops {
         for expr in two_op_exprs(op) {
@@ -354,8 +361,20 @@ fn diff_state_function() {
     // Seat 0: stay=2, stun=1, stunStart=3, exile=0, unstoppable=0.
     // Seat 1: stay=0, stun=0, stunStart=1, exile=4, unstoppable=2.
     f.ir.n_players = 2;
-    let keys0 = [("stay", 2i64), ("stun", 1), ("stunStart", 3), ("exile", 0), ("unstoppable", 0)];
-    let keys1 = [("stay", 0i64), ("stun", 0), ("stunStart", 1), ("exile", 4), ("unstoppable", 2)];
+    let keys0 = [
+        ("stay", 2i64),
+        ("stun", 1),
+        ("stunStart", 3),
+        ("exile", 0),
+        ("unstoppable", 0),
+    ];
+    let keys1 = [
+        ("stay", 0i64),
+        ("stun", 0),
+        ("stunStart", 1),
+        ("exile", 4),
+        ("unstoppable", 2),
+    ];
     for (k, v) in keys0 {
         f.ir.state_set(0, id_of(k), v);
     }
@@ -461,7 +480,12 @@ fn diff_all_inventory_guards() {
         set_scalar(&mut f, VarId::By, VarTy::Int, FillVal::Int(1));
         set_scalar(&mut f, VarId::TurnPlayer, VarTy::Int, FillVal::Int(0));
         set_scalar(&mut f, VarId::TurnKey, VarTy::Int, FillVal::Int(7));
-        set_scalar(&mut f, VarId::Kind, VarTy::Str, FillVal::Str("pay".to_string()));
+        set_scalar(
+            &mut f,
+            VarId::Kind,
+            VarTy::Str,
+            FillVal::Str("pay".to_string()),
+        );
         set_scalar(&mut f, VarId::CardId, VarTy::Int, FillVal::Int(42));
         set_scalar(&mut f, VarId::TriggerCard, VarTy::Int, FillVal::Int(42));
         set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(true));
@@ -490,12 +514,8 @@ fn diff_all_inventory_guards() {
         }];
         f.ir.named_set(rules_cond_ir::ctx::id_of("skillState"), 2);
         f.ir.named_set(rules_cond_ir::ctx::id_of("PAREO标记"), 1);
-        f.cand
-            .slots
-            .insert("skillState".into(), 2);
-        f.cand
-            .tok_names
-            .insert("PAREO标记".into(), 1);
+        f.cand.slots.insert("skillState".into(), 2);
+        f.cand.tok_names.insert("PAREO标记".into(), 1);
         f.ir.seat[0][SeatField::Money as usize] = 500;
         f.ir.n_players = 2;
         // Mirror seat money into the CEL snapshot (`money(p)` reads
@@ -516,7 +536,12 @@ fn diff_all_inventory_guards() {
         let mut f2 = f.clone();
         set_scalar(&mut f2, VarId::Actor, VarTy::Int, FillVal::Int(1));
         set_scalar(&mut f2, VarId::Value, VarTy::Int, FillVal::Int(0));
-        set_scalar(&mut f2, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(false));
+        set_scalar(
+            &mut f2,
+            VarId::CardPlaced,
+            VarTy::Bool,
+            FillVal::Bool(false),
+        );
         set_scalar(&mut f2, VarId::MoveRoll, VarTy::OptInt, FillVal::Null);
         assert_agree(src, &f2);
         agree += 1;
@@ -548,8 +573,25 @@ impl Rng {
 }
 
 fn random_expr(rng: &mut Rng, depth: u32) -> String {
-    let lits = ["-9223372036854775808", "-1", "0", "1", "9223372036854775807", "null", "true", "false"];
-    let vars = ["actor", "target", "value", "owner", "move_roll", "card_placed", "kind"];
+    let lits = [
+        "-9223372036854775808",
+        "-1",
+        "0",
+        "1",
+        "9223372036854775807",
+        "null",
+        "true",
+        "false",
+    ];
+    let vars = [
+        "actor",
+        "target",
+        "value",
+        "owner",
+        "move_roll",
+        "card_placed",
+        "kind",
+    ];
     if depth == 0 {
         if rng.below(2) == 0 {
             lits[rng.below(lits.len() as u64) as usize].to_string()
@@ -593,9 +635,24 @@ fn diff_random_expression_trees() {
         }
         let mut f = fixture_empty();
         // Symbolic-ish fixture: vary a few fields per case.
-        set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(rng.below(4) as i64 - 1));
-        set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(rng.below(4) as i64 - 1));
-        set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(rng.next() as i64));
+        set_scalar(
+            &mut f,
+            VarId::Actor,
+            VarTy::Int,
+            FillVal::Int(rng.below(4) as i64 - 1),
+        );
+        set_scalar(
+            &mut f,
+            VarId::Target,
+            VarTy::Int,
+            FillVal::Int(rng.below(4) as i64 - 1),
+        );
+        set_scalar(
+            &mut f,
+            VarId::Value,
+            VarTy::Int,
+            FillVal::Int(rng.next() as i64),
+        );
         set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
         set_scalar(
             &mut f,
@@ -603,7 +660,12 @@ fn diff_random_expression_trees() {
             VarTy::Str,
             FillVal::Str(format!("k{}", rng.below(96))),
         );
-        set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(rng.below(2) == 0));
+        set_scalar(
+            &mut f,
+            VarId::CardPlaced,
+            VarTy::Bool,
+            FillVal::Bool(rng.below(2) == 0),
+        );
         let roll = rng.below(3);
         set_scalar(
             &mut f,
@@ -678,12 +740,12 @@ fn ir_eval_matches_written_spec() {
                 ),
                 (
                     spec::Cmp::Gt,
-                    rules_cond_ir::eval::values_cmp(a, b).map(|o| o == core::cmp::Ordering::Greater),
+                    rules_cond_ir::eval::values_cmp(a, b)
+                        .map(|o| o == core::cmp::Ordering::Greater),
                 ),
                 (
                     spec::Cmp::Ge,
-                    rules_cond_ir::eval::values_cmp(a, b)
-                        .map(|o| o != core::cmp::Ordering::Less),
+                    rules_cond_ir::eval::values_cmp(a, b).map(|o| o != core::cmp::Ordering::Less),
                 ),
             ] {
                 let s = spec::spec_cmp(a, b, op);
@@ -693,16 +755,14 @@ fn ir_eval_matches_written_spec() {
                 };
                 assert_eq!(s, i, "cmp({op:?}, {a:?}, {b:?})");
             }
-            for (op, imp) in [
-                (
-                    spec::Arith::Add,
-                    match (a, b) {
-                        (Val::Int(x), Val::Int(y)) => x.checked_add(y),
-                        (Val::Err, _) | (_, Val::Err) => Some(i64::MIN), // marker
-                        _ => Some(i64::MIN),
-                    },
-                ),
-            ] {
+            for (op, imp) in [(
+                spec::Arith::Add,
+                match (a, b) {
+                    (Val::Int(x), Val::Int(y)) => x.checked_add(y),
+                    (Val::Err, _) | (_, Val::Err) => Some(i64::MIN), // marker
+                    _ => Some(i64::MIN),
+                },
+            )] {
                 let _ = (op, imp);
             }
             // Arithmetic via spec_* vs checked_*.

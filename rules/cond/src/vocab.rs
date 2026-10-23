@@ -97,9 +97,7 @@ pub enum Fx {
     },
     /// `f(x: int) -> bool` -- a pure predicate over one int (no view, no
     /// table). `repeated_digits` is the only user.
-    IntPred {
-        calc: fn(i64) -> bool,
-    },
+    IntPred { calc: fn(i64) -> bool },
     /// `f(tile: int, kind: string) -> bool` over a baked kind -> tile list
     /// (`tile_is` is the only user).
     TileIs {
@@ -1225,7 +1223,9 @@ pub fn by_flat(flat: &str) -> Option<&'static Name> {
 
 /// Look a name up by CEL spelling or any of its aliases.
 pub fn by_cel(cel: &str) -> Option<&'static Name> {
-    VOCAB.iter().find(|n| n.cel == cel || n.aliases.contains(&cel))
+    VOCAB
+        .iter()
+        .find(|n| n.cel == cel || n.aliases.contains(&cel))
 }
 
 /// Flat identifiers the lint accepts (window + candidate scalars).
@@ -1366,11 +1366,15 @@ pub fn fetch_name(n: &Name, view: &dyn CondView) -> Option<Val> {
 pub fn fn_table(n: &Name, view: &dyn CondView) -> Option<(&'static str, Table)> {
     match n.fx {
         Fx::SeatInt { var, field } => {
-            let rows = (0..view.seat_count()).map(|s| (s, field(view, s))).collect();
+            let rows = (0..view.seat_count())
+                .map(|s| (s, field(view, s)))
+                .collect();
             Some((var, Table::IntMap(rows)))
         }
         Fx::SeatIntIs { var, field } => {
-            let rows = (0..view.seat_count()).map(|s| (s, field(view, s))).collect();
+            let rows = (0..view.seat_count())
+                .map(|s| (s, field(view, s)))
+                .collect();
             Some((var, Table::IntMap(rows)))
         }
         Fx::StrInt { var, fill, .. } => Some((var, Table::StrMap(fill(view)))),

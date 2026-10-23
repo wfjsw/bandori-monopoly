@@ -12,9 +12,10 @@
 //! 「星星贴纸」 is a player counter; 「为此卡添加1个[奇迹水晶]」 is a band-card
 //! crystal. （3） is the hill's ownership shared across the band.
 
-use bandori_std::state_key; use card_sdk::abi::{counter, ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{counter, ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "skill:Poppin' Party:星之鼓动";
 /// 「星星贴纸」.
@@ -25,16 +26,31 @@ const USED: &str = "skill.poppin.used";
 pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            at_turn_start,
+        )),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
         // returned still flashed -- one per step of every walk.
-        On::Action(Action::Pass("actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)", None, None, on_pass)),
+        On::Action(Action::Pass(
+            "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
+            None,
+            None,
+            on_pass,
+        )),
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
-        On::Action(Action::SettleBefore("", None, Some(before_settle_applies), before_settle)),
+        On::Action(Action::SettleBefore(
+            "",
+            None,
+            Some(before_settle_applies),
+            before_settle,
+        )),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（1） chains two independent 「随后可使用…」 actions
         // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather
@@ -52,10 +68,14 @@ pub const POPPIN: CardDef = CardDef::new(
         // never matches a real buy tile); 「只有全部…破产后」 is the residual
         // guard, a derived scan outside the CEL schema (docs/GUARDS.md §4.2c).
         // Gate payload so the denial reason rides `reason`.
-        On::Filter(Filter::BuyGate("tile.id == tile_named('星之鼓动山丘')", Some(lock_hill_applies), lock_hill)),
+        On::Filter(Filter::BuyGate(
+            "tile.id == tile_named('星之鼓动山丘')",
+            Some(lock_hill_applies),
+            lock_hill,
+        )),
     ],
 )
-    .silent(&[0]);
+.silent(&[0]);
 
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].

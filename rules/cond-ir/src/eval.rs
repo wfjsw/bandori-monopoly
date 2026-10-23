@@ -207,8 +207,18 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
         }
         Kind::Call => eval_call(nodes, n, ctx),
         // Binary ops — operands first, then the pure step.
-        Kind::Add | Kind::Sub | Kind::Mul | Kind::Div | Kind::Rem | Kind::Eq | Kind::Ne
-        | Kind::Lt | Kind::Le | Kind::Gt | Kind::Ge | Kind::In => {
+        Kind::Add
+        | Kind::Sub
+        | Kind::Mul
+        | Kind::Div
+        | Kind::Rem
+        | Kind::Eq
+        | Kind::Ne
+        | Kind::Lt
+        | Kind::Le
+        | Kind::Gt
+        | Kind::Ge
+        | Kind::In => {
             let a = eval_node(nodes, n.a, ctx);
             let b = eval_node(nodes, n.b, ctx);
             eval_binop(n.kind, a, b)
@@ -501,7 +511,10 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
             let d = ((b - a) % n + n) % n;
             Val::Int(d.min(n - d))
         }
-        FnId::PlayersOn | FnId::NextDist | FnId::OthersWithin | FnId::OwnedWithin
+        FnId::PlayersOn
+        | FnId::NextDist
+        | FnId::OthersWithin
+        | FnId::OwnedWithin
         | FnId::OnPath => {
             let a = match int(0) {
                 Ok(v) => v,
@@ -532,14 +545,7 @@ fn set_has(ctx: &IrCtx, set: SetId, r: Result<i64, ()>) -> Val {
 /// (circle=0 … event=7). `None` for anything else.
 fn wire_kind_bit(kind_id: i64) -> Option<u32> {
     const KINDS: [&str; 8] = [
-        "circle",
-        "cafe",
-        "edogawa",
-        "ryuseido",
-        "property",
-        "ring",
-        "agent",
-        "event",
+        "circle", "cafe", "edogawa", "ryuseido", "property", "ring", "agent", "event",
     ];
     KINDS
         .iter()

@@ -91,7 +91,6 @@ fn forward(from: usize, n: usize) -> usize {
     (from + n) % 60
 }
 
-
 /// Answer the open prompt with the option that names `tile`, whatever the
 /// prompt kind is (`tile` items or a `choice` whose option carries the tile).
 fn answer_pick_tile(t: &mut Table, who: usize, tile: usize) -> Result<(), String> {
@@ -109,15 +108,16 @@ fn answer_pick_tile(t: &mut Table, who: usize, tile: usize) -> Result<(), String
     if p.count == 0 && p.options.len() == 1 {
         return t.answer(who, 0);
     }
-    Err(format!(
-        "no option names tile {tile}: {}",
-        t.dump_prompt()
-    ))
+    Err(format!("no option names tile {tile}: {}", t.dump_prompt()))
 }
 
 fn set_sticker(t: &mut Table, who: usize, n: i32) {
     let w = t.m.world_mut();
-    if let Some(c) = w.st.players[who].tokens.iter_mut().find(|c| c.name == STICKER) {
+    if let Some(c) = w.st.players[who]
+        .tokens
+        .iter_mut()
+        .find(|c| c.name == STICKER)
+    {
         c.value = n;
     } else {
         w.st.players[who].tokens.push(Counter {
@@ -177,7 +177,8 @@ fn popipa_contract() {
 
         let pre = t.snapshot_world();
         t.observe(POPIPA_CLAUSES);
-        t.play(0, POPIPA).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, POPIPA)
+            .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
 
         if t.money(0) != money + 1000 {
@@ -193,7 +194,9 @@ fn popipa_contract() {
         // card is not pinned. What is pinned: exactly one card was drawn.
         let hand = t.hand(0);
         if hand.len() != 1 {
-            return Err(format!("hand should hold exactly 1 drawn card, got {hand:?}"));
+            return Err(format!(
+                "hand should hold exactly 1 drawn card, got {hand:?}"
+            ));
         }
         let pile = t.draw_pile(0);
         // Started with 2, +1 Pipopa, -1 drawn = 2 left.
@@ -205,7 +208,11 @@ fn popipa_contract() {
                 return Err(format!("Popipa still in a zone: {z:?}"));
             }
         }
-        frame(&pre, t.world(), &["money:P0", "hand:P0", "draw:P0", "discard:P0"])
+        frame(
+            &pre,
+            t.world(),
+            &["money:P0", "hand:P0", "draw:P0", "discard:P0"],
+        )
     })
     .expect("C-PPP-popipa-01");
 }
@@ -248,7 +255,8 @@ fn pipopa_contract() {
 
         let pre = t.snapshot_world();
         t.observe(PIPOPA_CLAUSES);
-        t.play(0, PIPOPA).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, PIPOPA)
+            .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
 
         if t.money(0) != money + 1000 {
@@ -300,8 +308,7 @@ pub fn c_ppp_bang_dream_01(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     let sum_band = |step: &Step<'_>, pre: bool| -> i32 {
         let w = if pre { step.pre } else { step.post };
-        w.st
-            .players
+        w.st.players
             .get(who)
             .and_then(|p| p.field.iter().find(|f| f.group_skill))
             .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
@@ -370,16 +377,16 @@ fn bang_dream_contract() {
     .expect("C-PPP-bang-dream-01/02");
 }
 
-
 // =====================================================================
 // C-PPP-better-sound-01 -- （多惠）寻找更好的声音
 // =====================================================================
 
 /// C-PPP-better-sound-01 -- 「传送到“江户川乐器店”并获得一个[火罐]」
 pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
-    let played = step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == BETTER && (e.kind == "play" || e.kind.is_empty())
-    });
+    let played = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "card" && e.card == BETTER && (e.kind == "play" || e.kind.is_empty()));
     if !played {
         return Ok(());
     }
@@ -388,7 +395,15 @@ pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     let charge = |w: &game_core::engine::World| {
-        w.st.players.get(who).map(|p| (p.state_get(bandori_std::state_key::CHARGE), p.state_max(bandori_std::state_key::CHARGE))).unwrap_or((0, 0))
+        w.st.players
+            .get(who)
+            .map(|p| {
+                (
+                    p.state_get(bandori_std::state_key::CHARGE),
+                    p.state_max(bandori_std::state_key::CHARGE),
+                )
+            })
+            .unwrap_or((0, 0))
     };
     let (pre_f, pre_max) = charge(step.pre);
     let (post_f, _) = charge(step.post);
@@ -416,7 +431,8 @@ fn better_sound_contract() {
 
         let pre = t.snapshot_world();
         t.observe(BETTER_CLAUSES);
-        t.play(0, BETTER).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, BETTER)
+            .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
 
         if t.pos(0) != EDOGAWA {
@@ -428,7 +444,14 @@ fn better_sound_contract() {
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "state:P0:charge", "turn."],
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "pos:P0",
+                "state:P0:charge",
+                "turn.",
+            ],
         )
     })
     .expect("C-PPP-better-sound-01");
@@ -451,7 +474,8 @@ fn signpost_sixty_no_settle_and_lose_1000() {
 
         let pre = t.snapshot_world();
         let money1 = t.money(1);
-        t.play(0, SIGNPOST).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, SIGNPOST)
+            .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
         // 「不触发结算」 -- no rent / buy leg. The walk may still collect the
         // [CiRCLE奖励] for passing the start (that is not 结算).
@@ -474,7 +498,15 @@ fn signpost_sixty_no_settle_and_lose_1000() {
         frame(
             &pre,
             t.world(),
-            &["money:P0", "pos:P0", "hand:P0", "draw:P0", "discard:P0", "money:P1", "turn."],
+            &[
+                "money:P0",
+                "pos:P0",
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "money:P1",
+                "turn.",
+            ],
         )
     })
     .expect("C-PPP-signpost-01/02");
@@ -485,9 +517,10 @@ fn signpost_sixty_no_settle_and_lose_1000() {
 // =====================================================================
 
 pub fn c_ppp_caught_01(step: &Step<'_>) -> Result<(), String> {
-    let played = step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == CAUGHT && (e.kind == "play" || e.kind.is_empty())
-    });
+    let played = step
+        .events
+        .iter()
+        .any(|e| e.r#type == "card" && e.card == CAUGHT && (e.kind == "play" || e.kind.is_empty()));
     if !played {
         return Ok(());
     }
@@ -535,12 +568,14 @@ fn caught_moves_to_ahead_player() {
 
         let pre = t.snapshot_world();
         t.observe(CAUGHT_CLAUSES);
-        t.play(0, CAUGHT).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, CAUGHT)
+            .map_err(|e| format!("play rejected: {e}"))?;
         if t.prompt().is_some() {
             if let Some(k) = t.option("P1").or_else(|| t.option("player:1")) {
                 t.answer(0, k).map_err(|e| format!("player pick: {e}"))?;
             } else if t.prompt().map(|p| p.kind == "tile") == Some(true) {
-                t.answer_tile(0, them).map_err(|e| format!("tile pick {them}: {e}"))?;
+                t.answer_tile(0, them)
+                    .map_err(|e| format!("tile pick {them}: {e}"))?;
             } else {
                 t.answer(0, 0).map_err(|e| format!("pick 0: {e}"))?;
             }
@@ -548,9 +583,23 @@ fn caught_moves_to_ahead_player() {
         skip_all(&mut t);
 
         if t.pos(0) != them {
-            return Err(format!("pos {}, expected the ahead player's tile {them}", t.pos(0)));
+            return Err(format!(
+                "pos {}, expected the ahead player's tile {them}",
+                t.pos(0)
+            ));
         }
-        frame(&pre, t.world(), &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "houses:T", "turn."])
+        frame(
+            &pre,
+            t.world(),
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "pos:P0",
+                "houses:T",
+                "turn.",
+            ],
+        )
     })
     .expect("C-PPP-caught-01");
 }
@@ -586,7 +635,17 @@ fn far_away_teleports_to_farthest() {
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "money:P0", "money:P1", "money:P2", "houses:T", "turn."],
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "pos:P0",
+                "money:P0",
+                "money:P1",
+                "money:P2",
+                "houses:T",
+                "turn.",
+            ],
         )
     })
     .expect("C-PPP-far-away-01");
@@ -619,7 +678,8 @@ fn star_beat_option_1() {
 
         let pre = t.snapshot_world();
         let stickers0 = t.token(0, STICKER);
-        t.play(0, STAR_BEAT).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, STAR_BEAT)
+            .map_err(|e| format!("play rejected: {e}"))?;
         let k = t.option("opt_teleport").or(Some(0)).unwrap();
         t.answer(0, k).map_err(|e| format!("option 1: {e}"))?;
         skip_all(&mut t);
@@ -639,7 +699,19 @@ fn star_beat_option_1() {
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "token:P0", "state:P0", "money:P", "turn.", "bfield:", "bprop:", "state:P0:star_beat"],
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "pos:P0",
+                "token:P0",
+                "state:P0",
+                "money:P",
+                "turn.",
+                "bfield:",
+                "bprop:",
+                "state:P0:star_beat",
+            ],
         )
     })
     .expect("C-PPP-star-beat-03");
@@ -664,7 +736,8 @@ fn star_beat_option_2() {
 
         let pre = t.snapshot_world();
         let stickers0 = t.token(0, STICKER);
-        t.play(0, STAR_BEAT).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, STAR_BEAT)
+            .map_err(|e| format!("play rejected: {e}"))?;
         let k = t.option("opt_move").or(Some(1)).unwrap();
         t.answer(0, k).map_err(|e| format!("option 2: {e}"))?;
         skip_all(&mut t);
@@ -686,7 +759,16 @@ fn star_beat_option_2() {
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "token:P0", "money:P", "turn.", "state:P0:star_beat"],
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "pos:P0",
+                "token:P0",
+                "money:P",
+                "turn.",
+                "state:P0:star_beat",
+            ],
         )
     })
     .expect("C-PPP-star-beat-04");
@@ -700,7 +782,10 @@ pub fn c_ppp_popipapapipopa_c1(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     let get = |w: &game_core::engine::World| {
         w.st.players.get(who).and_then(|p| {
-            p.field.iter().find(|f| f.card == POPIPAPAPIPOPA).map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+            p.field
+                .iter()
+                .find(|f| f.card == POPIPAPAPIPOPA)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         })
     };
     if let (Some(a), Some(b)) = (get(step.pre), get(step.post)) {
@@ -871,7 +956,8 @@ fn random_star_sweeps_and_stacks() {
 
         let pre = t.snapshot_world();
         t.observe(RANDOM_STAR_CLAUSES);
-        t.play(0, RANDOM_STAR).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, RANDOM_STAR)
+            .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
 
         if !t.on_field(0, RANDOM_STAR) {
@@ -897,7 +983,17 @@ fn random_star_sweeps_and_stacks() {
                 "auction card not at the bottom of {pile:?} (C-PPP-random-star-01)"
             ));
         }
-        frame(&pre, t.world(), &["hand:P0", "draw:P0", "discard:P0", "field:P0", "crystals:P0"])
+        frame(
+            &pre,
+            t.world(),
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "field:P0",
+                "crystals:P0",
+            ],
+        )
     })
     .expect("C-PPP-random-star-01");
 }
@@ -954,7 +1050,8 @@ fn chocolate_move_1_to_4() {
         t.give(0, &[CHOCO]);
 
         let pre = t.snapshot_world();
-        t.play(0, CHOCO).map_err(|e| format!("play rejected: {e}"))?;
+        t.play(0, CHOCO)
+            .map_err(|e| format!("play rejected: {e}"))?;
         answer_pick_tile(&mut t, 0, dest)?;
         skip_all(&mut t);
 
@@ -964,7 +1061,19 @@ fn chocolate_move_1_to_4() {
                 t.pos(0)
             ));
         }
-        frame(&pre, t.world(), &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "state:P0", "money:P", "turn."])
+        frame(
+            &pre,
+            t.world(),
+            &[
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                "pos:P0",
+                "state:P0",
+                "money:P",
+                "turn.",
+            ],
+        )
     })
     .expect("C-PPP-chocolate-01");
 }
@@ -1061,7 +1170,7 @@ fn kasumi_fire_on_hill_settle() {
         t.begin_turn(0);
         let held = 0;
         t.set_fire(0, held, 1); // initial 0, cap 1
-        // Another player settles on the hill (rent to P0).
+                                // Another player settles on the hill (rent to P0).
         t.set_owner(HILL, Some(0));
         t.begin_turn(1);
         t.set_pos(1, HILL.wrapping_sub(2) % 60);
@@ -1402,7 +1511,10 @@ fn returns_sticker_after_general() {
     // the opening deck (「游戏开始时此卡从卡组放置到…」).
     let mut t = Table::new(&["户山香澄", "美竹兰"]);
     if !t.on_field(0, RETURNS) {
-        panic!("Returns not placed at game start (C-PPP-returns-02): {:?}", t.field_ids(0));
+        panic!(
+            "Returns not placed at game start (C-PPP-returns-02): {:?}",
+            t.field_ids(0)
+        );
     }
     t.begin_turn(0);
     // [持续]（2） opens a borrow prompt at every turn start.
@@ -1444,7 +1556,10 @@ fn returns_neutralises_band_build_lock() {
     // roll onto an owned empty tile must at least settle legally (band (4)
     // would forbid the build path on a main-move settle).
     if t.houses(SPACE) != 0 {
-        panic!("arranged houses moved before any build: {}", t.houses(SPACE));
+        panic!(
+            "arranged houses moved before any build: {}",
+            t.houses(SPACE)
+        );
     }
     skip_all(&mut t);
 }
@@ -1456,16 +1571,7 @@ fn returns_neutralises_band_build_lock() {
 /// The （1） sequence, as board indices.
 fn door_sequence() -> [usize; 10] {
     [
-        RYUSEIDO,
-        HANASAKI,
-        SPACE,
-        GALAXY,
-        BUDDOKAN,
-        RING1,
-        RING2,
-        RING3,
-        RING4,
-        OSAKA,
+        RYUSEIDO, HANASAKI, SPACE, GALAXY, BUDDOKAN, RING1, RING2, RING3, RING4, OSAKA,
     ]
 }
 
@@ -1486,11 +1592,7 @@ fn door_sequence_is_printed() {
     ];
     for (i, name) in names.iter().enumerate() {
         let idx = rules_spec::tile(name);
-        assert_eq!(
-            idx,
-            door_sequence()[i],
-            "sequence slot {i} is {name}"
-        );
+        assert_eq!(idx, door_sequence()[i], "sequence slot {i} is {name}");
     }
 }
 
@@ -1505,7 +1607,13 @@ fn door_walks_the_sequence() {
             .iter()
             .chain(t.world().st.board_field.iter())
             .find(|f| f.card == DOOR)
-            .and_then(|f| if f.tile >= 0 { Some(f.tile as usize) } else { None })
+            .and_then(|f| {
+                if f.tile >= 0 {
+                    Some(f.tile as usize)
+                } else {
+                    None
+                }
+            })
     };
     let seq = door_sequence();
     let mut expect = seq[0];
@@ -1580,9 +1688,7 @@ fn auction_off_raises_fire_cap() {
     // [持续]「火罐上限加1」 over the vanilla baseline of 0.
     let max1 = t.p(0).state_max(bandori_std::state_key::CHARGE);
     if max1 != 1 {
-        panic!(
-            "fire max {max1}, expected 1 (C-PPP-auction-off-c1: 上限加1 over baseline 0)"
-        );
+        panic!("fire max {max1}, expected 1 (C-PPP-auction-off-c1: 上限加1 over baseline 0)");
     }
 }
 
@@ -1716,11 +1822,25 @@ pub fn verify_popipa(
     let post_hand = post.hidden[who].hand.len();
     // The played card left; one card arrived.
     let played_in_pre = pre.hidden[who].hand.iter().filter(|c| *c == POPIPA).count();
-    let played_in_post = post.hidden[who].hand.iter().filter(|c| *c == POPIPA).count()
-        + post.hidden[who].draw.iter().filter(|c| *c == POPIPA).count()
-        + post.hidden[who].discard.iter().filter(|c| *c == POPIPA).count();
+    let played_in_post = post.hidden[who]
+        .hand
+        .iter()
+        .filter(|c| *c == POPIPA)
+        .count()
+        + post.hidden[who]
+            .draw
+            .iter()
+            .filter(|c| *c == POPIPA)
+            .count()
+        + post.hidden[who]
+            .discard
+            .iter()
+            .filter(|c| *c == POPIPA)
+            .count();
     if played_in_pre != 1 {
-        return Err(format!("pre should hold exactly 1 Popipa, got {played_in_pre}"));
+        return Err(format!(
+            "pre should hold exactly 1 Popipa, got {played_in_pre}"
+        ));
     }
     if played_in_post != 0 {
         return Err("Popipa [移除] -- must be in no zone".into());
@@ -1774,25 +1894,60 @@ fn popipa_verifier_rejects_mutants() {
     verify_popipa(&pre, &post, &events, 0).expect("genuine Popipa post");
 
     // LESS: revert the +1000.
-    expect_reject("LESS money", &pre, &post, &events, &verify_popipa_wrap, |w| {
-        w.st.players[0].money = pre.st.players[0].money;
-    });
+    expect_reject(
+        "LESS money",
+        &pre,
+        &post,
+        &events,
+        &verify_popipa_wrap,
+        |w| {
+            w.st.players[0].money = pre.st.players[0].money;
+        },
+    );
     // MORE: another player's money moved.
-    expect_reject("MORE other money", &pre, &post, &events, &verify_popipa_wrap, |w| {
-        w.st.players[1].money += 1;
-    });
+    expect_reject(
+        "MORE other money",
+        &pre,
+        &post,
+        &events,
+        &verify_popipa_wrap,
+        |w| {
+            w.st.players[1].money += 1;
+        },
+    );
     // WRONG: +1001.
-    expect_reject("WRONG amount", &pre, &post, &events, &verify_popipa_wrap, |w| {
-        w.st.players[0].money += 1;
-    });
+    expect_reject(
+        "WRONG amount",
+        &pre,
+        &post,
+        &events,
+        &verify_popipa_wrap,
+        |w| {
+            w.st.players[0].money += 1;
+        },
+    );
     // LESS: put Popipa back in the discard (not [移除]).
-    expect_reject("LESS not-removed", &pre, &post, &events, &verify_popipa_wrap, |w| {
-        w.hidden[0].discard.push(POPIPA.into());
-    });
+    expect_reject(
+        "LESS not-removed",
+        &pre,
+        &post,
+        &events,
+        &verify_popipa_wrap,
+        |w| {
+            w.hidden[0].discard.push(POPIPA.into());
+        },
+    );
     // MORE: a second Pipopa.
-    expect_reject("MORE extra Pipopa", &pre, &post, &events, &verify_popipa_wrap, |w| {
-        w.hidden[0].draw.push(PIPOPA.into());
-    });
+    expect_reject(
+        "MORE extra Pipopa",
+        &pre,
+        &post,
+        &events,
+        &verify_popipa_wrap,
+        |w| {
+            w.hidden[0].draw.push(PIPOPA.into());
+        },
+    );
 }
 
 fn verify_popipa_wrap(pre: &World, post: &World, events: &[MatchEvent]) -> Result<(), String> {
@@ -1855,21 +2010,56 @@ fn pipopa_verifier_rejects_mutants() {
     let events = t.events_since(mark);
     verify_pipopa(&pre, &post, &events, 0).expect("genuine Pipopa post");
 
-    expect_reject("LESS money", &pre, &post, &events, &verify_pipopa_wrap, |w| {
-        w.st.players[0].money = pre.st.players[0].money;
-    });
-    expect_reject("LESS no-place", &pre, &post, &events, &verify_pipopa_wrap, |w| {
-        w.st.players[0].field.retain(|f| f.card != POPIPAPAPIPOPA);
-    });
-    expect_reject("MORE other money", &pre, &post, &events, &verify_pipopa_wrap, |w| {
-        w.st.players[1].money += 1;
-    });
-    expect_reject("WRONG amount", &pre, &post, &events, &verify_pipopa_wrap, |w| {
-        w.st.players[0].money += 1;
-    });
-    expect_reject("LESS not-removed", &pre, &post, &events, &verify_pipopa_wrap, |w| {
-        w.hidden[0].discard.push(PIPOPA.into());
-    });
+    expect_reject(
+        "LESS money",
+        &pre,
+        &post,
+        &events,
+        &verify_pipopa_wrap,
+        |w| {
+            w.st.players[0].money = pre.st.players[0].money;
+        },
+    );
+    expect_reject(
+        "LESS no-place",
+        &pre,
+        &post,
+        &events,
+        &verify_pipopa_wrap,
+        |w| {
+            w.st.players[0].field.retain(|f| f.card != POPIPAPAPIPOPA);
+        },
+    );
+    expect_reject(
+        "MORE other money",
+        &pre,
+        &post,
+        &events,
+        &verify_pipopa_wrap,
+        |w| {
+            w.st.players[1].money += 1;
+        },
+    );
+    expect_reject(
+        "WRONG amount",
+        &pre,
+        &post,
+        &events,
+        &verify_pipopa_wrap,
+        |w| {
+            w.st.players[0].money += 1;
+        },
+    );
+    expect_reject(
+        "LESS not-removed",
+        &pre,
+        &post,
+        &events,
+        &verify_pipopa_wrap,
+        |w| {
+            w.hidden[0].discard.push(PIPOPA.into());
+        },
+    );
 }
 
 // ---------------------------------------------------------------- Bang Dream!
@@ -1937,14 +2127,15 @@ fn bang_dream_verifier_rejects_mutants() {
 
     expect_reject("LESS crystal", &pre, &post, &events, &v, |w| {
         if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
-            f.counters.insert("crystals".into(), pre
-                .st
-                .players[0]
-                .field
-                .iter()
-                .find(|f| f.group_skill)
-                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
-                .unwrap_or(0));
+            f.counters.insert(
+                "crystals".into(),
+                pre.st.players[0]
+                    .field
+                    .iter()
+                    .find(|f| f.group_skill)
+                    .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+                    .unwrap_or(0),
+            );
         }
     });
     expect_reject("LESS teleport", &pre, &post, &events, &v, |w| {
@@ -1975,9 +2166,11 @@ pub fn verify_better_sound(
             post.st.players[who].pos
         ));
     }
-    let dfire = post.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64 - pre.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64;
+    let dfire = post.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64
+        - pre.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64;
     // Cap may block; when room existed the delta is exactly 1.
-    let room = pre.st.players[who].state_get(bandori_std::state_key::CHARGE) < pre.st.players[who].state_max(bandori_std::state_key::CHARGE);
+    let room = pre.st.players[who].state_get(bandori_std::state_key::CHARGE)
+        < pre.st.players[who].state_max(bandori_std::state_key::CHARGE);
     if room && dfire != 1 {
         return Err(format!("fire delta {dfire}, expected +1"));
     }
@@ -2011,18 +2204,46 @@ fn better_sound_verifier_rejects_mutants() {
     let events = t.events_since(mark);
     verify_better_sound(&pre, &post, &events, 0).expect("genuine better-sound post");
 
-    expect_reject("LESS fire", &pre, &post, &events, &verify_better_wrap, |w| {
-        w.st.players[0].state_set("charge", 0);
-    });
-    expect_reject("LESS teleport", &pre, &post, &events, &verify_better_wrap, |w| {
-        w.st.players[0].pos = 0;
-    });
-    expect_reject("MORE other money", &pre, &post, &events, &verify_better_wrap, |w| {
-        w.st.players[1].money += 1;
-    });
-    expect_reject("WRONG fire", &pre, &post, &events, &verify_better_wrap, |w| {
-        w.st.players[0].state_set("charge", 2);
-    });
+    expect_reject(
+        "LESS fire",
+        &pre,
+        &post,
+        &events,
+        &verify_better_wrap,
+        |w| {
+            w.st.players[0].state_set("charge", 0);
+        },
+    );
+    expect_reject(
+        "LESS teleport",
+        &pre,
+        &post,
+        &events,
+        &verify_better_wrap,
+        |w| {
+            w.st.players[0].pos = 0;
+        },
+    );
+    expect_reject(
+        "MORE other money",
+        &pre,
+        &post,
+        &events,
+        &verify_better_wrap,
+        |w| {
+            w.st.players[1].money += 1;
+        },
+    );
+    expect_reject(
+        "WRONG fire",
+        &pre,
+        &post,
+        &events,
+        &verify_better_wrap,
+        |w| {
+            w.st.players[0].state_set("charge", 2);
+        },
+    );
 }
 
 // ---------------------------------------------------------------- Signpost
@@ -2042,8 +2263,7 @@ pub fn verify_signpost(
         if i != who && p.money != pre.st.players[i].money {
             return Err(format!(
                 "P{i} money {} -> {} during the walk (settled -- C-PPP-signpost-01)",
-                pre.st.players[i].money,
-                p.money
+                pre.st.players[i].money, p.money
             ));
         }
     }
@@ -2176,7 +2396,11 @@ fn star_beat_03_verifier_rejects_mutants() {
         w.st.players[1].money += 1;
     });
     expect_reject("WRONG stickers", &pre, &post, &events, &v, |w| {
-        if let Some(c) = w.st.players[0].tokens.iter_mut().find(|c| c.name == STICKER) {
+        if let Some(c) = w.st.players[0]
+            .tokens
+            .iter_mut()
+            .find(|c| c.name == STICKER)
+        {
             c.value += 1;
         }
     });
@@ -2215,9 +2439,7 @@ pub fn verify_popipapapipopa_pass(
     Ok(())
 }
 
-fn verify_ppp_pass_wrap(
-    d: i32,
-) -> impl Fn(&World, &World, &[MatchEvent]) -> Result<(), String> {
+fn verify_ppp_pass_wrap(d: i32) -> impl Fn(&World, &World, &[MatchEvent]) -> Result<(), String> {
     move |pre, post, events| verify_popipapapipopa_pass(pre, post, events, 0, d)
 }
 
@@ -2321,17 +2543,42 @@ fn band_sticker_verifier_rejects_mutants() {
     let events = t.events_since(mark);
     verify_band_sticker(&pre, &post, &events, 0).expect("genuine band sticker");
 
-    expect_reject("LESS sticker", &pre, &post, &events, &verify_band_sticker_wrap, |w| {
-        w.st.players[0].tokens.clear();
-    });
-    expect_reject("WRONG stickers", &pre, &post, &events, &verify_band_sticker_wrap, |w| {
-        if let Some(c) = w.st.players[0].tokens.iter_mut().find(|c| c.name == STICKER) {
-            c.value += 1;
-        }
-    });
-    expect_reject("MORE other money", &pre, &post, &events, &verify_band_sticker_wrap, |w| {
-        w.st.players[1].money += 1;
-    });
+    expect_reject(
+        "LESS sticker",
+        &pre,
+        &post,
+        &events,
+        &verify_band_sticker_wrap,
+        |w| {
+            w.st.players[0].tokens.clear();
+        },
+    );
+    expect_reject(
+        "WRONG stickers",
+        &pre,
+        &post,
+        &events,
+        &verify_band_sticker_wrap,
+        |w| {
+            if let Some(c) = w.st.players[0]
+                .tokens
+                .iter_mut()
+                .find(|c| c.name == STICKER)
+            {
+                c.value += 1;
+            }
+        },
+    );
+    expect_reject(
+        "MORE other money",
+        &pre,
+        &post,
+        &events,
+        &verify_band_sticker_wrap,
+        |w| {
+            w.st.players[1].money += 1;
+        },
+    );
 }
 
 // ---------------------------------------------------------------- No-op gates
@@ -2412,9 +2659,7 @@ fn popipa_noop_on_unrelated_act() {
     skip_all(&mut t);
     let post = t.snapshot_world();
     let events = t.events_since(mark);
-    if post.st.players[0].money != pre.st.players[0].money
-        && count_key(&events, "card:play") == 0
-    {
+    if post.st.players[0].money != pre.st.players[0].money && count_key(&events, "card:play") == 0 {
         // A turn-end [失去]/[获得] from another card is out of scope; pin
         // only that a Popipa play did not fire.
     }

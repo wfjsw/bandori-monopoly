@@ -1,8 +1,8 @@
 //! P2 tests against the data dir (board / match rules) plus the synthetic roster fixture.
 
+use game_core::deck;
 use game_core::net::{clean_name, NetMessage};
 use game_core::state::{MatchEvent, MatchPlayer, MatchState};
-use game_core::deck;
 mod common;
 use common::data;
 

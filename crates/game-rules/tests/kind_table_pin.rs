@@ -167,7 +167,8 @@ fn typed_engine_consts_have_table_rows() {
         (110, "PaySplitMulBefore"),
     ];
     for (id, name) in named {
-        let row = game_kinds::row(*id).unwrap_or_else(|| panic!("{name} (id {id}) has no table row"));
+        let row =
+            game_kinds::row(*id).unwrap_or_else(|| panic!("{name} (id {id}) has no table row"));
         assert_eq!(row.id, *id);
         assert!(!row.wire.is_empty(), "{name} wire empty");
         assert_eq!(
@@ -232,7 +233,12 @@ fn filter_payload_shape_mapping() {
     // Actions are `fn(i32) -> Asked` -- the shape column is meaningless and
     // the macro parks it at Value. Pin that so nobody reads it as a fold.
     for k in Action::KINDS {
-        assert_eq!(k.shape, FilterShape::Value, "Action::{} shape is inert", k.name);
+        assert_eq!(
+            k.shape,
+            FilterShape::Value,
+            "Action::{} shape is inert",
+            k.name
+        );
     }
 }
 
@@ -265,7 +271,12 @@ fn hook_only_flags_match_registries() {
             .find(|(id, _)| *id == k.kind.id)
             .unwrap_or_else(|| panic!("Actions::{} missing from kind_hook_only()", k.name))
             .1;
-        assert_eq!(game_rules::hook_only(k.kind), want, "ruleset hook_only {}", k.name);
+        assert_eq!(
+            game_rules::hook_only(k.kind),
+            want,
+            "ruleset hook_only {}",
+            k.name
+        );
     }
     // Filters are pure folds -- they never ride the counteraction-window
     // path at all, so they are absent from `kind_hook_only()` (the host only

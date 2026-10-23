@@ -36,7 +36,8 @@ fn main() {
     for m in index["modules"].as_array().expect("modules") {
         let f = cards_dir.join(m["file"].as_str().expect("file"));
         let bytes = std::fs::read(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
-        b.add(&bytes).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
+        b.add(&bytes)
+            .unwrap_or_else(|e| panic!("{}: {e}", f.display()));
     }
     let rules = b.build().expect("ruleset build (a bad `pre` is an error)");
     let cards = rules.cards();

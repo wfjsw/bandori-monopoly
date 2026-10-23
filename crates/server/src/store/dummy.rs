@@ -105,7 +105,10 @@ fn lock<T>(m: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>, StoreError> {
 
 impl CrossState for Store {
     fn session_get(&self, token: &str) -> Result<Option<Session>, StoreError> {
-        Ok(lock(&self.inner.sessions)?.get(token).cloned().map(Into::into))
+        Ok(lock(&self.inner.sessions)?
+            .get(token)
+            .cloned()
+            .map(Into::into))
     }
 
     fn session_put(&self, s: &Session) -> Result<(), StoreError> {
@@ -167,7 +170,10 @@ impl CrossState for Store {
     }
 
     fn record_log_get(&self, room: &str) -> Result<Vec<String>, StoreError> {
-        Ok(lock(&self.inner.logs)?.get(room).cloned().unwrap_or_default())
+        Ok(lock(&self.inner.logs)?
+            .get(room)
+            .cloned()
+            .unwrap_or_default())
     }
 
     fn record_log_del(&self, room: &str) -> Result<(), StoreError> {

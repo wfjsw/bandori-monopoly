@@ -32,7 +32,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let face = roll(p, 3, 20);
         ctx::log(
             player_id,
-            &Msg::new("log.event.dice").player_id("who", p).i("n", face as i64),
+            &Msg::new("log.event.dice")
+                .player_id("who", p)
+                .i("n", face as i64),
         );
         if face < x {
             continue;
@@ -43,7 +45,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // only logs who became eligible. A skin-change ask is the missing surface.
         ctx::log(
             player_id,
-            &Msg::new("log.event.ex_quest_skin").player_id("who", p).i("n", face as i64),
+            &Msg::new("log.event.ex_quest_skin")
+                .player_id("who", p)
+                .i("n", face as i64),
         );
     }
     Ok(())

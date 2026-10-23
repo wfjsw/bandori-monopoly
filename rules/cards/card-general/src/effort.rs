@@ -10,14 +10,22 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const EFFORT: CardDef = CardDef::new(
+    "通用:尽力后的收获",
+    &[On::Play("", None, Some(cant_play), play)],
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"尽力后的收获"#)
         .raw_name(r#"尽力后的收获"#)
         .tags(&[r#"手"#])
-        .text(r#"[手]：
-立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#)
+        .text(
+            r#"[手]：
+立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#,
+        )
         // sheet cell A11
-        .fields(&[("group", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]),
+);
 
 /// C# `CardEffort.WhyNot` defers to `H.MoveWhyNot`: refuses after the main move
 /// (`这回合已经移动过了`) and while `H.State.skipMove` (`本回合不能移动`).
@@ -36,16 +44,19 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let max = ctx::n(0, 6);
     let dir = ctx::plan::dir();
     let options: Vec<Msg> = (1..=max)
-        .map(|n| Msg::new(key!("effort_steps"))
-            .i("n", n as i64)
-            .tile("tile", ctx::tile_steps_ahead(player_id, n * dir)))
+        .map(|n| {
+            Msg::new(key!("effort_steps"))
+                .i("n", n as i64)
+                .tile("tile", ctx::tile_steps_ahead(player_id, n * dir))
+        })
         .collect();
     let steps = ctx::ask_pick(
         player_id,
         &Msg::new(key!("effort_title")),
         &Msg::new(key!("effort_ask")),
         &options,
-    )? as i32 + 1;
+    )? as i32
+        + 1;
     // 规则书[手]: 「立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]」
     // -- C# `H.CardMove(c, new MoveCtx { Steps = Math.Max(1, r.value) })`
     // (MatchHost.cs:2326-2329): `Steps` >= 0 walks exactly that many with no roll,

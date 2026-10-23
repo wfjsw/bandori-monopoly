@@ -73,8 +73,8 @@
 //!   here takes the settler. (C# paid `Seat`, but its `m.Seat == Seat` gate
 //!   made settler and card controller the same player.)
 
-use card_sdk::abi::{counter, mark, ActionKind, MarkFilter};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{counter, mark, ActionKind, MarkFilter};
 use card_sdk::{Action, CardDef, Msg, On};
 
 /// The board-owned [CP点] rule. One instance on [`BOARD_OWNER`], governing no
@@ -91,7 +91,7 @@ pub const MARK_CP: CardDef = CardDef::new(
         On::Action(Action::SettleBody("", None, Some(lands_on_cp), on_land)),
     ],
 )
-    .board_role("mark");
+.board_role("mark");
 
 /// The tile-mark filter every clause here uses: [CP点] is its own category
 /// (`data/rules.txt` 125), neutral, and the first matching row is the one.
@@ -131,7 +131,9 @@ fn on_place(_owner: i32) -> card_sdk::Asked {
         -1,
         src,
         count,
-        &Msg::new("log.cp_place"), card_sdk::abi::Stack::Merge);
+        &Msg::new("log.cp_place"),
+        card_sdk::abi::Stack::Merge,
+    );
     ctx::message::reply(cp_on(tile));
     Ok(())
 }
@@ -185,11 +187,7 @@ fn on_land(_owner: i32) -> card_sdk::Asked {
     }
     // 「[获得]800资金」 -- the settling player (see the reading above). C# was
     // `H.GainR(Seat, Reward, …)`, `Reward = c.N(0, 800)`.
-    ctx::gain(
-        seat,
-        800,
-        &Msg::new("log.cp_clean").player_id("who", seat),
-    )?;
+    ctx::gain(seat, 800, &Msg::new("log.cp_clean").player_id("who", seat))?;
     Ok(())
 }
 

@@ -10,24 +10,35 @@
 //!
 //! another player's [手] effect or an event before it lands.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NET_ERROR: CardDef = CardDef::new(
     "通用:网络链接异常",
-    &[On::Counteract(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event], "", Some(key!("net_error_when")), Some(can_counteract), counteract)],
-).meta(&card_sdk::meta::CardMeta::new()
+    &[On::Counteract(
+        &[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
+        "",
+        Some(key!("net_error_when")),
+        Some(can_counteract),
+        counteract,
+    )],
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"网络链接异常"#)
         .raw_name(r#"网络链接异常"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(r#"[手]：
+        .text(
+            r#"[手]：
 [反击]1张手卡的[手]效果或事件卡的效果生效前：根据卡和效果的类型依次进行以下操作：
 1. 手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]；
 2. 手卡的[手]效果且没有[指定]目标则抵消其所有的效果；
-3. 事件卡的效果手牌则则抵消其所有的效果。"#)
+3. 事件卡的效果手牌则则抵消其所有的效果。"#,
+        )
         // sheet cell A10
-        .fields(&[("group", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]),
+);
 
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「[反击]1张手卡的[手]效果或事件卡的效果生效前」

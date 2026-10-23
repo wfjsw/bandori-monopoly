@@ -23,9 +23,9 @@
 //! the sweep runs after each of this skill's own croquette-raising writes --
 //! the only sites that can raise the count (marker ownership).
 
-use card_sdk::abi::{ActionKind, Dice, FilterKind, MarkFilter};
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
+use card_sdk::abi::{ActionKind, Dice, FilterKind, MarkFilter};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 /// The mark kind 「可乐饼」 parked on a tile.
 const ON_TILE: &str = "可乐饼";
@@ -43,7 +43,12 @@ pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
         // 「育美经过其他角色时」 -- the passer's step onto a tile another player
         // stands on (行动阶段 12 [经过]). The other player is read off the tile
         // (`passTile` has no `target`).
-        On::Action(Action::PassTile("actor == owner", None, Some(passing_a_player), on_pass_player)),
+        On::Action(Action::PassTile(
+            "actor == owner",
+            None,
+            Some(passing_a_player),
+            on_pass_player,
+        )),
         // 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the skill button.
         On::Play("", None, Some(can_cash), cash),
         On::Filter(Filter::DiceRollPlan("", None, on_plan)),
@@ -76,7 +81,9 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             -1,
             ctx::self_uid(),
             1,
-            &Msg::new(key!("hagumi_homerun_note")), card_sdk::abi::Stack::Fresh);
+            &Msg::new(key!("hagumi_homerun_note")),
+            card_sdk::abi::Stack::Fresh,
+        );
     }
     sweep_overflow(player_id)
 }

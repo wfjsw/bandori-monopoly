@@ -188,10 +188,7 @@ impl CardWorld for TestWorld {
         -1
     }
     fn tile_owner(&self, tile: i32) -> i32 {
-        self.owners
-            .get(tile.max(0) as usize)
-            .copied()
-            .unwrap_or(-1)
+        self.owners.get(tile.max(0) as usize).copied().unwrap_or(-1)
     }
     fn player_pos(&self, player_id: i32) -> i32 {
         self.pos
@@ -337,7 +334,14 @@ impl CardWorld for TestWorld {
     fn set_trigger_spare(&mut self, seat: i32) {
         self.trigger.spare(seat);
     }
-    fn declare_trigger_effect(&mut self, kind: &str, target: i32, from: i32, tile: i32, value: i32) {
+    fn declare_trigger_effect(
+        &mut self,
+        kind: &str,
+        target: i32,
+        from: i32,
+        tile: i32,
+        value: i32,
+    ) {
         self.trigger.declare(game_core::engine::rules::Effect {
             kind: kind.to_string(),
             target,

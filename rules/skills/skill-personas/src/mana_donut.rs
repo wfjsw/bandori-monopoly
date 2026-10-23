@@ -18,9 +18,10 @@
 //! 消耗减半」 also scopes to the owner's own spending: the pay bend is
 //! `actor == owner`.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// 「你的资金消耗减半」 -- two `TurnEnd` layers, so the window runs through
 /// the end of the owner's **next** turn (the arming turn's end takes the first).
@@ -40,8 +41,18 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // 「初始1」 is created at game start; the cap is declared here and
         // re-declared (only when unset) at a turn start so a mid-game
         // placement still gets one. Both write only what they must.
-        On::Action(Action::DeckAtGameStart("card.placed", None, None, declare_cap)),
-        On::Action(Action::TurnStartBefore("card.placed", None, Some(cap_unset), declare_cap)),
+        On::Action(Action::DeckAtGameStart(
+            "card.placed",
+            None,
+            None,
+            declare_cap,
+        )),
+        On::Action(Action::TurnStartBefore(
+            "card.placed",
+            None,
+            Some(cap_unset),
+            declare_cap,
+        )),
         // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
         // branch. The choice / spend / pay stay in the body.
         On::Action(Action::Pass(PASS_PRE, None, None, on_pass)),
@@ -51,14 +62,21 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // ABI v74 Pattern A: pure integer transform `(value + 1) / 2` (the old
         // `set_pay_amount((amount + 1) / 2)`). No prompt, no side effects -- the
         // `pay(` hit in the catalog is `ctx::pay` in [`on_pass`], not here.
-        On::Filter(Filter::PaySplitMul("actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0", None, on_pay)),
+        On::Filter(Filter::PaySplitMul(
+            "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
+            None,
+            on_pay,
+        )),
         // No `TurnEnd` clear: the two `TurnEnd` layers tick off at the owner's
         // own wear-offs (before the `TurnEnd` hook fires).
     ],
 )
-    // 「（初始1，上限2）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 2)])
-    .silent(&[0, 1]);
+// 「（初始1，上限2）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 2),
+])
+.silent(&[0, 1]);
 
 /// The TurnStartBefore re-declare only does something when the cap is still
 /// unset (a mid-game placement of the skill). `state::max` is not in the CEL

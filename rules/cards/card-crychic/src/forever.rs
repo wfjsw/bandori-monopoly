@@ -1,7 +1,7 @@
 //! `CRYCHIC:如果能一直持续下去...` -- C# `CardForever`: drain the band skill
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:如果能一直持续下去...`）:
-//! > 如果能一直持续下去...： 
+//! > 如果能一直持续下去...：
 //!
 //! > （1）[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。
 //!
@@ -10,9 +10,9 @@
 //! crystals for 2,000 + 500·X, then stays in play as [持续] until a draw
 //! leaves the owner holding 7+ cards.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx;
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const FOREVER: CardDef = CardDef::new(
     "CRYCHIC:如果能一直持续下去...",
@@ -22,20 +22,50 @@ pub const FOREVER: CardDef = CardDef::new(
         // continuous condition, so the check runs at every point a hand size
         // moves (draw, discard-from-hand, play-from-hand) and at the turn
         // boundaries as a backstop. `Drew` alone only sees draws.
-        On::Action(Action::Drew("card.placed && owner.hand >= 7", None, None, on_drew)),
-        On::Action(Action::DiscardAfter("card.placed && owner.hand >= 7", None, None, on_drew)),
-        On::Action(Action::CardPlayed("card.placed && owner.hand >= 7", None, None, on_drew)),
-        On::Action(Action::TurnEndBefore("card.placed && owner.hand >= 7", None, None, on_drew)),
-        On::Action(Action::TurnEnd("card.placed && owner.hand >= 7", None, None, on_drew)),
+        On::Action(Action::Drew(
+            "card.placed && owner.hand >= 7",
+            None,
+            None,
+            on_drew,
+        )),
+        On::Action(Action::DiscardAfter(
+            "card.placed && owner.hand >= 7",
+            None,
+            None,
+            on_drew,
+        )),
+        On::Action(Action::CardPlayed(
+            "card.placed && owner.hand >= 7",
+            None,
+            None,
+            on_drew,
+        )),
+        On::Action(Action::TurnEndBefore(
+            "card.placed && owner.hand >= 7",
+            None,
+            None,
+            on_drew,
+        )),
+        On::Action(Action::TurnEnd(
+            "card.placed && owner.hand >= 7",
+            None,
+            None,
+            on_drew,
+        )),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"如果能一直持续下去..."#)
         .raw_name(r#"如果能一直持续下去..."#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"（1）[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。
-（2）[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。"#)
+        .text(
+            r#"（1）[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。
+（2）[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。"#,
+        )
         // sheet cell M8
-        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
+);
 
 const ID: &str = "CRYCHIC:如果能一直持续下去...";
 

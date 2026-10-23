@@ -33,9 +33,9 @@
 //! 火罐 does not set any player gate -- it is a resource, not a status
 //! marker. The cap is the only bound.
 
+use crate::ctx::{self, state};
 use card_sdk::abi::TriggerKind;
 use card_sdk::{Msg, Prompt};
-use crate::ctx::{self, state};
 
 // ------------------------------------------------------------- declaration keys
 
@@ -206,11 +206,7 @@ pub fn end_overlay(player_id: i32) -> i32 {
 /// **not** police it. Opens `markerGain` before the pots move (host verb,
 /// unchanged window). The window payload is the **actual** `want` (what will
 /// land); a cancelled window moves nothing.
-pub fn gain(
-    player_id: i32,
-    n: i32,
-    why: &Msg,
-) -> Result<i32, Prompt> {
+pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
     if n <= 0 {
         return Ok(0);
     }
@@ -249,11 +245,7 @@ pub fn gain(
 /// The `ChargePaying` window rides the pool spend verb and opens **even when
 /// the pool is empty** (the substitution path). A pre-check on the pool would
 /// skip the window and break 「以代替此次技能的火罐消耗」.
-pub fn spend(
-    player_id: i32,
-    n: i32,
-    why: &Msg,
-) -> Result<bool, Prompt> {
+pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
     }

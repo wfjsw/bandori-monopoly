@@ -21,8 +21,16 @@ fn vanilla_table_is_clean_and_at_player_0s_ops() {
 #[test]
 fn a_full_table_binds_skills() {
     let t = Table::new(&["户山香澄", "美竹兰"]);
-    assert!(t.skills(0).iter().any(|s| s.contains("户山香澄")), "{:?}", t.skills(0));
-    assert!(t.skills(1).iter().any(|s| s.contains("美竹兰")), "{:?}", t.skills(1));
+    assert!(
+        t.skills(0).iter().any(|s| s.contains("户山香澄")),
+        "{:?}",
+        t.skills(0)
+    );
+    assert!(
+        t.skills(1).iter().any(|s| s.contains("美竹兰")),
+        "{:?}",
+        t.skills(1)
+    );
 }
 
 #[test]

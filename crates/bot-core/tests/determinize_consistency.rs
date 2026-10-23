@@ -19,17 +19,20 @@ use game_core::deck;
 use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
-use game_core::state::{MatchState, BotMentality};
+use game_core::state::{BotMentality, MatchState};
 use game_core::MatchMode;
 
 fn data() -> Arc<GameData> {
     // bot-core must not grow a hard dep on the card crates, so the roster
     // comes from the generated roster fixture (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -181,10 +184,8 @@ fn determinize_reproduces_the_view() {
                     //    the public sightings; discards are public and exact).
                     for i in 0..4 {
                         let member_i = view.state.players[i].member;
-                        let hand: BTreeSet<String> =
-                            fork.hand_of(member_i).into_iter().collect();
-                        let draw: BTreeSet<String> =
-                            fork.draw_of(member_i).into_iter().collect();
+                        let hand: BTreeSet<String> = fork.hand_of(member_i).into_iter().collect();
+                        let draw: BTreeSet<String> = fork.draw_of(member_i).into_iter().collect();
                         assert!(
                             hand.is_disjoint(&draw),
                             "seed {seed} step {s} seat {seat} sample {k}: seat {i} hand/draw overlap: {hand:?} vs {draw:?}"
@@ -249,7 +250,10 @@ fn determinize_reproduces_the_view() {
             checked += 1;
         }
     }
-    assert!(checked > 10, "expected to walk real game points, got {checked}");
+    assert!(
+        checked > 10,
+        "expected to walk real game points, got {checked}"
+    );
 }
 
 #[test]

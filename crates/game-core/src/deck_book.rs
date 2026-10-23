@@ -31,12 +31,12 @@
 //! ruleset `index.json`, not the camelCase the `data/*.json` tables use:
 //! this file is engine-side data, not a game data table.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{PersonaData, GameData};
+use crate::data::{GameData, PersonaData};
 use crate::deck;
 
 /// File format version (`DeckBook::version`). Bump on any schema change; a
@@ -220,11 +220,7 @@ impl DeckBook {
             return Some(d);
         }
         // 4. (me)
-        first_valid(
-            data,
-            me,
-            self.me.iter().filter(|e| e.me == me.name),
-        )
+        first_valid(data, me, self.me.iter().filter(|e| e.me == me.name))
     }
 }
 

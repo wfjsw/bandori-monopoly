@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use game_core::data::{PersonaData, GameData};
+use game_core::data::{GameData, PersonaData};
 use game_core::engine::{Match, StubRules, BUY_RESERVE};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -108,7 +108,7 @@ fn defaults_equal_todays_constants() {
 /// The default params reproduce the old free functions and formulas exactly.
 #[test]
 fn default_params_are_the_old_formulas() {
-    use game_core::engine::{wants_buy, wants_build, wants_redeem};
+    use game_core::engine::{wants_build, wants_buy, wants_redeem};
     let p = StrategyParams::default();
     for money in [0, 1_999, 2_000, 2_001, 10_000] {
         for price in [0, 1, 500, 2_000, 5_000] {
@@ -116,9 +116,18 @@ fn default_params_are_the_old_formulas() {
             assert_eq!(p.wants_build(money, price), wants_build(money, price));
             assert_eq!(p.wants_redeem(money, price), wants_redeem(money, price));
             // Tile-aware: neutral group weight, no set bonus, no ratio cap.
-            assert_eq!(p.wants_buy_tile(money, price, 7, 0, true), wants_buy(money, price));
-            assert_eq!(p.wants_buy_tile(money, price, 7, 99, false), wants_buy(money, price));
-            assert_eq!(p.wants_build_tile(money, price, 7, 0), wants_build(money, price));
+            assert_eq!(
+                p.wants_buy_tile(money, price, 7, 0, true),
+                wants_buy(money, price)
+            );
+            assert_eq!(
+                p.wants_buy_tile(money, price, 7, 99, false),
+                wants_buy(money, price)
+            );
+            assert_eq!(
+                p.wants_build_tile(money, price, 7, 0),
+                wants_build(money, price)
+            );
         }
     }
     // The auction formula is the old float expression, bit for bit.
@@ -127,7 +136,11 @@ fn default_params_are_the_old_formulas() {
             for money in [0, 3_000, 10_000] {
                 let old = ((base as f64 * (0.6 + roll * 0.7) / 100.0) as i32) * 100;
                 let old = old.min(money - 1000);
-                assert_eq!(p.auction_worth(roll, base, money), old, "roll={roll} base={base}");
+                assert_eq!(
+                    p.auction_worth(roll, base, money),
+                    old,
+                    "roll={roll} base={base}"
+                );
             }
         }
     }
@@ -206,7 +219,10 @@ fn stale_hash_policy_and_params_version_ignore_the_book() {
     let mut b = book(vec![entry("Alpha", "", &[], p.clone())]);
     b.ruleset_sha256 = "some-other-ruleset".into();
     assert_eq!(b.lookup(&d, c, &opp, None, Some("stub")), None);
-    assert_eq!(b.resolve(&d, c, &opp, None, Some("stub")), StrategyParams::default());
+    assert_eq!(
+        b.resolve(&d, c, &opp, None, Some("stub")),
+        StrategyParams::default()
+    );
 
     // Policy mismatch: same story.
     let mut b = book(vec![entry("Alpha", "", &[], p.clone())]);
@@ -221,7 +237,12 @@ fn stale_hash_policy_and_params_version_ignore_the_book() {
     // A caller without a ruleset in hand only skips the hash check.
     let ok = book(vec![entry("Alpha", "", &[], p.clone())]);
     assert_eq!(ok.lookup(&d, c, &opp, None, None), Some(p));
-    let mut b = book(vec![entry("Alpha", "", &[], params_with(|p| p.buy_reserve = 42))]);
+    let mut b = book(vec![entry(
+        "Alpha",
+        "",
+        &[],
+        params_with(|p| p.buy_reserve = 42),
+    )]);
     b.policy = "chaos".into();
     assert_eq!(b.lookup(&d, c, &opp, None, None), None);
 }
@@ -319,7 +340,8 @@ fn parses_the_documented_shape_and_merges_partial_params() {
 #[test]
 fn the_shipped_book_is_empty_and_inert() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let text = std::fs::read_to_string(dir.join("strategy_book.json")).expect("shipped placeholder");
+    let text =
+        std::fs::read_to_string(dir.join("strategy_book.json")).expect("shipped placeholder");
     let b = StrategyBook::parse(&text).unwrap();
     assert!(b.is_empty(), "S2/S3 have not derived entries yet");
     let d = data();
@@ -410,7 +432,10 @@ fn a_live_parameter_change_moves_the_standard_bot() {
     d2.strategy_book = book;
     let d2 = Arc::new(d2);
     let blocked: usize = (1..=4).map(|s| buy_count(d2.clone(), s)).sum();
-    assert_eq!(blocked, 0, "a 1 000 000 buy reserve must stop every purchase");
+    assert_eq!(
+        blocked, 0,
+        "a 1 000 000 buy reserve must stop every purchase"
+    );
 }
 
 /// `strategy::for_seat` resolves from public state alone (own persona + the

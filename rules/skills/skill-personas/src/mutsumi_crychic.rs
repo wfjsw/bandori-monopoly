@@ -15,9 +15,10 @@
 //! axis is `skillState`, and 「只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」
 //! carves a class of crystal gains the engine does not tag.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The named other player, or -1.
 const OTHER: &str = "skill.mutsumiCrychic.other";
@@ -30,13 +31,21 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
         On::Play("", None, Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, None, at_start)),
         On::Action(Action::DeckAtGameStart("", None, None, at_start)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, None, on_pass)),
+        On::Action(Action::Pass(
+            bandori_std::guards::OWN_START,
+            None,
+            None,
+            on_pass,
+        )),
         On::Action(Action::DiceRollAfter("", None, Some(other), latch)),
     ],
 )
-    .silent(&[4])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+.silent(&[4])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() == state::get(player_id, OTHER)

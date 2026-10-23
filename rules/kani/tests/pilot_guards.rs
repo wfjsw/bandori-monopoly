@@ -46,7 +46,11 @@ fn aya_pay_add_guard_evaluates() {
         c.set_scalar(VarId::Actor, actor);
         c.set_scalar(VarId::Owner, owner);
         c.set_scalar(VarId::Value, value);
-        assert_eq!(prog.eval_bool(&c), expect, "actor={actor} owner={owner} value={value}");
+        assert_eq!(
+            prog.eval_bool(&c),
+            expect,
+            "actor={actor} owner={owner} value={value}"
+        );
     }
 }
 
@@ -81,9 +85,9 @@ fn chain_pay_guard_evaluates() {
     for (actor, owner, value, target, has_pay, expect) in [
         (0i64, 0i64, 1i64, 1i64, true, true),
         (0, 0, 0, 1, true, false),
-        (0, 0, 1, 0, true, false), // target == owner
+        (0, 0, 1, 0, true, false),  // target == owner
         (0, 0, 1, -1, true, false), // target < 0
-        (1, 0, 1, 1, true, false), // actor != owner
+        (1, 0, 1, 1, true, false),  // actor != owner
         (0, 0, 1, 1, false, false), // no Pay link
     ] {
         let mut c = IrCtx::default();

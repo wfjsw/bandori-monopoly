@@ -22,7 +22,9 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use card_sdk::ctx::raw;
-use card_sdk::ctx::{add_card_counter, add_counter, add_counter_at, counter, counter_at, set_counter};
+use card_sdk::ctx::{
+    add_card_counter, add_counter, add_counter_at, counter, counter_at, set_counter,
+};
 use card_sdk::msg::Msg;
 use card_sdk::Prompt;
 
@@ -36,20 +38,20 @@ pub mod counter {
     pub const CRYSTALS: &str = "crystals";
 }
 
+/// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
+/// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
+pub mod fire;
+/// Shared CEL guards.
+pub mod guards;
+/// Ruleset-declared raise-point kind ids and tile kind/class strings.
+pub mod kind;
 /// Roster metadata types (`PersonaDef` / `GroupDef`, `meta_key`) and the
 /// canonical data-file order tables (ABI v63, `docs/CARDS.md`).
 pub mod roster;
 /// Generated `(key -> ordinal)` tables restoring `data/*.json` order.
 pub mod roster_order;
-/// Ruleset-declared raise-point kind ids and tile kind/class strings.
-pub mod kind;
-/// Shared CEL guards.
-pub mod guards;
 /// Shared status verbs (stay / stun / exile) over the generic engine services.
 pub mod status;
-/// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
-/// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
-pub mod fire;
 
 /// State-map keys that name this ruleset's pots / statuses. Frozen webui wire.
 ///
@@ -107,13 +109,13 @@ pub mod ctx {
     pub use card_sdk::ctx::*;
 
     pub use crate::{
-        add_group_crystals, add_group_skill, add_card_crystals, add_crystals, add_crystals_at,
-        add_charge_max, add_rent_unit_bonus, add_ring_bonus, group_crystals, group_skill,
-        group_skills, card_crystals, persona_is, persona_skill, crystals, crystals_at, decay,
-        charge, charge_max, gain_charge, in_group, invoke_skill, is_agent, is_buyable, is_start,
-        is_color, is_venue, is_live_house_for, is_deed, is_shop, offer_build, offer_buy,
-        offer_force_buy, pay_rent, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked,
-        spend_charge, turn_snap,
+        add_card_crystals, add_charge_max, add_crystals, add_crystals_at, add_group_crystals,
+        add_group_skill, add_rent_unit_bonus, add_ring_bonus, card_crystals, charge, charge_max,
+        crystals, crystals_at, decay, gain_charge, group_crystals, group_skill, group_skills,
+        in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed, is_live_house_for,
+        is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy, pay_rent, persona_is,
+        persona_skill, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked, spend_charge,
+        turn_snap,
     };
 }
 
@@ -449,8 +451,7 @@ pub fn offer_build(player_id: i32, tile: i32) -> Result<(), Prompt> {
 /// Base half of the x11 `crystals_changed_guard` copies: this instance's
 /// crystals counter changed. Cards add their own residual (value vs 0, …).
 pub fn crystals_changed_of(card_id: &str) -> bool {
-    card_sdk::ctx::trigger::card_is(card_id)
-        && card_sdk::ctx::trigger::name() == "crystals"
+    card_sdk::ctx::trigger::card_is(card_id) && card_sdk::ctx::trigger::name() == "crystals"
 }
 
 /// Always-true guard (the x4 `always` copy).

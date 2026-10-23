@@ -41,7 +41,8 @@ static FOOTPRINTS: OnceLock<Footprints> = OnceLock::new();
 
 pub fn footprints() -> &'static Footprints {
     FOOTPRINTS.get_or_init(|| {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/rulebook/footprints.json");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/rulebook/footprints.json");
         let raw = std::fs::read_to_string(&path).expect("footprints.json");
         let v: serde_json::Value = serde_json::from_str(&raw).expect("footprints parse");
         let mut by_rule = BTreeMap::new();
@@ -289,7 +290,12 @@ pub fn drain_first(t: &mut Table) -> Result<(), String> {
                 ..game_core::net::NetMessage::act("answer")
             };
             if p.kind == "pick" || p.kind == "mortgage" {
-                msg.cards = p.items.iter().take(p.count.max(0) as usize).cloned().collect();
+                msg.cards = p
+                    .items
+                    .iter()
+                    .take(p.count.max(0) as usize)
+                    .cloned()
+                    .collect();
             }
             t.m.act(who as i32 + 1, &msg)
                 .map_err(|e| format!("answer: {}", e.key()))?;

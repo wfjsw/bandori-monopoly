@@ -211,14 +211,70 @@ pub fn intern(bytes: &[u8]) -> (i32, i32) {
                 }
             };
         }
-        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-        step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-        step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-        step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-        step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-        step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-        step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-        step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+        step!(0);
+        step!(1);
+        step!(2);
+        step!(3);
+        step!(4);
+        step!(5);
+        step!(6);
+        step!(7);
+        step!(8);
+        step!(9);
+        step!(10);
+        step!(11);
+        step!(12);
+        step!(13);
+        step!(14);
+        step!(15);
+        step!(16);
+        step!(17);
+        step!(18);
+        step!(19);
+        step!(20);
+        step!(21);
+        step!(22);
+        step!(23);
+        step!(24);
+        step!(25);
+        step!(26);
+        step!(27);
+        step!(28);
+        step!(29);
+        step!(30);
+        step!(31);
+        step!(32);
+        step!(33);
+        step!(34);
+        step!(35);
+        step!(36);
+        step!(37);
+        step!(38);
+        step!(39);
+        step!(40);
+        step!(41);
+        step!(42);
+        step!(43);
+        step!(44);
+        step!(45);
+        step!(46);
+        step!(47);
+        step!(48);
+        step!(49);
+        step!(50);
+        step!(51);
+        step!(52);
+        step!(53);
+        step!(54);
+        step!(55);
+        step!(56);
+        step!(57);
+        step!(58);
+        step!(59);
+        step!(60);
+        step!(61);
+        step!(62);
+        step!(63);
         slot.len = n as u8;
         frame.slots[i] = slot;
         frame.n = (i + 1) as u8;
@@ -292,14 +348,70 @@ pub fn read(handle: i32, len: usize) -> Vec<u8> {
                 }
             };
         }
-        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-        step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-        step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-        step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-        step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-        step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-        step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-        step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+        step!(0);
+        step!(1);
+        step!(2);
+        step!(3);
+        step!(4);
+        step!(5);
+        step!(6);
+        step!(7);
+        step!(8);
+        step!(9);
+        step!(10);
+        step!(11);
+        step!(12);
+        step!(13);
+        step!(14);
+        step!(15);
+        step!(16);
+        step!(17);
+        step!(18);
+        step!(19);
+        step!(20);
+        step!(21);
+        step!(22);
+        step!(23);
+        step!(24);
+        step!(25);
+        step!(26);
+        step!(27);
+        step!(28);
+        step!(29);
+        step!(30);
+        step!(31);
+        step!(32);
+        step!(33);
+        step!(34);
+        step!(35);
+        step!(36);
+        step!(37);
+        step!(38);
+        step!(39);
+        step!(40);
+        step!(41);
+        step!(42);
+        step!(43);
+        step!(44);
+        step!(45);
+        step!(46);
+        step!(47);
+        step!(48);
+        step!(49);
+        step!(50);
+        step!(51);
+        step!(52);
+        step!(53);
+        step!(54);
+        step!(55);
+        step!(56);
+        step!(57);
+        step!(58);
+        step!(59);
+        step!(60);
+        step!(61);
+        step!(62);
+        step!(63);
         return out;
     }
     let want = len.min(arena::MAX_BUF);
@@ -316,14 +428,70 @@ pub fn read(handle: i32, len: usize) -> Vec<u8> {
                     }
                 };
             }
-            step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-            step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-            step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-            step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-            step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-            step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-            step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-            step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+            step!(0);
+            step!(1);
+            step!(2);
+            step!(3);
+            step!(4);
+            step!(5);
+            step!(6);
+            step!(7);
+            step!(8);
+            step!(9);
+            step!(10);
+            step!(11);
+            step!(12);
+            step!(13);
+            step!(14);
+            step!(15);
+            step!(16);
+            step!(17);
+            step!(18);
+            step!(19);
+            step!(20);
+            step!(21);
+            step!(22);
+            step!(23);
+            step!(24);
+            step!(25);
+            step!(26);
+            step!(27);
+            step!(28);
+            step!(29);
+            step!(30);
+            step!(31);
+            step!(32);
+            step!(33);
+            step!(34);
+            step!(35);
+            step!(36);
+            step!(37);
+            step!(38);
+            step!(39);
+            step!(40);
+            step!(41);
+            step!(42);
+            step!(43);
+            step!(44);
+            step!(45);
+            step!(46);
+            step!(47);
+            step!(48);
+            step!(49);
+            step!(50);
+            step!(51);
+            step!(52);
+            step!(53);
+            step!(54);
+            step!(55);
+            step!(56);
+            step!(57);
+            step!(58);
+            step!(59);
+            step!(60);
+            step!(61);
+            step!(62);
+            step!(63);
         }
         // Pad to `want` so callers can slice `[..n]` without panicking.
         // Zero-loop: at most MAX_BUF pads, each a one-byte push.
@@ -334,14 +502,70 @@ pub fn read(handle: i32, len: usize) -> Vec<u8> {
                 }
             };
         }
-        pad!(0); pad!(1); pad!(2); pad!(3); pad!(4); pad!(5); pad!(6); pad!(7);
-        pad!(8); pad!(9); pad!(10); pad!(11); pad!(12); pad!(13); pad!(14); pad!(15);
-        pad!(16); pad!(17); pad!(18); pad!(19); pad!(20); pad!(21); pad!(22); pad!(23);
-        pad!(24); pad!(25); pad!(26); pad!(27); pad!(28); pad!(29); pad!(30); pad!(31);
-        pad!(32); pad!(33); pad!(34); pad!(35); pad!(36); pad!(37); pad!(38); pad!(39);
-        pad!(40); pad!(41); pad!(42); pad!(43); pad!(44); pad!(45); pad!(46); pad!(47);
-        pad!(48); pad!(49); pad!(50); pad!(51); pad!(52); pad!(53); pad!(54); pad!(55);
-        pad!(56); pad!(57); pad!(58); pad!(59); pad!(60); pad!(61); pad!(62); pad!(63);
+        pad!(0);
+        pad!(1);
+        pad!(2);
+        pad!(3);
+        pad!(4);
+        pad!(5);
+        pad!(6);
+        pad!(7);
+        pad!(8);
+        pad!(9);
+        pad!(10);
+        pad!(11);
+        pad!(12);
+        pad!(13);
+        pad!(14);
+        pad!(15);
+        pad!(16);
+        pad!(17);
+        pad!(18);
+        pad!(19);
+        pad!(20);
+        pad!(21);
+        pad!(22);
+        pad!(23);
+        pad!(24);
+        pad!(25);
+        pad!(26);
+        pad!(27);
+        pad!(28);
+        pad!(29);
+        pad!(30);
+        pad!(31);
+        pad!(32);
+        pad!(33);
+        pad!(34);
+        pad!(35);
+        pad!(36);
+        pad!(37);
+        pad!(38);
+        pad!(39);
+        pad!(40);
+        pad!(41);
+        pad!(42);
+        pad!(43);
+        pad!(44);
+        pad!(45);
+        pad!(46);
+        pad!(47);
+        pad!(48);
+        pad!(49);
+        pad!(50);
+        pad!(51);
+        pad!(52);
+        pad!(53);
+        pad!(54);
+        pad!(55);
+        pad!(56);
+        pad!(57);
+        pad!(58);
+        pad!(59);
+        pad!(60);
+        pad!(61);
+        pad!(62);
+        pad!(63);
         out
     })
 }
@@ -390,7 +614,10 @@ pub fn write(handle: i32, bytes: &[u8]) {
         if idx >= arena::MAX_SLOTS {
             return;
         }
-        let n = bytes.len().min(arena::MAX_BUF).min(frame.slots[idx].len as usize);
+        let n = bytes
+            .len()
+            .min(arena::MAX_BUF)
+            .min(frame.slots[idx].len as usize);
         macro_rules! step {
             ($k:expr) => {
                 if $k < n {
@@ -400,14 +627,70 @@ pub fn write(handle: i32, bytes: &[u8]) {
                 }
             };
         }
-        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-        step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
-        step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
-        step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
-        step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
-        step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
-        step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
-        step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+        step!(0);
+        step!(1);
+        step!(2);
+        step!(3);
+        step!(4);
+        step!(5);
+        step!(6);
+        step!(7);
+        step!(8);
+        step!(9);
+        step!(10);
+        step!(11);
+        step!(12);
+        step!(13);
+        step!(14);
+        step!(15);
+        step!(16);
+        step!(17);
+        step!(18);
+        step!(19);
+        step!(20);
+        step!(21);
+        step!(22);
+        step!(23);
+        step!(24);
+        step!(25);
+        step!(26);
+        step!(27);
+        step!(28);
+        step!(29);
+        step!(30);
+        step!(31);
+        step!(32);
+        step!(33);
+        step!(34);
+        step!(35);
+        step!(36);
+        step!(37);
+        step!(38);
+        step!(39);
+        step!(40);
+        step!(41);
+        step!(42);
+        step!(43);
+        step!(44);
+        step!(45);
+        step!(46);
+        step!(47);
+        step!(48);
+        step!(49);
+        step!(50);
+        step!(51);
+        step!(52);
+        step!(53);
+        step!(54);
+        step!(55);
+        step!(56);
+        step!(57);
+        step!(58);
+        step!(59);
+        step!(60);
+        step!(61);
+        step!(62);
+        step!(63);
     })
 }
 
@@ -450,7 +733,9 @@ pub fn clear() {
 
 // Production-only stack helper (Vec arena).
 #[cfg(not(kani))]
-fn with_stack<R>(f: impl FnOnce(&std::cell::RefCell<std::vec::Vec<std::vec::Vec<std::vec::Vec<u8>>>>) -> R) -> R {
+fn with_stack<R>(
+    f: impl FnOnce(&std::cell::RefCell<std::vec::Vec<std::vec::Vec<std::vec::Vec<u8>>>>) -> R,
+) -> R {
     arena::ARENA.with(f)
 }
 

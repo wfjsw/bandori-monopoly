@@ -138,12 +138,13 @@ pub fn twodonuts_exile_grant_in(effects: &[Effect], player: i32) -> bool {
 pub fn twodonuts_exile_ok(effects: &[Effect], player: i32) -> bool {
     twodonuts_exile_grant_in(effects, player)
         && !effects.iter().any(|e| {
-            matches!(e,
+            matches!(
+                e,
                 Effect::GainMoney { .. }
-                | Effect::PayMoney { .. }
-                | Effect::PayTo { .. }
-                | Effect::Teleport { .. }
-                | Effect::GainFire { .. }
+                    | Effect::PayMoney { .. }
+                    | Effect::PayTo { .. }
+                    | Effect::Teleport { .. }
+                    | Effect::GainFire { .. }
             )
         })
 }

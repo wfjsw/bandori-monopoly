@@ -71,7 +71,11 @@ fn at_decision(m: &Match, member: i32) -> bool {
 
 /// Park one fresh match at member 1's decision (the view frame the server
 /// would send), or `None` when the game ended first.
-fn park(seed: u64, data: &std::sync::Arc<game_core::data::GameData>, rules: &std::sync::Arc<dyn game_core::engine::CardRules>) -> Option<(Match, Value, i32)> {
+fn park(
+    seed: u64,
+    data: &std::sync::Arc<game_core::data::GameData>,
+    rules: &std::sync::Arc<dyn game_core::engine::CardRules>,
+) -> Option<(Match, Value, i32)> {
     let members = vec![
         RoomMember {
             id: 1,
@@ -188,7 +192,11 @@ fn main() {
     println!(
         "ruleset: {} ({}), legacy {}",
         ctx.rules.ruleset_sha256().unwrap_or("stub"),
-        if real { "real WasmRules" } else { "STUB -- no effects" },
+        if real {
+            "real WasmRules"
+        } else {
+            "STUB -- no effects"
+        },
         legacy
     );
 
@@ -222,13 +230,28 @@ fn main() {
                     // real decision -- it must hit the ponder cache.
                     let _ = handle(
                         &ctx,
-                        ponder_request(10_000 + g as u64, "bench", 1, &view, *budget, 7000 + g as u64),
+                        ponder_request(
+                            10_000 + g as u64,
+                            "bench",
+                            1,
+                            &view,
+                            *budget,
+                            7000 + g as u64,
+                        ),
                     );
                 }
                 let t0 = Instant::now();
                 let resp = handle(
                     &ctx,
-                    decide_request(g as u64, "bench", 1, &view, prompt_id, *budget, 1000 + g as u64),
+                    decide_request(
+                        g as u64,
+                        "bench",
+                        1,
+                        &view,
+                        prompt_id,
+                        *budget,
+                        1000 + g as u64,
+                    ),
                 );
                 let dt = t0.elapsed();
                 let Ok(ans) = BotAnswer::from_response(&resp) else {
@@ -254,9 +277,7 @@ fn main() {
             c.wall = wall.elapsed().as_secs_f64();
             c.lats.sort_by(|a, b| a.partial_cmp(b).unwrap());
             if c.lats.is_empty() {
-                println!(
-                    "budget {budget} ms, threads {threads}: no decisions parked"
-                );
+                println!("budget {budget} ms, threads {threads}: no decisions parked");
                 continue;
             }
             let n = c.lats.len().max(1) as f64;

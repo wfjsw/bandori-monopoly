@@ -1,7 +1,7 @@
 //! `HHW:（薰）怪盗hello happy` -- C# `CardKaoruThief` (MatchHost.cs:3780-3871).
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（薰）怪盗hello happy`）:
-//! > （薰）怪盗hello happy： 
+//! > （薰）怪盗hello happy：
 //! >  将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。
 //!
 //! Place this card in play and put a thief mark on one other player. The
@@ -9,9 +9,9 @@
 //! optional force-stop are in; the `H.AbnormalGate` wrapper around the stop
 //! stays a narrow TODO.
 
-use card_sdk::abi::{ActionKind, Dice, FilterKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
+use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const ID: &str = "HHW:（薰）怪盗hello happy";
 
@@ -190,7 +190,10 @@ fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
     PlanValue {
         reverse,
         clear_dice: true,
-        base: Some(Dice { count: 1, sides: 10 }),
+        base: Some(Dice {
+            count: 1,
+            sides: 10,
+        }),
         ..v
     }
 }

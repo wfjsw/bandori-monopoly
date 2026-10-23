@@ -2,16 +2,16 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:欢迎来到ave mujica的世界`）:
 //! > 欢迎来到ave mujica的世界：
-//! >  选择以下效果其一发动： 
+//! >  选择以下效果其一发动：
 //! >  
 //! > （1）转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）；
 //! > （2）[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态
 //!
 //! toggle one player's skill state; as [反击], re-toggle everyone who switched.
 
+use bandori_std::ctx;
 use bandori_std::state_key;
 use card_sdk::abi::ChainKind;
-use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const WELCOME_MUJICA: CardDef = CardDef::new(

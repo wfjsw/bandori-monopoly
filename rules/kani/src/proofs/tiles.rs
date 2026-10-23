@@ -44,7 +44,6 @@ fn symbolic_settle_world(player: i32) -> World {
     w
 }
 
-
 /// Call the unmodified `On::Settle` body of a tile rule via its `CardDef`,
 /// skipping `invoke::find`'s linear scan of the whole registry (that scan is
 /// an unwind cliff under CBMC). The function pointer is the same unmodified
@@ -328,7 +327,10 @@ pub fn agent_half_charge_rounds_up_to_ten() {
     crate::kassert!(cut % 10 == 0, "G-MONEY-10: cut is a multiple of 10");
     let half = (full + 1) / 2;
     crate::kassert!(cut >= half, "G-MONEY-10: cut >= ceil(full/2)");
-    crate::kassert!(cut < half + 10, "G-MONEY-10: cut is the *smallest* such multiple of 10");
+    crate::kassert!(
+        cut < half + 10,
+        "G-MONEY-10: cut is the *smallest* such multiple of 10"
+    );
     kani::cover!(full == 301, "301 → 160 (the clause-doc example)");
     if full == 301 {
         crate::kassert!(cut == 160, "G-MONEY-10: 301 → 160");
@@ -348,7 +350,10 @@ pub fn force_buy_is_double_buy_total() {
     kani::assume(house_cost >= 0 && house_cost <= 5_000);
     let buy = spec::buy_total(price, houses, house_cost);
     let force = spec::force_buy_total(price, houses, house_cost);
-    crate::kassert!(force == 2 * buy, "G-MONEY-07: force-buy is 2 × (price + houses·house)");
+    crate::kassert!(
+        force == 2 * buy,
+        "G-MONEY-07: force-buy is 2 × (price + houses·house)"
+    );
 }
 
 /// G-SETTLE-08: level cap is `rent.len() - 1`; empty table ⇒ 0 (RiNG).
@@ -390,8 +395,14 @@ pub fn property_leg_unowned_is_buy() {
     kani::cover!(owner < 0, "unowned → buy");
     kani::cover!(owner == player && !mortgaged, "own + free → build");
     kani::cover!(owner == player && mortgaged, "own + mortgaged → no effect");
-    kani::cover!(owner >= 0 && owner != player && !mortgaged, "other + free → rent");
-    kani::cover!(owner >= 0 && owner != player && mortgaged, "other + mortgaged → force-buy");
+    kani::cover!(
+        owner >= 0 && owner != player && !mortgaged,
+        "other + free → rent"
+    );
+    kani::cover!(
+        owner >= 0 && owner != player && mortgaged,
+        "other + mortgaged → force-buy"
+    );
 }
 
 /// G-SETTLE-13: the all-owned-by-other gate.
@@ -416,7 +427,10 @@ pub fn agent_all_owned_gate() {
     if all {
         let mut j = 0;
         while j < n {
-            crate::kassert!(owners[j] >= 0 && owners[j] != player, "gate: every member is other-owned");
+            crate::kassert!(
+                owners[j] >= 0 && owners[j] != player,
+                "gate: every member is other-owned"
+            );
             j += 1;
         }
     }

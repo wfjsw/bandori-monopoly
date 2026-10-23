@@ -136,7 +136,11 @@ fn g01_fire_bird_times_ave_mujica_on_one_rent() {
     drain(&mut t);
     let charged = rent * 3 / 2;
     let received = charged * 3 / 2;
-    assert_eq!(t.money(1), 10_000 - charged, "P1 pays the once-scaled 1.5*{rent}");
+    assert_eq!(
+        t.money(1),
+        10_000 - charged,
+        "P1 pays the once-scaled 1.5*{rent}"
+    );
     assert_eq!(t.money(0), 10_000 + received, "P0 receives 1.5*1.5*{rent}");
 }
 
@@ -179,11 +183,20 @@ fn g02_half_speed_plus_expectations_floor_on_a_rent() {
     t.dice(&[7]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), tile, "landed on the rent tile: {}", t.dump_prompt());
+    assert_eq!(
+        t.pos(0),
+        tile,
+        "landed on the rent tile: {}",
+        t.dump_prompt()
+    );
     // Add-then-multiply: (R + 100) / 2.
     let paid = (rent + 100) / 2;
     assert_eq!(t.money(0), 10_000 - paid, "(R+100)/2 for R = {rent}");
-    assert_eq!(t.money(1), 10_000 + paid, "the payee receives the paid amount");
+    assert_eq!(
+        t.money(1),
+        10_000 + paid,
+        "the payee receives the paid amount"
+    );
 }
 
 // =====================================================================
@@ -207,9 +220,17 @@ fn g03_net_error_drops_one_leg_of_a_split() {
     counteract_cancelling(&mut t, 2, "通用:网络链接异常", 2);
     drain(&mut t);
     let share = ceil10(2000 / 3);
-    assert_eq!(t.money(1), 10_000 - share, "P1 pays the pre-drop share {share}");
+    assert_eq!(
+        t.money(1),
+        10_000 - share,
+        "P1 pays the pre-drop share {share}"
+    );
     assert_eq!(t.money(2), 10_000, "P2 pays nothing");
-    assert_eq!(t.money(3), 10_000 - share, "P3 pays the pre-drop share {share}");
+    assert_eq!(
+        t.money(3),
+        10_000 - share,
+        "P3 pays the pre-drop share {share}"
+    );
 }
 
 // =====================================================================
@@ -242,7 +263,11 @@ fn g04_half_share_then_cancel_one_payer() {
     // The surviving halved payer pays share/2; the cancelled one pays 0.
     assert_eq!(t.money(1), 10_000 - share / 2, "P1 pays {share}/2");
     assert_eq!(t.money(2), 10_000, "P2 pays nothing");
-    assert_eq!(t.money(3), 10_000 - share, "P3 pays the full pre-drop share {share}");
+    assert_eq!(
+        t.money(3),
+        10_000 - share,
+        "P3 pays the full pre-drop share {share}"
+    );
 }
 
 // =====================================================================
@@ -271,7 +296,11 @@ fn g05_tritone_against_a_split_share() {
     let share = ceil10(2000 / 3);
     // P1 gains its share and pays it: net 0 now. The other legs still pay.
     assert_eq!(t.money(1), 10_000, "P1 nets 0 now: {}", t.money(1));
-    assert_eq!(t.money(0), 10_000 + 3 * share, "P0 receives all three shares");
+    assert_eq!(
+        t.money(0),
+        10_000 + 3 * share,
+        "P0 receives all three shares"
+    );
     assert_eq!(t.money(2), 10_000 - share);
     assert_eq!(t.money(3), 10_000 - share);
     assert!(
@@ -290,7 +319,11 @@ fn g05_tritone_against_a_split_share() {
         "discarded after 3 turn ends: {:?}",
         t.discard(1)
     );
-    assert_eq!(t.money(1), 10_000 - share, "P1 pays the accumulated amount back");
+    assert_eq!(
+        t.money(1),
+        10_000 - share,
+        "P1 pays the accumulated amount back"
+    );
 }
 
 // =====================================================================

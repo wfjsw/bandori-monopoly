@@ -32,25 +32,27 @@ mod ctx;
 pub mod eval;
 mod kinds;
 pub mod view;
-pub mod vocab;
 mod view_impl;
+pub mod vocab;
 pub use view_impl::SnapshotView;
-/// AST → heap-free IR for Kani (host-only; feature `lower`).
-#[cfg(feature = "lower")]
-pub mod lower;
 /// Build-time generator for the Kani guard IR table (feature `lower`).
 #[cfg(feature = "lower")]
 pub mod gen_ir;
+/// AST → heap-free IR for Kani (host-only; feature `lower`).
+#[cfg(feature = "lower")]
+pub mod lower;
 /// The §4.2 vocabulary lint/rewrite: only the host (`compile`) walks it.
 #[cfg(feature = "compile")]
 pub mod schema;
 
-pub use compile::Cond;
 #[cfg(feature = "compile")]
 pub use compile::compile;
-pub use ctx::{fill_named_layers, CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx};
+pub use compile::Cond;
+pub use ctx::{
+    fill_named_layers, CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx,
+};
 pub use eval::{EvalError, WindowScope};
-pub use kinds::{ident_known, int_constants, str_constants, mv, trig};
+pub use kinds::{ident_known, int_constants, mv, str_constants, trig};
 
 /// Stable int id for a string identity (character name / band name / card id).
 /// Not the data-table index -- a name-stable hash so a condition's

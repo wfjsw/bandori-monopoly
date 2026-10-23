@@ -38,7 +38,10 @@ fn baked_sha() -> String {
     }
     // CARGO_MANIFEST_DIR is crates/bot-glue.
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for rel in ["dist/cards/index.json", "webui/public/assets/rules/index.json"] {
+    for rel in [
+        "dist/cards/index.json",
+        "webui/public/assets/rules/index.json",
+    ] {
         if let Some(sha) = read_index_sha(&root.join(rel)) {
             return sha;
         }

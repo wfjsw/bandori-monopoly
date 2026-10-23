@@ -7,8 +7,8 @@
 
 mod common;
 
-use common::*;
 use bandori_std::kind as rk;
+use common::*;
 
 /// Manifest shape of the three split cards: one Filter + one Action half,
 /// same body, same pre, and no later entry-index drift beyond the known shift.
@@ -16,7 +16,10 @@ use bandori_std::kind as rk;
 fn split_cards_declare_filter_and_action_halves() {
     let r = rules();
     let shape = |id: &str| -> Vec<(i32, Vec<String>, bool)> {
-        let idx = r.ruleset().card(id).unwrap_or_else(|| panic!("{id} loaded"));
+        let idx = r
+            .ruleset()
+            .card(id)
+            .unwrap_or_else(|| panic!("{id} loaded"));
         let info = &r.ruleset().cards()[idx as usize];
         info.on
             .iter()
@@ -57,7 +60,11 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s[2].0, kind("Action"));
     assert_eq!(s[2].1, vec!["targeted".to_string()], "Targeted");
     assert_eq!(s[3].0, kind("Action"));
-    assert_eq!(s[3].1, vec!["paySplitChooseBefore".to_string()], "PaySplitChooseBefore");
+    assert_eq!(
+        s[3].1,
+        vec!["paySplitChooseBefore".to_string()],
+        "PaySplitChooseBefore"
+    );
     assert_eq!(s[4].0, kind("Filter"));
     assert_eq!(s[4].1, vec!["paySplitChoose".to_string()], "PaySplitChoose");
     assert_eq!(s[5].0, kind("Action"));
@@ -85,10 +92,7 @@ fn manifest_spellings_are_namespaced_strings() {
             .card(id)
             .unwrap_or_else(|| panic!("{id} loaded"));
         let info = &r.ruleset().cards()[idx as usize];
-        info.on
-            .iter()
-            .flat_map(|o| o.triggers.clone())
-            .collect()
+        info.on.iter().flat_map(|o| o.triggers.clone()).collect()
     };
     // embers registers `Actions::Exile` -- ruleset-ns spelling.
     let t = triggers("event:火种燃尽之后会怎么样呢？");
@@ -105,7 +109,12 @@ fn manifest_spellings_are_namespaced_strings() {
     // Retired spellings never appear. (`markerSpent` / `cardUsed` /
     // `houseAdded` are the *current* engine spellings -- only the old
     // ruleset-side names and `"r:bandori:73/74/75"` are dead.)
-    for id in ["event:火种燃尽之后会怎么样呢？", "通用:[衍生]FEVER!", "PP:不要背负期待", "Mujica:#J11"] {
+    for id in [
+        "event:火种燃尽之后会怎么样呢？",
+        "通用:[衍生]FEVER!",
+        "PP:不要背负期待",
+        "Mujica:#J11",
+    ] {
         let t = triggers(id);
         for s in &t {
             assert_ne!(s, "21", "{id} bare decimal");
@@ -172,7 +181,11 @@ fn fever_filter_half_pay_add_still_boosts() {
     let paid = money1 - t.money(1) as i64;
     let got = t.money(0) as i64 - money0;
     assert_eq!(paid, got, "FEVER! is a pure transfer");
-    assert_eq!(paid, 60 + x, "Filter half applied exactly once (rent 60 + X {x}, n {n})");
+    assert_eq!(
+        paid,
+        60 + x,
+        "Filter half applied exactly once (rent 60 + X {x}, n {n})"
+    );
 }
 
 /// no_expectation both halves: the roll shave (Filter DiceRollValue) and PaySplitAdd
@@ -193,7 +206,11 @@ fn no_expectation_both_halves_fire() {
         let _ = t.answer(0, 0);
     }
     // Filter half (DiceRollValue): face - 2.
-    assert_eq!(t.pos(0), (face - 2) as usize, "DiceRollValue half shaves by 2");
+    assert_eq!(
+        t.pos(0),
+        (face - 2) as usize,
+        "DiceRollValue half shaves by 2"
+    );
 }
 
 /// j11 both halves: TurnEnd decay (Action) burns a crystal. Sequence matches

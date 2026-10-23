@@ -168,10 +168,7 @@ fn pre_rollplan_does_not_shape_the_move() {
     let card = r.card("TEST:preRollPlan").expect("fixture present");
     let mut w = effect_window(0, 0);
     w.trigger.kind = TriggerKind::DiceRollPlan;
-    let call = Call::DiceRollPlan {
-        card,
-        player_id: 0,
-    };
+    let call = Call::DiceRollPlan { card, player_id: 0 };
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
@@ -196,10 +193,7 @@ fn pre_at_end_does_not_run() {
     let card = r.card("TEST:preAtEnd").expect("fixture present");
     let mut w = effect_window(0, 0);
     w.trigger.kind = TriggerKind::TurnEndAfter;
-    let call = Call::AtEnd {
-        card,
-        player_id: 0,
-    };
+    let call = Call::AtEnd { card, player_id: 0 };
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
@@ -224,10 +218,7 @@ fn pre_settle_does_not_govern() {
     let card = r.card("TEST:preSettle").expect("fixture present");
     let mut w = effect_window(0, 0);
     w.trigger.kind = TriggerKind::Settle;
-    let call = Call::Settle {
-        card,
-        player_id: 0,
-    };
+    let call = Call::Settle { card, player_id: 0 };
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
@@ -253,7 +244,10 @@ fn pre_compile_errors_fail_closed() {
         "owner.money >= 1.5",       // float literal (int-only)
         "double(owner.money) >= 1", // float op
     ] {
-        assert!(CompiledPre::compile(bad).is_err(), "should fail closed: {bad}");
+        assert!(
+            CompiledPre::compile(bad).is_err(),
+            "should fail closed: {bad}"
+        );
     }
     assert!(CompiledPre::compile("actor == owner").is_ok());
 }
@@ -287,8 +281,12 @@ fn pre_runtime_only_matches_host() {
 #[test]
 fn shipped_precompiled_blobs_match_host_compile() {
     let dir = dist("cards");
-    let text = std::fs::read_to_string(dir.join("index.json"))
-        .unwrap_or_else(|e| panic!("{}: {e} -- run tools/build-ruleset.mjs", dir.join("index.json").display()));
+    let text = std::fs::read_to_string(dir.join("index.json")).unwrap_or_else(|e| {
+        panic!(
+            "{}: {e} -- run tools/build-ruleset.mjs",
+            dir.join("index.json").display()
+        )
+    });
     let index: serde_json::Value = serde_json::from_str(&text).unwrap();
     let conds_meta = index
         .get("conds")
@@ -296,7 +294,8 @@ fn shipped_precompiled_blobs_match_host_compile() {
         .and_then(|f| f.as_str())
         .expect("a shipped set with guard conditions must publish a conds blob");
     let blob_path = dir.join(conds_meta);
-    let bytes = std::fs::read(&blob_path).unwrap_or_else(|e| panic!("{}: {e}", blob_path.display()));
+    let bytes =
+        std::fs::read(&blob_path).unwrap_or_else(|e| panic!("{}: {e}", blob_path.display()));
     let shipped =
         game_rules::PrecompiledConds::from_bytes(&bytes).expect("shipped blob must decode");
 
@@ -335,7 +334,13 @@ fn shipped_precompiled_blobs_match_host_compile() {
         for ei in 0..c.on.len() {
             let h = host.pre_at(ci as i32, ei as i32);
             let r = runtime.pre_at(ci as i32, ei as i32);
-            assert_eq!(h.is_some(), r.is_some(), "{}/{}: condition presence", c.id, ei);
+            assert_eq!(
+                h.is_some(),
+                r.is_some(),
+                "{}/{}: condition presence",
+                c.id,
+                ei
+            );
             let (Some(h), Some(r)) = (h, r) else { continue };
             for (actor, owner) in [(0, 0), (1, 0), (0, 1), (2, 2)] {
                 for value in [0, 5000] {
@@ -397,10 +402,7 @@ fn precompiled_missing_or_mismatched_is_a_build_error() {
     let entry = 1;
     let host = load(&["cards"]);
     let want = host
-        .pre_at(
-            host.card(card).expect("shipped card present"),
-            entry,
-        )
+        .pre_at(host.card(card).expect("shipped card present"), entry)
         .expect("reported entry declares a condition");
     let blob = want.blob.clone();
 
@@ -429,7 +431,10 @@ fn precompiled_missing_or_mismatched_is_a_build_error() {
         stale.add(&m).unwrap();
     }
     stale.precompiled("AG:回家的路上绕个道", 0, blob);
-    let err = stale.build().err().expect("stale blob entry must not build");
+    let err = stale
+        .build()
+        .err()
+        .expect("stale blob entry must not build");
     assert!(
         err.to_string().contains("no condition"),
         "loud, not ignored: {err}"

@@ -13,14 +13,8 @@ const FILL: &str = "R:[衍生] 觉悟";
 fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
     let d = data();
     let props = rules().card_props(card);
-    t.m.world_mut().place_card_on(
-        &d,
-        who as i32,
-        tile as i32,
-        card,
-        Msg::default(),
-        props,
-    );
+    t.m.world_mut()
+        .place_card_on(&d, who as i32, tile as i32, card, Msg::default(), props);
 }
 
 fn set_draw_n(t: &mut Table, who: usize, n: usize) {
@@ -162,10 +156,7 @@ fn t02_anon_link_plus_fire_bird() {
         "t02 record (RULING: linked half boosted?): paid = {}, base = {base}, 1.5*R1 = {low}",
         10_000 - t.money(1)
     );
-    assert!(
-        10_000 - t.money(1) >= low,
-        "at least 1.5 × R(1)"
-    );
+    assert!(10_000 - t.money(1) >= low, "at least 1.5 × R(1)");
 }
 
 // =====================================================================
@@ -208,7 +199,11 @@ fn t03_anon_link_plus_repaint() {
     // Repaint's ×0.5 is a modifier: exact half, then the engine's one
     // end-of-calc `ceil10` (user ruling 2026-10-15).
     let half = ceil10(full / 2);
-    assert_eq!(t.money(1), 10_000 - half, "halved+round10: {full} -> {half}");
+    assert_eq!(
+        t.money(1),
+        10_000 - half,
+        "halved+round10: {full} -> {half}"
+    );
 }
 
 // =====================================================================
@@ -263,7 +258,11 @@ fn t05_one_of_us_shares() {
         if p.kind == "player" {
             answer_player(&mut t, 0, 1);
         } else if p.kind == "tile" {
-            let want = if p.items.iter().any(|s| s == "47") { "47" } else { "48" };
+            let want = if p.items.iter().any(|s| s == "47") {
+                "47"
+            } else {
+                "48"
+            };
             let k = p.items.iter().position(|s| s == want).unwrap() as i32;
             t.answer(0, k).unwrap();
         } else {
@@ -287,7 +286,11 @@ fn t05_one_of_us_shares() {
     // 「之后被分享方资金直接增加，不受其他任何效果影响」 -- P0's half is a raw
     // add, so FEVER! (on P0's field) must not boost it.
     assert_eq!(t.money(1), 10_000 + r / 2, "P1 keeps R and pays R/2 to P0");
-    assert_eq!(t.money(0), 10_000 + r / 2, "P0 gets exactly R/2 (FEVER! does not boost)");
+    assert_eq!(
+        t.money(0),
+        10_000 + r / 2,
+        "P0 gets exactly R/2 (FEVER! does not boost)"
+    );
 }
 
 // =====================================================================
@@ -464,9 +467,15 @@ fn t10_ringing_bloom() {
     drain(&mut t);
     let expected = rent(t2, 3) / 2;
     let paid = 10_000 - t.money(1);
-    eprintln!("t10 record: P1 paid = {paid} (want R(2,3)/2 = {expected}), P0 = {} (+500*3)", t.money(0));
+    eprintln!(
+        "t10 record: P1 paid = {paid} (want R(2,3)/2 = {expected}), P0 = {} (+500*3)",
+        t.money(0)
+    );
     // (2): t2's houses count as the max (3) and the inflated ones charge half.
-    assert_eq!(paid, expected, "R(天文馆,3)/2 — the inflated houses charge half");
+    assert_eq!(
+        paid, expected,
+        "R(天文馆,3)/2 — the inflated houses charge half"
+    );
     // (3): after charging a non-RiNG tile, +500*X with X = the charged tile's
     // (treated) house count = 3.
     assert_eq!(
@@ -669,7 +678,11 @@ fn t13_smile_parade() {
         .find(|f| f.card.contains("笑容大游行"))
         .expect("card still on the field after (1)/(2)");
     // (2) 「并移除其上全部奇迹水晶」.
-    assert_eq!(f.counters.get("crystals").copied().unwrap_or(0), 0, "(2) clears the crystals");
+    assert_eq!(
+        f.counters.get("crystals").copied().unwrap_or(0),
+        0,
+        "(2) clears the crystals"
+    );
     eprintln!(
         "t13 swap record: card tile = {} (end {}), crystals = {}",
         f.tile,
@@ -747,7 +760,10 @@ fn t15_kkr_on_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    eprintln!("t15 record: P0 pos = {} (3 + 2 = 5 if CiRCLE counted)", t.pos(0));
+    eprintln!(
+        "t15 record: P0 pos = {} (3 + 2 = 5 if CiRCLE counted)",
+        t.pos(0)
+    );
 }
 
 // =====================================================================
@@ -857,7 +873,10 @@ fn t18_rana_interesting_woman() {
     loop {
         let Some(_) = t.prompt() else { break };
         // Prefer the force-stop branch so (4)/(5) are exercised.
-        let k = t.option("停").or_else(|| t.option("芭菲")).or_else(|| t.option("ask.yes"));
+        let k = t
+            .option("停")
+            .or_else(|| t.option("芭菲"))
+            .or_else(|| t.option("ask.yes"));
         if let Some(k) = k {
             t.answer(1, k).unwrap();
         } else {
@@ -904,7 +923,8 @@ fn t19_saaya_names_the_sky() {
     t.begin_turn(0);
     // (1): 「将此卡放置在山吹面包房」 — the play body drops it there.
     let yamabuki = tile("山吹面包房");
-    t.give_play(0, "PPP:（沙绫）总有一天要给这片天空命名").unwrap();
+    t.give_play(0, "PPP:（沙绫）总有一天要给这片天空命名")
+        .unwrap();
     t.set_pos(0, yamabuki - 2);
     t.dice(&[4, 5, 5, 5]);
     t.roll(0).unwrap();
@@ -914,7 +934,10 @@ fn t19_saaya_names_the_sky() {
         "t19 record: fire = {}, field = {:?}, tiles = {:?} (3d20 = 5+5+5 -> tile #15 = index 14)",
         t.charge(0),
         t.field_ids(0),
-        t.field(0).iter().map(|f| (f.card.clone(), f.tile)).collect::<Vec<_>>()
+        t.field(0)
+            .iter()
+            .map(|f| (f.card.clone(), f.tile))
+            .collect::<Vec<_>>()
     );
     // (2): 「[经过]此卡后在回合结束后获得1个[火罐]」.
     assert_eq!(t.charge(0), 1, "+1 fire at turn end after passing the card");
@@ -954,7 +977,11 @@ fn t20_clear_cp() {
     // 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 — a CP mark lands on the
     // chosen tile. (The 「场上]6个[CP点]」 and the 800-on-settle halves are recorded
     // above; their representation is not pinned by the sheet.)
-    assert!(!t.marks().is_empty(), "a [CP点] mark is placed: {:?}", t.marks());
+    assert!(
+        !t.marks().is_empty(),
+        "a [CP点] mark is placed: {:?}",
+        t.marks()
+    );
 }
 
 // =====================================================================
@@ -1173,7 +1200,9 @@ fn t25_noble_blue_mark() {
         t.dump_prompt()
     );
     assert!(
-        !p.options.iter().any(|o| format!("{o:?}").contains(&t1.to_string())),
+        !p.options
+            .iter()
+            .any(|o| format!("{o:?}").contains(&t1.to_string())),
         "marked tile must not be offered: {}",
         t.dump_prompt()
     );
@@ -1231,7 +1260,10 @@ fn t27_ikumi_marks() {
     }
     let marks = t.marks();
     eprintln!("t27 marks after play: {marks:?}");
-    let mark_tile = marks.first().map(|m| m.tile as usize).expect("a 育美 mark was placed");
+    let mark_tile = marks
+        .first()
+        .map(|m| m.tile as usize)
+        .expect("a 育美 mark was placed");
     // Walk past the mark's tile (start 2 before it; roll 4).
     t.set_pos(0, (mark_tile + 58) % 60);
     t.dice(&[4]);
@@ -1239,7 +1271,8 @@ fn t27_ikumi_marks() {
     let mut saw_offer = false;
     loop {
         let Some(_) = t.prompt() else { break };
-        if t.option("ask.yes").is_some() || t.option("停").is_some() || t.option("2000").is_some() {
+        if t.option("ask.yes").is_some() || t.option("停").is_some() || t.option("2000").is_some()
+        {
             saw_offer = true;
         }
         eprintln!("t27 prompt: {}", t.dump_prompt());

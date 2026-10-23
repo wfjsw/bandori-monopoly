@@ -8,10 +8,10 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{prop, ChainKind, ActionKind, Dice, FilterKind};
-use card_sdk::ctx::plan;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PlanValue};
+use card_sdk::abi::{prop, ActionKind, ChainKind, Dice, FilterKind};
+use card_sdk::ctx::plan;
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",

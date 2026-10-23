@@ -337,7 +337,10 @@ fn kkr_place_on_circle_iff_at(user: i32) {
     // routes dest through `Dest::Field` instead of the tile, this is a host
     // finding — the body asked for CiRCLE.
     kani::cover!(placed_circle, "PlaceCard dest is CiRCLE");
-    kani::cover!(!placed_circle, "PlaceCard dest is not CiRCLE (host finding)");
+    kani::cover!(
+        !placed_circle,
+        "PlaceCard dest is not CiRCLE (host finding)"
+    );
     // Pin the weaker determined fact: a PlaceCard by this player happens.
     crate::kassert!(
         effects
@@ -378,7 +381,8 @@ pub fn kkr_mutant_pay_1000() {
     invoke::unwrap_done(card_hhw::kokoro_circle::play_kani(user));
     let post = world::snapshot();
     crate::kassert!(
-        post.money[player as usize] == pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
+        post.money[player as usize]
+            == pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
         "mutant: card must not pay only 1000"
     );
 }
@@ -395,7 +399,8 @@ pub fn kkr_mutant_is_detected() {
     invoke::unwrap_done(card_hhw::kokoro_circle::play_kani(user));
     let post = world::snapshot();
     crate::kassert!(
-        post.money[player as usize] != pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
+        post.money[player as usize]
+            != pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
         "mutant -1000 must disagree with the card's -10000"
     );
 }
@@ -530,7 +535,9 @@ pub fn athletic_empty_discards() {
     // Book: the card is put into the discard. Observable: field-count drop
     // (the `set_dest` commit) or an explicit UnplaceCard effect.
     let discarded = post_field_n < pre_field_n
-        || effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. }));
+        || effects
+            .iter()
+            .any(|e| matches!(e, Effect::UnplaceCard { .. }));
     kani::cover!(discarded, "card unplaced into discard");
     kani::cover!(!discarded, "card NOT unplaced (LESS finding)");
     crate::kassert!(
@@ -642,7 +649,8 @@ pub fn believe_mutant_is_detected() {
     invoke::unwrap_done(card_hhw::believe_you::play_kani(user));
     let post = world::snapshot();
     crate::kassert!(
-        post.money[player as usize] != pre_money - spec::hhw::believe_02_amount_paid_mutant(pre_money),
+        post.money[player as usize]
+            != pre_money - spec::hhw::believe_02_amount_paid_mutant(pre_money),
         "mutant cost 80 must disagree with the card's 800"
     );
 }
@@ -682,7 +690,8 @@ fn backstage_pays_1000_per_discard_iff_at(user: i32) {
         "C-HHW-backstage-01: at most two flips"
     );
     crate::kassert!(
-        post.money[player as usize] == pre.money[player as usize] + spec::hhw::backstage_02_gain(flipped),
+        post.money[player as usize]
+            == pre.money[player as usize] + spec::hhw::backstage_02_gain(flipped),
         "C-HHW-backstage-02: money rises by exactly 1000 per flip"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
@@ -755,11 +764,7 @@ fn balloon_teleports_to_a_chosen_result_iff_at(user: i32) {
     // blocked-by host: `card_move` is a protocol stub and logs no Teleport.
     let mut dest = -1;
     for e in effects {
-        if let Effect::Teleport {
-            player: p,
-            tile,
-        } = e
-        {
+        if let Effect::Teleport { player: p, tile } = e {
             if *p == player {
                 dest = *tile;
             }
@@ -837,7 +842,10 @@ fn hagumi_over_60_gains_and_draws_iff_at(user: i32) {
         .any(|e| matches!(e, Effect::GainMoney { player: p, n } if *p == player && *n == 1000));
     kani::cover!(over, "over-60 branch");
     kani::cover!(!over && has_mark, "mark branch");
-    kani::cover!(!over && !has_mark && !has_gain, "neither (short pile / no pick)");
+    kani::cover!(
+        !over && !has_mark && !has_gain,
+        "neither (short pile / no pick)"
+    );
     if over {
         crate::kassert!(
             post.money[player as usize] == pre.money[player as usize] + 1000,

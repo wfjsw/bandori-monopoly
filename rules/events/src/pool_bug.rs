@@ -3,8 +3,8 @@
 //! 事件文本（`CardMeta` beside the rule body, id `卡池BUG`）:
 //! > 将此卡放置于场地中央并将一张“[衍生]修复公告”背面朝上放置于事件牌堆顶部，下次触发事件时将此卡放入事件弃牌。此卡在场时不可在造价1500及以上的格子上加盖房屋。
 
-use card_sdk::abi::{prop, ActionKind};
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{prop, ActionKind};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};

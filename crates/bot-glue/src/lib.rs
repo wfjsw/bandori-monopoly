@@ -246,8 +246,11 @@ fn assemble() -> Result<(), JsError> {
         return Ok(());
     }
     let roster: Roster = rules_native::roster();
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()), roster)
-        .map_err(|e| JsError::new(&e))?;
+    let d = GameData::load(
+        |f| files.get(f).cloned().ok_or_else(|| "missing".to_string()),
+        roster,
+    )
+    .map_err(|e| JsError::new(&e))?;
     let data = Arc::new(d);
     // Build the linked rules once; a later `load_data` rebinds them to the new
     // tables the same way the sandbox rebinds `WasmRules`.
@@ -266,14 +269,13 @@ fn assemble() -> Result<(), JsError> {
         // set and waits for the tables.
         return Ok(());
     }
-    let roster: Roster = RULESET.with(|r| {
-        r.borrow()
-            .as_ref()
-            .map(|s| s.roster())
-            .unwrap_or_default()
-    });
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()), roster)
-        .map_err(|e| JsError::new(&e))?;
+    let roster: Roster =
+        RULESET.with(|r| r.borrow().as_ref().map(|s| s.roster()).unwrap_or_default());
+    let d = GameData::load(
+        |f| files.get(f).cloned().ok_or_else(|| "missing".to_string()),
+        roster,
+    )
+    .map_err(|e| JsError::new(&e))?;
     let data = Arc::new(d);
     let rules = RULESET
         .with(|r| r.borrow().clone())
@@ -544,7 +546,11 @@ struct RootStat {
     eval_visits: u64,
 }
 
-fn root_stats_json(out: &SearchOutcome, st: &game_core::state::MatchState, seat: usize) -> Vec<RootStat> {
+fn root_stats_json(
+    out: &SearchOutcome,
+    st: &game_core::state::MatchState,
+    seat: usize,
+) -> Vec<RootStat> {
     out.root_stats_full
         .iter()
         .map(|s| RootStat {
@@ -834,11 +840,19 @@ fn run_search(
         ..Default::default()
     };
     let mut tree = if opts.reuse_trees {
-        CACHE.with(|c| c.borrow().trees.get(&member).cloned()).unwrap_or_default()
+        CACHE
+            .with(|c| c.borrow().trees.get(&member).cloned())
+            .unwrap_or_default()
     } else {
         Ismcts::new()
     };
-    let mut sim = MatchSim::new(data().expect("load_data"), rules().expect("rules"), view.clone(), seat, member);
+    let mut sim = MatchSim::new(
+        data().expect("load_data"),
+        rules().expect("rules"),
+        view.clone(),
+        seat,
+        member,
+    );
     let out = tree.search(&mut sim, seat, cfg);
     if opts.reuse_trees && !out.heuristic {
         if !keep_whole_tree {

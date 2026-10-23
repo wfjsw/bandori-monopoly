@@ -9,8 +9,8 @@
 //! seat-0 and seat-1 proofs. Direct `*_kani` body calls. Per-body host-op
 //! subset (outside → loud FAIL).
 
-use crate::host;
 use crate::harness::{self, SparsePlay};
+use crate::host;
 use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
@@ -169,7 +169,8 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
     };
     let ctx = crate::ir_fill::fill_for_guard(
         &w2,
-        gid, me,
+        gid,
+        me,
         0,
         false,
         -1,
@@ -194,11 +195,11 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
     let fan_delta: i32 = effects
         .iter()
         .filter_map(|e| match e {
-            Effect::AddToken {
-                player: p,
-                key,
-                n,
-            } if *p == me && *key == crate::intern::intern(FANS_UP).0 => Some(*n),
+            Effect::AddToken { player: p, key, n }
+                if *p == me && *key == crate::intern::intern(FANS_UP).0 =>
+            {
+                Some(*n)
+            }
             _ => None,
         })
         .sum();
@@ -221,7 +222,6 @@ pub fn aya_with_01_five_fans_iff() {
 pub fn aya_with_01_five_fans_user1_iff() {
     aya_with_01_five_fans_iff_at(1);
 }
-
 
 /// MUTANT: +4 fans.
 #[kani::proof]
@@ -298,7 +298,6 @@ pub fn aya_with_02_pay_discount_user1_iff() {
     aya_with_02_pay_discount_iff_at(1);
 }
 
-
 /// MUTANT: discount Y*99.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
@@ -368,7 +367,10 @@ pub fn band_idol_02_overflow_formula() {
     // x-down > 10-held. Class B: the old check asserted disagreement in the
     // agreeing range.
     let m = spec::skills_pp::band_idol_02_overflow_mutant(x, down, held);
-    kani::cover!(x > down && (x - down) > 10 - held, "reachable disagreement (cap 11)");
+    kani::cover!(
+        x > down && (x - down) > 10 - held,
+        "reachable disagreement (cap 11)"
+    );
     if x > down && (x - down) > 10 - held {
         crate::kassert!(m != over, "mutant cap 11 vs 10");
     }
@@ -385,7 +387,10 @@ pub fn skill2_all_pp_overflow_formula() {
     kani::assume(down >= 0 && down <= 5);
     kani::assume(held >= 0 && held <= 15);
     let over = spec::skills_pp::skill2_all_pp_overflow(down, held);
-    kani::cover!(down == 0 && held < 10, "X=1 > down=0, room → 1 overflow crystal");
+    kani::cover!(
+        down == 0 && held < 10,
+        "X=1 > down=0, room → 1 overflow crystal"
+    );
     kani::cover!(down == 0 && held >= 10, "X=1 but card full → 0");
     kani::cover!(down >= 1, "X=1 <= down → no overflow");
     if down == 0 && held < 10 {
@@ -493,7 +498,6 @@ pub fn band_idol_04_tick_user1_iff() {
     band_idol_04_tick_iff_at(1);
 }
 
-
 // ===========================================================================
 // C-PP-hina-lottery-02 borrow map (pure)
 // 「结果为1是丸山彩；结果为2是白鹭千圣；结果为3是若宫伊芙；结果为4是大和麻弥。」
@@ -532,7 +536,10 @@ pub fn maya_dawn_02_watch_formula() {
         watch == (y + 1).min(deck),
         "C-PP-maya-dawn-02: watch min(Y+1, deck)"
     );
-    crate::kassert!(spec::skills_pp::maya_dawn_02_hand_n() == 1, "exactly one card joins the hand");
+    crate::kassert!(
+        spec::skills_pp::maya_dawn_02_hand_n() == 1,
+        "exactly one card joins the hand"
+    );
 }
 
 // ===========================================================================
@@ -611,9 +618,8 @@ fn band_idol_01_start_grant_iff_at(user: i32) {
     invoke::unwrap_done(skill_groups::pastel::at_start_kani(me));
     let post_down = world::with_world(|ww| ww.fans_neg);
     for p in 0..MAX_PLAYERS {
-        let is_pp = world::with_world(|ww| {
-            ww.group_id[p] == crate::intern::intern("Pastel✽Palettes").0
-        });
+        let is_pp =
+            world::with_world(|ww| ww.group_id[p] == crate::intern::intern("Pastel✽Palettes").0);
         if is_pp || p >= world::with_world(|ww| ww.n_players) as usize {
             crate::kassert!(
                 post_down[p] == pre_down[p],
@@ -641,7 +647,6 @@ pub fn band_idol_01_start_grant_iff() {
 pub fn band_idol_01_start_grant_user1_iff() {
     band_idol_01_start_grant_iff_at(1);
 }
-
 
 // ===========================================================================
 // C-PP-band-idol-03 no CiRCLE reward — the clause is a prohibition on the
@@ -683,11 +688,18 @@ fn first_accident_02_iff_at(me: i32) {
             || ww.key_get(me, crate::intern::intern("skillBlock")) > 0
     });
     kani::cover!(blocked, "skillBlock token written");
-    crate::kassert!(blocked, "C-PP-first-accident-02: skillBlock token must be set");
+    crate::kassert!(
+        blocked,
+        "C-PP-first-accident-02: skillBlock token must be set"
+    );
 
     // 2) 丸山彩 (2) must refuse
     let pre_amount2 = world::with_world(|ww| ww.pay_amount);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayCombinedAdd */);
+    invoke::unwrap_done(invoke::entry_idx(
+        crate::card_id!("skill:丸山彩:With~"),
+        1,
+        me,
+    ) /* Hook PayCombinedAdd */);
     let post = world::snapshot();
     crate::kassert!(
         post.pay_amount == pre_amount2,

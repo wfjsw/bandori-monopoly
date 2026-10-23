@@ -17,8 +17,8 @@
 //! `*_kani` body calls keep CBMC's call graph at ONE body (no `call_body_idx`
 //! trampoline IF-chain).
 
-use crate::host;
 use crate::harness::{self, SparsePlay};
+use crate::host;
 use crate::invoke;
 use crate::spec::r as spec;
 use crate::world::{self, Effect, MAX_LOG};
@@ -796,7 +796,10 @@ fn student_council_add_resolve_iff_at(user: i32) {
     // No effect-log entry: `add_to_deck` is a silent pile write.
     let (logbuf, log_n) = log_slice();
     let _ = logbuf;
-    crate::kassert!(log_n == 0, "C-R-学生会的检查-02: insert is not an effect-log row");
+    crate::kassert!(
+        log_n == 0,
+        "C-R-学生会的检查-02: insert is not an effect-log row"
+    );
 }
 
 /// C-R-学生会的检查-02 iff at seat 0 (`n_players = 2`).
@@ -826,10 +829,7 @@ pub fn student_council_add_resolve_mutant_is_detected() {
     world::with_world_mut(|w| w.deck_n = 0);
     invoke::unwrap_done(card_roselia::council_check::counteract_kani(user));
     let post_deck_n = world::with_world(|w| w.deck_n as i32);
-    crate::kassert!(
-        post_deck_n != 2,
-        "mutant: deck did not grow by 2"
-    );
+    crate::kassert!(post_deck_n != 2, "mutant: deck did not grow by 2");
 }
 
 // ===========================================================================

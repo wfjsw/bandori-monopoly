@@ -14,17 +14,17 @@
 #![allow(dead_code)]
 
 pub mod board;
-#[cfg(kani)]
-pub mod kani_stubs;
+pub mod generated;
 pub mod harness;
 pub mod host;
 pub mod intern;
 pub mod invoke;
+pub mod ir_fill;
+#[cfg(kani)]
+pub mod kani_stubs;
 pub mod shim;
 pub mod spec;
 pub mod world;
-pub mod generated;
-pub mod ir_fill;
 
 #[cfg(kani)]
 pub mod proofs;

@@ -18,11 +18,7 @@ pub fn char_start_five_fans(pre_pos: i32) -> i32 {
 }
 
 /// Exact effect of the 5-fan half: one AddToken(+5) on the positive fan key.
-pub fn char_start_five_fans_log_ok(
-    effects: &[Effect],
-    player: i32,
-    pos_key: u16,
-) -> bool {
+pub fn char_start_five_fans_log_ok(effects: &[Effect], player: i32, pos_key: u16) -> bool {
     effects.len() == 1
         && matches!(
             effects[0],

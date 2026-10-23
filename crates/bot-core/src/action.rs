@@ -8,7 +8,7 @@
 
 use game_core::data::GameData;
 use game_core::engine::purchase;
-use game_core::state::{MatchPrompt, MatchState, stage};
+use game_core::state::{stage, MatchPrompt, MatchState};
 
 // ------------------------------------------------------------ A/B knobs
 //
@@ -249,9 +249,9 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
     match p.kind.as_str() {
         "auction" => {
             out.push(Action::Bid { amount: -1 }); // pass
-            // The engine refuses any positive bid from the current top
-            // bidder (`err.already_top_bid`, `mod.rs` place_bid): when the
-            // auction's `bidder` is us the only legal answer is pass.
+                                                  // The engine refuses any positive bid from the current top
+                                                  // bidder (`err.already_top_bid`, `mod.rs` place_bid): when the
+                                                  // auction's `bidder` is us the only legal answer is pass.
             if p.bidder == seat as i32 {
                 return out;
             }
@@ -519,8 +519,8 @@ pub fn action_priors(
                     match (est_of(card), cheapest) {
                         (Some(c), _) if c <= 0 => base += params.prior_play_bonus(),
                         (Some(c), Some(best)) if best > 0 => {
-                            base += params.prior_play_bonus()
-                                * (1.0 - (c as f64 / best.max(c) as f64));
+                            base +=
+                                params.prior_play_bonus() * (1.0 - (c as f64 / best.max(c) as f64));
                         }
                         _ => {}
                     }

@@ -60,17 +60,53 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
                 Err(()) => Val::Err,
             }
         }
-        Kind::Add => spec_arith(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Arith::Add),
-        Kind::Sub => spec_arith(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Arith::Sub),
-        Kind::Mul => spec_arith(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Arith::Mul),
-        Kind::Div => spec_arith(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Arith::Div),
-        Kind::Rem => spec_arith(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Arith::Rem),
+        Kind::Add => spec_arith(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Arith::Add,
+        ),
+        Kind::Sub => spec_arith(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Arith::Sub,
+        ),
+        Kind::Mul => spec_arith(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Arith::Mul,
+        ),
+        Kind::Div => spec_arith(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Arith::Div,
+        ),
+        Kind::Rem => spec_arith(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Arith::Rem,
+        ),
         Kind::Eq => spec_eq(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx)),
         Kind::Ne => spec_ne(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx)),
-        Kind::Lt => spec_cmp(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Cmp::Lt),
-        Kind::Le => spec_cmp(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Cmp::Le),
-        Kind::Gt => spec_cmp(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Cmp::Gt),
-        Kind::Ge => spec_cmp(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx), Cmp::Ge),
+        Kind::Lt => spec_cmp(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Cmp::Lt,
+        ),
+        Kind::Le => spec_cmp(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Cmp::Le,
+        ),
+        Kind::Gt => spec_cmp(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Cmp::Gt,
+        ),
+        Kind::Ge => spec_cmp(
+            eval_node(nodes, n.a, ctx),
+            eval_node(nodes, n.b, ctx),
+            Cmp::Ge,
+        ),
         Kind::In => spec_in(eval_node(nodes, n.a, ctx), eval_node(nodes, n.b, ctx)),
         Kind::Size => spec_size(eval_node(nodes, n.a, ctx)),
         Kind::List => {
@@ -343,7 +379,12 @@ pub fn spec_cmp(a: Val, b: Val, op: Cmp) -> Val {
 pub fn spec_in(a: Val, b: Val) -> Val {
     match (a, b) {
         (Val::Err, _) | (_, Val::Err) => Val::Err,
-        (x, Val::List(items)) => Val::Bool(items.as_slice().iter().any(|i| spec_eq(x, Val::Int(*i)) == Val::Bool(true))),
+        (x, Val::List(items)) => Val::Bool(
+            items
+                .as_slice()
+                .iter()
+                .any(|i| spec_eq(x, Val::Int(*i)) == Val::Bool(true)),
+        ),
         _ => Val::Err,
     }
 }

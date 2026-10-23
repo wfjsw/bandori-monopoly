@@ -12,10 +12,10 @@
 //! parser); the browser glue loads the blob with `rules-cond`'s `runtime-only`
 //! feature and never ships the parser.
 
+use rules_cond::view::CondView;
 pub use rules_cond::{
     CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope,
 };
-use rules_cond::view::CondView;
 
 /// Name-stable hash for string identities (persona / group / card id).
 /// Re-exported from [`rules_cond::id_of`] -- one hash, one spelling.
@@ -56,12 +56,7 @@ impl<'a, S: SnapSrc> SnapView<'a, S> {
         }
     }
 
-    pub fn candidate(
-        src: &'a S,
-        owner: i32,
-        card: &'a str,
-        placed: bool,
-    ) -> SnapView<'a, S> {
+    pub fn candidate(src: &'a S, owner: i32, card: &'a str, placed: bool) -> SnapView<'a, S> {
         SnapView {
             src,
             trigger: src.trigger(),
@@ -137,7 +132,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             .unwrap_or(-1)
     }
     fn move_kind(&self) -> i64 {
-        self.trigger.mv.as_ref().map(|m| m.kind as i64).unwrap_or(-1)
+        self.trigger
+            .mv
+            .as_ref()
+            .map(|m| m.kind as i64)
+            .unwrap_or(-1)
     }
     fn move_remaining(&self) -> i64 {
         self.trigger.mv.as_ref().map(|m| m.remaining).unwrap_or(0) as i64
@@ -146,7 +145,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger.main
     }
     fn move_by_skill(&self) -> bool {
-        self.trigger.mv.as_ref().map(|m| m.by_skill).unwrap_or(false)
+        self.trigger
+            .mv
+            .as_ref()
+            .map(|m| m.by_skill)
+            .unwrap_or(false)
     }
     fn move_dir(&self) -> i64 {
         self.trigger
@@ -193,7 +196,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
-        self.trigger.effects.iter().map(|e| e.target as i64).collect()
+        self.trigger
+            .effects
+            .iter()
+            .map(|e| e.target as i64)
+            .collect()
     }
     fn trigger_card(&self) -> i64 {
         match self.trigger.card.as_deref() {
@@ -213,22 +220,46 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.owner_seat as i64
     }
     fn owner_money(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.money(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 {
+            self.src.money(self.owner_seat) as i64
+        } else {
+            0
+        }
     }
     fn owner_charge(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.state_get(self.owner_seat, "charge") as i64 } else { 0 }
+        if self.owner_seat >= 0 {
+            self.src.state_get(self.owner_seat, "charge") as i64
+        } else {
+            0
+        }
     }
     fn owner_group_pool(&self, name: &str) -> i64 {
-        if self.owner_seat >= 0 { self.src.group_pool(self.owner_seat, name) as i64 } else { 0 }
+        if self.owner_seat >= 0 {
+            self.src.group_pool(self.owner_seat, name) as i64
+        } else {
+            0
+        }
     }
     fn owner_hand(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.hand_size(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 {
+            self.src.hand_size(self.owner_seat) as i64
+        } else {
+            0
+        }
     }
     fn owner_pos(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.player_pos(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 {
+            self.src.player_pos(self.owner_seat) as i64
+        } else {
+            0
+        }
     }
     fn owner_out(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.player_out(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 {
+            self.src.player_out(self.owner_seat) as i64
+        } else {
+            0
+        }
     }
     fn owner_persona(&self) -> i64 {
         if self.owner_seat < 0 {
@@ -243,7 +274,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         id_of(&self.src.group_name(self.owner_seat).unwrap_or_default())
     }
     fn owner_tiles(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.owned_count(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 {
+            self.src.owned_count(self.owner_seat) as i64
+        } else {
+            0
+        }
     }
     fn card_id(&self) -> i64 {
         id_of(self.card)
@@ -453,11 +488,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         let count = self.src.tile_count() as i64; // unused; seats drive the scan
         let _ = count;
         (0..self.src.player_count() as i64)
-            .filter(|&s| {
-                s != except
-                    && self.out(s) == 0
-                    && self.pos(s) == tile
-            })
+            .filter(|&s| s != except && self.out(s) == 0 && self.pos(s) == tile)
             .count() as i64
     }
     fn next_dist(&self, p: i64, dir: i64) -> i64 {
@@ -511,9 +542,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             return 0;
         }
         (0..self.src.tile_count() as i64)
-            .filter(|&t| {
-                self.src.tile_owner(t as i32) as i64 == p && self.dist(pos, t) <= radius
-            })
+            .filter(|&t| self.src.tile_owner(t as i32) as i64 == p && self.dist(pos, t) <= radius)
             .count() as i64
     }
     fn on_path(&self, me: i64, them: i64) -> i64 {
@@ -732,7 +761,12 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::tile_in(self, player_id, tile, class)
     }
     #[inline]
-    fn tile_class_rows(&self, tile: i32, classes: &[String], out: &mut Vec<(i64, i64, String)>) -> bool {
+    fn tile_class_rows(
+        &self,
+        tile: i32,
+        classes: &[String],
+        out: &mut Vec<(i64, i64, String)>,
+    ) -> bool {
         CardWorld::tile_class_rows(self, tile, classes, out)
     }
     #[inline]
@@ -1099,8 +1133,10 @@ pub fn condition_allows(
     let t0 = std::time::Instant::now();
     let ok = scope.eval(&pre.cond, cand);
     #[cfg(feature = "bot-cost")]
-    guard_cost::COND_EVAL_NS
-        .fetch_add(t0.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+    guard_cost::COND_EVAL_NS.fetch_add(
+        t0.elapsed().as_nanos() as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
     if !ok {
         bump(&guard_cost::SKIPPED_BY_CONDITION);
     }
@@ -1183,7 +1219,13 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
         // Generic tile queries (kind / attr / class tables).
-        fill_tile_generic(world, tile, &mut tile_kinds, &mut tile_attrs, &mut tile_classes);
+        fill_tile_generic(
+            world,
+            tile,
+            &mut tile_kinds,
+            &mut tile_attrs,
+            &mut tile_classes,
+        );
     }
 
     let players: Vec<PlayerSnap> = (0..world.player_count())
@@ -1251,10 +1293,26 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
 
     let tile = TileSnap {
         id: t.tile as i64,
-        owner: if t.tile >= 0 { world.tile_owner(t.tile) as i64 } else { -1 },
-        houses: if t.tile >= 0 { world.houses_of(t.tile) as i64 } else { 0 },
-        mortgaged: if t.tile >= 0 { world.mortgaged_of(t.tile) as i64 } else { 0 },
-        price: if t.tile >= 0 { world.tile_price(t.tile) as i64 } else { 0 },
+        owner: if t.tile >= 0 {
+            world.tile_owner(t.tile) as i64
+        } else {
+            -1
+        },
+        houses: if t.tile >= 0 {
+            world.houses_of(t.tile) as i64
+        } else {
+            0
+        },
+        mortgaged: if t.tile >= 0 {
+            world.mortgaged_of(t.tile) as i64
+        } else {
+            0
+        },
+        price: if t.tile >= 0 {
+            world.tile_price(t.tile) as i64
+        } else {
+            0
+        },
     };
 
     WindowCtx {
@@ -1304,7 +1362,13 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let mut tile_attrs = std::collections::BTreeMap::new();
     let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
-        fill_tile_generic(world, tile, &mut tile_kinds, &mut tile_attrs, &mut tile_classes);
+        fill_tile_generic(
+            world,
+            tile,
+            &mut tile_kinds,
+            &mut tile_attrs,
+            &mut tile_classes,
+        );
     }
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| {
@@ -1339,7 +1403,11 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             id: world.player_pos(player_id) as i64,
             owner: {
                 let t = world.player_pos(player_id);
-                if t >= 0 { world.tile_owner(t) as i64 } else { -1 }
+                if t >= 0 {
+                    world.tile_owner(t) as i64
+                } else {
+                    -1
+                }
             },
             houses: 0,
             mortgaged: 0,
@@ -1386,7 +1454,10 @@ fn fill_tile_generic<S: SnapSrc>(
 
     // Attrs: the seven documented fields.
     for attr in ["group", "tier", "price", "house", "area", "rent", "index"] {
-        tile_attrs.insert((tile as i64, attr.to_string()), world.tile_attr(tile, attr) as i64);
+        tile_attrs.insert(
+            (tile as i64, attr.to_string()),
+            world.tile_attr(tile, attr) as i64,
+        );
     }
 
     // Classes: the ruleset vocabulary plus `color:<g>` for groups present on
@@ -1395,9 +1466,7 @@ fn fill_tile_generic<S: SnapSrc>(
     if world.tile_class_rows(tile, &classes, tile_classes) {
         return;
     }
-    let players: Vec<i32> = std::iter::once(-1)
-        .chain(0..world.player_count())
-        .collect();
+    let players: Vec<i32> = std::iter::once(-1).chain(0..world.player_count()).collect();
     for &p in &players {
         for c in &classes {
             if world.tile_in(p, tile, c.as_str()) {
@@ -1443,12 +1512,7 @@ pub fn collect_tile_ids<S: SnapSrc>(world: &S) -> std::collections::BTreeMap<Str
 
 /// Per-candidate overlay: the card + seat being probed. Built per (card, seat)
 /// inside a window -- much cheaper than a window, so a fresh value is fine.
-pub fn fill_candidate<S: SnapSrc>(
-    world: &S,
-    owner: i32,
-    card: &str,
-    placed: bool,
-) -> CandidateCtx {
+pub fn fill_candidate<S: SnapSrc>(world: &S, owner: i32, card: &str, placed: bool) -> CandidateCtx {
     let p = owner;
     let mut cand = CandidateCtx {
         owner: owner as i64,

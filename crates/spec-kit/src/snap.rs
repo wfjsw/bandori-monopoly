@@ -61,10 +61,19 @@ pub fn snapshot(w: &World) -> Snap {
                 format!("field:P{i}:{f}"),
                 format!(
                     "{}|uid={}|tile={}|pool={}|immune={}|down={}|group={}",
-                    c.card, c.uid, c.tile, c.counters.values().sum::<i32>(), c.immune, c.face_down, c.group_skill
+                    c.card,
+                    c.uid,
+                    c.tile,
+                    c.counters.values().sum::<i32>(),
+                    c.immune,
+                    c.face_down,
+                    c.group_skill
                 ),
             );
-            m.insert(format!("pool:P{i}:{}", c.card), c.counters.values().sum::<i32>().to_string());
+            m.insert(
+                format!("pool:P{i}:{}", c.card),
+                c.counters.values().sum::<i32>().to_string(),
+            );
             for (k, v) in &c.props {
                 m.insert(format!("fprop:P{i}:{}:{k}", c.card), v.to_string());
             }
@@ -132,7 +141,12 @@ pub fn snapshot(w: &World) -> Snap {
             format!("bfield:{i}"),
             format!(
                 "{}|uid={}|tile={}|pool={}|immune={}|down={}",
-                c.card, c.uid, c.tile, c.counters.values().sum::<i32>(), c.immune, c.face_down
+                c.card,
+                c.uid,
+                c.tile,
+                c.counters.values().sum::<i32>(),
+                c.immune,
+                c.face_down
             ),
         );
         for (k, v) in &c.props {
@@ -146,14 +160,20 @@ pub fn snapshot(w: &World) -> Snap {
     m.insert("turn.extra".into(), t.extra.to_string());
     m.insert("turn.main_moved".into(), t.main_moved.to_string());
     m.insert("turn.played".into(), t.played.join("|"));
-    m.insert("turn.no_money_loss".into(), format!("{:?}", t.no_money_loss));
+    m.insert(
+        "turn.no_money_loss".into(),
+        format!("{:?}", t.no_money_loss),
+    );
     m.insert("turn.fixed_roll".into(), format!("{:?}", t.fixed_roll));
     m.insert("turn.main_steps".into(), t.main_steps.to_string());
     m.insert("turn.abnormal".into(), format!("{:?}", t.abnormal));
     m.insert("turn.extreme".into(), t.extreme.to_string());
     m.insert("turn.play_from_hand".into(), t.play_from_hand.to_string());
     m.insert("turn.paid_in_settle".into(), t.paid_in_settle.to_string());
-    m.insert("turn.turn_start_pos".into(), format!("{:?}", t.turn_start_pos));
+    m.insert(
+        "turn.turn_start_pos".into(),
+        format!("{:?}", t.turn_start_pos),
+    );
     m.insert("turn.turn_snap".into(), format!("{:?}", t.turn_snap));
     m.insert("turn.turn_rolls".into(), format!("{:?}", t.turn_rolls));
     m.insert("turn.build_discount".into(), t.build_discount.to_string());
@@ -172,7 +192,10 @@ pub fn snapshot(w: &World) -> Snap {
     );
 
     m.insert("extra_turns".into(), format!("{:?}", w.extra_turns));
-    m.insert("rule_param_bonus".into(), format!("{:?}", w.rule_param_bonus));
+    m.insert(
+        "rule_param_bonus".into(),
+        format!("{:?}", w.rule_param_bonus),
+    );
     m.insert("out_count".into(), w.out_count.to_string());
     m.insert("targeted".into(), format!("{:?}", w.targeted));
     m.insert(
@@ -306,11 +329,7 @@ pub fn diff(before: &Snap, after: &Snap, keep_bookkeeping: bool) -> Vec<Delta> {
 /// frame(pre, post, &["money:P0", "hand:P0", "draw:P0"]).expect("frame");
 /// # }
 /// ```
-pub fn frame(
-    pre: &World,
-    post: &World,
-    allowed_prefixes: &[&str],
-) -> Result<(), String> {
+pub fn frame(pre: &World, post: &World, allowed_prefixes: &[&str]) -> Result<(), String> {
     let a = snapshot(pre);
     let b = snapshot(post);
     let deltas = diff(&a, &b, false);

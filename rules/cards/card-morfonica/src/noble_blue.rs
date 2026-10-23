@@ -61,7 +61,9 @@ fn noble_blue(player_id: i32) -> card_sdk::Asked {
         player_id,
         ctx::self_uid(),
         1,
-        &Msg::new(key!("noble_blue_mark_note")), card_sdk::abi::Stack::Fresh);
+        &Msg::new(key!("noble_blue_mark_note")),
+        card_sdk::abi::Stack::Fresh,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("noble_blue_placed"))

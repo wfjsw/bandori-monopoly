@@ -10,9 +10,10 @@
 //! id). （1）'s 「从其他玩家处获得过资金」 is a `PayAfter` landing in this
 //! player's favour, latched per turn.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "skill:Sumimi:人气偶像组合";
 /// 「若你在一回合内从其他玩家处获得过资金」.
@@ -29,14 +30,23 @@ pub const SUMIMI: CardDef = CardDef::new(
         On::Action(Action::PayAfter("card.placed", None, None, after_pay)),
         // 「向其他人收费」 -- this player is the payee of a charge from another
         // seat. Again `MINE` is the payer side; `target == owner` is the charge.
-        On::Filter(Filter::PaySplitMul("target == owner && card.placed", None, bend)),
+        On::Filter(Filter::PaySplitMul(
+            "target == owner && card.placed",
+            None,
+            bend,
+        )),
         // Both halves of （1） live in the body: add when GOT, else clear.
         // The old `slot('skill.sumimi.got') == 0` guard only ever admitted the
         // clear branch (FINDINGS C-SUMIMI-band-01).
-        On::Action(Action::TurnEndBefore("actor == owner", None, None, at_turn_end)),
+        On::Action(Action::TurnEndBefore(
+            "actor == owner",
+            None,
+            None,
+            at_turn_end,
+        )),
     ],
 )
-    .silent(&[0]);
+.silent(&[0]);
 
 /// （1）'s latch -- 「若你在一回合内从其他玩家处获得过资金」.
 fn after_pay(player_id: i32) -> card_sdk::Asked {

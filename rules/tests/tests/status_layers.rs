@@ -20,7 +20,11 @@ fn grant_layer(t: &mut Table, who: usize, key: &str, n: i32, tick: Tick) {
     let p = who as i32;
     let w = t.m.world_mut();
     w.apply_layer(p, key, n);
-    w.state_set_flags(p, key, state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED);
+    w.state_set_flags(
+        p,
+        key,
+        state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,
+    );
     w.state_set_expires(p, key, Some(tick));
 }
 
@@ -52,11 +56,7 @@ fn stay_floors_at_zero() {
     let mut t = Table::vanilla(2);
     grant_layer(&mut t, 0, state_key::STAY, 1, Tick::TurnEnd);
     t.set_state(0, state_key::STAY, -5);
-    assert_eq!(
-        t.state(0, state_key::STAY),
-        0,
-        "[停留] floors at 0"
-    );
+    assert_eq!(t.state(0, state_key::STAY), 0, "[停留] floors at 0");
 }
 
 #[test]
@@ -64,11 +64,7 @@ fn exile_floors_at_zero() {
     let mut t = Table::vanilla(2);
     grant_layer(&mut t, 0, state_key::EXILE, 1, Tick::TurnStart);
     t.set_state(0, state_key::EXILE, -5);
-    assert_eq!(
-        t.state(0, state_key::EXILE),
-        0,
-        "[除外] floors at 0"
-    );
+    assert_eq!(t.state(0, state_key::EXILE), 0, "[除外] floors at 0");
 }
 
 // =====================================================================
@@ -167,10 +163,7 @@ fn stay_blocks_move_unless_unstoppable() {
     t.set_state(0, state_key::STAY, 1);
     assert!(!gate(&t, Gate::Move, 0), "[停留] closes the move gate");
     t.set_state(0, state_key::UNSTOPPABLE, 1);
-    assert!(
-        gate(&t, Gate::Move, 0),
-        "[不可阻挡] 「无视已存在的[停留]」"
-    );
+    assert!(gate(&t, Gate::Move, 0), "[不可阻挡] 「无视已存在的[停留]」");
 }
 
 /// 规则书 49: stun closes move / act / pay.
@@ -332,5 +325,8 @@ fn unstoppable_refuses_new_stun_layers() {
     drain(&mut t);
     pass(&mut t, 0);
     let stun = t.state(0, state_key::STUN) + t.state(0, state_key::STUN_START);
-    assert_eq!(stun, 0, "[不可阻挡] 「晕眩效果也不会获得新的层数」 (STA-01)");
+    assert_eq!(
+        stun, 0,
+        "[不可阻挡] 「晕眩效果也不会获得新的层数」 (STA-01)"
+    );
 }

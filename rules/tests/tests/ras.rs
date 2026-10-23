@@ -56,7 +56,11 @@ fn riot_counter_cycles_hands_and_draws_extra() {
     t.begin_turn(0);
     drain(&mut t);
     t.play(0, "通用:登上武道馆").unwrap();
-    assert!(t.counteract_offered("RAS:R. I. O. T."), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("RAS:R. I. O. T."),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "RAS:R. I. O. T.").unwrap();
     drain(&mut t);
 
@@ -68,7 +72,11 @@ fn riot_counter_cycles_hands_and_draws_extra() {
     // p2 discarded 2, drew 2.
     assert_eq!(t.hand(2).len(), 2, "p2 hands: {:?}", t.hand(2));
     // The counter card itself is spent.
-    assert!(t.discard(1).contains(&"RAS:R. I. O. T.".to_string()), "{:?}", t.discard(1));
+    assert!(
+        t.discard(1).contains(&"RAS:R. I. O. T.".to_string()),
+        "{:?}",
+        t.discard(1)
+    );
 }
 
 #[test]
@@ -86,7 +94,12 @@ fn riot_does_not_negate_the_countered_effect() {
     t.counteract(1, "RAS:R. I. O. T.").unwrap();
     drain(&mut t);
     // 规则书: 登武道馆 still charges each other player 1000.
-    assert_eq!(t.money(0), 22_000, "money {:?}", (0..3).map(|i| t.money(i)).collect::<Vec<_>>());
+    assert_eq!(
+        t.money(0),
+        22_000,
+        "money {:?}",
+        (0..3).map(|i| t.money(i)).collect::<Vec<_>>()
+    );
     assert_eq!(t.money(1), 19_000);
     assert_eq!(t.money(2), 19_000);
 }
@@ -128,8 +141,16 @@ fn exist_redirects_single_target_card() {
             t.decline();
         }
     }
-    assert!(t.on_field(1, "RAS:（chuchu）演奏我的音乐吧"), "fields {:?}", t.field_ids(1));
-    assert!(!t.on_field(2, "RAS:（chuchu）演奏我的音乐吧"), "fields {:?}", t.field_ids(2));
+    assert!(
+        t.on_field(1, "RAS:（chuchu）演奏我的音乐吧"),
+        "fields {:?}",
+        t.field_ids(1)
+    );
+    assert!(
+        !t.on_field(2, "RAS:（chuchu）演奏我的音乐吧"),
+        "fields {:?}",
+        t.field_ids(2)
+    );
     // 规则书: the redirected card still gets its 3 crystals on the new holder.
     assert_eq!(t.crystals(1, "RAS:（chuchu）演奏我的音乐吧"), Some(3));
 }
@@ -256,7 +277,11 @@ fn hey_kids_window_when_another_settles_your_tile() {
     t.set_pos(1, CIRCLE);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.counteract_offered("RAS:狂乱Hey Kids!!"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("RAS:狂乱Hey Kids!!"),
+        "{}",
+        t.dump_prompt()
+    );
 }
 
 #[test]
@@ -270,7 +295,11 @@ fn hey_kids_no_window_on_my_own_settle() {
     drain(&mut t);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(!t.counteract_offered("RAS:狂乱Hey Kids!!"), "{}", t.dump_prompt());
+    assert!(
+        !t.counteract_offered("RAS:狂乱Hey Kids!!"),
+        "{}",
+        t.dump_prompt()
+    );
     assert!(
         t.hand(0).contains(&"RAS:狂乱Hey Kids!!".to_string()),
         "the card stays in hand: {:?}",
@@ -289,7 +318,7 @@ fn hey_kids_no_window_on_a_non_rent_payment() {
     t.begin_turn(1);
     drain(&mut t);
     t.set_pos(1, SHOPPING); // standing on P0's tile, but the payment is not rent
-    // P1 plays 10次招募 (「[消耗]1500资金」) -- a spend, not a tile [结算].
+                            // P1 plays 10次招募 (「[消耗]1500资金」) -- a spend, not a tile [结算].
     t.give_play(1, "通用:10次招募（1回限定）").unwrap();
     drain(&mut t);
     assert_eq!(t.money(1), 8_500, "spent 1500, not rent");
@@ -542,7 +571,10 @@ fn change_world_boosts_the_next_charge() {
     // of the increased charge -- 「触发时获得等量资金」 is the owner receiving it).
     assert_eq!(t.money(1), 18_460, "1440 + 100");
     assert_eq!(t.money(0), 21_540);
-    assert!(!t.on_field(0, "RAS:Change the world"), "「触发后将该卡放入弃牌堆」");
+    assert!(
+        !t.on_field(0, "RAS:Change the world"),
+        "「触发后将该卡放入弃牌堆」"
+    );
 }
 
 #[test]
@@ -586,7 +618,7 @@ fn become_strongest_maps_the_roll_to_livehouse_tiles() {
     // plus the "Live House" agent), sorted by tile index.
     let expected = [
         (1, RING1),
-        (2, 16),   // RiNG 2
+        (2, 16), // RiNG 2
         (3, DUB),
         (4, LIVE_HOUSE),
         (5, RING3),
@@ -598,7 +630,10 @@ fn become_strongest_maps_the_roll_to_livehouse_tiles() {
     ];
     for (face, tile) in expected {
         let mut t = Table::vanilla(2);
-        t.own(0, &[RING1, 16, DUB, RING3, BUDOKAN, SPACE, LH_GALAXY, RING4]);
+        t.own(
+            0,
+            &[RING1, 16, DUB, RING3, BUDOKAN, SPACE, LH_GALAXY, RING4],
+        );
         t.set_money(0, 50_000);
         t.dice(&[face]);
         t.give_play(0, "RAS:成为最强").unwrap();
@@ -633,7 +668,11 @@ fn please_choose_window_on_livehouse_settle() {
     t.set_pos(1, SPACE - 1);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.counteract_offered("RAS:PLEASE CHOOSE"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("RAS:PLEASE CHOOSE"),
+        "{}",
+        t.dump_prompt()
+    );
 }
 
 #[test]
@@ -652,7 +691,11 @@ fn please_choose_opt2_teleports_counteractor_without_settle() {
     // The settler picks between the two options; pick opt2 (index 1).
     t.answer(1, 1).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), SPACE, "counteractor teleports to the settler's tile");
+    assert_eq!(
+        t.pos(0),
+        SPACE,
+        "counteractor teleports to the settler's tile"
+    );
     assert_eq!(t.pos(1), SPACE);
     assert!(t.draw_pile(0).contains(&"RAS:PLEASE CHOOSE".to_string()));
 }
@@ -737,7 +780,11 @@ fn storm_part2_discards_and_charges() {
     assert!(!t.on_field(0, "RAS:练习室里的风暴"), "「将此卡放入弃牌堆」");
     // 「对那个玩家进行一次…(4-X)/4倍价格的收费」 -- a direct charge to the
     // tile owner, not a re-settle of 武道馆 on top of p1's own landing.
-    assert!(t.money(0) > 24_000, "owner collected the 收费: {:?}", t.money(0));
+    assert!(
+        t.money(0) > 24_000,
+        "owner collected the 收费: {:?}",
+        t.money(0)
+    );
 }
 
 #[test]
@@ -1065,8 +1112,15 @@ fn chuchu_buy_pays_user_and_passes_the_card_on() {
     t.buy(1).unwrap();
     drain(&mut t);
     assert_eq!(t.money(0), before + 100, "「[使用者]获得100资金」");
-    assert!(t.on_field(2, "RAS:（chuchu）演奏我的音乐吧"), "moves on to the next seat");
-    assert_eq!(t.crystals(2, "RAS:（chuchu）演奏我的音乐吧"), Some(3), "refilled");
+    assert!(
+        t.on_field(2, "RAS:（chuchu）演奏我的音乐吧"),
+        "moves on to the next seat"
+    );
+    assert_eq!(
+        t.crystals(2, "RAS:（chuchu）演奏我的音乐吧"),
+        Some(3),
+        "refilled"
+    );
 }
 
 #[test]
@@ -1116,7 +1170,10 @@ fn lock_redirects_a_move_past_bandori_station() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), ASAHYU, "destination becomes 旭汤澡堂");
-    assert!(!t.on_field(0, "RAS:（LOCK）追逐梦想的步伐"), "「此卡[移除]」");
+    assert!(
+        !t.on_field(0, "RAS:（LOCK）追逐梦想的步伐"),
+        "「此卡[移除]」"
+    );
 }
 
 #[test]
@@ -1155,7 +1212,9 @@ fn crush_adds_xd20_for_the_discard_pile() {
     drain(&mut t);
     assert_eq!(t.pos(0), 4);
     assert_eq!(t.dice_left(), 0, "four faces consumed");
-    assert!(t.draw_pile(0).contains(&"RAS:（MASKING）CRUSH ON THE DRUM!!!".to_string()));
+    assert!(t
+        .draw_pile(0)
+        .contains(&"RAS:（MASKING）CRUSH ON THE DRUM!!!".to_string()));
 }
 
 #[test]
@@ -1182,13 +1241,23 @@ fn pareo_card_gives_two_tokens_and_offers_a_house_removal() {
     t.begin_turn(0);
     drain(&mut t);
     t.play(0, "RAS:（PAREO）渐渐远去的你").unwrap();
-    assert!(t.prompt().is_some(), "house-removal choice: {}", t.dump_prompt());
+    assert!(
+        t.prompt().is_some(),
+        "house-removal choice: {}",
+        t.dump_prompt()
+    );
     // Decline the removal.
     t.decline();
     let tok = t.p(0).tokens;
-    assert_eq!(tok.iter().map(|c| c.value).sum::<i32>(), 2, "「获得2个PAREO标记」 {tok:?}");
+    assert_eq!(
+        tok.iter().map(|c| c.value).sum::<i32>(),
+        2,
+        "「获得2个PAREO标记」 {tok:?}"
+    );
     assert_eq!(t.houses(SHOPPING), 2, "declined the removal");
-    assert!(t.draw_pile(0).contains(&"RAS:（PAREO）渐渐远去的你".to_string()));
+    assert!(t
+        .draw_pile(0)
+        .contains(&"RAS:（PAREO）渐渐远去的你".to_string()));
 }
 
 #[test]
@@ -1254,9 +1323,14 @@ fn rio_skill_rerolls_with_a_fire_pot() {
     let p = t.expect_prompt();
     assert_eq!(p.options.len(), 2, "yes/no: {}", t.dump_prompt());
     t.answer(0, 0).unwrap(); // yes
-    // Pick which face to keep.
+                             // Pick which face to keep.
     let p = t.expect_prompt();
-    assert_eq!(p.options.len(), 2, "keep old / keep new: {}", t.dump_prompt());
+    assert_eq!(
+        p.options.len(),
+        2,
+        "keep old / keep new: {}",
+        t.dump_prompt()
+    );
     t.answer(0, 1).unwrap(); // keep the new face (10)
     drain(&mut t);
     assert_eq!(t.pos(0), 10);
@@ -1497,7 +1571,11 @@ fn band_skill_accept_makes_the_next_main_move_a_teleport() {
             t.decline();
         }
     }
-    assert!(accepted, "the teleport offer came up: {:?}", t.recent_keys(15));
+    assert!(
+        accepted,
+        "the teleport offer came up: {:?}",
+        t.recent_keys(15)
+    );
     let before = t.pos(0);
     t.dice(&[3]);
     t.roll(0).unwrap();
@@ -1530,14 +1608,17 @@ fn guerrilla_special_offers_to_mark_a_deed_as_livehouse() {
     // Over the hand limit so `discard` is a legal 运营 command -- that path
     // raises `discarded`, which is what arms the [特] check (the card's [手]
     // is a [反击] only, so there is no plain play that spends it).
-    t.give(0, &[
-        "RAS:游击演出",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-        "R:[衍生] 压",
-    ]);
+    t.give(
+        0,
+        &[
+            "RAS:游击演出",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
     // A non-empty draw pile: `discard` refills an empty deck from the discard,
     // which would shuffle 游击演出 straight back in.
     t.set_draw(0, &["R:[衍生] 觉悟", "R:[衍生] 觉悟"]);
@@ -1769,7 +1850,6 @@ fn layer_keep_press_replaces_the_move_roll_with_a_kept_die() {
     assert_eq!(t.pos(0), 7, "moved exactly the kept die");
 }
 
-
 #[test]
 fn interaction_please_choose_opt2_is_an_abnormal_move() {
     // PLEASE CHOOSE opt2 [传送]s the counteractor -- an 「异常移动效果」 that 通用:安可
@@ -1785,7 +1865,7 @@ fn interaction_please_choose_opt2_is_an_abnormal_move() {
     t.roll(1).unwrap();
     t.counteract(0, "RAS:PLEASE CHOOSE").unwrap();
     t.answer(1, 1).unwrap(); // opt2: teleport p0 to p1
-    // 安可 may now open against the teleport.
+                             // 安可 may now open against the teleport.
     if t.counteract_offered("通用:安可") {
         t.counteract(0, "通用:安可").unwrap();
         drain(&mut t);

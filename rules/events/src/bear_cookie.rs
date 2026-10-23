@@ -69,7 +69,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「随后，将一张“[衍生]冲榜”背面朝上放置于事件牌堆顶部。」
     ctx::event_deck_push("冲榜", true);
-    ctx::log(player_id, &Msg::new("log.event.bear_cookie_push").card("event", "event:冲榜"));
+    ctx::log(
+        player_id,
+        &Msg::new("log.event.bear_cookie_push").card("event", "event:冲榜"),
+    );
     Ok(())
 }
 

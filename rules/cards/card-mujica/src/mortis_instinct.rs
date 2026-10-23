@@ -1,7 +1,7 @@
 //! `Mujica:（睦/mortis）表演的本能` -- C# `CardMortisInstinct` (MatchHost.cs:5342-5435):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（睦/mortis）表演的本能`）:
-//! > （睦/mortis）表演的本能： 
+//! > （睦/mortis）表演的本能：
 //! >  此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）
 //!
 //! copy the last non-placed card another player played.

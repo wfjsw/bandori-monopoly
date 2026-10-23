@@ -14,9 +14,10 @@
 //! built. 「选择本次移动向后」 is the plan's reverse; 「[经过]CiRCLE时不获得
 //! CiRCLE奖励」 is the plan's no-circle-reward flag.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind};
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The band-wide 「每四回合没有使用…（2）技能」 counter. Shared by every
 /// Afterglow skill: a press anywhere in the band resets it.
@@ -30,9 +31,13 @@ pub const RAN_RED: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
         On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
     ],
-).silent(&[1, 2])
-    // 「（初始1，上限1）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 1), (bandori_std::fire::FIRE_CAP, 1)]);
+)
+.silent(&[1, 2])
+// 「（初始1，上限1）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 1),
+    (bandori_std::fire::FIRE_CAP, 1),
+]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")
@@ -59,7 +64,10 @@ pub fn rest_tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
     if n < 4 {
         state::set(player_id, REST_TURNS, n);
-        ctx::log(player_id, &Msg::new(key!("afterglow_rest_count")).i("n", n as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("afterglow_rest_count")).i("n", n as i64),
+        );
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

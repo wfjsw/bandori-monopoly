@@ -15,9 +15,9 @@
 //! Not a hand play (C# `Normal => false`, no `Play` override): the [特] places it
 //! out of a deck inspection; the crystal growth runs on the `Drew` hook.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     "PP:[大和麻弥]可能性为∞",

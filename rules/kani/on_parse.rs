@@ -116,13 +116,20 @@ fn split_args(inner: &str) -> Vec<&str> {
 }
 
 fn last_nonempty<'a>(parts: &[&'a str]) -> Option<&'a str> {
-    parts.iter().rev().find(|p| !p.trim().is_empty()).map(|p| p.trim())
+    parts
+        .iter()
+        .rev()
+        .find(|p| !p.trim().is_empty())
+        .map(|p| p.trim())
 }
 
 fn is_ident(s: &str) -> bool {
     !s.is_empty()
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && s.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
+        && s.chars()
+            .next()
+            .map(|c| c.is_ascii_alphabetic() || c == '_')
+            == Some(true)
 }
 
 /// Balanced-paren span starting at `open` (`src[open] == '('`). Returns the
@@ -234,12 +241,7 @@ pub fn parse_filter_kind_shapes(src: &str) -> Vec<(String, BodyShape)> {
             let Some((name_part, shape_part)) = line.split_once("=>") else {
                 continue;
             };
-            let name = name_part
-                .split('@')
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string();
+            let name = name_part.split('@').next().unwrap_or("").trim().to_string();
             if !is_ident(&name) {
                 continue;
             }
@@ -328,7 +330,8 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
         let after = start + 4;
         let mut name_end = after;
         while name_end < src.len()
-            && (src.as_bytes()[name_end].is_ascii_alphanumeric() || src.as_bytes()[name_end] == b'_')
+            && (src.as_bytes()[name_end].is_ascii_alphanumeric()
+                || src.as_bytes()[name_end] == b'_')
         {
             name_end += 1;
         }
@@ -374,9 +377,7 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
                 panic!("on_parse: `On::{variant}::{kind}` has no body arg");
             };
             let Some(body) = body_ident(last) else {
-                panic!(
-                    "on_parse: `On::{variant}::{kind}` last arg `{last}` is not a body ident"
-                );
+                panic!("on_parse: `On::{variant}::{kind}` last arg `{last}` is not a body ident");
             };
             let shape = if variant == "Filter" {
                 *shapes.get(&kind).unwrap_or_else(|| {

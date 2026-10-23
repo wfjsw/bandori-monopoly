@@ -9,8 +9,8 @@
 //! The C# realises 「视为使用一次此卡使用者的技能」
 //! as H.AnnounceSkill plus SkillSayo's extension (+1 or +2, no fire cost).
 
-use card_sdk::abi::{prop, ChainKind};
 use bandori_std::ctx::{self, plan, state, trigger};
+use card_sdk::abi::{prop, ChainKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(

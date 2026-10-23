@@ -68,14 +68,12 @@ fn declaration_consumes_the_card(step: &Step<'_>) -> Result<(), String> {
     Ok(())
 }
 
-pub const CLAUSES: &[Clause] = &[
-    Clause::new(
-        "C-AG-declaration-03",
-        "roster#AG:宣战布告",
-        "被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。",
-        declaration_consumes_the_card,
-    ),
-];
+pub const CLAUSES: &[Clause] = &[Clause::new(
+    "C-AG-declaration-03",
+    "roster#AG:宣战布告",
+    "被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。",
+    declaration_consumes_the_card,
+)];
 
 /// C-AG-declaration-01 + C-AG-declaration-03.
 ///
@@ -135,10 +133,7 @@ fn declaration_pays_500_and_draws() {
             ));
         }
         if t.hand(1).iter().any(|c| c == "AG:宣战布告") {
-            return Err(format!(
-                "the counter left the hand: {:?}",
-                t.hand(1)
-            ));
+            return Err(format!("the counter left the hand: {:?}", t.hand(1)));
         }
 
         // Frame: the whole interaction only touched the two money slots and
@@ -380,7 +375,11 @@ fn sunset_demolishes_and_charges() {
         t.set_money(0, 20_000 + rng.range(0, 10) * 100);
         t.set_money(1, 20_000 + rng.range(0, 10) * 100);
 
-        let sum: i32 = prices.iter().zip(house_cost.iter()).map(|(p, h)| p + h).sum();
+        let sum: i32 = prices
+            .iter()
+            .zip(house_cost.iter())
+            .map(|(p, h)| p + h)
+            .sum();
         // ÷1 survivor, ceil-to-10 = 7200, halved (round < 100) = 3600.
         let x_base = ((sum + 9) / 10) * 10;
         let x = x_base / 2;
@@ -1238,14 +1237,10 @@ fn firepot_starts_at_one_with_cap_one() {
             let fire = t.charge(0);
             let cap = t.state_var(0, "charge").max;
             if fire != 1 {
-                return Err(format!(
-                    "C-AG-firepot-01: {name} 初始1, fire {fire}"
-                ));
+                return Err(format!("C-AG-firepot-01: {name} 初始1, fire {fire}"));
             }
             if cap != 1 {
-                return Err(format!(
-                    "C-AG-firepot-01: {name} 上限1, cap {cap}"
-                ));
+                return Err(format!("C-AG-firepot-01: {name} 上限1, cap {cap}"));
             }
         }
         Ok(())
@@ -1266,9 +1261,11 @@ fn ran_skill_moves_backward() {
         t.set_fire(0, 1, 1);
         t.begin_turn(0);
         let sid = t.skill_id(0, "叛逆的红挑染");
-        t.skill(0, &sid).map_err(|e| format!("skill rejected: {e}"))?;
+        t.skill(0, &sid)
+            .map_err(|e| format!("skill rejected: {e}"))?;
         if t.prompt().is_some() {
-            t.answer(0, 0).map_err(|e| format!("answer rejected: {e}"))?;
+            t.answer(0, 0)
+                .map_err(|e| format!("answer rejected: {e}"))?;
         }
         skip_all(&mut t);
         let start = rng.range(2, 12);
@@ -1327,7 +1324,8 @@ fn moca_skill_teleports_to_the_actor() {
                 .or_else(|| t.option("火罐"));
             if let Some(k) = k {
                 took = true;
-                t.answer(0, k).map_err(|e| format!("answer rejected: {e}"))?;
+                t.answer(0, k)
+                    .map_err(|e| format!("answer rejected: {e}"))?;
             } else {
                 t.decline();
             }
@@ -1388,9 +1386,7 @@ fn exclusive_cards_require_the_named_character() {
         let r = t.give_play(0, card);
         if let Err(e) = &r {
             if e == "err.play_exclusive" {
-                panic!(
-                    "exclusive card {card} must be playable by {owner}: {r:?}"
-                );
+                panic!("exclusive card {card} must be playable by {owner}: {r:?}");
             }
             // Counteract-only exclusives: timing is the book's own limit, not
             // the exclusive gate. Any other error still means the gate opened.

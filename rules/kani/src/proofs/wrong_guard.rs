@@ -135,7 +135,10 @@ pub fn wrong_guard_disagreement_is_reachable() {
     let book = clause_condition(actor, owner, value);
     // The disagreement is live at `value == 0` (wrong admits, clause rejects).
     kani::cover!(wrong && !book, "value == 0: wrong admits, clause rejects");
-    kani::cover!(!wrong && book, "value > 0 && actor==owner: wrong rejects? no — cover other side");
+    kani::cover!(
+        !wrong && book,
+        "value > 0 && actor==owner: wrong rejects? no — cover other side"
+    );
     kani::cover!(wrong == book, "they agree");
     crate::kassert!(
         !(wrong == book && value == 0 && actor == owner),

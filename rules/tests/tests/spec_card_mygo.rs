@@ -80,7 +80,6 @@ fn clear_stay_latch(t: &mut Table, who: usize) {
     }
 }
 
-
 // ---------------------------------------------------------------- iff helpers
 //
 // Addendum items 1-5: a contract is a pure verifier plus a mutants test.
@@ -326,12 +325,15 @@ fn anon_tokyo_limit_and_link_pay() {
 
         let pre = t.snapshot_world();
         t.observe(CLAUSES);
-        t.give_play(0, ANON_TOKYO).map_err(|e| format!("play: {e}"))?;
+        t.give_play(0, ANON_TOKYO)
+            .map_err(|e| format!("play: {e}"))?;
         t.answer_tile(0, 2).map_err(|e| format!("designate: {e}"))?;
 
         let delta = t.money(0) as i64 - money as i64;
         if delta != -1500 {
-            return Err(format!("money delta {delta}, expected -1500 (half of 3000)"));
+            return Err(format!(
+                "money delta {delta}, expected -1500 (half of 3000)"
+            ));
         }
         if t.marks_on(1).is_empty() || t.marks_on(2).is_empty() {
             return Err(format!(
@@ -371,13 +373,17 @@ fn anon_tokyo_branch_two_moves_one_and_settles() {
         // On 购物中心(1); own neither neighbour so branch 2 fires.
         t.set_pos(0, 1);
         t.own(1, &[2]); // 天文馆 owned by the other player
-        t.give_play(0, ANON_TOKYO).map_err(|e| format!("play: {e}"))?;
+        t.give_play(0, ANON_TOKYO)
+            .map_err(|e| format!("play: {e}"))?;
         // Designate 天文馆(2), the only adjacent 可购买.
         t.answer_tile(0, 2).map_err(|e| format!("designate: {e}"))?;
         rest(&mut t);
         drain(&mut t);
         if t.pos(0) != 2 {
-            return Err(format!("branch 2 must land on the designated tile 2, got {}", t.pos(0)));
+            return Err(format!(
+                "branch 2 must land on the designated tile 2, got {}",
+                t.pos(0)
+            ));
         }
         Ok(())
     })
@@ -394,7 +400,8 @@ fn anon_tokyo_link_adds_half_partner_rent() {
         t.own(0, &[1, 2]);
         t.set_houses(1, 1); // 购物中心 rent with 1 house
         t.set_houses(2, 1); // 天文馆 rent with 1 house
-        t.give_play(0, ANON_TOKYO).map_err(|e| format!("play: {e}"))?;
+        t.give_play(0, ANON_TOKYO)
+            .map_err(|e| format!("play: {e}"))?;
         t.answer_tile(0, 2).map_err(|e| format!("designate: {e}"))?;
         let linked_rent_1 = {
             // Rent of T1 with 1 house, as charged when landing there.
@@ -463,19 +470,28 @@ fn even_lost_counter_and_continuing() {
         let mut t = Table::vanilla(2);
         // (1) [反击] against another's card: place on own field.
         t.give(1, &[EVEN_LOST]);
-        t.give_play(0, "通用:登上武道馆").map_err(|e| format!("budokan: {e}"))?;
+        t.give_play(0, "通用:登上武道馆")
+            .map_err(|e| format!("budokan: {e}"))?;
         if !t.counteract_offered(EVEN_LOST) {
-            return Err(format!("C-MYGO-even-lost-01: not offered: {}", t.dump_prompt()));
+            return Err(format!(
+                "C-MYGO-even-lost-01: not offered: {}",
+                t.dump_prompt()
+            ));
         }
-        t.counteract(1, EVEN_LOST).map_err(|e| format!("counter: {e}"))?;
+        t.counteract(1, EVEN_LOST)
+            .map_err(|e| format!("counter: {e}"))?;
         if !t.on_field(1, EVEN_LOST) {
-            return Err(format!("C-MYGO-even-lost-01: not on field: {:?}", t.field_ids(1)));
+            return Err(format!(
+                "C-MYGO-even-lost-01: not on field: {:?}",
+                t.field_ids(1)
+            ));
         }
 
         // Own-card effect must not open the window.
         let mut u = Table::vanilla(2);
         u.give(0, &[EVEN_LOST, "通用:登上武道馆"]);
-        u.play(0, "通用:登上武道馆").map_err(|e| format!("own budokan: {e}"))?;
+        u.play(0, "通用:登上武道馆")
+            .map_err(|e| format!("own budokan: {e}"))?;
         if u.counteract_offered(EVEN_LOST) {
             return Err("C-MYGO-even-lost-01: own card must not open this counter".into());
         }
@@ -546,7 +562,9 @@ pub fn c_mygo_journey_place(step: &Step<'_>) -> Result<(), String> {
         .and_then(|p| p.field.iter().find(|f| f.card == JOURNEY))
         .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
     if crystals != Some(4) {
-        return Err(format!("C-MYGO-journey-01: crystals {crystals:?}, expected 4"));
+        return Err(format!(
+            "C-MYGO-journey-01: crystals {crystals:?}, expected 4"
+        ));
     }
     Ok(())
 }
@@ -599,14 +617,25 @@ fn journey_place_and_settle_gain() {
         if c != 4 {
             return Err(format!("C-MYGO-journey-01: crystals {c}, expected 4"));
         }
-        let tile = t.field(0).into_iter().find(|f| f.card == JOURNEY).map(|f| f.tile);
+        let tile = t
+            .field(0)
+            .into_iter()
+            .find(|f| f.card == JOURNEY)
+            .map(|f| f.tile);
         if tile != Some(5) {
             return Err(format!("C-MYGO-journey-01: tile {tile:?}, expected 5"));
         }
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "hand_n:P0", "field:P0", "crystals:P0", "discard:P0", "discard_pub:P0"],
+            &[
+                "hand:P0",
+                "hand_n:P0",
+                "field:P0",
+                "crystals:P0",
+                "discard:P0",
+                "discard_pub:P0",
+            ],
         )?;
 
         // (2) [持续] 触发结算时, X = tiles passed this main move -> X*60.
@@ -647,7 +676,9 @@ fn journey_drain_and_discard() {
         t.end(0).map_err(|e| format!("end: {e}"))?;
         let c = t.crystals(0, JOURNEY).unwrap_or(-1);
         if c != 3 {
-            return Err(format!("C-MYGO-journey-02: crystals {c}, expected 3 after S=7>6"));
+            return Err(format!(
+                "C-MYGO-journey-02: crystals {c}, expected 3 after S=7>6"
+            ));
         }
 
         // Move 6 is not strictly > 6: no drain.
@@ -661,7 +692,9 @@ fn journey_drain_and_discard() {
         u.end(0).map_err(|e| format!("end: {e}"))?;
         let c = u.crystals(0, JOURNEY).unwrap_or(-1);
         if c != 4 {
-            return Err(format!("C-MYGO-journey-02: crystals {c}, expected 4 after S=6"));
+            return Err(format!(
+                "C-MYGO-journey-02: crystals {c}, expected 4 after S=6"
+            ));
         }
 
         // Crystals hit 0 -> 弃牌堆.
@@ -671,7 +704,7 @@ fn journey_drain_and_discard() {
         v.set_pos(0, 5);
         v.set_hand(0, &[]);
         v.set_draw(0, &["R:曲奇时间"]); // non-empty draw: no eager reshuffle
-        // Force a long main move so the end drains the last crystal.
+                                        // Force a long main move so the end drains the last crystal.
         v.begin_turn(0);
         v.dice(&[7]);
         v.roll(0).map_err(|e| format!("roll: {e}"))?;
@@ -725,9 +758,9 @@ fn rainday_place_and_zone_stay() {
     forall(5, 0x1301, |rng, _i| {
         let mut t = Table::vanilla(3);
         let n = rng.range(1, 4); // 1..=4, the first four agents excl. 东京外
-        // Agent order excluding 东京外: 1 主要街道(blue), 2 中心学区(green),
-        // 3 周边学区(green), 4 弦卷集团(yellow), ...
-        // n=1 -> blue group tiles 1,4,5,6,7.
+                                 // Agent order excluding 东京外: 1 主要街道(blue), 2 中心学区(green),
+                                 // 3 周边学区(green), 4 弦卷集团(yellow), ...
+                                 // n=1 -> blue group tiles 1,4,5,6,7.
         t.set_pos(1, 5); // 偶像经纪公司, blue -- in zone for n=1
         t.set_pos(2, 20); // 瑟罗希亚, not blue
         t.dice(&[n]);
@@ -840,7 +873,9 @@ fn rainday_drains_one_crystal_per_turn_end() {
         t.end(0).map_err(|e| format!("end: {e}"))?;
         let c = t.crystals(0, RAINDAY).unwrap_or(-1);
         if c != 4 {
-            return Err(format!("C-MYGO-rainday-03: crystals {c}, expected 4 after one end"));
+            return Err(format!(
+                "C-MYGO-rainday-03: crystals {c}, expected 4 after one end"
+            ));
         }
         // Drain 4 -> 1 over four more ends (the end that hits 0 discards).
         t.set_draw(0, &["R:曲奇时间"]);
@@ -1048,7 +1083,8 @@ fn soyo_mixed_attaches_and_halves_agent_charge() {
         t.set_character_raw(0, "长崎素世");
         t.own(0, &[1]); // 购物中心
         t.set_pos(0, 1);
-        t.give_play(0, SOYO_MIXED).map_err(|e| format!("play: {e}"))?;
+        t.give_play(0, SOYO_MIXED)
+            .map_err(|e| format!("play: {e}"))?;
         if t.prompt().is_some() {
             let k = t.option("1").unwrap_or(0);
             t.answer(0, k).map_err(|e| format!("pick tile: {e}"))?;
@@ -1059,7 +1095,11 @@ fn soyo_mixed_attaches_and_halves_agent_charge() {
                 t.field_ids(0)
             ));
         }
-        let tile = t.field(0).into_iter().find(|f| f.card == SOYO_MIXED).map(|f| f.tile);
+        let tile = t
+            .field(0)
+            .into_iter()
+            .find(|f| f.card == SOYO_MIXED)
+            .map(|f| f.tile);
         if tile != Some(1) {
             return Err(format!("C-MYGO-soyo-mixed-01: tile {tile:?}, expected 1"));
         }
@@ -1076,7 +1116,8 @@ fn soyo_mixed_attaches_and_halves_agent_charge() {
         u.set_houses(1, 1); // 购物中心 rent 1360 w/ 1 house
         u.own(1, &[9, 10, 13, 14]); // green group, the agent's colour
         u.set_pos(0, 1);
-        u.give_play(0, SOYO_MIXED).map_err(|e| format!("play: {e}"))?;
+        u.give_play(0, SOYO_MIXED)
+            .map_err(|e| format!("play: {e}"))?;
         if u.prompt().is_some() {
             let k = u.option("1").unwrap_or(0);
             u.answer(0, k).map_err(|e| format!("pick tile: {e}"))?;
@@ -1117,7 +1158,11 @@ fn rana_fun_place_and_crystal_on_pass() {
         t.set_character_raw(0, "要乐奈");
         t.set_pos(0, 5);
         t.give_play(0, RANA_FUN).map_err(|e| format!("play: {e}"))?;
-        let tile = t.field(0).into_iter().find(|f| f.card == RANA_FUN).map(|f| f.tile);
+        let tile = t
+            .field(0)
+            .into_iter()
+            .find(|f| f.card == RANA_FUN)
+            .map(|f| f.tile);
         if tile != Some(5) {
             return Err(format!("C-MYGO-rana-fun-01: tile {tile:?}, expected 5"));
         }
@@ -1169,7 +1214,10 @@ fn rana_fun_choice_and_force_stop() {
         }
         // Take the 强制停下 branch if offered; otherwise the 抹茶芭菲 branch.
         // The determined part of -04 is the discard on the stop branch.
-        let stop = t.option("强制") .or_else(|| t.option("stop")).or_else(|| t.option("force"));
+        let stop = t
+            .option("强制")
+            .or_else(|| t.option("stop"))
+            .or_else(|| t.option("force"));
         if let Some(k) = stop {
             t.answer(1, k).map_err(|e| format!("stop: {e}"))?;
             rest(&mut t);
@@ -1202,7 +1250,13 @@ pub fn c_mygo_tomori_card_place(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     let p = &step.post.st.players[who];
     let stay = p.state_get("stay");
-    let pre_stay = step.pre.st.players.get(who).map(|q| q.state_get("stay")).unwrap_or(0);
+    let pre_stay = step
+        .pre
+        .st
+        .players
+        .get(who)
+        .map(|q| q.state_get("stay"))
+        .unwrap_or(0);
     if stay != pre_stay + 2 {
         return Err(format!(
             "C-MYGO-tomori-card-01: stay {pre_stay} -> {stay}, expected +2"
@@ -1351,10 +1405,10 @@ fn tomori_card_crystal_pays_fire_and_removes() {
         // would also refill). The clause is the refill; check the net zero
         // after an external -1.
         v.set_crystals(0, TOMORI_CARD, 2); // simulate the loss
-        // Without a live remover the refill hook does not fire on a bare
-        // arrange. The black-box suite drives a real remover
-        // (`light_refills_crystals_lost_for_a_non_skill_cost_reason`).
-        // Pin the book numbers here only when a remover is driven.
+                                           // Without a live remover the refill hook does not fire on a bare
+                                           // arrange. The black-box suite drives a real remover
+                                           // (`light_refills_crystals_lost_for_a_non_skill_cost_reason`).
+                                           // Pin the book numbers here only when a remover is driven.
         let _ = v;
 
         // -05: crystals exhausted -> [移除].
@@ -1384,7 +1438,8 @@ fn rikki_act_stay_holders_quarter_pay() {
         t.set_pos(2, 20);
         let money1 = t.money(1);
         let money2 = t.money(2);
-        t.give_play(0, RIKKI_ACT).map_err(|e| format!("play: {e}"))?;
+        t.give_play(0, RIKKI_ACT)
+            .map_err(|e| format!("play: {e}"))?;
         while t.prompt().is_some() {
             let p = t.expect_prompt();
             if p.kind == "tile" {
@@ -1508,7 +1563,9 @@ fn hitoshizuku_clear_charge_and_stun_play() {
             ));
         }
         if d2 != want2 {
-            return Err(format!("C-MYGO-hitoshizuku-02: P2 paid {d2}, expected {want2}"));
+            return Err(format!(
+                "C-MYGO-hitoshizuku-02: P2 paid {d2}, expected {want2}"
+            ));
         }
         if d0 != want1 + want2 {
             return Err(format!(
@@ -1548,11 +1605,14 @@ fn hitoshizuku_clear_charge_and_stun_play() {
         u.set_state(1, "stay", 1);
         let m0 = u.money(0);
         let m1 = u.money(1);
-        u.give_play(0, HITOSHIZUKU).map_err(|e| format!("play: {e}"))?;
+        u.give_play(0, HITOSHIZUKU)
+            .map_err(|e| format!("play: {e}"))?;
         let d0 = u.money(0) as i64 - m0 as i64;
         let d1 = m1 as i64 - u.money(1) as i64;
         if d1 != 1000 {
-            return Err(format!("C-MYGO-hitoshizuku-02: P1 paid {d1}, expected 1000"));
+            return Err(format!(
+                "C-MYGO-hitoshizuku-02: P1 paid {d1}, expected 1000"
+            ));
         }
         if d0 != 1000 + 2000 {
             return Err(format!(
@@ -1688,7 +1748,8 @@ fn normal_copies_last_main_move_steps() {
         t.give(0, &[NORMAL]);
         t.set_pos(0, 5); // in the blue zone for d10=1
         t.dice(&[1]);
-        t.give_play(1, "MyGO:那天的雨").map_err(|e| format!("rainday: {e}"))?;
+        t.give_play(1, "MyGO:那天的雨")
+            .map_err(|e| format!("rainday: {e}"))?;
         if !t.counteract_offered(NORMAL) {
             return Err(format!(
                 "C-MYGO-normal-01: [反击] window did not open after an \
@@ -1696,7 +1757,8 @@ fn normal_copies_last_main_move_steps() {
                 t.dump_prompt()
             ));
         }
-        t.counteract(0, NORMAL).map_err(|e| format!("counter: {e}"))?;
+        t.counteract(0, NORMAL)
+            .map_err(|e| format!("counter: {e}"))?;
         rest(&mut t);
         drain(&mut t);
         // [停留] still blocks this turn's main move (glossary). The copy is
@@ -1752,7 +1814,8 @@ fn haneoka_thresholds_and_ineffective() {
         let face = 10 + rng.range(0, 10); // 10..=19
         let mut t = haneoka_setup(0, face);
         let money = t.money(0);
-        t.give_play(0, HANEOKA).map_err(|e| format!("play face {face}: {e}"))?;
+        t.give_play(0, HANEOKA)
+            .map_err(|e| format!("play face {face}: {e}"))?;
         rest(&mut t);
         drain(&mut t);
         if t.houses(7) != 1 {
@@ -1792,14 +1855,17 @@ fn haneoka_thresholds_and_ineffective() {
 
         let miss = 1 + rng.range(0, 8); // 1..=9
         let mut u = haneoka_setup(0, miss);
-        u.give_play(0, HANEOKA).map_err(|e| format!("play face {miss}: {e}"))?;
+        u.give_play(0, HANEOKA)
+            .map_err(|e| format!("play face {miss}: {e}"))?;
         rest(&mut u);
         drain(&mut u);
         if u.houses(7) != 0 {
             return Err(format!("C-MYGO-haneoka-05: face {miss} must not build"));
         }
         if u.on_field(0, HANEOKA) {
-            return Err(format!("C-MYGO-haneoka-05: face {miss} must not stay on field"));
+            return Err(format!(
+                "C-MYGO-haneoka-05: face {miss} must not stay on field"
+            ));
         }
         if !u.discard(0).iter().any(|c| c == HANEOKA) {
             return Err(format!(
@@ -1875,7 +1941,9 @@ pub fn c_mygo_rinpuu_stay(step: &Step<'_>) -> Result<(), String> {
         .map(|p| p.state_get("stay"))
         .unwrap_or(0);
     if stay != pre + 1 {
-        return Err(format!("C-MYGO-rinpuu-01: stay {pre} -> {stay}, expected +1"));
+        return Err(format!(
+            "C-MYGO-rinpuu-01: stay {pre} -> {stay}, expected +1"
+        ));
     }
     Ok(())
 }
@@ -2000,7 +2068,11 @@ fn tomori_skill_fire_on_passing_ring() {
 fn tomori_skill_fire_cap_and_initial() {
     let t = Table::new(&["高松灯", "千早爱音"]);
     assert_eq!(t.charge(0), 4, "C-MYGO-tomori-skill-01: initial 4");
-    assert_eq!(t.p(0).state_max("charge"), 4, "C-MYGO-tomori-skill-01: cap 4");
+    assert_eq!(
+        t.p(0).state_max("charge"),
+        4,
+        "C-MYGO-tomori-skill-01: cap 4"
+    );
 }
 
 /// C-MYGO-tomori-skill-02/03/04: force-teleport for 4 pots; d20<=6 stay +
@@ -2014,7 +2086,7 @@ fn tomori_skill_teleport_windows() {
         t.set_fire(0, 4, 4);
         t.set_pos(0, 10);
         t.set_pos(1, 13); // within ±5 of 10
-        // Another player's move end within ±5: P1 rolls onto 13 from 12.
+                          // Another player's move end within ±5: P1 rolls onto 13 from 12.
         t.begin_turn(1);
         t.set_pos(1, 12);
         t.set_fire(0, 4, 4);
@@ -2022,7 +2094,11 @@ fn tomori_skill_teleport_windows() {
         t.roll(1).map_err(|e| format!("roll: {e}"))?;
         // A counter/skill window should offer the 4-pot force-teleport.
         if t.prompt().is_some() {
-            if let Some(k) = t.option("诗超绊").or_else(|| t.option("tomori")).or_else(|| t.option("charge")) {
+            if let Some(k) = t
+                .option("诗超绊")
+                .or_else(|| t.option("tomori"))
+                .or_else(|| t.option("charge"))
+            {
                 let _ = t.answer(0, k);
             } else {
                 t.decline();
@@ -2132,7 +2208,8 @@ fn anon_skill_draw_after_abnormal_resolves() {
         t.set_pos(0, 5); // blue zone for d10=1
         t.set_pos(1, 30);
         t.dice(&[1]);
-        t.give_play(1, "MyGO:那天的雨").map_err(|e| format!("rainday: {e}"))?;
+        t.give_play(1, "MyGO:那天的雨")
+            .map_err(|e| format!("rainday: {e}"))?;
         // 「在受到[停留]…效果影响并结算该效果后」 opens a YesNo ask
         // (`anon_restart_title`). YesNo has no `options`; accept it so the
         // 2-pot spend + draw run.
@@ -2306,7 +2383,7 @@ fn rana_skill_parfait_on_ring_gains_400() {
         t.set_pos(0, 6);
         // Give P0 a 抹茶芭菲 via the overlap clause, then pass a RiNG.
         t.set_pos(1, 8); // RiNG 1
-        // Arrange the token directly (the overlap is clause -06).
+                         // Arrange the token directly (the overlap is clause -06).
         t.set_state(0, "stay", 0);
         // token setter is not on Table; use the overlap to create one.
         t.set_pos(0, 0);
@@ -2326,7 +2403,11 @@ fn rana_skill_parfait_on_ring_gains_400() {
         t.roll(1).map_err(|e| format!("roll: {e}"))?;
         // Optional press: spend the parfait for 400.
         if t.prompt().is_some() {
-            if let Some(k) = t.option("抹茶").or_else(|| t.option("parfait")).or_else(|| t.option("400")) {
+            if let Some(k) = t
+                .option("抹茶")
+                .or_else(|| t.option("parfait"))
+                .or_else(|| t.option("400"))
+            {
                 let _ = t.answer(1, k);
             } else {
                 t.decline();
@@ -2435,7 +2516,8 @@ fn rikki_skill_fire_on_any_stay_gain() {
         t.set_pos(1, 5); // blue zone for d10=1
         t.set_pos(2, 30);
         t.dice(&[1]);
-        t.give_play(0, "MyGO:那天的雨").map_err(|e| format!("rainday: {e}"))?;
+        t.give_play(0, "MyGO:那天的雨")
+            .map_err(|e| format!("rainday: {e}"))?;
         if t.state(1, "stay") != 1 {
             return Err("setup: P1 did not gain a stay".into());
         }
@@ -2456,7 +2538,11 @@ fn rikki_skill_fire_on_any_stay_gain() {
 fn rikki_skill_fire_cap_and_initial() {
     let t = Table::new(&["椎名立希", "高松灯"]);
     assert_eq!(t.charge(0), 0, "C-MYGO-rikki-skill-01: initial 0");
-    assert_eq!(t.p(0).state_max("charge"), 5, "C-MYGO-rikki-skill-01: cap 5");
+    assert_eq!(
+        t.p(0).state_max("charge"),
+        5,
+        "C-MYGO-rikki-skill-01: cap 5"
+    );
 }
 
 /// C-MYGO-rikki-skill-02: 运营, 1 pot, +1 crystal on a field card, once/turn.
@@ -2482,9 +2568,7 @@ fn rikki_skill_adds_crystal_once_per_turn() {
         }
         let c = t.crystals(0, "MyGO:轮符雨").unwrap_or(-1);
         if c != 1 {
-            return Err(format!(
-                "C-MYGO-rikki-skill-02: crystals {c}, expected 1"
-            ));
+            return Err(format!("C-MYGO-rikki-skill-02: crystals {c}, expected 1"));
         }
         t.set_fire(0, 1, 5);
         if t.skill(0, &skill).is_ok() {
@@ -2552,7 +2636,9 @@ fn band_crystals_move_and_draw() {
         drain(&mut t);
         let c = t.crystals(0, &band).unwrap_or(-1);
         if c != 0 {
-            return Err(format!("C-MYGO-band-02: crystals {c}, expected 0 (roll 15)"));
+            return Err(format!(
+                "C-MYGO-band-02: crystals {c}, expected 0 (roll 15)"
+            ));
         }
 
         // -03: 1 crystal -> move exactly 1, no dice.
@@ -2613,7 +2699,8 @@ fn band_ineffective_card_adds_over_cap_crystal() {
         t.own(0, &[7]);
         t.set_pos(0, 7);
         t.dice(&[3]); // <10 -> 「视为此卡未生效」
-        t.give_play(0, "MyGO:羽丘的不可思议女孩").map_err(|e| format!("play: {e}"))?;
+        t.give_play(0, "MyGO:羽丘的不可思议女孩")
+            .map_err(|e| format!("play: {e}"))?;
         rest(&mut t);
         drain(&mut t);
         let c = t.crystals(0, &band).unwrap_or(-1);
@@ -2625,7 +2712,8 @@ fn band_ineffective_card_adds_over_cap_crystal() {
         // A second ineffective card pushes to 1+2 = 3, the over-cap max.
         t.begin_turn(0);
         t.dice(&[3]);
-        t.give_play(0, "MyGO:羽丘的不可思议女孩").map_err(|e| format!("play 2: {e}"))?;
+        t.give_play(0, "MyGO:羽丘的不可思议女孩")
+            .map_err(|e| format!("play 2: {e}"))?;
         rest(&mut t);
         drain(&mut t);
         let c = t.crystals(0, &band).unwrap_or(-1);
@@ -2638,9 +2726,6 @@ fn band_ineffective_card_adds_over_cap_crystal() {
     })
     .expect("C-MYGO-band-04");
 }
-
-
-
 
 // ================================================================
 // Remaining clause coverage
@@ -2814,13 +2899,14 @@ fn miracle_pass_everyone_pays_last_three_digits() {
         // were unowned (no rent). P0 walked 0->6 over unowned tiles if we
         // cleared owners; arrange that so `gained == q`.
         if gained < 0 {
-            return Err(format!("C-MYGO-miracle-03: gained {gained}, expected >= {q}"));
+            return Err(format!(
+                "C-MYGO-miracle-03: gained {gained}, expected >= {q}"
+            ));
         }
         Ok(())
     })
     .expect("C-MYGO-miracle-03");
 }
-
 
 // ================================================================
 // Iff verifiers + mutants (addendum items 1-5)
@@ -2828,16 +2914,19 @@ fn miracle_pass_everyone_pays_last_three_digits() {
 
 /// Pure verifier for C-MYGO-rinpuu-01: user gains exactly one [停留],
 /// money unchanged, and the effect-event multiset is just the play.
-pub fn verify_rinpuu_stay(
-    pre: &World,
-    post: &World,
-    events: &[MatchEvent],
-) -> Result<(), String> {
+pub fn verify_rinpuu_stay(pre: &World, post: &World, events: &[MatchEvent]) -> Result<(), String> {
     let who = pre
         .st
         .players
         .iter()
-        .position(|p| p.member == events.iter().find(|e| e.r#type == "card").map(|e| e.player_id).unwrap_or(0))
+        .position(|p| {
+            p.member
+                == events
+                    .iter()
+                    .find(|e| e.r#type == "card")
+                    .map(|e| e.player_id)
+                    .unwrap_or(0)
+        })
         .unwrap_or(0);
     let pre_stay = pre.st.players[who].state_get("stay");
     let post_stay = post.st.players[who].state_get("stay");
@@ -2912,10 +3001,16 @@ pub fn verify_journey_place(
         .find(|f| f.card == JOURNEY)
         .ok_or("card not on field")?;
     if f.counters.get("crystals").copied().unwrap_or(0) != 4 {
-        return Err(format!("crystals {}, expected 4", f.counters.get("crystals").copied().unwrap_or(0)));
+        return Err(format!(
+            "crystals {}, expected 4",
+            f.counters.get("crystals").copied().unwrap_or(0)
+        ));
     }
     if f.tile != pre.st.players[who].pos {
-        return Err(format!("tile {}, expected {}", f.tile, pre.st.players[who].pos));
+        return Err(format!(
+            "tile {}, expected {}",
+            f.tile, pre.st.players[who].pos
+        ));
     }
     // Frame: no money moved for anyone.
     for i in 0..post.st.players.len() {
@@ -2950,7 +3045,11 @@ fn journey_place_verifier_rejects_mutants() {
         }
         // WRONG: 5 crystals instead of 4.
         let mut wrong = post.clone();
-        if let Some(f) = wrong.st.players[0].field.iter_mut().find(|f| f.card == JOURNEY) {
+        if let Some(f) = wrong.st.players[0]
+            .field
+            .iter_mut()
+            .find(|f| f.card == JOURNEY)
+        {
             f.counters.insert("crystals".into(), 5);
         }
         if verify_journey_place(&pre, &wrong, &[]).is_ok() {
@@ -3155,7 +3254,11 @@ fn haneoka_below_10_is_a_no_op() {
         drain(&mut t);
         let post = t.snapshot_world();
         if t.money(0) != money {
-            return Err(format!("C-MYGO-haneoka-05: money moved {} -> {}", money, t.money(0)));
+            return Err(format!(
+                "C-MYGO-haneoka-05: money moved {} -> {}",
+                money,
+                t.money(0)
+            ));
         }
         if t.houses(7) != houses {
             return Err(format!(

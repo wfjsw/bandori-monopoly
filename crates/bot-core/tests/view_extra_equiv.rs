@@ -30,10 +30,13 @@ fn data() -> Arc<GameData> {
     // bot-core must not grow a hard dep on the card crates, so the roster
     // comes from the generated roster fixture (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
         GameData::load(
@@ -132,7 +135,10 @@ fn compare_one(
         t.est_cost_ok += 1;
     } else {
         t.est_cost_bad += 1;
-        panic!("{label} member {member}: est_cost diverged: {:?} vs {:?}", want.est_cost, got.est_cost);
+        panic!(
+            "{label} member {member}: est_cost diverged: {:?} vs {:?}",
+            want.est_cost, got.est_cost
+        );
     }
 
     let skills_equal = got.skills.len() == want.skills.len()
@@ -147,8 +153,14 @@ fn compare_one(
         t.skills_bad += 1;
         panic!(
             "{label} member {member}: skills diverged\n  server: {:?}\n  client: {:?}",
-            want.skills.iter().map(|s| (&s.id, s.enabled)).collect::<Vec<_>>(),
-            got.skills.iter().map(|s| (&s.id, s.enabled)).collect::<Vec<_>>(),
+            want.skills
+                .iter()
+                .map(|s| (&s.id, s.enabled))
+                .collect::<Vec<_>>(),
+            got.skills
+                .iter()
+                .map(|s| (&s.id, s.enabled))
+                .collect::<Vec<_>>(),
         );
     }
 
@@ -235,7 +247,10 @@ fn seat_view_extras_match_the_server_on_seeded_games() {
     assert_eq!(t.playable_bad, 0, "playable must agree every time");
     assert_eq!(t.est_cost_bad, 0, "est_cost must agree every time");
     assert_eq!(t.skills_bad, 0, "skills must agree every time");
-    assert_eq!(t.ai_presence_bad, 0, "aiAnswer presence must agree every time");
+    assert_eq!(
+        t.ai_presence_bad, 0,
+        "aiAnswer presence must agree every time"
+    );
     // `ai_exact` covers the no-RNG prompts (the fallback fill). Divergences
     // are the audit's RNG rows; they must remain a minority.
     assert!(
@@ -302,5 +317,8 @@ fn seat_view_extras_match_on_a_solo_frame_too() {
     }
     eprintln!("solo-frame equivalence: {t:?}");
     assert!(t.views > 20, "too few solo views: {}", t.views);
-    assert_eq!(t.playable_bad + t.est_cost_bad + t.skills_bad + t.ai_presence_bad, 0);
+    assert_eq!(
+        t.playable_bad + t.est_cost_bad + t.skills_bad + t.ai_presence_bad,
+        0
+    );
 }

@@ -18,7 +18,6 @@ fn settle_on(t: &mut Table, who: usize, target: usize) {
     t.roll(who).unwrap();
 }
 
-
 fn price(t: usize) -> i32 {
     data().tiles[t].price
 }
@@ -178,7 +177,10 @@ fn g_settle_05_empty_event_deck_reshuffles_the_discard() {
     // A reshuffle happened: either the deck is non-empty again, or the
     // discard shrank (the card moved into the deck and was drawn).
     assert!(
-        !t.event_deck().is_empty() || t.event_discard().len() < before_discard || t.event_removed().len() > 0 || t.hand(0).len() == 1,
+        !t.event_deck().is_empty()
+            || t.event_discard().len() < before_discard
+            || t.event_removed().len() > 0
+            || t.hand(0).len() == 1,
         "reshuffle: deck={:?} discard was {before_discard} now {:?}",
         t.event_deck(),
         t.event_discard()
@@ -236,9 +238,9 @@ fn g_settle_06_unowned_buy_is_the_settle() {
     // either a buy prompt is open, or a buy already committed.
     let bought = t.owner(land) == Some(0);
     let prompt = t.prompt();
-    let offered = prompt.as_ref().is_some_and(|p| {
-        p.title.key().contains("buy") || p.title.key().contains("ask.buy")
-    });
+    let offered = prompt
+        .as_ref()
+        .is_some_and(|p| p.title.key().contains("buy") || p.title.key().contains("ask.buy"));
     assert!(
         bought || offered,
         "the settle of an unowned buyable must offer the optional buy \
@@ -259,9 +261,9 @@ fn g_settle_07_own_build_is_the_settle() {
     settle_on(&mut t, 0, land);
     let built = t.houses(land) == 1;
     let prompt = t.prompt();
-    let offered = prompt.as_ref().is_some_and(|p| {
-        p.title.key().contains("build") || p.title.key().contains("ask.build")
-    });
+    let offered = prompt
+        .as_ref()
+        .is_some_and(|p| p.title.key().contains("build") || p.title.key().contains("ask.build"));
     assert!(
         built || offered,
         "the settle of an own un-mortgaged buyable must offer the optional build; \
@@ -291,7 +293,11 @@ fn g_settle_07_build_costs_the_marked_house() {
         }
         let cost = house_cost(land);
         assert_eq!(t.houses(land), 1, "one house up");
-        assert_eq!(t.money(0), money - cost, "paid the marked house cost {cost}");
+        assert_eq!(
+            t.money(0),
+            money - cost,
+            "paid the marked house cost {cost}"
+        );
         Ok(())
     })
     .expect("G-SETTLE-07 cost");
@@ -335,7 +341,11 @@ fn g_settle_08_level_caps() {
         "three houses at the build cost"
     );
     // The cap holds in the data model too.
-    assert_eq!(data().tiles[land].rent.len() - 1, 3, "four rent rows = cap 3");
+    assert_eq!(
+        data().tiles[land].rent.len() - 1,
+        3,
+        "four rent rows = cap 3"
+    );
 }
 
 // =====================================================================
@@ -355,7 +365,10 @@ fn g_settle_09_upgrade_cannot_be_funded_by_mortgaging_that_deed() {
     settle_on(&mut t, 0, land);
     // No build is offered at 100 money -- the deed being upgraded cannot fund
     // its own construction.
-    assert!(t.prompt().is_none() || t.build(0).is_err(), "no build at 100 money");
+    assert!(
+        t.prompt().is_none() || t.build(0).is_err(),
+        "no build at 100 money"
+    );
     // 5.2: a mortgaged deed's settle has no effect.
     t.set_mortgaged(land, true);
     settle_on(&mut t, 0, land);
@@ -435,7 +448,11 @@ fn g_settle_12_force_buy_ignores_modifiers_and_pays_a_stunned_owner() {
         let w = t.m.world_mut();
         w.apply_layer(1, bandori_std::state_key::STUN, 1);
         w.state_set_flags(1, bandori_std::state_key::STUN, 1 | 2);
-        w.state_set_expires(1, bandori_std::state_key::STUN, Some(game_core::state::Tick::TurnEnd));
+        w.state_set_expires(
+            1,
+            bandori_std::state_key::STUN,
+            Some(game_core::state::Tick::TurnEnd),
+        );
     } // owner cannot normally receive
     t.set_money(0, 10_000);
     t.set_money(1, 10_000);
@@ -554,7 +571,9 @@ fn g_settle_10_frame_only_money_moves() {
     frame(
         &pre,
         t.world(),
-        &["money:P0", "money:P1", "pos:P0", "turn", "step", "landed", "round", "recent", "hidden"],
+        &[
+            "money:P0", "money:P1", "pos:P0", "turn", "step", "landed", "round", "recent", "hidden",
+        ],
     )
     .expect("G-SETTLE-10 frame");
 }

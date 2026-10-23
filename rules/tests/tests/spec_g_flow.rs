@@ -83,10 +83,7 @@ impl Setup {
         let member = self.m.world().st.players[who].member;
         let out = observe(
             &mut self.m,
-            StepAct::Act {
-                who: member,
-                msg,
-            },
+            StepAct::Act { who: member, msg },
             |_| {
                 // Setup phases are not "play"; settle_match returns at once.
             },
@@ -165,7 +162,12 @@ impl Setup {
                 .iter()
                 .zip(p.answers.iter())
                 .filter(|(_, &a)| a < 0)
-                .map(|(&seat, _)| (seat as usize, self.m.world().st.players[seat as usize].member))
+                .map(|(&seat, _)| {
+                    (
+                        seat as usize,
+                        self.m.world().st.players[seat as usize].member,
+                    )
+                })
                 .collect();
             for (seat, member) in pending {
                 let act = if p.kind == "mulligan" {
@@ -264,7 +266,11 @@ fn turn_order_ties_resolve_to_unique_faces() {
         let mut uniq = rolls.clone();
         uniq.sort_unstable();
         uniq.dedup();
-        assert_eq!(uniq.len(), rolls.len(), "seed {k}: tied faces left {rolls:?}");
+        assert_eq!(
+            uniq.len(),
+            rolls.len(),
+            "seed {k}: tied faces left {rolls:?}"
+        );
     }
 }
 
@@ -469,13 +475,12 @@ fn start_tile_circle_and_10000_money() {
         assert_eq!(p.money, 10_000, "player {i} start money");
         assert_eq!(p.pos, 0, "player {i} start tile (1号CiRCLE = tile 0)");
     }
-    let keys: Vec<String> = s
-        .m
-        .world()
-        .recent
-        .iter()
-        .map(|e| rules_spec::event_key(e))
-        .collect();
+    let keys: Vec<String> =
+        s.m.world()
+            .recent
+            .iter()
+            .map(|e| rules_spec::event_key(e))
+            .collect();
     assert!(
         keys.iter().any(|k| k == "log.match_start"),
         "no log.match_start in {keys:?}"
@@ -572,9 +577,7 @@ fn turn_phases_and_immediate_next_turn() {
     assert_eq!(t.turn(), 0);
 
     // End without the main move is refused (G-FLOW-02).
-    let err = t
-        .end(0)
-        .expect_err("end before [主要移动] must be refused");
+    let err = t.end(0).expect_err("end before [主要移动] must be refused");
     assert!(
         err.contains("roll") || err.contains("busy") || err.contains("first"),
         "unexpected end-refusal key {err:?}"
@@ -587,7 +590,11 @@ fn turn_phases_and_immediate_next_turn() {
     // G-SETTLE-06/07 may open a buy/build prompt; answer it so the stage can
     // finish the settle and reach 结束.
     t.settle_answering_defaults();
-    assert_eq!(t.step(), stage::END, "after the main move the stage is 结束");
+    assert_eq!(
+        t.step(),
+        stage::END,
+        "after the main move the stage is 结束"
+    );
     assert!(t.world().turn.main_moved, "main_moved latch");
 
     // Second main move is refused / no-op (G-FLOW-01).
@@ -608,7 +615,8 @@ fn turn_phases_and_immediate_next_turn() {
         "no log.end_turn in {keys:?}"
     );
     assert!(
-        keys.iter().any(|k| k == "log.turn" || k == "log.turn_extra"),
+        keys.iter()
+            .any(|k| k == "log.turn" || k == "log.turn_extra"),
         "next turn did not begin immediately in the same settle: {keys:?}"
     );
     assert_eq!(t.turn(), 1, "next seat in action order");
@@ -628,7 +636,11 @@ fn turn_start_removes_one_exile_layer() {
     t.set_state(0, bandori_std::state_key::STAY, 1);
     t.begin_turn(0);
     t.end(0).expect("end with [停留]");
-    assert_eq!(t.state(1, bandori_std::state_key::EXILE), 1, "[除外] 2 -> 1 at 回合开始前");
+    assert_eq!(
+        t.state(1, bandori_std::state_key::EXILE),
+        1,
+        "[除外] 2 -> 1 at 回合开始前"
+    );
     let keys = t.recent_keys(30);
     assert!(
         keys.iter().any(|k| k == "log.exiled_skip"),
@@ -644,7 +656,11 @@ fn turn_start_last_exile_layer_clears() {
     t.set_state(0, bandori_std::state_key::STAY, 1);
     t.begin_turn(0);
     t.end(0).expect("end");
-    assert_eq!(t.state(1, bandori_std::state_key::EXILE), 0, "[除外] 1 -> 0 at 回合开始前");
+    assert_eq!(
+        t.state(1, bandori_std::state_key::EXILE),
+        0,
+        "[除外] 1 -> 0 at 回合开始前"
+    );
 }
 
 /// G-FLOW-08 -- 结束阶段 removes one [晕眩] / [停留] layer.
@@ -667,8 +683,16 @@ fn turn_end_removes_one_stay_and_stun_layer() {
     t.end(2).expect("end P2");
     // P0's turn began and (being stunned) auto-skipped to its end, decaying
     // one of each. The window above is P2's end -> P0's skip -> P1's turn.
-    assert_eq!(t.state(0, bandori_std::state_key::STUN), 1, "[晕眩] 2 -> 1 at turn end");
-    assert_eq!(t.state(0, bandori_std::state_key::STAY), 1, "[停留] 2 -> 1 at turn end");
+    assert_eq!(
+        t.state(0, bandori_std::state_key::STUN),
+        1,
+        "[晕眩] 2 -> 1 at turn end"
+    );
+    assert_eq!(
+        t.state(0, bandori_std::state_key::STAY),
+        1,
+        "[停留] 2 -> 1 at turn end"
+    );
 }
 
 /// G-FLOW-09 -- 晕眩 skips 运营 and the main move.

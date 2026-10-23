@@ -17,10 +17,10 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ActionKind, FilterKind};
-use skill_groups::fans;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On, PayAddValue};
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
+use skill_groups::fans;
 
 pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
@@ -123,7 +123,10 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
 fn shave_x_filter(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     // 「[拥有者][消耗]或[支付]时」 -- the owner is the payer/spender.
     if v.value <= 0 || trigger::player_id() != player_id || !poorest(player_id) {
-        return PayAddValue { value: v.value, ..v };
+        return PayAddValue {
+            value: v.value,
+            ..v
+        };
     }
     let x = shave_x(player_id);
     let out = (v.value - x).max(0);

@@ -11,9 +11,9 @@
 //! 「上回合进行过房屋加盖」 is latched at `houseAdded` and read at the next
 //! turn start; the free turn is announced when it is taken.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, state};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Did this player's own build commit last turn?
 const BUILT_LAST: &str = "skill.tamade.builtLast";
@@ -28,12 +28,27 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         // must still enter the body; gating the hook on `builtLast == 0` left
         // that arm dead (and skipped the builtThis reset), so the second build
         // paid full price.
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start)),
-        On::Action(Action::HouseAdded(card_sdk::pre::MINE, None, None, on_built)),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, at_turn_end)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            at_turn_start,
+        )),
+        On::Action(Action::HouseAdded(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            on_built,
+        )),
+        On::Action(Action::TurnEnd(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            at_turn_end,
+        )),
     ],
 )
-    .silent(&[1, 2]);
+.silent(&[1, 2]);
 
 /// 「加盖房屋时半价」, or 「本回合加盖房屋变为免费」 when last turn built.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {

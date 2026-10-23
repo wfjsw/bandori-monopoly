@@ -7,9 +7,9 @@
 //! Sheet 2026-10-06: every threshold is inclusive (「至少为」), and the
 //! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
-use card_sdk::abi::{roll_source, ActionKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{roll_source, ActionKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
@@ -129,7 +129,9 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("haneoka_cancel_title")).card("card", ID),
-        &Msg::new(key!("haneoka_cancel_ask")).n("money", amount as i64).card("card", ID),
+        &Msg::new(key!("haneoka_cancel_ask"))
+            .n("money", amount as i64)
+            .card("card", ID),
     )? {
         return Ok(());
     }

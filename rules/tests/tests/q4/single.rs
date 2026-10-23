@@ -49,7 +49,8 @@ fn play_cost_surfaces(rule: &str, deltas: &[super::Delta]) -> BTreeSet<&'static 
         // treat those as declared-by-the-press.
         let is_self = d.path.contains(rule)
             || (d.before.contains(rule) && d.path.starts_with("hand:"))
-            || (d.after.contains(rule) && (d.path.starts_with("discard:") || d.path.starts_with("field:")));
+            || (d.after.contains(rule)
+                && (d.path.starts_with("discard:") || d.path.starts_with("field:")));
         // A crystal counter appearing at 0 on a card this same window placed
         // is the instance's initial value, not a crystal write.
         let is_new_instance_zero = {
@@ -57,9 +58,9 @@ fn play_cost_surfaces(rule: &str, deltas: &[super::Delta]) -> BTreeSet<&'static 
                 // `crystals:P{i}:{card}` -- take the card id.
                 let card = d.path.splitn(3, ':').nth(2).unwrap_or("");
                 !card.is_empty()
-                    && deltas.iter().any(|o| {
-                        o.path.starts_with("field:") && o.after.contains(card)
-                    })
+                    && deltas
+                        .iter()
+                        .any(|o| o.path.starts_with("field:") && o.after.contains(card))
             } else {
                 false
             }
@@ -187,7 +188,10 @@ fn audit_one_raw(rule: &str, seed: u64) -> RuleAudit {
             in_footprint.insert(s.to_string());
             continue;
         }
-        stray.push((s.to_string(), format!("{}: {} -> {}", d.path, d.before, d.after)));
+        stray.push((
+            s.to_string(),
+            format!("{}: {} -> {}", d.path, d.before, d.after),
+        ));
     }
 
     RuleAudit {

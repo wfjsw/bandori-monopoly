@@ -110,7 +110,10 @@ fn compute_ai_answer_reproduces_the_prompt_open_fill_on_offers() {
     assert!(buys > 20, "too few buy prompts sampled: {buys}");
     // The bug was "always decline" -- a healthy run must see both answers,
     // and in particular must see the engine actually say yes.
-    assert!(yes > 0, "the engine never said yes to a buy across {buys} prompts");
+    assert!(
+        yes > 0,
+        "the engine never said yes to a buy across {buys} prompts"
+    );
 }
 
 /// The user-visible symptom, stated directly: with funds that leave the buy
@@ -151,10 +154,7 @@ fn compute_ai_answer_buys_when_the_reserve_is_met() {
                 if price < 0 || p.money < price || p.money - price < 2_000 {
                     continue;
                 }
-                let want = m
-                    .view_extra_typed(p.member)
-                    .ai_answer
-                    .expect("live fill");
+                let want = m.view_extra_typed(p.member).ai_answer.expect("live fill");
                 let got = m.compute_ai_answer(p.member).expect("recomputed answer");
                 assert_eq!(
                     want.answer, 0,
@@ -171,5 +171,8 @@ fn compute_ai_answer_buys_when_the_reserve_is_met() {
         }
     }
     eprintln!("fundable buys checked: {checked}");
-    assert!(checked > 5, "too few fundable buy prompts sampled: {checked}");
+    assert!(
+        checked > 5,
+        "too few fundable buy prompts sampled: {checked}"
+    );
 }

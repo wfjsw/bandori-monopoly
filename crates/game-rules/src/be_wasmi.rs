@@ -4,9 +4,7 @@
 //! embedded JIT is not available) and, with the `wasmi-native` feature, on the
 //! server too -- mainly to keep both paths covered by the same tests.
 
-pub use wasmi::{
-    Caller, Engine, Instance, Linker, Module, Store, StoreLimits, StoreLimitsBuilder,
-};
+pub use wasmi::{Caller, Engine, Instance, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 use wasmi::{Config, Extern, Memory};
 
 /// Ceiling on one instance's linear memory. A card run allocates a handful of

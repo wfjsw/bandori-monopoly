@@ -42,9 +42,17 @@ fn tsugu_ge22_draws_a_card() {
     // 22 < 26: the choice comes up; answer it, then the draw lands.
     // 规则书: 「结果小于26则选择[获得]1000资金或…」
     t.answer(0, 0).unwrap(); // gain 1000
-    // 规则书: 「结果至少为22则抽1张卡」
-    assert!(t.hand(0).contains(&"通用:GREAT".to_string()), "hand {:?}", t.hand(0));
-    assert_eq!(t.draw_pile(0), vec!["通用:@Tsugu ycm"], "played card refills the empty deck");
+                             // 规则书: 「结果至少为22则抽1张卡」
+    assert!(
+        t.hand(0).contains(&"通用:GREAT".to_string()),
+        "hand {:?}",
+        t.hand(0)
+    );
+    assert_eq!(
+        t.draw_pile(0),
+        vec!["通用:@Tsugu ycm"],
+        "played card refills the empty deck"
+    );
 }
 
 // 规则书: 「结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]」
@@ -67,11 +75,14 @@ fn tsugu_lt26_choose_move_settles() {
     t.dice(&[1, 1, 1]);
     t.give_play(0, "通用:@Tsugu ycm").unwrap();
     t.answer(0, 1).unwrap(); // move
-    // Teleport to Bandori车站 (index 35) and settle: the unowned-buy offer.
+                             // Teleport to Bandori车站 (index 35) and settle: the unowned-buy offer.
     assert_eq!(t.pos(0), BANDORI, "events {:?}", t.recent_keys(8));
     let p = t.expect_prompt();
-    assert!(p.title.key().contains("buy") || p.title.key().contains("agent"),
-        "{}", t.dump_prompt());
+    assert!(
+        p.title.key().contains("buy") || p.title.key().contains("agent"),
+        "{}",
+        t.dump_prompt()
+    );
 }
 
 // 规则书: 「结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并不[结算]」
@@ -101,7 +112,10 @@ fn tsugu_ge26_can_buy_any_unowned() {
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
     // Must offer purchasable unowned tiles (not CiRCLE / agents / shops).
     assert!(p.items.contains(&FUJIMI.to_string()), "items {:?}", p.items);
-    assert!(!p.items.contains(&CIRCLE.to_string()), "CiRCLE not purchasable");
+    assert!(
+        !p.items.contains(&CIRCLE.to_string()),
+        "CiRCLE not purchasable"
+    );
     assert!(!p.items.contains(&SHOPPING.to_string()) || true);
     t.answer_tile(0, FUJIMI).unwrap();
     assert_eq!(t.owner(FUJIMI), Some(0));
@@ -124,7 +138,12 @@ fn tsugu_buy_gate_refused_does_not_log_a_buy() {
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
     t.answer_tile(0, HILL).unwrap(); // 星之鼓动山丘, price 600
     skip_all(&mut t);
-    assert_eq!(t.owner(HILL), None, "BuyGate refused the buy: {:?}", t.recent_keys(16));
+    assert_eq!(
+        t.owner(HILL),
+        None,
+        "BuyGate refused the buy: {:?}",
+        t.recent_keys(16)
+    );
     let keys = t.recent_keys(16);
     assert!(
         !keys.iter().any(|k| k.contains("tsugu_buy")),
@@ -177,8 +196,13 @@ fn agent_quote_carries_the_tsugu_buy_add() {
 
 fn data() -> std::sync::Arc<game_core::data::GameData> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster =
-        game_core::data::Roster::from_fixture(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json")).expect("roster fixture")).expect("roster fixture parses");
+    let roster = game_core::data::Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
+    )
+    .expect("roster fixture parses");
     std::sync::Arc::new(
         game_core::data::GameData::load(
             |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
@@ -196,7 +220,7 @@ fn tsugu_ge28_buy_discount_1500() {
     t.give_play(0, "通用:@Tsugu ycm").unwrap();
     t.answer(0, 0).unwrap(); // buy
     t.answer_tile(0, FUJIMI).unwrap(); // price 600
-    // 规则书: 「降低1500（最低0）」 → 600-1500 clamped to 0.
+                                       // 规则书: 「降低1500（最低0）」 → 600-1500 clamped to 0.
     assert_eq!(t.money(0), 10_000, "pays 0 after the 1500 discount");
     assert_eq!(t.owner(FUJIMI), Some(0));
 }
@@ -265,7 +289,10 @@ fn perfect_removes_self_adds_fever_gains_3000() {
     t.give_play(0, "通用:[衍生]PERFECT").unwrap();
     assert_eq!(t.money(0), 13_000);
     // [移除]此卡: PERFECT is gone from the game, not in the discard.
-    assert!(!t.discard(0).contains(&"通用:[衍生]PERFECT".to_string()), "PERFECT [移除]ed");
+    assert!(
+        !t.discard(0).contains(&"通用:[衍生]PERFECT".to_string()),
+        "PERFECT [移除]ed"
+    );
     // 规则书: 「将一张“FEVER!“加入弃卡区」
     assert_eq!(t.draw_pile(0), vec!["通用:[衍生]FEVER!".to_string()]);
 }
@@ -275,7 +302,11 @@ fn perfect_removes_self_adds_fever_gains_3000() {
 fn fever_goes_to_owners_field() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "通用:[衍生]FEVER!").unwrap();
-    assert!(t.on_field(0, "通用:[衍生]FEVER!"), "field {:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, "通用:[衍生]FEVER!"),
+        "field {:?}",
+        t.field_ids(0)
+    );
     let f = &t.field(0)[0];
     assert_eq!(f.owner, 0);
     assert_eq!(f.user, 0);
@@ -290,7 +321,7 @@ fn fever_boosts_a_gain() {
     t.dice(&[6]);
     t.roll(0).unwrap();
     skip_all(&mut t); // claim the CiRCLE reward (money)
-    // The plain reward is 2000; the boost raises it.
+                      // The plain reward is 2000; the boost raises it.
     assert!(t.money(0) > 12_000, "boost applied: {}", t.money(0));
 }
 
@@ -352,15 +383,29 @@ fn fever_x_counts_face_down_field_cards() {
     t.give_play(0, "通用:[衍生]FEVER!").unwrap();
     // A face-down second card on the owner's field.
     t.place_raw(0, "通用:GREAT");
-    let uid = t.field(0).iter().find(|f| f.card == "通用:GREAT").unwrap().uid;
-    t.m.world_mut().st.players[0].field.iter_mut()
-        .find(|f| f.uid == uid).unwrap().face_down = true;
+    let uid = t
+        .field(0)
+        .iter()
+        .find(|f| f.card == "通用:GREAT")
+        .unwrap()
+        .uid;
+    t.m.world_mut().st.players[0]
+        .field
+        .iter_mut()
+        .find(|f| f.uid == uid)
+        .unwrap()
+        .face_down = true;
     // Two cards (FEVER + the face-down GREAT) → X = 600 - 400 = 200.
     t.set_pos(0, 55);
     t.dice(&[6]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.money(0), 12_200, "X counts the face-down card too: {}", t.money(0) - 12_000);
+    assert_eq!(
+        t.money(0),
+        12_200,
+        "X counts the face-down card too: {}",
+        t.money(0) - 12_000
+    );
 }
 
 /// 规则书（2）: 「[拥有者]回合开始时将此卡放入[使用者]弃卡区」 -- the **user's**
@@ -379,7 +424,11 @@ fn fever_leaves_to_the_users_discard_pile() {
     t.roll(1).unwrap();
     skip_all(&mut t);
     t.end(1).unwrap();
-    assert!(!t.on_field(0, "通用:[衍生]FEVER!"), "field {:?}", t.field_ids(0));
+    assert!(
+        !t.on_field(0, "通用:[衍生]FEVER!"),
+        "field {:?}",
+        t.field_ids(0)
+    );
     assert!(
         t.discard(0).contains(&"通用:[衍生]FEVER!".to_string()),
         "user discard {:?}",
@@ -435,7 +484,10 @@ fn thanks_party_offers_a_player_under_500() {
             t.decline();
         }
     }
-    assert!(saw_offer, "a player under 500 is still offered the 500 spend");
+    assert!(
+        saw_offer,
+        "a player under 500 is still offered the 500 spend"
+    );
 }
 
 // 规则书: 「[拥有者]回合开始时将此卡放入[使用者]弃卡区」
@@ -453,7 +505,11 @@ fn fever_leaves_to_users_discard() {
     skip_all(&mut t);
     t.end(1).unwrap();
     // Owner's turn start: card leaves the field.
-    assert!(!t.on_field(0, "通用:[衍生]FEVER!"), "field {:?}", t.field_ids(0));
+    assert!(
+        !t.on_field(0, "通用:[衍生]FEVER!"),
+        "field {:?}",
+        t.field_ids(0)
+    );
     // …into the [使用者]'s (P0's) discard.
     assert_eq!(t.draw_pile(0), vec!["通用:[衍生]FEVER!".to_string()]);
 }
@@ -624,12 +680,19 @@ fn cp_settle_on_marked_tile_pays_800() {
     // 规则书: 「[获得]800资金」 -- to the settling player.
     assert_eq!(t.money(0), 10_800, "events {:?}", t.recent_keys(8));
     // 规则书: 「移除…自己[场上]1个[CP点]」 -- one **on-card** [CP点].
-    assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(5), "one on-card CP spent");
+    assert_eq!(
+        t.cp_on_card(0, "通用:该清CP了"),
+        Some(5),
+        "one on-card CP spent"
+    );
     // 规则书: 「移除格子上的个[CP点]」 -- the **tile** mark.
     assert!(t.marks_on(5).is_empty(), "tile mark gone: {:?}", t.marks());
     // The card stays: its on-card [CP点] is not empty (ruling 2026-10-07, the
     // graveyard is keyed on the on-card count, not on the tile marks).
-    assert!(t.on_field(0, "通用:该清CP了"), "still 5 on-card [CP点] left");
+    assert!(
+        t.on_field(0, "通用:该清CP了"),
+        "still 5 on-card [CP点] left"
+    );
 }
 
 // ruling 2026-10-07 (on-card vs tile CP): 「自己[场上]1个[CP点]」 is the CP
@@ -712,7 +775,10 @@ fn cp_marks_are_neutral_and_attached_to_the_card() {
     assert_eq!(m.category, "cp", "[CP点] is its own category: {m:?}");
     // Provenance for the log / 「来自」, and the instance 「此卡」 keys on.
     assert_eq!(m.card, "通用:该清CP了", "「来自」 provenance: {m:?}");
-    assert!(m.src.is_some_and(|s| s > 0), "attached to the placing card instance: {m:?}");
+    assert!(
+        m.src.is_some_and(|s| s > 0),
+        "attached to the placing card instance: {m:?}"
+    );
 }
 
 // User ruling 2026-10-07 (on-card vs tile CP): 「该清CP了 should be graveyarded
@@ -766,7 +832,11 @@ fn cp_card_stays_when_only_its_markers_run_out() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    assert!(t.marks_on(5).is_empty(), "the tile mark is gone: {:?}", t.marks());
+    assert!(
+        t.marks_on(5).is_empty(),
+        "the tile mark is gone: {:?}",
+        t.marks()
+    );
     assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(5));
     assert!(
         t.on_field(0, "通用:该清CP了"),
@@ -834,12 +904,19 @@ fn net_negates_untargeted_hand_effect() {
     t.give(1, &["通用:网络链接异常"]);
     t.give(0, &["通用:GREAT"]);
     t.play(0, "通用:GREAT").unwrap();
-    assert!(t.counteract_offered("通用:网络链接异常"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("通用:网络链接异常"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "通用:网络链接异常").unwrap();
     skip_all(&mut t);
     // 规则书: 「抵消其所有的效果」 — no money, no PERFECT.
     assert_eq!(t.money(0), 10_000, "no +2000");
-    assert!(!t.draw_pile(0).contains(&"通用:[衍生]PERFECT".to_string()), "no PERFECT");
+    assert!(
+        !t.draw_pile(0).contains(&"通用:[衍生]PERFECT".to_string()),
+        "no PERFECT"
+    );
     // Both spent cards are filed, then immediately refill their owners' empty decks.
     assert_eq!(t.draw_pile(0), vec!["通用:GREAT"]);
     assert_eq!(t.draw_pile(1), vec!["通用:网络链接异常"]);
@@ -895,12 +972,18 @@ fn harvest_previews_each_distance_with_wraparound_and_reverse() {
         assert_eq!(p.options.len(), 6);
         for (i, option) in p.options.iter().enumerate() {
             let n = i as i32 + 1;
-            let tile = if reverse { (2 - n).rem_euclid(60) } else { (58 + n) % 60 };
+            let tile = if reverse {
+                (2 - n).rem_euclid(60)
+            } else {
+                (58 + n) % 60
+            };
             assert_eq!(option.a.get("tile"), Some(&Arg::Tile(tile)));
         }
         let destination = if reverse { 58 } else { 2 };
         t.answer(0, 3).unwrap(); // four tiles
-        while t.prompt().is_some() { t.decline(); }
+        while t.prompt().is_some() {
+            t.decline();
+        }
         assert_eq!(t.pos(0), destination);
     }
 }
@@ -924,7 +1007,7 @@ fn party_x1_grants_extra_turn() {
     t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
     t.answer(1, 1).unwrap(); // decline
     t.answer(2, 1).unwrap(); // decline
-    // Only the user's own 500 → base count 0, X = 0 + 1 = 1 (the user).
+                             // Only the user's own 500 → base count 0, X = 0 + 1 = 1 (the user).
     assert_eq!(t.money(0), 9_500, "user consumes 500");
     t.dice(&[1]);
     t.roll(0).unwrap();
@@ -1074,11 +1157,17 @@ fn marina_card_counters_extra_effect_on_circle() {
         t.dump_prompt(),
         t.recent_keys(12)
     );
-    t.counteract(0, "通用:[月岛麻里奈]今天也要加油工作喔").unwrap();
+    t.counteract(0, "通用:[月岛麻里奈]今天也要加油工作喔")
+        .unwrap();
     skip_all(&mut t);
     // 规则书: 「正常进行」 — the pass went through and the CiRCLE reward paid.
     assert_eq!(t.pos(0), 2);
-    assert_eq!(t.money(0), 12_000, "2000 reward, no CP extra: {:?}", t.recent_keys(10));
+    assert_eq!(
+        t.money(0),
+        12_000,
+        "2000 reward, no CP extra: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 // =====================================================================
@@ -1268,7 +1357,7 @@ fn tsugu_skill_first_roll_minus_d6() {
     let sid = t.skill_id(0, "尽力了吗");
     t.skill(0, &sid).unwrap();
     t.answer(0, 0).unwrap(); // partner P1
-    // P0's move: d20=10, minus d6=4 → 6.
+                             // P0's move: d20=10, minus d6=4 → 6.
     t.set_pos(0, 10);
     t.dice(&[10, 4]);
     t.roll(0).unwrap();
@@ -1308,7 +1397,7 @@ fn tsugu_skill_halves_settle_costs() {
     let sid = t.skill_id(0, "尽力了吗");
     t.skill(0, &sid).unwrap();
     t.answer(0, 0).unwrap(); // partner P1
-    // Land on P1's 富士见坂 (index 11): rent 60 → halved to 30.
+                             // Land on P1's 富士见坂 (index 11): rent 60 → halved to 30.
     t.own(1, &[FUJIMI]);
     t.set_pos(0, 5);
     t.dice(&[10, 4]); // d20=10, -d6=4 → 6 → land on 11
@@ -1352,7 +1441,12 @@ fn circle_band_doubles_a_number() {
         }
     }
     // 规则书: 「一个数字变为两倍」 → 2000 becomes 4000.
-    assert_eq!(t.money(0), 14_000, "2000 doubled to 4000: {:?}", t.recent_keys(12));
+    assert_eq!(
+        t.money(0),
+        14_000,
+        "2000 doubled to 4000: {:?}",
+        t.recent_keys(12)
+    );
 }
 
 // =====================================================================
@@ -1405,7 +1499,11 @@ fn ix_great_perfect_fever_chain() {
     t.dice(&[6]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.money(0), 17_400, "15000 + 2000 + 400 (X counts FEVER itself)");
+    assert_eq!(
+        t.money(0),
+        17_400,
+        "15000 + 2000 + 400 (X counts FEVER itself)"
+    );
 }
 
 // AG:宣战布告 (Afterglow) vs 通用:登上武道馆: a cross-group [反击] against
@@ -1422,8 +1520,11 @@ fn ix_ag_declaration_vs_budokan() {
     // 宣战布告: 「被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡」
     // Whether it also negates 登上武道馆 is the counter's ChainKind; what is
     // observable is that the declaration itself pays 500 and draws.
-    assert!(t.money(1) >= 10_000 - 2_000 + 500 || t.money(1) == 10_500 || t.money(1) == 8_500,
-        "P1 after declaration: {}", t.money(1));
+    assert!(
+        t.money(1) >= 10_000 - 2_000 + 500 || t.money(1) == 10_500 || t.money(1) == 8_500,
+        "P1 after declaration: {}",
+        t.money(1)
+    );
 }
 
 // AG:宣战布告 vs 通用:雨啊，快点来吧: the stay is an effect on the target.
@@ -1439,7 +1540,11 @@ fn ix_ag_declaration_vs_rain() {
     t.counteract(0, "AG:宣战布告").unwrap();
     skip_all(&mut t);
     // The declaration pays 500 from P1 to P0 and P0 draws 1.
-    assert!(t.money(0) >= 10_500 || t.money(0) == 10_000, "P0 {}", t.money(0));
+    assert!(
+        t.money(0) >= 10_500 || t.money(0) == 10_000,
+        "P0 {}",
+        t.money(0)
+    );
 }
 
 // CiRCLE THANKS PARTY! resolves while FEVER! is on the field.
@@ -1558,12 +1663,7 @@ fn assert_no_line_spam(events: &[MatchEvent], max: usize) {
 /// bound on the whole log, and the play terminating (no prompt left behind).
 /// `answer` is the script of join/decline answers for the other seats, in
 /// order (0 = yes, 1 = no); `dice` are the loaded faces for an Xd20.
-fn play_card_log_ok(
-    n: usize,
-    card: &str,
-    dice: &[i32],
-    answers: &[i32],
-) -> Vec<MatchEvent> {
+fn play_card_log_ok(n: usize, card: &str, dice: &[i32], answers: &[i32]) -> Vec<MatchEvent> {
     let mut t = Table::vanilla(n);
     if !dice.is_empty() {
         t.dice(dice);
@@ -1711,6 +1811,11 @@ fn money_card_log_is_bounded_across_a_scripted_game() {
         let evs = t.events_since(mark);
         assert_money_lines_carry_action(&evs);
         assert_no_line_spam(&evs, 2);
-        assert!(evs.len() <= 16, "{card}: {} lines: {:?}", evs.len(), evs.iter().map(|e| e.msg.key()).collect::<Vec<_>>());
+        assert!(
+            evs.len() <= 16,
+            "{card}: {} lines: {:?}",
+            evs.len(),
+            evs.iter().map(|e| e.msg.key()).collect::<Vec<_>>()
+        );
     }
 }

@@ -22,7 +22,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use card_sdk::kani_host::{Args, Op};
 use game_rules::native_shims::{install_host, take_host, HostOps};
 use game_rules::{
-    with_inline_host, CardInfo, CardPile, CardWorld, CallOut, HostCtx, HostErr, HostRequest,
+    with_inline_host, CallOut, CardInfo, CardPile, CardWorld, HostCtx, HostErr, HostRequest,
     HostState, InlineHost, Msg as EngineMsg, Prompt as EnginePrompt, RulesHandle,
 };
 
@@ -270,7 +270,8 @@ impl CardWorld for ConfWorld {
         for _ in 0..count.max(0) {
             t += self.d(sides);
         }
-        self.events.push(format!("dice {player_id} {count}d{sides}={t}"));
+        self.events
+            .push(format!("dice {player_id} {count}d{sides}={t}"));
         t
     }
     fn log(&mut self, player_id: i32, msg: EngineMsg) {
@@ -537,7 +538,10 @@ impl CardWorld for ConfWorld {
     }
     fn discard_count(&self, player_id: i32, card: &str) -> i32 {
         let p = player_id.max(0) as usize % 4;
-        self.discards[p].iter().filter(|c| c.as_str() == card).count() as i32
+        self.discards[p]
+            .iter()
+            .filter(|c| c.as_str() == card)
+            .count() as i32
     }
     fn deck_count(&self, player_id: i32) -> i32 {
         let p = player_id.max(0) as usize % 4;
@@ -577,7 +581,8 @@ impl CardWorld for ConfWorld {
         uid
     }
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, _note: EngineMsg) -> i32 {
-        self.events.push(format!("place_card_on {player_id} {tile} {card}"));
+        self.events
+            .push(format!("place_card_on {player_id} {tile} {card}"));
         let uid = self.next_uid;
         self.next_uid += 1;
         uid
@@ -644,7 +649,8 @@ impl CardWorld for ConfWorld {
             value
         };
         self.state.insert((player_id, key.to_string()), value);
-        self.events.push(format!("set_slot {player_id} {key} {value}"));
+        self.events
+            .push(format!("set_slot {player_id} {key} {value}"));
         value
     }
     fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
@@ -665,8 +671,7 @@ impl CardWorld for ConfWorld {
     fn state_set_bounds(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn state_set_expires(&mut self, _: i32, _: &str, _: Option<game_core::state::Tick>) {}
     fn state_set_flags(&mut self, player_id: i32, key: &str, flags: u8) {
-        self.state_flags
-            .insert((player_id, key.to_string()), flags);
+        self.state_flags.insert((player_id, key.to_string()), flags);
     }
     fn tick_state(&mut self, _: i32, _: game_core::state::Tick) -> Vec<(String, i32)> {
         Vec::new()
@@ -1021,7 +1026,9 @@ impl InlineHost for ConfInline {
             HostRequest::Gate { .. } => Some(1),
             HostRequest::Marker { .. } => Some(1),
             HostRequest::Draw { player_id: _, n } => Some(n),
-            HostRequest::Target { player_id, tile, .. } => {
+            HostRequest::Target {
+                player_id, tile, ..
+            } => {
                 if tile >= 0 {
                     Some(tile)
                 } else {
@@ -1104,10 +1111,16 @@ fn snap_model() -> Snap {
 fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
     let mut diffs = Vec::new();
     if real.n_players != model.n_players {
-        diffs.push(format!("n_players real={} model={}", real.n_players, model.n_players));
+        diffs.push(format!(
+            "n_players real={} model={}",
+            real.n_players, model.n_players
+        ));
     }
     if real.money != model.money {
-        diffs.push(format!("money real={:?} model={:?}", real.money, model.money));
+        diffs.push(format!(
+            "money real={:?} model={:?}",
+            real.money, model.money
+        ));
     }
     if real.pos != model.pos {
         diffs.push(format!("pos real={:?} model={:?}", real.pos, model.pos));
@@ -1116,7 +1129,10 @@ fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
         diffs.push(format!("out real={:?} model={:?}", real.out, model.out));
     }
     if real.charge != model.charge {
-        diffs.push(format!("fire real={:?} model={:?}", real.charge, model.charge));
+        diffs.push(format!(
+            "fire real={:?} model={:?}",
+            real.charge, model.charge
+        ));
     }
     if real.stay != model.stay {
         diffs.push(format!("stay real={:?} model={:?}", real.stay, model.stay));
@@ -1157,7 +1173,14 @@ fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
             .filter(|l| pats.iter().any(|p| l.contains(p)))
             .count()
     };
-    let money_pats = ["gain ", "pay ", "pay_pipeline", "GainMoney", "PayMoney", "PayTo"];
+    let money_pats = [
+        "gain ",
+        "pay ",
+        "pay_pipeline",
+        "GainMoney",
+        "PayMoney",
+        "PayTo",
+    ];
     let tele_pats = ["teleport", "Teleport"];
     let stay_pats = ["give_stay", "GiveStay", "give_stun", "GiveStun"];
     if count(&real.effects, &money_pats) != count(&model.effects, &money_pats) {
@@ -1253,7 +1276,13 @@ fn install_model_world_with(mut w: KWorld, answers: &[i32]) {
 
 /// Run one op on both sides from the shared pre-state and compare.
 /// Callers intern handles *before* this; the arena is not cleared here.
-fn diff_op(label: &str, answers: &[i32], real: impl FnOnce(&mut ConfHost) -> i64, model: Args, op: Op) {
+fn diff_op(
+    label: &str,
+    answers: &[i32],
+    real: impl FnOnce(&mut ConfHost) -> i64,
+    model: Args,
+    op: Op,
+) {
     let _g = model_lock();
     install_model_world(answers);
     let model_ret = rules_kani::host::dispatch(op, model);
@@ -1655,7 +1684,9 @@ fn diff_card(label: &str, id: &str, answers: &[i32], run: impl Fn(&str, i32) -> 
     let mut inline = ConfInline;
     let host_box: Box<ConfHost> = Box::new(ConfHost::new(base_conf(), answers.to_vec()));
     let prev = install_host(host_box);
-    let real_res = with_inline_host(&mut inline, || catch_unwind(AssertUnwindSafe(|| run(id, 0))));
+    let real_res = with_inline_host(&mut inline, || {
+        catch_unwind(AssertUnwindSafe(|| run(id, 0)))
+    });
     let host_box = take_host().expect("conf host installed");
     if let Some(p) = prev {
         let _ = install_host(p);
@@ -1900,9 +1931,7 @@ fn op_tile_at_set_tile_at_match_engine() {
         (a, s, b, missing)
     };
     if real != model {
-        panic!(
-            "MODEL-vs-ENGINE DIVERGENCE [tile_at/set_tile_at]: real={real:?} model={model:?}"
-        );
+        panic!("MODEL-vs-ENGINE DIVERGENCE [tile_at/set_tile_at]: real={real:?} model={model:?}");
     }
 }
 
@@ -2038,52 +2067,84 @@ fn op_trig_move_sentinels_match_engine() {
     let conf = base_conf();
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move kind", conf, model,
+    diff_get_with(
+        "no-move kind",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_kind, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_kind, [0; 6]),
+    );
     let conf = base_conf();
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move dir", conf, model,
+    diff_get_with(
+        "no-move dir",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_dir(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_dir, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_dir, [0; 6]),
+    );
     let conf = base_conf();
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move from", conf, model,
+    diff_get_with(
+        "no-move from",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_from(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_from, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_from, [0; 6]),
+    );
     let conf = base_conf();
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move roll", conf, model,
+    diff_get_with(
+        "no-move roll",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_roll(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]),
+    );
     let mut conf = base_conf();
     conf.trig_main = true;
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move main", conf, model,
+    diff_get_with(
+        "no-move main",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_main, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_main, [0; 6]),
+    );
     let conf = base_conf();
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move remaining", conf, model,
+    diff_get_with(
+        "no-move remaining",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_remaining(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_remaining, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_remaining, [0; 6]),
+    );
     let conf = base_conf();
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move total", conf, model,
+    diff_get_with(
+        "no-move total",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_total(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_total, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_total, [0; 6]),
+    );
     let conf = base_conf();
     let mut model = base_model();
     model.trig_main = true;
-    diff_get_with("no-move resolve", conf, model,
+    diff_get_with(
+        "no-move resolve",
+        conf,
+        model,
         |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_resolve, [0; 6]));
+        || rules_kani::host::dispatch(Op::trig_move_resolve, [0; 6]),
+    );
 }
 
 #[test]
@@ -2187,8 +2248,6 @@ fn op_trig_buy_setters_match_engine() {
         )
     };
     if real != model {
-        panic!(
-            "MODEL-vs-ENGINE DIVERGENCE [trig setters]: real={real:?} model={model:?}"
-        );
+        panic!("MODEL-vs-ENGINE DIVERGENCE [trig setters]: real={real:?} model={model:?}");
     }
 }

@@ -887,7 +887,9 @@ impl World {
             } else {
                 0
             };
-            pending.push((ek, text, seg.player, seg.from, seg.to, seg.value, dice, seg.ahead));
+            pending.push((
+                ek, text, seg.player, seg.from, seg.to, seg.value, dice, seg.ahead,
+            ));
             seg.from = seg.to;
             seg.value = 0;
             seg.pending_first = false;

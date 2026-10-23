@@ -75,14 +75,7 @@ fn missing_wrappers(file: &Path, shapes: &HashMap<String, BodyShape>) -> Vec<Str
 /// every file with a missing wrapper.
 fn scan_rules_tree(root: &Path, shapes: &HashMap<String, BodyShape>) -> Vec<(String, Vec<String>)> {
     let mut out = Vec::new();
-    for dir in [
-        "cards",
-        "skills",
-        "events",
-        "tiles",
-        "markers",
-        "status",
-    ] {
+    for dir in ["cards", "skills", "events", "tiles", "markers", "status"] {
         let base = root.join(dir);
         if !base.is_dir() {
             continue;

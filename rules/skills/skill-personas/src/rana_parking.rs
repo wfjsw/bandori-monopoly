@@ -21,9 +21,10 @@
 //! Kids / Parking Space), not a pre-settle write. Both used to be done at
 //! `settleBefore`.
 
-use bandori_std::state_key; use card_sdk::abi::{ActionKind, FilterKind};
 use bandori_std::ctx::{self, plan, state, trigger};
-use card_sdk::{Action, CardDef, Filter, key, Msg, On};
+use bandori_std::state_key;
+use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// The 「抹茶芭菲」 counter on this skill instance. Tile units (parked on
 /// space) and held units (a player's tokens) are the same counter bound to
@@ -59,13 +60,27 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         // pre puts the owner in the actor seat (the mover); `target` is the
         // other player already standing on the landing tile (one raise per
         // such other). The body must read `target`, not `player_id`.
-        On::Action(Action::PassPlayer(card_sdk::pre::MINE, None, None, on_overlap)),
+        On::Action(Action::PassPlayer(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            on_overlap,
+        )),
     ],
 )
-    .labels(&[(3, "（1）"), (4, "（2）"), (5, "（2）"), (6, "（2）"), (7, "（3）")])
-    .silent(&[1, 2])
-    // 「（初始3，上限3）」
-    .props(&[(bandori_std::fire::FIRE_INITIAL, 3), (bandori_std::fire::FIRE_CAP, 3)]);
+.labels(&[
+    (3, "（1）"),
+    (4, "（2）"),
+    (5, "（2）"),
+    (6, "（2）"),
+    (7, "（3）"),
+])
+.silent(&[1, 2])
+// 「（初始3，上限3）」
+.props(&[
+    (bandori_std::fire::FIRE_INITIAL, 3),
+    (bandori_std::fire::FIRE_CAP, 3),
+]);
 
 fn any(_player_id: i32) -> bool {
     true
@@ -257,7 +272,9 @@ fn replace_body(player_id: i32) -> card_sdk::Asked {
         player_id,
         ctx::self_uid(),
         1,
-        &Msg::new(key!("rana_parking_note")), card_sdk::abi::Stack::Merge);
+        &Msg::new(key!("rana_parking_note")),
+        card_sdk::abi::Stack::Merge,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("rana_parking_placed")).tile("tile", space),

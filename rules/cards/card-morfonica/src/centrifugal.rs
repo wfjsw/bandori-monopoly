@@ -8,9 +8,9 @@
 //!
 //! Counteraction-only (`Normal => false`).
 
-use card_sdk::abi::{ChainKind, ActionKind, FilterKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind, FilterKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";
 

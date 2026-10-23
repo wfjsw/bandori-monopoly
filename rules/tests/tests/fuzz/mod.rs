@@ -139,31 +139,32 @@ pub fn shrink(
 /// Panics inside the driver (`settle` never resting, `world_mut` asserts) are
 /// caught and turned into findings so one bad seed cannot abort the soak.
 pub fn one_iter(seed: u64, turns: u32) -> Result<Trace, Finding> {
-    let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<Trace, String> {
-        let (mut t, _cards) = gen::arrange(seed);
-        let mut rng = Rng::new(seed ^ 0xA5A5);
-        let known = gen::all_card_ids();
-        let mut tr = Trace::new();
-        for _ in 0..turns {
-            let before: Vec<i32> = (0..t.n).map(|i| t.money(i)).collect();
-            let mark = t.mark();
-            let sub = drive::drive(&mut t, &mut rng, 1, AnswerMode::Free)?;
-            tr.acts += sub.acts;
-            tr.prompts += sub.prompts;
-            tr.counteracts += sub.counteracts;
-            tr.traps += sub.traps;
-            tr.pairs_this_turn.extend(sub.pairs_this_turn);
-            for (k, v) in sub.unaccounted_money {
-                *tr.unaccounted_money.entry(k).or_default() += v;
+    let run =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<Trace, String> {
+            let (mut t, _cards) = gen::arrange(seed);
+            let mut rng = Rng::new(seed ^ 0xA5A5);
+            let known = gen::all_card_ids();
+            let mut tr = Trace::new();
+            for _ in 0..turns {
+                let before: Vec<i32> = (0..t.n).map(|i| t.money(i)).collect();
+                let mark = t.mark();
+                let sub = drive::drive(&mut t, &mut rng, 1, AnswerMode::Free)?;
+                tr.acts += sub.acts;
+                tr.prompts += sub.prompts;
+                tr.counteracts += sub.counteracts;
+                tr.traps += sub.traps;
+                tr.pairs_this_turn.extend(sub.pairs_this_turn);
+                for (k, v) in sub.unaccounted_money {
+                    *tr.unaccounted_money.entry(k).or_default() += v;
+                }
+                let after: Vec<i32> = (0..t.n).map(|i| t.money(i)).collect();
+                let events = t.events_since(mark);
+                drive::check_nonneg(&t)?;
+                drive::check_money(&before, &after, &events, &mut tr)?;
+                drive::check_cards(&t, known)?;
             }
-            let after: Vec<i32> = (0..t.n).map(|i| t.money(i)).collect();
-            let events = t.events_since(mark);
-            drive::check_nonneg(&t)?;
-            drive::check_money(&before, &after, &events, &mut tr)?;
-            drive::check_cards(&t, known)?;
-        }
-        Ok(tr)
-    }));
+            Ok(tr)
+        }));
     let run = match run {
         Ok(r) => r,
         Err(panic) => {

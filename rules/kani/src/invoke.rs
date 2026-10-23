@@ -169,9 +169,7 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
         On::Action(e) => e.body,
         // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
         // through `filter_*_idx` / direct trampolines instead.
-        On::Filter(..) => {
-            fail_no_kind("Filter (use filter_idx)")
-        }
+        On::Filter(..) => fail_no_kind("Filter (use filter_idx)"),
     }
 }
 

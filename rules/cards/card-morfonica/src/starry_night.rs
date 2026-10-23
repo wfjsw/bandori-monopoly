@@ -1,7 +1,7 @@
 //! `Mor:蝴蝶飞舞的星月夜` -- C# `CardStarryNight` (MatchHost.cs:4666-4778): pay X
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:蝴蝶飞舞的星月夜`）:
-//! > 蝴蝶飞舞的星月夜： 
+//! > 蝴蝶飞舞的星月夜：
 //!
 //! > （1） 支付X次1000的的资金，将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]，此卡没有[奇迹水晶]时加入弃牌堆; 此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次
 //!
@@ -11,9 +11,9 @@
 //!
 //! ×1000 to stock X crystals; each removal pays the owner 1,000.
 
-use card_sdk::abi::{ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 
@@ -196,13 +196,17 @@ fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
 /// sheet says. With （3） paying 1,000 per crystal the owner is out net 0 and
 /// the crystal count drops -- a voluntary decay of this card.
 fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
-    if ctx::player_out(player_id) || !rules_status::can_pay(player_id) || ctx::money_of(player_id) < 1000 {
+    if ctx::player_out(player_id)
+        || !rules_status::can_pay(player_id)
+        || ctx::money_of(player_id) < 1000
+    {
         return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("starry_night_attack_title")),
-        &Msg::new(key!("starry_night_attack_ask")).card("card", ID)
+        &Msg::new(key!("starry_night_attack_ask"))
+            .card("card", ID)
             .player_id("who", roller)
             .i("roll", roll as i64),
     )? {

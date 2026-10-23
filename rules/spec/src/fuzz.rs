@@ -46,7 +46,8 @@ static FOOTPRINTS: OnceLock<Footprints> = OnceLock::new();
 /// (the generator then draws uniformly).
 pub fn footprints() -> &'static Footprints {
     FOOTPRINTS.get_or_init(|| {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/rulebook/footprints.json");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/rulebook/footprints.json");
         let Ok(raw) = std::fs::read_to_string(&path) else {
             return Footprints {
                 by_rule: BTreeMap::new(),
@@ -310,12 +311,7 @@ pub enum AnswerMode {
 /// `rng` drives *action* choice only; answers use a parallel stream derived
 /// from the same seed so a replayed run consumes action randomness identically.
 /// Every input goes through the table's observer (so the armed clauses fire).
-pub fn drive(
-    t: &mut Table,
-    rng: &mut Rng,
-    turns: u32,
-    mode: AnswerMode,
-) -> Result<Trace, String> {
+pub fn drive(t: &mut Table, rng: &mut Rng, turns: u32, mode: AnswerMode) -> Result<Trace, String> {
     let mut tr = Trace::new();
     let mut replay = match mode {
         AnswerMode::Free => None,
@@ -403,7 +399,9 @@ fn drain_prompts(
     }
     Err(format!(
         "drain_prompts: prompts never stopped (last: {}; hist: {:?})",
-        t.prompt().map(|p| p.title.key().to_string()).unwrap_or_default(),
+        t.prompt()
+            .map(|p| p.title.key().to_string())
+            .unwrap_or_default(),
         hist.into_iter().collect::<Vec<_>>(),
     ))
 }
@@ -476,7 +474,8 @@ fn pick_answer(t: &Table, who: usize, rng: &mut Rng) -> AnswerRec {
 fn apply_answer(t: &mut Table, who: usize, rec: &AnswerRec) -> Result<(), String> {
     let p = t.prompt().ok_or("apply_answer: prompt gone")?;
     let is_decline = rec.value == p.fallback
-        && (p.title.key() == "ask.counteract.title" || p.kind == "tile" && rec.value as usize >= p.items.len());
+        && (p.title.key() == "ask.counteract.title"
+            || p.kind == "tile" && rec.value as usize >= p.items.len());
     if is_decline {
         return t
             .decline_one(who, p.id, rec.value)
@@ -486,10 +485,12 @@ fn apply_answer(t: &mut Table, who: usize, rec: &AnswerRec) -> Result<(), String
         who: who as i32 + 1,
         prompt: p.id,
         value: rec.value,
-        cards: if rec.cards.is_empty()
-            && (rec.kind == "pick" || rec.kind == "mortgage")
-        {
-            p.items.iter().take(p.count.max(0) as usize).cloned().collect()
+        cards: if rec.cards.is_empty() && (rec.kind == "pick" || rec.kind == "mortgage") {
+            p.items
+                .iter()
+                .take(p.count.max(0) as usize)
+                .cloned()
+                .collect()
         } else {
             rec.cards.clone()
         },

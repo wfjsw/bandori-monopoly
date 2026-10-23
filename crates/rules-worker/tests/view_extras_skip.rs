@@ -11,10 +11,13 @@ use serde_json::{json, Value};
 fn ctx() -> Ctx {
     // No ruleset in this harness: the three legacy JSON files are the bridge.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../game-core/tests/fixtures/roster.json"),
+        )
+        .expect("roster fixture"),
     )
-    .expect("roster fixture"))
     .expect("roster fixture parses");
     let data = GameData::load(
         |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
@@ -81,10 +84,22 @@ fn bot_views_carry_the_extras() {
     assert_eq!(v["ok"], json!(true), "view: {v}");
     let view = &v["view"];
     // The bot service reads these off its `BotSeatView`.
-    assert!(view.get("aiAnswer").is_some(), "bot frame missing aiAnswer: {view}");
-    assert!(view.get("playable").is_some(), "bot frame missing playable: {view}");
-    assert!(view.get("estCost").is_some(), "bot frame missing estCost: {view}");
-    assert!(view.get("skills").is_some(), "bot frame missing skills: {view}");
+    assert!(
+        view.get("aiAnswer").is_some(),
+        "bot frame missing aiAnswer: {view}"
+    );
+    assert!(
+        view.get("playable").is_some(),
+        "bot frame missing playable: {view}"
+    );
+    assert!(
+        view.get("estCost").is_some(),
+        "bot frame missing estCost: {view}"
+    );
+    assert!(
+        view.get("skills").is_some(),
+        "bot frame missing skills: {view}"
+    );
     // `playable` is one flag per hand card.
     let hand = view["hand"].as_array().expect("hand");
     let playable = view["playable"].as_array().expect("playable");

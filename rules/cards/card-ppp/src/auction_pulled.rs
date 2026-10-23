@@ -10,9 +10,9 @@
 //! raises the owner's fire-pot cap.
 //! A pure [特] card (C# has no `Play`, `Normal => false`, `Immune => true`).
 
-use card_sdk::abi::{CardPile, ActionKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, CardPile, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:[衍生]拍卖撤下来了";
 const STAR: &str = "PPP:仓库里的Random Star";

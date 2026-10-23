@@ -11,9 +11,9 @@
 //! （2） latches a livehouse settle, then at the next turn start offers the
 //! teleport if the player is still standing there.
 
-use card_sdk::abi::ActionKind;
 use bandori_std::ctx::{self, plan, state};
-use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On};
+use card_sdk::abi::ActionKind;
+use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 /// 「每回合可选择只获得第一次受到的[异常移动效果]」 -- 1 once one has landed.
 const TAKEN: &str = "skill.ras.taken";
@@ -25,7 +25,12 @@ pub const RAS: CardDef = CardDef::new(
     &[
         // Turn-start bookkeeping: clear the per-turn latch and drop a stale
         // landing memory. Silent -- the player never sees this as a clause.
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, None, at_turn_start_reset)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            None,
+            at_turn_start_reset,
+        )),
         // （1）「每回合可选择只获得第一次受到的[异常移动效果]」 -- the drop of the
         // second+ hit belongs on `AbnormalGuard` (the declaration gate that can
         // refuse the effect); the `Abnormal` outcome hook is too late to cancel.
@@ -39,10 +44,15 @@ pub const RAS: CardDef = CardDef::new(
         On::Action(Action::Settle(card_sdk::pre::MINE, None, None, on_settle)),
         // （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
         // The remembered-tile scan is a derived read (docs/GUARDS.md §4.2).
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, Some(still_on_remembered), at_turn_start_offer)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::pre::MINE,
+            None,
+            Some(still_on_remembered),
+            at_turn_start_offer,
+        )),
     ],
 )
-    .silent(&[0, 2, 3]);
+.silent(&[0, 2, 3]);
 
 /// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
 /// landing memory when the player has moved off it.
@@ -77,9 +87,7 @@ fn owned_livehouses(player_id: i32) -> alloc::vec::Vec<i32> {
 /// offer can name, so the entry must not activate (no prompt, no flash, no log).
 fn still_on_remembered(player_id: i32) -> bool {
     let t = state::get(player_id, ON_HOUSE);
-    t >= 0
-        && ctx::player_pos(player_id) == t
-        && owned_livehouses(player_id).first().is_some()
+    t >= 0 && ctx::player_pos(player_id) == t && owned_livehouses(player_id).first().is_some()
 }
 
 /// （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.

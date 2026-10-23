@@ -10,9 +10,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, ActionKind, MoveKind, TriggerKind};
 use bandori_std::ctx::{self, trigger};
-use card_sdk::{Action, CardDef, key, Msg, On};
+use card_sdk::abi::{ActionKind, ChainKind, MoveKind, TriggerKind};
+use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
     "R:学生会的检查",

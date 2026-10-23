@@ -10,7 +10,6 @@
 mod testworld;
 use testworld::*;
 
-
 #[test]
 fn loads_and_validates() {
     let r = ruleset();
@@ -190,14 +189,18 @@ fn runaway_effect_is_stopped_by_fuel() {
     let r = ruleset().with_fuel(200);
     let card = r.card("HHW:（育美）").unwrap();
     let err = r
-        .run(&TestWorld::new(1), Call::Play { card, player_id: 0 }, &[], None)
+        .run(
+            &TestWorld::new(1),
+            Call::Play { card, player_id: 0 },
+            &[],
+            None,
+        )
         .unwrap_err();
     assert!(
         matches!(err, RuleError::Trap(ref m) if m.contains("fuel")),
         "{err}"
     );
 }
-
 
 #[test]
 fn cross_module_play_card_replays_the_inner_prompt() {
@@ -248,7 +251,6 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     };
     assert_eq!(after, after2);
 }
-
 
 /// How long the rules submodule takes to fire up for a small check: build
 /// (compile + validate + manifest) and then one `run` (store + linker +
