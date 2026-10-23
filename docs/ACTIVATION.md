@@ -162,6 +162,30 @@ ruleset_on(card, entry, op, player_id, arg) -> i64
   `EXIT_DECLINED` and fails the activation loudly. (`EXIT_NEED_INPUT` is
   already safe by the "published a prompt and kept going" trap; `EXIT_DECLINED`
   would otherwise be a *silent* wrong answer.)
+* **Trap severity: a trapping `OP_DECLARE` never commits and never costs the
+  card.** The collector runs *before* the point of no return, so there is
+  nothing to graveyard -- the card is still in hand (a play / [反击]) or still
+  in play (a hook). A trap is therefore a **decline**, not a destroy. The rule
+  that lines the sites up:
+
+  | site | on trap | card |
+  |---|---|---|
+  | residual guard (`entry_admitted`) | declines | untouched |
+  | **`OP_DECLARE`** (every entry, both paths) | **declines** | **untouched** |
+  | `OP_RUN` (body) | `log.card_trap` + `DEST_GRAVEYARD` | lost |
+
+  The body's `DEST_GRAVEYARD` is not a louder severity setting -- it is a
+  **post-commit consequence**: the card already left the hand and then blew
+  up, and losing it is the established cost of a trapping module
+  (`wasm_rules.rs`: "a trapping module must not take the match down with it").
+  A declare trap has no such cost to charge. Propagating it into that arm
+  destroys a card whose body never ran.
+
+  Visibility: the play / [反击] paths log `log.card_trap` (they have a `Cx`).
+  The hook path declines silently -- `declare_after` has no log channel and
+  matches the residual guard's own "historical dispatch leniency" just above
+  it. Unifying the log across every site is a follow-up; the **severity** is
+  what must not vary.
 * `Call::{Play, Counteract}` and the chain link carry `arg: i32`; `resolve_jobs`
   / `drive` pass it into `OP_RUN` exactly the way `COUNTERACT_MOVE_EXTENSION`
   is stamped today, but as a real parameter rather than a move tag. **The

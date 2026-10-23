@@ -299,3 +299,44 @@ fn counteract_declare_sees_the_trigger() {
         t.recent_keys(40)
     );
 }
+
+/// A trapping `OP_DECLARE` never commits and **never costs the card**
+/// (docs/ACTIVATION.md §2 "Trap severity"). The collector runs before the
+/// point of no return, so there is nothing to graveyard: the body must not
+/// run and the placed card must stay in play. Propagating the trap into the
+/// body-trap arm (`log.card_trap` + `DEST_GRAVEYARD`) would destroy a card
+/// whose body never ran.
+#[test]
+fn trapping_declare_never_costs_the_card() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &["TEST:trap_declare"]);
+    t.set_hand(1, &[]);
+    // Play places it; the card is on the field with a TurnEnd hook whose
+    // collector deliberately panics into a wasm trap.
+    t.give_play(0, "TEST:trap_declare").unwrap();
+    drain(&mut t);
+    assert!(
+        t.field(0).iter().any(|f| f.card == "TEST:trap_declare"),
+        "the card placed: {:?}",
+        t.field(0)
+    );
+    // Roll first (`err.roll_first`), then end the turn: `turnEnd` raises and
+    // the hook's collector traps.
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+
+    assert!(
+        t.field(0).iter().any(|f| f.card == "TEST:trap_declare"),
+        "a trapping collector must not graveyard the card -- it never committed: {:?}",
+        t.field(0)
+    );
+    assert!(
+        !keys_contain(&t, "trap_declare_body"),
+        "the body has no decline path and logs unconditionally -- silence proves it never ran: {:?}",
+        t.recent_keys(40)
+    );
+}

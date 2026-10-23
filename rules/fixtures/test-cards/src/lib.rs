@@ -1615,6 +1615,38 @@ fn trigger_seen_body(player_id: i32, arg: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A placed card whose hook's `OP_DECLARE` collector **traps**. A trapping
+/// collector must never commit and must never cost the card
+/// (docs/ACTIVATION.md §2 "Trap severity"): the body never runs and the card
+/// stays in play. Propagating the trap into the body-trap arm would
+/// `DEST_GRAVEYARD` a card whose body never ran. The body has no decline path
+/// and logs unconditionally, so silence is proof it never ran.
+const TRAP_DECLARE: CardDef = CardDef::new(
+    "TEST:trap_declare",
+    &[
+        On::Play("", None, None, trap_declare_play),
+        On::Action(Action::TurnEnd("card.placed", None, None, trap_declare_body))
+            .declare(trap_declare_collect),
+    ],
+);
+
+fn trap_declare_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:trap_declare", &Msg::new(key!("trap_declare_note")));
+    Ok(())
+}
+
+/// Deliberately panics into a wasm trap: the collector blows up before the
+/// activation commits.
+fn trap_declare_collect(_player_id: i32) -> card_sdk::Declared {
+    panic!("TEST:trap_declare collector trapped");
+}
+
+fn trap_declare_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("trap_declare_body")));
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1625,5 +1657,5 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
-    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN
+    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE
 ]);

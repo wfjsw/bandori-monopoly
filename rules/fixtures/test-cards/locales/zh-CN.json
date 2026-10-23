@@ -71,5 +71,7 @@
   "pick_c_title": "TEST:pick_counter",
   "pick_c_ask": "Counter with this?",
   "pick_c_body": "pick-counter body ran with arg {{arg}}",
-  "trigger_seen_body": "trigger-seen body ran with arg {{arg}}"
+  "trigger_seen_body": "trigger-seen body ran with arg {{arg}}",
+  "trap_declare_note": "trap-declare placed",
+  "trap_declare_body": "trap-declare body ran"
 }

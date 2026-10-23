@@ -1697,7 +1697,16 @@ impl Ruleset {
             }
             Err(e) => match finish(store, Err(e)) {
                 Ok(o) => Ok(Admitted::Paused(o)),
-                Err(e2) => Err(e2),
+                // A trapping `OP_DECLARE` never commits and never costs the
+                // card (docs/ACTIVATION.md §2): the collector runs *before*
+                // the point of no return, so there is nothing to graveyard
+                // and the card is still in hand / still in play. Propagating
+                // here would fall into the body-trap arm (`log.card_trap` +
+                // `DEST_GRAVEYARD`) and destroy a card whose body never ran.
+                // Matches the residual guard's own leniency a few lines up.
+                Err(_e2) => Ok(Admitted::No {
+                    next_answer: after,
+                }),
             },
         }
     }
