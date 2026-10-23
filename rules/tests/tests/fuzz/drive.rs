@@ -283,6 +283,30 @@ fn pick_answer(t: &Table, who: usize, rng: &mut Rng) -> AnswerRec {
                 cards: p.items.clone(),
             }
         }
+        "multi" => {
+            // Bitmask of exactly `count` options. The prompt's fallback is
+            // already a valid mask (first `count`); sometimes draw a random
+            // valid mask so the fuzzer exercises other combinations. Never a
+            // bare option index -- that would be `err.pick_count`.
+            let n = p.options.len().min(31) as i32;
+            let want = p.count.clamp(1, n.max(1));
+            let mut value = p.fallback;
+            if n > 0 && rng.chance(50) {
+                let mut pool: Vec<i32> = (0..n).collect();
+                value = 0;
+                for _ in 0..want.min(pool.len() as i32) {
+                    let i = rng.below(pool.len() as u64) as usize;
+                    let x = pool.swap_remove(i);
+                    value |= 1 << x;
+                }
+            }
+            AnswerRec {
+                who,
+                kind,
+                value,
+                cards: vec![],
+            }
+        }
         "auction" => {
             // value < 0 = pass; otherwise a bid. Passing keeps the run short.
             let pass = rng.chance(70);

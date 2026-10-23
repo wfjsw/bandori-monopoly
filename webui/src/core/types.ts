@@ -148,6 +148,9 @@ export interface TileMark {
 }
 export interface MatchPrompt {
   id: number; kind: string; title: Msg; text: Msg; card: string; options: Msg[];
+  /** The timeout default: an option index -- except `"multi"`, where it is a
+   *  valid answer bitmask (the first `count` options). Never clamp a multi
+   *  answer to `0..options.length`. */
   fallback: number; players: number[]; answers: number[]; timeLeft: number; tile: number;
   bid: number; bidder: number; items: string[]; count: number;
   /** The quoted price on a buy / force_buy prompt; -1 when not a purchase. */

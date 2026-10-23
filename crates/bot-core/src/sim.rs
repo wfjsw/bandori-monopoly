@@ -440,6 +440,13 @@ pub fn ai_answer_to_action(st: &MatchState, a: &AiAnswer, seat: usize) -> Option
                 })
             }
         }
+        "multi" => {
+            // The answer is the bitmask itself; `Action::Offer` carries it as
+            // `value`. Clamp negatives to the valid fallback mask so the
+            // mapped action is never an invalid answer.
+            let bits = if a.answer < 0 { p.fallback } else { a.answer };
+            Some(Action::Offer { index: bits })
+        }
         _ => None,
     }
 }
