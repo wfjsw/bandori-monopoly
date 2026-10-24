@@ -78,8 +78,7 @@ pub const TEMP_KEY: &str = "tempFire";
 
 /// The persona-skill field instance that owns this seat's fire pools.
 /// Resolved through the existing guest lookup (`persona_skill` + `find_card`)
-/// -- no dedicated host import. -1 when the seat has no persona skill (every
-/// read is 0 and every write is a no-op).
+/// -- no dedicated host import. -1 when the seat has no persona skill.
 fn skill_uid(player_id: i32) -> i32 {
     let Some(skill) = ctx::persona_skill(player_id) else {
         return -1;
@@ -93,13 +92,19 @@ fn row_live(player_id: i32, name: &str) -> bool {
     ctx::tok(player_id, name) > 0 || ctx::tok_max(player_id, name) > 0
 }
 
-/// Write the named row of the persona-skill instance. No-op when there is no
-/// fire skill. `max <= 0` leaves any stored ceiling alone.
+/// Can this seat hold fire? A persona-skill instance owns the pool; a row
+/// that is already live (declared, or arranged by a test harness) is also
+/// writable so guests do not have to re-bind it. A seat with neither owns no
+/// pots -- every write is a no-op and every read is 0.
+fn writable(player_id: i32) -> bool {
+    skill_uid(player_id) >= 0 || row_live(player_id, KEY)
+}
+
+/// Write the named row of the persona-skill instance. `max <= 0` leaves any
+/// stored ceiling alone. Used by `adjust_cap` even before a pool exists
+/// (it advertises the ceiling); `gain` / `spend` go through [`writable`].
 fn set_row(player_id: i32, name: &str, value: i32, max: i32) {
     let uid = skill_uid(player_id);
-    if uid < 0 {
-        return;
-    }
     ctx::set_tok(player_id, name, value, max, uid);
 }
 
@@ -126,7 +131,7 @@ pub fn pull_under_cap(have: i32, cap: i32) -> i32 {
 
 /// 火罐 held (the capped pool; does not include [`temp`]).
 pub fn get(player_id: i32) -> i32 {
-    if skill_uid(player_id) < 0 {
+    if !writable(player_id) {
         return 0;
     }
     ctx::tok(player_id, KEY)
@@ -134,7 +139,7 @@ pub fn get(player_id: i32) -> i32 {
 
 /// The declared cap (0 = none declared).
 pub fn max(player_id: i32) -> i32 {
-    if skill_uid(player_id) < 0 {
+    if !writable(player_id) {
         return 0;
     }
     ctx::tok_max(player_id, KEY)
@@ -169,7 +174,7 @@ fn face_bounds(skill: &str) -> (i32, i32) {
 /// For a swap / overlay that must **replace** the previous face's numbers,
 /// use [`redeclare`].
 pub fn declare(player_id: i32, initial: i32, cap: i32) {
-    if skill_uid(player_id) < 0 {
+    if !writable(player_id) {
         return;
     }
     // Cap only on first declaration (row absent). A per-turn `TurnStartBefore`
@@ -251,7 +256,7 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
     if n <= 0 {
         return Ok(0);
     }
-    if skill_uid(player_id) < 0 {
+    if !writable(player_id) {
         return Ok(0);
     }
     // I2: clamp here, not in the engine. `max == 0` (no declaration) refuses
@@ -298,7 +303,7 @@ pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
     }
-    if skill_uid(player_id) < 0 {
+    if !writable(player_id) {
         return Ok(false);
     }
     let from_temp = temp::get(player_id).min(n);
@@ -328,10 +333,11 @@ fn spend_pool(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
 /// Move the cap by `n`; pulls the value down under the new ceiling (I2
 /// 「在任意时刻」). The host verb only moves the advertised ceiling -- the
 /// pull-under is this kernel's job. Returns the new cap.
+///
+/// Allowed even when the seat has no fire skill (「此卡拥有者火罐上限加1」
+/// creates the ceiling over a baseline of 0); [`gain`] still refuses until
+/// there is a live pool.
 pub fn adjust_cap(player_id: i32, n: i32) -> i32 {
-    if skill_uid(player_id) < 0 {
-        return 0;
-    }
     // Make sure the row exists (and is bound) before moving its ceiling.
     if !row_live(player_id, KEY) {
         set_row(player_id, KEY, 0, 0);
@@ -410,7 +416,7 @@ pub mod temp {
 
     /// Temp pots held.
     pub fn get(player_id: i32) -> i32 {
-        if skill_uid(player_id) < 0 {
+        if !writable(player_id) {
             return 0;
         }
         ctx::tok(player_id, TEMP_KEY)
@@ -419,7 +425,7 @@ pub mod temp {
     /// The temp ceiling. lisa's face allows exceeding the pool cap, so this
     /// is unbounded by default; the kernel still owns the key.
     pub fn max(player_id: i32) -> i32 {
-        if skill_uid(player_id) < 0 {
+        if !writable(player_id) {
             return 0;
         }
         ctx::tok_max(player_id, TEMP_KEY)
@@ -430,7 +436,7 @@ pub mod temp {
     /// about the declared pool). Returns how many landed under the temp
     /// ceiling.
     pub fn grant(player_id: i32, n: i32) -> i32 {
-        if n <= 0 || skill_uid(player_id) < 0 {
+        if n <= 0 || !writable(player_id) {
             return 0;
         }
         // First grant arms the over-cap allowance (unbounded by the pool cap).
@@ -452,7 +458,7 @@ pub mod temp {
         if n <= 0 {
             return Ok(true);
         }
-        if skill_uid(player_id) < 0 {
+        if !writable(player_id) {
             return Ok(false);
         }
         if get(player_id) < n {

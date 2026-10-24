@@ -450,7 +450,8 @@ fn better_sound_contract() {
                 "draw:P0",
                 "discard:P0",
                 "pos:P0",
-                "state:P0:charge",
+                // Fire is a held token of the persona-skill instance.
+                "token:P0",
                 "turn.",
             ],
         )
