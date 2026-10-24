@@ -99,9 +99,16 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, state_key::SKILL_STATE, 2);
     ctx::log(player_id, &Msg::new(key!("sakiko_life_two")));
     // 状态2: 「保留至多一张手牌并将其余置入弃牌堆」
+    //
+    // Discard from the end so the graveyard keeps its historical order (the
+    // last card is discarded first). 「保留至多一张手牌并将其余置入弃牌堆」 does
+    // not name an order, but a later 「弃牌堆顶」 reader sees whatever landed
+    // last -- a `drain(1..)` here would silently reverse that for no gain.
     let mut hand = ctx::cards_in(player_id, CardPile::Hand);
-    for c in hand.drain(1..) {
-        ctx::discard_from_hand(player_id, c.as_str());
+    while hand.len() > 1 {
+        if let Some(c) = hand.pop() {
+            ctx::discard_from_hand(player_id, c.as_str());
+        }
     }
     play_deck_top(player_id)?;
     Ok(())

@@ -787,6 +787,12 @@ pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
     unsafe { sys::take_card(player_id, p, l, src as i32) != 0 }
 }
 
+/// Corrupt-prefix guard for the decode-failure fallback below. Real piles are
+/// far smaller (the callers already reject `n > cap` with `cap` ∈ 16..8192
+/// *bytes*); this only bounds a garbage length varint so a bad buffer cannot
+/// ask for a gigabyte of `INVALID`s.
+const MAX_NAME_LIST: usize = 4096;
+
 /// Decode a host name list (`postcard::to_allocvec(&Vec<String>)`) into
 /// interned [`NameId`]s.
 ///
@@ -798,23 +804,36 @@ pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
 /// stays exact — bodies that read `.len()` must see the true count
 /// (`docs/rulebook/spec/kani/ras.md` `ranger_01_02_steps_by_count_iff`).
 fn decode_name_list(buf: &[u8]) -> Vec<NameId> {
-    let borrowed: Vec<&str> = postcard::from_bytes(buf).unwrap_or_default();
-    let mut out = Vec::with_capacity(borrowed.len());
-    for s in borrowed {
-        out.push(crate::intern::intern(s));
+    match postcard::from_bytes::<Vec<&str>>(buf) {
+        Ok(borrowed) => borrowed.into_iter().map(crate::intern::intern).collect(),
+        // Decode failed mid-list. The `Vec`'s varint length prefix is still
+        // readable; keep that many [`NameId::INVALID`] so `.len()` stays exact
+        // (the invariant above). An empty list would tell `ranger`'s 「数量」 and
+        // `riot`'s redraw that the pile is empty when it is not. The cap is a
+        // corrupt-prefix guard, not a design bound — callers already reject
+        // `n > cap` before we get here.
+        Err(_) => {
+            let n = postcard::from_bytes::<usize>(buf).unwrap_or(0);
+            alloc::vec![crate::intern::NameId::INVALID; n.min(MAX_NAME_LIST)]
+        }
     }
-    out
 }
 
 /// Decode a host `(uid, name)` list (`postcard::to_allocvec(&Vec<(i32, String)>)`).
-/// No `String` construction — see [`decode_name_list`].
+/// No `String` construction — see [`decode_name_list`]. Same length invariant.
 fn decode_uid_name_list(buf: &[u8]) -> Vec<(i32, NameId)> {
-    let borrowed: Vec<(i32, &str)> = postcard::from_bytes(buf).unwrap_or_default();
-    let mut out = Vec::with_capacity(borrowed.len());
-    for (uid, s) in borrowed {
-        out.push((uid, crate::intern::intern(s)));
+    match postcard::from_bytes::<Vec<(i32, &str)>>(buf) {
+        Ok(borrowed) => borrowed
+            .into_iter()
+            .map(|(uid, s)| (uid, crate::intern::intern(s)))
+            .collect(),
+        Err(_) => {
+            let n = postcard::from_bytes::<usize>(buf).unwrap_or(0);
+            (0..n.min(MAX_NAME_LIST))
+                .map(|i| (i as i32, crate::intern::NameId::INVALID))
+                .collect()
+        }
     }
-    out
 }
 
 /// Every card id in a player's `pile`, in pile order (the deck's top card

@@ -2107,12 +2107,17 @@ impl Ruleset {
     /// [`export::OP_GUARD`] -- the effect body does not run here.
     ///
     /// Goes through [`crate::cond_pre::admits_gate`] (docs/GUARDS.md §4.4 item
-    /// 3): a rejecting condition **is** a block (`err.play_pre`) and the gate
+    /// 3): a rejecting condition **is** a block (`err.play_pre`).
+    ///
     /// Play-mode selection (a card may declare several `On::Play` entries as
     /// alternative activations, each with its own gate): the first **gated**
     /// entry whose gate admits; failing that, the first ungated entry. `None`
-    /// when the card has no Play entry. Both [`Self::cant_play`] and
-    /// [`Self::run`] (Play) pick through here, so they agree.
+    /// when the card has no Play entry. [`Self::run`] (Play) picks through
+    /// here. [`Self::cant_play`] does **not** -- it evaluates only the first
+    /// declared Play entry (see the note there: play-mode merges are a
+    /// per-card problem, not a dispatch one), so on a card whose first Play
+    /// gate is closed and whose second would admit, the two disagree until
+    /// those merges land.
     fn play_entry_for<W: CardWorld>(
         &self,
         world: &W,
