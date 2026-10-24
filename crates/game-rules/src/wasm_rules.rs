@@ -258,9 +258,6 @@ pub struct Run {
     /// instance's own `counter(name)`. One log for every named counter
     /// (ruleset counter keys and any card-declared name).
     counter_log: Vec<(i32, String, String, i32)>,
-    /// Players this run granted off-board layers to -- the engine raises the caller-supplied name
-    /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
-    abnormal_log: Vec<(i32, i32)>,
     named_raise_log: Vec<(i32, String, i32)>,
     /// Skill-state 1↔2 toggles this run made, `(who, from, to)` -- the engine
     /// raises `state` for each once the run commits (Mujica:欢迎来到ave
@@ -658,13 +655,11 @@ impl Run {
             .push((owner, card, name.to_string(), now - was));
     }
 
-    /// Record an **on-card** [tile marks] write against the instance at `uid` so the
-    /// commit point can raise `cpChanged` (the same shape as
-    /// [`Self::note_counter_changed`]). `was` and `now` bracket that instance's
-    /// on-card mark count, so a write that lands on the same count still raises
-    /// and a count emptied by *any* path -- this run's settle, another effect's
-    /// removal -- leaves the field the same way. A write with no live instance
-    /// raises nothing.
+    // On-card [CP点] writes ride `note_counter_changed` as `counter::CP` (v51).
+    // `CpChanged` is retired (user ruling 2026-10-07): the 「its on-card [CP点]
+    // is empty → graveyard」 rule lives on `Action::CounterChanged` with a
+    // `counter::CP` name check in the residual guard
+    // (`rules/cards/card-general/src/clear_cp.rs`), not a CP-only trigger.
 
     /// Move the running instance to `dest` **now** -- unplace-and-send, applied
     /// mid-effect rather than at the run's commit, for a card that must be gone
@@ -3118,7 +3113,6 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
@@ -3385,8 +3379,7 @@ impl<M: CardModules> RulesBridge<M> {
                         marker_spent_log: vec![],
                         house_log: vec![],
                         counter_log: vec![],
-                        abnormal_log: vec![],
-                        named_raise_log: vec![],
+                                named_raise_log: vec![],
                         state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
@@ -4415,10 +4408,6 @@ impl<M: CardModules> RulesBridge<M> {
         if !after.house_log.is_empty() {
             return true;
         }
-        if !after.abnormal_log.is_empty() {
-            // A layer write is a player hit -- Other (it lands on a player).
-            return true;
-        }
         // Draw / discard: own = SelfOnly (proposed); another player's = Other.
         for (who, _id) in &after.draw_log {
             if *who != owner {
@@ -4529,8 +4518,6 @@ impl<M: CardModules> RulesBridge<M> {
             Some("reshuffle")
         } else if !after.house_log.is_empty() {
             Some("house")
-        } else if !after.abnormal_log.is_empty() {
-            Some("named-raise")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
         } else if after.logged > 0 {
@@ -4657,7 +4644,6 @@ impl<M: CardModules> RulesBridge<M> {
                 && after.discard_log.is_empty()
                 && after.reshuffle_log.is_empty()
                 && after.house_log.is_empty()
-                && after.abnormal_log.is_empty()
                 && after.state_log.is_empty()
                 && after.marker_spent_log.is_empty()
                 && after.counter_log.is_empty()
@@ -4803,12 +4789,12 @@ impl<M: CardModules> RulesBridge<M> {
                 t.by_card = by;
             })?;
         }
-        // `cpChanged` -- the mark-emptying card 「its on-card [tile marks] is empty →
-        // graveyard」 rule (user ruling 2026-10-07) lives here, for
-        // the same reason: a count emptied by *any* write (this
-        // run's `add_cp_at`, another effect's removal) leaves the
-        // field. The count watched is the on-card mark counter attached
-        // to the card -- not the tile marks.
+        // The mark-emptying card 「its on-card [CP点] is empty → graveyard」
+        // rule (user ruling 2026-10-07) does **not** raise here: `CpChanged`
+        // is retired. It lives on `Action::CounterChanged` with a
+        // `counter::CP` name check in the residual guard (`clear_cp.rs`) --
+        // one event handler on the count, not a check at each spend site.
+        // A count emptied by *any* write still leaves the field.
 
         // Post-commit named raise -- the wire event name is caller-supplied
         // data (the ruleset owns the vocabulary). 「任意玩家获得[除外]…时」
@@ -4821,9 +4807,9 @@ impl<M: CardModules> RulesBridge<M> {
                 t.by_card = by;
             })?;
         }
-        for (player_id, kind) in after.abnormal_log {
-            let _ = (player_id, kind);
-        }
+        // TODO(规则书): a layer write is a player hit -- Other (it lands on a
+        // player). Raise here once the off-board layer concept lands
+        // (「任意玩家获得[除外]…时」); nothing pushes a layer log yet.
         // `state` -- 「当有其他玩家切换状态时」 (Mujica:欢迎来到ave
         // mujica的世界 (2)). Raised once per real skill-state 1↔2 toggle
         // this run made, same post-commit shape as a named raise. The counter's
@@ -6518,7 +6504,6 @@ impl<M: CardModules> RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -6747,7 +6732,6 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
@@ -7125,7 +7109,6 @@ impl<M: CardModules> RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -9046,7 +9029,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -9116,7 +9098,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
@@ -9238,7 +9219,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,

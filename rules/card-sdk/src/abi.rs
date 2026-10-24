@@ -190,6 +190,9 @@ use std::borrow::Cow;
 ///      attached [CP点] count is written, so 「…时」 clauses on the count (the
 ///      该清CP了 graveyard rule) live in one event handler instead of at each
 ///      spend site. Mirrors v29's `crystalsChanged`.
+///      **Retired** (v51 / user ruling 2026-10-07): `CpChanged` is gone; the
+///      该清CP了 graveyard rule rides `CounterChanged` with a `counter::CP`
+///      name check in the residual guard (`clear_cp.rs`), not a CP-only trigger.
 /// v37: event rule instances (`docs/EVENTS.md`) -- the `rules/events` category.
 ///      `ctx::event_expire` / `event_is_active` / `event_deck_push` /
 ///      `event_banish` are the rule body's handles on the engine's event deck
@@ -205,7 +208,8 @@ use std::borrow::Cow;
 ///      with `ctx::cp_attached` (the running instance) / `cp_at` (another
 ///      instance). `cp_attached` changed meaning in place: it used to total
 ///      the tile marks carrying the instance as `src`, it now reads
-///      `FieldCard::cp`. `HookKind::CpChanged` rides the on-card writes only.
+///      `FieldCard::cp`. `HookKind::CpChanged` rode the on-card writes only
+///      (retired in v51 -- see the note on v36).
 ///      The per-player 「自己[场上]」 counter `mark::CP_FIELD_TOK` is gone: the
 ///      card's own count replaces it.
 /// v40: the **purchase surface** (`docs/PURCHASE.md`). `TriggerKind`s
