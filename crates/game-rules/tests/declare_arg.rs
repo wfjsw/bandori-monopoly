@@ -1,13 +1,16 @@
 //! Activation arguments (`declare`, docs/ACTIVATION.md §2) and the
-//! cross-card applicability query (`ctx::can_fire` / `ctx::card_replayable`).
+//! cross-card applicability query (`ctx::query_guard`).
 //!
 //! * a declined `declare` fires nothing -- no body, no header, no flash, no
 //!   log -- and for a play the card is **still in hand** (the LOY-SEEYOU-01
 //!   observable);
 //! * an accepted `declare_arg` runs the body once and the body sees the arg;
+//! * the arg may be a **card-authored struct** (several fields round-trip);
 //! * a decline on one entry does not stop the next entry on the same timing;
 //! * a decline that came from a prompt replays without re-asking;
-//! * `can_fire` / `card_replayable` answer for a gated pair;
+//! * `query_guard` answers by the **entry id the target declared** -- the
+//!   right slug admits, a wrong or unnamed one does not -- and by
+//!   `entry::PRESS` for the press surface;
 //! * a probe of an asking residual is `RuleError::GuardPrompted`, never a
 //!   prompt.
 
@@ -140,9 +143,10 @@ fn sibling_entry_still_runs_after_a_decline() {
     );
 }
 
-/// `ctx::card_replayable` / `ctx::can_fire` answer for a gated pair.
-/// `TEST:gate_closed`'s `On::Play` gate always refuses, so it is never
-/// playable and its body never runs.
+/// `TEST:gate_closed`'s `On::Play` gate always refuses, so the play is
+/// refused at the offer layer and its body never runs. (The *query* half of
+/// the closed gate is asserted by `query_guard_sees_slugs_and_press` below --
+/// this one only covers the engine's own refusal.)
 #[test]
 fn can_fire_sees_a_closed_gate() {
     let mut t = Table::vanilla(2);
@@ -339,4 +343,84 @@ fn trapping_declare_never_costs_the_card() {
         "the body has no decline path and logs unconditionally -- silence proves it never ran: {:?}",
         t.recent_keys(40)
     );
+}
+
+/// The named `i64` arg `name` on the first log line whose key contains `needle`.
+fn logged_i(t: &Table, needle: &str, name: &str) -> Option<i64> {
+    t.m.world().recent.iter().find_map(|e| {
+        if !e.msg.key().contains(needle) {
+            return None;
+        }
+        match e.msg.a.get(name) {
+            Some(game_core::msg::Arg::I(v)) | Some(game_core::msg::Arg::N(v)) => Some(*v as i64),
+            _ => None,
+        }
+    })
+}
+
+/// A `declare_arg` may hand the body a **card-authored struct**, not just an
+/// `i32`. `TEST:struct_arg`'s collector returns three fields and the body
+/// logs each -- two distinct non-default values is what a single `Arg(i32)`
+/// could not carry, so this is the round-trip the wire has to preserve
+/// (docs/ACTIVATION.md §2 "Guest surface").
+#[test]
+fn struct_arg_round_trips_every_field() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &["TEST:struct_arg"]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:struct_arg").unwrap();
+    drain(&mut t);
+
+    assert!(
+        keys_contain(&t, "struct_arg_body"),
+        "the body ran: {:?}",
+        t.recent_keys(40)
+    );
+    assert_eq!(
+        logged_i(&t, "struct_arg_body", "pick"),
+        Some(3),
+        "the struct's `pick` crossed the wire: {:?}",
+        t.recent_keys(40)
+    );
+    assert_eq!(
+        logged_i(&t, "struct_arg_body", "tile"),
+        Some(7),
+        "the struct's `tile` crossed the wire: {:?}",
+        t.recent_keys(40)
+    );
+    assert_eq!(
+        logged_i(&t, "struct_arg_body", "seat"),
+        Some(-1),
+        "the struct's `seat` crossed the wire: {:?}",
+        t.recent_keys(40)
+    );
+}
+
+/// `query_guard` answers by the **entry id the target card declared**, and by
+/// `entry::PRESS` for the press surface. The named-identifier design exists
+/// so "which of this card's hooks?" cannot be ambiguous -- a wrong or unnamed
+/// id must answer `false`, not "some entry happened to admit"
+/// (docs/ACTIVATION.md §3).
+#[test]
+fn query_guard_sees_slugs_and_press() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &["TEST:query"]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:query").unwrap();
+    drain(&mut t);
+
+    assert!(keys_contain(&t, "query_body"), "{:?}", t.recent_keys(40));
+    let k = |n: &str| logged_i(&t, "query_body", n);
+
+    // The right slug on an admitting hook.
+    assert_eq!(k("open"), Some(1), "named_open.\"decay\" admits: {:?}", t.recent_keys(40));
+    // The same slug on a hook whose guard refuses.
+    assert_eq!(k("shut"), Some(0), "named_shut.\"decay\" refuses: {:?}", t.recent_keys(40));
+    // A slug the target never declared.
+    assert_eq!(k("wrong"), Some(0), "an undeclared id is not a match: {:?}", t.recent_keys(40));
+    // A card with no such entry at all.
+    assert_eq!(k("unnamed"), Some(0), "no entry named \"decay\" on TEST:echo: {:?}", t.recent_keys(40));
+    // `entry::PRESS` -- the press surface, which no entry declares.
+    assert_eq!(k("press_open"), Some(1), "TEST:echo has an open press: {:?}", t.recent_keys(40));
+    assert_eq!(k("press_shut"), Some(0), "TEST:gate_closed's press is shut: {:?}", t.recent_keys(40));
 }

@@ -4,6 +4,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger, CardPile};
+use card_sdk::serde;
 use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On, PayAddValue, PlanValue};
 
 /// Plays another card (in another module) in the middle of its own effect.
@@ -1647,6 +1648,120 @@ fn trap_declare_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Rev-2: a card-authored struct arg, and named entry ids for `query_guard`.
+// ---------------------------------------------------------------------------
+
+/// The card's own activation argument -- private to this file, postcard on
+/// the wire. Two distinct fields so the test can prove more than one `i32`
+/// crossed (a plain `Arg(i32)` could not carry both).
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
+struct StructArg {
+    pick: i32,
+    tile: i32,
+    seat: i32,
+}
+
+/// A play whose `declare_arg` returns a **struct**. Prompt-free, so the
+/// whole interaction is the play and the body logs every field. The body has
+/// no decline path.
+const STRUCT_ARG: CardDef = CardDef::new(
+    "TEST:struct_arg",
+    &[On::Play("", None, None, struct_arg_unused).declare_arg(struct_arg_declare, struct_arg_body)],
+);
+
+const fn struct_arg_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn struct_arg_declare(_player_id: i32) -> card_sdk::Declared<StructArg> {
+    Ok(card_sdk::Activation::Arg(StructArg {
+        pick: 3,
+        tile: 7,
+        seat: -1,
+    }))
+}
+
+fn struct_arg_body(player_id: i32, arg: StructArg) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("struct_arg_body"))
+            .i("pick", arg.pick as i64)
+            .i("tile", arg.tile as i64)
+            .i("seat", arg.seat as i64),
+    );
+    Ok(())
+}
+
+/// A hook carrying a **named entry id** whose guard admits. No `pre` -- this
+/// fixture is about the *guard* and the id lookup, not about a placement
+/// condition (`query_guard` routes through `admits`, so a `card.placed`
+/// condition would correctly reject an unplaced card and mask the guard).
+const NAMED_OPEN: CardDef = CardDef::new(
+    "TEST:named_open",
+    &[
+        On::Play("", None, None, named_open_play),
+        On::Action(Action::TurnEnd("", None, Some(always), named_open_tick)).id("decay"),
+    ],
+);
+
+fn named_open_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:named_open", &Msg::new(key!("named_note")));
+    Ok(())
+}
+
+fn named_open_tick(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("named_open_tick")));
+    Ok(())
+}
+
+/// A hook carrying the same named id whose guard refuses -- the negative for
+/// `query_guard`'s slug lookup.
+const NAMED_SHUT: CardDef = CardDef::new(
+    "TEST:named_shut",
+    &[
+        On::Play("", None, None, named_shut_play),
+        On::Action(Action::TurnEnd("", None, Some(never), named_shut_tick)).id("decay"),
+    ],
+);
+
+fn named_shut_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:named_shut", &Msg::new(key!("named_note")));
+    Ok(())
+}
+
+fn named_shut_tick(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("named_shut_tick")));
+    Ok(())
+}
+
+/// A body that asks `query_guard` about the fixtures above and logs every
+/// verdict in one line. The host test reads those booleans -- a guest API
+/// cannot be probed from the host side without a card calling it.
+const QUERY: CardDef = CardDef::new("TEST:query", &[On::Play("", None, None, query_body)]);
+
+fn query_body(player_id: i32) -> card_sdk::Asked {
+    let open = ctx::query_guard(player_id, "TEST:named_open", "decay");
+    let shut = ctx::query_guard(player_id, "TEST:named_shut", "decay");
+    let wrong = ctx::query_guard(player_id, "TEST:named_open", "nope");
+    let unnamed = ctx::query_guard(player_id, "TEST:echo", "decay");
+    let press_open = ctx::query_guard(player_id, "TEST:echo", ctx::entry::PRESS);
+    let press_shut = ctx::query_guard(player_id, "TEST:gate_closed", ctx::entry::PRESS);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("query_body"))
+            .i("open", open as i64)
+            .i("shut", shut as i64)
+            .i("wrong", wrong as i64)
+            .i("unnamed", unnamed as i64)
+            .i("press_open", press_open as i64)
+            .i("press_shut", press_shut as i64),
+    );
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1657,5 +1772,6 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
-    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE
+    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE,
+    STRUCT_ARG, NAMED_OPEN, NAMED_SHUT, QUERY
 ]);

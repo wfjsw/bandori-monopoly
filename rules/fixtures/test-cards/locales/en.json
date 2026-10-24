@@ -73,5 +73,10 @@
   "pick_c_body": "pick-counter body ran with arg {{arg}}",
   "trigger_seen_body": "trigger-seen body ran with arg {{arg}}",
   "trap_declare_note": "trap-declare placed",
-  "trap_declare_body": "trap-declare body ran"
+  "trap_declare_body": "trap-declare body ran",
+  "struct_arg_body": "struct-arg body ran pick={{pick}} tile={{tile}} seat={{seat}}",
+  "named_note": "named hook card placed",
+  "named_open_tick": "named-open tick ran",
+  "named_shut_tick": "named-shut tick ran",
+  "query_body": "query open={{open}} shut={{shut}} wrong={{wrong}} unnamed={{unnamed}} press_open={{press_open}} press_shut={{press_shut}}"
 }
