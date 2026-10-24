@@ -102,9 +102,11 @@ fn mj(m: &Msg) -> (i32, i32) {
 /// Reserve an **out-buffer** the host writes into during the call.
 ///
 /// Returns `(handle, scratch)`. On wasm the handle is the scratch's
-/// linear-memory pointer (the host writes straight into it); on native it is
-/// an arena slot and `scratch` is a dummy of the same length (the real bytes
-/// come back through [`out_read`]).
+/// linear-memory pointer (the host writes straight into it) and `scratch`
+/// **is** the buffer [`out_read`] hands to the decoder. On native / kani the
+/// handle is an arena slot the host writes through [`crate::native::write`];
+/// `scratch` is empty and [`out_read`] moves the slot's bytes out (native) or
+/// copies them under the kani unwind bounds.
 fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
     #[cfg(kani)]
     {
@@ -122,14 +124,22 @@ fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
     #[cfg(not(kani))]
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let (h, l) = crate::native::reserve(cap);
-        (h, alloc::vec![0u8; l as usize])
+        // Arena slot is the real buffer (the host writes there via the handle).
+        // No dummy of the same length -- `out_read` moves the slot out, so the
+        // decoder walks that one allocation in place. See [`crate::native::take`].
+        let (h, _l) = crate::native::reserve(cap);
+        (h, alloc::vec::Vec::new())
     }
 }
 
 /// Read back an out-buffer the host just wrote (`n` = the host's return).
-/// On wasm the scratch already holds the bytes; on native they live in the
-/// arena and `scratch` is discarded.
+///
+/// Returns the single buffer the decoder walks -- no second `Vec` copy.
+/// On wasm that is `scratch` itself (the host wrote into it via the pointer);
+/// on native it is the reserved slot moved out of the arena
+/// ([`crate::native::take`]); on kani it is the bounded-copy result of
+/// [`crate::native::read`] (the fixed arena cannot hand out a borrow, and a
+/// `vec![0u8; n]` scratch would hit the unwind cliff).
 fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
     #[cfg(kani)]
     {
@@ -146,7 +156,7 @@ fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8>
     #[cfg(not(target_arch = "wasm32"))]
     {
         let _ = scratch;
-        crate::native::read(p, n.max(0) as usize)
+        crate::native::take(p, n.max(0) as usize)
     }
 }
 

@@ -597,6 +597,44 @@ pub fn read(handle: i32, len: usize) -> Vec<u8> {
     })
 }
 
+/// Take the bytes behind an **out-buffer** handle: moves the slot out of the
+/// arena instead of copying it ([`read`]). One-shot -- the handle is dead
+/// afterwards, which is exactly the `out_buf` / `out_read` pairing (probe,
+/// host write, decode). Do not use on interned name handles.
+///
+/// Sized to `len` like [`read`] so callers can slice `[..n]` without
+/// panicking when the host wrote fewer bytes (or the handle was stale).
+#[cfg(not(kani))]
+pub fn take(handle: i32, len: usize) -> Vec<u8> {
+    use std::vec::Vec;
+    // Destructive, so refuse the wasm-style null handle (a length-only probe
+    // or a failed `reserve`) -- `read`'s `(handle - 1).max(0)` would otherwise
+    // land on slot 0 and eat an interned name.
+    if handle <= 0 {
+        return std::vec![0u8; len];
+    }
+    with_stack(|stack| {
+        let mut stack = stack.borrow_mut();
+        // Same frame rule as [`read`]: handles index the bottom (stable) frame.
+        // (`read`'s `or_else(last)` never fires -- `first` is `Some` whenever
+        // `last` is -- and a second `*_mut` in that closure is an E0499.)
+        let frame = match stack.first_mut() {
+            Some(f) => f,
+            None => return std::vec![0u8; len],
+        };
+        let idx = (handle - 1).max(0) as usize;
+        if idx >= frame.len() {
+            return std::vec![0u8; len];
+        }
+        let mut out = std::mem::take(&mut frame[idx]);
+        out.truncate(len);
+        if out.len() < len {
+            out.resize(len, 0);
+        }
+        out
+    })
+}
+
 /// The bytes behind a name handle, as a slice of the intern table when the
 /// handle is a `NameId` (no heap). Falls back to [`read`] for arena handles.
 /// Host name lookups should prefer [`crate::intern::decode_handle`] +
