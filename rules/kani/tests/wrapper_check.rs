@@ -18,9 +18,12 @@ use std::path::{Path, PathBuf};
 fn kind_shapes() -> HashMap<String, BodyShape> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let rules = manifest.parent().expect("rules/");
+    let repo = rules.parent().expect("repo root");
     let mut sources = Vec::new();
-    for rel in ["card-sdk/src/kinds.rs", "bandori-std/src/kind.rs"] {
-        let p = rules.join(rel);
+    for p in [
+        repo.join("crates/card-sdk/src/kinds.rs"),
+        rules.join("bandori-std/src/kind.rs"),
+    ] {
         sources.push(fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}")));
     }
     kind_shapes_from(&sources)

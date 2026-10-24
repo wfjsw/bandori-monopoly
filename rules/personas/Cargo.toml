@@ -9,5 +9,5 @@ description = "Persona (character) roster rows -- PersonaDef metadata, one file 
 crate-type = ["rlib"]
 
 [dependencies]
-card-sdk = { path = "../card-sdk", features = ["guest"] }
+card-sdk = { path = "../../crates/card-sdk", features = ["guest"] }
 bandori-std = { path = "../bandori-std" }

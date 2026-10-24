@@ -535,7 +535,7 @@ G3 is the merge gate for G4.
 ## 8. G1 status (2026-10-07) — `crates/rules-cond`
 
 Isolated module: workspace member `crates/rules-cond`, **no** dependency on
-`game-core` / `card-sdk`, not referenced by host/ABI/`rules/card-sdk` (those
+`game-core` / `card-sdk`, not referenced by host/ABI/`crates/card-sdk` (those
 are being edited concurrently). The host fills the two pure-data snapshots in
 G2.
 
@@ -784,7 +784,7 @@ unaffected either way.
 
 ### 9.4 Files
 
-* `rules/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` `pre` before the guard,
+* `crates/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` `pre` before the guard,
   `pre::MINE`, `On::pre()` builder, `ManifestOn.pre`, `ABI_VERSION = 45`.
 * `crates/game-rules/src/cond_pre.rs` (new) — `CompiledPre`, `PrecompiledConds`
   (the shipped `conds-*.bin` envelope, §8.2), `admits` /
@@ -899,7 +899,7 @@ required set (buy 2899 / forcebuy 392 / auctions 255 / rent 19567 / bankrupt 96)
 
 ### 10.5 Files (G3/G4; legacy scaffolding removed 2026-10-14)
 
-* `rules/card-sdk/src/{lib.rs,abi.rs,rt.rs}` — `On::*` guard `Option<fn>`,
+* `crates/card-sdk/src/{lib.rs,abi.rs,rt.rs}` — `On::*` guard `Option<fn>`,
   `On::has_guard`/`no_guard`/`guard`, `ManifestOn::has_guard`. The G3 audit
   pieces (`CardDef::legacy`, `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`)
   shipped with G3 and were deleted at removal time (ABI **61**).

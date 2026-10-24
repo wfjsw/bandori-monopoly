@@ -91,7 +91,7 @@ Wire ids 9 / 10 (master's v73) and 12 / 13 (v80).
 
 `On::Action` / `On::Filter` are **one kind per entry** (every multi-kind list
 was split). Constructors come from the `action_kinds!` / `filter_kinds!` macros
-in `rules/card-sdk/src/kinds.rs`; the body shape is pinned by the constructor
+in `crates/card-sdk/src/kinds.rs`; the body shape is pinned by the constructor
 (`FilterShape`), so a filter body can never be registered on the wrong kind
 and there is no `check_kind_variant`. `On::Counteract` still takes a list of
 `ChainKind` (a [反击] may answer several chain links).
@@ -145,7 +145,7 @@ Folding would make the tile body just another `Action(SettleBody)` and lose the
 
 ### Filter payload types (the minimal clean set)
 
-Per-kind payloads live in `rules/card-sdk/src/payload.rs`. `None` = leave the
+Per-kind payloads live in `crates/card-sdk/src/payload.rs`. `None` = leave the
 host's answer alone; there is no `UNCHANGED` sentinel and no `i32::MIN`
 encoding. One `FilterPayload` impl each, flattened to `i32` only at the
 `hostfns.rs` wasm-import edge.
@@ -189,7 +189,7 @@ takes.
 per kind plus `Filter::KINDS` / `Action::KINDS` (`&'static [KindInfo]`) for pin
 tests and tooling. The constructor type pins the side -- there is no
 `check_kind_variant`. The engine table (ids, spellings, `is_filter`) lives in
-`crates/game-kinds`; the DSL constructors live in `rules/card-sdk/src/kinds.rs`.
+`crates/game-kinds`; the DSL constructors live in `crates/card-sdk/src/kinds.rs`.
 
 **Dual-role ids** (one wire id, two typed views) are ids used both as a
 [反击] chain link and as an Action-listened event. They have an `ActionKind`
@@ -269,7 +269,7 @@ immediately before the pure filter stage:
 
 The engine kind table in `crates/game-kinds` (`ENGINE_KINDS`) is the **single
 declaration source of truth** for ids, spellings, and `is_filter`. The typed
-mirror is `Filter::KINDS` / `Action::KINDS` in `rules/card-sdk/src/kinds.rs`.
+mirror is `Filter::KINDS` / `Action::KINDS` in `crates/card-sdk/src/kinds.rs`.
 Today (27 filter kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,

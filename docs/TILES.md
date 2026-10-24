@@ -347,7 +347,7 @@ per slot.
 ### Declaration
 
 `CardDef::texts` is a per-entry side table `(entry index, slot, tile, key)`
-(`rules/card-sdk`, ABI v59):
+(`crates/card-sdk`, ABI v59):
 
 | field | values | |
 |---|---|---|
@@ -505,7 +505,7 @@ The rulebook's 「可选择」 offers are the settle prompts themselves
 fire-up cost. If wasm per-landing cost exceeds it, evaluate native execution of
 the built-in tile rules (the default `CardRules::settle_tile` impl already runs
 the bodies as plain Rust for `StubRules`; promoting that to the general native
-path is the fallback, `rules/card-sdk/src/native.rs`'s arena is the ABI surface
+path is the fallback, `crates/card-sdk/src/native.rs`'s arena is the ABI surface
 it would use).
 
 ### Before (2026-10-06, this machine)

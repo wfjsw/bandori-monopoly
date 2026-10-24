@@ -10,6 +10,6 @@ description = "Event card (事件卡) rules: one CardDef per event, active on th
 crate-type = ["rlib"]
 
 [dependencies]
-card-sdk = { path = "../card-sdk", features = ["guest"] }
+card-sdk = { path = "../../crates/card-sdk", features = ["guest"] }
 bandori-std = { path = "../bandori-std" }
 rules-status = { path = "../status" }

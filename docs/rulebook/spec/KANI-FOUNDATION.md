@@ -48,7 +48,7 @@ rules/kani::board            static 60-tile board from data/board.json
 | **ir_fill** | `rules/kani/src/ir_fill.rs` | general World → `IrCtx` (every field filled or documented) |
 | **spec units** | `rules/kani/src/spec/<unit>.rs` | reference specs FROM the clause docs only |
 | **proof units** | `rules/kani/src/proofs/<unit>.rs` | `#[kani::proof]` harnesses |
-| **generic SDK** | `rules/card-sdk/src/kani_host.rs`, `ctx/sys_kani.rs` | `cfg(kani)` dispatch of every import; no game words |
+| **generic SDK** | `crates/card-sdk/src/kani_host.rs`, `ctx/sys_kani.rs` | `cfg(kani)` dispatch of every import; no game words |
 
 `rules-kani` is a **ROOT** workspace member (crate name `rules-kani`). It is
 deliberately not in the `rules/` wasm workspace. Run from the worktree root:
@@ -404,7 +404,7 @@ pub fn aya_haruka_01_mutant_two_cards() {
 
 Strategy (a)+(e): frozen 2-card discard of distinct interned ids; pick
 unrolled as two concrete worlds. Under `cfg(kani)`, `cards_in` returns a
-1-byte interned-str facade (`rules/card-sdk/src/ctx.rs`) and `invoke::find`
+1-byte interned-str facade (`crates/card-sdk/src/ctx.rs`) and `invoke::find`
 returns the `CardDef` directly (a 200+ entry iterator scan never returned
 under CBMC — that made earlier "SUCCESS" vacuous; fixed by reachability
 bisect). Still blocked: heap `String` length stays symbolic so `memcmp` in
@@ -657,13 +657,13 @@ tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out
 
 ## Adding a host import (checklist — a miss breaks EVERY Kani proof)
 
-A new `ruleset_*` import in `rules/card-sdk/src/ctx/sys.rs` must also be added
+A new `ruleset_*` import in `crates/card-sdk/src/ctx/sys.rs` must also be added
 to the Kani side, or `card-sdk` stops compiling under `cfg(kani)` and every
 harness FAILS in seconds (this happened with `join_redirect_target` /
 `set_join_used`):
 
-1. `rules/card-sdk/src/kani_host.rs` — an `Op` variant with the same slot.
-2. `rules/card-sdk/src/ctx/sys_kani.rs` — the same-signature `pub fn` calling
+1. `crates/card-sdk/src/kani_host.rs` — an `Op` variant with the same slot.
+2. `crates/card-sdk/src/ctx/sys_kani.rs` — the same-signature `pub fn` calling
    `kani_host::call_*` (`call_i32` / `call_unit` / ...).
 3. `rules/kani/src/host.rs` — a faithful `dispatch` arm (follow
    `crates/game-rules/src/hostfns.rs`); engine-scheduling surfaces stay

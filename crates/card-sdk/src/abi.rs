@@ -11,722 +11,722 @@ use std::borrow::Cow;
 /// v2: `play_card` (cross-module card calls); one module per card.
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
 /// v7: board/hand/status query + op wave (is_buyable ... in_group, marker spend,
-///     sweep_to_deck, trig_card_is; `Trigger.card`).
+///    sweep_to_deck, trig_card_is; `Trigger.card`).
 /// v8: `ruleset_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
 /// v9: `cant_move`, `hand_size`, `is_deed`/`is_start`/`is_venue`.
 /// v10: `trig_step` (`Trigger.step`) so a counteraction can tell which turn step
-///      (0/1/2/3) it fired in, for kinds that aren't step-specific (e.g.
-///      `mortgage` fires during both step 1 and step 3); paired
-///      `*Before`/`*After` kinds filling in the missing half of every
-///      trigger point, plus new hooks for buy/build/discard/end turn/leave.
+///    (0/1/2/3) it fired in, for kinds that aren't step-specific (e.g.
+///    `mortgage` fires during both step 1 and step 3); paired
+///    `*Before`/`*After` kinds filling in the missing half of every
+///    trigger point, plus new hooks for buy/build/discard/end turn/leave.
 /// v11: `trig_by_card` (`Trigger.by_card`) -- the player whose card caused this
-///      trigger, or -1 when it was not card-caused. "Hit by another card" is
-///      `by_card >= 0 && by_card != player_id`.
+///    trigger, or -1 when it was not card-caused. "Hit by another card" is
+///    `by_card >= 0 && by_card != player_id`.
 /// v12: `trig_set_pay_amount` -- a counteraction to a `pay`/`paid` trigger may rewrite
-///      the pending amount (0 = cancel the payment).
-///      Also: `set_move_roll` now actually reaches the engine (the write-back from
-///      the counteraction's trigger to `Trigger.value` was missing).
+///    the pending amount (0 = cancel the payment).
+///    Also: `set_move_roll` now actually reaches the engine (the write-back from
+///    the counteraction's trigger to `Trigger.value` was missing).
 /// v13: `trig_pay_is_rent` (`t.Pay.IsRent`) -- is this `pay`/`paid` trigger rent,
-///      as opposed to a buy/build/forced loss. Card-driven payments are never rent.
+///    as opposed to a buy/build/forced loss. Card-driven payments are never rent.
 /// v14: `t.Move` context -- `trig_move_flags` (a [`MoveFlags`] bitset), plus
-///      `trig_move_main` and `trig_move_dir`. A move-caused trigger (moveRoll /
-///      pass / settle*) can now say what kind of move it was, and any number of
-///      orthogonal modifiers on it. Replaces the bespoke `trig_move_fire_roll`.
+///    `trig_move_main` and `trig_move_dir`. A move-caused trigger (moveRoll /
+///    pass / settle*) can now say what kind of move it was, and any number of
+///    orthogonal modifiers on it. Replaces the bespoke `trig_move_fire_roll`.
 /// v15: `trig_set_cancelled` / `trig_cancelled` -- a
-///      counteraction may negate the trigger's effect outright: the engine then
-///      skips the effect body (land / event / play)
-///      but still runs the point's Before/After hooks.
+///    counteraction may negate the trigger's effect outright: the engine then
+///    skips the effect body (land / event / play)
+///    but still runs the point's Before/After hooks.
 /// v16: `trig_set_pay_target` -- a counteraction may also redirect the payee of a
-///      pending `pay` (`t.Pay.to`; -1 = the bank). The transfer amount
-///      follows `set_pay_amount`, so a reduced payment credits the payee less too.
+///    pending `pay` (`t.Pay.to`; -1 = the bank). The transfer amount
+///    follows `set_pay_amount`, so a reduced payment credits the payee less too.
 /// v17: field-card (`Fx`) hooks + per-card crystals. New `TriggerKind`s
-///      (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `DiceRollAfter`, `CardPlayed`,
-///      `Targeted`, `PaySplitChoose`) are **hook points**, not [反击] points: the
-///      engine runs every *placed* card's `counteract` against them automatically.
-///      `crystals` / `set_crystals` / `add_crystals` on the running field card.
+///    (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `DiceRollAfter`, `CardPlayed`,
+///    `Targeted`, `PaySplitChoose`) are **hook points**, not [反击] points: the
+///    engine runs every *placed* card's `counteract` against them automatically.
+///    `crystals` / `set_crystals` / `add_crystals` on the running field card.
 /// v18: `take_from_hand`; `drawn` self-dispatches to the card named on `t.card`
-///      (the one just drawn, still in hand).
+///    (the one just drawn, still in hand).
 /// v19: `cards_in(player_id, pile, buf, cap)` -- list a player's [`CardPile`] as a
-///      postcard `Vec<String>` written into a guest-owned buffer (the first
-///      host->guest string return). `take_card(player_id, pile, id)` replaces
-///      `take_from_hand` and works on any pile.
+///    postcard `Vec<String>` written into a guest-owned buffer (the first
+///    host->guest string return). `take_card(player_id, pile, id)` replaces
+///    `take_from_hand` and works on any pile.
 /// v20: turn plan + scheduling -- `schedule_turn_end` (a card asks for a
-///      `turnEnd` call at this turn's end or at the end of a player's next turn),
-///      `set_no_money_loss`, `set_fixed_roll` / `fixed_roll`, `set_next_steps`,
-///      `turn_main_steps`, marker-cap move, `card_replayable`.
-///      `play_card` now returns the inner card's `Dest`, and the inner card runs
-///      as itself (its own id and `Dest`, no longer the outer card's).
+///    `turnEnd` call at this turn's end or at the end of a player's next turn),
+///    `set_no_money_loss`, `set_fixed_roll` / `fixed_roll`, `set_next_steps`,
+///    `turn_main_steps`, marker-cap move, `card_replayable`.
+///    `play_card` now returns the inner card's `Dest`, and the inner card runs
+///    as itself (its own id and `Dest`, no longer the outer card's).
 /// v21: `CardDef` standardized like triggers -- `id` + a table of `On` entry
-///      points (`Play(gate, effect)`, `Counteract(kinds, guard, effect)`,
-///      `Hook(kinds, effect)`, `AtEnd`). The manifest lists each entry with
-///      its trigger kinds, so the host dispatches only to cards that declared
-///      the kind at hand; one export `ruleset_on(card, entry, op, player_id)`
-///      replaces `ruleset_play` / `_can_react` / `_react` / `_cant_play` (the
-///      pre-v21 names, kept here as history).
+///    points (`Play(gate, effect)`, `Counteract(kinds, guard, effect)`,
+///    `Hook(kinds, effect)`, `AtEnd`). The manifest lists each entry with
+///    its trigger kinds, so the host dispatches only to cards that declared
+///    the kind at hand; one export `ruleset_on(card, entry, op, player_id)`
+///    replaces `ruleset_play` / `_can_react` / `_react` / `_cant_play` (the
+///    pre-v21 names, kept here as history).
 /// v23: hook kinds for the remaining raise points -- TurnEndBefore / TurnEndAfter,
-///      PaySplitAdd / PaySplitMul / PaySplitAt (the Money pipeline), Discarded, DeckBeforeGame /
-///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleBody, BeforeOut,
-///      Teleported. Move payload `trig_move_remaining` / `trig_move_total` and
-///      `MoveFlags::TELEPORT_WALK`. `schedule_turn_end` takes a mode (bit 1 =
-///      the player's next turn, bit 2 = before the wear-off).
-///      DiceRollAfter now fires before the moveRoll [反击] window.
-///      `DiceRollPlan` is the point `On::RollPlan` (v22) is dispatched at.
+///    PaySplitAdd / PaySplitMul / PaySplitAt (the Money pipeline), Discarded, DeckBeforeGame /
+///    DeckAtGameStart, Drew, Reshuffled, Bought, SettleBody, BeforeOut,
+///    Teleported. Move payload `trig_move_remaining` / `trig_move_total` and
+///    `MoveFlags::TELEPORT_WALK`. `schedule_turn_end` takes a mode (bit 1 =
+///    the player's next turn, bit 2 = before the wear-off).
+///    DiceRollAfter now fires before the moveRoll [反击] window.
+///    `DiceRollPlan` is the point `On::RollPlan` (v22) is dispatched at.
 /// v24: movement shaping -- `set_steps` / `set_reverse` / `set_signed` /
-///      `set_stop_at` / `set_parity` / `set_resolve` / `set_settle_tile` /
-///      `set_pay_factor` / `set_rent_factor` / `set_no_buy` / `set_can_build` /
-///      `set_can_build` / `set_teleport_walk` / `set_min_roll` /
-///      `set_extra_steps` / `set_more_steps` / `set_fire_roll` /
-///      `set_no_circle_reward` / `set_settle_as_agent` and the `move_*` getters,
-///      on the move being planned (guest: `ctx::plan::*`).
+///    `set_stop_at` / `set_parity` / `set_resolve` / `set_settle_tile` /
+///    `set_pay_factor` / `set_rent_factor` / `set_no_buy` / `set_can_build` /
+///    `set_can_build` / `set_teleport_walk` / `set_min_roll` /
+///    `set_extra_steps` / `set_more_steps` / `set_fire_roll` /
+///    `set_no_circle_reward` / `set_settle_as_agent` and the `move_*` getters,
+///    on the move being planned (guest: `ctx::plan::*`).
 /// v25: card-driven abnormal grants / `teleport_to`
-///      go through the abnormal gate: the `abnormalGuard` hook (new kind),
-///      then the `abnormal` [反击] window when another player caused it; a blocked
-///      effect does not apply. `abnormal_count(player_id)`,
-///      `placed_tile(player_id, id)`, `play_doubled()` and
-///      `trig_cards` (the drawn cards on a `drew` trigger).
+///    go through the abnormal gate: the `abnormalGuard` hook (new kind),
+///    then the `abnormal` [反击] window when another player caused it; a blocked
+///    effect does not apply. `abnormal_count(player_id)`,
+///    `placed_tile(player_id, id)`, `play_doubled()` and
+///    `trig_cards` (the drawn cards on a `drew` trigger).
 /// v26: the targeting pipeline -- `target(player_id, tile, single)` pauses the
-///      run with a `Target` host request (`target` / `target_tile`): the off-board kind,
-///      the `immuneAll` / `untargetable` / `redirect` guard hooks (new kinds),
-///      the `targeted_count` counter, then the `targeted` hooks
-///      and the `target` [反击] window. `immuneAll` also gates card-driven
-///      abnormal effects and payments. `sweep_to_deck`
-///      became `shuffle_into_deck(player_id, hand, discard)`.
+///    run with a `Target` host request (`target` / `target_tile`): the off-board kind,
+///    the `immuneAll` / `untargetable` / `redirect` guard hooks (new kinds),
+///    the `targeted_count` counter, then the `targeted` hooks
+///    and the `target` [反击] window. `immuneAll` also gates card-driven
+///    abnormal effects and payments. `sweep_to_deck`
+///    became `shuffle_into_deck(player_id, hand, discard)`.
 /// v27: the move model. `MoveFlags` is gone: a move is exactly one `MoveKind`
-///      (Walk | Teleport), and what it resolves is a separate category,
-///      `Settle` (ROUTE = the tiles it passes resolve 经过; DEST = the landing
-///      resolves 结算). A teleport-walk becomes a Teleport whose destination
-///      is computed from the roll; no-Resolve clears DEST. CHARGE_ROLL
-///      is card-owned state now (`plan::set_tag` / `trigger::move_tag`), not an
-///      engine flag. `ctx::card_move` / `ctx::agent_landing` run a move or an
-///      agent landing from inside a card; the plan gained `set_kind` / `set_tag`
-///      / `set_start` / `set_teleport_to` and the Base/Dice roll tables
-///      (`set_base_dice` / `add_base_dice` / `add_extra_dice` -- a flat add is a
-///      `0`-sided term, a flat add).
-///      NOT yet in v27, though named in earlier drafts of this line: the play
-///      context (`CardDef.targeting`, `trigger::play_*`, `set_immune`,
-///      `add_mark_flags(.., NO_TARGET)`) and `plan::set_stopped`. Targeting is
-///      the `HostRequest::Target` gate; the rest is unported.
+///    (Walk | Teleport), and what it resolves is a separate category,
+///    `Settle` (ROUTE = the tiles it passes resolve 经过; DEST = the landing
+///    resolves 结算). A teleport-walk becomes a Teleport whose destination
+///    is computed from the roll; no-Resolve clears DEST. CHARGE_ROLL
+///    is card-owned state now (`plan::set_tag` / `trigger::move_tag`), not an
+///    engine flag. `ctx::card_move` / `ctx::agent_landing` run a move or an
+///    agent landing from inside a card; the plan gained `set_kind` / `set_tag`
+///    / `set_start` / `set_teleport_to` and the Base/Dice roll tables
+///    (`set_base_dice` / `add_base_dice` / `add_extra_dice` -- a flat add is a
+///    `0`-sided term, a flat add).
+///    NOT yet in v27, though named in earlier drafts of this line: the play
+///    context (`CardDef.targeting`, `trigger::play_*`, `set_immune`,
+///    `add_mark_flags(.., NO_TARGET)`) and `plan::set_stopped`. Targeting is
+///    the `HostRequest::Target` gate; the rest is unported.
 /// v28: the [反击] vocabulary is `counteract` throughout. `On::CounterAct` /
-///      `OnKind::CounterAct` / `Call::CounterAct` became `Counteract`, the
-///      trigger-kind wire string `reacted` became `counteracted`, and the
-///      guest entry points are `counteract` / `can_counteract` (formerly
-///      `react` / `can_react`). Only the `counteracted` string is on the wire;
-///      the rest is naming.
+///    `OnKind::CounterAct` / `Call::CounterAct` became `Counteract`, the
+///    trigger-kind wire string `reacted` became `counteracted`, and the
+///    guest entry points are `counteract` / `can_counteract` (formerly
+///    `react` / `can_react`). Only the `counteracted` string is on the wire;
+///    the rest is naming.
 /// v29: two semantic breaks share this bump.
-///      (a) **Band crystals are the band-skill field instance's crystals.**
-///      `group_crystals` / `add_group_crystals` no longer touch the keyed state
-///      `bandCrystals` (deleted, along with the old per-player store): they
-///      are sugar over the player's band-skill field card (`skill:<band>:<skill>`,
-///      `FieldCard::group_skill`) -- the same instance `crystals` / `add_crystals`
-///      touch from inside a band skill's own handler, so 「乐队卡 / 团卡」 crystal
-///      text is one pool. `max` = 0 now means uncapped (it used to clamp the
-///      count to 0); `add_group_crystals` returns the new count (it used to
-///      return the delta). A player with no band skill reads 0 and every write
-///      is a no-op; a swapped or removed band card takes its crystals with it.
-///      (b) the match-start / per-draw raise points (see the `TriggerKind`
-///      notes on `DeckBeforeGame` / `DeckAtGameStart` / `Drawn` / `Drew`, and
-///      `prop::NO_REWARD`).
+///    (a) **Band crystals are the band-skill field instance's crystals.**
+///    `group_crystals` / `add_group_crystals` no longer touch the keyed state
+///    `bandCrystals` (deleted, along with the old per-player store): they
+///    are sugar over the player's band-skill field card (`skill:<band>:<skill>`,
+///    `FieldCard::group_skill`) -- the same instance `crystals` / `add_crystals`
+///    touch from inside a band skill's own handler, so 「乐队卡 / 团卡」 crystal
+///    text is one pool. `max` = 0 now means uncapped (it used to clamp the
+///    count to 0); `add_group_crystals` returns the new count (it used to
+///    return the delta). A player with no band skill reads 0 and every write
+///    is a no-op; a swapped or removed band card takes its crystals with it.
+///    (b) the match-start / per-draw raise points (see the `TriggerKind`
+///    notes on `DeckBeforeGame` / `DeckAtGameStart` / `Drawn` / `Drew`, and
+///    `prop::NO_REWARD`).
 /// v30: card-declared static **properties** ride the manifest -- a generic
-///      `props` map of named `key -> i32` values on `ManifestEntry`, declared
-///      by `CardDef::props`, replacing the engine's rulebook-prose matching
-///      (「手卡上限数量减1」 / 「可在眩晕时打出」). The keys the engine reads are
-///      named constants in [`prop`] (mirrored in `game_core::state::prop`):
-///      `handLimitDelta` and the hand-play exemption. The host keeps them on `CardInfo`, the
-///      engine queries `CardRules::card_prop(card, key)` (default 0) and
-///      stamps the whole map onto the `FieldCard` at placement.
+///    `props` map of named `key -> i32` values on `ManifestEntry`, declared
+///    by `CardDef::props`, replacing the engine's rulebook-prose matching
+///    (「手卡上限数量减1」 / 「可在眩晕时打出」). The keys the engine reads are
+///    named constants in [`prop`] (mirrored in `game_core::state::prop`):
+///    `handLimitDelta` and the hand-play exemption. The host keeps them on `CardInfo`, the
+///    engine queries `CardRules::card_prop(card, key)` (default 0) and
+///    stamps the whole map onto the `FieldCard` at placement.
 /// v31: tile rule instances (`docs/TILES.md`) -- `OnKind::Settle` (a rule's
-///      settle body), the tile-data `prop` keys (`price` / `house` / `group` /
-///      `buildMax` / `rentLen` / `rent:N` / `ringMult`), `place_card` on
-///      `BOARD_OWNER`, and the `ctx::settle_*` primitives.
+///    settle body), the tile-data `prop` keys (`price` / `house` / `group` /
+///    `buildMax` / `rentLen` / `rent:N` / `ringMult`), `place_card` on
+///    `BOARD_OWNER`, and the `ctx::settle_*` primitives.
 /// v32: the tile-bending surface replaces the engine's tile flags
-///      (`docs/TILES.md` Phase 3). `tile_prop` / `set_tile_prop` read and write
-///      a rule instance's props **by tile**; `settle_circle_reward` is the
-///      经过 CiRCLE reward (`tile:circle`'s Pass entry). `prop::NO_REWARD`
-///      replaces the `noCircleReward` plan flag and per-player state latch,
-///      `prop::RENT_FACTOR` / `PAY_FACTOR` replace `rent_factor` / `pay_factor`,
-///      `prop::BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` replace the turn-ctx
-///      buy knobs, `prop::NO_BUILD` replaces the `noBuild` state key, and
-///      `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` replace the old per-player
-///      colour override key. Board-owned instances now hear
-///      the field hooks they declare (`passTile` &c.).
+///    (`docs/TILES.md` Phase 3). `tile_prop` / `set_tile_prop` read and write
+///    a rule instance's props **by tile**; `settle_circle_reward` is the
+///    经过 CiRCLE reward (`tile:circle`'s Pass entry). `prop::NO_REWARD`
+///    replaces the `noCircleReward` plan flag and per-player state latch,
+///    `prop::RENT_FACTOR` / `PAY_FACTOR` replace `rent_factor` / `pay_factor`,
+///    `prop::BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` replace the turn-ctx
+///    buy knobs, `prop::NO_BUILD` replaces the `noBuild` state key, and
+///    `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` replace the old per-player
+///    colour override key. Board-owned instances now hear
+///    the field hooks they declare (`passTile` &c.).
 /// v33: `roll_ask` (a card-/skill-driven roll that raises the `Roll` chain
-///      link -- the 「掷骰结算前」 [反击] window -- with the roller, the face and
-///      a `t.Roll.Source` code) and `trig_roll_source` /
-///      [`roll_source`]`::{NONE,CHARGE,CARD,SKILL}`. `ctx::roll` is unchanged
-///      (no window); a roll that [反击]s must answer goes through
-///      `ctx::roll_ask` / `ctx::do_move_roll_ask`.
+///    link -- the 「掷骰结算前」 [反击] window -- with the roller, the face and
+///    a `t.Roll.Source` code) and `trig_roll_source` /
+///    [`roll_source`]`::{NONE,CHARGE,CARD,SKILL}`. `ctx::roll` is unchanged
+///    (no window); a roll that [反击]s must answer goes through
+///    `ctx::roll_ask` / `ctx::do_move_roll_ask`.
 /// v34: `prop::RENT_HOUSES` (virtual rent-house-count, 「房屋数视为…」 -- gone
-///      with a placed card) and `ctx::rent_houses_of` (the counted value the
-///      rent lookup reads). `ctx::houses_of` remains real.
+///    with a placed card) and `ctx::rent_houses_of` (the counted value the
+///    rent lookup reads). `ctx::houses_of` remains real.
 /// v35: the skill / band-skill / follow surface.
-///      (a) `invoke_skill(player_id, id)` -- run a skill rule's press entry
-///      (`On::Play`) for a player, nested like `play_card`. This is 「立即执行
-///      乐队技能的（2）效果」 (mutsumi_never) and 「触发其技能的发动」 (pareo_far):
-///      the card runs the skill's press entry directly. No `skillUsed` raise --
-///      that is the player's
-///      own press (`use_skill`), not a card running the body.
-///      (b) the skill **attachment surface**:
-///      `group_skill(player_id)` / `persona_skill(player_id)` name the bound
-///      rule id, `group_skills(player_id)` lists every band attachment as
-///      `(uid, id, extra)`, `add_group_skill(player_id, id, extra)` attaches one.
-///      `extra` is 「拿取」's borrowed copy: 「相同乐队技能卡
-///      的效果不可叠加」 (the hook dispatch skips an extra when a non-extra copy
-///      of the same id is already attached) and 「不视为那个乐队的角色」
-///      (`in_group` still reads only the character).
-///      (c) `raise_bought(player_id, tile)` -- a card that hands a deed over
-///      (tomoe_savior's 「从该玩家处收购该地契」) announces the acquisition so
-///      the `bought` hook chain hears it.
-///      (d) `plan::add_follower(player_id)` -- 「使你的下次主要移动结果对那些
-///      玩家一起执行」 (sakiko_lead): the move's result is replayed for each
-///      follower after the mover settles, in the recorded order (「你先触发结算，
-///      此后其他玩家按行动顺序依次触发结算」).
+///    (a) `invoke_skill(player_id, id)` -- run a skill rule's press entry
+///    (`On::Play`) for a player, nested like `play_card`. This is 「立即执行
+///    乐队技能的（2）效果」 (mutsumi_never) and 「触发其技能的发动」 (pareo_far):
+///    the card runs the skill's press entry directly. No `skillUsed` raise --
+///    that is the player's
+///    own press (`use_skill`), not a card running the body.
+///    (b) the skill **attachment surface**:
+///    `group_skill(player_id)` / `persona_skill(player_id)` name the bound
+///    rule id, `group_skills(player_id)` lists every band attachment as
+///    `(uid, id, extra)`, `add_group_skill(player_id, id, extra)` attaches one.
+///    `extra` is 「拿取」's borrowed copy: 「相同乐队技能卡
+///    的效果不可叠加」 (the hook dispatch skips an extra when a non-extra copy
+///    of the same id is already attached) and 「不视为那个乐队的角色」
+///    (`in_group` still reads only the character).
+///    (c) `raise_bought(player_id, tile)` -- a card that hands a deed over
+///    (tomoe_savior's 「从该玩家处收购该地契」) announces the acquisition so
+///    the `bought` hook chain hears it.
+///    (d) `plan::add_follower(player_id)` -- 「使你的下次主要移动结果对那些
+///    玩家一起执行」 (sakiko_lead): the move's result is replayed for each
+///    follower after the mover settles, in the recorded order (「你先触发结算，
+///    此后其他玩家按行动顺序依次触发结算」).
 /// v36: [CP点] is its own tile-mark category (`mark::CP_CATEGORY` / `mark::CP_KIND`),
-///      owned by the `mark:cp` rule instance on the neutral board owner and never
-///      by a player. The small writer API is `ctx::place_cp` / `ctx::count_cp` /
-///      `ctx::clear_cp` plus the attached counts (`ctx::count_cp_from` per tile,
-///      `ctx::cp_attached` in total) -- provenance is the placing card instance
-///      (`TileMark.src`), not `TileMark.owner`. `HookKind::CpChanged` /
-///      `TriggerKind::CpChanged` (`cpChanged`) fires whenever a card instance's
-///      attached [CP点] count is written, so 「…时」 clauses on the count (the
-///      该清CP了 graveyard rule) live in one event handler instead of at each
-///      spend site. Mirrors v29's `crystalsChanged`.
+///    owned by the `mark:cp` rule instance on the neutral board owner and never
+///    by a player. The small writer API is `ctx::place_cp` / `ctx::count_cp` /
+///    `ctx::clear_cp` plus the attached counts (`ctx::count_cp_from` per tile,
+///    `ctx::cp_attached` in total) -- provenance is the placing card instance
+///    (`TileMark.src`), not `TileMark.owner`. `HookKind::CpChanged` /
+///    `TriggerKind::CpChanged` (`cpChanged`) fires whenever a card instance's
+///    attached [CP点] count is written, so 「…时」 clauses on the count (the
+///    该清CP了 graveyard rule) live in one event handler instead of at each
+///    spend site. Mirrors v29's `crystalsChanged`.
 /// v37: event rule instances (`docs/EVENTS.md`) -- the `rules/events` category.
-///      `ctx::event_expire` / `event_is_active` / `event_deck_push` /
-///      `event_banish` are the rule body's handles on the engine's event deck
-///      and active list. An event's `CardDef` id is `event:<id>` and it is
-///      bound on the neutral board owner (`BOARD_OWNER`) with `tile = -1` for
-///      as long as it is active, the same shape as a `tile:*` instance.
+///    `ctx::event_expire` / `event_is_active` / `event_deck_push` /
+///    `event_banish` are the rule body's handles on the engine's event deck
+///    and active list. An event's `CardDef` id is `event:<id>` and it is
+///    bound on the neutral board owner (`BOARD_OWNER`) with `tile = -1` for
+///    as long as it is active, the same shape as a `tile:*` instance.
 /// v38: the two [CP点] kinds (user ruling 2026-10-07). **Tile marks** remain the
-///      `mark:cp` owner's (`ctx::place_cp` / `count_cp` / `count_cp_from` /
-///      `clear_cp`, plus `ctx::cp_src_at` for the mark's provenance lookup).
-///      **On-card** [CP点] is `FieldCard::cp` -- 「自己[场上]N个[CP点]」, the CP
-///      points attached to the card itself (the card rule's own stock,
-///      crystals-like) -- written with `ctx::add_cp` / `add_cp_at` and read
-///      with `ctx::cp_attached` (the running instance) / `cp_at` (another
-///      instance). `cp_attached` changed meaning in place: it used to total
-///      the tile marks carrying the instance as `src`, it now reads
-///      `FieldCard::cp`. `HookKind::CpChanged` rides the on-card writes only.
-///      The per-player 「自己[场上]」 counter `mark::CP_FIELD_TOK` is gone: the
-///      card's own count replaces it.
+///    `mark:cp` owner's (`ctx::place_cp` / `count_cp` / `count_cp_from` /
+///    `clear_cp`, plus `ctx::cp_src_at` for the mark's provenance lookup).
+///    **On-card** [CP点] is `FieldCard::cp` -- 「自己[场上]N个[CP点]」, the CP
+///    points attached to the card itself (the card rule's own stock,
+///    crystals-like) -- written with `ctx::add_cp` / `add_cp_at` and read
+///    with `ctx::cp_attached` (the running instance) / `cp_at` (another
+///    instance). `cp_attached` changed meaning in place: it used to total
+///    the tile marks carrying the instance as `src`, it now reads
+///    `FieldCard::cp`. `HookKind::CpChanged` rides the on-card writes only.
+///    The per-player 「自己[场上]」 counter `mark::CP_FIELD_TOK` is gone: the
+///    card's own count replaces it.
 /// v40: the **purchase surface** (`docs/PURCHASE.md`). `TriggerKind`s
-///      `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` / `BuyAssign` (wire names
-///      `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign`) and the
-///      [`BuyKind`] payload (`buy_kind` / `seller` / `price` / `deal_*`).
-///      New tile props: [`prop::BUYABLE`], [`prop::BUY_HOUSES`],
-///      [`prop::FORCE_MULT`] / [`prop::FORCE_FIXED`] /
-///      [`prop::FORCE_STAYS_MORTGAGED`], [`prop::ANY_COLOR`] and the
-///      `colorFor:` prefix. `ctx::buy_quotes` / `ctx::buy` / `ctx::acquire` /
-///      `ctx::agent_offer` / `ctx::linger`. The retired props
-///      `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` remain for one ABI (P5
-///      deletes them and the lingering-turn flags together). SAVE_VERSION 3 → 4
-///      (the lingering-instance field enters the save).
+///    `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` / `BuyAssign` (wire names
+///    `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign`) and the
+///    [`BuyKind`] payload (`buy_kind` / `seller` / `price` / `deal_*`).
+///    New tile props: [`prop::BUYABLE`], [`prop::BUY_HOUSES`],
+///    [`prop::FORCE_MULT`] / [`prop::FORCE_FIXED`] /
+///    [`prop::FORCE_STAYS_MORTGAGED`], [`prop::ANY_COLOR`] and the
+///    `colorFor:` prefix. `ctx::buy_quotes` / `ctx::buy` / `ctx::acquire` /
+///    `ctx::agent_offer` / `ctx::linger`. The retired props
+///    `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` remain for one ABI (P5
+///    deletes them and the lingering-turn flags together). SAVE_VERSION 3 → 4
+///    (the lingering-instance field enters the save).
 /// v41: the **removals**. `ctx::set_buy_discount` / `ctx::set_free_buy` /
-///      `ctx::set_raze_on_buy` and the fields they wrote are gone,
-///      replaced by `ctx::linger` + the `BuyAdd` / `BuyMul` / `BuySet` /
-///      `BuyAssign` hooks. The old global / per-player colour writers and
-///      their state key are gone, replaced by the `prop::ANY_COLOR` /
-///      `prop::COLOR_FOR_PREFIX` tile
-///      props. The retired props `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY`
-///      go with them.
+///    `ctx::set_raze_on_buy` and the fields they wrote are gone,
+///    replaced by `ctx::linger` + the `BuyAdd` / `BuyMul` / `BuySet` /
+///    `BuyAssign` hooks. The old global / per-player colour writers and
+///    their state key are gone, replaced by the `prop::ANY_COLOR` /
+///    `prop::COLOR_FOR_PREFIX` tile
+///    props. The retired props `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY`
+///    go with them.
 /// v42: the payment command's **pre-split** stage and the terminal hooks
-///      (`PIPELINE-AUDIT` Q2 / Q6). `TriggerKind`s `PayCombinedAdd` / `PayCombinedMul`
-///      / `PayCombinedCancel` (wire names `payCombinedAdd` / `payCombinedMul` /
-///      `payCombinedCancel`) run command-wide on the figure **before** any
-///      「[分摊]」 divides it -- 「分摊前」 -- alongside the existing per-share
-///      `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt`. `ctx::pay_total` /
-///      `ctx::split_pay` / `ctx::transfer_leg` drive them. Terminal
-///      `<thing>Resolved` hooks: `tileResolved` (after `settleAfter`),
-///      `moveResolved` (after a move and its settle), `bankruptResolved` (after
-///      the leftover auctions). `HostRequest::Pay` carries `total_stage`, and
-///      `HostRequest::PayTotal` is new. SAVE_VERSION unchanged (no save field).
+///    (`PIPELINE-AUDIT` Q2 / Q6). `TriggerKind`s `PayCombinedAdd` / `PayCombinedMul`
+///    / `PayCombinedCancel` (wire names `payCombinedAdd` / `payCombinedMul` /
+///    `payCombinedCancel`) run command-wide on the figure **before** any
+///    「[分摊]」 divides it -- 「分摊前」 -- alongside the existing per-share
+///    `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt`. `ctx::pay_total` /
+///    `ctx::split_pay` / `ctx::transfer_leg` drive them. Terminal
+///    `<thing>Resolved` hooks: `tileResolved` (after `settleAfter`),
+///    `moveResolved` (after a move and its settle), `bankruptResolved` (after
+///    the leftover auctions). `HostRequest::Pay` carries `total_stage`, and
+///    `HostRequest::PayTotal` is new. SAVE_VERSION unchanged (no save field).
 /// v43: the **move-head / move-tail** pair (`SETTLE-STAGES.md` §7). `TriggerKind`s
-///      `MoveBefore` / `MoveAfter` (wire names `moveBefore` / `moveAfter`).
-///      `moveBefore` fires for every move -- walk or teleport, main or
-///      card-driven, settling or not -- once its plan is fixed and before the
-///      first step / the teleport; counteractions that cancel or alter the move
-///      belong here (so it is a [`ChainKind`] too). `moveAfter` fires after
-///      `passPlayer`, before `settleBefore`, for every completed move --
-///      including a 「不触发结算」 one (only the settle stages are skipped);
-///      「移动后」/「主要移动结束时」/「移动终点」 clauses land here. The
-///      roll-specific `rollPlan` / `moveRoll` and the teleport-specific
-///      `teleport` / `teleported` remain where they are; `moveResolved` remains the
-///      final terminal after any settle. SAVE_VERSION unchanged.
+///    `MoveBefore` / `MoveAfter` (wire names `moveBefore` / `moveAfter`).
+///    `moveBefore` fires for every move -- walk or teleport, main or
+///    card-driven, settling or not -- once its plan is fixed and before the
+///    first step / the teleport; counteractions that cancel or alter the move
+///    belong here (so it is a [`ChainKind`] too). `moveAfter` fires after
+///    `passPlayer`, before `settleBefore`, for every completed move --
+///    including a 「不触发结算」 one (only the settle stages are skipped);
+///    「移动后」/「主要移动结束时」/「移动终点」 clauses land here. The
+///    roll-specific `rollPlan` / `moveRoll` and the teleport-specific
+///    `teleport` / `teleported` remain where they are; `moveResolved` remains the
+///    final terminal after any settle. SAVE_VERSION unchanged.
 /// v45: guard **condition** per guarded entry (docs/GUARDS.md G0). `On::Play` /
-///      `On::Counteract` / `On::Hook` gain a trailing `pre: &'static str`
-///      (`""` = none) and `ManifestOn` gains `pre: Option<String>` (the CEL
-///      source, compiled host-side at ruleset build). No behavioural change
-///      while no entry declares one. SAVE_VERSION unchanged (no save field).
+///    `On::Counteract` / `On::Hook` gain a trailing `pre: &'static str`
+///    (`""` = none) and `ManifestOn` gains `pre: Option<String>` (the CEL
+///    source, compiled host-side at ruleset build). No behavioural change
+///    while no entry declares one. SAVE_VERSION unchanged (no save field).
 /// v46: deleted guards + legacy audit (GUARDS.md G3/G4). `On::Counteract` /
-///      `On::Hook` guards become `Option<fn>` (`None` = G4-deleted residual);
-///      `ManifestOn` gains `has_guard` / `has_legacy`; `CardDef` gains a
-///      `legacy` table and `export::OP_LEGACY_GUARD` (= 2) returns the
-///      pre-migration guard for the `guard-audit` equivalence check. SAVE_VERSION
-///      unchanged (no save field).
+///    `On::Hook` guards become `Option<fn>` (`None` = G4-deleted residual);
+///    `ManifestOn` gains `has_guard` / `has_legacy`; `CardDef` gains a
+///    `legacy` table and `export::OP_LEGACY_GUARD` (= 2) returns the
+///    pre-migration guard for the `guard-audit` equivalence check. SAVE_VERSION
+///    unchanged (no save field).
 /// v47: opt-in field counteractions and mutually exclusive choice groups;
-///      these share the hand-counteraction window without spending a field card.
+///    these share the hand-counteraction window without spending a field card.
 /// v48: shared movement counteractions receive the preselected extension in
-///      `COUNTERACT_MOVE_EXTENSION`; distance is chosen before its payment.
+///    `COUNTERACT_MOVE_EXTENSION`; distance is chosen before its payment.
 /// v49: **every** entry kind carries the guard condition (docs/GUARDS.md G0).
-///      `On::Gate` / `On::AtEnd` / `On::RollPlan` / `On::Settle` gain the same
-///      `pre: &'static str` + `Option<fn(i32) -> bool>` residual-guard pair
-///      `On::Hook` has (so `On::Gate(kinds, pre, guard, body)` and
-///      `On::RollPlan(pre, guard, body)` &c.). The host evaluates category →
-///      condition → guard → body and fires the card flash only at body entry,
-///      exactly as for hooks: an entry whose condition rejects runs no body and
-///      emits no `card` event. `ManifestOn` is unchanged -- `pre` / `has_guard`
-///      were already there and simply start carrying these kinds' values (a
-///      pre-v49 module lied `has_guard: true` for them; v49 reports
-///      `g.is_some()`). The window variables meaningful per kind are
-///      documented in `docs/GUARDS.md` §4.2c. SAVE_VERSION unchanged (no save
-///      field).
+///    `On::Gate` / `On::AtEnd` / `On::RollPlan` / `On::Settle` gain the same
+///    `pre: &'static str` + `Option<fn(i32) -> bool>` residual-guard pair
+///    `On::Hook` has (so `On::Gate(kinds, pre, guard, body)` and
+///    `On::RollPlan(pre, guard, body)` &c.). The host evaluates category →
+///    condition → guard → body and fires the card flash only at body entry,
+///    exactly as for hooks: an entry whose condition rejects runs no body and
+///    emits no `card` event. `ManifestOn` is unchanged -- `pre` / `has_guard`
+///    were already there and simply start carrying these kinds' values (a
+///    pre-v49 module lied `has_guard: true` for them; v49 reports
+///    `g.is_some()`). The window variables meaningful per kind are
+///    documented in `docs/GUARDS.md` §4.2c. SAVE_VERSION unchanged (no save
+///    field).
 /// v50: the tile-body guest primitives (`rules/tiles/src/agent.rs` /
-///      `circle.rs`). `ask_tiles` / `opt_tile` / `opt_price` / `opt_ai` -- the
-///      tile ask with per-option labels, prices and an AI choice hint
-///      (the agent-landing ask's `ask.view.prices` + `with_ai`); `PromptKind::TileId`
-///      records the **tile id** (or -1 for 「不选」) in the answer log, so a
-///      commit-pass re-run of a body whose options the just-committed host
-///      effect reshaped still maps the pick to the same tile. `agent_offer` --
-///      the chosen branch (buy `0` / build `1` / half-rent `2`) as one host
-///      routine. `raise` --
-///      guest-raised trigger points (`passRewardAffected` from `tile:circle`);
-///      returns whether the link settled. `gain_typed` -- a bank print through
-///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
-///      `typ` and a replacement log line (`Pay::text`). `prop_at` /
-///      `set_prop_at` (one declared property of a field instance), layer counters
-///      (`[除外]` layers, mirroring the other layer counters), `ai_agent_choice` (the AI's
-///      preferred index among agent-offer tiles), `trigger::move_from`
-///      (`t.Move.From`, the 移动起点). `ctx::agent_landing` and
-///      `ctx::settle_circle_reward` are **removed** -- the tile bodies carry
-///      the logic (`land_at_built_in` / `Play::circle_reward` remain the
-///      `StubRules` fallback). SAVE_VERSION unchanged (no save field).
+///    `circle.rs`). `ask_tiles` / `opt_tile` / `opt_price` / `opt_ai` -- the
+///    tile ask with per-option labels, prices and an AI choice hint
+///    (the agent-landing ask's `ask.view.prices` + `with_ai`); `PromptKind::TileId`
+///    records the **tile id** (or -1 for 「不选」) in the answer log, so a
+///    commit-pass re-run of a body whose options the just-committed host
+///    effect reshaped still maps the pick to the same tile. `agent_offer` --
+///    the chosen branch (buy `0` / build `1` / half-rent `2`) as one host
+///    routine. `raise` --
+///    guest-raised trigger points (`passRewardAffected` from `tile:circle`);
+///    returns whether the link settled. `gain_typed` -- a bank print through
+///    the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
+///    `typ` and a replacement log line (`Pay::text`). `prop_at` /
+///    `set_prop_at` (one declared property of a field instance), layer counters
+///    (`[除外]` layers, mirroring the other layer counters), `ai_agent_choice` (the AI's
+///    preferred index among agent-offer tiles), `trigger::move_from`
+///    (`t.Move.From`, the 移动起点). `ctx::agent_landing` and
+///    `ctx::settle_circle_reward` are **removed** -- the tile bodies carry
+///    the logic (`land_at_built_in` / `Play::circle_reward` remain the
+///    `StubRules` fallback). SAVE_VERSION unchanged (no save field).
 /// v51: **named counters + bound units + cross-card messages** (user ruling
-///      2026-10-10). Every tile mark and player token is a unit of some card
-///      instance's named counter, bound to a tile or a holder; destroying the
-///      instance destroys its units. The two on-card counters keep their wire
-///      names ([`counter::CP`], [`counter::CRYSTALS`]); anything else is a
-///      name in `FieldCard::counters`. One `CounterChanged` hook replaces
-///      `CpChanged` / `CrystalsChanged` (carries the counter name + signed
-///      delta). The tile-mark surface is a filter
-///      ([`MarkFilter`]) over `place_mark` (with [`Stack::Merge`] /
-///      [`Stack::Fresh`]) / `count_marks` / `bump_mark` / `remove_marks` /
-///      `mark_src_at` -- the CP helpers are gone. `On::Message` + `ctx::send`
-///      is the generic cross-card channel (该清CP了 -> `mark:cp` places CP
-///      units; the landing hook spends the placer's on-card CP). `tok` /
-///      `add_tok` / `set_tok` become the holder-binding verbs of the creating
-///      instance's counter. SAVE_VERSION 5 → 6 (marks/tokens carry
-///      `instance`).
+///    2026-10-10). Every tile mark and player token is a unit of some card
+///    instance's named counter, bound to a tile or a holder; destroying the
+///    instance destroys its units. The two on-card counters keep their wire
+///    names ([`counter::CP`], [`counter::CRYSTALS`]); anything else is a
+///    name in `FieldCard::counters`. One `CounterChanged` hook replaces
+///    `CpChanged` / `CrystalsChanged` (carries the counter name + signed
+///    delta). The tile-mark surface is a filter
+///    ([`MarkFilter`]) over `place_mark` (with [`Stack::Merge`] /
+///    [`Stack::Fresh`]) / `count_marks` / `bump_mark` / `remove_marks` /
+///    `mark_src_at` -- the CP helpers are gone. `On::Message` + `ctx::send`
+///    is the generic cross-card channel (该清CP了 -> `mark:cp` places CP
+///    units; the landing hook spends the placer's on-card CP). `tok` /
+///    `add_tok` / `set_tok` become the holder-binding verbs of the creating
+///    instance's counter. SAVE_VERSION 5 → 6 (marks/tokens carry
+///    `instance`).
 /// v52: `ManifestOn::label` -- an entry's rulebook clause label (「（1）」),
-///      carried so the host's 「效果适用」 line can name which clause of a
-///      multi-entry card ran. Filled from the `On` entry itself
-///      (`On::label`, which moves with the entry); `None` = unlabelled.
-///      Opaque display text -- nothing resolves it against the card text;
-///      if the line needs prose, the entry carries a copy of it.
-///      No host-function change; SAVE_VERSION unchanged.
+///    carried so the host's 「效果适用」 line can name which clause of a
+///    multi-entry card ran. Filled from the `On` entry itself
+///    (`On::label`, which moves with the entry); `None` = unlabelled.
+///    Opaque display text -- nothing resolves it against the card text;
+///    if the line needs prose, the entry carries a copy of it.
+///    No host-function change; SAVE_VERSION unchanged.
 /// v53: **purchase replies tell the truth** (HOST-06). `card_buy` / `buy` /
-///      `acquire` / `agent_offer` / `card_build` / `card_offer_build` /
-///      `card_mortgage` / `raise_bought` answer `1` only when the engine
-///      actually committed (deed assigned / house raised / deed mortgaged /
-///      hand-over landed) and `0` on every refusal (`BuyGate` / `buyBefore` /
-///      `buildBefore` cancel, already owned, unpaid quote or money,
-///      `why_not_build_on`, max houses). They used to answer `1`
-///      unconditionally. `buy_quotes` (HOST-07) is the same hook-aware quote
-///      `buy` charges (`BuyGate` / `BuyAdd` / `BuyMul` / `BuySet`), no longer
-///      the native land+houses figure. `plan::set_no_build` /
-///      `plan::set_build_anywhere` (HOST-08) have host bodies: `set_no_build`
-///      is `set_can_build(false)` on the move being planned, and
-///      `set_build_anywhere` opens builds past the landing-only rule. Dead
-///      surface removed: the `set_bonus` import (HOST-09) and five unused
-///      host linker names (HOST-10). No wire shape change for live imports;
-///      SAVE_VERSION unchanged.
+///    `acquire` / `agent_offer` / `card_build` / `card_offer_build` /
+///    `card_mortgage` / `raise_bought` answer `1` only when the engine
+///    actually committed (deed assigned / house raised / deed mortgaged /
+///    hand-over landed) and `0` on every refusal (`BuyGate` / `buyBefore` /
+///    `buildBefore` cancel, already owned, unpaid quote or money,
+///    `why_not_build_on`, max houses). They used to answer `1`
+///    unconditionally. `buy_quotes` (HOST-07) is the same hook-aware quote
+///    `buy` charges (`BuyGate` / `BuyAdd` / `BuyMul` / `BuySet`), no longer
+///    the native land+houses figure. `plan::set_no_build` /
+///    `plan::set_build_anywhere` (HOST-08) have host bodies: `set_no_build`
+///    is `set_can_build(false)` on the move being planned, and
+///    `set_build_anywhere` opens builds past the landing-only rule. Dead
+///    surface removed: the `set_bonus` import (HOST-09) and five unused
+///    host linker names (HOST-10). No wire shape change for live imports;
+///    SAVE_VERSION unchanged.
 /// v54: `ManifestOn::presentation` -- how an entry shows up in the log.
-///      `Visible` (default) flashes and writes a 「效果适用」 header.
-///      `Silent` (`CardDef::silent`) is bookkeeping: runs its body, posts no
-///      flash and no header (declare_cap / set_bounds / initial values /
-///      latch clears). `QuietWhenEmpty` (`CardDef::quiet_when_empty`) runs
-///      normally but **retracts** its header when the body produced nothing
-///      visible (no children, no logs): the clause applied and changed
-///      nothing (capped gain, 「已满」), so the player never sees a flash.
-///      If the body produced anything, or the drive halted for a prompt (the
-///      header is already on the stream), it behaves like `Visible`.
-///      Nested activations announce normally. No host-function change;
-///      SAVE_VERSION unchanged.
+///    `Visible` (default) flashes and writes a 「效果适用」 header.
+///    `Silent` (`CardDef::silent`) is bookkeeping: runs its body, posts no
+///    flash and no header (declare_cap / set_bounds / initial values /
+///    latch clears). `QuietWhenEmpty` (`CardDef::quiet_when_empty`) runs
+///    normally but **retracts** its header when the body produced nothing
+///    visible (no children, no logs): the clause applied and changed
+///    nothing (capped gain, 「已满」), so the player never sees a flash.
+///    If the body produced anything, or the drive halted for a prompt (the
+///    header is already on the stream), it behaves like `Visible`.
+///    Nested activations announce normally. No host-function change;
+///    SAVE_VERSION unchanged.
 /// v55: `ManifestOn::flash` -- a declarative, per-entry [`Flash`] policy beside
-///      the header mode: `Auto` (host classifies by scope, owner-self-only =>
-///      no flash), `Always` (the rule says this entry always flashes, e.g. a
-///      self-only effect the player must notice), `Never` (log entry remains,
-///      no flash/pulse). Authored via `CardDef::flash`. The header modes of
-///      v54 are unchanged; `CardDef::presentation` is the one lookup that
-///      folds header + flash into [`EntryPresentation`].
-///      Imperative flash from the body (like `ctx::log`): new host imports
-///      `flash` / `no_flash` / `flash_card` / `flash_tile` /
-///      `flash_card_keyed` (see `ctx::flash` and kin). Precedence:
-///      `Never` > `ctx::no_flash` > `ctx::flash` / `Always` > `Auto`-by-scope.
-///      A proactive `"flash"` event is parent-linked under the activation and
-///      plays through the client's cardFlash path.
-///      **Once-per-flash identity** (user, 2026-10-11): a flash is identified
-///      by `(drive id, flash ordinal within the drive)` or an explicit key via
-///      `ctx::flash_card_keyed`. Once posted to the stream, a re-run that
-///      reaches the same identity MUST NOT post it again (unlike logs, which
-///      replace-by-index and drop on halt). Identity lives in the drive's
-///      persistent state and survives halt; the activation's own flash obeys
-///      the same rule. Client-side, event ids dedupe a re-delivered frame.
-///      SAVE_VERSION unchanged.
+///    the header mode: `Auto` (host classifies by scope, owner-self-only =>
+///    no flash), `Always` (the rule says this entry always flashes, e.g. a
+///    self-only effect the player must notice), `Never` (log entry remains,
+///    no flash/pulse). Authored via `CardDef::flash`. The header modes of
+///    v54 are unchanged; `CardDef::presentation` is the one lookup that
+///    folds header + flash into [`EntryPresentation`].
+///    Imperative flash from the body (like `ctx::log`): new host imports
+///    `flash` / `no_flash` / `flash_card` / `flash_tile` /
+///    `flash_card_keyed` (see `ctx::flash` and kin). Precedence:
+///    `Never` > `ctx::no_flash` > `ctx::flash` / `Always` > `Auto`-by-scope.
+///    A proactive `"flash"` event is parent-linked under the activation and
+///    plays through the client's cardFlash path.
+///    **Once-per-flash identity** (user, 2026-10-11): a flash is identified
+///    by `(drive id, flash ordinal within the drive)` or an explicit key via
+///    `ctx::flash_card_keyed`. Once posted to the stream, a re-run that
+///    reaches the same identity MUST NOT post it again (unlike logs, which
+///    replace-by-index and drop on halt). Identity lives in the drive's
+///    persistent state and survives halt; the activation's own flash obeys
+///    the same rule. Client-side, event ids dedupe a re-delivered frame.
+///    SAVE_VERSION unchanged.
 /// v56: **generic tile queries** replace the eight game-named kind/class host
-///      ops (`is_deed` / `is_start` / `is_agent` / `is_shop` / `is_venue`
-///      / `is_buyable` / `is_venue_for` / `is_color`). New imports:
-///      `tile_is(tile, kind)` -- data `TileKind` by wire spelling;
-///      `tile_attr(tile, attr)` -- i32 field read (`group`/`area`/`tier`/
-///      `price`/`house`/`rent`/`index`);
-///      `tile_in(player, tile, class)` -- ruleset class membership
-///      (`buyable`/`shop`/`livehouse`/`color:<g>`), with per-player overrides
-///      as generic class-membership props (`class:` / `classFor:<p>:`) plus the
-///      existing `anyColor` / `colorFor:<p>` colour props. Game sugar
-///      (`is_deed(t) = tile_is(t, "ring")`, …) lives in `bandori-std`.
-///      `tile_group` / `tile_price` remain as generic field sugar.
-///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+///    ops (`is_deed` / `is_start` / `is_agent` / `is_shop` / `is_venue`
+///    / `is_buyable` / `is_venue_for` / `is_color`). New imports:
+///    `tile_is(tile, kind)` -- data `TileKind` by wire spelling;
+///    `tile_attr(tile, attr)` -- i32 field read (`group`/`area`/`tier`/
+///    `price`/`house`/`rent`/`index`);
+///    `tile_in(player, tile, class)` -- ruleset class membership
+///    (`buyable`/`shop`/`livehouse`/`color:<g>`), with per-player overrides
+///    as generic class-membership props (`class:` / `classFor:<p>:`) plus the
+///    existing `anyColor` / `colorFor:<p>` colour props. Game sugar
+///    (`is_deed(t) = tile_is(t, "ring")`, …) lives in `bandori-std`.
+///    `tile_group` / `tile_price` remain as generic field sugar.
+///    Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
 /// v65: **import-module rename** -- the wasm import module and every guest
-///      export / native `link_name` drop the game prefix: module `"bandori"` →
-///      `"ruleset"`, `bandori_<name>` → `ruleset_<name>` (`ruleset_on`,
-///      `ruleset_metadata`, `ruleset_abi_version`, `ruleset_manifest`, and
-///      every `link_name = "ruleset_*"` host import). The Rust macros become
-///      `ruleset!` / `ruleset_card!`. Wire-visible names change, so old modules
-///      do not load on a new host (replays use archived engine bundles).
-///      Semantics of every import/export are unchanged. SAVE_VERSION unchanged.
+///    export / native `link_name` drop the game prefix: module `"bandori"` →
+///    `"ruleset"`, `bandori_<name>` → `ruleset_<name>` (`ruleset_on`,
+///    `ruleset_metadata`, `ruleset_abi_version`, `ruleset_manifest`, and
+///    every `link_name = "ruleset_*"` host import). The Rust macros become
+///    `ruleset!` / `ruleset_card!`. Wire-visible names change, so old modules
+///    do not load on a new host (replays use archived engine bundles).
+///    Semantics of every import/export are unchanged. SAVE_VERSION unchanged.
 /// v64: **turn-clock props** -- `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET`
-///      on a board-owned instance override the host turn clock (`base_time`
-///      = 恢复时间, `bonus_time` = 免费时间) as each turn starts (元祖！邦多利酱).
-///      Also the turn-clock **modifier hooks** `TriggerKind` / `HookKind`
-///      `{TurnBonusTime = 99, TurnBaseTime = 100}`: raised as each turn starts
-///      with `value` = the seconds the host would use (免费时间 refill / 恢复时间);
-///      a hook rewrites it with `trigger::set_pay_amount`. The props then
-///      override the hooked result. No new import, no SAVE_VERSION change.
+///    on a board-owned instance override the host turn clock (`base_time`
+///    = 恢复时间, `bonus_time` = 免费时间) as each turn starts (元祖！邦多利酱).
+///    Also the turn-clock **modifier hooks** `TriggerKind` / `HookKind`
+///    `{TurnBonusTime = 99, TurnBaseTime = 100}`: raised as each turn starts
+///    with `value` = the seconds the host would use (免费时间 refill / 恢复时间);
+///    a hook rewrites it with `trigger::set_pay_amount`. The props then
+///    override the hooked result. No new import, no SAVE_VERSION change.
 /// v63: **roster metadata export** (`docs/CARDS.md` 「Card metadata」).
-///      `CardDef::meta` carries the card's data-set row (name / rawName /
-///      text / tags / derived / cell + a generic `fields` map for game slots
-///      `band` / `owner`); the skill crates' `PersonaDef` / `GroupDef`
-///      tables carry the character / band rows. A new guest export
-///      `ruleset_metadata` (`export::METADATA`, `() -> i64` packed
-///      postcard `meta::MetaDoc`) hands the whole roster to the host on
-///      request -- **not** through `ManifestEntry` (the match path is
-///      unchanged and unbloomed). Rows sort by `(kind, ordinal)` where the
-///      ordinal comes from a shared generated table
-///      (`bandori_std::roster_order`) so the rebuilt vectors equal the JSON
-///      file order exactly even though the Rust crates register alphabetically.
-///      Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load`
-///      consumes the converted `Roster`. No host-function change; SAVE_VERSION
-///      unchanged (no save field).
+///    `CardDef::meta` carries the card's data-set row (name / rawName /
+///    text / tags / derived / cell + a generic `fields` map for game slots
+///    `band` / `owner`); the skill crates' `PersonaDef` / `GroupDef`
+///    tables carry the character / band rows. A new guest export
+///    `ruleset_metadata` (`export::METADATA`, `() -> i64` packed
+///    postcard `meta::MetaDoc`) hands the whole roster to the host on
+///    request -- **not** through `ManifestEntry` (the match path is
+///    unchanged and unbloomed). Rows sort by `(kind, ordinal)` where the
+///    ordinal comes from a shared generated table
+///    (`bandori_std::roster_order`) so the rebuilt vectors equal the JSON
+///    file order exactly even though the Rust crates register alphabetically.
+///    Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load`
+///    consumes the converted `Roster`. No host-function change; SAVE_VERSION
+///    unchanged (no save field).
 /// v62: **static card property + guest query** -- `prop::SONG` (`"song"`,
-///      default 0): a song-title card marker (「卡名为歌名的卡」, Kizuna
-///      Music's X). Declared with `.props(&[(prop::SONG, 1)])` on exactly the
-///      twenty song cards; rules read it back through the new host import
-///      `card_prop(id, key) -> i32` (`ctx::card_prop`), which is the generic
-///      guest face of `CardRules::card_prop` (default 0). No game vocabulary
-///      in the import. SAVE_VERSION unchanged.
+///    default 0): a song-title card marker (「卡名为歌名的卡」, Kizuna
+///    Music's X). Declared with `.props(&[(prop::SONG, 1)])` on exactly the
+///    twenty song cards; rules read it back through the new host import
+///    `card_prop(id, key) -> i32` (`ctx::card_prop`), which is the generic
+///    guest face of `CardRules::card_prop` (default 0). No game vocabulary
+///    in the import. SAVE_VERSION unchanged.
 /// v61: **legacy guard-audit scaffolding removed** (docs/GUARDS.md §5.1/§10
-///      finished 2026-10-14). `CardDef::legacy` / `.legacy(...)`,
-///      `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`, the `guard-audit`
-///      host feature, `cond_pre::legacy_audit` and `legacy_probe` are gone --
-///      the G3 equivalence check ran once at removal time and the pre-migration
-///      copies were deleted. `ManifestOn` loses `has_legacy` (postcard is not
-///      self-describing, so this is the bump); guest wasm must be rebuilt with
-///      the host. SAVE_VERSION / RECORD_VERSION unchanged (no save field).
+///    finished 2026-10-14). `CardDef::legacy` / `.legacy(...)`,
+///    `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`, the `guard-audit`
+///    host feature, `cond_pre::legacy_audit` and `legacy_probe` are gone --
+///    the G3 equivalence check ran once at removal time and the pre-migration
+///    copies were deleted. `ManifestOn` loses `has_legacy` (postcard is not
+///    self-describing, so this is the bump); guest wasm must be rebuilt with
+///    the host. SAVE_VERSION / RECORD_VERSION unchanged (no save field).
 /// v60: **exclusive-use gate** -- `TriggerKind::ExclusiveUse = 98` (also
-///      `GateKind`): a CEL-only `On::Gate` question the band-skill cards answer
-///      (CRYCHIC's 「variants may not use the base character's exclusives」).
-///      The engine's default verdict is the generic exclusive rule (playable
-///      iff `card.owner` is the actor's character or its base `variant_of`);
-///      a closing gate entry denies the base case. Window: `actor`,
-///      `trigger_card` (the exclusive's id hash), `name` (the card's `owner`
-///      character name; `counter_is`), `value` (1 = owner is the actor's base
-///      character), `step` (1 = owner is the actor's own character). No new
-///      host import, no SAVE_VERSION change.
+///    `GateKind`): a CEL-only `On::Gate` question the band-skill cards answer
+///    (CRYCHIC's 「variants may not use the base character's exclusives」).
+///    The engine's default verdict is the generic exclusive rule (playable
+///    iff `card.owner` is the actor's character or its base `variant_of`);
+///    a closing gate entry denies the base case. Window: `actor`,
+///    `trigger_card` (the exclusive's id hash), `name` (the card's `owner`
+///    character name; `counter_is`), `value` (1 = owner is the actor's base
+///    character), `step` (1 = owner is the actor's own character). No new
+///    host import, no SAVE_VERSION change.
 /// v59: `ManifestEntry::texts` -- per-entry **tile text** declarations
-///      (`CardDef::texts`): the deed-popup description an entry speaks for,
-///      as `(entry, slot, tile, key)`. `slot` is [`text_slot`] (settle /
-///      pass); `tile` is `""` = the instance's own tile or a board tile name
-///      for a tile-bound text on a tile-less instance; `key` is a `ui`
-///      namespace i18n key (`deed.note.*`), `""` = suppress the slot. The
-///      view composes per-tile speakers in body-precedence order (docs/TILES.md
-///      「Tile text」). Trailing field on `ManifestEntry` (postcard is not
-///      self-describing, so this is the bump); `MatchState::tile_texts` is a
-///      view-only field and needs no SAVE_VERSION change.
+///    (`CardDef::texts`): the deed-popup description an entry speaks for,
+///    as `(entry, slot, tile, key)`. `slot` is [`text_slot`] (settle /
+///    pass); `tile` is `""` = the instance's own tile or a board tile name
+///    for a tile-bound text on a tile-less instance; `key` is a `ui`
+///    namespace i18n key (`deed.note.*`), `""` = suppress the slot. The
+///    view composes per-tile speakers in body-precedence order (docs/TILES.md
+///    「Tile text」). Trailing field on `ManifestEntry` (postcard is not
+///    self-describing, so this is the bump); `MatchState::tile_texts` is a
+///    view-only field and needs no SAVE_VERSION change.
 /// v58: **status gates** -- `TriggerKind::{ActGate = 95, PayGate = 96,
-///      MoveGate = 97}` (also `GateKind`): CEL-only `On::Gate` questions the
-///      `status:*` pseudo cards answer; the host evaluates the condition
-///      natively (`ctx::can_pay`'s host body asks `PayGate`). No new host
-///      import, no SAVE_VERSION change.
+///    MoveGate = 97}` (also `GateKind`): CEL-only `On::Gate` questions the
+///    `status:*` pseudo cards answer; the host evaluates the condition
+///    natively (`ctx::can_pay`'s host body asks `PayGate`). No new host
+///    import, no SAVE_VERSION change.
 /// v57: **closeout integration** -- one monotonic bump covering every addition
-///      the five closeout batches made on top of v56:
-///      `TriggerKind::ChargePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
-///      substitution + flip-effect hook; `ctx::raise` is prompt-aware;
-///      FlipEffect retired in v83 -- id 94 never reuse);
-///      `join_redirect_target` / `set_join_used` (真奈 join retarget, CH-05);
-///      and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
-///      `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
-///      `adjust_money`). `money += delta` with a `log.gain` / `log.lose` line
-///      and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` /
-///      `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
-///      任何效果影响」 wants a [指定] split's amount to land as-is (ONE OF US's
-///      「被分享方资金直接增加，不受其他任何效果影响」). Non-pausing. Positive
-///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
-///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
-///      engine batch's SAVE_VERSION 6 → 7 is independent).
+///    the five closeout batches made on top of v56:
+///    `TriggerKind::ChargePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
+///    substitution + flip-effect hook; `ctx::raise` is prompt-aware;
+///    FlipEffect retired in v83 -- id 94 never reuse);
+///    `join_redirect_target` / `set_join_used` (真奈 join retarget, CH-05);
+///    and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
+///    `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
+///    `adjust_money`). `money += delta` with a `log.gain` / `log.lose` line
+///    and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` /
+///    `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
+///    任何效果影响」 wants a [指定] split's amount to land as-is (ONE OF US's
+///    「被分享方资金直接增加，不受其他任何效果影响」). Non-pausing. Positive
+///    `delta` is a gain, negative a loss. `World::gain_money` / a raw
+///    decrement under the hood. SAVE_VERSION unchanged by this batch (the
+///    engine batch's SAVE_VERSION 6 → 7 is independent).
 /// v66: **generic engine vocabulary** (phase 2, tiles). The engine treats
-///      tile kinds as opaque string ids; rule meaning comes from the ruleset.
-///      `CardDef::board_role` (`""` / `"tile"` / `"mark"` / `"status"`) and
-///      `CardDef::governs` (tile kinds a `tile` rule settles) ride
-///      [`ManifestEntry`] as trailing fields (postcard is not self-describing,
-///      so this is the bump). `game-core` no longer carries a kind→rule table
-///      or named tile-kind enum variants; `CardRules::tile_rule_id` /
-///      `mark_rule_ids` / `status_rule_ids` supply the lists. Generic dice
-///      rent: [`prop::RENT_DICE_MULT`] on a tile rule instance means
-///      `count_owned_kind(owner, kind) × mult × 1d20` instead of the rent
-///      table. No SAVE_VERSION change
-///      (TileKind still serializes as the same raw string).
+///    tile kinds as opaque string ids; rule meaning comes from the ruleset.
+///    `CardDef::board_role` (`""` / `"tile"` / `"mark"` / `"status"`) and
+///    `CardDef::governs` (tile kinds a `tile` rule settles) ride
+///    [`ManifestEntry`] as trailing fields (postcard is not self-describing,
+///    so this is the bump). `game-core` no longer carries a kind→rule table
+///    or named tile-kind enum variants; `CardRules::tile_rule_id` /
+///    `mark_rule_ids` / `status_rule_ids` supply the lists. Generic dice
+///    rent: [`prop::RENT_DICE_MULT`] on a tile rule instance means
+///    `count_owned_kind(owner, kind) × mult × 1d20` instead of the rent
+///    table. No SAVE_VERSION change
+///    (TileKind still serializes as the same raw string).
 /// v67: **roster persona/group names** (phase 2). MetaRow kinds `"persona"` /
-///      `"group"` (was `"character"` / `"band"`); meta key `"group"` (was
-///      `"band"`). Player/field wire names `persona` / `skillOwner` /
-///      `affiliations` / `groupSkill`. Host helpers `group_*` / `persona_*`
-///      (was `band_*` / `character_*`). SAVE_VERSION 9 → 10 (persisted
-///      player/field keys renamed). RECORD_VERSION unchanged.
+///    `"group"` (was `"character"` / `"band"`); meta key `"group"` (was
+///    `"band"`). Player/field wire names `persona` / `skillOwner` /
+///    `affiliations` / `groupSkill`. Host helpers `group_*` / `persona_*`
+///    (was `band_*` / `character_*`). SAVE_VERSION 9 → 10 (persisted
+///    player/field keys renamed). RECORD_VERSION unchanged.
 /// v68: **charge resource + named counters + rule params** (phase 2). State
-///      key `"charge"` (was `"fire"`); host imports `ruleset_charge_*`;
-///      `MatchRulesData.rule_params` map (was `ringMultiplier`) with the
-///      dice-rent unit under `rentUnitMult`; host `ruleset_rent_unit_mult` /
-///      `ruleset_add_rent_unit_bonus` (was `ring_*`); `FieldCard` named
-///      counters only (`counters` map, no `cp`/`crystals` fields);
-///      `ruleset_group_pool(player, name)` (was `group_crystals`);
-///      `StateVar.flags` for never-negative / engine-owned; trigger
-///      `chargePaying` (was `firePaying`). SAVE_VERSION 10 → 11 (state key,
-///      FieldCard shape, profile charge fields).
+///    key `"charge"` (was `"fire"`); host imports `ruleset_charge_*`;
+///    `MatchRulesData.rule_params` map (was `ringMultiplier`) with the
+///    dice-rent unit under `rentUnitMult`; host `ruleset_rent_unit_mult` /
+///    `ruleset_add_rent_unit_bonus` (was `ring_*`); `FieldCard` named
+///    counters only (`counters` map, no `cp`/`crystals` fields);
+///    `ruleset_group_pool(player, name)` (was `group_crystals`);
+///    `StateVar.flags` for never-negative / engine-owned; trigger
+///    `chargePaying` (was `firePaying`). SAVE_VERSION 10 → 11 (state key,
+///    FieldCard shape, profile charge fields).
 /// v69: neutral pass-reward / deed wire names. TriggerKind/HookKind/ChainKind
-///      `circleAffected` -> `passRewardAffected` (numeric 26 unchanged; the
-///      old spelling still parses). CEL `is_circle`/`is_ring`/`is_live_house`
-///      -> `is_start`/`is_deed`/`is_venue` (old names remain aliases).
-///      i18n keys `ask.circle.*` / `log.circle_*` -> `ask.pass_reward.*` /
-///      `log.pass_reward_*` / `log.land_start`. SAVE_VERSION unchanged.
+///    `circleAffected` -> `passRewardAffected` (numeric 26 unchanged; the
+///    old spelling still parses). CEL `is_circle`/`is_ring`/`is_live_house`
+///    -> `is_start`/`is_deed`/`is_venue` (old names remain aliases).
+///    i18n keys `ask.circle.*` / `log.circle_*` -> `ask.pass_reward.*` /
+///    `log.pass_reward_*` / `log.land_start`. SAVE_VERSION unchanged.
 /// v70: **rule-defined kind ids** (phase 3). `TriggerKind` / `HookKind` /
-///      `ChainKind` / `GateKind` are transparent `i32` newtypes; engine-generic
-///      raise points are associated consts. Game-named kinds
-///      (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 /
-///      `HouseAdded` 75 / `ChargePaying` 78) leave the SDK and live as
-///      ruleset-declared opaque ids (`bandori-std::kind`). Custom ids
-///      serialize as decimal (`"26"`); no legacy aliases (`circleAffected`,
-///      `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
-///      `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
-///      `tile_attr` only. SAVE_VERSION unchanged.
-///      (Superseded in v90: the three *universal* raises of that batch --
-///      marker-spend commit, field-card activation, house-count write -- moved
-///      to the engine namespace as `markerSpent` / `cardUsed` / `houseAdded`.)
+///    `ChainKind` / `GateKind` are transparent `i32` newtypes; engine-generic
+///    raise points are associated consts. Game-named kinds
+///    (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 /
+///    `HouseAdded` 75 / `ChargePaying` 78) leave the SDK and live as
+///    ruleset-declared opaque ids (`bandori-std::kind`). Custom ids
+///    serialize as decimal (`"26"`); no legacy aliases (`circleAffected`,
+///    `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
+///    `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
+///    `tile_attr` only. SAVE_VERSION unchanged.
+///    (Superseded in v90: the three *universal* raises of that batch --
+///    marker-spend commit, field-card activation, house-count write -- moved
+///    to the engine namespace as `markerSpent` / `cardUsed` / `houseAdded`.)
 /// v71: **money rounds once after add/mul** (user ruling 2026-10-15,
-///      OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
-///      `paySplitAdd` / `paySplitMul` / `payCombined*` / `set_pay_factor`) transform the
-///      running amount exactly and must not CeilTo-10 inside their own body;
-///      `money_inner` / `pay_total` round a positive figure **up to a multiple
-///      of 10 once** after every add/mul modifier has been processed. An
-///      amount no modifier touched is left as the base formula produced it.
-///      Printed 「向上取整10」 sites (agent half-rent, `[分摊]` share formula,
-///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
-///      No new import; host semantics of `set_pay_amount` composition change.
-///      SAVE_VERSION unchanged (no save field).
+///    OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
+///    `paySplitAdd` / `paySplitMul` / `payCombined*` / `set_pay_factor`) transform the
+///    running amount exactly and must not CeilTo-10 inside their own body;
+///    `money_inner` / `pay_total` round a positive figure **up to a multiple
+///    of 10 once** after every add/mul modifier has been processed. An
+///    amount no modifier touched is left as the base formula produced it.
+///    Printed 「向上取整10」 sites (agent half-rent, `[分摊]` share formula,
+///    `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
+///    No new import; host semantics of `set_pay_amount` composition change.
+///    SAVE_VERSION unchanged (no save field).
 /// v72: **persona write** -- new host import `set_persona(player_id, name)`
-///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
-///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
-///      exclusive gate and `persona_is` see the new identity; skills are
-///      swapped separately. SAVE_VERSION unchanged.
+///    writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
+///    character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
+///    exclusive gate and `persona_is` see the new identity; skills are
+///    swapped separately. SAVE_VERSION unchanged.
 /// v73: **deed bodies** -- `OnKind::Mortgage` (9) / `OnKind::Redeem` (10)
-///      (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
-///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
-///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
-///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
-///      direct money move (hooks + logging remain in that mechanism).
+///    (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
+///    `On::Settle`). A tile rule owns mortgage/redeem eligibility
+///    (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
+///    `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
+///    direct money move (hooks + logging remain in that mechanism).
 /// v74: **Action / Filter split** (WordPress `do_action` / `apply_filters`).
-///      `On::Hook` is removed (no alias). `OnKind::Hook = 3` is renamed
-///      `OnKind::Action` and **keeps id 3** (old compiled modules remain
-///      loadable). New `OnKind::Filter = 11` (11, not 9 -- 9/10 are the v73
-///      deed kinds) carries the modifier-pipeline / value-shaping kinds
-///      (`TriggerKind::is_filter`). A Filter may only list filter kinds and an
-///      Action only non-filter kinds; the check runs at ruleset build
-///      (`On::check_kind_variant`). SAVE_VERSION unchanged.
+///    `On::Hook` is removed (no alias). `OnKind::Hook = 3` is renamed
+///    `OnKind::Action` and **keeps id 3** (old compiled modules remain
+///    loadable). New `OnKind::Filter = 11` (11, not 9 -- 9/10 are the v73
+///    deed kinds) carries the modifier-pipeline / value-shaping kinds
+///    (`TriggerKind::is_filter`). A Filter may only list filter kinds and an
+///    Action only non-filter kinds; the check runs at ruleset build
+///    (`On::check_kind_variant`). SAVE_VERSION unchanged.
 /// v75: **pure Filter bodies**. `On::Filter` becomes
-///      `fn(player_id, value) -> i32`; `On::FilterFlag` is
-///      `fn(player_id, value) -> bool` (false = cancel/substitute);
-///      `On::FilterValue` is `fn(player_id, FilterValue) -> FilterValue`.
-///      Bodies may not prompt or emit mutating ctx effects; the host folds the
-///      return. New filter kind `TriggerKind::DiceRollValue = 102` is raised
-///      immediately before `DiceRollAfter` for roll reshaping (DiceRollAfter remains a
-///      pure Action event). SAVE_VERSION unchanged.
+///    `fn(player_id, value) -> i32`; `On::FilterFlag` is
+///    `fn(player_id, value) -> bool` (false = cancel/substitute);
+///    `On::FilterValue` is `fn(player_id, FilterValue) -> FilterValue`.
+///    Bodies may not prompt or emit mutating ctx effects; the host folds the
+///    return. New filter kind `TriggerKind::DiceRollValue = 102` is raised
+///    immediately before `DiceRollAfter` for roll reshaping (DiceRollAfter remains a
+///    pure Action event). SAVE_VERSION unchanged.
 /// v76: **DiceRollPlan / AtEnd fold**. `On::RollPlan` is
-///      `On::FilterValue(&[TriggerKind::DiceRollPlan], …)`; `On::AtEnd` is
-///      `On::Action(&[TriggerKind::AtEnd], …)` (one-shot via the existing
-///      `schedule_turn_end` list). `OnKind::RollPlan = 5` / `OnKind::AtEnd = 4`
-///      are retired -- never reuse those wire ids. New kind
-///      `TriggerKind::AtEnd = 103` (wire `atEnd`). SAVE_VERSION unchanged.
+///    `On::FilterValue(&[TriggerKind::DiceRollPlan], …)`; `On::AtEnd` is
+///    `On::Action(&[TriggerKind::AtEnd], …)` (one-shot via the existing
+///    `schedule_turn_end` list). `OnKind::RollPlan = 5` / `OnKind::AtEnd = 4`
+///    are retired -- never reuse those wire ids. New kind
+///    `TriggerKind::AtEnd = 103` (wire `atEnd`). SAVE_VERSION unchanged.
 /// v77: **Gate fold**. `On::Gate` is `On::FilterFlag` (yes/no: true = allowed)
-///      or `On::FilterValue` (target / reason). All gate kinds join
-///      `TriggerKind::is_filter()`. `OnKind::Gate = 6` is retired -- never
-///      reuse. CEL-only status gates keep their native `admits_pre` /
-///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
+///    or `On::FilterValue` (target / reason). All gate kinds join
+///    `TriggerKind::is_filter()`. `OnKind::Gate = 6` is retired -- never
+///    reuse. CEL-only status gates keep their native `admits_pre` /
+///    `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
 /// v78: **purity + interactive pre-stages**. New kinds `FlipAfter = 104`
-///      (post-flip Action; retired in v83 -- id 104 never reuse),
-///      `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`
-///      (interactive Action pre-stages raised immediately before the pure
-///      `PaySplitChoose` / `PayCombinedAdd` filter stages, restoring the rulebook
-///      prompt position). FilterValue gains an interned `tag_key` / `reason`
-///      id and a host-supplied `recorded_roll` so dice-rolling Filter bodies
-///      become pure. `card_sdk::pure::refuse_if_filter` covers every mutating
-///      ctx call. SAVE_VERSION unchanged.
+///    (post-flip Action; retired in v83 -- id 104 never reuse),
+///    `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`
+///    (interactive Action pre-stages raised immediately before the pure
+///    `PaySplitChoose` / `PayCombinedAdd` filter stages, restoring the rulebook
+///    prompt position). FilterValue gains an interned `tag_key` / `reason`
+///    id and a host-supplied `recorded_roll` so dice-rolling Filter bodies
+///    become pure. `card_sdk::pure::refuse_if_filter` covers every mutating
+///    ctx call. SAVE_VERSION unchanged.
 /// v79: **`Roll*` kind family renamed to `DiceRoll*`** (numeric ids unchanged).
-///      `Roll(1) -> DiceRollBefore`, `RollAfter(49) -> DiceRollAfter`,
-///      `RollPlan(67) -> DiceRollPlan`, `RollValue(102) -> DiceRollValue`.
-///      `MoveRoll(2)` is **not** renamed (it is a [反击] ChainKind, a different
-///      mechanism from Action/Filter). Wire names change too (`roll` ->
-///      `diceRollBefore`, `rollAfter` -> `diceRollAfter`, `rollPlan` ->
-///      `diceRollPlan`, `rollValue` -> `diceRollValue`) -- those strings ride
-///      logs, the CEL kind vocabulary, and `anim.chainKind.*` locales, so this
-///      is a version bump. Hard rename: no aliases (old records replay on
-///      archived engines). SAVE_VERSION unchanged.
+///    `Roll(1) -> DiceRollBefore`, `RollAfter(49) -> DiceRollAfter`,
+///    `RollPlan(67) -> DiceRollPlan`, `RollValue(102) -> DiceRollValue`.
+///    `MoveRoll(2)` is **not** renamed (it is a [反击] ChainKind, a different
+///    mechanism from Action/Filter). Wire names change too (`roll` ->
+///    `diceRollBefore`, `rollAfter` -> `diceRollAfter`, `rollPlan` ->
+///    `diceRollPlan`, `rollValue` -> `diceRollValue`) -- those strings ride
+///    logs, the CEL kind vocabulary, and `anim.chainKind.*` locales, so this
+///    is a version bump. Hard rename: no aliases (old records replay on
+///    archived engines). SAVE_VERSION unchanged.
 /// v80: **buy / build bodies** -- `OnKind::Buy` (12) / `OnKind::Build` (13)
-///      (`On::Buy` / `On::Build`, same pre/guard/body shape as
-///      `On::Mortgage` / `On::Redeem`). The body owns the order of steps,
-///      eligibility and the quote, and calls generic mechanism primitives
-///      (`ctx::raise` dispatching on `TriggerKind::is_filter`, `ctx::pay_buy` /
-///      `ctx::pay_build` through the money pipeline, `ctx::assign_deed`,
-///      `ctx::log`). `buyGate` is a `FilterFlag`, `buyAssign` a `FilterValue`
-///      (deal owner/houses/mortgaged); `buyBefore` / `bought` / `buyAfter` /
-///      `buildBefore` / `houseAdded` / `buildAfter` remain Actions. Force-buy
-///      money remains a direct transfer outside effects (规则书 其他规则 6).
-///      Ids 12/13, not 4/5/6 (retired) or 11 (`Filter`). Renumbered once past
-///      the v79 DiceRoll* rename (the buy/build branch also claimed v79).
-///      SAVE_VERSION unchanged.
+///    (`On::Buy` / `On::Build`, same pre/guard/body shape as
+///    `On::Mortgage` / `On::Redeem`). The body owns the order of steps,
+///    eligibility and the quote, and calls generic mechanism primitives
+///    (`ctx::raise` dispatching on `TriggerKind::is_filter`, `ctx::pay_buy` /
+///    `ctx::pay_build` through the money pipeline, `ctx::assign_deed`,
+///    `ctx::log`). `buyGate` is a `FilterFlag`, `buyAssign` a `FilterValue`
+///    (deal owner/houses/mortgaged); `buyBefore` / `bought` / `buyAfter` /
+///    `buildBefore` / `houseAdded` / `buildAfter` remain Actions. Force-buy
+///    money remains a direct transfer outside effects (规则书 其他规则 6).
+///    Ids 12/13, not 4/5/6 (retired) or 11 (`Filter`). Renumbered once past
+///    the v79 DiceRoll* rename (the buy/build branch also claimed v79).
+///    SAVE_VERSION unchanged.
 /// v81: **`MoveRoll` kind renamed to `DiceRollResult`** (numeric id 2 unchanged).
-///      Completes the v79 `DiceRoll*` family: `MoveRoll(2) -> DiceRollResult`
-///      so every roll kind shares the `DiceRoll*` prefix
-///      (`DiceRollBefore(1)` / `DiceRollResult(2)` / `DiceRollPlan(67)` /
-///      `DiceRollAfter(49)` / `DiceRollValue(102)`). Wire name changes too
-///      (`moveRoll` -> `diceRollResult`) -- that string rides logs, the CEL
-///      kind vocabulary (`kind == DiceRollResult`), and `anim.chainKind.*`
-///      locales, so this is a version bump. Hard rename: no aliases (old
-///      records replay on archived engines). Still a [反击] ChainKind
-///      (counteraction window), NOT an Action/Filter kind and still absent
-///      from `TriggerKind::is_filter()`. The host/ctx API names
-///      `set_move_roll` / `do_move_roll` / `trigger::move_roll` / CEL
-///      `move_roll` are **not** kind names and are unchanged.
-///      SAVE_VERSION unchanged.
+///    Completes the v79 `DiceRoll*` family: `MoveRoll(2) -> DiceRollResult`
+///    so every roll kind shares the `DiceRoll*` prefix
+///    (`DiceRollBefore(1)` / `DiceRollResult(2)` / `DiceRollPlan(67)` /
+///    `DiceRollAfter(49)` / `DiceRollValue(102)`). Wire name changes too
+///    (`moveRoll` -> `diceRollResult`) -- that string rides logs, the CEL
+///    kind vocabulary (`kind == DiceRollResult`), and `anim.chainKind.*`
+///    locales, so this is a version bump. Hard rename: no aliases (old
+///    records replay on archived engines). Still a [反击] ChainKind
+///    (counteraction window), NOT an Action/Filter kind and still absent
+///    from `TriggerKind::is_filter()`. The host/ctx API names
+///    `set_move_roll` / `do_move_roll` / `trigger::move_roll` / CEL
+///    `move_roll` are **not** kind names and are unchanged.
+///    SAVE_VERSION unchanged.
 /// v82: **`Pay*` kind family renamed to Combined/Split levels** (numeric ids
-///      unchanged). Names name the pipeline LEVEL, not whether a 「[分摊]」
-///      split happened: a payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」)
-///      first runs the Combined stages on the WHOLE figure before 「[分摊]」
-///      divides it, then each settled leg/share runs the Split stages. A
-///      single non-split payment runs both levels once each.
-///      `PayTotalAdd(84) -> PayCombinedAdd`, `PayTotalMul(85) -> PayCombinedMul`,
-///      `PayTotalCancel(86) -> PayCombinedCancel`;
-///      `PayAdd(55) -> PaySplitAdd`, `PayMul(56) -> PaySplitMul`,
-///      `PayChoose(52) -> PaySplitChoose`, `PayAt(57) -> PaySplitAt`;
-///      pre-stage prompts `PayTotalAddAsk(106) -> PayCombinedAddBefore`,
-///      `PayChooseAsk(105) -> PaySplitChooseBefore`.
-///      Wire names change too (`payTotalAdd` -> `payCombinedAdd`,
-///      `payTotalMul` -> `payCombinedMul`, `payTotalCancel` -> `payCombinedCancel`,
-///      `payAdd` -> `paySplitAdd`, `payMul` -> `paySplitMul`,
-///      `payChoose` -> `paySplitChoose`, `payAt` -> `paySplitAt`,
-///      `payTotalAddAsk` -> `payCombinedAddBefore`,
-///      `payChooseAsk` -> `paySplitChooseBefore`) -- those strings ride logs,
-///      the CEL kind vocabulary, and `anim.chainKind.*` locales, so this is a
-///      version bump. Hard rename: no aliases (old records replay on archived
-///      engines). Not renamed: `Pay(9)` / `Paid(10)` / `PayAfter(48)` /
-///      `PayGate(96)` / `ChargePaying(78)`, host fns (`ctx::pay_*`, `pay_buy`,
-///      `pay_build`, `pay_leg`, `split_pay`, `set_pay_amount`,
-///      `set_pay_target`), and CEL variables (`pay_is_rent`, `pay_*`).
-///      Filter/Action classification unchanged: Combined*/Split* filters remain
-///      filters; the two *Before prompts remain Actions.
-///      SAVE_VERSION unchanged.
+///    unchanged). Names name the pipeline LEVEL, not whether a 「[分摊]」
+///    split happened: a payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」)
+///    first runs the Combined stages on the WHOLE figure before 「[分摊]」
+///    divides it, then each settled leg/share runs the Split stages. A
+///    single non-split payment runs both levels once each.
+///    `PayTotalAdd(84) -> PayCombinedAdd`, `PayTotalMul(85) -> PayCombinedMul`,
+///    `PayTotalCancel(86) -> PayCombinedCancel`;
+///    `PayAdd(55) -> PaySplitAdd`, `PayMul(56) -> PaySplitMul`,
+///    `PayChoose(52) -> PaySplitChoose`, `PayAt(57) -> PaySplitAt`;
+///    pre-stage prompts `PayTotalAddAsk(106) -> PayCombinedAddBefore`,
+///    `PayChooseAsk(105) -> PaySplitChooseBefore`.
+///    Wire names change too (`payTotalAdd` -> `payCombinedAdd`,
+///    `payTotalMul` -> `payCombinedMul`, `payTotalCancel` -> `payCombinedCancel`,
+///    `payAdd` -> `paySplitAdd`, `payMul` -> `paySplitMul`,
+///    `payChoose` -> `paySplitChoose`, `payAt` -> `paySplitAt`,
+///    `payTotalAddAsk` -> `payCombinedAddBefore`,
+///    `payChooseAsk` -> `paySplitChooseBefore`) -- those strings ride logs,
+///    the CEL kind vocabulary, and `anim.chainKind.*` locales, so this is a
+///    version bump. Hard rename: no aliases (old records replay on archived
+///    engines). Not renamed: `Pay(9)` / `Paid(10)` / `PayAfter(48)` /
+///    `PayGate(96)` / `ChargePaying(78)`, host fns (`ctx::pay_*`, `pay_buy`,
+///    `pay_build`, `pay_leg`, `split_pay`, `set_pay_amount`,
+///    `set_pay_target`), and CEL variables (`pay_is_rent`, `pay_*`).
+///    Filter/Action classification unchanged: Combined*/Split* filters remain
+///    filters; the two *Before prompts remain Actions.
+///    SAVE_VERSION unchanged.
 /// v83: **`FlipEffect` / `FlipAfter` retired; PP fans in the per-player state
-///      dict**. Ids 94 (`flipEffect`) and 104 (`flipAfter`) are **retired --
-///      never reuse**. Fan counters move to `ctx::state` keys `ppFansUp` /
-///      `ppFansDown` (`skill_groups::fans`, docs/CARDS.md 「PP fans in the
-///      per-player state dict」), owned by no card. Band clause （2） runs for
-///      **every** down→up flip via the ruleset-defined Action kind `FansFlip`
-///      (wire 107, `bandori_std::kind`; raised before the dict writes with
-///      `value` = the effect's intended X). CEL reads the fans as
-///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
-///      SAVE_VERSION unchanged.
+///    dict**. Ids 94 (`flipEffect`) and 104 (`flipAfter`) are **retired --
+///    never reuse**. Fan counters move to `ctx::state` keys `ppFansUp` /
+///    `ppFansDown` (`skill_groups::fans`, docs/CARDS.md 「PP fans in the
+///    per-player state dict」), owned by no card. Band clause （2） runs for
+///    **every** down→up flip via the ruleset-defined Action kind `FansFlip`
+///    (wire 107, `bandori_std::kind`; raised before the dict writes with
+///    `value` = the effect's intended X). CEL reads the fans as
+///    `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
+///    SAVE_VERSION unchanged.
 /// v84: **Dead trigger kinds retired**. Ids 16 (`stop`), 17 (`teleport`),
-///      19 / 20 / 22 (the first three abnormal kinds) are **retired -- never
-///      reuse**. None of them is raised by the engine and none has a live
-///      listener. Not retired (still live at v84): `skillTeleport` (18),
-///      the ruleset-declared id 21, `teleported` (66), `MoveKind::Teleport`, and
-///      the `AbKind` wire ids. The CEL names for the retired kinds leave the
-///      kind table (`Teleport` remains as `MoveKind`). SAVE_VERSION unchanged.
+///    19 / 20 / 22 (the first three abnormal kinds) are **retired -- never
+///    reuse**. None of them is raised by the engine and none has a live
+///    listener. Not retired (still live at v84): `skillTeleport` (18),
+///    the ruleset-declared id 21, `teleported` (66), `MoveKind::Teleport`, and
+///    the `AbKind` wire ids. The CEL names for the retired kinds leave the
+///    kind table (`Teleport` remains as `MoveKind`). SAVE_VERSION unchanged.
 /// v85: **`SkillTeleport` retired; `move.by_skill` source tag**. Wire id 18
-///      (`skillTeleport`) is **retired -- never reuse**. The only listener
-///      (R:必然的联系（莉莎）) rides `MoveAfter` + cond
-///      `move.kind == Teleport && move.by_skill` instead. `MoveCtx.by_skill`
-///      is a generic "shaped or started by a `skill:` rule" tag (cond
-///      `move.by_skill`); serde skip-if-false so saves remain stable.
-///      `HostRequest::Teleport` now runs through `card_teleport` /
-///      `teleport_as(resolve=false)` so it raises the move tail like every
-///      other movement path. SAVE_VERSION unchanged.
+///    (`skillTeleport`) is **retired -- never reuse**. The only listener
+///    (R:必然的联系（莉莎）) rides `MoveAfter` + cond
+///    `move.kind == Teleport && move.by_skill` instead. `MoveCtx.by_skill`
+///    is a generic "shaped or started by a `skill:` rule" tag (cond
+///    `move.by_skill`); serde skip-if-false so saves remain stable.
+///    `HostRequest::Teleport` now runs through `card_teleport` /
+///    `teleport_as(resolve=false)` so it raises the move tail like every
+///    other movement path. SAVE_VERSION unchanged.
 /// v85 (source): **typed kind views** (`ActionKind` / `FilterKind`). The old
-///      `HookKind` / `GateKind` aliases are retired (no alias remains). `On::Action`
-///      takes `&'static [ActionKind]`, `On::Filter*` takes `&'static [FilterKind]`,
-///      so a wrong-side kind const is a rustc error rather than a ruleset-build
-///      failure. `TriggerKind` remains the single declaration source of truth
-///      (all consts, `spelling`/`from_str`, `is_filter`); the typed sets mirror it
-///      exactly. `ChainKind` remains the [`TriggerKind`] alias for
-///      `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
-///      same name tables, no id renumbering. Source-only: ABI_VERSION remains 85.
+///    `HookKind` / `GateKind` aliases are retired (no alias remains). `On::Action`
+///    takes `&'static [ActionKind]`, `On::Filter*` takes `&'static [FilterKind]`,
+///    so a wrong-side kind const is a rustc error rather than a ruleset-build
+///    failure. `TriggerKind` remains the single declaration source of truth
+///    (all consts, `spelling`/`from_str`, `is_filter`); the typed sets mirror it
+///    exactly. `ChainKind` remains the [`TriggerKind`] alias for
+///    `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
+///    same name tables, no id renumbering. Source-only: ABI_VERSION remains 85.
 /// v86: **display columns leave `ruleset_metadata`**. Printed text / display
-///      strings remain authored on [`crate::meta::CardMeta`] /
-///      `bandori_std::roster::{PersonaDef, GroupDef}` (the builder calls are
-///      unchanged) but no longer ride the runtime metadata blob. Dropped
-///      MetaRow keys: card `text` / `rawName` / `cell`; persona `display` /
-///      `text` / `color` / `variantTag` / `art` / `costume` / `cnId`; group
-///      `text` / `shortName` / `color` / `logo`. They are serialized at build
-///      time into `webui/src/generated/display.json` by
-///      `tools/export-display.mjs` (`docs/DISPLAY.md`). Keys that remain:
-///      card `name` / `group` / `owner` / `derived` / `tags`; persona `name` /
-///      `group` / `skill` / `exclusiveCards` / `preset` / `variantOf`; group
-///      `name` / `skill` / `sharesExclusives`. Postcard field order of
-///      [`crate::meta::MetaRow`] is unchanged (dropped columns are empty /
-///      absent map pairs). SAVE_VERSION unchanged.
+///    strings remain authored on [`crate::meta::CardMeta`] /
+///    `bandori_std::roster::{PersonaDef, GroupDef}` (the builder calls are
+///    unchanged) but no longer ride the runtime metadata blob. Dropped
+///    MetaRow keys: card `text` / `rawName` / `cell`; persona `display` /
+///    `text` / `color` / `variantTag` / `art` / `costume` / `cnId`; group
+///    `text` / `shortName` / `color` / `logo`. They are serialized at build
+///    time into `webui/src/generated/display.json` by
+///    `tools/export-display.mjs` (`docs/DISPLAY.md`). Keys that remain:
+///    card `name` / `group` / `owner` / `derived` / `tags`; persona `name` /
+///    `group` / `skill` / `exclusiveCards` / `preset` / `variantOf`; group
+///    `name` / `skill` / `sharesExclusives`. Postcard field order of
+///    [`crate::meta::MetaRow`] is unchanged (dropped columns are empty /
+///    absent map pairs). SAVE_VERSION unchanged.
 /// v87: **generic turn-flow / logging verbs** for status hosts: `end_turn_now`
-///      (auto-skip latch), `teleport_as` (move-tail teleport with the `main`
-///      flag and no abnormal window), `log_as` (typed log line). Additive
-///      imports; SAVE_VERSION unchanged.
+///    (auto-skip latch), `teleport_as` (move-tail teleport with the `main`
+///    flag and no abnormal window), `log_as` (typed log line). Additive
+///    imports; SAVE_VERSION unchanged.
 /// v88: **generic status / marker verbs**. The three named host grants
-///      collapse to one kind-parameterized verb;
-///      the turn-flow move-latch becomes `skip_main_move` / `clear_move_skip`;
-///      charge-named marker imports become the generic `marker_*` family
-///      (`gain_marker` / `spend_marker` / `add_marker_max`). `AbKind` is an
-///      opaque newtype (wire codec only); the game names live in
-///      `bandori-std`. `ActionKind`/`TriggerKind` lose the ruleset-named
-///      consts (wire id 21 remains an opaque custom id). SAVE_VERSION unchanged.
+///    collapse to one kind-parameterized verb;
+///    the turn-flow move-latch becomes `skip_main_move` / `clear_move_skip`;
+///    charge-named marker imports become the generic `marker_*` family
+///    (`gain_marker` / `spend_marker` / `add_marker_max`). `AbKind` is an
+///    opaque newtype (wire codec only); the game names live in
+///    `bandori-std`. `ActionKind`/`TriggerKind` lose the ruleset-named
+///    consts (wire id 21 remains an opaque custom id). SAVE_VERSION unchanged.
 /// v89: **status vocabulary leaves the SDK**. The kind-parameterized verb is
-///      gone (rules compose `gate` + `state::*` + `raise_after`); state-key /
-///      prop constants that named game statuses are deleted; `AbKind::as_str`
-///      loses its name table (wire codec is `from_i32` / `as_i32` only).
-///      `TriggerKind` id 21 serializes as decimal `"21"` (ruleset-declared).
-///      New decision gates `OnBoardGate` (108) / `TargetableGate` (109).
-///      `CardDef::gate_msgs` / `CardDef::exemption_prop` carry gate-refusal
-///      i18n keys and the exempting prop key as data. `state::set_flags` +
-///      `ctx::raise_after` are additive. SAVE_VERSION unchanged.
+///    gone (rules compose `gate` + `state::*` + `raise_after`); state-key /
+///    prop constants that named game statuses are deleted; `AbKind::as_str`
+///    loses its name table (wire codec is `from_i32` / `as_i32` only).
+///    `TriggerKind` id 21 serializes as decimal `"21"` (ruleset-declared).
+///    New decision gates `OnBoardGate` (108) / `TargetableGate` (109).
+///    `CardDef::gate_msgs` / `CardDef::exemption_prop` carry gate-refusal
+///    i18n keys and the exempting prop key as data. `state::set_flags` +
+///    `ctx::raise_after` are additive. SAVE_VERSION unchanged.
 
 /// v90: **`MetaRow` sheds its two dead display slots**. `raw_name` and `cell`
-///      have been empty since v86 moved display columns into
-///      `webui/src/generated/display.json`; nothing read them. Dropped from
-///      the postcard field order (a wire break -- that is the bump). The sheet
-///      cell is now a comment on the card impl, and a row with no sheet name
-///      is *named* after its cell (`#J11`) in `CardMeta::name`. SAVE_VERSION
-///      unchanged.
+///    have been empty since v86 moved display columns into
+///    `webui/src/generated/display.json`; nothing read them. Dropped from
+///    the postcard field order (a wire break -- that is the bump). The sheet
+///    cell is now a comment on the card impl, and a row with no sheet name
+///    is *named* after its cell (`#J11`) in `CardMeta::name`. SAVE_VERSION
+///    unchanged.
 
 /// v91: **namespaced trigger kinds**. `TriggerKind` is `{ ns: KindNs, id: i32 }`
-///      (`KindNs::Engine` / `KindNs::Ruleset(key)`) instead of a bare `i32`;
-///      `ActionKind` / `FilterKind` wrap it. A rule-defined kind can no longer
-///      collide with a future engine id -- or with another ruleset's ids
-///      (the key names the ruleset). Wire spelling: engine stays camelCase,
-///      ruleset is `"r:{key}:{id}"` (e.g. `"r:bandori:21"`). Bare decimals
-///      do not parse. Host masks are per-namespace (a second `u128` for ruleset
-///      ids); a ruleset id outside `0..128` is a load error.
+///    (`KindNs::Engine` / `KindNs::Ruleset(key)`) instead of a bare `i32`;
+///    `ActionKind` / `FilterKind` wrap it. A rule-defined kind can no longer
+///    collide with a future engine id -- or with another ruleset's ids
+///    (the key names the ruleset). Wire spelling: engine stays camelCase,
+///    ruleset is `"r:{key}:{id}"` (e.g. `"r:bandori:21"`). Bare decimals
+///    do not parse. Host masks are per-namespace (a second `u128` for ruleset
+///    ids); a ruleset id outside `0..128` is a load error.
 /// Three universal raises that Phase 1 still spelled as ruleset ids are
 /// engine kinds, same numbers: **`markerSpent` (73)** any named-counter
 /// spend commits; **`cardUsed` (74)** a field card's `On::Play` runs;
@@ -736,106 +736,106 @@ use std::borrow::Cow;
 /// genuinely ruleset vocabulary: `Exile` (21), `PassRewardAffected` (26),
 /// `ChargePaying` (78), `FansFlip` (107).
 /// v92: **CEL `kind` is a string**. `as_cel_i64` / `from_cel_i64` are dead;
-///      the bit-pack encoding is gone. `trig_kind` / `raise` /
-///      `declare_effect` / `trig_effect_kind` carry spellings (the
-///      two-call out-buffer pattern for host-to-guest, pointer+len for
-///      guest-to-host). `ManifestOn.triggers` is `Vec<String>` of spellings.
-///      CEL `kind` compares spellings; the IR bakes `id_of(spelling)`.
-///      `move.kind` stays `int` (`MoveKind` is a closed engine enum).
+///    the bit-pack encoding is gone. `trig_kind` / `raise` /
+///    `declare_effect` / `trig_effect_kind` carry spellings (the
+///    two-call out-buffer pattern for host-to-guest, pointer+len for
+///    guest-to-host). `ManifestOn.triggers` is `Vec<String>` of spellings.
+///    CEL `kind` compares spellings; the IR bakes `id_of(spelling)`.
+///    `move.kind` stays `int` (`MoveKind` is a closed engine enum).
 /// SAVE_VERSION unchanged (kinds are not in `Saved`).
 /// RECORD_VERSION unchanged (the record codec does not carry kind ids).
 /// v93: **idiomatic payloads + shared vocabulary**. `FilterValue` and its
-///      `UNCHANGED` sentinel are gone. Per-kind payloads in
-///      [`crate::payload`]: `GateValue` / `PlanValue` / `RollValue` /
-///      `DealValue` / `PayAddValue` / `RedirectValue`, one `FilterPayload`
-///      impl each. `On::FilterValue`'s body is a `FilterBody` arm (temporary
-///      adapter until the Phase 3 `FilterEntry` drive). Gates move off
-///      `On::FilterFlag` onto `FilterBody::Gate`; pure-decision
-///      (`PaySplitChoose` / `PayCombinedCancel`) stays `fn(i32,i32)->bool`.
-///      Intern-id tables (`TAG_FIRE_ROLL` / `TAG_PRE_ROLLPLAN` /
-///      `REASON_POPPIN_LOCKED`) die -- bodies carry `MsgKey` strings.
-///      Shared wire vocabulary lives in `game-kinds`: `Seat` / `Tile` /
-///      `Payee` / `Dice` / `MoveKind` / `Dir` / `MsgKey`, one definition on
-///      both sides of the hostcall. Flatten to `i32` only at the
-///      `hostfns.rs` wasm-import edge. **SAVE_VERSION 11 -> 12** (`MoveCtx`
-///      / `World.recorded_roll` / `TriggerBuy` sentinels become `Option`);
-///      older saves are refused (replays ride archived engine bundles).
+///    `UNCHANGED` sentinel are gone. Per-kind payloads in
+///    [`crate::payload`]: `GateValue` / `PlanValue` / `RollValue` /
+///    `DealValue` / `PayAddValue` / `RedirectValue`, one `FilterPayload`
+///    impl each. `On::FilterValue`'s body is a `FilterBody` arm (temporary
+///    adapter until the Phase 3 `FilterEntry` drive). Gates move off
+///    `On::FilterFlag` onto `FilterBody::Gate`; pure-decision
+///    (`PaySplitChoose` / `PayCombinedCancel`) stays `fn(i32,i32)->bool`.
+///    Intern-id tables (`TAG_FIRE_ROLL` / `TAG_PRE_ROLLPLAN` /
+///    `REASON_POPPIN_LOCKED`) die -- bodies carry `MsgKey` strings.
+///    Shared wire vocabulary lives in `game-kinds`: `Seat` / `Tile` /
+///    `Payee` / `Dice` / `MoveKind` / `Dir` / `MsgKey`, one definition on
+///    both sides of the hostcall. Flatten to `i32` only at the
+///    `hostfns.rs` wasm-import edge. **SAVE_VERSION 11 -> 12** (`MoveCtx`
+///    / `World.recorded_roll` / `TriggerBuy` sentinels become `Option`);
+///    older saves are refused (replays ride archived engine bundles).
 /// RECORD_VERSION unchanged (the record codec does not carry kind ids).
 /// v94: **typed filter/action registration DSL**. `On::FilterFlag` /
-///      `On::FilterValue` / `FilterBody` die; every filter registration is
-///      `On::Filter(FilterEntry)` built by the `filter_kinds!` constructors
-///      (`Filter::DiceRollPlan(pre, guard, body)`), every action is
-///      `On::Action(ActionEntry)` from `action_kinds!`. One kind per entry --
-///      multi-kind lists are split. `FilterEntry.body` is a type-erased
-///      `*const ()` cast back only inside `payload::drive_*` (one per shape).
-///      Downstream rulesets declare custom kinds with the same macros
-///      (`bandori_std::kind::{Actions, Filters}`). `check_kind_variant` is
-///      deleted -- the constructor type pins the side. Source-only for the
-///      wire: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
-///      unchanged.
+///    `On::FilterValue` / `FilterBody` die; every filter registration is
+///    `On::Filter(FilterEntry)` built by the `filter_kinds!` constructors
+///    (`Filter::DiceRollPlan(pre, guard, body)`), every action is
+///    `On::Action(ActionEntry)` from `action_kinds!`. One kind per entry --
+///    multi-kind lists are split. `FilterEntry.body` is a type-erased
+///    `*const ()` cast back only inside `payload::drive_*` (one per shape).
+///    Downstream rulesets declare custom kinds with the same macros
+///    (`bandori_std::kind::{Actions, Filters}`). `check_kind_variant` is
+///    deleted -- the constructor type pins the side. Source-only for the
+///    wire: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
+///    unchanged.
 /// v95: **named-field `On` entries + `counter_reason` locale keys**. The
-///      remaining positional-tuple variants become `*Body` arms holding
-///      `PlayEntry` / `CounteractEntry` / `RuleEntry` / `MessageEntry`; the
-///      call spelling stays `On::Play(pre, why_not, body)` via `const fn`
-///      constructors, with the 「…时」 clause attached by the
-///      `.counter_reason(key)` builder (the entry field is `Option<MsgKey>`;
-///      `None` replaces `""`). `ActionEntry`'s field moves with it. Display
-///      text for the 「…时」 clause leaves Rust for
-///      `cards:<crate>.…` / `counter.*` locale entries. Source + display export
-///      only: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
-///      unchanged.
+///    remaining positional-tuple variants become `*Body` arms holding
+///    `PlayEntry` / `CounteractEntry` / `RuleEntry` / `MessageEntry`; the
+///    call spelling stays `On::Play(pre, why_not, body)` via `const fn`
+///    constructors, with the 「…时」 clause attached by the
+///    `.counter_reason(key)` builder (the entry field is `Option<MsgKey>`;
+///    `None` replaces `""`). `ActionEntry`'s field moves with it. Display
+///    text for the 「…时」 clause leaves Rust for
+///    `cards:<crate>.…` / `counter.*` locale entries. Source + display export
+///    only: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
+///    unchanged.
 /// v96: **`PaySplitMulBefore` interactive pre-stage**. New Action kind
-///      `PaySplitMulBefore = 110` (wire `paySplitMulBefore`, hook-only like
-///      `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`). Raised
-///      per settled payment leg immediately before the pure `PaySplitMul`
-///      filter fold -- after the whole `paySplitAdd` fold, before
-///      `scale_settle_payment`. Payload: `player_id` = payer, `target` =
-///      payee, `value` = the PaySplitMul input, the pay flag, `tile`,
-///      `by_card`. The ask's `set_pay_amount` / `set_pay_target` fold into the
-///      running figure; a value change sets `modified` so the end-of-calc
-///      CeilTo-10 still fires. This is the writable stage between
-///      `PaySplitAdd` and `PaySplitMul` (规则书 支付阶段 3 「支付计算后」).
-///      Source-only for the wire: `ManifestOn` is unchanged. SAVE_VERSION /
-///      RECORD_VERSION unchanged.
+///    `PaySplitMulBefore = 110` (wire `paySplitMulBefore`, hook-only like
+///    `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`). Raised
+///    per settled payment leg immediately before the pure `PaySplitMul`
+///    filter fold -- after the whole `paySplitAdd` fold, before
+///    `scale_settle_payment`. Payload: `player_id` = payer, `target` =
+///    payee, `value` = the PaySplitMul input, the pay flag, `tile`,
+///    `by_card`. The ask's `set_pay_amount` / `set_pay_target` fold into the
+///    running figure; a value change sets `modified` so the end-of-calc
+///    CeilTo-10 still fires. This is the writable stage between
+///    `PaySplitAdd` and `PaySplitMul` (规则书 支付阶段 3 「支付计算后」).
+///    Source-only for the wire: `ManifestOn` is unchanged. SAVE_VERSION /
+///    RECORD_VERSION unchanged.
 /// v97: **multi-select choice**. New import `ruleset_opt_count(n)` pushes how
-///      many of the following options the ask wants; `PromptKind::ChoiceMulti
-///      = 7` (wire `"multi"`) asks for exactly that many distinct options. The
-///      ask answer is a **bitmask** (bit *i* = option *i*) in the same single
-///      `i32` the answer log and `ruleset_ask` already carry -- no wire or
-///      answer-log shape change. Guest API: `ctx::ask_pick_multi`. SAVE_VERSION
-///      / RECORD_VERSION unchanged.
+///    many of the following options the ask wants; `PromptKind::ChoiceMulti
+///    = 7` (wire `"multi"`) asks for exactly that many distinct options. The
+///    ask answer is a **bitmask** (bit *i* = option *i*) in the same single
+///    `i32` the answer log and `ruleset_ask` already carry -- no wire or
+///    answer-log shape change. Guest API: `ctx::ask_pick_multi`. SAVE_VERSION
+///    / RECORD_VERSION unchanged.
 /// v98: **activation arguments (`declare`) + `ctx::query_guard`**
-///      (docs/ACTIVATION.md).
+///    (docs/ACTIVATION.md).
 ///
-///      *`declare`* -- a per-entry collector runs **before** the point of no
-///      return and hands the body a **typed** argument, `T`, which is the
-///      card's own postcard record (a pick, a tile, a card, …). `T = i32` is
-///      the default, so the common "which of N" case keeps its spelling.
-///      `export::ON` therefore stays at **four** params; `OP_DECLARE = 2`
-///      returns packed `(ptr<<32)|len` of `postcard(T)` (or `EXIT_NEED_INPUT`,
-///      or the new `EXIT_DECLINED`), the host stores `Vec<u8>`, and the body's
-///      drive pulls it via `ctx::declared_arg::<T>()`. A buffer address cannot
-///      collide with an `EXIT_*` sentinel. `ManifestOn::has_declare` (always
-///      serialized) says whether the host must run it; `On::Filter` never
-///      declares (rejected at ruleset build -- a filter is a pure value fold).
-///      The body of a declaring entry is `fn(i32, T) -> Asked`; everyone else
-///      keeps `fn(i32) -> Asked`. Guest API: `On::declare` / `On::declare_arg`.
+///    *`declare`* -- a per-entry collector runs **before** the point of no
+///    return and hands the body a **typed** argument, `T`, which is the
+///    card's own postcard record (a pick, a tile, a card, …). `T = i32` is
+///    the default, so the common "which of N" case keeps its spelling.
+///    `export::ON` therefore stays at **four** params; `OP_DECLARE = 2`
+///    returns packed `(ptr<<32)|len` of `postcard(T)` (or `EXIT_NEED_INPUT`,
+///    or the new `EXIT_DECLINED`), the host stores `Vec<u8>`, and the body's
+///    drive pulls it via `ctx::declared_arg::<T>()`. A buffer address cannot
+///    collide with an `EXIT_*` sentinel. `ManifestOn::has_declare` (always
+///    serialized) says whether the host must run it; `On::Filter` never
+///    declares (rejected at ruleset build -- a filter is a pure value fold).
+///    The body of a declaring entry is `fn(i32, T) -> Asked`; everyone else
+///    keeps `fn(i32) -> Asked`. Guest API: `On::declare` / `On::declare_arg`.
 ///
-///      *`query_guard`* -- one cross-card applicability query, by the entry id
-///      the **target** declares (`On::id("decay")`, an ASCII slug: identity,
-///      never display text). `ctx::query_guard(player_id, card_id, entry_id)`.
-///      `entry::PRESS` is the reserved id of a card's press entry
-///      (`On::Play`), resolved via `play_entry_preferring_gated`; declaring
-///      that word is rejected at ruleset build. `can_fire` / `can_fire_any` /
-///      `card_replayable` are gone -- the press question is
-///      `query_guard(…, entry::PRESS)`. `ManifestOn::id` (always serialized)
-///      carries the slug.
+///    *`query_guard`* -- one cross-card applicability query, by the entry id
+///    the **target** declares (`On::id("decay")`, an ASCII slug: identity,
+///    never display text). `ctx::query_guard(player_id, card_id, entry_id)`.
+///    `entry::PRESS` is the reserved id of a card's press entry
+///    (`On::Play`), resolved via `play_entry_preferring_gated`; declaring
+///    that word is rejected at ruleset build. `can_fire` / `can_fire_any` /
+///    `card_replayable` are gone -- the press question is
+///    `query_guard(…, entry::PRESS)`. `ManifestOn::id` (always serialized)
+///    carries the slug.
 ///
-///      **Player-visible ordering:** for `On::Play` the `declare` prompt fires
-///      *before* the `card` counteraction window (because `hand.remove` is the
-///      commit and the window opens after it) -- the mode is part of declaring
-///      the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
-///      declaration. SAVE_VERSION / RECORD_VERSION unchanged.
+///    **Player-visible ordering:** for `On::Play` the `declare` prompt fires
+///    *before* the `card` counteraction window (because `hand.remove` is the
+///    commit and the window opens after it) -- the mode is part of declaring
+///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
+///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 pub const ABI_VERSION: i32 = 99;
 /// v99: **named-card pile movers collapse onto `Dest`**. `add_to_hand` /
 ///      `add_to_deck` / `add_to_deck_at` (`DeckPos`) die; the one

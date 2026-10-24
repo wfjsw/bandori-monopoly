@@ -560,9 +560,10 @@ fn gen_body_dispatch() {
     // Kind name → body shape, from every `filter_kinds!` table. Unknown kinds
     // panic inside `parse_on_bodies` (loud miss).
     let kind_shapes = {
+        let repo = rules_dir.parent().expect("repo root").to_path_buf();
         let mut sources = Vec::new();
         for p in [
-            rules_dir.join("card-sdk/src/kinds.rs"),
+            repo.join("crates/card-sdk/src/kinds.rs"),
             rules_dir.join("bandori-std/src/kind.rs"),
         ] {
             sources.push(fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {:?}: {e}", p)));

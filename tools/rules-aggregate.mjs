@@ -84,7 +84,7 @@ description = "The shipped ruleset: every band's cards in one wasm module."
 crate-type = ["cdylib"]
 
 [dependencies]
-card-sdk = { path = "../../card-sdk", features = ["guest"] }
+card-sdk = { path = "../../../crates/card-sdk", features = ["guest"] }
 bandori-std = { path = "../../bandori-std" }
 personas = { path = "../../personas" }
 ${deps}

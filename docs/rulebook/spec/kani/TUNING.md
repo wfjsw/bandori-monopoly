@@ -477,7 +477,7 @@ property verdict (covers unevaluated). The stubs themselves are fail-closed
 ### Soundness kept
 
 * Unwinding assertions ON. No `#[ignore]`, no allowlist, no weakened specs.
-* Card bodies unmodified. Only `rules/kani/**` + `cfg(kani)` in `rules/card-sdk`.
+* Card bodies unmodified. Only `rules/kani/**` + `cfg(kani)` in `crates/card-sdk`.
 * `panic_fmt` stub excluded from `should_panic` mutants.
 * Production (`cfg(not(kani))`) untouched by stubs (`-Z stubbing` is a Kani
   compile flag; `kani_alloc` is `cfg(kani)` only).

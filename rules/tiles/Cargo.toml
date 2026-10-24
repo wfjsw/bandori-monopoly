@@ -10,6 +10,6 @@ description = "Board tile rules: one CardDef per tile kind, settling in the norm
 crate-type = ["rlib"]
 
 [dependencies]
-card-sdk = { path = "../card-sdk", features = ["guest"] }
+card-sdk = { path = "../../crates/card-sdk", features = ["guest"] }
 bandori-std = { path = "../bandori-std" }
 rules-status = { path = "../status" }

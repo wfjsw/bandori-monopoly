@@ -4,6 +4,7 @@ members = [
     "crates/bot-core",
     "crates/bot-glue",
     "crates/bot-service",
+    "crates/card-sdk",
     "crates/game-core",
     "crates/game-kinds",
     "crates/game-rules",
@@ -20,8 +21,8 @@ members = [
     "rules/kani",
 ]
 # The guest side (cards compiled to wasm32) is a separate workspace: rules/
-# It shares only the ABI crate (`rules/card-sdk`, constants + types, no imports
-# on native).
+# It depends on the kernel ABI crate (`crates/card-sdk`, constants + types, no
+# imports on native) by path.
 
 [workspace.package]
 version = "0.1.0"
@@ -39,7 +40,7 @@ serde_json = "1"
 # release wasm. Everything else is exactly wasmi's default feature set.
 wasmi = { version = "2", default-features = false, features = ["stable", "std", "validate", "memory64", "auto-dispatch"] }
 sha2 = "0.10"
-card-sdk = { path = "rules/card-sdk" }
+card-sdk = { path = "crates/card-sdk" }
 bitflags = { version = "2", default-features = false }
 
 [profile.release]

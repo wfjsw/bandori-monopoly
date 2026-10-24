@@ -9,7 +9,7 @@ description = "Test-only cards. Not shipped. Also proves a module may hold sever
 crate-type = ["cdylib"]
 
 [dependencies]
-card-sdk = { path = "../../card-sdk", features = ["guest"] }
+card-sdk = { path = "../../../crates/card-sdk", features = ["guest"] }
 bandori-std = { path = "../../bandori-std" }
 rules-status = { path = "../../status" }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
