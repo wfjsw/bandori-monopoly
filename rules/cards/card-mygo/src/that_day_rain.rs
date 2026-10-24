@@ -123,7 +123,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
-            ctx::decay()?;
+            ctx::remove_crystal()?;
         }
         _ => {}
     }

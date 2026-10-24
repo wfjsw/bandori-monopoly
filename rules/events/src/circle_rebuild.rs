@@ -89,7 +89,7 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
     if ctx::is_start(at) {
         // 「移除一个」 -- `ctx::decay` burns one crystal of this instance.
-        let left = ctx::decay()?;
+        let left = ctx::remove_crystal()?;
         // 「为0时放入事件弃牌」
         if left <= 0 {
             expire(ID);

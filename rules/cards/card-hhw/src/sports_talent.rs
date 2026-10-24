@@ -62,7 +62,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 「为0时置入弃牌堆」 half is [`on_crystals_changed`]. `actor == owner &&
 /// card.placed` is the pre.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 

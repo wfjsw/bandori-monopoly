@@ -1828,12 +1828,12 @@ pub fn verify_popipa(
         .filter(|c| *c == POPIPA)
         .count()
         + post.hidden[who]
-            .draw
+            .deck
             .iter()
             .filter(|c| *c == POPIPA)
             .count()
         + post.hidden[who]
-            .discard
+            .graveyard
             .iter()
             .filter(|c| *c == POPIPA)
             .count();
@@ -1852,10 +1852,10 @@ pub fn verify_popipa(
     }
     // Pipopa entered the draw multiset (draw pile + hand + discard).
     let pipopa = post.hidden[who]
-        .draw
+        .deck
         .iter()
         .chain(post.hidden[who].hand.iter())
-        .chain(post.hidden[who].discard.iter())
+        .chain(post.hidden[who].graveyard.iter())
         .filter(|c| *c == PIPOPA)
         .count();
     if pipopa != 1 {
@@ -1934,7 +1934,7 @@ fn popipa_verifier_rejects_mutants() {
         &events,
         &verify_popipa_wrap,
         |w| {
-            w.hidden[0].discard.push(POPIPA.into());
+            w.hidden[0].graveyard.push(POPIPA.into());
         },
     );
     // MORE: a second Pipopa.
@@ -1945,7 +1945,7 @@ fn popipa_verifier_rejects_mutants() {
         &events,
         &verify_popipa_wrap,
         |w| {
-            w.hidden[0].draw.push(PIPOPA.into());
+            w.hidden[0].deck.push(PIPOPA.into());
         },
     );
 }
@@ -1977,8 +1977,8 @@ pub fn verify_pipopa(
     }
     for z in [
         &post.hidden[who].hand,
-        &post.hidden[who].draw,
-        &post.hidden[who].discard,
+        &post.hidden[who].deck,
+        &post.hidden[who].graveyard,
     ] {
         if z.iter().any(|c| c == PIPOPA) {
             return Err("Pipopa still in a private zone (must be [移除])".into());
@@ -2057,7 +2057,7 @@ fn pipopa_verifier_rejects_mutants() {
         &events,
         &verify_pipopa_wrap,
         |w| {
-            w.hidden[0].discard.push(PIPOPA.into());
+            w.hidden[0].graveyard.push(PIPOPA.into());
         },
     );
 }

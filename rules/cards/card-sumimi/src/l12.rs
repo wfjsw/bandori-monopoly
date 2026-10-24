@@ -48,7 +48,7 @@ const ID: &str = "Sumimi:#L12";
 /// (`H.Db.Card(id)?.group == "Sumimi"`).
 fn pool(player_id: i32) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for pile in [CardPile::Discard, CardPile::Deck] {
+    for pile in [CardPile::Graveyard, CardPile::Deck] {
         for id in ctx::cards_in(player_id, pile) {
             if id != ID && id.starts_with("Sumimi:") && !out.iter().any(|x| *x == id) {
                 out.push(id);
@@ -85,7 +85,7 @@ fn l12(player_id: i32) -> card_sdk::Asked {
     // `H.Shuffle(hidden.draw)`. `take_card` pulls one copy out of the pile
     // without moving it; `add_to_dest` then files it. (The reshuffle of the
     // remaining draw pile is cosmetic and not expressible here.)
-    if !ctx::take_card(player_id, &id, CardPile::Discard) {
+    if !ctx::take_card(player_id, &id, CardPile::Graveyard) {
         ctx::take_card(player_id, &id, CardPile::Deck);
     }
     ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);

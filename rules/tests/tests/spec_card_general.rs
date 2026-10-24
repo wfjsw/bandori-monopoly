@@ -169,9 +169,9 @@ pub fn c_gen_great_01(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     // 「[移除]：将卡移除出游戏」 -- the card is in no zone at all.
     let in_any = step.post.hidden[who].hand.iter().any(|c| c == "通用:GREAT")
-        || step.post.hidden[who].draw.iter().any(|c| c == "通用:GREAT")
+        || step.post.hidden[who].deck.iter().any(|c| c == "通用:GREAT")
         || step.post.hidden[who]
-            .discard
+            .graveyard
             .iter()
             .any(|c| c == "通用:GREAT")
         || step.post.st.players[who]
@@ -203,7 +203,7 @@ pub fn c_gen_great_02(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     let n = step.post.hidden[who]
-        .draw
+        .deck
         .iter()
         .filter(|c| c.as_str() == "通用:[衍生]PERFECT")
         .count();
@@ -345,11 +345,11 @@ pub fn c_gen_perfect_01(step: &Step<'_>) -> Result<(), String> {
         .iter()
         .any(|c| c == "通用:[衍生]PERFECT")
         || step.post.hidden[who]
-            .draw
+            .deck
             .iter()
             .any(|c| c == "通用:[衍生]PERFECT")
         || step.post.hidden[who]
-            .discard
+            .graveyard
             .iter()
             .any(|c| c == "通用:[衍生]PERFECT")
         || step.post.st.players[who]
@@ -383,12 +383,12 @@ pub fn c_gen_perfect_02(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     let in_discard = step.post.hidden[who]
-        .discard
+        .graveyard
         .iter()
         .filter(|c| c.as_str() == "通用:[衍生]FEVER!")
         .count();
     let in_draw = step.post.hidden[who]
-        .draw
+        .deck
         .iter()
         .filter(|c| c.as_str() == "通用:[衍生]FEVER!")
         .count();
@@ -397,12 +397,12 @@ pub fn c_gen_perfect_02(step: &Step<'_>) -> Result<(), String> {
     // empty when it was filed), in which case the discard is empty.
     if in_discard == 1 {
         Ok(())
-    } else if in_draw == 1 && step.post.hidden[who].discard.is_empty() {
+    } else if in_draw == 1 && step.post.hidden[who].graveyard.is_empty() {
         Ok(())
     } else {
         Err(format!(
             "FEVER! in discard {in_discard} / draw {in_draw} (discard {:?}), expected 1 in discard",
-            step.post.hidden[who].discard
+            step.post.hidden[who].graveyard
         ))
     }
 }

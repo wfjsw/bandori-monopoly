@@ -207,7 +207,7 @@ impl ConfWorld {
     fn pile_of(&mut self, pile: CardPile) -> &mut Vec<Vec<String>> {
         match pile {
             CardPile::Hand => &mut self.hands,
-            CardPile::Discard => &mut self.discards,
+            CardPile::Graveyard => &mut self.discards,
             CardPile::Deck => &mut self.decks,
             _ => &mut self.hands,
         }
@@ -216,7 +216,7 @@ impl ConfWorld {
     fn pile_ref(&self, pile: CardPile) -> &Vec<Vec<String>> {
         match pile {
             CardPile::Hand => &self.hands,
-            CardPile::Discard => &self.discards,
+            CardPile::Graveyard => &self.discards,
             CardPile::Deck => &self.decks,
             _ => &self.hands,
         }

@@ -91,7 +91,7 @@ pub fn snapshot(w: &World) -> Snap {
         for (h, c) in w
             .hidden
             .get(i)
-            .map(|h| h.draw.clone())
+            .map(|h| h.deck.clone())
             .unwrap_or_default()
             .iter()
             .enumerate()
@@ -101,7 +101,7 @@ pub fn snapshot(w: &World) -> Snap {
         for (h, c) in w
             .hidden
             .get(i)
-            .map(|h| h.discard.clone())
+            .map(|h| h.graveyard.clone())
             .unwrap_or_default()
             .iter()
             .enumerate()

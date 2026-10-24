@@ -23,6 +23,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("card.placed", None, turn_end)),
 
         // 奇迹水晶为0时此卡放入弃牌堆。
+        // TODO: Check, this effect should be silent
         On::Action(Action::CounterChanged(
             "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", 
             Some(crystals_changed_guard), 
@@ -60,17 +61,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书(1): 「你的回合结束时移除一个奇迹水晶」 -- C# `DecayCard.TurnEnd` ->
-/// `AddCrystals(-1)`. The 「奇迹水晶为0时此卡放入弃牌堆」 half is
+/// 规则书(1): 「你的回合结束时移除一个奇迹水晶」 
+/// The 「奇迹水晶为0时此卡放入弃牌堆」 half is
 /// [`on_crystals_changed`], not this tick.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
-    // TODO: This function needs a better name or a uniform shape
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 
-/// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」 -- C# `Empty()` /
-/// `H.Unplace(this, "discard")`.
+/// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」
 ///
 /// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a

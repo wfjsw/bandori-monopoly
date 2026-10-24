@@ -122,11 +122,11 @@ impl Table {
             let w = m.world_mut();
             for h in w.hidden.iter_mut() {
                 h.hand.clear();
-                h.draw.clear();
-                h.discard.clear();
+                h.deck.clear();
+                h.graveyard.clear();
             }
             for card in top_first.iter().rev() {
-                w.hidden[0].draw.insert(0, card.to_string());
+                w.hidden[0].deck.insert(0, card.to_string());
             }
         }
         m.quick_start();
@@ -628,8 +628,8 @@ impl Table {
         let w = self.m.world_mut();
         for h in w.hidden.iter_mut() {
             h.hand.clear();
-            h.draw.clear();
-            h.discard.clear();
+            h.deck.clear();
+            h.graveyard.clear();
             h.next_steps = None;
         }
         for p in w.st.players.iter_mut() {
@@ -713,12 +713,12 @@ impl Table {
 
     /// Replace the draw pile; `top_first[0]` is drawn first.
     pub fn set_draw(&mut self, who: usize, top_first: &[&str]) {
-        self.m.world_mut().hidden[who].draw =
+        self.m.world_mut().hidden[who].deck =
             top_first.iter().rev().map(|s| s.to_string()).collect();
     }
 
     pub fn set_discard(&mut self, who: usize, cards: &[&str]) {
-        self.m.world_mut().hidden[who].discard = cards.iter().map(|s| s.to_string()).collect();
+        self.m.world_mut().hidden[who].graveyard = cards.iter().map(|s| s.to_string()).collect();
     }
 
     /// Write a per-player state key. For the status layer counters this also
@@ -907,7 +907,7 @@ impl Table {
     /// The draw pile, top first.
     pub fn draw_pile(&self, who: usize) -> Vec<String> {
         self.m.world().hidden[who]
-            .draw
+            .deck
             .iter()
             .rev()
             .cloned()
@@ -915,7 +915,7 @@ impl Table {
     }
 
     pub fn discard(&self, who: usize) -> Vec<String> {
-        self.m.world().hidden[who].discard.clone()
+        self.m.world().hidden[who].graveyard.clone()
     }
 
     pub fn field(&self, who: usize) -> Vec<FieldCard> {

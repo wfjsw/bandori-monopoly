@@ -124,7 +124,7 @@ pub mod ctx {
     pub use crate::{
         add_card_crystals, add_charge_max, add_crystals, add_crystals_at, add_group_crystals,
         add_group_skill, add_rent_unit_bonus, add_ring_bonus, card_crystals, charge, charge_max,
-        crystals, crystals_at, decay, gain_charge, group_crystals, group_skill, group_skills,
+        crystals, crystals_at, remove_crystal, gain_charge, group_crystals, group_skill, group_skills,
         in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed, is_live_house_for,
         is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy, pay_rent, persona_is,
         persona_skill, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked, spend_charge,
@@ -226,7 +226,7 @@ pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
 }
 
 /// Burn one of this card's crystals (the decay tick). Returns the count left.
-pub fn decay() -> Result<i32, Prompt> {
+pub fn remove_crystal() -> Result<i32, Prompt> {
     add_crystals(-1, 0)
 }
 

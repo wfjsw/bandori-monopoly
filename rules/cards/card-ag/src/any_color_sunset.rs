@@ -84,7 +84,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         // 规则书: 「若为2则从弃牌堆中选择一张牌放置到抽牌堆顶」
         2 => {
             // TODO: Rename discard => graveyard
-            if let Some(id) = pick_from_discard(player_id, key!("any_color_sunset_deck_ask"))? {
+            if let Some(id) = pick_from_graveyard(player_id, key!("any_color_sunset_deck_ask"))? {
                 ctx::add_to_dest(player_id, &id, ctx::Dest::DeckTop);
             }
         }
@@ -125,7 +125,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         }
         // 规则书: 「若为5则从弃牌堆中选择一张牌加入手牌」
         5 => {
-            if let Some(id) = pick_from_discard(player_id, key!("any_color_sunset_hand_ask"))? {
+            if let Some(id) = pick_from_graveyard(player_id, key!("any_color_sunset_hand_ask"))? {
                 ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
             }
         },
@@ -138,13 +138,13 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
 /// discard pile, which is taken out of it. `None` (and a log line) when the
 /// discard is empty. The pick/take mechanism is [`ctx::pick_from_pile`]; this
 /// wrapper only binds this card's prompts.
-fn pick_from_discard(
+fn pick_from_graveyard(
     player_id: i32,
     ask: &'static str,
 ) -> Result<Option<String>, card_sdk::Prompt> {
     ctx::pick_from_pile(
         player_id,
-        ctx::CardPile::Discard,
+        ctx::CardPile::Graveyard,
         &Msg::new(key!("any_color_sunset_title")),
         &Msg::new(ask),
         Some(&Msg::new(key!("any_color_sunset_no_discard"))),

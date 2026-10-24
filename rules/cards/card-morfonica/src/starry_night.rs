@@ -95,7 +95,7 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
 /// C# `CardStarryNight.Remove` -- burn one crystal. The payout and the
 /// discard ride the write: [`on_crystals_changed`] is 规则书（3） and（1）.
 fn remove_crystal(_player_id: i32) -> card_sdk::Asked {
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 

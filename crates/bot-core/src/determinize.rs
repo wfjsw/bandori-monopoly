@@ -217,8 +217,8 @@ fn sample_world(
             rng.shuffle(&mut draw);
             hidden.push(Hidden {
                 hand: view.hand.clone(),
-                draw,
-                discard,
+                deck: draw,
+                graveyard: discard,
                 next_steps: None,
                 // Private pick-screen UI state (world.rs): never part of
                 // `MatchState`, so it is not on the seat's view and the search
@@ -233,8 +233,8 @@ fn sample_world(
             }
             hidden.push(Hidden {
                 hand,
-                draw,
-                discard,
+                deck: draw,
+                graveyard: discard,
                 next_steps: None,
                 // Opponent seats: same rule as above -- never visible, never
                 // sampled.
@@ -252,8 +252,8 @@ fn sample_world(
     let mut st = st.clone();
     for (p, h) in st.players.iter_mut().zip(&hidden) {
         p.hand = h.hand.len() as i32;
-        p.draw = h.draw.len() as i32;
-        p.discard = h.discard.clone();
+        p.draw = h.deck.len() as i32;
+        p.discard = h.graveyard.clone();
     }
     st.event_top = event_top;
 

@@ -123,7 +123,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
 /// [`on_crystals_changed`].
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 
