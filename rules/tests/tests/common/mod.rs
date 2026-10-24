@@ -658,12 +658,17 @@ impl Table {
             }
             p.state_set(bandori_std::state_key::EXILE_TO, -1);
             // Start-time resources: fire is a held token of the persona-skill
-            // instance (MARKERS.md §7), not a state key. Fans live in the
-            // state dict now (`ppFansUp` / `ppFansDown`), owned by the
-            // `mark:pp_fans` host. Clear the once-flag too so a later
-            // `at_start` in the same table can re-deal (MARKERS.md §4.5).
-            p.tokens
-                .retain(|t| t.name != bandori_std::fire::KEY);
+            // instance (MARKERS.md §7). Clear the **value** only -- the declared
+            // cap (`Counter.max`) is the already-declared latch and must survive
+            // so a per-turn re-hook leaves it alone. Fans live in the state dict
+            // (`ppFansUp` / `ppFansDown`), owned by the `mark:pp_fans` host.
+            // Clear the once-flag too so a later `at_start` in the same table
+            // can re-deal (MARKERS.md §4.5).
+            for tok in p.tokens.iter_mut() {
+                if tok.name == bandori_std::fire::KEY {
+                    tok.value = 0;
+                }
+            }
             p.state_set("ppFansUp", 0);
             p.state_set("ppFansDown", 0);
             p.state_set("mark.pp_fans.initial", 0);

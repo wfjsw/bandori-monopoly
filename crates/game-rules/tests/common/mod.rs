@@ -675,8 +675,14 @@ impl Table {
             }
             p.state_set(K_TILE_SLOT, -1);
             // Start-time resources: fire is a held token of the persona-skill
-            // instance (MARKERS.md §7), not a state key.
-            p.tokens.retain(|t| t.name != K_CHARGE && !t.name.starts_with("P✽P粉丝"));
+            // instance (MARKERS.md §7). Clear the value only -- the declared cap
+            // is the already-declared latch.
+            for tok in p.tokens.iter_mut() {
+                if tok.name == K_CHARGE {
+                    tok.value = 0;
+                }
+            }
+            p.tokens.retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
         for f in w.st.board_field.iter_mut() {
             f.props.remove(prop::NO_REWARD);
