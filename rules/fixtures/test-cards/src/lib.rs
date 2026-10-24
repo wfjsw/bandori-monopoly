@@ -158,7 +158,7 @@ fn crystal_play(player_id: i32) -> card_sdk::Asked {
     // The decay tick: a write that takes the count to zero. `decay` no longer
     // discards at 0 -- only the handler below is the 「no crystals -> discard」
     // check.
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 
@@ -242,7 +242,7 @@ fn lister(player_id: i32) -> card_sdk::Asked {
     if let Some(first) = hand.first() {
         if ctx::take_card(player_id, first, CardPile::Hand) {
             ctx::to_discard(player_id, first);
-            let found = ctx::cards_in(player_id, CardPile::Discard)
+            let found = ctx::cards_in(player_id, CardPile::Graveyard)
                 .iter()
                 .any(|c| c == first);
             ctx::log(

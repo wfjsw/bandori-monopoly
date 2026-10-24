@@ -236,9 +236,9 @@ long gone and those questions are `On::Filter(Filter::ActGate(...))` entries.
 
 Filter bodies may not prompt and may not call mutating `ctx` effects.
 `card_sdk::pure::refuse_if_filter` debug-asserts (and tests enforce) every
-mutating call: `gain` / `draw` / `place_card` / `set_dest` / `set_slot` /
-`inc_slot` / `roll` / `set_prop` / `state::set` / `plan::set_tag` /
-`add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
+mutating call: `gain` / `draw` / `place_card` / `place_self_to_field` /
+`set_dest` / `set_slot` / `inc_slot` / `roll` / `set_prop` / `state::set` /
+`plan::set_tag` / `add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
 log-why rule). A fused hook (value rewrite + gain/place/…) is split into a
 Filter half and an `On::Action` half on the appropriate event (e.g. `PayAfter`).
 
@@ -714,7 +714,7 @@ are `tile_in` classes.
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_tiles` (labels + prices + AI hint), `ask_player`, `ask_card`, `ask_number` |
 | nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | purchase (ABI v40/41) | `buy_quotes(player, kind, &[tile])` (batched quote), `buy(player, tile, kind)` (replaces `card_buy`), `acquire(player, from, tile, price)` (「收购」: pipeline pay, then assign → `bought` → `buyAfter`), `agent_offer`, `linger(player, expires)` (bind the running def as a turn-scoped instance in `TurnCtx.lingering` -- the hand-card home for 「本回合」 effects; a `set_prop` before it lands on the instance's props), `buy_price(t)` (the deed's base value). `trigger::{buy_kind, seller, price, set_price, deal_owner, set_deal_owner, deal_houses, set_deal_houses, deal_mortgaged, set_deal_mortgaged, set_reason}` carry the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` / `BuyAssign` payload (`docs/PURCHASE.md`). |
-| field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
+| field cards | `place_card`, `place_card_at`, `place_self_to_field` (「将此卡放置在场上」: `set_dest(Dest::Field)` + `place_card`, for a play body that stays in play; else `place_card` / `place_card_at` and name the card's own `Dest`), `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
 | cross-card messages (ABI v51) | `send(Target, name, &Message)`, `On::Message(names, pre, guard, body)`, `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text, reply}` -- see 「Cross-card messages」 |
 | tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `prop_at`, `set_prop_at`, `draw`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `buy`, `buy_quotes`, `card_build`, `ask_tiles`, `ai_agent_choice`, `is_color`, `raise`, `gain_typed`, `exile_of`, `stun_of`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 | event rules | `event_expire`, `event_is_active`, `event_deck_push`, `event_banish` (the active-list / deck handles; `docs/EVENTS.md`) |
