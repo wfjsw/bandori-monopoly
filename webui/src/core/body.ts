@@ -11,7 +11,22 @@
 /** One numbered effect, with its `1. / 2.` sub-step lines split out. */
 export interface Item {
   text: string;
-  sub: string[];
+  /**
+   * Nested `1. / 2.` sub-steps. **Optional on the wire**: the display export
+   * (`dump_display.rs`) omits the key entirely when an effect has none, so
+   * every reader must treat a missing `sub` as `[]` -- see [`itemSubs`].
+   * `ui/bodyText.parse` always fills it in.
+   */
+  sub?: string[];
+}
+
+/** The sub-steps of a numbered effect, tolerating an omitted `sub`.
+ *
+ *  The display export drops empty arrays, so `{ text }` is a complete item.
+ *  Reading `it.sub.length` unguarded throws `Cannot read properties of
+ *  undefined` and blanks the whole board -- use this instead. */
+export function itemSubs(it: Item): string[] {
+  return it.sub ?? [];
 }
 
 export type Block =

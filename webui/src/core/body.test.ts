@@ -4,7 +4,7 @@
 // reach into the sentence.
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { splitTypeTag } from "./body.ts";
+import { itemSubs, splitTypeTag, type Item } from "./body.ts";
 
 test("a leading type tag splits off as the subtitle", () => {
   assert.deepEqual(splitTypeTag("[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。"), {
@@ -58,4 +58,17 @@ test("the remainder is passed through verbatim", () => {
   const rest = splitTypeTag("[反击]：当你…").rest;
   assert.equal(rest, "：当你…");
   assert.equal(splitTypeTag("[反击]  两个空格").rest, "  两个空格");
+});
+
+// The display export (`dump_display.rs`) omits `sub` on a numbered effect that
+// has no nested `1. / 2.` steps, so a body item read straight off the wire can
+// be `{ text }` alone. `SkillBody` used to read `it.sub.length` unguarded --
+// `Cannot read properties of undefined (reading 'length')` on every plain
+// effect, which unmounted the tree and blanked the board.
+test("a display-export item with no sub key reads as no sub-steps", () => {
+  const bare = JSON.parse('{"text":"支付1000元。"}') as Item;
+  assert.deepEqual(itemSubs(bare), []);
+  // Explicit empty and populated forms stay as they are.
+  assert.deepEqual(itemSubs({ text: "x", sub: [] }), []);
+  assert.deepEqual(itemSubs({ text: "x", sub: ["a", "b"] }), ["a", "b"]);
 });

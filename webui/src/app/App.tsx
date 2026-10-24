@@ -2,6 +2,7 @@
 
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { playSceneBgm, sfx, unlockAudio } from "../core/audio";
+import { isRepeatCrash, reportCrash } from "../core/crash";
 import { useLangVersion, useProfile } from "../core/hooks";
 import { preloadRoute, warmAllWhenIdle, within } from "../core/preload";
 import { useCrossfade } from "../hooks/scene";
@@ -15,6 +16,7 @@ import { InspectPreviewHost } from "../ui/CardPreview";
 import { ToastHost } from "../ui/Toast";
 import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
+import { CrashBoundary } from "./CrashBoundary";
 import { InstallHint } from "./InstallHint";
 import { RotateHint } from "./RotateHint";
 import { Console } from "../console/Console";
@@ -48,6 +50,34 @@ document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.prev
 document.addEventListener("pointerdown", () => unlockAudio(), { capture: true });
 document.addEventListener("click", (e) => {
   if ((e.target as Element).closest("button:not(:disabled)")) sfx("tap", 40);
+});
+
+// Failures that never throw into React. `installLogCapture()` already logs
+// these; here we only record the crash. A lone `"error"` / `"rejection"` does
+// not put the panel up (see CrashBoundary) -- the codebase fires and ignores
+// many promises on purpose, and a healthy board must stay up.
+//
+// `isRepeatCrash` gates the *report*, not the registry: a timer that rejects
+// every 50 ms would otherwise rebuild the env fields forever for a crash
+// `reportCrash` is already going to refuse.
+window.addEventListener("error", (e) => {
+  const message = e.message || String(e.error ?? "error");
+  if (isRepeatCrash(message)) return;
+  reportCrash({
+    kind: "error",
+    message,
+    stack: e.error instanceof Error ? e.error.stack : undefined,
+  });
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const reason = e.reason;
+  const message = reason instanceof Error ? reason.message : String(reason);
+  if (isRepeatCrash(message)) return;
+  reportCrash({
+    kind: "rejection",
+    message,
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
 });
 
 export function App() {
@@ -85,8 +115,12 @@ export function App() {
   });
 
   const booted = ready && profile;
+  // One boundary around the whole tree: a throw in `Stage`, `ModalHost`, the
+  // scene, or the side overlays must not be the thing that blanks the screen.
+  // The panel itself is outside `Stage` (see CrashPanel) so it still paints if
+  // the stage is the component that died.
   return (
-    <>
+    <CrashBoundary>
       <Stage transitioning={fading}>
         {/* Remount on language change so every already-rendered string is re-read. */}
         <div key={lang} style={{ position: "absolute", inset: 0 }}>
@@ -102,6 +136,6 @@ export function App() {
       <InstallHint />
       <RotateHint />
       <Console />
-    </>
+    </CrashBoundary>
   );
 }
