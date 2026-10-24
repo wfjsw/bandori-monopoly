@@ -530,14 +530,14 @@ pub trait CardRules: Send + Sync {
     /// play into the body. `Err(Halt)` = a prompt is pending -- the same
     /// multi-pass / answer-log model as a body `Asked`.
     ///
-    /// Default: no collector, arg 0. `WasmRules` runs the entry's `OP_DECLARE`.
+    /// Default: no collector, empty arg. `WasmRules` runs the entry's `OP_DECLARE`.
     fn declare_activation(
         &self,
         _cx: &mut Cx,
         _player: usize,
         _card: &str,
-    ) -> Flow<Option<i32>> {
-        Ok(Some(0))
+    ) -> Flow<Option<Vec<u8>>> {
+        Ok(Some(Vec::new()))
     }
 
     /// Does this rule declare an activatable `On::Play` (a skill button / card

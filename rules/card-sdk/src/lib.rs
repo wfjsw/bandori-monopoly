@@ -683,10 +683,11 @@ impl CardDef {
 /// Play-from-hand entry ([`On::Play`]).
 #[derive(Clone, Copy)]
 pub struct PlayEntry {
-    /// External identifier for cross-card applicability queries
-    /// ([`On::id`], `ctx::entry_admits`, docs/ACTIVATION.md §3).
-    /// `""` = not externally addressable (the common case, free). Unique per
-    /// card, not globally.
+    /// Stable **internal** identifier for cross-card applicability queries
+    /// ([`On::id`], `ctx::query_guard`, docs/ACTIVATION.md §3). An ASCII slug
+    /// (`[A-Za-z0-9_][A-Za-z0-9_.:-]*`) -- never display text; that is
+    /// [`Self::label`]. `""` = not externally addressable (the common case,
+    /// free). Unique per card, not globally.
     pub id: &'static str,
     /// Gate condition (docs/GUARDS.md §4.3). `""` = no condition.
     pub pre: &'static str,
@@ -1213,16 +1214,23 @@ impl On {
         }
     }
 
-    /// Name this entry for cross-card applicability queries
-    /// (`ctx::entry_admits`, docs/ACTIVATION.md §3). `""` (the default) means
-    /// not externally addressable. Ids are unique **per card**, not globally.
+    /// Give this entry a stable **internal** identifier for cross-card
+    /// applicability queries (`ctx::query_guard`, docs/ACTIVATION.md §3).
+    /// `""` (the default) means not externally addressable. Ids are unique
+    /// **per card**, not globally.
     ///
-    /// The name is the target card's to choose -- a rulebook clause reads best:
+    /// **This is identity, not display text.** It is never shown to players.
+    /// It must be an ASCII slug -- `[A-Za-z0-9_][A-Za-z0-9_.:-]*` -- which
+    /// `build-ruleset` and `Ruleset::build` enforce. Rulebook wording belongs
+    /// in [`Self::label`] ("（2）") or [`Self::counter_reason`]; renaming a
+    /// clause must not silently break a query, and full-width vs half-width
+    /// parens are different strings that look identical in a diff.
     ///
     /// ```ignore
-    /// On::Play("", None, Some(can_use), use_skill).id("（2）")
-    /// // elsewhere:
-    /// ctx::entry_admits(player_id, "skill:美竹兰:叛逆的红挑染", "（2）")
+    /// // the skill's press entry:
+    /// On::Play("", None, Some(can_use), use_skill).id("press").label("（2）")
+    /// // elsewhere -- the slug, never the label:
+    /// ctx::query_guard(player_id, "skill:美竹兰:叛逆的红挑染", "press")
     /// ```
     pub const fn id(self, id: &'static str) -> Self {
         match self {
@@ -1432,6 +1440,23 @@ impl On {
             On::BuyBody(e) => e.label,
             On::BuildBody(e) => e.label,
             On::MessageBody(e) => e.label,
+        }
+    }
+
+    /// This entry's stable internal identifier (see [`Self::id`]); `""` = not
+    /// externally addressable. Never display text -- that is [`Self::label_of`].
+    pub const fn id_of(&self) -> &'static str {
+        match self {
+            On::PlayBody(e) => e.id,
+            On::CounteractBody(e) => e.id,
+            On::Action(e) => e.id,
+            On::Filter(e) => e.id,
+            On::SettleBody(e) => e.id,
+            On::MortgageBody(e) => e.id,
+            On::RedeemBody(e) => e.id,
+            On::BuyBody(e) => e.id,
+            On::BuildBody(e) => e.id,
+            On::MessageBody(e) => e.id,
         }
     }
 

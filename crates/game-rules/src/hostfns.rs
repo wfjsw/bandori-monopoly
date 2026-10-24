@@ -1336,7 +1336,7 @@ pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Re
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, 0, false);
+    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {
@@ -2724,7 +2724,7 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, 0, false);
+    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {
@@ -2799,7 +2799,7 @@ pub fn card_replayable<C: HostCtx>(
             let depth = c.st().depth + 1;
             let nested = HostState::new(rules.clone(), world, vec![], depth);
             let (res, _inner, left) =
-                c.call_entry(nested, card, entry, export::OP_GUARD, player_id, 0, true);
+                c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], true);
             c.set_fuel(left)?;
             let playable = match res {
                 Ok(CallOut::Msg(None)) => true,
@@ -2821,56 +2821,25 @@ pub fn card_replayable<C: HostCtx>(
 /// prompt answers `false` (the same way [`RuleError::GuardPrompted`] folds an
 /// eligibility scan to "not eligible").
 ///
-/// `trig` is the trigger-kind spelling; empty = no trigger selection. For a
-/// trigger-keyed kind (`Counteract` / `Action` / `Filter`) an empty `trig` is
-/// ambiguous and answers `false` -- use [`can_fire_any`] for the OR.
-pub fn can_fire<C: HostCtx>(
+/// The entry is addressed by its stable internal slug (`ManifestOn::id`), not
+/// by a positional `(kind, trigger)` pair -- that is what removes "which of
+/// this card's three hooks?" ambiguity. An unnamed or unknown id answers `0`.
+pub fn query_guard<C: HostCtx>(
     c: &mut C,
     player_id: i32,
     p: i32,
     n: i32,
-    kind: i32,
-    tp: i32,
-    tn: i32,
+    ep: i32,
+    el: i32,
 ) -> Result<i32, HostErr> {
     let id = guest_str(c, p, n)?;
-    let trig = if tn > 0 {
-        Some(guest_str(c, tp, tn)?)
-    } else {
-        None
-    };
-    can_fire_inner(c, player_id, &id, kind, trig.as_deref(), false)
-}
-
-/// Does **any** entry of `card_id` at `kind` admit? The explicit OR over
-/// [`can_fire`]'s per-entry form.
-pub fn can_fire_any<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    p: i32,
-    n: i32,
-    kind: i32,
-) -> Result<i32, HostErr> {
-    let id = guest_str(c, p, n)?;
-    can_fire_inner(c, player_id, &id, kind, None, true)
-}
-
-/// Shared body of [`can_fire`] / [`can_fire_any`]. `any` ORs over every entry
-/// of the kind; otherwise `trig` must pick one out for a trigger-keyed kind.
-fn can_fire_inner<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    id: &str,
-    kind: i32,
-    trig: Option<&str>,
-    any: bool,
-) -> Result<i32, HostErr> {
+    let entry_id = guest_str(c, ep, el)?;
     let rules = c
         .st()
         .rules
         .clone()
-        .ok_or_else(|| HostErr::trap("can_fire unavailable here"))?;
-    let Some(card) = rules.by_id(id) else {
+        .ok_or_else(|| HostErr::trap("query_guard unavailable here"))?;
+    let Some(card) = rules.by_id(&id) else {
         return Ok(0);
     };
     let Some(info) = rules.card(card) else {
@@ -2879,44 +2848,47 @@ fn can_fire_inner<C: HostCtx>(
     if c.st().depth >= MAX_NESTING {
         return Ok(0);
     }
-    let kind = match OnKind::from_i32(kind) {
-        Some(k) => k,
-        None => return Ok(0),
-    };
-    // `On::Play` is not trigger-keyed and is the "is any press open" question
-    // the engine's own `play_entry_preferring_gated` answers.
-    let entries: Vec<i32> = if kind == OnKind::Play {
+    // Named-entry lookup (docs/ACTIVATION.md §3). `entry::PRESS` is reserved:
+    // it always resolves the press entry the engine itself would pick, so a
+    // card with several press modes answers "is *any* press open" the way
+    // `play_entry_preferring_gated` does. Any other id must be a declared
+    // slug; unnamed / unknown is not externally addressable and fails closed.
+    let entry = if entry_id == card_sdk::abi::entry::PRESS {
         match info.play_entry_preferring_gated() {
-            Some(e) => vec![e],
+            Some(e) => e,
             None => return Ok(0),
         }
-    } else if any {
-        info.entries(kind, None)
     } else {
-        let Some(t) = trig else {
-            // Ambiguous for a trigger-keyed kind: fail closed (docs/ACTIVATION.md §3).
-            return Ok(0);
-        };
-        let tk = crate::TriggerKind::from_str(t);
-        if tk == crate::TriggerKind::None {
-            return Ok(0);
+        match info.entry_by_id(&entry_id) {
+            Some(e) => e,
+            None => return Ok(0),
         }
-        info.entries(kind, Some(tk))
     };
-    if entries.is_empty() {
-        return Ok(0);
+    let kind = match info.on.get(entry as usize) {
+        Some(o) => OnKind::from_i32(o.kind).unwrap_or(OnKind::Play),
+        None => return Ok(0),
+    };
+    Ok(query_guard_entry(c, player_id, &id, card, entry, kind)? as i32)
+}
+
+/// Serve the running activation's declared argument as `postcard` bytes
+/// (docs/ACTIVATION.md §2). `out_ptr = 0` asks for the size only -- the
+/// `group_skills` / `out_buf` shape.
+pub fn declared_arg<C: HostCtx>(c: &mut C, out_ptr: i32, cap: i32) -> Result<i32, HostErr> {
+    let bytes = c.st().declared.clone();
+    let n = bytes.len() as i32;
+    if out_ptr == 0 || cap < n {
+        return Ok(n);
     }
-    for entry in entries {
-        if can_fire_entry(c, player_id, id, card, entry, kind)? {
-            return Ok(1);
-        }
+    if n > 0 {
+        c.write_guest(out_ptr, &bytes)?;
     }
-    Ok(0)
+    Ok(n)
 }
 
 /// [`admits`] for one entry: condition + residual guard / play gate, body
 /// never run, probe mode.
-fn can_fire_entry<C: HostCtx>(
+fn query_guard_entry<C: HostCtx>(
     c: &mut C,
     player_id: i32,
     id: &str,
@@ -2928,7 +2900,7 @@ fn can_fire_entry<C: HostCtx>(
         .st()
         .rules
         .clone()
-        .ok_or_else(|| HostErr::trap("can_fire unavailable here"))?;
+        .ok_or_else(|| HostErr::trap("query_guard unavailable here"))?;
     let pre = rules.pre(card, entry);
     let scope;
     let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
@@ -2954,7 +2926,7 @@ fn can_fire_entry<C: HostCtx>(
                 let depth = c.st().depth + 1;
                 let nested = HostState::new(rules.clone(), world, vec![], depth);
                 let (res, _inner, left) =
-                    c.call_entry(nested, card, entry, export::OP_GUARD, player_id, 0, true);
+                    c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], true);
                 c.set_fuel(left)?;
                 let playable = match res {
                     Ok(CallOut::Msg(None)) => true,
@@ -2973,7 +2945,7 @@ fn can_fire_entry<C: HostCtx>(
         let depth = c.st().depth + 1;
         let nested = HostState::new(rules.clone(), world, vec![], depth);
         let (res, _inner, left) =
-            c.call_entry(nested, card, entry, export::OP_GUARD, player_id, 0, false);
+            c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], false);
         let _ = c.set_fuel(left);
         match res {
             Ok(CallOut::Code(v)) => Ok(v != 0),
@@ -3403,7 +3375,7 @@ pub fn send<C: HostCtx>(
         nested.msg = payload.clone();
         nested.msg_reply = 0;
         let (res, inner, left) =
-            c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, 0, false);
+            c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, &[], false);
         let st = c.st_mut();
         st.world = inner.world;
         if let Some(w) = st.world.as_mut() {

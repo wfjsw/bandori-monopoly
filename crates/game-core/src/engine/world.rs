@@ -178,7 +178,7 @@ pub struct TurnCtx {
     /// resolved (docs/ACTIVATION.md §2). Scoped to one play, like
     /// `play_from_hand`. `rules.play` reads it into `Call::Play`'s `arg`.
     #[serde(default)]
-    pub play_arg: i32,
+    pub play_arg: Vec<u8>,
     /// Seats whose designation on the play being resolved is cancelled
     /// (「取消其对目标之一的designate」). A per-pair cancel: the rest of the play's
     /// designations still land. Cleared at the start of each play.
@@ -255,7 +255,7 @@ impl Default for TurnCtx {
             abnormal: Vec::new(),
             extreme: Extreme::Plain,
             play_from_hand: false,
-            play_arg: 0,
+            play_arg: Vec::new(),
             cancelled_designations: Vec::new(),
             play_doubled: None,
             paid_in_settle: 0,

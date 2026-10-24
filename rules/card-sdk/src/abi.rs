@@ -912,6 +912,21 @@ pub mod text_slot {
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "ruleset";
 
+/// Reserved entry identifiers for cross-card applicability queries
+/// (`ctx::query_guard`, docs/ACTIVATION.md §3). Lives in `abi` so both the
+/// guest and the host see the same spelling.
+pub mod entry {
+    /// The card's **press** entry (`On::Play`): "may I use this?", which is
+    /// what a skill button asks. Not a declared id -- it always resolves the
+    /// entry the engine itself would pick (`play_entry_preferring_gated`), so
+    /// a card with several press modes answers "is *any* press open" the way
+    /// the engine picks a mode.
+    ///
+    /// A card may not declare this id (`On::id`; `build-ruleset` rejects it),
+    /// so the word cannot be squatted.
+    pub const PRESS: &str = "press";
+}
+
 /// Guest exports.
 pub mod export {
     pub const ABI_VERSION: &str = "ruleset_abi_version";
@@ -2726,10 +2741,17 @@ pub struct ManifestOn {
     pub has_guard: bool,
     /// Does this entry collect an activation argument before its body
     /// (`On::declare`, docs/ACTIVATION.md §2)? The host then runs
-    /// [`export::OP_DECLARE`] before the point of no return and passes the
-    /// answer as `arg` on [`export::OP_RUN`]. Never `skip_serializing_if`:
-    /// postcard is not self-describing. v98. `On::Filter` is never `true`.
+    /// [`export::OP_DECLARE`] before the point of no return, stores the
+    /// postcard bytes, and serves them back on [`export::OP_RUN`] through
+    /// `ruleset_declared_arg`. Never `skip_serializing_if`: postcard is not
+    /// self-describing. v98. `On::Filter` is never `true`.
     pub has_declare: bool,
+    /// Stable **internal** identifier for cross-card applicability queries
+    /// (`ctx::query_guard`, docs/ACTIVATION.md §3). An ASCII slug matching
+    /// `[A-Za-z0-9_][A-Za-z0-9_.:-]*`; `None` = not externally addressable.
+    /// Never display text -- that is [`Self::label`]. v98.
+    /// Never `skip_serializing_if`: postcard is not self-describing.
+    pub id: Option<String>,
     /// Message names this [`OnKind::Message`] entry answers (empty otherwise).
     #[serde(default)]
     pub messages: Vec<String>,

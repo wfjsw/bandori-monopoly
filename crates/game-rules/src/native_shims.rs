@@ -402,10 +402,12 @@ pub trait HostOps {
     fn op_card_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_replayable`
     fn op_card_replayable(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_can_fire` -- cross-card applicability (docs/ACTIVATION.md §3).
-    fn op_can_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_can_fire_any`
-    fn op_can_fire_any(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_query_guard` -- cross-card applicability by named entry id
+    /// (docs/ACTIVATION.md §3).
+    fn op_query_guard(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_declared_arg` -- the running activation's postcard arg
+    /// (docs/ACTIVATION.md §2).
+    fn op_declared_arg(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_roller`
     fn op_set_roller(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_steps`
@@ -1382,11 +1384,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_replayable(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_replayable(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_can_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::can_fire(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
+    fn op_query_guard(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::query_guard(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
-    fn op_can_fire_any(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::can_fire_any(self, a[0], a[1], a[2], a[3])? as i64)
+    fn op_declared_arg(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::declared_arg(self, a[0], a[1])? as i64)
     }
     fn op_set_roller(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_roller(self, a[0])?;
@@ -3669,29 +3671,24 @@ pub unsafe extern "C-unwind" fn ruleset_card_move(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_can_fire(
+pub unsafe extern "C-unwind" fn ruleset_query_guard(
     player_id: i32,
     ptr: i32,
     len: i32,
-    kind: i32,
-    trig_ptr: i32,
-    trig_len: i32,
+    e_ptr: i32,
+    e_len: i32,
 ) -> i32 {
     with_host(
-        |h| match h.op_can_fire([player_id, ptr, len, kind, trig_ptr, trig_len]) {
+        |h| match h.op_query_guard([player_id, ptr, len, e_ptr, e_len, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },
     )
 }
 
-pub unsafe extern "C-unwind" fn ruleset_can_fire_any(
-    player_id: i32,
-    ptr: i32,
-    len: i32,
-    kind: i32,
-) -> i32 {
-    with_host(|h| match h.op_can_fire_any([player_id, ptr, len, kind, 0, 0]) {
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_declared_arg(out_ptr: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_declared_arg([out_ptr, cap, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

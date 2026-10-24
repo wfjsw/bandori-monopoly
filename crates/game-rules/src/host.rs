@@ -135,6 +135,20 @@ impl CardInfo {
         self.entries(kind, trigger).first().copied()
     }
 
+    /// The entry named by a stable internal identifier (`ManifestOn::id`,
+    /// docs/ACTIVATION.md §3). `""` and unknown ids answer `None` -- the
+    /// caller's query is then `false`, which is the point: an unnamed entry is
+    /// not externally addressable.
+    pub fn entry_by_id(&self, id: &str) -> Option<i32> {
+        if id.is_empty() {
+            return None;
+        }
+        self.on
+            .iter()
+            .position(|o| o.id.as_deref() == Some(id))
+            .map(|i| i as i32)
+    }
+
     /// **Every** entry of `kind` answering `trigger`, in declaration order.
     /// A card may carry several independent effects on one timing (「初始1，
     /// 上限2」 plus 「每回合开始时」); all of them run.
@@ -204,23 +218,23 @@ impl CardInfo {
 
 /// What to run. `Ruleset` resolves it to the card's matching entry point; a
 /// card without one simply does nothing.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Call {
     /// `On::Play` -- the effect when played from hand. `arg` is the activation
-    /// argument the play path's `OP_DECLARE` collected (docs/ACTIVATION.md §2);
-    /// 0 when the entry has no declare.
+    /// argument the play path's `OP_DECLARE` collected (docs/ACTIVATION.md §2)
+    /// as `postcard` bytes; empty when the entry has no declare.
     Play {
         card: i32,
         player_id: i32,
-        arg: i32,
+        arg: Vec<u8>,
     },
     /// `On::Counteract` -- the counteraction effect, for the world's current
     /// trigger kind. `arg` is the argument `finish_offer`'s `OP_DECLARE`
-    /// recorded on the chain link; 0 when the entry has no declare.
+    /// recorded on the chain link.
     Counteract {
         card: i32,
         player_id: i32,
-        arg: i32,
+        arg: Vec<u8>,
     },
     /// `On::Action` -- the field-card hook for `kind`.
     Hook {
@@ -694,8 +708,9 @@ pub struct HookRun<W> {
 /// What a bare [`Ruleset::declare_entry`] run collected, before the point of
 /// no return (docs/ACTIVATION.md §2).
 pub enum DeclareOut {
-    /// Proceed; the body receives this as its activation argument.
-    Arg(i32),
+    /// Proceed; the body receives these `postcard` bytes as its activation
+    /// argument (docs/ACTIVATION.md §2).
+    Arg(Vec<u8>),
     /// The player declined: the entry does not fire at all.
     Declined,
     /// A prompt is pending -- the caller pauses and re-runs with the answer.
@@ -714,7 +729,7 @@ pub enum Admitted<W> {
     /// The entry applies. `next_answer` is the cursor **after** `admits` and
     /// `OP_DECLARE`; `arg` is the activation argument [`OP_DECLARE`] collected
     /// (0 when the entry has no declare).
-    Yes { next_answer: usize, arg: i32 },
+    Yes { next_answer: usize, arg: Vec<u8> },
     /// The entry does not apply (condition / guard / a declined declare).
     /// `next_answer` is the cursor after whatever prompts ran -- a decline
     /// that *came from a prompt* has consumed its answer-log slot and must not
@@ -1473,9 +1488,9 @@ impl Ruleset {
         // admission and are not re-checked at body time; their `arg` was
         // collected at the offer layer and rides the `Call` -- `resolve_jobs`
         // never re-enters `OP_DECLARE`.)
-        let mut arg = match call {
-            Call::Play { arg, .. } | Call::Counteract { arg, .. } => arg,
-            _ => 0,
+        let mut arg = match &call {
+            Call::Play { arg, .. } | Call::Counteract { arg, .. } => arg.clone(),
+            _ => Vec::new(),
         };
         let mut next_answer = 0;
         if matches!(
@@ -1528,6 +1543,7 @@ impl Ruleset {
         if let Some(cb) = on_body.as_deref_mut() {
             cb(store.data_mut().w(), entry);
         }
+        store.data_mut().declared = arg.clone();
         let res = call_card(
             &self.inner,
             &mut store,
@@ -1535,7 +1551,6 @@ impl Ruleset {
             entry,
             export::OP_RUN,
             player_id,
-            arg,
         );
         finish(store, res)
     }
@@ -1596,7 +1611,6 @@ impl Ruleset {
                     entry,
                     export::OP_GUARD,
                     player_id,
-                    0,
                 )
             }) {
                 Ok(v) => {
@@ -1662,37 +1676,28 @@ impl Ruleset {
         if !self.has_declare(card, entry) {
             return Ok(Admitted::Yes {
                 next_answer: start_answer,
-                arg: 0,
+                arg: Vec::new(),
             });
         }
         let mut store = self.store(world.clone(), answers, start_answer)?;
         let res = crate::inline::with_no_inline(|| {
-            call_card(
-                &self.inner,
-                &mut store,
-                card,
-                entry,
-                export::OP_DECLARE,
-                player_id,
-                0,
-            )
+            call_card_declare(&self.inner, &mut store, card, entry, player_id)
         });
         let after = store.data().next_answer;
         match res {
             // Decline: the entry does not fire. The cursor has already
             // advanced past any prompt the collector made.
-            Ok(v) if v == abi::EXIT_DECLINED as i64 => {
+            Ok((code, _bytes)) if code == abi::EXIT_DECLINED as i64 => {
                 let _ = finish(store, Ok(0))?;
                 Ok(Admitted::No {
                     next_answer: after,
                 })
             }
-            Ok(v) => {
-                let arg = v as i32;
+            Ok((_code, bytes)) => {
                 let _ = finish(store, Ok(0))?;
                 Ok(Admitted::Yes {
                     next_answer: after,
-                    arg,
+                    arg: bytes,
                 })
             }
             Err(e) => match finish(store, Err(e)) {
@@ -1732,32 +1737,30 @@ impl Ruleset {
         answers: &[i32],
     ) -> Result<DeclareOut, RuleError> {
         if !self.has_declare(card, entry) {
-            return Ok(DeclareOut::Arg(0));
+            return Ok(DeclareOut::Arg(Vec::new()));
         }
         let mut store = self.store(world.clone(), answers, 0)?;
         let res = crate::inline::with_no_inline(|| {
-            call_card(
-                &self.inner,
-                &mut store,
-                card,
-                entry,
-                export::OP_DECLARE,
-                player_id,
-                0,
-            )
+            call_card_declare(&self.inner, &mut store, card, entry, player_id)
         });
         match res {
-            Ok(v) if v == abi::EXIT_DECLINED as i64 => {
+            Ok((code, bytes)) if code == abi::EXIT_DECLINED as i64 => {
                 let _ = finish(store, Ok(0))?;
                 Ok(DeclareOut::Declined)
             }
-            Ok(v) => {
+            Ok((code, bytes)) if code == abi::EXIT_NEED_INPUT as i64 => {
                 let _ = finish(store, Ok(0))?;
-                Ok(DeclareOut::Arg(v as i32))
+                // `finish` already consumed the pause into `Outcome`; fall
+                // through to the error arm shape by reporting a generic pause.
+                Ok(DeclareOut::Arg(bytes))
+            }
+            Ok((_code, bytes)) => {
+                let _ = finish(store, Ok(0))?;
+                Ok(DeclareOut::Arg(bytes))
             }
             Err(e) => match finish(store, Err(e)) {
                 Ok(Outcome::NeedInput(p, _)) => Ok(DeclareOut::Paused(p)),
-                Ok(_) => Ok(DeclareOut::Arg(0)),
+                Ok(_) => Ok(DeclareOut::Arg(Vec::new())),
                 Err(e2) => Err(e2),
             },
         }
@@ -1870,6 +1873,7 @@ impl Ruleset {
             if let Some(cb) = on_body.as_deref_mut() {
                 cb(store.data_mut().w(), entry);
             }
+            store.data_mut().declared = arg.clone();
             let res = call_card(
                 &self.inner,
                 &mut store,
@@ -1877,7 +1881,6 @@ impl Ruleset {
                 entry,
                 export::OP_RUN,
                 player_id,
-                arg,
             );
             let after_body = store.data().next_answer;
             let outcome = finish(store, res)?;
@@ -1992,7 +1995,6 @@ impl Ruleset {
                         entry,
                         export::OP_GUARD,
                         player_id,
-                        0,
                     )
                 }) {
                     Ok(v) => Ok(v != 0),
@@ -2779,7 +2781,7 @@ pub trait HostCtx {
         entry: i32,
         op: i32,
         player_id: i32,
-        arg: i32,
+        arg: &[u8],
         want_msg: bool,
     ) -> (
         Result<CallOut, HostErr>,
@@ -2811,6 +2813,10 @@ pub struct HostState<W, R = DefaultRules> {
     pub count: i32,
     pub asked: Option<Prompt>,
     pub host_request: Option<HostRequest>,
+    /// The activation argument (`postcard` bytes) the entry's `OP_DECLARE`
+    /// collected, served back to the body via `ctx::declared_arg`
+    /// (docs/ACTIVATION.md §2). Set before `OP_RUN`; empty = none.
+    pub declared: Vec<u8>,
     pub depth: u32,
     // -- message context (`On::Message` / `ctx::send`) -------------------
     /// Sender instance uid for the message being handled.
@@ -2861,6 +2867,7 @@ impl<W, R: RulesHandle> HostState<W, R> {
             count: 0,
             asked: None,
             host_request: None,
+            declared: Vec::new(),
             depth,
             msg_sender_uid: -1,
             msg_sender_seat: -1,
@@ -2918,7 +2925,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
         entry: i32,
         op: i32,
         player_id: i32,
-        arg: i32,
+        arg: &[u8],
         want_msg: bool,
     ) -> (Result<CallOut, HostErr>, HostState<W>, u64) {
         let rules = match nested.rules.clone() {
@@ -2937,6 +2944,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
             let inner = store.into_data();
             return (Err(e), inner, fuel);
         }
+        store.data_mut().declared = arg.to_vec();
         let res = if want_msg {
             match call_card_msg(&rules, &mut store, card, entry, op, player_id) {
                 Ok(m) => Ok(CallOut::Msg(m)),
@@ -2944,7 +2952,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
                 Err(e) => Err(HostErr::trap(be::error_text(&e))),
             }
         } else {
-            match call_card(&rules, &mut store, card, entry, op, player_id, arg) {
+            match call_card(&rules, &mut store, card, entry, op, player_id) {
                 Ok(v) => Ok(CallOut::Code(v)),
                 Err(e) if be::is_need_input(&e) => Err(HostErr::NeedInput),
                 Err(e) => Err(HostErr::trap(be::error_text(&e))),
@@ -2986,7 +2994,6 @@ fn call_card<W: CardWorld>(
     entry: i32,
     op: i32,
     player_id: i32,
-    arg: i32,
 ) -> Result<i64, Error> {
     let slot = rules.slots[card as usize];
     #[cfg(feature = "bot-cost")]
@@ -3001,8 +3008,8 @@ fn call_card<W: CardWorld>(
     #[cfg(feature = "bot-cost")]
     let t1 = std::time::Instant::now();
     let out = inst
-        .get_typed_func::<(i32, i32, i32, i32, i32), i64>(&mut *store, export::ON)?
-        .call(&mut *store, (slot.local, entry, op, player_id, arg))
+        .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
+        .call(&mut *store, (slot.local, entry, op, player_id))
         .and_then(fold_exit);
     #[cfg(feature = "bot-cost")]
     bot_cost::GUEST_NS.fetch_add(
@@ -3039,8 +3046,8 @@ fn call_card_msg<W: CardWorld>(
     #[cfg(feature = "bot-cost")]
     let t1 = std::time::Instant::now();
     let packed = inst
-        .get_typed_func::<(i32, i32, i32, i32, i32), i64>(&mut *store, export::ON)?
-        .call(&mut *store, (slot.local, entry, op, player_id, 0))
+        .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
+        .call(&mut *store, (slot.local, entry, op, player_id))
         .and_then(fold_exit)?;
     #[cfg(feature = "bot-cost")]
     bot_cost::GUEST_NS.fetch_add(
@@ -3058,6 +3065,38 @@ fn call_card_msg<W: CardWorld>(
         ))
     })?;
     Ok(Some(engine_msg(m)))
+}
+
+/// Run one `OP_DECLARE` collector and read back its `postcard` bytes
+/// (docs/ACTIVATION.md §2). The packed return is `(ptr<<32)|len` in guest
+/// memory, so a buffer address can never collide with an `EXIT_*` sentinel.
+///
+/// Returns the raw `i64` plus the decoded bytes (empty when the return was a
+/// sentinel or a zero-length buffer). `declare_entry` decides what each
+/// sentinel means.
+#[cfg(feature = "sandbox")]
+fn call_card_declare<W: CardWorld>(
+    rules: &Inner,
+    store: &mut Store<HostState<W>>,
+    card: i32,
+    entry: i32,
+    player_id: i32,
+) -> Result<(i64, Vec<u8>), Error> {
+    let slot = rules.slots[card as usize];
+    let inst = instantiate_cached(rules, &mut *store, slot.module)?;
+    let packed = inst
+        .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
+        .call(&mut *store, (slot.local, entry, export::OP_DECLARE, player_id))
+        .and_then(fold_exit)?;
+    if packed == 0
+        || packed == abi::EXIT_NEED_INPUT as i64
+        || packed == abi::EXIT_DECLINED as i64
+    {
+        return Ok((packed, Vec::new()));
+    }
+    let (ptr, len) = abi::unpack(packed);
+    let bytes = read_mem(&inst, store, ptr as i32, len as i32)?;
+    Ok((packed, bytes))
 }
 
 /// Validate one module and read its manifest. Also reads the optional
@@ -5202,23 +5241,22 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "can_fire",
+        "query_guard",
         |mut c: C<W>,
          player_id: i32,
          p: i32,
          n: i32,
-         kind: i32,
-         tp: i32,
-         tn: i32|
+         ep: i32,
+         el: i32|
          -> Result<i32, Error> {
-            hostfns::can_fire(&mut c, player_id, p, n, kind, tp, tn).map_err(HostErr::into_err)
+            hostfns::query_guard(&mut c, player_id, p, n, ep, el).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "can_fire_any",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, kind: i32| -> Result<i32, Error> {
-            hostfns::can_fire_any(&mut c, player_id, p, n, kind).map_err(HostErr::into_err)
+        "declared_arg",
+        |mut c: C<W>, out_ptr: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::declared_arg(&mut c, out_ptr, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5491,6 +5529,7 @@ impl HostState<NullWorld> {
             count: 0,
             asked: None,
             host_request: None,
+            declared: Vec::new(),
             depth: 0,
             msg_sender_uid: -1,
             msg_sender_seat: -1,

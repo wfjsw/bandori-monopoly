@@ -32,6 +32,14 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     },
                     has_guard: o.has_guard(),
                     has_declare: o.has_declare(),
+                    id: {
+                        let i = o.id_of();
+                        if i.is_empty() {
+                            None
+                        } else {
+                            Some(String::from(i))
+                        }
+                    },
                     messages: match o {
                         On::MessageBody(e) => e.names.iter().map(|s| String::from(*s)).collect(),
                         _ => Vec::new(),
@@ -170,7 +178,6 @@ pub fn on(
     entry: i32,
     op: i32,
     player_id: i32,
-    arg: i32,
 ) -> i64 {
     // Call boundary: every guest buffer this entry hands the host is interned
     // in a **per-call native frame**. Nested `call_entry`s push their own frame
@@ -222,12 +229,12 @@ pub fn on(
             None => 0,
         },
         // Activation-argument collector (docs/ACTIVATION.md §2). Runs before
-        // the point of no return; the host stores the answer and passes it
-        // back in as `arg` on `OP_RUN`.
+        // the point of no return; the host stores the postcard bytes and
+        // serves them back to the body via `ctx::declared_arg`.
         (entry, export::OP_DECLARE) => fold_declare(declare_of(&entry), player_id),
         // Pure filter bodies: one `drive` per shape, which owns the type cast
         // of `body` and the host IO. See `payload::drive_*`. Filters never
-        // declare (`arg` is ignored).
+        // declare.
         (On::Filter(e), _) => {
             (e.drive)(player_id, e.body);
             0
@@ -258,65 +265,50 @@ pub fn on(
                 body, drive, shape, ..
             }),
             _,
-        ) => match drive(player_id, body_arg(shape, arg), body) {
-            Ok(()) => 0,
-            // Asked: the host reads the published question and re-runs us with
-            // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.
-            Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
-        },
-        (On::Action(e), _) => match (e.drive)(player_id, body_arg(e.shape, arg), e.body) {
+        ) => {
+            let _ = shape;
+            match drive(player_id, body) {
+                Ok(()) => 0,
+                // Asked: the host reads the published question and re-runs us
+                // with the answer. The old `EXIT_NEED_INPUT` trap, as a return
+                // value.
+                Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+            }
+        }
+        (On::Action(e), _) => match (e.drive)(player_id, e.body) {
             Ok(()) => 0,
             Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
         },
     }
 }
 
-/// The `declare` collector on an entry, if any. `On::Filter` never has one.
-fn declare_of(o: &On) -> Option<fn(i32) -> crate::Declared> {
+/// The `declare` collector drive on an entry, if any. `On::Filter` never has
+/// one.
+fn declare_of(o: &On) -> Option<(crate::DeclareDrive, *const ())> {
     match o {
-        On::PlayBody(e) => e.declare,
-        On::CounteractBody(e) => e.declare,
-        On::Action(e) => e.declare,
+        On::PlayBody(e) => e.declare_drive.zip(e.declare),
+        On::CounteractBody(e) => e.declare_drive.zip(e.declare),
+        On::Action(e) => e.declare_drive.zip(e.declare),
         On::Filter(_) => None,
-        On::SettleBody(e) => e.declare,
-        On::MortgageBody(e) => e.declare,
-        On::RedeemBody(e) => e.declare,
-        On::BuyBody(e) => e.declare,
-        On::BuildBody(e) => e.declare,
-        On::MessageBody(e) => e.declare,
+        On::SettleBody(e) => e.declare_drive.zip(e.declare),
+        On::MortgageBody(e) => e.declare_drive.zip(e.declare),
+        On::RedeemBody(e) => e.declare_drive.zip(e.declare),
+        On::BuyBody(e) => e.declare_drive.zip(e.declare),
+        On::BuildBody(e) => e.declare_drive.zip(e.declare),
+        On::MessageBody(e) => e.declare_drive.zip(e.declare),
     }
 }
 
-/// A [`BodyShape::Plain`] body ignores the activation argument; a
-/// [`BodyShape::WithArg`] one receives it. This is where a decline-only
-/// [`On::declare`] still passes a real `0` through.
-fn body_arg(shape: crate::BodyShape, arg: i32) -> i32 {
-    match shape {
-        crate::BodyShape::Plain => 0,
-        crate::BodyShape::WithArg => arg,
-    }
-}
-
-/// Fold one [`crate::Activation`] to the wire. See [`export::OP_DECLARE`].
-fn fold_declare(decl: Option<fn(i32) -> crate::Declared>, player_id: i32) -> i64 {
-    let Some(f) = decl else {
-        // No collector: proceed with the default arg. The host only calls
-        // `OP_DECLARE` when `ManifestOn::has_declare`, so this is a backstop.
+/// Run one collector and fold it to the wire: `EXIT_DECLINED`,
+/// `EXIT_NEED_INPUT`, or packed `(ptr<<32)|len` of `postcard(T)`. A buffer
+/// address, so no sentinel collision is possible.
+fn fold_declare(decl: Option<(crate::DeclareDrive, *const ())>, player_id: i32) -> i64 {
+    let Some((drive, f)) = decl else {
+        // No collector. The host only calls `OP_DECLARE` when
+        // `ManifestOn::has_declare`, so this is a backstop.
         return 0;
     };
-    match f(player_id) {
-        Ok(crate::Activation::Decline) => crate::abi::EXIT_DECLINED as i64,
-        Ok(crate::Activation::Arg(n)) => {
-            // A collision with either sentinel would be read as "paused" or
-            // "declined" instead of as the arg -- fail loudly rather than
-            // silently mis-declare (docs/ACTIVATION.md §2).
-            if n == crate::abi::EXIT_NEED_INPUT || n == crate::abi::EXIT_DECLINED {
-                panic!("activation argument {n:#x} collides with an EXIT sentinel");
-            }
-            n as i64
-        }
-        Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
-    }
+    drive(player_id, f)
 }
 
 /// Generate the guest exports for a card table.
@@ -366,8 +358,8 @@ macro_rules! ruleset {
         /// Linked call entry -- same body as the wasm export, no `#[no_mangle]`
         /// so every rule crate can link into one binary.
         #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
-        pub fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32, arg: i32) -> i64 {
-            $crate::rt::on(BAND_TABLE, card, entry, op, player_id, arg)
+        pub fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
+            $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
         }
 
         /// Linked manifest -- same body as the wasm export.
@@ -394,8 +386,8 @@ macro_rules! ruleset {
         }
         #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
         #[no_mangle]
-        pub extern "C" fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32, arg: i32) -> i64 {
-            $crate::rt::on(BAND_TABLE, card, entry, op, player_id, arg)
+        pub extern "C" fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
+            $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
         }
         #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
         #[no_mangle]
