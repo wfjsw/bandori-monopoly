@@ -261,6 +261,7 @@ fn l02_one_walk_several_pass_effects() {
             value: 2,
 
             instance: None,
+            max: 0,
         });
     // 安可 in hand from the start, so the 香澄 forced stop can be countered.
     t.give(0, &["通用:安可"]);

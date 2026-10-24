@@ -1008,6 +1008,7 @@ fn band_press_offers_both_exchange_and_cash() {
             value: 2,
 
             instance: None,
+            max: 0,
         });
     }
     let sid = t.skill_id(0, "星之鼓动");

@@ -124,6 +124,7 @@ fn set_sticker(t: &mut Table, who: usize, n: i32) {
             name: STICKER.into(),
             value: n,
             instance: None,
+            max: 0,
         });
     }
 }
