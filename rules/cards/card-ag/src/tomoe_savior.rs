@@ -7,6 +7,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMOE_SAVIOR: CardDef = CardDef::new(
@@ -17,15 +18,14 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     // residual guard.
     &[On::Counteract(
         &[ChainKind::Mortgage],
-        "actor == owner || owner.money >= tile.price / 2", Some(key!("tomoe_savior_when")),
+        "actor == owner || owner.money >= tile.price / 2",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("tomoe_savior_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"商店街的救世主"#)
         .raw_name(r#"（巴）商店街的救世主"#)
         .tags(&[r#"反击"#])
-        .text(r#"【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回"#)
+        .text(CardText::para(r#"【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回"#))
         // sheet cell C14
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"宇田川巴"#)]));
 

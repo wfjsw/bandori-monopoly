@@ -13,6 +13,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:（有咲）等等等一下";
@@ -20,18 +21,24 @@ const ID: &str = "PPP:（有咲）等等等一下";
 pub const ARISA_WAIT: CardDef = CardDef::new(
     "PPP:（有咲）等等等一下",
     &[
-        On::Play("", None, None, arisa_wait),
-        On::Action(Action::EventAfter("", None, Some(event_after_guard), event_after)),
+        On::Play("", None, arisa_wait),
+        On::Action(Action::EventAfter("", Some(event_after_guard), event_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"等等等一下"#)
         .raw_name(r#"（有咲）等等等一下"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手]：
-将此卡放置在[使用者]的[场地]。
-[持续]：
-（1）任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。
-（2）事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在[使用者]的[场地]。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。"#),
+                    it(r#"事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell B16
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"市谷有咲"#)]));
 

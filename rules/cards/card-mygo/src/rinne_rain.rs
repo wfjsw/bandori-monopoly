@@ -7,18 +7,19 @@
 //! [停留] layer and book an extra [触发结算] at this turn's end.
 
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 pub const RINNE_RAIN: CardDef = CardDef::new(
     "MyGO:轮符雨",
     &[
-        On::Play("", None, None, rinne_rain),
+        On::Play("", None, rinne_rain),
         // 「并在回合结束时额外进行一次[触发结算]」 is a **scheduling** clause
         // (`docs/TILES.md`), not a tile fact: `On::AtEnd` runs it at the turn
         // end, and its body is a plain `ctx::settle`.
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
-        On::Action(Action::AtEnd("owner.pos >= 0", None, None, settle_now)),
+        On::Action(Action::AtEnd("owner.pos >= 0", None, settle_now)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)])
@@ -27,7 +28,7 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         .name(r#"轮符雨"#)
         .raw_name(r#"轮符雨"#)
         .tags(&[])
-        .text(r#"使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]"#)
+        .text(CardText::para(r#"使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]"#))
         // sheet cell I4
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]),
 );

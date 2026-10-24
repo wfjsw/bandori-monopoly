@@ -20,23 +20,19 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const RAISE_EFFORT: CardDef = CardDef::new(
     "skill:和奏瑞依:一次又一次竭尽全力",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         // （2）「进行任意掷骰后，可选择使用一个[火罐]再投一次」 -- only with a
         // pot to spend. `fixed_roll` is derived plan state outside the CEL
         // schema (docs/GUARDS.md §4.2c): residual guard.
         On::Action(Action::DiceRollAfter(
             "actor == owner && charge(owner) >= 1",
-            None,
             Some(roll_unfixed),
-            on_roll,
-        )),
+            on_roll)),
     ],
 )
 .silent(&[0, 1])

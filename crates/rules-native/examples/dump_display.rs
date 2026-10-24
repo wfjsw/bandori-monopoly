@@ -26,7 +26,7 @@
 //!   carry `counterReason`).
 //! * Event keys are the **bare** event id (`对邦`), not the `event:` rule-id
 //!   prefix. `derived` is engine data and is not exported.
-//! * `counterReason` is read from the card's [`On::counter_reason`] -- the
+//! * `counterReason` is read from the card's [`On::counter_reason_key`] -- the
 //!   「…时」 clause the counteraction prompt shows, as a **locale key** the
 //!   client resolves (`cards:<crate>.…` / `counter.*`). Several entries join
 //!   their keys with `\n`.
@@ -120,7 +120,8 @@ fn cards_map() -> JsonMap {
             }
             let Some(meta) = card.meta else { continue };
             let mut row = JsonMap::new();
-            insert_str(&mut row, "text", meta.text);
+            insert_str(&mut row, "text", &meta.text.flat());
+            insert_body(&mut row, &meta.text);
             insert_str(&mut row, "rawName", meta.raw_name);
             insert_str(&mut row, "counterReason", &counter_reason(card));
             map.insert(card.id.to_string(), Value::Object(row));
@@ -129,13 +130,13 @@ fn cards_map() -> JsonMap {
     map
 }
 
-/// The [反击] trigger's `counterReason`: every [`card_sdk::On::counter_reason`]
+/// The [反击] trigger's `counterReason`: every [`card_sdk::On::counter_reason_key`]
 /// key on this card, joined with `\n`. The manifest carries the key; the UI
 /// resolves it at render.
 fn counter_reason(card: &card_sdk::CardDef) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for entry in card.on {
-        if let Some(reason) = entry.counter_reason() {
+        if let Some(reason) = entry.counter_reason_key() {
             if !reason.is_empty() {
                 parts.push(reason);
             }
@@ -154,7 +155,8 @@ fn events_map() -> JsonMap {
         let bare = card.id.strip_prefix("event:").unwrap_or(card.id);
         let mut row = JsonMap::new();
         insert_str(&mut row, "name", meta.name);
-        insert_str(&mut row, "text", meta.text);
+        insert_str(&mut row, "text", &meta.text.flat());
+        insert_body(&mut row, &meta.text);
         map.insert(bare.to_string(), Value::Object(row));
     }
     map
@@ -195,5 +197,77 @@ fn groups_map() -> JsonMap {
 fn insert_str(row: &mut JsonMap, key: &str, value: &str) {
     if !value.is_empty() {
         row.insert(key.to_string(), Value::String(value.to_string()));
+    }
+}
+
+/// The structured rule text as `body` blocks -- the shape `SkillBody` renders
+/// directly, so the client does not re-derive sections / bulletpoints from the
+/// flat `text` string. Omitted when the text is empty.
+///
+/// ```json
+/// "body": [
+///   { "t": "label", "text": "[手]：" },
+///   { "t": "p", "text": "依次进行以下效果：" },
+///   { "t": "steps", "items": ["…；", "…。"] },
+///   { "t": "ol", "items": [{ "text": "…", "sub": ["…"] }] }
+/// ]
+/// ```
+fn insert_body(row: &mut JsonMap, text: &card_sdk::text::CardText) {
+    use card_sdk::text::{TextBlock, TextPiece};
+
+    if text.is_empty() {
+        return;
+    }
+    let mut blocks = Vec::new();
+    for piece in text.pieces() {
+        let obj = match piece {
+            TextPiece::Label(label) => {
+                let mut o = Map::new();
+                o.insert("t".into(), Value::String("label".into()));
+                o.insert("text".into(), Value::String(label.to_string()));
+                o
+            }
+            TextPiece::Block(TextBlock::Para(s)) => {
+                let mut o = Map::new();
+                o.insert("t".into(), Value::String("p".into()));
+                o.insert("text".into(), Value::String(s.to_string()));
+                o
+            }
+            TextPiece::Block(TextBlock::Steps(list)) => {
+                let mut o = Map::new();
+                o.insert("t".into(), Value::String("steps".into()));
+                o.insert(
+                    "items".into(),
+                    Value::Array(list.iter().map(|s| Value::String(s.to_string())).collect()),
+                );
+                o
+            }
+            TextPiece::Block(TextBlock::Items(list)) => {
+                let mut o = Map::new();
+                o.insert("t".into(), Value::String("ol".into()));
+                let items: Vec<Value> = list
+                    .iter()
+                    .map(|it| {
+                        let mut io = Map::new();
+                        io.insert("text".into(), Value::String(it.text.to_string()));
+                        if !it.sub.is_empty() {
+                            io.insert(
+                                "sub".into(),
+                                Value::Array(
+                                    it.sub.iter().map(|s| Value::String(s.to_string())).collect(),
+                                ),
+                            );
+                        }
+                        Value::Object(io)
+                    })
+                    .collect();
+                o.insert("items".into(), Value::Array(items));
+                o
+            }
+        };
+        blocks.push(Value::Object(obj));
+    }
+    if !blocks.is_empty() {
+        row.insert("body".to_string(), Value::Array(blocks));
     }
 }

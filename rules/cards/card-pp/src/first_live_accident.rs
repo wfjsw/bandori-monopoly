@@ -13,22 +13,25 @@
 //! `PlacedOf(player_id).Any(c => c.Live && c is CardFirstLiveAccident)`).
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
 pub const FIRST_LIVE_ACCIDENT: CardDef = CardDef::new(
     "PP:初次演出事故",
-    &[On::Play("", None, None, first_live_accident)],
+    &[On::Play("", None, first_live_accident)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"初次演出事故"#)
         .raw_name(r#"初次演出事故"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(
-            r#"[手]：
-将此卡放置在[使用者]的[场地]并将1张“重叠的声音”加入抽卡区并洗切，然后抽1张卡。
-[持续]：
-[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在[使用者]的[场地]并将1张“重叠的声音”加入抽卡区并洗切，然后抽1张卡。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                para(r#"[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。"#),
+            ]),
+        ]))
         // sheet cell D4
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );

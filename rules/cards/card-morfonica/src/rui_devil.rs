@@ -7,12 +7,13 @@
 //! 被触发，将x设置为5」) -- every skill fire during the resolution, immediately.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
-pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play("", None, None, rui_devil)]).meta(&card_sdk::meta::CardMeta::new()
+pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play("", None, rui_devil)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"正论恶魔"#)
         .raw_name(r#"（Rui）正论恶魔"#)
         .tags(&[])
-        .text(r#"向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5"#)
+        .text(CardText::para(r#"向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5"#))
         // sheet cell G15
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"八潮瑠唯"#)]));
 

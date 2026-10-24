@@ -9,6 +9,7 @@
 use bandori_std::ctx::{self, trigger};
 use bandori_std::state_key;
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Once-per-turn placement latch. `cast` is reached from both `play` and the
@@ -22,25 +23,24 @@ const ID: &str = "Mujica:骰子已经掷下";
 pub const DICE_CAST: CardDef = CardDef::new(
     "Mujica:骰子已经掷下",
     &[
-        On::Play("", None, Some(cant_play), play),
+        On::Play("", Some(cant_play), play),
         // 「（此卡可以被反击）」 -- the play window stays open for counters
         // before `cast` sets the lock (the lock is armed in the body).
         On::Counteract(
             &[ChainKind::Card],
-            "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key", Some(key!("dice_cast_when")),
+            "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key",
             None,
-            counteract,
-        ),
+            counteract).counter_reason(key!("dice_cast_when")),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Action(Action::TurnEndAfter("actor == owner && card.placed", None, None, turn_end)),
+        On::Action(Action::TurnEndAfter("actor == owner && card.placed", None, turn_end)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"骰子已经掷下"#)
         .raw_name(r#"骰子已经掷下"#)
         .tags(&[r#"反击"#])
-        .text(r#"将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）"#)
+        .text(CardText::para(r#"将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）"#))
         // sheet cell J6
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

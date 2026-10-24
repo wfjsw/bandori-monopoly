@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, MoveKind};
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MISAKI_CARD: CardDef = CardDef::new(
@@ -18,15 +19,14 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         // 规则书[反击]: 「使用火罐进行移动掷骰后」 -- the [火罐] roll is
         // card-owned state: the card that armed one tagged the move
         // (`ctx::plan::set_tag("fireRoll", 1)`).
-        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0", Some(key!("misaki_card_when")),
+        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("misaki_card_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")
         .raw_name(r#"（美咲）"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。"#)
+        .text(CardText::para(r#"[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。"#))
         // sheet cell F15
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"奥泽美咲"#)]));
 

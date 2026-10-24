@@ -36,14 +36,15 @@ const THIEF_WIRE: &str = "cards:card-hhw.kaoru_thief_tok";
 pub const KAORU_PRINCE: CardDef = CardDef::new(
     "skill:濑田薰:梦幻的王子殿下",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
+        // [特]（2） -- the skill press itself.
+        On::Play("", Some(can_use), use_skill).label("（2）"),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)),
         // （1） 「每次[经过]…时」 -- "I pass" is `actor == owner` (`MINE`); an
         // unfiltered `Pass` fires for every passer's every step. The two halves
         // of 「[经过]或被[经过]」 never both fire on one step: `Pass` here needs
         // the owner to be the passer, and `PassTile` below needs someone else
         // to step onto the owner's tile.
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, None, on_pass)),
+        On::Action(Action::Pass(card_sdk::pre::MINE, None, on_pass)).label("（1）"),
         // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4), the passer's step onto this player's tile -- not the end-tile
         // [重叠]. `target` is not on a `passTile` payload, so the condition
@@ -51,12 +52,10 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
         On::Action(Action::PassTile(
             "actor != owner && tile.id == owner.pos",
             None,
-            None,
-            on_passed,
-        )),
+            on_passed))
+        .label("（1）"),
     ],
 )
-.labels(&[(0, "（2）"), (2, "（1）"), (3, "（1）")])
 .silent(&[1])
 .quiet_when_empty(&[2, 3])
 // 「（上限7）」

@@ -15,6 +15,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it, items, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
@@ -23,23 +24,28 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // 规则书[持续]（1）: 「此卡拥有者每次[经过]“东京外”，“江户川乐器店”，
         // “山吹面包房”，“星之鼓动山丘”或“流星堂”时」 -- the five named spots
         // are the condition.
-        On::Action(Action::PassTile("card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))", None, None, pass_tile)),
+        On::Action(Action::PassTile("card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))", None, pass_tile)),
         // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶」 -- a payment
         // the owner owes, with a crystal to spend.
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive crystal spend sits immediately before the pure
         // `PaySplitChoose` filter stage.
-        On::Action(Action::PaySplitChooseBefore("card.placed && actor == owner && value > 0 && card.counter('crystals') > 0", None, None, pay_choose)),
+        On::Action(Action::PaySplitChooseBefore("card.placed && actor == owner && value > 0 && card.counter('crystals') > 0", None, pay_choose)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Popipapapipopa"#)
         .raw_name(r#"[衍生]Popipapapipopa"#)
         .derived(true)
         .tags(&[r#"持续"#, r#"衍生"#])
-        .text(r#"[持续]
-（1）此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。
-（2）消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。"#)
+        .text(CardText::of(&[
+            sec(r#"[持续]"#, &[
+                items(&[
+                    it(r#"此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。"#),
+                    it(r#"消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell B4
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

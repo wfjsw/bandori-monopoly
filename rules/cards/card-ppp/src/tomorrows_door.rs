@@ -15,13 +15,14 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
-        On::Play("", None, None, play),
-        On::Action(Action::PassTile("card.placed && actor == owner", None, Some(pass_tile_guard), pass_tile)),
+        On::Play("", None, play),
+        On::Action(Action::PassTile("card.placed && actor == owner", Some(pass_tile_guard), pass_tile)),
         // (3)'s surcharge joins the rent payment at `paySplitAdd` (before `paySplitMul`),
         // so a 「支付减半」 scaler sees the shaped total.
         On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner", Some(pay_add_guard), pay_add)),
@@ -29,15 +30,17 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // -- an entry in the settle's effect list, for the shapes no rent
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
         // that replaces the body skips this entry.
-        On::Action(Action::SettleBody("card.placed && actor != owner && tile.id >= 0", None, Some(settle_body_guard), settle_body)),
+        On::Action(Action::SettleBody("card.placed && actor != owner && tile.id >= 0", Some(settle_body_guard), settle_body)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Tomorrow's Door"#)
         .raw_name(r#"Tomorrow's Door"#)
         .tags(&[])
-        .text(r#"（1）此卡指定的序列（从前往后）为“流星堂”，“花咲川女子学院”，“Space”，“Live House Galaxy”，“武道馆”，“RiNG 1”，“RiNG 2”，“RiNG 3”，“RiNG 4”，“大阪中之岛公园”
-（2）将此卡放置在“流星堂”上，此卡使用者每次[经过]此卡所在的格子时把此卡放置到此卡（1）效果的序列中的下一个，如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域
-（3）此卡在自身游玩区域时[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。"#)
+        .text(CardText::items(&[
+            it(r#"此卡指定的序列（从前往后）为“流星堂”，“花咲川女子学院”，“Space”，“Live House Galaxy”，“武道馆”，“RiNG 1”，“RiNG 2”，“RiNG 3”，“RiNG 4”，“大阪中之岛公园”"#),
+            it(r#"将此卡放置在“流星堂”上，此卡使用者每次[经过]此卡所在的格子时把此卡放置到此卡（1）效果的序列中的下一个，如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域"#),
+            it(r#"此卡在自身游玩区域时[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。"#),
+        ]))
         // sheet cell B6
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

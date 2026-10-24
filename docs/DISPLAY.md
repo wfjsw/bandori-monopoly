@@ -40,14 +40,14 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 
 ```json
 {
-  "cards":    { "<cardId>":      { "text": "...", "rawName": "...",
-                                   "counterReason": "..." } },
+  "cards":    { "<cardId>":      { "text": "...", "body": [ … ],
+                                   "rawName": "...", "counterReason": "..." } },
   "personas": { "<personaName>": { "display": "...", "text": "...", "color": "...",
                                    "variantTag": "...", "art": "...", "costume": "...",
                                    "cnId": "..." } },
   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
                                    "logo": "..." } },
-  "events":   { "<eventId>":     { "name": "...", "text": "..." } }
+  "events":   { "<eventId>":     { "name": "...", "text": "...", "body": [ … ] } }
 }
 ```
 
@@ -60,11 +60,39 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
   are absent. Every roster card / persona / group / event that carries the
   relevant fields appears.
 
+### Rule text: `text` + `body`
+
+Card and event rule text is authored as a `CardText` -- sections and
+bulletpoints as data (`rules/card-sdk/src/text.rs`). Two views land here:
+
+* `text` -- the rulebook string form (`CardText::flat()`). Prose consumers and
+  the rule queries (`card_text_mentions`, 「效果包含…」) substring-search this.
+* `body` -- the structure, so the client renders sections / bulletpoints
+  directly instead of re-deriving them from `text` with regex heuristics.
+
+`body` is a flat block list in render order:
+
+```json
+"body": [
+  { "t": "label", "text": "[手]：" },
+  { "t": "p",     "text": "依次进行以下效果：" },
+  { "t": "steps", "items": ["…；", "…。"] },
+  { "t": "ol",    "items": [{ "text": "…", "sub": ["…"] }] }
+]
+```
+
+`label` heads a section; `p` is free prose; `ol` items are the numbered
+effects `（1）（2）…` (the marker is positional -- it is not in `text`, the list
+renders its own numbers); `steps` is a standalone `1. 2. 3.` run (the
+「依次进行以下操作：」 lists, also nested as `items[].sub`). Persona and group
+skill text is still a flat `text` only -- the client parses it at render time.
+
 ### Field list
 
 | kind | key | authored as | notes |
 | --- | --- | --- | --- |
-| card | `text` | `CardMeta::text` | rule text |
+| card | `text` | `CardMeta::text` (`flat()`) | rule text, rulebook string form |
+| card | `body` | `CardMeta::text` | rule text as sections / bulletpoints |
 | card | `rawName` | `CardMeta::raw_name` | untrimmed sheet name |
 | card | `counterReason` | `On` reason field (`Counteract` / `Action` / `Play`) | 「…时」 clause the counteraction prompt shows, as a **locale key** the client resolves (`cards:<crate>.…` / `counter.*`, ABI v95); several entries join their keys with `\n` |
 | persona | `display` | `PersonaDef::display` | compact display label |
@@ -79,7 +107,8 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 | group | `color` | `GroupDef::color` | accent colour |
 | group | `logo` | `GroupDef::logo` | logo id |
 | event | `name` | `CardMeta::name` | event name |
-| event | `text` | `CardMeta::text` | event rulebook body |
+| event | `text` | `CardMeta::text` (`flat()`) | event rulebook body |
+| event | `body` | `CardMeta::text` | event body as sections / bulletpoints |
 
 The sheet cell a row was lifted from is **not** a field any more -- it is a
 `// sheet cell X` comment on the card impl. A row whose sheet name line is

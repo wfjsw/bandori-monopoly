@@ -27,9 +27,7 @@ pub const AKAO_COOL: CardDef = CardDef::new(
     &[On::Action(Actions::PassRewardAffected(
         card_sdk::pre::MINE,
         None,
-        None,
-        on_circle,
-    ))],
+        on_circle))],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 

@@ -691,11 +691,93 @@ fn colors_4_takes_2000() {
     .expect("C-AG-colors-05");
 }
 
+/// C-AG-colors-07 -- roll 6 is **one** multi-select of 3 distinct effects
+/// from {1..5}. The answer is a bitmask (bit *i* = effect *i+1*); a wrong
+/// popcount is rejected (`err.pick_count`), which is the distinctness
+/// guarantee.
+#[test]
+fn colors_6_picks_three_distinct() {
+    forall(4, 0xA6_0063, |rng, _i| {
+        let mut t = Table::vanilla(2);
+        let m = 10_000 + rng.range(0, 6) * 100;
+        t.set_money(0, m);
+        t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+        t.dice(&[6]);
+        t.give(0, &["AG:无论是何种颜色的夕阳"]);
+        let pre = t.snapshot_world();
+        t.play(0, "AG:无论是何种颜色的夕阳")
+            .map_err(|e| format!("play rejected: {e}"))?;
+        let p = t.expect_prompt();
+        if p.kind != "multi" {
+            return Err(format!(
+                "C-AG-colors-07: expected one kind=multi prompt, got {}",
+                t.dump_prompt()
+            ));
+        }
+        if p.count != 3 {
+            return Err(format!(
+                "C-AG-colors-07: count {}, expected 3 / {}",
+                p.count,
+                t.dump_prompt()
+            ));
+        }
+        if p.options.len() != 5 {
+            return Err(format!(
+                "C-AG-colors-07: {} options, expected 5 / {}",
+                p.options.len(),
+                t.dump_prompt()
+            ));
+        }
+        // A wrong popcount (2 bits) is rejected -- this is the "one effect
+        // cannot be selected twice" / "exactly 3" guarantee.
+        let bad = 0b00011; // effects 1 and 2 only
+        match t.answer(0, bad) {
+            Ok(()) => {
+                return Err(format!(
+                    "C-AG-colors-07: popcount-2 mask {bad:#b} must be rejected / {}",
+                    t.dump_prompt()
+                ));
+            }
+            Err(e) if e.contains("pick_count") => {}
+            Err(e) => {
+                return Err(format!(
+                    "C-AG-colors-07: expected err.pick_count for {bad:#b}, got {e}"
+                ));
+            }
+        }
+        // Bits 0+2+4 = effects 1, 3, 5: +1500, draw 1, and (with an empty
+        // discard) a no-op. Applied in ascending face order.
+        let mask = 0b10101;
+        t.answer(0, mask)
+            .map_err(|e| format!("answer {mask:#b} rejected: {e} / {}", t.dump_prompt()))?;
+        skip_all(&mut t);
+        if t.money(0) != m + 1500 {
+            return Err(format!(
+                "C-AG-colors-07: money {}, expected {} (+1500 from effect 1)",
+                t.money(0),
+                m + 1500
+            ));
+        }
+        let hand = t.hand(0);
+        if !hand.iter().any(|c| c == "通用:GREAT") {
+            return Err(format!(
+                "C-AG-colors-07: effect 3 must draw 1 (通用:GREAT), hand {hand:?}"
+            ));
+        }
+        frame(
+            &pre,
+            t.world(),
+            &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
+        )
+    })
+    .expect("C-AG-colors-07");
+}
+
 /// C-AG-colors-03 -- roll 2 「从弃牌堆中选择一张牌放置到抽牌堆顶」.
 /// The chosen title leaves the discard and becomes the draw-pile top.
 #[test]
 fn colors_2_puts_a_discard_card_on_deck_top() {
-    forall(4, 0xA6_0063, |rng, _i| {
+    forall(4, 0xA6_0068, |rng, _i| {
         let mut t = Table::vanilla(2);
         let keep = "通用:GREAT";
         let take = "通用:安可";

@@ -507,8 +507,12 @@ Exclusive to 美竹兰 (`characters.json#美竹兰.exclusiveCards`).
 * **Condition:** --.
 * **Effect:** three of the five effects (results 1..5) are chosen and trigger.
 * **Frame:** the union of the three effects' footprints.
-* **Rulings & OPEN:** repetition of one effect thrice is not excluded by the
-  text (「选择1-5中的3个效果」). Not contracted -- multi-effect sequencing.
+* **Rulings & OPEN:** 「选择1-5中的3个效果」 is 3 **distinct** effects drawn
+  from {1,2,3,4,5} -- 「3个效果」 names three effects, not one effect three
+  times. The multiselect enforces this (one checkbox per effect). The three
+  trigger in **ascending face order** (1 before 2 before …): the text
+  specifies no order and a single multiselect has none, so ascending is the
+  deterministic reading. Still not contracted (multi-effect sequencing).
 * **Executable:** documented, not contracted.
 
 ---

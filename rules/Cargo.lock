@@ -23,6 +23,7 @@ dependencies = [
  "bandori-std",
  "card-sdk",
  "rules-status",
+ "serde",
 ]
 
 [[package]]
@@ -190,6 +191,7 @@ dependencies = [
  "bandori-std",
  "card-sdk",
  "rules-status",
+ "serde",
 ]
 
 [[package]]

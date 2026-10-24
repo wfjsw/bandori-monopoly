@@ -35,16 +35,12 @@ pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             "actor == owner && slot('skillState') != 2",
             None,
-            None,
-            at_turn_start,
-        )),
-        On::Action(Action::CardPlayed(card_sdk::pre::MINE, None, None, on_play)),
+            at_turn_start)),
+        On::Action(Action::CardPlayed(card_sdk::pre::MINE, None, on_play)),
         On::Action(Action::TurnEnd(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_end,
-        )),
+            at_turn_end)),
     ],
 )
 .silent(&[1]);

@@ -942,6 +942,12 @@ mod abi {
             link_name = "ruleset_opt_ai"
         )]
         pub fn opt_ai(ai: i32);
+        // v97: multi-select choice -- how many of the pushed options the ask wants.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_opt_count"
+        )]
+        pub fn opt_count(count: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_ask"
@@ -1222,11 +1228,26 @@ mod abi {
             link_name = "ruleset_card_move"
         )]
         pub fn card_move(player_id: i32) -> i32;
+        /// Cross-card applicability query by named entry id
+        /// (docs/ACTIVATION.md §3).
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_card_replayable"
+            link_name = "ruleset_query_guard"
         )]
-        pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32;
+        pub fn query_guard(
+            player_id: i32,
+            ptr: i32,
+            len: i32,
+            e_ptr: i32,
+            e_len: i32,
+        ) -> i32;
+        /// The running activation's declared arg as postcard bytes
+        /// (docs/ACTIVATION.md §2). `out_ptr=0` asks for the size.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_declared_arg"
+        )]
+        pub fn declared_arg(out_ptr: i32, cap: i32) -> i32;
         // movement shaping: the move being planned
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),

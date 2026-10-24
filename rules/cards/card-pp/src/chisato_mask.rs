@@ -17,18 +17,17 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
-        On::Play("", None, None, chisato_mask),
+        On::Play("", None, chisato_mask),
         On::Action(Action::Reshuffled(
             "",
-            None,
             Some(reshuffled_guard),
-            reshuffled,
-        )),
+            reshuffled)),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
@@ -40,13 +39,17 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
         .name(r#"微笑的铁假面"#)
         .raw_name(r#"[白鹭千圣]微笑的铁假面"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(
-            r#"[手]：
-将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。
-[持续]：
-（1）[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。
-（2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。"#),
+                    it(r#"[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell D18
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"白鹭千圣"#)]),
 );

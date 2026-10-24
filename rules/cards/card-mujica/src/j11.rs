@@ -9,6 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "Mujica:#J11";
@@ -16,25 +17,25 @@ const ID: &str = "Mujica:#J11";
 pub const J11: CardDef = CardDef::new(
     "Mujica:#J11",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
         // reactions, not [反击]s.
-        On::Action(Action::TurnEnd("card.placed", None, None, counteract)),
-        On::Action(Action::Targeted("card.placed", None, None, counteract)),
+        On::Action(Action::TurnEnd("card.placed", None, counteract)),
+        On::Action(Action::Targeted("card.placed", None, counteract)),
         // C# `CardJ11.PaySplitChoose` interactive arm: `ask_yes` → `charge` →
         // `set_pay_amount(0)`. Rides `PaySplitChooseBefore` (v78), restoring the
         // rulebook PaySplitChoose position (its own entry; the TurnEnd/Targeted
         // dispatcher is separate). The pure stun cancel stays on FilterFlag.
-        On::Action(Action::PaySplitChooseBefore("card.placed", None, None, pay_choose_ask)),
+        On::Action(Action::PaySplitChooseBefore("card.placed", None, pay_choose_ask)),
         On::Filter(Filter::PaySplitChoose("card.placed", None, pay_choose_cancel)),
-        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         // sheet cell J11 -- the name line is blank; `#J11` is the name.
         .name("#J11")
         .raw_name("")
         .tags(&[])
-        .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#)
+        .text(CardText::para(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#))
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {

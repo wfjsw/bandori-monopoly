@@ -17,23 +17,30 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     "PP:[大和麻弥]可能性为∞",
     &[
-        On::Play("", None, Some(can_swap), swap),
-        On::Action(Action::Drew("actor == owner && card.placed && value > 0", None, None, drew)),
+        On::Play("", Some(can_swap), swap),
+        On::Action(Action::Drew("actor == owner && card.placed && value > 0", None, drew)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"可能性为∞"#)
         .raw_name(r#"[大和麻弥]可能性为∞"#)
         .tags(&[r#"持续"#, r#"特"#])
-        .text(r#"[特]：
-观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]（次效果优先于其他后续效果，比如观看卡组后将一张牌加入手牌）。
-[持续]：
-（1）[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个[奇迹水晶]。
-（2）[共鸣]交换[拥有者]的抽卡区和弃卡区。"#)
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]（次效果优先于其他后续效果，比如观看卡组后将一张牌加入手牌）。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个[奇迹水晶]。"#),
+                    it(r#"[共鸣]交换[拥有者]的抽卡区和弃卡区。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell D17
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"大和麻弥"#)]));
 

@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 pub const NFO: CardDef = CardDef::new(
@@ -21,8 +22,8 @@ pub const NFO: CardDef = CardDef::new(
         // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
         // live in a Filter. Whole offer on `ActionKind::Effect` (payment
         // declaration; `t.value` folds there).
-        On::Action(Action::Effect("", None, Some(gain_guard), gain_bump)),
-        On::Play("", None, None, play),
+        On::Action(Action::Effect("", Some(gain_guard), gain_bump)),
+        On::Play("", None, play),
         // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
         // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
@@ -35,14 +36,14 @@ pub const NFO: CardDef = CardDef::new(
         //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
         //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
         On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_shave)),
-        On::Action(Action::PayAfter("actor == owner && card.placed", None, None, pay_unplace)),
-        On::Action(Action::AtEnd("", None, None, at_end)),
+        On::Action(Action::PayAfter("actor == owner && card.placed", None, pay_unplace)),
+        On::Action(Action::AtEnd("", None, at_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)
         .raw_name(r#"NFO"#)
         .tags(&[])
-        .text(r#"投掷1d6并在回合结束后获得一层[停留]。若投掷结果为1，获得1500资金；若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]；若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆；若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出；若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300；若结果为6，依次获得结果1-5的全部效果。（若结果严格大于6，则从1开始重新计数）"#)
+        .text(CardText::para(r#"投掷1d6并在回合结束后获得一层[停留]。若投掷结果为1，获得1500资金；若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]；若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆；若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出；若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300；若结果为6，依次获得结果1-5的全部效果。（若结果严格大于6，则从1开始重新计数）"#))
         // sheet cell E7
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
@@ -182,14 +183,14 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- distinct discard
-/// titles filtered to the replayable ones, then [`ctx::pick_take_from`] (the
-/// card leaves the discard before it resolves). `H.PlayCard` then applies the
-/// card's own `Dest`.
+/// titles filtered to the ones [`ctx::query_guard`] admits on
+/// [`ctx::entry::PRESS`], then [`ctx::pick_take_from`] (the card leaves the
+/// discard before it resolves). `H.PlayCard` then applies the card's own `Dest`.
 fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
-    // Not this card itself, and only cards the rules will let us play again.
+    // Not this card itself, and only cards the press entry admits.
     let ok: Vec<String> = ctx::distinct_cards_in(player_id, ctx::CardPile::Discard)
         .into_iter()
-        .filter(|id| id != ID && ctx::card_replayable(player_id, id))
+        .filter(|id| id != ID && ctx::query_guard(player_id, id, ctx::entry::PRESS))
         .collect();
     let Some(id) = ctx::pick_take_from(
         player_id,

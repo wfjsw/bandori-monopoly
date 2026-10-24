@@ -7,6 +7,7 @@
 //!
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
 pub const GACHA10: CardDef = CardDef::new(
     "通用:10次招募（1回限定）",
@@ -14,7 +15,7 @@ pub const GACHA10: CardDef = CardDef::new(
     // is effect content (rulebook L13-14), so there is no `money >= 1500` play
     // gate -- an unaffordable in-body payment takes the Q1 shortfall path
     // (mortgage, then bankruptcy). C# `CardGacha10.WhyNot` had one.
-    &[On::Play("", None, None, gacha10)],
+    &[On::Play("", None, gacha10)],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 1500)])
 .meta(
@@ -22,10 +23,11 @@ pub const GACHA10: CardDef = CardDef::new(
         .name(r#"10次招募（1回限定）"#)
         .raw_name(r#"10次招募（1回限定）"#)
         .tags(&[r#"手"#])
-        .text(
-            r#"[手]：
-[消耗]1500资金，抽1张卡。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"[消耗]1500资金，抽1张卡。"#),
+            ]),
+        ]))
         // sheet cell A7
         .fields(&[("group", r#"通用"#), ("owner", "")]),
 );

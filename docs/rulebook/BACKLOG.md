@@ -3136,6 +3136,45 @@ What the 2026-10-17 audit changed (kept for the record):
 - **All path cites** moved to `skill-personas/` / `skill-groups/`; several kind
   names updated for the v85 `ActionKind`/`FilterKind` system.
 
+# Newly filed 2026-10-23 (ABI v98 `declare` + `can_fire`)
+
+## Not landed: DECLARE-TRAP-LOG — every "entry did not fire" trap should log
+
+`docs/ACTIVATION.md` §2 "Follow-up (tracked)". Severity is already correct and
+pinned (`trapping_declare_never_costs_the_card`, `declare_arg`): a trapping
+`OP_DECLARE` declines and does not cost the card. This is observability only.
+
+The split is backwards today -- loudest where the player needs it least:
+
+| site | logs `log.card_trap`? | the player… |
+|---|---|---|
+| residual guard (`entry_admitted`) | no ("historical dispatch leniency") | — |
+| `OP_DECLARE` on a hook (`declare_after`) | **no** | clicked nothing; a 「可选择」 silently did not apply |
+| `OP_DECLARE` on a play / [反击] | yes | just clicked something and would notice |
+| `OP_RUN` (body) | yes | — |
+
+The hook path is the automatic 「可选择」 case -- the whole reason `declare`
+exists for hooks -- and the reference is `AG:绯红之魂`'s `pay_offer`. If that
+collector traps the player is **never asked**, the −1000 silently does not
+apply, and nothing is logged: they are looking at a payment that did not get
+cut, not at a dialog that failed to appear. The residual guard has the same
+hole and it is older.
+
+- **kind**: ABI observability gap
+- **class**: B
+- **severity**: low (diagnostics; correctness is already held)
+- **suggested batch**: card-sdk / game-rules host
+- **locations**: `crates/game-rules/src/host.rs` `declare_after` (hook
+  `OP_DECLARE` trap arm) and `entry_admitted` (residual-guard trap arm);
+  `docs/ACTIVATION.md` §2 "Follow-up (tracked)"
+- **shape** (peer-reviewed): `on_trap: Option<&mut dyn FnMut(&mut W, i32)>` on
+  `entry_admitted`, mirroring `run_hook`'s existing `on_body`. **Do not** put
+  `trapped` on `Admitted::No` / `HookRun` -- a trapping declare yields
+  `Admitted::No`, which makes `run_hook` return `Ok(None)`, so the drive has no
+  channel left to learn that one of them trapped.
+- **land both arms together** (hook `OP_DECLARE` *and* the residual guard) or
+  the table gains a fifth row and it is a half-fix.
+
 ## Per class (open items only; D excluded)
 
 | class | meaning | open items (2026-10-20) |

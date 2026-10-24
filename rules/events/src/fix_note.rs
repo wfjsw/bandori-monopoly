@@ -5,6 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind};
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -22,14 +23,14 @@ const REMAIN: &str = "remain";
 pub const FIX_NOTE: CardDef = CardDef::new(
     "event:修复公告",
     &[
-        On::Play("", None, None, play),
-        On::Action(Action::BuildBefore("", None, Some(always), before_build)),
-        On::Action(Action::BuildAfter("", None, Some(always), after_build)),
+        On::Play("", None, play),
+        On::Action(Action::BuildBefore("", Some(always), before_build)),
+        On::Action(Action::BuildAfter("", Some(always), after_build)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"修复公告"#)
-            .text(r#"前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后将此卡移除。"#)
+            .text(CardText::para(r#"前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后将此卡移除。"#))
             // sheet cell A25
             .derived(true));
 

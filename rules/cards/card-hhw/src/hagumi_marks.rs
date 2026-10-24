@@ -16,6 +16,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, MarkFilter, MoveKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";
@@ -23,11 +24,11 @@ const ID: &str = "HHW:（育美）";
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 规则书（1）: 「你经过育美标记时可在那格强制停下」 -- the offer exists
         // only when one of this player's 育美标记 sits on the tile. Mark count
         // is a derived scan, residual (docs/GUARDS.md §4.2).
-        On::Action(Action::PassTile("actor == owner && card.placed && move.kind != Teleport && tile.id >= 0", None, Some(has_mark_here), hook)),
+        On::Action(Action::PassTile("actor == owner && card.placed && move.kind != Teleport && tile.id >= 0", Some(has_mark_here), hook)),
         On::Counteract(
             &[ChainKind::EndTurnAfter],
             // 「你回合外」 is `actor != owner`. 「收到资金」 -- at least one gain
@@ -36,17 +37,18 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
             // every money-in whatever the cause (C# `H.GainR` covers 「获得」 and
             // payments landing in this player's favour alike), so a pure-hand
             // (2) sees the count too -- nothing needs to be placed.
-            "actor != owner && gains_this_turn(owner) > 0", None,
+            "actor != owner && gains_this_turn(owner) > 0",
             None,
-            counteract2,
-        ),
+            counteract2),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"We Can☆Hurray!"#)
         .raw_name(r#"（育美）We Can☆Hurray!"#)
         .tags(&[])
-        .text(r#"（1）[手] 投掷2次4d20并将一个育美标记放置到投掷结果之一的格子上，你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记；若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记。
-（2）[反击] 此卡可在你回合外收到资金的回合结束时打出，当前回合内你每获得过一次资金，此卡的投掷次数+1"#)
+        .text(CardText::items(&[
+            it(r#"[手] 投掷2次4d20并将一个育美标记放置到投掷结果之一的格子上，你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记；若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记。"#),
+            it(r#"[反击] 此卡可在你回合外收到资金的回合结束时打出，当前回合内你每获得过一次资金，此卡的投掷次数+1"#),
+        ]))
         // sheet cell F14
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"北泽育美"#)]));
 

@@ -25,24 +25,20 @@ const PASSED: &str = "skill.rimiResolve.passed";
 pub const RIMI_RESOLVE: CardDef = CardDef::new(
     "skill:牛込里美:里美的决心",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
         // （1）「你的回合中[经过]任意Live House颜色格子」 -- `is_live_house_for`
         // is player-relative (sees a recolour too) and not in the condition
         // vocabulary, so it is the residual guard. `actor == owner` is the pre.
         On::Action(Action::Pass(
             card_sdk::pre::MINE,
-            None,
             Some(on_pass_live_house),
-            on_pass,
-        )),
+            on_pass)),
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skill.rimiResolve.passed') != 0",
             None,
-            None,
-            at_turn_end,
-        )),
+            at_turn_end)),
     ],
 )
 .silent(&[1, 2, 3])

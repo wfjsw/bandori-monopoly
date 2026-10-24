@@ -9,15 +9,19 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::MoveKind;
+use card_sdk::{CardText, para, sec};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TO_YOU_FAR_AWAY: CardDef =
-    CardDef::new("PPP:献给远方的你", &[On::Play("", None, Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("PPP:献给远方的你", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"献给远方的你"#)
         .raw_name(r#"献给远方的你"#)
         .tags(&[r#"手"#])
-        .text(r#"[手]：
-[传送]至任意与[使用者]绝对距离最远的玩家的格子并[结算]，然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖（例：[使用者]在#11号格子，一名玩家在#1号格子则绝对距离为10）。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"[传送]至任意与[使用者]绝对距离最远的玩家的格子并[结算]，然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖（例：[使用者]在#11号格子，一名玩家在#1号格子则绝对距离为10）。"#),
+            ]),
+        ]))
         // sheet cell B11
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

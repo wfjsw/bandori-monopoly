@@ -30,6 +30,9 @@ fn kind_shapes() -> HashMap<String, BodyShape> {
 fn expected_sig(shape: BodyShape) -> &'static str {
     match shape {
         BodyShape::Action => "(player_id: i32) -> card_sdk::Asked",
+        // The activation arg is generic (`fn(i32, T) -> Asked`), so only the
+        // arity and the `player_id` slot can be pinned here.
+        BodyShape::ActionArg => "(player_id: i32, ",
         BodyShape::Value => "(player_id: i32, value: i32) -> i32",
         BodyShape::Flag => "(player_id: i32, value: i32) -> bool",
         BodyShape::Gate => "(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue",

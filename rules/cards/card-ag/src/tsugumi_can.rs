@@ -9,19 +9,28 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TSUGUMI_CAN: CardDef = CardDef::new(
     "AG:（鸫）微小的『能做到』的事",
     &[
-        On::Play("", None, Some(cant_play), play),
-        On::Counteract(&[ChainKind::Card], "", Some(key!("tsugumi_can_when")), Some(can_counteract), counteract),
+        On::Play("", Some(cant_play), play),
+        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract).counter_reason(key!("tsugumi_can_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微小的『能做到』的事"#)
         .raw_name(r#"（鸫）微小的『能做到』的事"#)
         .tags(&[r#"反击"#])
-        .text(r#"打出此卡时，选择其中一个效果发动：（1）【反击】时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算，除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对无论是何种颜色的夕阳生效）（2）视为打出一张@Tsugu ycm"#)
+        .text(CardText::of(&[
+            sec("", &[
+                para(r#"打出此卡时，选择其中一个效果发动："#),
+                items(&[
+                    it(r#"【反击】时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算，除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对无论是何种颜色的夕阳生效）"#),
+                    it(r#"视为打出一张@Tsugu ycm"#),
+                ]),
+            ]),
+        ]))
         // sheet cell C16
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"羽泽鸫"#)]));
 

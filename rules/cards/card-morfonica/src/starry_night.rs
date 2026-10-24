@@ -13,6 +13,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Mor:蝴蝶飞舞的星月夜";
@@ -24,18 +25,20 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // 的资金」 is effect content (rulebook L13-14), so there is no
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
-        On::Play("", None, None, starry_night),
-        On::Action(Action::DiceRollAfter("card.placed && card.counter('crystals') > 0", None, None, hook)),
-        On::Action(Action::PassTile("card.placed && card.counter('crystals') > 0", None, None, hook)),
-        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Play("", None, starry_night),
+        On::Action(Action::DiceRollAfter("card.placed && card.counter('crystals') > 0", None, hook)),
+        On::Action(Action::PassTile("card.placed && card.counter('crystals') > 0", None, hook)),
+        On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"蝴蝶飞舞的星月夜"#)
         .raw_name(r#"蝴蝶飞舞的星月夜"#)
         .tags(&[])
-        .text(r#"（1） 支付X次1000的资金，将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]，此卡没有[奇迹水晶]时加入弃牌堆; 此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次
-（2）当其他角色的移动掷骰结果是偶数时可消耗1000资金并移除此卡的一个[奇迹水晶]，此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]。
-（3）此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金。"#)
+        .text(CardText::items(&[
+            it(r#"支付X次1000的资金，将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]，此卡没有[奇迹水晶]时加入弃牌堆; 此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次"#),
+            it(r#"当其他角色的移动掷骰结果是偶数时可消耗1000资金并移除此卡的一个[奇迹水晶]，此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]。"#),
+            it(r#"此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金。"#),
+        ]))
         // sheet cell G5
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

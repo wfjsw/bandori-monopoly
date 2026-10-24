@@ -1,8 +1,26 @@
 /* The body inherits its container's type; only list rhythm is set here. */
 .body { margin: 0; display: flex; flex-direction: column; gap: 0.35em; }
 .lead { margin: 0; }
-/* A card's section label (`[手]：`, `[持续]：`) heading the effects under it. */
-.label { margin: 0.25em 0 0; font-weight: 700; }
+
+/* A card's section label (`[手]：`, `[持续]：`) -- the subtitle heading the
+   effects under it. Same voice as a type tag that opens a run (`.tag`), on a
+   line of its own. */
+.label {
+  margin: 0.35em 0 0;
+  font-weight: 700;
+  color: var(--pink-deep);
+  letter-spacing: 0.04em;
+}
 .label:first-child { margin-top: 0; }
+
+/* A type tag that opens a paragraph or an effect (`[反击] …`): the subtitle
+   voice, inline at the start of that run. Mid-sentence 「[反击]」 never gets
+   this -- see `splitTypeTag`. */
+.tag {
+  font-weight: 700;
+  color: var(--pink-deep);
+  letter-spacing: 0.04em;
+}
+
 .list { margin: 0; padding-left: 1.35em; display: flex; flex-direction: column; gap: 0.3em; }
 .sub { margin: 0.3em 0 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 0.2em; }

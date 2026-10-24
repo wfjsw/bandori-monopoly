@@ -7,6 +7,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
@@ -16,17 +17,15 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
         "actor == owner && move.roll != null && move.roll < 6",
-        Some(key!("himari_plus_one_when")),
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("himari_plus_one_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"如果并非没问题"#)
         .raw_name(r#"（绯玛丽）如果并非没问题"#)
         .tags(&[r#"反击"#])
-        .text(r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#)
+        .text(CardText::para(r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#))
         // sheet cell C15
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]),
 );

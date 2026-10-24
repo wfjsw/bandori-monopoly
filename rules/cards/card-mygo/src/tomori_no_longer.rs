@@ -16,17 +16,18 @@ use alloc::string::String;
 use bandori_std::ctx::{self, trigger, CardPile};
 use bandori_std::kind::Actions;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     "MyGO:（灯）不再迷茫",
     &[
-        On::Play("", None, None, tomori_no_longer),
+        On::Play("", None, tomori_no_longer),
         // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept whenever the
         // count empties, whichever write emptied it (the skill-cost swap, a
         // move, or a decay). `CounterChanged` is name-filtered to
         // `counter::CRYSTALS`.
-        On::Action(Action::CounterChanged("", None, Some(sweep_guard), sweep)),
+        On::Action(Action::CounterChanged("", Some(sweep_guard), sweep)),
         // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
         // fire-cost substitution. The offer exists only for a positive spend
         // with a crystal to trade; accepting cancels the fire spend and burns
@@ -37,18 +38,22 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // `ChargePaying` (the window `spend_charge` raises before the pots
         // move); `set_cancelled()` makes `raise` return false, i.e. cost
         // substituted and the skill body proceeds.
-        On::Action(Actions::ChargePaying("actor == owner && card.counter('crystals') >= 1", None, None, cover)),
+        On::Action(Actions::ChargePaying("actor == owner && card.counter('crystals') >= 1", None, cover)),
         // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
         // 获得等同于减少量的[奇迹水晶]」. `ActionKind::CounterChanged`
         // name-filtered to `counter::CRYSTALS` (the name is not yet in the
         // condition vocabulary).
-        On::Action(Action::CounterChanged(card_sdk::pre::MINE, None, Some(refill_guard), refill)),
+        On::Action(Action::CounterChanged(card_sdk::pre::MINE, Some(refill_guard), refill)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不再迷茫"#)
         .raw_name(r#"（灯）不再迷茫"#)
         .tags(&[])
-        .text(r#"（1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数 （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶] （3）此卡上的奇迹水晶耗尽后，[移除]此卡"#)
+        .text(CardText::items(&[
+            it(r#"获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数"#),
+            it(r#"你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]"#),
+            it(r#"此卡上的奇迹水晶耗尽后，[移除]此卡"#),
+        ]))
         // sheet cell I3
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"高松灯"#)]));
 

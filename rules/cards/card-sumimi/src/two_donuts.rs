@@ -20,22 +20,26 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
     &[
-        On::Play("", None, None, two_donuts),
+        On::Play("", None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
         // latch, the `move_dir` read) stay in the arms below.
-        On::Action(Action::PassTile("card.placed", None, None, fx)),
-        On::Action(Action::SettleAfter("card.placed", None, None, fx)),
+        On::Action(Action::PassTile("card.placed", None, fx)),
+        On::Action(Action::SettleAfter("card.placed", None, fx)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)
         .raw_name(r#"一人两个甜甜圈"#)
         .tags(&[])
-        .text(r#"（1）获得[除外]直至你原本所在格子被其他玩家经过。（2）你原本所在格子被其他玩家经过时，可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家本次移动终点间的任一格并触发结算，之后你们各获得2火罐（超出上限的每个火罐转化为500资金）"#)
+        .text(CardText::items(&[
+            it(r#"获得[除外]直至你原本所在格子被其他玩家经过。"#),
+            it(r#"你原本所在格子被其他玩家经过时，可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家本次移动终点间的任一格并触发结算，之后你们各获得2火罐（超出上限的每个火罐转化为500资金）"#),
+        ]))
         // sheet cell L4
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

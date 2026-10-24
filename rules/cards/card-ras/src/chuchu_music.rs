@@ -8,26 +8,27 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CHUCHU_MUSIC: CardDef = CardDef::new(
     "RAS:（chuchu）演奏我的音乐吧",
     &[
-        On::Play("", None, Some(cant_play), play),
-        On::Action(Action::TurnEnd("", None, Some(turn_end_guard), turn_end)),
+        On::Play("", Some(cant_play), play),
+        On::Action(Action::TurnEnd("", Some(turn_end_guard), turn_end)),
         // 规则书: 「场上存在此卡的玩家下次购买地契时」 -- the acquisition moment,
         // C# `CardChuchuMusic.Bought` (`Fx.Bought` = 「a player became the owner
         // of `t.tile`」), the same hook Afterglow / Roselia / 朝日 listen on for
         // their 「购买…时」 clauses. It was `BuyAfter` (「after `Card.Buy`
         // resolves」), which `ctx::raise_bought`'s card-driven hand-over (巴's
         // 「收购该地契」) does not raise -- so the bonus never fired there.
-        On::Action(Action::Bought("", None, Some(buy_after_guard), buy_after)),
+        On::Action(Action::Bought("", Some(buy_after_guard), buy_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"演奏我的音乐吧"#)
         .raw_name(r#"（chuchu）演奏我的音乐吧"#)
         .tags(&[])
-        .text(r#"将此卡放置于你以外的一名玩家场上并为其添加3个奇迹水晶，那名玩家的每个回合结束时失去一个；场上存在此卡的玩家下次购买地契时，[使用者]获得100资金，将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个；此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）。此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡。"#)
+        .text(CardText::para(r#"将此卡放置于你以外的一名玩家场上并为其添加3个奇迹水晶，那名玩家的每个回合结束时失去一个；场上存在此卡的玩家下次购买地契时，[使用者]获得100资金，将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个；此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）。此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡。"#))
         // sheet cell H12
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"珠手知由"#)]));
 

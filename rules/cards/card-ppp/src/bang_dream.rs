@@ -10,20 +10,22 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
 pub const BANG_DREAM: CardDef = CardDef::new(
     "PPP:Bang Dream!",
-    &[On::Play("", None, Some(cant_play), bang_dream)],
+    &[On::Play("", Some(cant_play), bang_dream)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Bang Dream!"#)
         .raw_name(r#"Bang Dream!"#)
         .tags(&[r#"手"#])
-        .text(
-            r#"[手]：
-为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房。"#),
+            ]),
+        ]))
         // sheet cell B7
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );

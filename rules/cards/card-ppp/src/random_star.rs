@@ -11,22 +11,25 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RANDOM_STAR: CardDef = CardDef::new(
     "PPP:仓库里的Random Star",
     &[
-        On::Play("", None, None, random_star),
+        On::Play("", None, random_star),
         // 规则书（2）: 「[经过]“流星堂”时可使用2星星贴纸」 -- the owner's
         // still-walking (non-teleport) pass of 流星堂, with two stickers in hand.
-        On::Action(Action::PassTile("card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2", None, None, pass_tile)),
+        On::Action(Action::PassTile("card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2", None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"仓库里的Random Star"#)
         .raw_name(r#"仓库里的Random Star"#)
         .tags(&[])
-        .text(r#"（1）将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”放置在卡组底端
-（2）[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]"#)
+        .text(CardText::items(&[
+            it(r#"将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”放置在卡组底端"#),
+            it(r#"[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]"#),
+        ]))
         // sheet cell B12
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

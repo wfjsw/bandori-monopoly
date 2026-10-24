@@ -7,7 +7,7 @@
 import { memo, type CSSProperties, type ReactNode } from "react";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
-import { D, cardTitle, cardText, cardColor, skillCard, GENERAL_GROUP } from "../core/data";
+import { D, cardTitle, cardText, cardBody, cardColor, skillCard, GENERAL_GROUP } from "../core/data";
 import type { CardData } from "../core/types";
 import { Btn } from "./Button";
 import s from "./Card.module.css";
@@ -120,7 +120,7 @@ function CardDetail({ id, actions, note, close }: { id: string; actions: CardAct
           {!c && skillCard(id)?.group && <span>{skillCard(id)!.group}</span>}
         </div>
         {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-        <div className={s.text}><SkillBody text={cardText(id)} /></div>
+        <div className={s.text}><SkillBody blocks={cardBody(id)} text={cardText(id)} /></div>
         {note && <div className={s.note}>{note}</div>}
         {actions.length > 0 && (
           <div className={s.actions}>

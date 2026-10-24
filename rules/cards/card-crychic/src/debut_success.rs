@@ -8,16 +8,17 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",
-    &[On::Play("", None, None, debut_success), On::Action(Action::AtEnd("", None, None, at_end))],
+    &[On::Play("", None, debut_success), On::Action(Action::AtEnd("", None, at_end))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"初演大成功"#)
         .raw_name(r#"初演大成功"#)
         .tags(&[])
-        .text(r#"打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。"#)
+        .text(CardText::para(r#"打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。"#))
         // sheet cell M11
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
