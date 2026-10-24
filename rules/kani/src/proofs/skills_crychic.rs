@@ -90,7 +90,7 @@ mod tomori_spend {
     crate::host_subset!(tomori_spend_dispatch {
         raise => arm_raise,
         spend_marker => arm_spend_marker,
-        state_add | inc_slot => arm_state_add,
+        state_add => arm_state_add,
         log | effect => arm_log,
     });
 

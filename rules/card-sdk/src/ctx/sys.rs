@@ -744,27 +744,8 @@ mod abi {
             link_name = "ruleset_state_add"
         )]
         pub fn state_add(player_id: i32, ptr: i32, len: i32, delta: i32) -> i32;
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_state_set_flags"
-        )]
-        pub fn state_set_flags(player_id: i32, ptr: i32, len: i32, flags: i32);
-
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_slot"
-        )]
-        pub fn slot(player_id: i32, ptr: i32, len: i32) -> i32;
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_set_slot"
-        )]
-        pub fn set_slot(player_id: i32, ptr: i32, len: i32, v: i32);
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_inc_slot"
-        )]
-        pub fn inc_slot(player_id: i32, ptr: i32, len: i32, by: i32) -> i32;
+        // slot/set_slot/inc_slot retired: sugar over state_get/set/add (no
+        // dedicated export). state_set_flags rides state_set field FLAGS.
         // pots & status
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),

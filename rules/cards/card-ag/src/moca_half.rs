@@ -6,6 +6,8 @@
 //! > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。
 //!
 //! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
+//! 
+//! Reviewed 10/24/2026
 
 use bandori_std::ctx;
 use card_sdk::{CardText, it};
@@ -113,14 +115,19 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// readings are defensible and they disagree by one step, so the composition
 /// order needs a ruling. Filed as OPEN-ROLLRESHAPE-01.
 fn roll_half(player_id: i32, v: RollValue) -> RollValue {
+
     let roll = v.value.max(0);
-    let halved = (roll + 1) / 2;
+
+    // TODO: Replace to .div_ceil as soon as https://github.com/rust-lang/rust/issues/88581
+    let halved = roll / 2 + roll % 2;
+
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_roll"))
             .i("from", roll as i64)
             .i("to", halved as i64),
     );
+
     RollValue { value: halved, ..v }
 }
 
@@ -130,13 +137,17 @@ fn roll_half(player_id: i32, v: RollValue) -> RollValue {
 /// User ruling 2026-10-15 (OPEN-取整 family): a 减半 modifier transforms the
 /// running amount exactly and must NOT CeilTo in its own body; the engine
 /// rounds up to a multiple of 10 once after all add/mul modifiers. Integer
-/// fold rounds the .5 up (`(amount + 1) / 2`) so a sole modifier still settles
+/// fold rounds the .5 up (`value.div_ceil(2)`) so a sole modifier still settles
 /// at `round10(exact)` (25 → 12.5 → 20).
 fn pay_mul(player_id: i32, value: i32) -> i32 {
     if value <= 0 {
         return value;
     }
-    let half = ((value as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
+    // `value > 0`, so ceil-halving is `value / 2 + value % 2` (stable; avoids
+    // the unstable `int_roundings` feature behind `div_ceil`, and unlike
+    // `(value + 1) / 2` it cannot overflow at `i32::MAX`).
+    // TODO: Replace to .div_ceil as soon as https://github.com/rust-lang/rust/issues/88581
+    let half = value / 2 + value % 2;
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_pay"))

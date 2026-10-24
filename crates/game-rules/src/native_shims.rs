@@ -218,12 +218,6 @@ pub trait HostOps {
     fn op_state_set(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_state_add`
     fn op_state_add(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_slot`
-    fn op_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_set_slot`
-    fn op_set_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_inc_slot`
-    fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_group_pool`
     fn op_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_add_group_pool`
@@ -250,8 +244,6 @@ pub trait HostOps {
     fn op_add_marker_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_apply_abnormal` (player, kind, n, to)
     fn op_apply_abnormal(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_state_set_flags` (player, key_p, key_l, flags)
-    fn op_state_set_flags(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_raise_after` (player, name_p, name_l, value)
     fn op_raise_after(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_skip_main_move` (player, locked)
@@ -1071,16 +1063,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_state_add(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::state_add(self, a[0], a[1], a[2], a[3])? as i64)
     }
-    fn op_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::slot(self, a[0], a[1], a[2])? as i64)
-    }
-    fn op_set_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::set_slot(self, a[0], a[1], a[2], a[3])?;
-        Ok(0)
-    }
-    fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::inc_slot(self, a[0], a[1], a[2], a[3])? as i64)
-    }
     fn op_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::group_pool(self, a[0], a[1], a[2])? as i64)
     }
@@ -1123,11 +1105,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_apply_abnormal(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::apply_abnormal(self, a[0], a[1], a[2], a[3])?;
-        Ok(0)
-    }
-    fn op_state_set_flags(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        let key = crate::hostfns::guest_str(self, a[1], a[2])?;
-        crate::hostfns::state_set_flags(self, a[0], &key, a[3] as u8)?;
         Ok(0)
     }
     fn op_raise_after(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -2839,35 +2816,6 @@ pub unsafe extern "C-unwind" fn ruleset_state_add(
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_slot(player_id: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_slot([player_id, ptr, len, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_slot(player_id: i32, ptr: i32, len: i32, v: i32) {
-    with_host(|h| match h.op_set_slot([player_id, ptr, len, v, 0, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_inc_slot(
-    player_id: i32,
-    ptr: i32,
-    len: i32,
-    by: i32,
-) -> i32 {
-    with_host(|h| match h.op_inc_slot([player_id, ptr, len, by, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_group_pool(player_id: i32, np: i32, nl: i32) -> i32 {
     with_host(|h| match h.op_group_pool([player_id, np, nl, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -3005,21 +2953,6 @@ pub unsafe extern "C-unwind" fn ruleset_add_marker_max(
             Err(e) => abort_host(e),
         },
     )
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_state_set_flags(
-    player_id: i32,
-    kp: i32,
-    kn: i32,
-    flags: i32,
-) {
-    with_host(
-        |h| match h.op_state_set_flags([player_id, kp, kn, flags, 0, 0]) {
-            Ok(_) => 0,
-            Err(e) => abort_host(e),
-        },
-    );
 }
 
 #[no_mangle]

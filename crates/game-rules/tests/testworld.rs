@@ -283,13 +283,6 @@ impl CardWorld for TestWorld {
     fn add_tok(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn slot(&self, _: i32, _: &str) -> i32 {
-        0
-    }
-    fn set_slot(&mut self, _: i32, _: &str, _: i32) {}
-    fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
-        0
-    }
     fn group_pool(&self, _: i32, _: &str) -> i32 {
         0
     }

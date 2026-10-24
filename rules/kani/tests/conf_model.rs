@@ -1558,19 +1558,19 @@ fn op_to_discard_and_hand_size() {
 }
 
 #[test]
-fn op_set_slot_slot_match() {
+fn state_set_get_value_match() {
     let _g = model_lock();
     let (kp, kl) = intern_str("conf.key");
     diff_op_seq(
-        "set_slot+slot",
+        "state_set+state_get",
         &[],
         |c| {
-            game_rules::hostfns::set_slot(c, 1, kp, kl, 9).unwrap();
-            game_rules::hostfns::slot(c, 1, kp, kl).unwrap() as i64
+            game_rules::hostfns::state_set(c, 1, kp, kl, 0, 9).unwrap();
+            game_rules::hostfns::state_get(c, 1, kp, kl, 0).unwrap() as i64
         },
         || {
-            rules_kani::host::dispatch(Op::set_slot, [1, kp, kl, 9, 0, 0]);
-            rules_kani::host::dispatch(Op::slot, [1, kp, kl, 0, 0, 0])
+            rules_kani::host::dispatch(Op::state_set, [1, kp, kl, 0, 9, 0]);
+            rules_kani::host::dispatch(Op::state_get, [1, kp, kl, 0, 0, 0])
         },
     );
 }
