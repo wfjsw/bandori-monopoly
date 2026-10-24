@@ -17,7 +17,7 @@
 //! move, so there is nothing to latch.
 
 use bandori_std::ctx;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const MARINA_GIFTS: CardDef = CardDef::new(
@@ -60,7 +60,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「你投掷一次1d10，如果投掷结果至少为6，那名玩家获得1200资金」
-    let face = ctx::roll(player_id, 1, 10);
+    let face = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::SKILL)?;
     if face >= 6 {
         ctx::gain(
             passer,

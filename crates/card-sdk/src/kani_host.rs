@@ -15,7 +15,7 @@
 #[repr(u16)]
 pub enum Op {
     roll = 0,
-    roll_ask = 1,
+    roll_direct = 1,
     log = 2,
     effect = 3,
     tile_count = 4,
@@ -304,7 +304,8 @@ pub enum Op {
     gate = 289,
     card_settle_at = 290,
     card_offer_build = 291,
-    do_move_roll = 292,
+    // do_move_roll (was 292) is gone: `ctx::do_move_roll` is
+    // `roll_direct(..., RollPurpose::Move)` (v102).
     // is_live_house_for = 293 (removed v56)
     placed_cards = 294,
     field_instances = 295,

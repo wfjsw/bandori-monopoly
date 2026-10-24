@@ -78,7 +78,7 @@ fn roll_after_applies(_player_id: i32) -> bool {
 fn on_roll_after(player_id: i32) -> card_sdk::Asked {
     reward(player_id)?;
     // 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」
-    reroll_to_ten(player_id);
+    reroll_to_ten(player_id)?;
     Ok(())
 }
 
@@ -113,13 +113,13 @@ fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- reroll with
 /// `H.DoMoveRoll` until the face is at least 10 (at most 10 attempts, bailing
 /// out when the player is out). Called from the `DiceRollAfter` branch of [`counteract`].
-fn reroll_to_ten(player_id: i32) {
+fn reroll_to_ten(player_id: i32) -> card_sdk::Asked {
     let mut x = trigger::move_roll().unwrap_or(trigger::value());
     for _ in 0..10 {
         if x >= 10 || ctx::player_out(player_id) {
             break;
         }
-        x = ctx::do_move_roll(player_id).max(0);
+        x = ctx::do_move_roll(player_id)?.max(0);
         trigger::set_move_roll(x);
     }
     ctx::log(
@@ -128,6 +128,7 @@ fn reroll_to_ten(player_id: i32) {
             .player_id("who", player_id)
             .i("n", x as i64),
     );
+    Ok(())
 }
 
 /// 规则书: 「为0时置入弃牌堆」 -- C# `Empty()` / `H.Unplace(this, "discard")`.

@@ -842,7 +842,22 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 102;
+pub const ABI_VERSION: i32 = 103;
+/// v103: **roll API redesign**. `ctx::roll` is the windowed default (raises
+///    the 「掷骰结算前」 [反击] window on the face) and `ctx::roll_direct` is the
+///    windowless one; both return `Result<i32, Prompt>` via `asked()` and pause
+///    with `Pause::Sentinel` (not `Trap`), matching `gain` / `pay` / `draw` /
+///    `raise`. New [`RollPurpose`] codes (`Effect = 0`, `Move = 1`) replace the
+///    `sides == 0` "move roll" hack: `Move` sums the move plan's dice tables
+///    and ignores `count`/`sides`; `Effect` is `count`d`sides`. Every roll path
+///    logs one `"dice"` event (the roll animation) -- there is no quiet variant.
+///    `ctx::roll_ask` / `ctx::do_move_roll_ask` and the old 3-arg `ruleset_roll`
+///    are gone. `ruleset_roll(player_id, count, sides, purpose, source)` is the
+///    windowed import; `ruleset_roll_direct(player_id, count, sides, purpose)`
+///    the windowless one. `ctx::do_move_roll` is now
+///    `roll_direct(..., RollPurpose::Move)` and the dedicated
+///    `ruleset_do_move_roll` import is gone. `roll_source` is unchanged
+///    (orthogonal attribution). SAVE_VERSION / RECORD_VERSION unchanged.
 /// v102: **named scheduled callbacks**. `On::Action(Action::AtEnd(pre, guard,
 ///    body))` becomes `On::Schedule(id, pre, guard, body)` -- a required
 ///    stable ASCII slug names the entry, and the scheduling family
@@ -1408,6 +1423,8 @@ pub mod prop {
 /// `t.Roll.Source` -- where a `diceRollBefore` / `diceRollResult` face came from. Read by
 /// 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `diceRollBefore` / `diceRollResult`
 /// trigger carries one; every other trigger reads [`roll_source::NONE`].
+/// Orthogonal to [`RollPurpose`] -- purpose says *what* was rolled, source says
+/// *who / what funded* the roll.
 pub mod roll_source {
     /// Unattributed (the engine's own move roll, or a roll with no named source).
     pub const NONE: i32 = 0;
@@ -1415,10 +1432,24 @@ pub mod roll_source {
     /// rules-layer names the clause). Frozen; the engine never branches on the
     /// game name.
     pub const CHARGE: i32 = 1;
-    /// A hand/field card's own roll (`ctx::roll_ask` from a card body).
+    /// A hand/field card's own roll (`ctx::roll` from a card body).
     pub const CARD: i32 = 2;
-    /// A skill press's roll (`ctx::roll_ask` from a skill body).
+    /// A skill press's roll (`ctx::roll` from a skill body).
     pub const SKILL: i32 = 3;
+}
+
+/// Why a die is being cast. Wire codes are frozen i32s; the engine branches on
+/// them to pick the face producer (`count`d`sides` vs the move plan's tables).
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RollPurpose {
+    /// A card / skill effect's own `count`d`sides` roll.
+    Effect = 0,
+    /// The turn's main movement roll (or a reroll of its plan). The face is the
+    /// sum of the move plan's `base` + `dice` tables (`count` / `sides` are
+    /// ignored). Replaces the old `sides == 0` shape of `roll_ask` /
+    /// `do_move_roll_ask`.
+    Move = 1,
 }
 
 /// `i32_exit` status the host uses to abort a run that reached an unanswered prompt.

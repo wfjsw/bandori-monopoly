@@ -6,6 +6,7 @@
 //! 1d6 to pick a player and move to the tile in front of them.
 
 use bandori_std::ctx;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -46,7 +47,7 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     if count <= 0 {
         return Ok(());
     }
-    let r = ctx::roll(player_id, 1, 6);
+    let r = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     let who = list[((r - 1).rem_euclid(count)) as usize];
     let n = ctx::tile_count();
     if n <= 0 {

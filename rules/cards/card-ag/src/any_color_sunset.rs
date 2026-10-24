@@ -15,6 +15,7 @@
 //! Reviewed 10/23/2026
 
 use bandori_std::ctx;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::ctx::NameId;
 use card_sdk::{key, CardDef, CardText, Msg, On};
 
@@ -29,7 +30,7 @@ pub const ANY_COLOR_SUNSET: CardDef =
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6并根据结果获得对应效果」; 「若结果严格大于6，则从1开始重新计数」
-    let raw = ctx::roll(player_id, 1, 6);
+    let raw = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     let k = (raw - 1).rem_euclid(6) + 1;
     if k <= 5 {
         // 规则书: 「若为1则…若为5则…」 (single-effect branch)

@@ -28,7 +28,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
-use card_sdk::abi::{ActionKind, CardPile};
+use card_sdk::abi::{ActionKind, CardPile, RollPurpose};
 use card_sdk::ctx::{intern, NameId};
 use card_sdk::{CardText, it, items, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -177,9 +177,12 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
             )?;
             i.min(pool.len() - 1)
         } else {
-            // C# `H._rng.Next(pool.Count)` -- a silent host rng; the only host-side
-            // draw here is `ctx::roll`, which also logs the face.
-            (ctx::roll(player_id, 1, pool.len() as i32) - 1).max(0) as usize % pool.len()
+            // C# `H._rng.Next(pool.Count)` -- a silent host rng. Pure random
+            // index pick, not a 「掷骰」 the player should see countered, so
+            // `roll_direct` (it still animates).
+            (ctx::roll_direct(player_id, 1, pool.len() as i32, RollPurpose::Effect)? - 1).max(0)
+                as usize
+                % pool.len()
         };
         let id = pool.remove(index);
         // C# `h.draw.Add(pool[index])` then `H.Shuffle(h.draw)` at the end; each

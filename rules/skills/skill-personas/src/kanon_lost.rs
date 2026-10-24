@@ -77,7 +77,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// Applicability is the entry's condition (a fixed face means no pair to subtract).
 fn on_roll(player_id: i32) -> card_sdk::Asked {
     let a = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
-    let b = ctx::do_move_roll(player_id).max(0);
+    let b = ctx::do_move_roll(player_id)?.max(0);
     let face = (a - b).abs();
     ctx::trigger::set_move_roll(face);
     ctx::log(

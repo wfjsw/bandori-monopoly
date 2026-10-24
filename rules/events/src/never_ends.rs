@@ -23,7 +23,7 @@ pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::P
 /// `data/board.json`) with no settle. 「且获得1层在回合开始时移除的[除外]」 --
 /// one exile layer that the engine's turn-start tick wears off.
 fn play(player_id: i32) -> card_sdk::Asked {
-    let n = roll(player_id, 1, 4);
+    let n = roll(player_id, 1, 4)?;
     ctx::log(
         player_id,
         &Msg::new("log.event.dice")

@@ -334,8 +334,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
     match op {
         // ---- dice / log ----
         Op::roll => arm_roll(a),
-        Op::roll_ask => arm_roll_ask(a),
-        Op::do_move_roll => arm_do_move_roll(a),
+        Op::roll_direct => arm_roll(a),
         Op::log | Op::effect => arm_log(a),
 
         // ---- tiles (static data from board.json + runtime state) ----
@@ -1697,6 +1696,26 @@ pub fn arm_dist(a: Args) -> i64 {
     }
 }
 
+/// Shared face producer for `Op::roll` / `Op::roll_direct`. `purpose` is the
+/// ABI's `RollPurpose` wire code (0 = Effect `count`d`sides`, 1 = Move plan
+/// tables). Move rolls used to be a dedicated `do_move_roll` import; they now
+/// arrive as `roll_direct` with purpose 1 and the args' count/sides ignored.
+pub fn arm_roll(a: Args) -> i64 {
+    let [_player_id, count, sides, purpose, _source, _] = a;
+    if purpose == 1 {
+        arm_do_move_roll(a)
+    } else {
+        roll_dice(count, sides) as i64
+    }
+}
+
+/// Concrete face of 1 — isolation for harnesses that pin the die so a
+/// downstream `Vec` walk (rainday's agent-area build) sees a single branch.
+/// Not a silent-zero: a real 1d10 face.
+pub fn arm_roll_face_one(_a: Args) -> i64 {
+    1
+}
+
 pub fn arm_do_move_roll(a: Args) -> i64 {
     let _ = a;
     roll_dice(2, 6) as i64
@@ -2465,23 +2484,6 @@ pub fn arm_raise_bought(_a: Args) -> i64 {
 
 pub fn arm_ring_multiplier(_a: Args) -> i64 {
     1
-}
-
-pub fn arm_roll(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    roll_dice(a1, a2) as i64
-}
-
-/// Concrete face of 1 — isolation for harnesses that pin the die so a
-/// downstream `Vec` walk (rainday's agent-area build) sees a single branch.
-/// Not a silent-zero: a real 1d10 face.
-pub fn arm_roll_face_one(_a: Args) -> i64 {
-    1
-}
-
-pub fn arm_roll_ask(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    roll_dice(a1, a2) as i64
 }
 
 pub fn arm_round_no(a: Args) -> i64 {

@@ -14,9 +14,11 @@
 use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec, steps};
+use card_sdk::{para, sec, steps, CardText};
 
-pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[
+    On::Play("", Some(play_guard), play)
+]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"即使夕阳落山"#)
         .raw_name(r#"即使夕阳落山"#)
         .tags(&[r#"手"#, r#"限"#])
@@ -35,7 +37,8 @@ pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("",
         // sheet cell C5
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
-/// Owned tiles with at least one house (C# `CardSunset.Built`).
+/// Owned tiles with at least one house.
+/// 玩家有房子的格子
 fn built(player_id: i32) -> Vec<i32> {
     ctx::owned_tiles(player_id)
         .into_iter()
@@ -43,8 +46,8 @@ fn built(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
-/// C# `CardSunset.WhyNot`: needs 4 built deeds, then someone to pay.
-fn cant_play(player_id: i32) -> Option<Msg> {
+/// 玩家必须拥有至少四个有房子的格子，且必须有其他玩家存在，否则无法使用此卡。
+fn play_guard(player_id: i32) -> Option<Msg> {
     if built(player_id).len() < 4 {
         return Some(Msg::new(key!("sunset_no_built")));
     }
@@ -54,15 +57,22 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-/// `CeilTo(x, 10)` on the rational `num / den` (C# `MatchHost.CeilTo`:
-/// `(int)Math.Ceiling(x / unit - 1E-09) * unit`).
-fn ceil10(num: i64, den: i64) -> i64 {
+/// Ceil to the nearest multiple of 10 for the rational `num / den`. Returns 0 if `num` or `den` is non-positive.
+///
+/// Stays in `i32`: instead of `ceil(num / (10 * den)) * 10` (whose `10 * den`
+/// intermediate can overflow) this derives the answer from the quotient and
+/// remainder of `num / den`, and the round-up step saturates.
+fn ceil10(num: i32, den: i32) -> i32 {
     if num <= 0 || den <= 0 {
         return 0;
     }
-    let d = 10 * den;
-    let q = if num % d == 0 { num / d } else { num / d + 1 };
-    q * 10
+    let q = num / den;
+    // `num / den` is already a multiple of 10 exactly when `q % 10 == 0` and `num % den == 0`.
+    if q % 10 == 0 && num % den == 0 {
+        q
+    } else {
+        (q / 10).saturating_add(1).saturating_mul(10)
+    }
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
@@ -97,11 +107,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // -- C# `picked.Sum(t => H._tiles[t].price + H.State.houses[t] * H._tiles[t].house)`:
     // land price (`ctx::tile_price`) plus `houses_of(t)` times the per-house
     // build cost (`ctx::build_cost` = `H._tiles[t].house`).
-    let mut sum = 0i64;
+    let mut sum = 0;
     for &t in &picked {
-        sum += ctx::tile_price(t) as i64 + ctx::houses_of(t) as i64 * ctx::build_cost(t) as i64;
+        sum += ctx::tile_price(t) + ctx::houses_of(t) * ctx::build_cost(t);
     }
-    let n = targets.len() as i64;
+    let n = targets.len() as i32;
     let mut x = ceil10(sum, n.max(1));
     // 规则书[限]: 「第100轮次开始前此卡的X为原本X的一半」
     // -- C# `if (H.State.round < 100) x = CeilTo(x / 2.0, 10)`.
@@ -109,7 +119,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
         x = ceil10(x, 2);
         ctx::log(player_id, &Msg::new(key!("sunset_halved")));
     }
-    let x = x.clamp(0, i32::MAX as i64) as i32;
     ctx::log(player_id, &Msg::new(key!("sunset_x")).n("x", x as i64));
     // 规则书[手]: 「[指定][使用者]以外的所有玩家」 -- C# `H.TargetAll(c, list, got)`,
     // run before the house removal (the C# order). The gate is the full

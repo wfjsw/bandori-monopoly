@@ -2,7 +2,7 @@
 
 //! Test-only cards for the host's cross-module tests.
 
-use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
+use card_sdk::abi::{roll_source, ChainKind, ActionKind, FilterKind, RollPurpose};
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::serde;
 use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On, PayAddValue, PlanValue};
@@ -987,7 +987,7 @@ const ROLL_THEN_PAY: CardDef = CardDef::new(
 );
 
 fn roll_then_pay(player_id: i32) -> card_sdk::Asked {
-    let _ = ctx::roll(player_id, 1, 6);
+    let _ = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     ctx::pay(player_id, 100, &Msg::new(key!("roll_then_pay_why")))?;
     Ok(())
 }

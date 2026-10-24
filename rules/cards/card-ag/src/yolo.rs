@@ -8,7 +8,7 @@
 //! 结算前」) -- any of the user's rolls, not only the main move roll.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{ChainKind, RollPurpose};
 use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -34,9 +34,13 @@ pub const YOLO: CardDef = CardDef::new(
 );
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
+    // The 1d4 is the amount this effect *adds*, not a fresh game roll to
+    // answer -- windowless (`roll_direct`), matching the old `ctx::roll`.
+    // Opening 「掷骰结算前」 here nests this same counteract (and Eve's) on the
+    // boost and double-applies them (cross_move `m03_eve_then_yolo`).
+    // Still honours a forced extreme (「以理论最大值或最小值结算」).
     let before = trigger::move_roll().unwrap_or_else(|| trigger::value().max(0));
-    let n = ctx::roll(player_id, 1, 4);
+    let n = ctx::roll_direct(player_id, 1, 4, RollPurpose::Effect)?;
     trigger::set_move_roll(before + n);
     ctx::log(
         player_id,

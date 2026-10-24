@@ -23,9 +23,9 @@ pub const THIS_HAND: CardDef = CardDef::new("event:这只手我不会放开", &[
 /// forced no-settle walk (`fate_together.rs` pattern).
 fn play(_player_id: i32) -> card_sdk::Asked {
     for p in all_players() {
-        let a = roll(p, 1, 20);
-        let b = roll(p, 1, 20);
-        let c = roll(p, 1, 20);
+        let a = roll(p, 1, 20)?;
+        let b = roll(p, 1, 20)?;
+        let c = roll(p, 1, 20)?;
         let x = a - b + c;
         ctx::log(
             p,

@@ -16,7 +16,7 @@ use on_parse::*;
 
 const ARRAY_OPS: &[&str] = &[
     "roll",
-    "roll_ask",
+    "roll_direct",
     "log",
     "effect",
     "flash",
@@ -281,7 +281,6 @@ const ARRAY_OPS: &[&str] = &[
     "gate",
     "card_settle_at",
     "card_offer_build",
-    "do_move_roll",
     "placed_cards",
     "field_instances",
     "unplace_at",

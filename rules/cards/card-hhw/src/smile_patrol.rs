@@ -7,6 +7,7 @@
 //! on one of your tiles, then roll 3d20 and maybe build free on that tile.
 
 use bandori_std::ctx;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -46,7 +47,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    let r = ctx::roll(player_id, 3, 20);
+    let r = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
     let tile = (r - 1).rem_euclid(n);
     ctx::log(
         player_id,

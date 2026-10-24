@@ -42,11 +42,48 @@ pub fn abnormal_gate<C: HostCtx>(c: &mut C, player_id: i32, kind: AbKind) -> Res
     Ok(v != 0)
 }
 
-pub fn roll<C: HostCtx>(c: &mut C, player_id: i32, count: i32, sides: i32) -> Result<i32, HostErr> {
-    if !(1..=100).contains(&count) || !(1..=1000).contains(&sides) {
-        return Err(HostErr::trap(format!("roll({count}d{sides}) out of range")));
-    }
-    Ok(c.st_mut().w().roll(player_id, count, sides))
+/// `ctx::roll` -- windowed roll (the default). Raises the 「掷骰结算前」 [反击]
+/// window on the face. `purpose` is a `card_sdk::abi::RollPurpose` wire code
+/// (0 = Effect `count`d`sides`, 1 = Move plan tables); `source` is a
+/// `roll_source` code. Pause shape is [`crate::inline::Pause::Sentinel`] so the
+/// guest's `asked()` sees `Err(Prompt)`.
+pub fn roll<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    count: i32,
+    sides: i32,
+    purpose: i32,
+    source: i32,
+) -> Result<i32, HostErr> {
+    let req = HostRequest::Roll {
+        player_id,
+        count,
+        sides,
+        purpose,
+        source,
+        window: true,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+/// `ctx::roll_direct` -- roll without the [反击] window. The face is final as
+/// cast; still one `"dice"` event. Same pause shape as [`roll`].
+pub fn roll_direct<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    count: i32,
+    sides: i32,
+    purpose: i32,
+) -> Result<i32, HostErr> {
+    let req = HostRequest::Roll {
+        player_id,
+        count,
+        sides,
+        purpose,
+        source: 0,
+        window: false,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
 pub fn log<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
@@ -1692,10 +1729,6 @@ pub fn in_group<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result
     Ok(c.st().wr().in_group(player_id, &name))
 }
 
-pub fn do_move_roll<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok(c.st_mut().w().do_move_roll(player_id))
-}
-
 pub fn tok_names<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -2011,24 +2044,6 @@ pub fn card_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> 
     let st = c.st_mut();
     st.host_request = Some(req);
     Err(HostErr::NeedInput)
-}
-
-pub fn roll_ask<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    count: i32,
-    sides: i32,
-    source: i32,
-) -> Result<i32, HostErr> {
-    {
-        let req = HostRequest::Roll {
-            player_id,
-            count,
-            sides,
-            source,
-        };
-        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-    }
 }
 
 pub fn card_settle_at<C: HostCtx>(

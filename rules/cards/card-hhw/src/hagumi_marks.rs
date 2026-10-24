@@ -15,7 +15,7 @@
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, ChainKind, MarkFilter, MoveKind};
+use card_sdk::abi::{roll_source, ActionKind, ChainKind, MarkFilter, MoveKind, RollPurpose};
 use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -69,7 +69,7 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     let mut tiles = alloc::vec::Vec::new();
     let mut rolls = alloc::vec::Vec::new();
     for _ in 0..times.max(1) {
-        let r = ctx::roll(player_id, 4, 20);
+        let r = ctx::roll(player_id, 4, 20, RollPurpose::Effect, roll_source::CARD)?;
         let t = (r - 1).rem_euclid(n);
         // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」 -- the rolls
         // may land on the same tile; the C# `.Distinct()` keeps the first roll then.

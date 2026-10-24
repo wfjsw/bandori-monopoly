@@ -101,7 +101,7 @@ fn offer_reroll(player_id: i32, first: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // Re-roll the same shape the move rolled, and let the player pick.
-    let second = ctx::do_move_roll(player_id);
+    let second = ctx::do_move_roll(player_id)?;
     let keep = ctx::ask_yes(
         player_id,
         &Msg::new(key!("taki_crychic_title")),

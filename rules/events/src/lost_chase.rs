@@ -26,7 +26,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let players = all_players();
     let mut faces: Vec<(i32, i32)> = Vec::new();
     for &p in &players {
-        let face = roll(p, 5, 20);
+        let face = roll(p, 5, 20)?;
         ctx::log(
             player_id,
             &Msg::new("log.event.dice")

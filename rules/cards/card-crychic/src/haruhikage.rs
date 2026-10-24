@@ -166,7 +166,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        TriggerKind::DiceRollResult => reroll_skill(player_id),
+        TriggerKind::DiceRollResult => reroll_skill(player_id)?,
         TriggerKind::SettleBefore => step_toward_skill(player_id)?,
         // 规则书（2）[反击]: the payment window is the `effect` chain whose link
         // declares a `Pay` (`TriggerKind::Effect` -- `Pay` itself is the post-chain
@@ -180,11 +180,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 椎名立希（CRYCHIC）的技能 -- one reroll of the move dice.
-fn reroll_skill(player_id: i32) {
+fn reroll_skill(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "diceRollValue" branch:
     // `int num = Math.Max(0, H.DoMoveRoll(move)); move.Roll = num;`.
     // C# rerolls with `H.DoMoveRoll`, which sums the move's whole dice table.
-    let x = ctx::do_move_roll(player_id);
+    let x = ctx::do_move_roll(player_id)?;
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- the new face becomes the move roll.
     trigger::set_move_roll(x);
     ctx::log(
@@ -193,6 +193,7 @@ fn reroll_skill(player_id: i32) {
             .player_id("who", player_id)
             .i("n", x as i64),
     );
+    Ok(())
 }
 
 /// 丰川祥子（CRYCHIC）的技能 -- the endpoint steps 1 tile toward a player within 5.

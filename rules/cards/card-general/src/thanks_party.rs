@@ -9,6 +9,7 @@
 //! then Xd20 > 35 pays out; alone, an extra turn.
 
 use alloc::vec::Vec;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{CardText, para, sec, steps};
 
@@ -70,7 +71,7 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[手] (sheet 2026-10-06 新卡组卡 A12): 「1. X至少为2则[使用者]投掷
     // Xd20，如果结果至少为35则…」 (was 「大于35」).
-    let r = ctx::roll(player_id, x, 20);
+    let r = ctx::roll(player_id, x, 20, RollPurpose::Effect, roll_source::CARD)?;
     if r < 35 {
         ctx::log(
             player_id,

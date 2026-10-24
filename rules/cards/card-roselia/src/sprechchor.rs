@@ -6,6 +6,7 @@
 //!
 
 use bandori_std::ctx;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -31,7 +32,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn sprechchor(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
-    let n = ctx::roll(player_id, 1, 20);
+    let n = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
     ctx::gain(player_id, 1000 + n * 120, &Msg::new(key!("sprechchor_why")))?;
     Ok(())
 }

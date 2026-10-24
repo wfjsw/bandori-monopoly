@@ -116,7 +116,7 @@ crate::host_subset!(ag_dispatch {
     count_marks_f => arm_count_marks_f,
     self_uid => arm_self_uid,
     // dice
-    roll | roll_ask => arm_roll,
+    roll | roll_direct => arm_roll,
     // fire (colors-04 fill)
     charge => arm_fire,
     ,

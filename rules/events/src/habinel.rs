@@ -26,7 +26,7 @@ pub const HABINEL: CardDef = CardDef::new("event:前往哈比内尔王国旅游"
 fn play(_player_id: i32) -> card_sdk::Asked {
     let smile = ctx::tile_named("微笑号");
     for p in all_players() {
-        let x = roll(p, 1, 2);
+        let x = roll(p, 1, 2)?;
         // 规则书: 「结束后传送到微笑号」 -- the return tile is `exile_to`.
         rules_status::exile::send(p, x, smile);
         ctx::log(

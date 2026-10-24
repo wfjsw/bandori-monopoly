@@ -180,7 +180,7 @@ fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
     }
     // 规则书: the C# rerolls with `H.DoMoveRoll`, which sums the move's whole
     // dice table (base + extra dice + flat bonuses) rather than a bare 1d20.
-    let new_roll = ctx::do_move_roll(player_id);
+    let new_roll = ctx::do_move_roll(player_id)?;
     trigger::set_move_roll(new_roll);
     ctx::log(
         player_id,

@@ -117,7 +117,7 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `hhw` | `HHW:因为我一直相信着你` | `add_to_deck_at,add_to_hand,ask_card,ask_player,cards_in,discard_from_hand,log,others,pay,take_card` | yes | — |
 | `hhw` | `HHW:微笑巡逻队` | `add_house,build_cost,can_build_on,card_offer_build,houses_of,is_buyable,log,money_of,mortgaged_of,owned_tiles,roll,tile_count` | yes | — |
 | `hhw` | `HHW:梦幻的回礼` | `add_band_crystals,ask_tile,can_pay,log,mortgaged_of,player_out,rent_of,state::set,tile_count,tile_owner,transfer` | yes | — |
-| `hhw` | `HHW:热气球演出` | `ask_tile,cant_move,card_move,log,plan::set_kind,plan::set_resolve,plan::set_teleport_to,roll_ask,tile_count` | yes | — |
+| `hhw` | `HHW:热气球演出` | `ask_tile,cant_move,card_move,log,plan::set_kind,plan::set_resolve,plan::set_teleport_to,roll,tile_count` | yes | — |
 | `hhw` | `HHW:爱心义演` | `find_card,is_circle,log,place_card,plan::set_extra_steps,prop,set_dest,set_prop,tile_at,tile_owner,turn_key` | yes | — |
 | `hhw` | `HHW:笑容大游行` | `add_crystals,ask_yes,card_settle_at,crystals,decay,log,place_card,plan::set_settle_as_agent,self_tile,set_crystals,set_dest,set_self_tile,tile_named,trigger::player_id,trigger::set_cancelled,trigger::tile` | yes | — |
 | `hhw` | `HHW:运动的天赋` | `crystals,decay,do_move_roll,gain,is_placed,log,place_card,plan::set_min_roll,player_out,set_crystals,set_dest,set_slot,slot` | yes | — |
@@ -309,7 +309,7 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `skills_characters` | `skill:凑友希那:来练习吧` | `ask_yes,gain_fire,gate,is_circle,is_ring,log,plan::set_stop_at,player_pos,set_owner,set_prop,spend_fire,teleport_to,tile_named,trigger::move_remaining,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:北泽育美:全垒打！` | `add_tok,ask_yes,bump_mark,count_marks,log,place_mark,self_uid,tile_named,tok,transfer,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:千早爱音:重新开始` | `ask_yes,draw,gain_fire,spend_fire,trigger::player_id` | yes | — |
-| `skills_characters` | `skill:和奏瑞依:一次又一次竭尽全力` | `ask_pick,ask_yes,do_move_roll_ask,fixed_roll,gain_fire,log,spend_fire,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::value` | yes | — |
+| `skills_characters` | `skill:和奏瑞依:一次又一次竭尽全力` | `ask_pick,ask_yes,roll,fixed_roll,gain_fire,log,spend_fire,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::value` | yes | — |
 | `skills_characters` | `skill:大和麻弥:朝阳照耀的片刻` | `add_to_deck,add_to_hand,add_tok,ask_number,ask_pick,cards_in,in_band,log,place_card,player_count,player_out,take_card,tok,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:奥泽美咲:另一个我` | `ask_yes,gain_fire,give_exile,log,skill_blocked,spend_fire,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:宇田川亚子:对帅气的憧憬` | `add_to_hand,ask_pick,ask_yes,cards_in,field_instances,is_face_down_at,log,pay,place_card,set_dest,set_face_down_at,take_card,to_discard,trigger::player_id,unplace_at` | yes | — |

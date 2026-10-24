@@ -78,7 +78,7 @@ fn on_pass(_player_id: i32) -> card_sdk::Asked {
     let drawer = ctx::prop(DRAWER);
     // 「抽到的玩家投掷一次1d10（不受任何其他效果影响）」 -- a bare `ctx::roll`,
     // which raises no [反击] window and consults no dice modifiers.
-    let face = roll(drawer, 1, 10);
+    let face = roll(drawer, 1, 10)?;
     if face >= 6 {
         ctx::gain(who, 1200, &Msg::new("log.event.marina_box_win"))?;
     }

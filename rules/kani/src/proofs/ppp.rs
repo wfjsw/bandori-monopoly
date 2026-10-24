@@ -70,7 +70,7 @@ crate::host_subset!(ppp_dispatch {
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_state_add,
-    roll | roll_ask => arm_roll,
+    roll | roll_direct => arm_roll,
     player_pos => arm_player_pos,
     player_count => arm_player_count,
     player_out => arm_player_out,
@@ -106,7 +106,7 @@ crate::host_subset!(ppp_dispatch {
     | set_no_money_loss | set_fixed_roll | set_next_steps | set_build_discount
     | set_build_cost_pct | set_extreme | clear_dice | set_can_build
     | move_stopped | move_stop_at | move_parity | move_resolve | move_steps
-    | move_remaining | move_total | move_dir | fixed_roll | do_move_roll
+    | move_remaining | move_total | move_dir | fixed_roll
     | turn_main_steps | turn_rolls | turn_snap | turn_start_pos
     | targeted_count => arm_protocol_stub,
     card_move => arm_card_move,

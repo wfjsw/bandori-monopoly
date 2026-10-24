@@ -6,6 +6,7 @@
 //!
 
 use bandori_std::ctx;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -21,7 +22,7 @@ pub const COURAGE_WINGS: CardDef =
 fn courage_wings(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「掷骰3d20，结果对应序号格子」 -- `ctx::roll` honours a forced
     // extreme (「以理论最大值或最小值结算」) when one is armed.
-    let roll = ctx::roll(player_id, 3, 20);
+    let roll = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
     let n = ctx::tile_count();
     if n <= 0 {
         return Ok(());

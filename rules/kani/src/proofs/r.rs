@@ -49,7 +49,7 @@ crate::host_subset!(cookie_dispatch {
 
 /// `R:Sprechchor` play body only (`cant_play` is not invoked).
 crate::host_subset!(sprechchor_dispatch {
-    roll | roll_ask => arm_roll,
+    roll | roll_direct => arm_roll,
     gain | gain_typed | gain_fixed => arm_gain,
 });
 
@@ -85,7 +85,7 @@ crate::host_subset!(fire_bird_burn_dispatch {
 /// face 4's replay are listed (the sparse world usually early-returns them;
 /// if isolation breaks the body runs and the face-1 slice is unaffected).
 crate::host_subset!(nfo_play_dispatch {
-    roll | roll_ask => arm_roll,
+    roll | roll_direct => arm_roll,
     schedule_turn_end => arm_schedule_turn_end,
     log | effect => arm_log,
     player_out => arm_player_out,
