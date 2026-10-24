@@ -181,13 +181,16 @@ impl NativeRulesHandle {
                     on,
                     props,
                     texts: card
-                        .texts
+                        .on
                         .iter()
-                        .map(|(e, slot, tile, key)| ManifestTileText {
-                            entry: *e,
-                            slot: (*slot).to_string(),
-                            tile: (*tile).to_string(),
-                            key: (*key).to_string(),
+                        .enumerate()
+                        .flat_map(|(ei, o)| {
+                            o.texts_of().iter().map(move |(slot, tile, key)| ManifestTileText {
+                                entry: ei as i32,
+                                slot: (*slot).to_string(),
+                                tile: (*tile).to_string(),
+                                key: (*key).to_string(),
+                            })
                         })
                         .collect(),
                     board_role: card.board_role.to_string(),

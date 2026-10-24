@@ -102,6 +102,8 @@ pub struct FilterEntry {
     pub flash: crate::abi::Flash,
     /// See [`crate::PlayEntry::header`].
     pub header: crate::abi::Presentation,
+    /// See [`crate::PlayEntry::texts`].
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 // Safety: `body` always points at a `fn` item in static code (constructed by
@@ -141,6 +143,8 @@ pub struct ActionEntry {
     pub flash: crate::abi::Flash,
     /// See [`crate::PlayEntry::header`].
     pub header: crate::abi::Presentation,
+    /// See [`crate::PlayEntry::texts`].
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 impl ActionEntry {
@@ -175,6 +179,7 @@ pub const fn filter_value(
         label: "",
         flash: crate::abi::Flash::Auto,
         header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 
@@ -197,6 +202,7 @@ pub const fn filter_flag(
         label: "",
         flash: crate::abi::Flash::Auto,
         header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 
@@ -221,6 +227,7 @@ pub const fn filter_payload<P: FilterPayload>(
         label: "",
         flash: crate::abi::Flash::Auto,
         header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 
@@ -247,6 +254,7 @@ pub const fn action(
         label: "",
         flash: crate::abi::Flash::Auto,
         header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 

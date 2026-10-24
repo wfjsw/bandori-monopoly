@@ -269,18 +269,6 @@ pub struct CardDef {
     /// Keys are [`abi::prop`] constants; a key not declared reads as its
     /// default (`0`).
     pub props: &'static [(&'static str, i32)],
-    /// Per-entry **tile text** -- the deed-popup description this entry speaks
-    /// for, as `(entry index, slot, tile, key)`.
-    /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
-    /// - `tile`: `""` = the instance's own tile (a `tile:*` rule bound to one
-    ///   tile); otherwise a board tile *name* (`"CiRCLE"`, `"CiRCLE 咖啡厅"`) for
-    ///   a tile-bound text on a tile-less instance (`event:*`).
-    /// - `key`: i18n key in the `ui` namespace (`deed.note.*`); `""` means this
-    ///   entry **suppresses** the slot (the effective text is nothing).
-    ///
-    /// `CardDef::texts`. The view composes per-tile speakers in
-    /// body-precedence order (docs/TILES.md 「Tile text」).
-    pub texts: &'static [(i32, &'static str, &'static str, &'static str)],
     /// Deck/gallery metadata for this card (`CardDef::meta`, ABI v63). Lives
     /// beside the rule so the roster is authored with the rule; rides the
     /// separate `ruleset_metadata` export, **not** [`abi::ManifestEntry`].
@@ -322,7 +310,6 @@ impl CardDef {
             id,
             on,
             props: &[],
-            texts: &[],
             meta: None,
             board_role: "",
             governs: &[],
@@ -339,7 +326,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props,
-            texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
@@ -369,38 +355,6 @@ impl CardDef {
         crate::abi::EntryPresentation { header, flash }
     }
 
-    /// Declare the deed-popup **tile text** these entries speak for --
-    /// `(entry index, slot, tile, key)`. See [`Self::texts`] for the shape.
-    /// Replaces any earlier `texts` call.
-    ///
-    /// ```ignore
-    /// use card_sdk::abi::text_slot;
-    /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
-    ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Action(Action::PassTile("", None, Some(pass_pays), on_pass)),      // 1
-    /// ]).texts(&[
-    ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
-    ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
-    /// ]);
-    /// ```
-    pub const fn texts(
-        self,
-        texts: &'static [(i32, &'static str, &'static str, &'static str)],
-    ) -> Self {
-        Self {
-            id: self.id,
-            on: self.on,
-            props: self.props,
-            texts,
-            meta: self.meta,
-            board_role: self.board_role,
-            governs: self.governs,
-            gate_msgs: self.gate_msgs,
-            gate_skip_msgs: self.gate_skip_msgs,
-            exemption_prop: self.exemption_prop,
-        }
-    }
-
     /// Deck/gallery metadata for this card (`docs/CARDS.md` 「Card metadata」).
     /// Lives beside the rule; exported through `ruleset_metadata`, never
     /// through [`abi::ManifestEntry`]. Replaces any earlier `meta` call.
@@ -420,7 +374,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            texts: self.texts,
             meta: Some(meta),
             board_role: self.board_role,
             governs: self.governs,
@@ -442,7 +395,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            texts: self.texts,
             meta: self.meta,
             board_role: role,
             governs: self.governs,
@@ -466,7 +418,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
             governs: kinds,
@@ -484,7 +435,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
@@ -502,7 +452,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
@@ -519,7 +468,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
             governs: self.governs,
@@ -594,6 +542,21 @@ pub struct PlayEntry {
     /// posts no header and no flash; [`abi::Presentation::QuietWhenEmpty`]
     /// retracts the header when the body produced nothing visible.
     pub header: crate::abi::Presentation,
+    /// Per-entry **tile text** -- the deed-popup description this entry speaks
+    /// for, as `(slot, tile, key)` rows ([`On::texts`]).
+    /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
+    /// - `tile`: `""` = the instance's own tile (a `tile:*` rule bound to one
+    ///   tile); otherwise a board tile *name* (`"CiRCLE"`, `"CiRCLE 咖啡厅"`) for
+    ///   a tile-bound text on a tile-less instance (`event:*`).
+    /// - `key`: i18n key in the `ui` namespace (`deed.note.*`); `""` means this
+    ///   row **suppresses** the slot (the effective text is nothing).
+    ///
+    /// The view composes per-tile speakers in body-precedence order
+    /// (docs/TILES.md 「Tile text」). A **slice**, not a fluent additive
+    /// `.text(slot, tile, key)`: `const fn` cannot grow a `&'static` slice,
+    /// and slice-valued fields are already the house style on entries
+    /// ([`CounteractEntry::links`], [`MessageEntry::names`]).
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 /// [反击] entry ([`On::Counteract`]).
@@ -627,6 +590,8 @@ pub struct CounteractEntry {
     pub flash: crate::abi::Flash,
     /// See [`PlayEntry::header`].
     pub header: crate::abi::Presentation,
+    /// See [`PlayEntry::texts`].
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 /// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
@@ -655,6 +620,8 @@ pub struct RuleEntry {
     pub flash: crate::abi::Flash,
     /// See [`PlayEntry::header`].
     pub header: crate::abi::Presentation,
+    /// See [`PlayEntry::texts`].
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 /// Cross-card message entry ([`On::Message`]).
@@ -684,6 +651,8 @@ pub struct MessageEntry {
     pub flash: crate::abi::Flash,
     /// See [`PlayEntry::header`].
     pub header: crate::abi::Presentation,
+    /// See [`PlayEntry::texts`].
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 // The `body` pointer is code, not data: immutable and never freed (the same
@@ -828,6 +797,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -855,6 +825,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -877,6 +848,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -899,6 +871,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -921,6 +894,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -943,6 +917,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -965,6 +940,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -989,6 +965,7 @@ impl On {
             label: "",
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
+            texts: &[],
         })
     }
 
@@ -1518,6 +1495,80 @@ impl On {
         }
     }
 
+    /// Declare the deed-popup **tile text** this entry speaks for, as
+    /// `(slot, tile, key)` rows. Attaches to the entry, so it moves with it
+    /// when entries are reordered -- no index to drift. Replaces any earlier
+    /// `texts` call on this entry.
+    ///
+    /// Shape (see [`PlayEntry::texts`] and docs/TILES.md 「Tile text」):
+    /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
+    /// - `tile`: `""` = the instance's own tile; a board tile *name* for a
+    ///   tile-bound text on a tile-less instance.
+    /// - `key`: `deed.note.*`; `""` suppresses the slot.
+    ///
+    /// A **slice**, not a fluent additive `.text(slot, tile, key)`: `const fn`
+    /// cannot grow a `&'static` slice, and slice-valued fields are already
+    /// the house style on entries ([`CounteractEntry::links`],
+    /// [`MessageEntry::names`]). Declaration order of the rows is preserved
+    /// on the wire (the view's text precedence uses it).
+    ///
+    /// ```ignore
+    /// use card_sdk::abi::text_slot;
+    /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
+    ///     On::Settle("", None, settle)
+    ///         .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+    ///     On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
+    ///         .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+    /// ]);
+    /// ```
+    pub const fn texts(
+        self,
+        rows: &'static [(&'static str, &'static str, &'static str)],
+    ) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.texts = rows;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.texts = rows;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.texts = rows;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.texts = rows;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.texts = rows;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.texts = rows;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.texts = rows;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.texts = rows;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.texts = rows;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.texts = rows;
+                On::MessageBody(e)
+            }
+        }
+    }
+
     /// This entry's 「效果适用」 display text (see [`Self::label`]); `""` = none.
     pub const fn label_of(&self) -> &'static str {
         match self {
@@ -1565,6 +1616,23 @@ impl On {
             On::BuyBody(e) => e.header,
             On::BuildBody(e) => e.header,
             On::MessageBody(e) => e.header,
+        }
+    }
+
+    /// This entry's tile-text rows (see [`Self::texts`]); empty = the entry
+    /// speaks for no deed-popup slot.
+    pub const fn texts_of(&self) -> &'static [(&'static str, &'static str, &'static str)] {
+        match self {
+            On::PlayBody(e) => e.texts,
+            On::CounteractBody(e) => e.texts,
+            On::Action(e) => e.texts,
+            On::Filter(e) => e.texts,
+            On::SettleBody(e) => e.texts,
+            On::MortgageBody(e) => e.texts,
+            On::RedeemBody(e) => e.texts,
+            On::BuyBody(e) => e.texts,
+            On::BuildBody(e) => e.texts,
+            On::MessageBody(e) => e.texts,
         }
     }
 

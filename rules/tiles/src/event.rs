@@ -11,10 +11,13 @@ use bandori_std::ctx;
 use card_sdk::abi::text_slot;
 use card_sdk::{CardDef, Msg, On};
 
-pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle("", None, settle)])
-    .board_role("tile")
-    .governs(&["cafe", "ryuseido"])
-    .texts(&[(0, text_slot::SETTLE, "", "deed.note.drawEvent")]);
+pub const EVENT: CardDef = CardDef::new(
+    "tile:event",
+    &[On::Settle("", None, settle)
+        .texts(&[(text_slot::SETTLE, "", "deed.note.drawEvent")])],
+)
+.board_role("tile")
+.governs(&["cafe", "ryuseido"]);
 
 /// 规则书: 「[结算]是：抽取一张手卡，然后抽取一个事件卡。」
 fn settle(player_id: i32) -> card_sdk::Asked {

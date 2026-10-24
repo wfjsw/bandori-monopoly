@@ -485,6 +485,32 @@ Path: `On::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
 `"card"` event's `flash` flag under the precedence above. Proactive `"flash"`
 events play through the client's cardFlash path.
 
+**Multi-entry drives.** `run_hook` announces once per matching entry, then
+`commit_after` takes **one** flash decision for one header. The sibling
+entries' policies therefore **fold** (`Never` if any says `Never`; else
+`Always` if any says `Always`; else `Auto`) -- a trailing `Auto` must not drop
+an earlier `Always`, and a trailing `Always` must not lift an earlier `Never`.
+`ctx::flash` / `ctx::no_flash` keep their runtime positions in the precedence.
+
+## Tile text (`On::texts`)
+
+Deed-popup text rides the entry that speaks it (`On::texts(&[(slot, tile,
+key)])`), not an entry-index side table -- so it cannot drift when entries are
+reordered. See [TILES.md 「Tile text」](TILES.md#tile-text) for the shape,
+precedence, and the `event:协助CiRCLE重建` worked example.
+
+```rust
+pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
+    On::Settle("", None, settle)
+        .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+    On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
+        .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+]);
+```
+
+Path: `On::texts` → `ManifestTileText` (v59, entry index synthesised from
+declaration order) → `CardRules::card_texts` → `compose_tile_texts`.
+
 ## Bot-only estimated execution cost
 
 `prop::EST_COST` (`"estCost"`) is a card's **estimated execution cost** (user

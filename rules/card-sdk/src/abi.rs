@@ -441,7 +441,7 @@ use std::borrow::Cow;
 ///      character), `step` (1 = owner is the actor's own character). No new
 ///      host import, no SAVE_VERSION change.
 /// v59: `ManifestEntry::texts` -- per-entry **tile text** declarations
-///      (`CardDef::texts`): the deed-popup description an entry speaks for,
+///      (`On::texts`): the deed-popup description an entry speaks for,
 ///      as `(entry, slot, tile, key)`. `slot` is [`text_slot`] (settle /
 ///      pass); `tile` is `""` = the instance's own tile or a board tile name
 ///      for a tile-bound text on a tile-less instance; `key` is a `ui`
@@ -925,7 +925,7 @@ pub struct EntryPresentation {
 /// The host scopes it to one counteraction body, never the resulting walk.
 pub const COUNTERACT_MOVE_EXTENSION: &str = "counteract.moveExtension";
 
-/// Tile-text slots (`CardDef::texts`, [`ManifestTileText::slot`], v59): which
+/// Tile-text slots (`On::texts`, [`ManifestTileText::slot`], v59): which
 /// half of a deed popup an entry speaks for. The settle slot is the 结算
 /// description; the pass slot is the 经过 one. Mirrors the body's
 /// `On::Settle` / `ActionKind::PassTile` split -- the text an entry declares is
@@ -2699,7 +2699,7 @@ pub struct ManifestEntry {
     /// declare reads as its default (`0`). Host side becomes a `BTreeMap`.
     #[serde(default)]
     pub props: Vec<(String, i32)>,
-    /// Tile texts this card's entries speak (`CardDef::texts`). v59.
+    /// Tile texts this card's entries speak (`On::texts`). v59.
     /// Trailing field -- postcard is not self-describing, so adding it is an
     /// ABI bump.
     #[serde(default)]
@@ -2729,7 +2729,7 @@ pub struct ManifestEntry {
     pub gate_skip_msgs: Vec<(i32, String)>,
 }
 
-/// One per-entry **tile text** declaration (`CardDef::texts`, v59): the
+/// One per-entry **tile text** declaration (`On::texts`, v59): the
 /// deed-popup description an entry speaks for.
 ///
 /// * `entry` -- the manifest `on` index the text hangs off.
