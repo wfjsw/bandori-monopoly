@@ -999,6 +999,24 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
     unsafe { sys::place_card_at(player_id, cp, cl, p, l) }
 }
 
+/// 「将此卡放置在场上」 -- [`set_dest`]`(`[`Dest::Field`]`)` then [`place_card`],
+/// the fold every play body that stays in play wants. Two axes, one call:
+/// `place_card` creates the field instance **now**; the `Dest::Field` fate
+/// tells the commit that the played hand card *became* that instance, so it is
+/// not also spent to the default fate (the discard). Returns the new
+/// instance's uid ([`place_card_at`]'s contract).
+///
+/// Only for the body that places **its own** card (its `ID`). A body placing
+/// some *other* card still calls [`place_card`] alone -- that instance is not
+/// the played hand card's fate -- and a play whose hand card retires elsewhere
+/// (「…然后此卡[移除]」) names its own [`Dest`].
+#[cfg_attr(kani, inline(always))]
+pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg) -> i32 {
+    crate::pure::refuse_if_filter("ctx::place_self_to_field");
+    set_dest(Dest::Field);
+    place_card(player_id, card, note)
+}
+
 /// Where this card goes afterwards (see [`Dest`]). For a
 /// play it is the hand card's fate; for a field effect, the instance's.
 pub fn set_dest(dest: Dest) {
