@@ -161,7 +161,7 @@ fn main() {
         let mut ev_log: Vec<String> = Vec::new();
         while !m.ended() {
             m.tick(0.25);
-            for e in m.events_since(last_event) {
+            for e in m.events_since_ref(last_event) {
                 last_event = e.id;
                 *kinds.entry(e.r#type.clone()).or_default() += 1;
                 if dump_events.is_some() {
