@@ -222,6 +222,8 @@ pub enum Op {
     trig_card_is = 206,
     play_card = 207,
     card_move = 208,
+    /// Retired (v98): folded into `query_guard` via `entry::PRESS`.
+    /// Never reuse this id.
     card_replayable = 209,
     set_roller = 210,
     set_steps = 211,

@@ -1483,7 +1483,7 @@ fn decline_sib_counter(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// A card whose `On::Play` gate is closed: `ctx::card_replayable` /
+/// A card whose `On::Play` gate is closed: `ctx::query_guard(…, ctx::entry::PRESS)` /
 /// `ctx::can_fire` must answer false for it.
 const GATE_CLOSED: CardDef = CardDef::new(
     "TEST:gate_closed",

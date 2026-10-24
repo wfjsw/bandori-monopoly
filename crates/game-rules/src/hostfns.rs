@@ -2747,74 +2747,8 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
     }
 }
 
-pub fn card_replayable<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    p: i32,
-    n: i32,
-) -> Result<i32, HostErr> {
-    let id = guest_str(c, p, n)?;
-    let rules = c
-        .st()
-        .rules
-        .clone()
-        .ok_or_else(|| HostErr::trap("card_replayable unavailable here"))?;
-    let Some(card) = rules.by_id(&id) else {
-        return Ok(0);
-    };
-    let info = match rules.card(card) {
-        Some(i) => i,
-        None => return Ok(0),
-    };
-    if !info.has_play() || c.st().depth >= MAX_NESTING {
-        return Ok(0);
-    }
-    let Some(entry) = info.entry(OnKind::Play, None) else {
-        return Ok(1);
-    };
-    // docs/GUARDS.md §4.4 item 5: every path that reaches a guard goes through
-    // `admits`. A rejecting condition is a block; the nested `OP_GUARD` is
-    // skipped.
-    let pre = rules.pre(card, entry);
-    // Scope only when a condition exists (`pre == None` never reads it).
-    let scope;
-    let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
-        scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
-            c.st().wr(),
-            player_id,
-        ));
-        Some(&scope)
-    } else {
-        None
-    };
-    let cand = crate::cond_pre::fill_candidate(c.st().wr(), player_id, &id, false);
-    let asked = crate::cond_pre::admits_gate(
-        pre,
-        scope,
-        &cand,
-        || (),
-        || -> Result<Option<()>, HostErr> {
-            let mut world = c.st().wr().clone();
-            world.enter_card(&id);
-            let depth = c.st().depth + 1;
-            let nested = HostState::new(rules.clone(), world, vec![], depth);
-            let (res, _inner, left) =
-                c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], true);
-            c.set_fuel(left)?;
-            let playable = match res {
-                Ok(CallOut::Msg(None)) => true,
-                Ok(CallOut::Code(0)) => true,
-                _ => false,
-            };
-            Ok(if playable { None } else { Some(()) })
-        },
-    );
-    let playable = matches!(asked, Ok(None));
-    Ok(playable as i32)
-}
-
-/// Cross-card applicability query (docs/ACTIVATION.md §3): can `card_id`'s
-/// `kind` entry fire for `player_id` right now?
+/// Cross-card applicability query (docs/ACTIVATION.md §3): does the named
+/// entry of `card_id` admit for `player_id` right now?
 ///
 /// Evaluates that entry's condition + residual guard / play gate through
 /// `admits` and does **not** run its body. Probe mode: a residual that would

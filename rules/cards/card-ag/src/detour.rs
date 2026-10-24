@@ -104,7 +104,7 @@ pub const DETOUR: CardDef = CardDef::new(
 fn some_plan_fires(player_id: i32) -> bool {
     PLANS
         .iter()
-        .any(|id| ctx::card_replayable(player_id, id))
+        .any(|id| ctx::query_guard(player_id, id, ctx::entry::PRESS))
 }
 
 /// Activation-argument collector (docs/ACTIVATION.md §2): which 「(2)」 to arm.
@@ -119,7 +119,7 @@ fn pick_plan(player_id: i32) -> Declared {
     let mut live: [bool; 4] = [false; 4];
     let mut any = false;
     for (i, id) in PLANS.iter().enumerate() {
-        live[i] = ctx::card_replayable(player_id, id);
+        live[i] = ctx::query_guard(player_id, id, ctx::entry::PRESS);
         any |= live[i];
     }
     if !any {

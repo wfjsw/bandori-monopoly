@@ -5234,13 +5234,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "card_replayable",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::card_replayable(&mut c, player_id, p, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "query_guard",
         |mut c: C<W>,
          player_id: i32,

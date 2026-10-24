@@ -2289,18 +2289,9 @@ pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
     Ok(Dest::from_i32(v))
 }
 
-/// Reserved entry ids -- see [`query_guard`].
-pub mod entry {
-    /// The card's **press** entry (`On::Play`): "may I use this?", which is
-    /// what a skill button asks. Not a declared id -- it always resolves the
-    /// entry the engine itself would pick (`play_entry_preferring_gated`), so
-    /// a card with several press modes answers "is *any* press open" the way
-    /// the engine picks a mode.
-    ///
-    /// A card may not declare this id ([`crate::On::id`]; `build-ruleset`
-    /// rejects it), so the word cannot be squatted.
-    pub const PRESS: &str = "press";
-}
+/// Reserved entry ids -- see [`query_guard`]. Re-exported from
+/// [`crate::abi::entry`] so the guest and the host share one spelling.
+pub use crate::abi::entry;
 
 /// Does the **named entry** of `card_id` admit for `player_id` right now?
 ///

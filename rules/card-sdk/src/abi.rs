@@ -803,17 +803,33 @@ use std::borrow::Cow;
 ///      `i32` the answer log and `ruleset_ask` already carry -- no wire or
 ///      answer-log shape change. Guest API: `ctx::ask_pick_multi`. SAVE_VERSION
 ///      / RECORD_VERSION unchanged.
-/// v98: **activation arguments (`declare`) + `ctx::can_fire`** (docs/ACTIVATION.md).
-///      `export::ON` widens to `(card, entry, op, player_id, arg) -> i64`; new
-///      `OP_DECLARE = 2` collects the activation argument before the point of
-///      no return and returns it, `EXIT_NEED_INPUT`, or the new
-///      `EXIT_DECLINED`. `ManifestOn::has_declare` (always serialized) says
-///      whether the host must run it; `On::Filter` never declares (rejected at
-///      ruleset build -- a filter is a pure value fold). The body of a
-///      declaring entry is `fn(i32, i32) -> Asked` and receives the arg;
-///      everyone else keeps `fn(i32) -> Asked`. Guest API: `On::declare` /
-///      `On::declare_arg`, `ctx::can_fire` / `ctx::can_fire_any` (the
-///      generalisation of `ctx::card_replayable`).
+/// v98: **activation arguments (`declare`) + `ctx::query_guard`**
+///      (docs/ACTIVATION.md).
+///
+///      *`declare`* -- a per-entry collector runs **before** the point of no
+///      return and hands the body a **typed** argument, `T`, which is the
+///      card's own postcard record (a pick, a tile, a card, …). `T = i32` is
+///      the default, so the common "which of N" case keeps its spelling.
+///      `export::ON` therefore stays at **four** params; `OP_DECLARE = 2`
+///      returns packed `(ptr<<32)|len` of `postcard(T)` (or `EXIT_NEED_INPUT`,
+///      or the new `EXIT_DECLINED`), the host stores `Vec<u8>`, and the body's
+///      drive pulls it via `ctx::declared_arg::<T>()`. A buffer address cannot
+///      collide with an `EXIT_*` sentinel. `ManifestOn::has_declare` (always
+///      serialized) says whether the host must run it; `On::Filter` never
+///      declares (rejected at ruleset build -- a filter is a pure value fold).
+///      The body of a declaring entry is `fn(i32, T) -> Asked`; everyone else
+///      keeps `fn(i32) -> Asked`. Guest API: `On::declare` / `On::declare_arg`.
+///
+///      *`query_guard`* -- one cross-card applicability query, by the entry id
+///      the **target** declares (`On::id("decay")`, an ASCII slug: identity,
+///      never display text). `ctx::query_guard(player_id, card_id, entry_id)`.
+///      `entry::PRESS` is the reserved id of a card's press entry
+///      (`On::Play`), resolved via `play_entry_preferring_gated`; declaring
+///      that word is rejected at ruleset build. `can_fire` / `can_fire_any` /
+///      `card_replayable` are gone -- the press question is
+///      `query_guard(…, entry::PRESS)`. `ManifestOn::id` (always serialized)
+///      carries the slug.
+///
 ///      **Player-visible ordering:** for `On::Play` the `declare` prompt fires
 ///      *before* the `card` counteraction window (because `hand.remove` is the
 ///      commit and the window opens after it) -- the mode is part of declaring
