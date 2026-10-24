@@ -63,8 +63,9 @@ pub const DETOUR: CardDef = CardDef::new(
             Some(|player_id| {
                 rules_status::move_blocked(player_id).is_none() && some_plan_fires(player_id)
             }),
-            unused_body)
-        .declare_arg(pick_plan, counteract_with_plan),
+            unused_body
+            // TODO: This should not be pickable at all. Change it to act based on active skill card.
+        ).declare_arg(pick_plan, counteract_with_plan),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.

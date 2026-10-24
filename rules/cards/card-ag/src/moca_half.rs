@@ -8,7 +8,6 @@
 //! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
@@ -17,16 +16,29 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
+        // > (1)  将此卡放置在场上并获得3个奇迹水晶
         On::Play("", None, play),
+
+        // 你的回合结束时移除一个奇迹水晶
         On::Action(Action::TurnEnd("card.placed", None, turn_end)),
+
+        // 奇迹水晶为0时此卡放入弃牌堆。
+        On::Action(Action::CounterChanged(
+            "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", 
+            Some(crystals_changed_guard), 
+            on_crystals_changed)
+        ),
+
+        // > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）
         On::Filter(Filter::DiceRollValue("actor == owner && move.main && card.placed", None, roll_half)),
+
+        // 且你的所有资金支付与消耗减半。
         On::Filter(Filter::PaySplitMul("actor == owner && card.placed && value > 0", None, pay_mul)),
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)
         .raw_name(r#"（摩卡）0.5倍速"#)
-        .tags(&[])
+        .tags(&[r#"手"#, r#"场地"#])
         .text(CardText::items(&[
             it(r#"将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。"#),
             it(r#"此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。"#),
@@ -35,11 +47,11 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书(1): 「将此卡放置在场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
+    // 规则书(1): 「将此卡放置在场上」
+    // TODO: Why we need 2 function to place a card on the field?
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("moca_half_note")));
-    // 规则书(1): 「并获得3个奇迹水晶」 -- the placement's crystal charge (C#
-    // `H.PlaceFromPlay(c, -1, -1, 3)`).
+    // 规则书(1): 「并获得3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(
         player_id,
@@ -52,6 +64,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// `AddCrystals(-1)`. The 「奇迹水晶为0时此卡放入弃牌堆」 half is
 /// [`on_crystals_changed`], not this tick.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // TODO: This function needs a better name or a uniform shape
     ctx::decay()?;
     Ok(())
 }
