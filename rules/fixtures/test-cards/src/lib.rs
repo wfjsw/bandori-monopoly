@@ -4,6 +4,7 @@
 
 use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
 use bandori_std::ctx::{self, trigger, CardPile};
+use card_sdk::serde;
 use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On, PayAddValue, PlanValue};
 
 /// Plays another card (in another module) in the middle of its own effect.
@@ -1408,6 +1409,350 @@ fn my_rewrite(_player_id: i32, v: PlanValue) -> PlanValue {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Activation arguments (`declare`, docs/ACTIVATION.md §2).
+// ---------------------------------------------------------------------------
+
+/// Always declines at the activation-argument collector. The body has **no
+/// decline path** and logs unconditionally, so silence is proof it never ran
+/// (and the card must still be in hand).
+const DECLINE: CardDef = CardDef::new(
+    "TEST:decline",
+    &[On::Play("", None, decline_body).declare(decline_declare)],
+);
+
+fn decline_declare(_player_id: i32) -> card_sdk::Declared {
+    Ok(card_sdk::Activation::Decline)
+}
+
+fn decline_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("decline_body")));
+    Ok(())
+}
+
+/// Asks "use this?" at the collector; a yes carries the arg 7 to the body,
+/// which logs it. The body has no decline path.
+const PICK: CardDef = CardDef::new(
+    "TEST:pick",
+    &[On::Play("", None, pick_unused).declare_arg(pick_declare, pick_body)],
+);
+
+const fn pick_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn pick_declare(player_id: i32) -> card_sdk::Declared {
+    if ctx::ask_yes(player_id, &Msg::new(key!("pick_title")), &Msg::new(key!("pick_ask")))? {
+        Ok(card_sdk::Activation::Arg(7))
+    } else {
+        Ok(card_sdk::Activation::Decline)
+    }
+}
+
+fn pick_body(player_id: i32, arg: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pick_body")).i("arg", arg as i64),
+    );
+    Ok(())
+}
+
+/// Sibling of [`DECLINE`] on the same timing: a decline on one entry must not
+/// stop the next entry. Both fire at `card` (this one is the counter).
+const DECLINE_SIB: CardDef = CardDef::new(
+    "TEST:decline_sib",
+    &[
+        On::Play("", None, decline_sib_play),
+        On::Counteract(
+            &[ChainKind::Card],
+            "",
+            Some(never),
+            decline_sib_counter),
+    ],
+);
+
+fn decline_sib_play(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("decline_sib_play")));
+    Ok(())
+}
+
+fn decline_sib_counter(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("decline_sib_counter")));
+    Ok(())
+}
+
+/// A card whose `On::Play` gate is closed: `ctx::query_guard(…, ctx::entry::PRESS)` /
+/// `ctx::can_fire` must answer false for it.
+const GATE_CLOSED: CardDef = CardDef::new(
+    "TEST:gate_closed",
+    &[On::Play("", Some(|_p| Some(Msg::new(key!("gate_closed_why")))), gate_closed_body)],
+);
+
+fn gate_closed_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("gate_closed_body")));
+    Ok(())
+}
+
+/// A counteract whose residual guard **would prompt**. Eligibility probes
+/// (`can_counteract_scoped`) must refuse with `RuleError::GuardPrompted`
+/// rather than asking the player mid-scan (docs/ACTIVATION.md §3).
+const ASKING_GUARD: CardDef = CardDef::new(
+    "TEST:asking_guard",
+    &[
+        On::Play("", None, asking_guard_play),
+        On::Counteract(
+            &[ChainKind::Card],
+            "",
+            Some(asking_guard),
+            asking_guard_counter),
+    ],
+);
+
+fn asking_guard_play(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("asking_guard_play")));
+    Ok(())
+}
+
+fn asking_guard(player_id: i32) -> bool {
+    // A residual guard is a pure query; asking from one is a probe error.
+    ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("asking_guard_title")),
+        &Msg::new(key!("asking_guard_ask")),
+    )
+    .unwrap_or(true)
+}
+
+fn asking_guard_counter(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("asking_guard_counter")));
+    Ok(())
+}
+
+/// A [反击] whose activation argument is collected at the **offer** layer
+/// (docs/ACTIVATION.md §2): `OP_DECLARE` runs in `finish_offer`, before the
+/// declaration commits. Declining there means **no counter is declared at
+/// all** -- the card stays in hand and the body never runs. The body has no
+/// decline path and logs unconditionally, so silence is proof it never ran.
+const PICK_COUNTER: CardDef = CardDef::new(
+    "TEST:pick_counter",
+    &[On::Counteract(
+        &[ChainKind::Card],
+        "",
+        Some(always),
+        pick_counter_unused)
+    .declare_arg(pick_counter_declare, pick_counter_body)],
+);
+
+fn always(_player_id: i32) -> bool {
+    true
+}
+
+const fn pick_counter_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn pick_counter_declare(player_id: i32) -> card_sdk::Declared {
+    if ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("pick_c_title")),
+        &Msg::new(key!("pick_c_ask")),
+    )? {
+        Ok(card_sdk::Activation::Arg(7))
+    } else {
+        Ok(card_sdk::Activation::Decline)
+    }
+}
+
+fn pick_counter_body(player_id: i32, arg: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pick_c_body")).i("arg", arg as i64),
+    );
+    Ok(())
+}
+
+/// A [反击] whose collector reads the **trigger it is declaring against**. The
+/// collector only accepts when `trigger::kind()` is `Card`; a `Run` bound to
+/// `Trigger::default()` (kind `None`) would decline and the body would never
+/// run. Pins that a [反击]'s `OP_DECLARE` sees the real trigger
+/// (docs/ACTIVATION.md §2) -- `detour` needs it the moment its pick filters on
+/// the roll.
+const TRIGGER_SEEN: CardDef = CardDef::new(
+    "TEST:trigger_seen",
+    &[On::Counteract(
+        &[ChainKind::Card],
+        "",
+        Some(always),
+        trigger_seen_unused)
+    .declare_arg(trigger_seen_declare, trigger_seen_body)],
+);
+
+const fn trigger_seen_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn trigger_seen_declare(_player_id: i32) -> card_sdk::Declared {
+    if ctx::trigger::kind() == card_sdk::abi::TriggerKind::Card {
+        Ok(card_sdk::Activation::Arg(1))
+    } else {
+        Ok(card_sdk::Activation::Decline)
+    }
+}
+
+fn trigger_seen_body(player_id: i32, arg: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("trigger_seen_body")).i("arg", arg as i64),
+    );
+    Ok(())
+}
+
+/// A placed card whose hook's `OP_DECLARE` collector **traps**. A trapping
+/// collector must never commit and must never cost the card
+/// (docs/ACTIVATION.md §2 "Trap severity"): the body never runs and the card
+/// stays in play. Propagating the trap into the body-trap arm would
+/// `DEST_GRAVEYARD` a card whose body never ran. The body has no decline path
+/// and logs unconditionally, so silence is proof it never ran.
+const TRAP_DECLARE: CardDef = CardDef::new(
+    "TEST:trap_declare",
+    &[
+        On::Play("", None, trap_declare_play),
+        On::Action(Action::TurnEnd("card.placed", None, trap_declare_body))
+            .declare(trap_declare_collect),
+    ],
+);
+
+fn trap_declare_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:trap_declare", &Msg::new(key!("trap_declare_note")));
+    Ok(())
+}
+
+/// Deliberately panics into a wasm trap: the collector blows up before the
+/// activation commits.
+fn trap_declare_collect(_player_id: i32) -> card_sdk::Declared {
+    panic!("TEST:trap_declare collector trapped");
+}
+
+fn trap_declare_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("trap_declare_body")));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Rev-2: a card-authored struct arg, and named entry ids for `query_guard`.
+// ---------------------------------------------------------------------------
+
+/// The card's own activation argument -- private to this file, postcard on
+/// the wire. Two distinct fields so the test can prove more than one `i32`
+/// crossed (a plain `Arg(i32)` could not carry both).
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
+struct StructArg {
+    pick: i32,
+    tile: i32,
+    seat: i32,
+}
+
+/// A play whose `declare_arg` returns a **struct**. Prompt-free, so the
+/// whole interaction is the play and the body logs every field. The body has
+/// no decline path.
+const STRUCT_ARG: CardDef = CardDef::new(
+    "TEST:struct_arg",
+    &[On::Play("", None, struct_arg_unused).declare_arg(struct_arg_declare, struct_arg_body)],
+);
+
+const fn struct_arg_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn struct_arg_declare(_player_id: i32) -> card_sdk::Declared<StructArg> {
+    Ok(card_sdk::Activation::Arg(StructArg {
+        pick: 3,
+        tile: 7,
+        seat: -1,
+    }))
+}
+
+fn struct_arg_body(player_id: i32, arg: StructArg) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("struct_arg_body"))
+            .i("pick", arg.pick as i64)
+            .i("tile", arg.tile as i64)
+            .i("seat", arg.seat as i64),
+    );
+    Ok(())
+}
+
+/// A hook carrying a **named entry id** whose guard admits. No `pre` -- this
+/// fixture is about the *guard* and the id lookup, not about a placement
+/// condition (`query_guard` routes through `admits`, so a `card.placed`
+/// condition would correctly reject an unplaced card and mask the guard).
+const NAMED_OPEN: CardDef = CardDef::new(
+    "TEST:named_open",
+    &[
+        On::Play("", None, named_open_play),
+        On::Action(Action::TurnEnd("", Some(always), named_open_tick)).id("decay"),
+    ],
+);
+
+fn named_open_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:named_open", &Msg::new(key!("named_note")));
+    Ok(())
+}
+
+fn named_open_tick(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("named_open_tick")));
+    Ok(())
+}
+
+/// A hook carrying the same named id whose guard refuses -- the negative for
+/// `query_guard`'s slug lookup.
+const NAMED_SHUT: CardDef = CardDef::new(
+    "TEST:named_shut",
+    &[
+        On::Play("", None, named_shut_play),
+        On::Action(Action::TurnEnd("", Some(never), named_shut_tick)).id("decay"),
+    ],
+);
+
+fn named_shut_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:named_shut", &Msg::new(key!("named_note")));
+    Ok(())
+}
+
+fn named_shut_tick(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("named_shut_tick")));
+    Ok(())
+}
+
+/// A body that asks `query_guard` about the fixtures above and logs every
+/// verdict in one line. The host test reads those booleans -- a guest API
+/// cannot be probed from the host side without a card calling it.
+const QUERY: CardDef = CardDef::new("TEST:query", &[On::Play("", None, query_body)]);
+
+fn query_body(player_id: i32) -> card_sdk::Asked {
+    let open = ctx::query_guard(player_id, "TEST:named_open", "decay");
+    let shut = ctx::query_guard(player_id, "TEST:named_shut", "decay");
+    let wrong = ctx::query_guard(player_id, "TEST:named_open", "nope");
+    let unnamed = ctx::query_guard(player_id, "TEST:echo", "decay");
+    let press_open = ctx::query_guard(player_id, "TEST:echo", ctx::entry::PRESS);
+    let press_shut = ctx::query_guard(player_id, "TEST:gate_closed", ctx::entry::PRESS);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("query_body"))
+            .i("open", open as i64)
+            .i("shut", shut as i64)
+            .i("wrong", wrong as i64)
+            .i("unnamed", unnamed as i64)
+            .i("press_open", press_open as i64)
+            .i("press_shut", press_shut as i64),
+    );
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1418,5 +1763,6 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
-    CUSTOM_FILTER
+    CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE,
+    STRUCT_ARG, NAMED_OPEN, NAMED_SHUT, QUERY
 ]);

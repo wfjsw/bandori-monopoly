@@ -11,6 +11,7 @@
 use alloc::vec::Vec;
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 /// The shared mark name. `skill:鳰原令王那:梦幻可爱♪女仆` (2) reads and spends
 /// 「PAREO标记」 by that literal, so the card must add under the same name --
@@ -28,9 +29,7 @@ pub const PAREO_FAR: CardDef = CardDef::new(
         .name(r#"渐渐远去的你"#)
         .raw_name(r#"（PAREO）渐渐远去的你"#)
         .tags(&[])
-        .text(
-            r#"获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋"#,
-        )
+        .text(CardText::para(r#"获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋"#))
         // sheet cell H15
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"鳰原令王那"#)]),
 );

@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TAKI_EVEN_IF: CardDef = CardDef::new(
@@ -21,7 +22,7 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         .name(r#"即便比不上..."#)
         .raw_name(r#"（立希）即便比不上..."#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 进入移动阶段后，触发结算前可打出，进行一次重骰，你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止。"#)
+        .text(CardText::para(r#"[反击] 进入移动阶段后，触发结算前可打出，进行一次重骰，你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止。"#))
         // sheet cell M16
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"椎名立希（CRYCHIC）"#)]));
 

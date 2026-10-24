@@ -10,6 +10,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MASHIRO_PAY: CardDef = CardDef::new(
@@ -23,7 +24,7 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
         .name("")
         .raw_name(r#"（小白）"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金"#)
+        .text(CardText::para(r#"[反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金"#))
         // sheet cell G9
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"仓田真白"#)]));
 

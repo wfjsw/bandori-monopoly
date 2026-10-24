@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";
@@ -30,7 +31,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         .name(r#"夏日合宿"#)
         .raw_name(r#"夏日合宿"#)
         .tags(&[])
-        .text(r#"打出此卡，直到下个自己的回合开始前，你只会被自己发动的效果指定。当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌"#)
+        .text(CardText::para(r#"打出此卡，直到下个自己的回合开始前，你只会被自己发动的效果指定。当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌"#))
         // sheet cell G3
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

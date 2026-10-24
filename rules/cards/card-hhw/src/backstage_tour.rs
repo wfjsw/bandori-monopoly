@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use bandori_std::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const BACKSTAGE_TOUR: CardDef = CardDef::new(
     "HHW:出发！后台之旅！",
@@ -21,7 +22,7 @@ pub const BACKSTAGE_TOUR: CardDef = CardDef::new(
         .name(r#"出发！后台之旅！"#)
         .raw_name(r#"出发！后台之旅！"#)
         .tags(&[])
-        .text(r#"看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金"#)
+        .text(CardText::para(r#"看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金"#))
         // sheet cell F4
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]),
 );

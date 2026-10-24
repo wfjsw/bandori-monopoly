@@ -11,6 +11,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
@@ -35,10 +36,10 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         .name(r#"总有一天要给这片天空命名"#)
         .raw_name(r#"（沙绫）总有一天要给这片天空命名"#)
         .tags(&[])
-        .text(
-            r#"（1）将此卡放置在山吹面包房
-（2）[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上"#,
-        )
+        .text(CardText::items(&[
+            it(r#"将此卡放置在山吹面包房"#),
+            it(r#"[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上"#),
+        ]))
         // sheet cell B18
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]),
 );

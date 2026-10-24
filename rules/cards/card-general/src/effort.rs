@@ -9,6 +9,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
 pub const EFFORT: CardDef = CardDef::new(
     "通用:尽力后的收获",
@@ -19,10 +20,11 @@ pub const EFFORT: CardDef = CardDef::new(
         .name(r#"尽力后的收获"#)
         .raw_name(r#"尽力后的收获"#)
         .tags(&[r#"手"#])
-        .text(
-            r#"[手]：
-立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#),
+            ]),
+        ]))
         // sheet cell A11
         .fields(&[("group", r#"通用"#), ("owner", "")]),
 );

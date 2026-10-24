@@ -7,13 +7,14 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
+use card_sdk::{CardText};
 
 use crate::util::all_players;
 
 pub const TEARS: CardDef = CardDef::new("event:泪水的含义", &[On::Play("", None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"泪水的含义"#)
-            .text(r#"所有玩家依次和行动序列里的下一位玩家进行比较：当前玩家和下一位玩家拥有同色地契则下一位玩家[支付]当前玩家700资金，否则当前玩家[支付]下一位玩家300资金。"#)
+            .text(CardText::para(r#"所有玩家依次和行动序列里的下一位玩家进行比较：当前玩家和下一位玩家拥有同色地契则下一位玩家[支付]当前玩家700资金，否则当前玩家[支付]下一位玩家300资金。"#))
             // sheet cell A22
             .derived(false));
 

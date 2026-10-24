@@ -17,6 +17,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const ANON_TOKYO: CardDef = CardDef::new(
@@ -29,12 +30,18 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
         .name(r#"Anon Tokyo"#)
         .raw_name(r#"[千早爱音]Anon Tokyo"#)
         .tags(&[r#"手"#, r#"限"#])
-        .text(r#"[限]：
-自己所在的格子是[可购买格子]。
-[手]：
-[指定][使用者]所在当格的任一相邻的[可购买格子]，根据使用者所在格子和被[指定]格子的状态依次进行以下操作：
-1. [使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半并在上述的两个格子间放置1个[奇迹水晶]（上限1），被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半；
-2. [使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]改为向前或后移动1格到被[指定]格子且[结算]。"#)
+        .text(CardText::of(&[
+            sec(r#"[限]："#, &[
+                para(r#"自己所在的格子是[可购买格子]。"#),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"[指定][使用者]所在当格的任一相邻的[可购买格子]，根据使用者所在格子和被[指定]格子的状态依次进行以下操作："#),
+                steps(&[
+                    r#"[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半并在上述的两个格子间放置1个[奇迹水晶]（上限1），被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半；"#,
+                    r#"[使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]改为向前或后移动1格到被[指定]格子且[结算]。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell I8
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"千早爱音"#)]));
 

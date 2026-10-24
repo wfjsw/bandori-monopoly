@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, CardPile};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, On};
 
 pub const RIOT: CardDef = CardDef::new(
@@ -24,7 +25,7 @@ pub const RIOT: CardDef = CardDef::new(
         .name(r#"R. I. O. T."#)
         .raw_name(r#"R. I. O. T."#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 当你被其他人的卡效果影响时打出此卡，所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。"#)
+        .text(CardText::para(r#"[反击] 当你被其他人的卡效果影响时打出此卡，所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。"#))
         // sheet cell H2
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

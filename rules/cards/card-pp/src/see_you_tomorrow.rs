@@ -14,6 +14,7 @@
 //! `P✽P粉丝` face-up (up to the fan count). The [特] gate lives in `cant_play`.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, it, items, para, sec};
 use skill_groups::fans;
 
 pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
@@ -26,13 +27,17 @@ pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
         .raw_name(r#"[衍生]明天见"#)
         .derived(true)
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
-        .text(
-            r#"[特]：
-（1）只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可使用。
-（2）[共鸣]无视此卡的[特]效果（1）。
-[手]：
-将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                items(&[
+                    it(r#"只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可使用。"#),
+                    it(r#"[共鸣]无视此卡的[特]效果（1）。"#),
+                ]),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#),
+            ]),
+        ]))
         // sheet cell D6
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );

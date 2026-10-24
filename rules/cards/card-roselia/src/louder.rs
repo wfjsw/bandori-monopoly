@@ -7,6 +7,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, louder)])
     .props(&[(card_sdk::abi::prop::SONG, 1)])
@@ -15,7 +16,7 @@ pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", Non
             .name(r#"louder"#)
             .raw_name(r#"（ykn）louder"#)
             .tags(&[])
-            .text(r#"每次打出此卡时使ring的价格基础乘数+5"#)
+            .text(CardText::para(r#"每次打出此卡时使ring的价格基础乘数+5"#))
             // sheet cell E2
             .fields(&[("group", r#"Roselia"#), ("owner", r#"凑友希那"#)]),
     );

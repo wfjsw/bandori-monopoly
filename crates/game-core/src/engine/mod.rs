@@ -2264,6 +2264,7 @@ impl Match {
             }
         } else {
             let picks = matches!(l.kind(), "pick" | "mortgage");
+            let multi = l.kind() == "multi";
             let fallback = l.ask.view.fallback;
             let max = if l.kind() == "tile" {
                 l.ask.view.items.len() as i32
@@ -2280,6 +2281,18 @@ impl Match {
                         if picks {
                             l.picked = l.ask.ai_picked[k].clone();
                             l.answers[k] = 0;
+                        } else if multi {
+                            // A bitmask answer must not be clamped to an option
+                            // index (that would destroy e.g. `0b0111`). Take
+                            // the precomputed mask when it is already valid;
+                            // otherwise the prompt's valid fallback mask.
+                            let v = l.ask.ai[k];
+                            let n = l.ask.view.options.len().min(31) as i32;
+                            let ok = v >= 0
+                                && n > 0
+                                && (v >> n) == 0
+                                && v.count_ones() as i32 == l.ask.view.count;
+                            l.answers[k] = if ok { v } else { fallback };
                         } else {
                             l.answers[k] = l.ask.ai[k].clamp(0, max.max(0));
                         }
@@ -2568,6 +2581,19 @@ impl Match {
                     return Err(Msg::new("err.no_option"));
                 }
                 l.answers[k] = v;
+            }
+            "multi" => {
+                // Bitmask of exactly `count` distinct options. The popcount
+                // check is the "cannot select one effect twice" guarantee.
+                let n = l.ask.view.options.len() as i32;
+                let bits = m.value;
+                if n <= 0 || bits < 0 || (bits >> n) != 0 {
+                    return Err(Msg::new("err.no_option"));
+                }
+                if bits.count_ones() as i32 != l.ask.view.count {
+                    return Err(Msg::new("err.pick_count").i("n", l.ask.view.count));
+                }
+                l.answers[k] = bits;
             }
             _ => {
                 if m.value < 0 || m.value as usize >= l.ask.view.options.len() {

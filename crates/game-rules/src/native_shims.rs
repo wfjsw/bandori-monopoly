@@ -296,6 +296,8 @@ pub trait HostOps {
     fn op_opt_price(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_opt_ai`
     fn op_opt_ai(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_opt_count`
+    fn op_opt_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_ask`
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_kind` (p, n) -- two-call out-buffer spelling
@@ -398,8 +400,12 @@ pub trait HostOps {
     fn op_play_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_move`
     fn op_card_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_card_replayable`
-    fn op_card_replayable(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_query_guard` -- cross-card applicability by named entry id
+    /// (docs/ACTIVATION.md §3).
+    fn op_query_guard(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_declared_arg` -- the running activation's postcard arg
+    /// (docs/ACTIVATION.md §2).
+    fn op_declared_arg(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_roller`
     fn op_set_roller(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_steps`
@@ -1202,6 +1208,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
         crate::hostfns::opt_ai(self, a[0])?;
         Ok(0)
     }
+
+    fn op_opt_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::opt_count(self, a[0])?;
+        Ok(0)
+    }
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::ask(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
     }
@@ -1368,8 +1379,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_move(self, a[0])? as i64)
     }
-    fn op_card_replayable(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::card_replayable(self, a[0], a[1], a[2])? as i64)
+    fn op_query_guard(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::query_guard(self, a[0], a[1], a[2], a[3], a[4])? as i64)
+    }
+    fn op_declared_arg(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::declared_arg(self, a[0], a[1])? as i64)
     }
     fn op_set_roller(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_roller(self, a[0])?;
@@ -3216,6 +3230,14 @@ pub unsafe extern "C-unwind" fn ruleset_opt_ai(ai: i32) {
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_opt_count(n: i32) {
+    with_host(|h| match h.op_opt_count([n, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_ask(
     kind: i32,
     player_id: i32,
@@ -3644,13 +3666,27 @@ pub unsafe extern "C-unwind" fn ruleset_card_move(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_replayable(player_id: i32, ptr: i32, len: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_query_guard(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    e_ptr: i32,
+    e_len: i32,
+) -> i32 {
     with_host(
-        |h| match h.op_card_replayable([player_id, ptr, len, 0, 0, 0]) {
+        |h| match h.op_query_guard([player_id, ptr, len, e_ptr, e_len, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },
     )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_declared_arg(out_ptr: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_declared_arg([out_ptr, cap, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]

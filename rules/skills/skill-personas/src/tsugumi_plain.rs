@@ -28,7 +28,7 @@ const OWED: &str = "skill.tsugumiPlain.owed";
 pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
-        On::Play("", Some(can_use), use_skill),
+        On::Play("", Some(can_use), use_skill).label("（2）"),
         On::Action(Action::TurnStartBefore("", None, declare_cap)),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)),
         On::Action(Action::TurnEnd("", Some(afterglow), tick)),

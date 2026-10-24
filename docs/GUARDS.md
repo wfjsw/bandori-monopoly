@@ -54,7 +54,7 @@ per-card probes.
 |---|---|---|---|---|
 | counteract guards | 51 | 50 (`can_counteract`×48, `can_counteract2`, `can_counter_fire`, `can_negate`) | `On::Counteract` | cards + `tae_police.rs:87` |
 | hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Action` | cards, skills, events, tiles |
-| play gates | 97 of 201 `On::Play` (`None`×104) | `cant_play`×62 + `can_use`×19 + 16 one-offs | `On::Play(Some(..))` | cards |
+| play gates | 97 of 201 `On::Play` (`None`×104) | `cant_play`×62 + `can_use`×19 + 16 one-offs | `On::Play().counter_reason(..)` | cards |
 | skill usability | (in play gates) | `can_use` family ×35 | `On::Play` | skills/ |
 | gates / settle / rollplan | no guard fn (body only) | — | `On::Filter(Filter::ActGate(..))`/`Settle`/`On::Filter(Filter::DiceRollPlan(..))` | tiles, cards |
 
@@ -350,7 +350,24 @@ residual wasm guard -- exactly the G3 split.
    `rules-native` bot build) goes through one host function
    `admits(entry, ctx) = pre(ctx) && guard(ctx)`. No caller may call a guard
    directly — with clauses removed from the guards, skipping the condition
-   would admit what it should reject.
+   would admit what it should reject. The guest-facing spelling of "ask
+   another card's guard" is **`ctx::can_fire(player_id, id, kind, trigger)`**
+   (ABI v98; `ctx::card_replayable` is its `On::Play` case), evaluated in
+   **probe mode**: an entry whose residual guard would prompt answers `false`.
+   It is the query half next to `invoke_skill` / `play_card` / `send`. See
+   `docs/ACTIVATION.md`.
+
+**Asking is `declare`, not a guard (ABI v98).** A prompt that decides *whether
+an entry fires* -- and any choice that is part of declaring it -- lives in a
+**`declare`** phase (`fn(i32) -> Declared`, `Declared = Result<Option<i32>,
+Prompt>`), which runs at the offer layer *before* the point of no return and
+hands its `Some(arg)` to the body as an argument. `Ok(None)` declines and the
+entry never fires. This keeps the residual guard pure (eligibility probes
+never prompt), and makes decline real: for a [反击] the counter is not
+declared, for a play the card never leaves the hand. A body-level `ask_yes` +
+early return is the wrong shape -- the entry has already been announced and
+any effect before the ask has been re-run once by the multi-pass replay.
+`docs/ACTIVATION.md`.
 
 **Play-gate messages (user ruling 2026-10-10).** A play gate (`On::Play`) must
 not trade a specific refusal `Msg` for the generic `err.play_pre` a `pre`-reject

@@ -31,15 +31,29 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                         }
                     },
                     has_guard: o.has_guard(),
+                    has_declare: o.has_declare(),
+                    id: {
+                        let i = o.id_of();
+                        if i.is_empty() {
+                            None
+                        } else {
+                            Some(String::from(i))
+                        }
+                    },
                     messages: match o {
                         On::MessageBody(e) => e.names.iter().map(|s| String::from(*s)).collect(),
                         _ => Vec::new(),
                     },
-                    label: c
-                        .labels
-                        .iter()
-                        .find(|(e, _)| *e == ei as i32)
-                        .map(|(_, l)| String::from(*l)),
+                    // The clause display text rides the entry (`On::label`),
+                    // so it cannot drift when entries are reordered.
+                    label: {
+                        let l = o.label_of();
+                        if l.is_empty() {
+                            None
+                        } else {
+                            Some(String::from(l))
+                        }
+                    },
                     presentation: c.presentation(ei as i32).header,
                     flash: c.presentation(ei as i32).flash,
                 })
@@ -128,7 +142,7 @@ pub fn metadata(bands: &'static [&'static [CardDef]], sources: &RosterSources) -
 /// `native::read` would look up a garbage slot. The arena is cleared at the
 /// start of the next [`on`], which is long enough for the host to read the
 /// buffer it just asked for.
-fn leak(bytes: Vec<u8>) -> i64 {
+pub(crate) fn leak(bytes: Vec<u8>) -> i64 {
     // Real pointers only for a pure wasm32 guest module. Native **and**
     // the wasm32-linked monolith (`native-rules`) go through the arena:
     // `NativeHost` always reads `card_sdk::native::read`.
@@ -214,33 +228,87 @@ pub fn on(
             },
             None => 0,
         },
+        // Activation-argument collector (docs/ACTIVATION.md §2). Runs before
+        // the point of no return; the host stores the postcard bytes and
+        // serves them back to the body via `ctx::declared_arg`.
+        (entry, export::OP_DECLARE) => fold_declare(declare_of(&entry), player_id),
         // Pure filter bodies: one `drive` per shape, which owns the type cast
-        // of `body` and the host IO. See `payload::drive_*`.
+        // of `body` and the host IO. See `payload::drive_*`. Filters never
+        // declare.
         (On::Filter(e), _) => {
             (e.drive)(player_id, e.body);
             0
         }
         (
-            On::CounteractBody(CounteractEntry { body: run, .. })
-            | On::PlayBody(PlayEntry { body: run, .. })
-            | On::SettleBody(RuleEntry { body: run, .. })
-            | On::MortgageBody(RuleEntry { body: run, .. })
-            | On::RedeemBody(RuleEntry { body: run, .. })
-            | On::BuyBody(RuleEntry { body: run, .. })
-            | On::BuildBody(RuleEntry { body: run, .. })
-            | On::MessageBody(MessageEntry { body: run, .. }),
+            On::CounteractBody(CounteractEntry {
+                body, drive, shape, ..
+            })
+            | On::PlayBody(PlayEntry {
+                body, drive, shape, ..
+            })
+            | On::SettleBody(RuleEntry {
+                body, drive, shape, ..
+            })
+            | On::MortgageBody(RuleEntry {
+                body, drive, shape, ..
+            })
+            | On::RedeemBody(RuleEntry {
+                body, drive, shape, ..
+            })
+            | On::BuyBody(RuleEntry {
+                body, drive, shape, ..
+            })
+            | On::BuildBody(RuleEntry {
+                body, drive, shape, ..
+            })
+            | On::MessageBody(MessageEntry {
+                body, drive, shape, ..
+            }),
             _,
-        ) => match run(player_id) {
-            Ok(()) => 0,
-            // Asked: the host reads the published question and re-runs us with
-            // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.
-            Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
-        },
-        (On::Action(e), _) => match (e.body)(player_id) {
+        ) => {
+            let _ = shape;
+            match drive(player_id, body) {
+                Ok(()) => 0,
+                // Asked: the host reads the published question and re-runs us
+                // with the answer. The old `EXIT_NEED_INPUT` trap, as a return
+                // value.
+                Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+            }
+        }
+        (On::Action(e), _) => match (e.drive)(player_id, e.body) {
             Ok(()) => 0,
             Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
         },
     }
+}
+
+/// The `declare` collector drive on an entry, if any. `On::Filter` never has
+/// one.
+fn declare_of(o: &On) -> Option<(crate::DeclareDrive, *const ())> {
+    match o {
+        On::PlayBody(e) => e.declare_drive.zip(e.declare),
+        On::CounteractBody(e) => e.declare_drive.zip(e.declare),
+        On::Action(e) => e.declare_drive.zip(e.declare),
+        On::Filter(_) => None,
+        On::SettleBody(e) => e.declare_drive.zip(e.declare),
+        On::MortgageBody(e) => e.declare_drive.zip(e.declare),
+        On::RedeemBody(e) => e.declare_drive.zip(e.declare),
+        On::BuyBody(e) => e.declare_drive.zip(e.declare),
+        On::BuildBody(e) => e.declare_drive.zip(e.declare),
+        On::MessageBody(e) => e.declare_drive.zip(e.declare),
+    }
+}
+
+/// Run one collector and fold it to the wire: `EXIT_DECLINED`,
+/// `EXIT_NEED_INPUT`, or packed `(ptr<<32)|len` of `postcard(T)`. A buffer
+/// address, so no sentinel collision is possible.
+fn fold_declare(decl: Option<(crate::DeclareDrive, *const ())>, player_id: i32) -> i64 {
+    let Some((drive, f)) = decl else {
+        // No collector. The host only calls `OP_DECLARE` when
+        // `ManifestOn::has_declare`, so this is a backstop.
+        return 0;
+    };
+    drive(player_id, f)
 }
 
 /// Generate the guest exports for a card table.

@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
 use card_sdk::abi::{FilterKind, MoveKind};
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Filter, Msg, On};
 
 pub const TSUGU_YCM: CardDef = CardDef::new(
@@ -31,12 +32,17 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         .name(r#"@Tsugu ycm"#)
         .raw_name(r#"@Tsugu ycm"#)
         .tags(&[r#"手"#])
-        .text(r#"[手]：
-投掷3d10并根据结果依次进行以下操作：
-1. 结果至少为22则抽1张卡；
-2. 结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并不[结算]，且可选择购买任意无主的[可购买格子]；
-3. 结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）；
-4. 结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"投掷3d10并根据结果依次进行以下操作："#),
+                steps(&[
+                    r#"结果至少为22则抽1张卡；"#,
+                    r#"结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并不[结算]，且可选择购买任意无主的[可购买格子]；"#,
+                    r#"结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）；"#,
+                    r#"结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell A2
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 

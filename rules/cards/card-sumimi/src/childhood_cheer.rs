@@ -19,6 +19,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
@@ -41,7 +42,7 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         .name(r#"儿时玩伴的鼓励"#)
         .raw_name(r#"(初华（Sumimi）)儿时玩伴的鼓励"#)
         .tags(&[])
-        .text(r#"可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。"#)
+        .text(CardText::para(r#"可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。"#))
         // sheet cell L9
         .fields(&[("group", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]),
 );

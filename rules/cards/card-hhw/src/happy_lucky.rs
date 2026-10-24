@@ -7,6 +7,7 @@
 //! roll 1d4 mod 4 and teleport along that axis to the farthest tile.
 
 use card_sdk::abi::MoveKind;
+use card_sdk::{CardText};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const HAPPY_LUCKY: CardDef = CardDef::new(
@@ -16,7 +17,7 @@ pub const HAPPY_LUCKY: CardDef = CardDef::new(
         .name(r#"Happy, Lucky, Smile, Yeah！"#)
         .raw_name(r#"Happy, Lucky, Smile, Yeah！"#)
         .tags(&[])
-        .text(r#"投掷1d4mod4，对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子（例：在弦卷豪宅骰到4则传送到商店街），视为你的主要移动。"#)
+        .text(CardText::para(r#"投掷1d4mod4，对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子（例：在弦卷豪宅骰到4则传送到商店街），视为你的主要移动。"#))
         // sheet cell F10
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

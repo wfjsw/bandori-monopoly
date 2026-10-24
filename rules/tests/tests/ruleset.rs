@@ -75,10 +75,14 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let r = ruleset();
     let card = r.card("HHW:（育美）").unwrap();
     let world = TestWorld::new(20261003);
-    let call = Call::Play { card, player_id: 1 };
+    let call = Call::Play {
+        card,
+        player_id: 1,
+        arg: Vec::new(),
+    };
 
     // Pass 1: no answers -> blocked on the tile prompt, nothing committed.
-    let Outcome::NeedInput(p, _) = r.run(&world, call, &[], None).unwrap() else {
+    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &[], None).unwrap() else {
         panic!("expected a prompt")
     };
     assert_eq!(p.kind, PromptKind::Tile);
@@ -88,7 +92,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     assert!(!p.options.is_empty() && p.options.len() <= 2);
 
     // The prompt is reproducible: same snapshot -> same options.
-    let Outcome::NeedInput(again, _) = r.run(&world, call, &[], None).unwrap() else {
+    let Outcome::NeedInput(again, _) = r.run(&world, call.clone(), &[], None).unwrap() else {
         panic!()
     };
     assert_eq!(p, again);
@@ -98,7 +102,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let PromptOption::Int(expected_tile) = p.options[pick as usize] else {
         panic!("tile options are ints")
     };
-    let Outcome::Done(after) = r.run(&world, call, &[pick], None).unwrap() else {
+    let Outcome::Done(after) = r.run(&world, call.clone(), &[pick], None).unwrap() else {
         panic!("expected Done")
     };
     assert_eq!(
@@ -123,7 +127,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     );
 
     // Determinism: replaying the full answer log gives an identical world.
-    let Outcome::Done(after2) = r.run(&world, call, &[pick], None).unwrap() else {
+    let Outcome::Done(after2) = r.run(&world, call.clone(), &[pick], None).unwrap() else {
         panic!()
     };
     assert_eq!(after, after2);
@@ -162,7 +166,11 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
     assert!(r.can_counteract(&world, card, 0).unwrap());
 
     let Outcome::Done(after) = r
-        .run(&world, Call::Counteract { card, player_id: 0 }, &[], None)
+        .run(&world, Call::Counteract {
+            card,
+            player_id: 0,
+            arg: Vec::new(),
+        }, &[], None)
         .unwrap()
     else {
         panic!()
@@ -191,7 +199,11 @@ fn runaway_effect_is_stopped_by_fuel() {
     let err = r
         .run(
             &TestWorld::new(1),
-            Call::Play { card, player_id: 0 },
+            Call::Play {
+                card,
+                player_id: 0,
+                arg: Vec::new(),
+            },
             &[],
             None,
         )
@@ -215,10 +227,11 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     let call = Call::Play {
         card: relay,
         player_id: 2,
+        arg: Vec::new(),
     };
 
     // The prompt raised inside the *nested* card aborts the whole outer run.
-    let Outcome::NeedInput(p, _) = r.run(&world, call, &[], None).unwrap() else {
+    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &[], None).unwrap() else {
         panic!("expected a prompt")
     };
     assert_eq!(
@@ -227,7 +240,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     );
 
     // Replay with the answer: outer and inner effects both complete, in order.
-    let Outcome::Done(after) = r.run(&world, call, &[0], None).unwrap() else {
+    let Outcome::Done(after) = r.run(&world, call.clone(), &[0], None).unwrap() else {
         panic!("expected Done")
     };
     let kinds: Vec<&str> = after
@@ -246,7 +259,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     assert_eq!(after.marks[0].0, t);
 
     // Determinism across modules: replaying the same answers gives an identical world.
-    let Outcome::Done(after2) = r.run(&world, call, &[0], None).unwrap() else {
+    let Outcome::Done(after2) = r.run(&world, call.clone(), &[0], None).unwrap() else {
         panic!()
     };
     assert_eq!(after, after2);
@@ -276,19 +289,23 @@ fn fire_up_cost() {
         .or_else(|| r.card("AG:Y.O.L.O"))
         .unwrap();
     let world = TestWorld::new(1);
-    let call = Call::Play { card, player_id: 0 };
+    let call = Call::Play {
+                card,
+                player_id: 0,
+                arg: Vec::new(),
+            };
     // One cold run to pay first-time costs, and to prove the entry really runs.
     // `R:[衍生] 压` gains money, which is now a pipeline entry that pauses for the
     // host (`NeedHost`); any of Done / NeedInput / NeedHost proves the entry ran.
     assert!(matches!(
-        r.run(&world, call, &[], None),
+        r.run(&world, call.clone(), &[], None),
         Ok(Outcome::Done(_)) | Ok(Outcome::NeedInput(_, _)) | Ok(Outcome::NeedHost(_, _))
     ));
 
     let n = 100;
     let t = Instant::now();
     for _ in 0..n {
-        let _ = r.run(&world, call, &[], None);
+        let _ = r.run(&world, call.clone(), &[], None);
     }
     let each = t.elapsed() / n;
 
@@ -315,13 +332,17 @@ fn fire_up_breakdown() {
     let r = b.build().unwrap();
     let card = r.card("R:[衍生] 压").unwrap();
     let world = TestWorld::new(1);
-    let call = Call::Play { card, player_id: 0 };
-    let _ = r.run(&world, call, &[], None);
+    let call = Call::Play {
+                card,
+                player_id: 0,
+                arg: Vec::new(),
+            };
+    let _ = r.run(&world, call.clone(), &[], None);
     let n = 200;
 
     let t = Instant::now();
     for _ in 0..n {
-        let _ = r.run(&world, call, &[], None);
+        let _ = r.run(&world, call.clone(), &[], None);
     }
     println!("breakdown: full run {:?}/call", t.elapsed() / n);
 }
@@ -349,12 +370,16 @@ fn fire_up_reboot() {
     // And one small check on the warm ruleset.
     let card = r2.card("R:[衍生] 压").unwrap();
     let world = TestWorld::new(1);
-    let call = Call::Play { card, player_id: 0 };
-    let _ = r2.run(&world, call, &[], None);
+    let call = Call::Play {
+                card,
+                player_id: 0,
+                arg: Vec::new(),
+            };
+    let _ = r2.run(&world, call.clone(), &[], None);
     let n = 500;
     let t = Instant::now();
     for _ in 0..n {
-        let _ = r2.run(&world, call, &[], None);
+        let _ = r2.run(&world, call.clone(), &[], None);
     }
     println!("  small check on warm ruleset: {:?}/call", t.elapsed() / n);
 }

@@ -13,6 +13,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 const ID: &str = "通用:[衍生]FEVER!";
@@ -44,11 +45,17 @@ pub const FEVER: CardDef = CardDef::new(
         .raw_name(r#"[衍生]FEVER!"#)
         .derived(true)
         .tags(&[r#"手"#, r#"持续"#, r#"衍生"#])
-        .text(r#"[手]：
-将此卡放置在[使用者]的[场地]。
-[持续]：
-（1）[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）。
-（2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在[使用者]的[场地]。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）。"#),
+                    it(r#"[拥有者]回合开始时将此卡放入[使用者]弃卡区。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell A6
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 

@@ -17,6 +17,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -42,15 +43,19 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
         .raw_name(r#"[衍生]重叠的声音"#)
         .derived(true)
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
-        .text(
-            r#"[特]：
-此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上的“初次演出事故”（如果有）。
-[手]：
-依次进行以下操作：
-1. [移除]此卡和[使用者][场地]上的“初次演出事故”（如果有）；
-2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
-3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上的“初次演出事故”（如果有）。"#),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"依次进行以下操作："#),
+                steps(&[
+                    r#"[移除]此卡和[使用者][场地]上的“初次演出事故”（如果有）；"#,
+                    r#"进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；"#,
+                    r#"回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell D5
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );

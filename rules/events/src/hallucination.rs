@@ -5,6 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, Seat};
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};
@@ -28,7 +29,7 @@ pub const HALLUCINATION: CardDef = CardDef::new(
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"幻觉来了"#)
-            .text(r#"将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。"#)
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。"#))
             // sheet cell A13
             .derived(false));
 

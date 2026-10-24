@@ -11,6 +11,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RAN_AS_USUAL: CardDef = CardDef::new(
@@ -42,8 +43,10 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         .name(r#"像往常一样"#)
         .raw_name(r#"(兰) 像往常一样"#)
         .tags(&[])
-        .text(r#"（1）此卡可以当反击使用
-（2）受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#)
+        .text(CardText::items(&[
+            it(r#"此卡可以当反击使用"#),
+            it(r#"受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#),
+        ]))
         // sheet cell C6
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"美竹兰"#)]));
 

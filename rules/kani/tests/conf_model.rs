@@ -962,6 +962,7 @@ impl HostCtx for ConfHost {
         _entry: i32,
         _op: i32,
         _player_id: i32,
+        _arg: &[u8],
         _want_msg: bool,
     ) -> (
         Result<CallOut, HostErr>,

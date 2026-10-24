@@ -5,13 +5,14 @@
 
 use bandori_std::ctx;
 use card_sdk::{CardDef, Msg, On};
+use card_sdk::{CardText};
 
 use crate::util::{all_players, roll};
 
 pub const THIS_HAND: CardDef = CardDef::new("event:这只手我不会放开", &[On::Play("", None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"这只手我不会放开"#)
-            .text(r#"所有玩家移动X，X=1d20-1d20+1d20，如果X是负数则向自身移动方向的反方向移动（每个玩家独立投掷三个1d20进行计算，不触发场地效果）"#)
+            .text(CardText::para(r#"所有玩家移动X，X=1d20-1d20+1d20，如果X是负数则向自身移动方向的反方向移动（每个玩家独立投掷三个1d20进行计算，不触发场地效果）"#))
             // sheet cell A6
             .derived(false));
 

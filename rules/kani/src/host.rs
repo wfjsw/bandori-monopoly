@@ -902,6 +902,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- prompts ----
         Op::opt_int | Op::opt_str | Op::opt_tile => arm_opt(a),
         Op::opt_price | Op::opt_ai => arm_opt_price(a),
+        // v97: multi-select -- stores the count on the prompt; not an option,
+        // so it must not bump `opt_n` (that would widen the symbolic answer
+        // range past the real option list).
+        Op::opt_count => 0,
         Op::ask => arm_ask(a),
 
         // ---- trigger context ----
@@ -1085,7 +1089,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::card_offer_build
         | Op::card_settle_at
         | Op::card_mortgage
-        | Op::card_replayable
+        | Op::query_guard
+        | Op::declared_arg
         | Op::card_text_mentions
         | Op::card_prop
         | Op::buy

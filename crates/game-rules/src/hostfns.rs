@@ -1336,7 +1336,7 @@ pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Re
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, false);
+    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {
@@ -2338,6 +2338,13 @@ pub fn opt_ai<C: HostCtx>(c: &mut C, ai: i32) -> Result<(), HostErr> {
     Ok(())
 }
 
+/// How many of the pushed options a multi-select ask wants (`ask_pick_multi`).
+/// Pushed before `ask`, like `opt_price` / `opt_ai`.
+pub fn opt_count<C: HostCtx>(c: &mut C, n: i32) -> Result<(), HostErr> {
+    c.st_mut().count = n;
+    Ok(())
+}
+
 pub fn ask<C: HostCtx>(
     c: &mut C,
     kind: i32,
@@ -2351,7 +2358,7 @@ pub fn ask<C: HostCtx>(
         .ok_or_else(|| HostErr::trap(format!("bad prompt kind {kind}")))?;
     let title = guest_msg(c, tp, tl)?;
     let text = guest_msg(c, xp, xl)?;
-    let (options, prices, ai_hint, answer_slot) = {
+    let (options, prices, ai_hint, count, answer_slot) = {
         let st = c.st_mut();
         let options = std::mem::take(&mut st.options);
         if kind != PromptKind::YesNo && options.is_empty() {
@@ -2362,7 +2369,8 @@ pub fn ask<C: HostCtx>(
         }
         let prices = std::mem::take(&mut st.prices);
         let ai_hint = std::mem::replace(&mut st.ai_hint, -1);
-        (options, prices, ai_hint, st.next_answer)
+        let count = std::mem::replace(&mut st.count, 0);
+        (options, prices, ai_hint, count, st.next_answer)
     };
     // Like `pay`: the pause is the sentinel as the return value, so
     // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
@@ -2379,6 +2387,7 @@ pub fn ask<C: HostCtx>(
             answer_slot,
             prices,
             ai_hint,
+            count,
         },
     )
 }
@@ -2715,7 +2724,7 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, false);
+    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {
@@ -2738,36 +2747,95 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
     }
 }
 
-pub fn card_replayable<C: HostCtx>(
+/// Cross-card applicability query (docs/ACTIVATION.md §3): does the named
+/// entry of `card_id` admit for `player_id` right now?
+///
+/// Evaluates that entry's condition + residual guard / play gate through
+/// `admits` and does **not** run its body. Probe mode: a residual that would
+/// prompt answers `false` (the same way [`RuleError::GuardPrompted`] folds an
+/// eligibility scan to "not eligible").
+///
+/// The entry is addressed by its stable internal slug (`ManifestOn::id`), not
+/// by a positional `(kind, trigger)` pair -- that is what removes "which of
+/// this card's three hooks?" ambiguity. An unnamed or unknown id answers `0`.
+pub fn query_guard<C: HostCtx>(
     c: &mut C,
     player_id: i32,
     p: i32,
     n: i32,
+    ep: i32,
+    el: i32,
 ) -> Result<i32, HostErr> {
     let id = guest_str(c, p, n)?;
+    let entry_id = guest_str(c, ep, el)?;
     let rules = c
         .st()
         .rules
         .clone()
-        .ok_or_else(|| HostErr::trap("card_replayable unavailable here"))?;
+        .ok_or_else(|| HostErr::trap("query_guard unavailable here"))?;
     let Some(card) = rules.by_id(&id) else {
         return Ok(0);
     };
-    let info = match rules.card(card) {
-        Some(i) => i,
-        None => return Ok(0),
+    let Some(info) = rules.card(card) else {
+        return Ok(0);
     };
-    if !info.has_play() || c.st().depth >= MAX_NESTING {
+    if c.st().depth >= MAX_NESTING {
         return Ok(0);
     }
-    let Some(entry) = info.entry(OnKind::Play, None) else {
-        return Ok(1);
+    // Named-entry lookup (docs/ACTIVATION.md §3). `entry::PRESS` is reserved:
+    // it always resolves the press entry the engine itself would pick, so a
+    // card with several press modes answers "is *any* press open" the way
+    // `play_entry_preferring_gated` does. Any other id must be a declared
+    // slug; unnamed / unknown is not externally addressable and fails closed.
+    let entry = if entry_id == card_sdk::abi::entry::PRESS {
+        match info.play_entry_preferring_gated() {
+            Some(e) => e,
+            None => return Ok(0),
+        }
+    } else {
+        match info.entry_by_id(&entry_id) {
+            Some(e) => e,
+            None => return Ok(0),
+        }
     };
-    // docs/GUARDS.md §4.4 item 5: every path that reaches a guard goes through
-    // `admits`. A rejecting condition is a block; the nested `OP_GUARD` is
-    // skipped.
+    let kind = match info.on.get(entry as usize) {
+        Some(o) => OnKind::from_i32(o.kind).unwrap_or(OnKind::Play),
+        None => return Ok(0),
+    };
+    Ok(query_guard_entry(c, player_id, &id, card, entry, kind)? as i32)
+}
+
+/// Serve the running activation's declared argument as `postcard` bytes
+/// (docs/ACTIVATION.md §2). `out_ptr = 0` asks for the size only -- the
+/// `group_skills` / `out_buf` shape.
+pub fn declared_arg<C: HostCtx>(c: &mut C, out_ptr: i32, cap: i32) -> Result<i32, HostErr> {
+    let bytes = c.st().declared.clone();
+    let n = bytes.len() as i32;
+    if out_ptr == 0 || cap < n {
+        return Ok(n);
+    }
+    if n > 0 {
+        c.write_guest(out_ptr, &bytes)?;
+    }
+    Ok(n)
+}
+
+/// [`admits`] for one entry: condition + residual guard / play gate, body
+/// never run, probe mode.
+fn query_guard_entry<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    id: &str,
+    card: i32,
+    entry: i32,
+    kind: OnKind,
+) -> Result<bool, HostErr> {
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostErr::trap("query_guard unavailable here"))?;
     let pre = rules.pre(card, entry);
-    // Scope only when a condition exists (`pre == None` never reads it).
     let scope;
     let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
         scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
@@ -2778,30 +2846,49 @@ pub fn card_replayable<C: HostCtx>(
     } else {
         None
     };
-    let cand = crate::cond_pre::fill_candidate(c.st().wr(), player_id, &id, false);
-    let asked = crate::cond_pre::admits_gate(
-        pre,
-        scope,
-        &cand,
-        || (),
-        || -> Result<Option<()>, HostErr> {
-            let mut world = c.st().wr().clone();
-            world.enter_card(&id);
-            let depth = c.st().depth + 1;
-            let nested = HostState::new(rules.clone(), world, vec![], depth);
-            let (res, _inner, left) =
-                c.call_entry(nested, card, entry, export::OP_GUARD, player_id, true);
-            c.set_fuel(left)?;
-            let playable = match res {
-                Ok(CallOut::Msg(None)) => true,
-                Ok(CallOut::Code(0)) => true,
-                _ => false,
-            };
-            Ok(if playable { None } else { Some(()) })
-        },
-    );
-    let playable = matches!(asked, Ok(None));
-    Ok(playable as i32)
+    let cand = crate::cond_pre::fill_candidate(c.st().wr(), player_id, id, false);
+    if kind == OnKind::Play {
+        // The Play gate answers `Option<Msg>` (None = playable) -- `admits_gate`.
+        let asked = crate::cond_pre::admits_gate(
+            pre,
+            scope,
+            &cand,
+            || (),
+            || -> Result<Option<()>, HostErr> {
+                let mut world = c.st().wr().clone();
+                world.enter_card(id);
+                let depth = c.st().depth + 1;
+                let nested = HostState::new(rules.clone(), world, vec![], depth);
+                let (res, _inner, left) =
+                    c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], true);
+                c.set_fuel(left)?;
+                let playable = match res {
+                    Ok(CallOut::Msg(None)) => true,
+                    Ok(CallOut::Code(0)) => true,
+                    _ => false,
+                };
+                Ok(if playable { None } else { Some(()) })
+            },
+        );
+        return Ok(matches!(asked, Ok(None)));
+    }
+    // A residual guard answers 0/1. Probe mode: a pause is "does not admit".
+    let asked: Result<bool, ()> = crate::cond_pre::admits(pre, scope, &cand, || {
+        let mut world = c.st().wr().clone();
+        world.enter_card(id);
+        let depth = c.st().depth + 1;
+        let nested = HostState::new(rules.clone(), world, vec![], depth);
+        let (res, _inner, left) =
+            c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], false);
+        let _ = c.set_fuel(left);
+        match res {
+            Ok(CallOut::Code(v)) => Ok(v != 0),
+            Ok(CallOut::Msg(None)) => Ok(true),
+            // Would prompt, or trapped: not eligible (probe mode).
+            _ => Ok(false),
+        }
+    });
+    Ok(asked.unwrap_or(false))
 }
 
 pub fn schedule_turn_end<C: HostCtx>(c: &mut C, player_id: i32, mode: i32) -> Result<(), HostErr> {
@@ -3222,7 +3309,7 @@ pub fn send<C: HostCtx>(
         nested.msg = payload.clone();
         nested.msg_reply = 0;
         let (res, inner, left) =
-            c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, false);
+            c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, &[], false);
         let st = c.st_mut();
         st.world = inner.world;
         if let Some(w) = st.world.as_mut() {

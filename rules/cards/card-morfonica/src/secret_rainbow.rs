@@ -12,6 +12,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new(
@@ -31,7 +32,14 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         .name(r#"秘密与青春的虹彩"#)
         .raw_name(r#"秘密与青春的虹彩"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。（2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#)
+        .text(CardText::of(&[
+            sec(r#"[反击]"#, &[
+                items(&[
+                    it(r#"当你向学妹或同级生支付时，打出此卡，此次支付金额减半。"#),
+                    it(r#"当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell G14
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

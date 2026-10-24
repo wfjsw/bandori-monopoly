@@ -7,6 +7,7 @@
 //!
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
 pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play("", None, budokan)])
     // 规则书: 「[指定][使用者]以外的所有玩家」 -- `Card.Def.Targeting`, so
@@ -15,8 +16,11 @@ pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play("
         .name(r#"登上武道馆"#)
         .raw_name(r#"登上武道馆"#)
         .tags(&[r#"手"#])
-        .text(r#"[手]：
-将X设为2000÷“[使用者]以外的[存活]玩家数量”向上取整10，Y设为[存活]玩家数量减1。[指定][使用者]以外的所有玩家，被[指定]的玩家[支付][使用者]X资金。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将X设为2000÷“[使用者]以外的[存活]玩家数量”向上取整10，Y设为[存活]玩家数量减1。[指定][使用者]以外的所有玩家，被[指定]的玩家[支付][使用者]X资金。"#),
+            ]),
+        ]))
         // sheet cell A3
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 

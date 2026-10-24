@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRAJECTORY: CardDef = CardDef::new(
@@ -21,7 +22,14 @@ pub const TRAJECTORY: CardDef = CardDef::new(
         .name(r#"轨迹"#)
         .raw_name(r#"轨迹"#)
         .tags(&[r#"反击"#, r#"特"#])
-        .text(r#"[反击] [特]（1）在场上有玩家破产时，展示此卡，你获得那名玩家的任意一张地契（自动免费赎回），并拆除那个对应格子的所有房屋。"#)
+        .text(CardText::of(&[
+            sec("", &[
+                para(r#"[反击] [特]"#),
+                items(&[
+                    it(r#"在场上有玩家破产时，展示此卡，你获得那名玩家的任意一张地契（自动免费赎回），并拆除那个对应格子的所有房屋。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell E15
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

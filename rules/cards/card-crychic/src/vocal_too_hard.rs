@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
@@ -23,7 +24,7 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         .name(r#"主唱太拼命了"#)
         .raw_name(r#"主唱太拼命了"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。"#)
+        .text(CardText::para(r#"[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。"#))
         // sheet cell M10
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );

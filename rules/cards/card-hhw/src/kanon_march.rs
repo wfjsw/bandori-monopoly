@@ -7,6 +7,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{ActionKind, MoveKind};
+use card_sdk::{CardText};
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
@@ -29,7 +30,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         .name(r#"Wacha Mocha 啪嗒进行曲"#)
         .raw_name(r#"（花音）Wacha Mocha 啪嗒进行曲"#)
         .tags(&[])
-        .text(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。"#)
+        .text(CardText::para(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。"#))
         // sheet cell F13
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"松原花音"#)]));
 

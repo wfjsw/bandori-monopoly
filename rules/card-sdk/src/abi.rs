@@ -317,7 +317,10 @@ use std::borrow::Cow;
 ///      `instance`).
 /// v52: `ManifestOn::label` -- an entry's rulebook clause label (「（1）」),
 ///      carried so the host's 「效果适用」 line can name which clause of a
-///      multi-entry card ran. `CardDef::labels` fills it; `None` = unlabelled.
+///      multi-entry card ran. Filled from the `On` entry itself
+///      (`On::label`, which moves with the entry); `None` = unlabelled.
+///      Opaque display text -- nothing resolves it against the card text;
+///      if the line needs prose, the entry carries a copy of it.
 ///      No host-function change; SAVE_VERSION unchanged.
 /// v53: **purchase replies tell the truth** (HOST-06). `card_buy` / `buy` /
 ///      `acquire` / `agent_offer` / `card_build` / `card_offer_build` /
@@ -794,7 +797,46 @@ use std::borrow::Cow;
 ///      `PaySplitAdd` and `PaySplitMul` (规则书 支付阶段 3 「支付计算后」).
 ///      Source-only for the wire: `ManifestOn` is unchanged. SAVE_VERSION /
 ///      RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 96;
+/// v97: **multi-select choice**. New import `ruleset_opt_count(n)` pushes how
+///      many of the following options the ask wants; `PromptKind::ChoiceMulti
+///      = 7` (wire `"multi"`) asks for exactly that many distinct options. The
+///      ask answer is a **bitmask** (bit *i* = option *i*) in the same single
+///      `i32` the answer log and `ruleset_ask` already carry -- no wire or
+///      answer-log shape change. Guest API: `ctx::ask_pick_multi`. SAVE_VERSION
+///      / RECORD_VERSION unchanged.
+/// v98: **activation arguments (`declare`) + `ctx::query_guard`**
+///      (docs/ACTIVATION.md).
+///
+///      *`declare`* -- a per-entry collector runs **before** the point of no
+///      return and hands the body a **typed** argument, `T`, which is the
+///      card's own postcard record (a pick, a tile, a card, …). `T = i32` is
+///      the default, so the common "which of N" case keeps its spelling.
+///      `export::ON` therefore stays at **four** params; `OP_DECLARE = 2`
+///      returns packed `(ptr<<32)|len` of `postcard(T)` (or `EXIT_NEED_INPUT`,
+///      or the new `EXIT_DECLINED`), the host stores `Vec<u8>`, and the body's
+///      drive pulls it via `ctx::declared_arg::<T>()`. A buffer address cannot
+///      collide with an `EXIT_*` sentinel. `ManifestOn::has_declare` (always
+///      serialized) says whether the host must run it; `On::Filter` never
+///      declares (rejected at ruleset build -- a filter is a pure value fold).
+///      The body of a declaring entry is `fn(i32, T) -> Asked`; everyone else
+///      keeps `fn(i32) -> Asked`. Guest API: `On::declare` / `On::declare_arg`.
+///
+///      *`query_guard`* -- one cross-card applicability query, by the entry id
+///      the **target** declares (`On::id("decay")`, an ASCII slug: identity,
+///      never display text). `ctx::query_guard(player_id, card_id, entry_id)`.
+///      `entry::PRESS` is the reserved id of a card's press entry
+///      (`On::Play`), resolved via `play_entry_preferring_gated`; declaring
+///      that word is rejected at ruleset build. `can_fire` / `can_fire_any` /
+///      `card_replayable` are gone -- the press question is
+///      `query_guard(…, entry::PRESS)`. `ManifestOn::id` (always serialized)
+///      carries the slug.
+///
+///      **Player-visible ordering:** for `On::Play` the `declare` prompt fires
+///      *before* the `card` counteraction window (because `hand.remove` is the
+///      commit and the window opens after it) -- the mode is part of declaring
+///      the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
+///      declaration. SAVE_VERSION / RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 98;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -887,19 +929,40 @@ pub mod text_slot {
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "ruleset";
 
+/// Reserved entry identifiers for cross-card applicability queries
+/// (`ctx::query_guard`, docs/ACTIVATION.md §3). Lives in `abi` so both the
+/// guest and the host see the same spelling.
+pub mod entry {
+    /// The card's **press** entry (`On::Play`): "may I use this?", which is
+    /// what a skill button asks. Not a declared id -- it always resolves the
+    /// entry the engine itself would pick (`play_entry_preferring_gated`), so
+    /// a card with several press modes answers "is *any* press open" the way
+    /// the engine picks a mode.
+    ///
+    /// A card may not declare this id (`On::id`; `build-ruleset` rejects it),
+    /// so the word cannot be squatted.
+    pub const PRESS: &str = "press";
+}
+
 /// Guest exports.
 pub mod export {
     pub const ABI_VERSION: &str = "ruleset_abi_version";
     /// `() -> i64` packed `(ptr << 32) | len` pointing at a UTF-8 JSON manifest.
     pub const MANIFEST: &str = "ruleset_manifest";
-    /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
-    /// `entry` (an index into the card's manifest `on` list). `op` is
-    /// [`OP_RUN`] or [`OP_GUARD`]. Returns 0, the guard's
+    /// `(card: i32, entry: i32, op: i32, player_id: i32, arg: i32) -> i64` --
+    /// call entry `entry` (an index into the card's manifest `on` list). `op`
+    /// is [`OP_RUN`], [`OP_GUARD`] or [`OP_DECLARE`]. Returns 0, the guard's
     /// 0/1, or (for a `Play` gate) a packed `(ptr << 32) | len` postcard `Msg`
-    /// reason with 0 meaning "playable".
+    /// reason with 0 meaning "playable". `arg` is the activation argument a
+    /// prior [`OP_DECLARE`] collected (docs/ACTIVATION.md §2); ignored on
+    /// [`OP_GUARD`], always 0 for a [`OP_RUN`] of a no-declare entry.
     pub const ON: &str = "ruleset_on";
     pub const OP_RUN: i32 = 0;
     pub const OP_GUARD: i32 = 1;
+    /// Collect the activation argument. Returns the arg, [`crate::abi::EXIT_NEED_INPUT`],
+    /// or [`crate::abi::EXIT_DECLINED`]. Only called when
+    /// [`ManifestOn::has_declare`].
+    pub const OP_DECLARE: i32 = 2;
     pub const MEMORY: &str = "memory";
     /// `() -> i64` packed `(ptr << 32) | len` pointing at a postcard
     /// [`crate::meta::MetaDoc`] (ABI v63). Built only when called; absent on
@@ -1268,6 +1331,11 @@ pub mod roll_source {
 /// Never observed by the guest.
 pub const EXIT_NEED_INPUT: i32 = 0x0B_A0_D0;
 
+/// `OP_DECLARE` return: the player declined, the entry does not fire at all.
+/// Sibling of [`EXIT_NEED_INPUT`]. Never a legal [`Activation::Arg`] -- `rt`
+/// panics if one collides (docs/ACTIVATION.md §2).
+pub const EXIT_DECLINED: i32 = 0x0B_A0_D1;
+
 /// Prompt kinds, one per host ask shape.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1291,6 +1359,11 @@ pub enum PromptKind {
     /// Pick a tile the player then **walks** to (`ask_tile_walk`): answered
     /// like `Tile`, but the board lights the path as well as the tile.
     TileWalk = 6,
+    /// Exactly `count` of the pushed options (`ask_pick_multi`). The answer is
+    /// a **bitmask** (bit *i* = option *i*), carried in the single `i32` the
+    /// answer log and `ruleset_ask` already speak. Distinctness is the mask's
+    /// own shape -- the same bit cannot be set twice.
+    ChoiceMulti = 7,
 }
 
 impl PromptKind {
@@ -1303,6 +1376,7 @@ impl PromptKind {
             4 => Self::Card,
             5 => Self::TileId,
             6 => Self::TileWalk,
+            7 => Self::ChoiceMulti,
             _ => return None,
         })
     }
@@ -1318,6 +1392,7 @@ impl PromptKind {
             // Same UI as `Tile` -- only the recorded answer differs.
             Self::TileId => "tile",
             Self::TileWalk => "tile",
+            Self::ChoiceMulti => "multi",
         }
     }
 }
@@ -2681,12 +2756,26 @@ pub struct ManifestOn {
     /// moved into `pre`; the host then skips the `OP_GUARD` instantiation
     /// (`admits_pre`). `true` for every pre-G4 entry.
     pub has_guard: bool,
+    /// Does this entry collect an activation argument before its body
+    /// (`On::declare`, docs/ACTIVATION.md §2)? The host then runs
+    /// [`export::OP_DECLARE`] before the point of no return, stores the
+    /// postcard bytes, and serves them back on [`export::OP_RUN`] through
+    /// `ruleset_declared_arg`. Never `skip_serializing_if`: postcard is not
+    /// self-describing. v98. `On::Filter` is never `true`.
+    pub has_declare: bool,
+    /// Stable **internal** identifier for cross-card applicability queries
+    /// (`ctx::query_guard`, docs/ACTIVATION.md §3). An ASCII slug matching
+    /// `[A-Za-z0-9_][A-Za-z0-9_.:-]*`; `None` = not externally addressable.
+    /// Never display text -- that is [`Self::label`]. v98.
+    /// Never `skip_serializing_if`: postcard is not self-describing.
+    pub id: Option<String>,
     /// Message names this [`OnKind::Message`] entry answers (empty otherwise).
     #[serde(default)]
     pub messages: Vec<String>,
-    /// The entry's rulebook clause label -- 「（1）」 / 「（2）」 and kin -- so
-    /// the 「效果适用」 line can name which clause of a multi-entry card ran.
+    /// Opaque display text for the 「效果适用」 line -- 「（1）」 / 「（2）」 and
+    /// kin -- so the line can name which clause of a multi-entry card ran.
     /// `None` = unlabelled (the line shows just the card name). v52.
+    /// Not a key into the card text; source is [`On::label`] on the entry.
     #[serde(default)]
     pub label: Option<String>,
     /// How this entry presents itself in the log (`CardDef::silent` /

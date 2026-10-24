@@ -733,6 +733,10 @@ pub fn opt_ai(ai: i32) {
     kani_host::call_unit(Op::opt_ai, [ai, 0, 0, 0, 0, 0]);
 }
 
+pub fn opt_count(count: i32) {
+    kani_host::call_unit(Op::opt_count, [count, 0, 0, 0, 0, 0]);
+}
+
 pub fn ask(
     kind: i32,
     player_id: i32,
@@ -962,8 +966,21 @@ pub fn card_move(player_id: i32) -> i32 {
     kani_host::call_i32(Op::card_move, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::card_replayable, [player_id, ptr, len, 0, 0, 0])
+pub fn query_guard(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    e_ptr: i32,
+    e_len: i32,
+) -> i32 {
+    kani_host::call_i32(
+        Op::query_guard,
+        [player_id, ptr, len, e_ptr, e_len, 0],
+    )
+}
+
+pub fn declared_arg(out_ptr: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::declared_arg, [out_ptr, cap, 0, 0, 0, 0])
 }
 
 pub fn set_roller(player_id: i32) {

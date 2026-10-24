@@ -17,6 +17,7 @@
 
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词 11) -- the default CiRCLE money reward. A
@@ -44,11 +45,17 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         .name(r#"稍微努力了一下"#)
         .raw_name(r#"（NNM）稍微努力了一下"#)
         .tags(&[])
-        .text(r#"弃置手中x枚角色标记，发动以下效果中的一个：
-（1）抽x张卡（可超过上限），回合结束后将手牌弃置到五张
-（2）获得x次经过CiRCLE时的资金奖励
-（3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制
-（4）当奇迹水晶耗尽时，将此卡置入弃牌堆"#)
+        .text(CardText::of(&[
+            sec("", &[
+                para(r#"弃置手中x枚角色标记，发动以下效果中的一个："#),
+                items(&[
+                    it(r#"抽x张卡（可超过上限），回合结束后将手牌弃置到五张"#),
+                    it(r#"获得x次经过CiRCLE时的资金奖励"#),
+                    it(r#"将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制"#),
+                    it(r#"当奇迹水晶耗尽时，将此卡置入弃牌堆"#),
+                ]),
+            ]),
+        ]))
         // sheet cell G7
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"广町七深"#)]));
 

@@ -10,6 +10,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
@@ -19,7 +20,15 @@ pub const PLEASE_CHOOSE: CardDef = CardDef::new(
         .name(r#"PLEASE CHOOSE"#)
         .raw_name(r#"PLEASE CHOOSE"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 当有玩家在livehouse格子上结算时，使对方选择以下效果之一执行：（1）立即打出一张可将你指定为目标的牌并将你指定为目标（之一），（2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）"#)
+        .text(CardText::of(&[
+            sec("", &[
+                para(r#"[反击] 当有玩家在livehouse格子上结算时，使对方选择以下效果之一执行："#),
+                items(&[
+                    it(r#"立即打出一张可将你指定为目标的牌并将你指定为目标（之一），"#),
+                    it(r#"使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）"#),
+                ]),
+            ]),
+        ]))
         // sheet cell H7
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
@@ -60,7 +69,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     //   the clause under-specifies -- see the note above it
     // -- C# filters `other`'s hand for `Normal && Targeting && WhyNot == null`,
     // `H.AskCard`, then `H.PlayCard` with `Tags["force"] = player_id`. Hand listing
-    // (`ctx::cards_in`) and the replayable gate (`ctx::card_replayable`) are
+    // (`ctx::cards_in`) and the press gate (`ctx::query_guard(p, id, ctx::entry::PRESS)`) are
     // ready; the targeting flags (`H.Target` / `Card.Targeting`) and the
     // force-target play tag are still missing, so option (1) is offered but
     // not executed.

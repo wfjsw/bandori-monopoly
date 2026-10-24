@@ -24,6 +24,10 @@ use std::collections::HashMap;
 pub enum BodyShape {
     /// `fn(i32) -> Asked` — Play / Counteract / Action / Settle / …
     Action,
+    /// `fn(i32, i32) -> Asked` — an entry carrying `On::declare_arg`'s
+    /// activation-argument body (docs/ACTIVATION.md §2). The trampoline passes
+    /// an unconstrained `kani::any()` as the arg.
+    ActionArg,
     /// `fn(i32, i32) -> i32`
     Value,
     /// `fn(i32, i32) -> bool`
@@ -50,7 +54,7 @@ pub struct OnBody {
     /// Kind constructor name for Filter/Action (`"DiceRollPlan"`, `"TurnStart"`).
     /// `None` for the non-namespaced variants.
     pub kind: Option<String>,
-    /// Body function ident (the `fn(i32) -> Asked` ctor arg).
+    /// Body function ident (last arg of the inner call).
     pub body: String,
     pub shape: BodyShape,
 }
@@ -80,7 +84,7 @@ pub fn strip_rust_comments(src: &str) -> String {
     out
 }
 
-/// `On` variants whose body is `fn(i32) -> Asked` (the `body` ctor arg).
+/// `On` variants whose body is `fn(i32) -> Asked` (last ctor arg).
 const ACTIONISH: &[&str] = &[
     "Play",
     "Counteract",
@@ -115,6 +119,14 @@ fn split_args(inner: &str) -> Vec<&str> {
     parts
 }
 
+fn last_nonempty<'a>(parts: &[&'a str]) -> Option<&'a str> {
+    parts
+        .iter()
+        .rev()
+        .find(|p| !p.trim().is_empty())
+        .map(|p| p.trim())
+}
+
 fn is_ident(s: &str) -> bool {
     !s.is_empty()
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -122,25 +134,6 @@ fn is_ident(s: &str) -> bool {
             .next()
             .map(|c| c.is_ascii_alphabetic() || c == '_')
             == Some(true)
-}
-
-/// Body function ident: a bare ident, not a literal (`None`/`true`/`false`).
-/// (`FilterBody::Arm(fn)` is retired and rejected.)
-fn body_ident(arg: &str) -> Option<String> {
-    let s = arg.trim();
-    if matches!(s, "None" | "true" | "false") {
-        return None;
-    }
-    if is_ident(s) {
-        return Some(s.to_string());
-    }
-    None
-}
-
-/// Last arg that qualifies as a body ident. Shapes that carry `counter_reason`
-/// trail with it (`None` / `Some(..)`), so the body is not always last.
-fn find_body_arg<'a>(parts: &[&'a str]) -> Option<&'a str> {
-    parts.iter().rev().find(|p| body_ident(p).is_some()).copied()
 }
 
 /// Balanced-paren span starting at `open` (`src[open] == '('`). Returns the
@@ -162,6 +155,14 @@ fn paren_end(src: &str, open: usize) -> Option<usize> {
             }
         }
         j += 1;
+    }
+    None
+}
+
+/// Last-arg body: a bare ident. (`FilterBody::Arm(fn)` is retired and rejected.)
+fn body_ident(last: &str) -> Option<String> {
+    if is_ident(last) {
+        return Some(last.to_string());
     }
     None
 }
@@ -376,10 +377,12 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
                 panic!("on_parse: unbalanced ctor call for `On::{variant}::{kind}`");
             };
             let args = split_args(&inner[open + 1..end - 1]);
-            let Some(body_arg) = find_body_arg(&args) else {
-                panic!("on_parse: `On::{variant}::{kind}` has no body ident arg");
+            let Some(last) = last_nonempty(&args) else {
+                panic!("on_parse: `On::{variant}::{kind}` has no body arg");
             };
-            let body = body_ident(body_arg).expect("find_body_arg only returns body idents");
+            let Some(body) = body_ident(last) else {
+                panic!("on_parse: `On::{variant}::{kind}` last arg `{last}` is not a body ident");
+            };
             let shape = if variant == "Filter" {
                 *shapes.get(&kind).unwrap_or_else(|| {
                     panic!(
@@ -394,6 +397,10 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             } else {
                 BodyShape::Action
             };
+            // A chained `.declare(...)` / `.declare_arg(pick, body)` is part of
+            // the same registration (docs/ACTIVATION.md §2). `.declare_arg`
+            // replaces the constructor body with an `fn(i32, i32) -> Asked`.
+            let (body, shape) = apply_declare(src, j, body, shape);
             bodies.push(OnBody {
                 variant: variant.clone(),
                 kind: Some(kind),
@@ -402,17 +409,21 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             });
         } else if ACTIONISH.contains(&variant.as_str()) {
             let args = split_args(inner);
-            let Some(body_arg) = find_body_arg(&args) else {
+            let Some(last) = last_nonempty(&args) else {
+                search_from = j;
+                continue;
+            };
+            let Some(body) = body_ident(last) else {
                 panic!(
-                    "on_parse: `On::{variant}` has no body ident arg (byte {start})"
+                    "on_parse: `On::{variant}` last arg `{last}` is not a body ident (byte {start})"
                 );
             };
-            let body = body_ident(body_arg).expect("find_body_arg only returns body idents");
+            let (body, shape) = apply_declare(src, j, body, BodyShape::Action);
             bodies.push(OnBody {
                 variant,
                 kind: None,
                 body,
-                shape: BodyShape::Action,
+                shape,
             });
         } else {
             // Unknown On variant: skip (other arms of the enum may appear in
@@ -423,11 +434,49 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
     bodies
 }
 
+/// Fold a chained `On::declare` / `On::declare_arg` into one registration.
+/// `after` is the byte just past `On::X(...)`'s closing paren.
+///
+/// * `.declare(pick)` -- decline-only; the body stays `fn(i32) -> Asked`.
+/// * `.declare_arg(pick, body)` -- the body becomes `fn(i32, i32) -> Asked`
+///   and the trampoline must hand it an arg.
+fn apply_declare(
+    src: &str,
+    after: usize,
+    body: String,
+    shape: BodyShape,
+) -> (String, BodyShape) {
+    let tail = src[after..].trim_start();
+    if let Some(rest) = tail.strip_prefix(".declare_arg(") {
+        // `rest` starts *inside* the call; `paren_end` indexes the `(` itself,
+        // which sits immediately before `rest` within `tail`.
+        let open = tail.len() - rest.len() - 1;
+        // Second argument is the replacement body ident.
+        let Some(end) = paren_end(tail, open) else {
+            return (body, shape);
+        };
+        let args = split_args(&tail[open + 1..end - 1]);
+        if args.len() < 2 {
+            return (body, shape);
+        }
+        if let Some(ident) = body_ident(args[1].trim()) {
+            return (ident, BodyShape::ActionArg);
+        }
+        return (body, shape);
+    }
+    if tail.starts_with(".declare(") {
+        // Decline-only: body unchanged.
+        return (body, shape);
+    }
+    (body, shape)
+}
+
 /// Trampoline second-argument default for a filter body. `Action` has no
 /// second argument.
 pub fn default_expr(shape: BodyShape) -> &'static str {
     match shape {
         BodyShape::Action => "/* action: no second arg */",
+        BodyShape::ActionArg => "/* action-arg: second arg is the activation arg */",
         BodyShape::Value | BodyShape::Flag => "0",
         BodyShape::Gate => "card_sdk::GateValue::default()",
         BodyShape::Plan => "card_sdk::PlanValue::default()",

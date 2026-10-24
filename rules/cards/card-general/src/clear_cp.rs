@@ -29,6 +29,7 @@
 use alloc::vec::Vec;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{counter, mark, ActionKind, MarkFilter, Message, Target, TriggerKind};
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CLEAR_CP: CardDef = CardDef::new(
@@ -47,9 +48,16 @@ pub const CLEAR_CP: CardDef = CardDef::new(
         .name(r#"该清CP了"#)
         .raw_name(r#"该清CP了"#)
         .tags(&[r#"手"#, r#"特"#])
-        .text(r#"（1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
-[手]：
-在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。"#)
+        .text(CardText::of(&[
+            sec("", &[
+                items(&[
+                    it(r#"[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。"#),
+                ]),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。"#),
+            ]),
+        ]))
         // sheet cell A8
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 

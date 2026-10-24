@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ONE_OF_US: CardDef = CardDef::new(
@@ -38,7 +39,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         .name(r#"ONE OF US"#)
         .raw_name(r#"ONE OF US"#)
         .tags(&[])
-        .text(r#"将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契，触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契"#)
+        .text(CardText::para(r#"将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契，触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契"#))
         // sheet cell C10
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 

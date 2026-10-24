@@ -7,6 +7,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const SPRECHCHOR: CardDef =
     CardDef::new("R:Sprechchor", &[On::Play("", Some(cant_play), sprechchor)])
@@ -14,7 +15,7 @@ pub const SPRECHCHOR: CardDef =
         .name(r#"Sprechchor"#)
         .raw_name(r#"Sprechchor"#)
         .tags(&[])
-        .text(r#"在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目"#)
+        .text(CardText::para(r#"在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目"#))
         // sheet cell E14
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

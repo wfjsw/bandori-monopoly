@@ -14,6 +14,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
@@ -43,7 +44,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         .name(r#"黑衣人的补给"#)
         .raw_name(r#"黑衣人的补给"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。"#)
+        .text(CardText::para(r#"[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。"#))
         // sheet cell F8
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

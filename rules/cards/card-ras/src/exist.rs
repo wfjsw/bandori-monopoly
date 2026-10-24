@@ -7,6 +7,7 @@
 
 use bandori_std::ctx::{self};
 use card_sdk::abi::{ActionKind, FilterKind, Payee, Seat};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RedirectValue};
 
 pub const EXIST: CardDef = CardDef::new(
@@ -26,7 +27,7 @@ pub const EXIST: CardDef = CardDef::new(
         .name(r#"EXIST"#)
         .raw_name(r#"EXIST"#)
         .tags(&[])
-        .text(r#"将此卡放置于自己场上，直到自己的下一回合开始，场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你，你的下回合开始时将其翻入弃牌堆，若在此期间此卡没有造成影响，抽1张卡"#)
+        .text(CardText::para(r#"将此卡放置于自己场上，直到自己的下一回合开始，场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你，你的下回合开始时将其翻入弃牌堆，若在此期间此卡没有造成影响，抽1张卡"#))
         // sheet cell H3
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

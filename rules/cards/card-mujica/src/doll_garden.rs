@@ -8,6 +8,7 @@
 //! player either moves without settling or pays you X*20, then you move the sum.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const DOLL_GARDEN: CardDef = CardDef::new(
     "Mujica:人偶的箱庭",
@@ -16,8 +17,8 @@ pub const DOLL_GARDEN: CardDef = CardDef::new(
         .name(r#"人偶的箱庭"#)
         .raw_name(r#"人偶的箱庭"#)
         .tags(&[])
-        .text(r#"使场上所有其他玩家选择其一执行：“进行一次移动掷骰并移动对应步数（不[触发结算]）”或“向你支付X*20资金，X为该玩家正常移动到你所在格子所需的移动数。” 无法移动的玩家只能选择向你支付。
-然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。"#)
+        .text(CardText::para(r#"使场上所有其他玩家选择其一执行：“进行一次移动掷骰并移动对应步数（不[触发结算]）”或“向你支付X*20资金，X为该玩家正常移动到你所在格子所需的移动数。” 无法移动的玩家只能选择向你支付。
+        然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。"#))
         // sheet cell J12
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

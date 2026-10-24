@@ -9,6 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
 const ID: &str = "AG:（摩卡）0.5倍速";
@@ -26,8 +27,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         .name(r#"0.5倍速"#)
         .raw_name(r#"（摩卡）0.5倍速"#)
         .tags(&[])
-        .text(r#"(1) 将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。
-(2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。"#)
+        .text(CardText::items(&[
+            it(r#"将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。"#),
+            it(r#"此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。"#),
+        ]))
         // sheet cell C7
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 

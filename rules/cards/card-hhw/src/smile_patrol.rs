@@ -8,13 +8,14 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const SMILE_PATROL: CardDef =
     CardDef::new("HHW:微笑巡逻队", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微笑巡逻队"#)
         .raw_name(r#"微笑巡逻队"#)
         .tags(&[])
-        .text(r#"付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）"#)
+        .text(CardText::para(r#"付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）"#))
         // sheet cell F6
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

@@ -9,6 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(
@@ -26,7 +27,7 @@ pub const HANEOKA: CardDef = CardDef::new(
         .name(r#"羽丘的不可思议女孩"#)
         .raw_name(r#"羽丘的不可思议女孩"#)
         .tags(&[])
-        .text(r#"位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若小于10，此卡放入弃牌堆且视为此卡未生效"#)
+        .text(CardText::para(r#"位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若小于10，此卡放入弃牌堆且视为此卡未生效"#))
         // sheet cell I7
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 

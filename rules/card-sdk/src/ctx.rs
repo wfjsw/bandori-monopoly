@@ -2022,6 +2022,82 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
     }
 }
 
+/// Pick exactly `count` distinct options in one multi-select prompt. The answer
+/// is a bitmask (bit *i* = option *i*); the chosen indices come back
+/// **ascending**. `count` is clamped to `1..=options.len()`.
+///
+/// The decode never trusts the host: a mask with too few bits is padded with
+/// the lowest unset indices, too many keeps the lowest `count` set bits, so
+/// the result is always exactly `count` distinct in-range indices -- including
+/// under Kani's symbolic answers.
+pub fn ask_pick_multi(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    options: &[Msg],
+    count: u32,
+) -> Result<Vec<usize>, Prompt> {
+    let n = options.len().min(31);
+    let want = (count as usize).clamp(1, n.max(1));
+    #[cfg(kani)]
+    {
+        // Same bounded zero-loop push as `ask_pick`; 5 options (this card's
+        // widest multi) sit well under the 16-slot cap, so the existing
+        // proofs keep compiling.
+        const CAP: usize = 16;
+        let mut i = 0usize;
+        while i < CAP {
+            if let Some(o) = options.get(i) {
+                let (p, l) = mj(o);
+                unsafe { sys::opt_str(p, l) }
+            }
+            i += 1;
+        }
+        if options.len() > CAP {
+            kani::assert(false, "ask_pick_multi: more than 16 options under Kani");
+        }
+    }
+    #[cfg(not(kani))]
+    {
+        for o in options {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+    }
+    unsafe { sys::opt_count(want as i32) }
+    let mask = ask_raw(PromptKind::ChoiceMulti, player_id, title, text)?;
+    Ok(decode_multi_mask(mask, n, want))
+}
+
+/// Turn a multi-select answer mask into exactly `count` distinct indices in
+/// `0..n`, ascending. Pads short masks with the lowest unset indices; keeps
+/// the lowest `count` bits of a fat mask. Host answers that are negative or
+/// name bits past `n` are treated as empty and padded.
+fn decode_multi_mask(mask: i32, n: usize, count: usize) -> Vec<usize> {
+    let count = count.min(n);
+    let mut picked: Vec<usize> = Vec::with_capacity(count);
+    let bits = if mask < 0 { 0u32 } else { mask as u32 };
+    for i in 0..n {
+        if picked.len() >= count {
+            break;
+        }
+        if bits & (1u32 << i) != 0 {
+            picked.push(i);
+        }
+    }
+    // Pad with the lowest unset indices so the result is always `count` long.
+    for i in 0..n {
+        if picked.len() >= count {
+            break;
+        }
+        if bits & (1u32 << i) == 0 {
+            picked.push(i);
+        }
+    }
+    picked.sort_unstable();
+    picked
+}
+
 /// A yes/no ask.
 pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> Result<bool, Prompt> {
     Ok(ask_raw(PromptKind::YesNo, player_id, title, text)? == 0)
@@ -2213,12 +2289,60 @@ pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
     Ok(Dest::from_i32(v))
 }
 
-/// Could `player_id` play `id` right now (it has a `play` effect and
-/// its `cant_play` gate is open)?
+/// Reserved entry ids -- see [`query_guard`]. Re-exported from
+/// [`crate::abi::entry`] so the guest and the host share one spelling.
+pub use crate::abi::entry;
+
+/// Does the **named entry** of `card_id` admit for `player_id` right now?
+///
+/// Evaluates that entry's **condition + residual guard / play gate** through
+/// `admits` (docs/GUARDS.md §4.4 item 6) and does **not** run its body. The
+/// query half next to [`play_card`] / [`invoke_skill`] / [`send`] -- see
+/// docs/ACTIVATION.md §3.
+///
+/// There is one query, not two. "May I press this card / use this skill?" is
+/// "does the press entry admit?", asked of [`entry::PRESS`]:
+///
+/// ```ignore
+/// ctx::query_guard(p, "skill:美竹兰:叛逆的红挑染", ctx::entry::PRESS)
+/// ctx::query_guard(p, "AG:回家的路上绕个道", "decay")
+/// ```
+///
+/// The entry is addressed by a stable **internal** slug the target card
+/// declared (`On::….id("decay")`) or by a reserved [`entry`] id -- never by a
+/// positional `(kind, trigger)` pair. That is what removes "which of this
+/// card's three hooks?" ambiguity. Slugs are identity, not display text, and
+/// are unique per card.
+///
+/// **Probe mode** -- never prompts. An entry whose residual guard would ask
+/// answers `false`, the same way an eligibility probe folds
+/// `RuleError::GuardPrompted` to "not eligible". Unknown card, unknown or
+/// unnamed entry, or nesting overflow answer `false` too.
 #[cfg_attr(kani, inline(always))]
-pub fn card_replayable(player_id: i32, id: &str) -> bool {
-    let (p, l) = s(id);
-    unsafe { sys::card_replayable(player_id, p, l) != 0 }
+pub fn query_guard(player_id: i32, card_id: &str, entry_id: &str) -> bool {
+    let (p, l) = s(card_id);
+    let (ep, el) = s(entry_id);
+    unsafe { sys::query_guard(player_id, p, l, ep, el) != 0 }
+}
+
+/// The activation argument the running entry's `OP_DECLARE` collected
+/// (docs/ACTIVATION.md §2), as the card's own `T`. `None` when nothing was
+/// collected (no `declare` on the entry, or the host has no store).
+///
+/// Only the body's `drive` normally calls this -- it hands `T` on as the
+/// body's second parameter. A body that wants the value directly may call it.
+pub fn declared_arg<T: crate::ActivationArg>() -> Option<T> {
+    let need = unsafe { sys::declared_arg(0, 0) };
+    if need <= 0 {
+        return None;
+    }
+    let (p, scratch) = out_buf(need as usize);
+    let got = unsafe { sys::declared_arg(p, need) };
+    if got != need {
+        return None;
+    }
+    let buf = out_read(p, got, scratch);
+    postcard::from_bytes(&buf).ok()
 }
 
 /// The move being planned: what an
