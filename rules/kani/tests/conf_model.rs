@@ -1577,7 +1577,7 @@ fn op_count_held_set_held_name_match() {
         "set_held_name+count_held_name",
         &[],
         |c| {
-            game_rules::hostfns::set_held_name(c, np, nl, 2, 5).unwrap();
+            game_rules::hostfns::set_held_name(c, np, nl, 2, 5, 0, -1).unwrap();
             game_rules::hostfns::count_held_name(c, np, nl, 2).unwrap() as i64
         },
         || {

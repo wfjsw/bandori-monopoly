@@ -47,6 +47,7 @@ pub const PILOT_INTERN_NAMES: &[&str] = &[
 pub struct Known {
     pub tok_pp_pos: NameId,
     pub tok_pp_neg: NameId,
+    pub tok_charge: NameId,
     pub crystals: NameId,
     pub cp: NameId,
     pub rent_houses: NameId,
@@ -63,6 +64,8 @@ fn known_init() -> Known {
     Known {
         tok_pp_pos: intern::intern(TOK_PP_POS),
         tok_pp_neg: intern::intern(TOK_PP_NEG),
+        // Fire is a held token of the persona-skill instance (MARKERS.md §7).
+        tok_charge: intern::intern("charge"),
         crystals: intern::intern(world::COUNTER_CRYSTALS),
         cp: intern::intern(world::COUNTER_CP),
         rent_houses: intern::intern(world::RENT_HOUSES),
@@ -765,6 +768,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::count_held | Op::count_held_name => arm_count_held(a),
         Op::add_held => arm_add_held(a),
         Op::set_held_name => arm_set_held_name(a),
+        Op::tok_max => arm_tok_max(a),
         Op::state_get => arm_state_get(a),
         Op::slot => arm_slot(a),
         Op::state_set => arm_state_set(a),
@@ -1593,6 +1597,9 @@ pub fn arm_count_held(a: Args) -> i64 {
             w.fans_pos[pp]
         } else if key == known().tok_pp_neg {
             w.fans_neg[pp]
+        } else if key == known().tok_charge {
+            // Fire lives on the same store `gain_marker` writes.
+            w.charge[pp]
         } else {
             w.key_get(p, key)
         }
@@ -2591,18 +2598,36 @@ pub fn arm_send_to_dest(a: Args) -> i64 {
     })
 }
 
+/// Live ceiling on the held row (`Counter.max`; 0 = uncapped / undeclared).
+/// The Kani world models fire's ceiling as `charge_max`.
+pub fn arm_tok_max(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let key = name_id(a0, a1);
+    let p = player_idx(a2);
+    world::with_world(|w| {
+        if key == known().tok_charge {
+            w.charge_max[p] as i64
+        } else {
+            0
+        }
+    })
+}
+
 pub fn arm_set_held_name(a: Args) -> i64 {
     let [a0, a1, a2, a3, ..] = a;
     let key = name_id(a0, a1);
     let p = a2;
     let v = a3;
     world::with_world_mut(|w| {
-        w.key_set(p, key, v);
         if key == known().tok_pp_pos {
             w.fans_pos[player_idx(p)] = v;
         } else if key == known().tok_pp_neg {
             w.fans_neg[player_idx(p)] = v;
+        } else if key == known().tok_charge {
+            // Fire lives on the same store `gain_marker` writes.
+            w.charge[player_idx(p)] = v;
         } else {
+            w.key_set(p, key, v);
             w.sync_views_player(p);
         }
         w.push(Effect::SetToken {
