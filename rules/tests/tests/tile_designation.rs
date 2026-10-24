@@ -167,11 +167,11 @@ fn one_of_us_refs_store_and_retrieve_the_pair() {
     let unset = t.state(0, "no_such_ref");
     assert_eq!(unset, 0, "unset slot reads 0");
     assert!(
-        card_sdk::abi::MarkRef::from_i32(unset).is_none(),
+        card_sdk::abi::MarkRef::from(unset).is_none(),
         "unset slot unpacks to MarkRef::NONE"
     );
     assert!(
-        !card_sdk::abi::MarkRef::from_i32(mine_ref).is_none(),
+        !card_sdk::abi::MarkRef::from(mine_ref).is_none(),
         "a stored ref unpacks to a live handle"
     );
 }

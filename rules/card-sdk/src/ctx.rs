@@ -1161,7 +1161,7 @@ pub fn place_mark(
     let (kp, kl) = s(kind);
     let (cp, cl) = s(category);
     let (np, nl) = mj(note);
-    crate::abi::MarkRef::from_i32(unsafe {
+    crate::abi::MarkRef::from(unsafe {
         sys::place_mark(
             tile,
             kp,
@@ -1261,7 +1261,7 @@ pub fn mark_partner(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
 /// dead -- never recycled onto a later mark).
 #[cfg_attr(kani, inline(always))]
 pub fn mark_tile(r: crate::abi::MarkRef) -> i32 {
-    unsafe { sys::mark_tile(r.as_i32()) }
+    unsafe { sys::mark_tile(r.into()) }
 }
 
 /// Is the row at `r` still on the board? No extra syscall -- this is just
@@ -1274,7 +1274,7 @@ pub fn mark_alive(r: crate::abi::MarkRef) -> bool {
 /// Drop the exact mark row at `r`. Returns whether that row was present.
 #[cfg_attr(kani, inline(always))]
 pub fn remove_mark(r: crate::abi::MarkRef) -> bool {
-    unsafe { sys::remove_mark(r.as_i32()) != 0 }
+    unsafe { sys::remove_mark(r.into()) != 0 }
 }
 
 /// Units of **this** instance's counter `kind` bound to `tile`.

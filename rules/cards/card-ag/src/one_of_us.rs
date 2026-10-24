@@ -166,8 +166,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .tile("a", a)
             .tile("b", b),
     );
-    ctx::set_slot(player_id, "one_of_us_mine", a_ref.as_i32());
-    ctx::set_slot(player_id, "one_of_us_theirs", b_ref.as_i32());
+    ctx::set_slot(player_id, "one_of_us_mine", a_ref.into());
+    ctx::set_slot(player_id, "one_of_us_theirs", b_ref.into());
     // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金
     // 直接增加，不受其他任何效果影响）」 -- the split is `measure_rent` +
     // `share_at_resolved` below: the settle completes at the original owner
@@ -283,7 +283,7 @@ fn before_out(owner: i32) -> card_sdk::Asked {
     // handle). A dead ref is skipped; the pair is done once `one_of_us_partner`
     // is cleared below, so nothing re-reads them after that.
     for key in ["one_of_us_mine", "one_of_us_theirs"] {
-        let r = MarkRef::from_i32(ctx::slot(owner, key));
+        let r = MarkRef::from(ctx::slot(owner, key));
         if !r.is_live() {
             continue;
         }

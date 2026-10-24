@@ -806,9 +806,9 @@ Keep it in card state and resolve the pick later:
 
 ```rust
 let r = ctx::designate_tile(tile, player_id, &Msg::new(key!("note")));
-ctx::set_slot(player_id, "my.deed", r.as_i32());
+ctx::set_slot(player_id, "my.deed", r.into());
 // later:
-let r = MarkRef::from_i32(ctx::slot(player_id, "my.deed"));
+let r = MarkRef::from(ctx::slot(player_id, "my.deed"));
 if r.is_live() { let t = r.tile(); /* ... */ }
 // designation ends early, card still in play:
 ctx::undesignate(r);
