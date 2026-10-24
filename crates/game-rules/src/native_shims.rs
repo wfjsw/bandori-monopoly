@@ -3689,6 +3689,7 @@ pub unsafe extern "C-unwind" fn ruleset_declared_arg(out_ptr: i32, cap: i32) -> 
     })
 }
 
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_roller(player_id: i32) {
     with_host(|h| match h.op_set_roller([player_id, 0, 0, 0, 0, 0]) {
         Ok(_) => {}
