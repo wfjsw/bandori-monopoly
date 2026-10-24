@@ -108,61 +108,114 @@ pub struct Prompt;
 /// What every effect entry returns: done, or "asked, re-run me".
 pub type Asked = Result<(), Prompt>;
 
-/// The activation argument a `declare` collector hands the body.
+/// A typed activation argument. Blanket-impl'd for any postcard record.
 ///
-/// A three-arm rather than `Option<i32>` so "declined" is never confused with
-/// "proceed with no argument": `Arg(0)` is the accept arm of a yes/no ask,
-/// `Decline` is the entry not firing at all (docs/ACTIVATION.md §2).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Activation {
+/// `T` is the **card's own** struct -- a pick, a tile, a card, a seat, a count
+/// -- whatever that activation decides. Nothing about it is shared with other
+/// cards: the collector and the body live in one file and share the type, and
+/// only `postcard` crosses (docs/ACTIVATION.md §2).
+pub trait ActivationArg: serde::Serialize + serde::de::DeserializeOwned + Default {}
+impl<T: serde::Serialize + serde::de::DeserializeOwned + Default> ActivationArg for T {}
+
+/// What a `declare` collector returns.
+///
+/// A two-arm rather than `Option<T>` so "declined" is never confused with
+/// "proceed": `Decline` is the entry not firing at all (docs/ACTIVATION.md §2).
+/// `T = i32` is the default, so the common "which of N" case keeps its
+/// zero-ceremony spelling.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Activation<T: ActivationArg = i32> {
     /// The player declined. The entry does not fire at all -- no body, no
     /// header, no flash, no log. For a [反击] this is "do not declare"; for a
     /// play it is "the card never left the hand"; for a hook it is the
     /// 「可选择」 opt-out.
     Decline,
-    /// Proceed; the body receives this as its second parameter. `Arg(0)` is
-    /// the plain yes/no accept.
-    Arg(i32),
+    /// Proceed; the body receives `T` as its second parameter.
+    Arg(T),
 }
 
 /// Collect the activation argument **before** the activation commits.
 ///
 /// `Err(Prompt)` pauses and re-runs, same multi-pass as [`Asked`]. Runs at the
 /// offer layer, before the point of no return (docs/ACTIVATION.md §2).
-pub type Declared = Result<Activation, Prompt>;
+pub type Declared<T: ActivationArg = i32> = Result<Activation<T>, Prompt>;
+
+/// Monomorphized collector driver: casts the erased collector back to
+/// `fn(i32) -> Declared<T>` and folds it to the wire
+/// (`EXIT_DECLINED` / `EXIT_NEED_INPUT` / packed `(ptr<<32)|len` of postcard).
+///
+/// The cast lives only in [`drive_declare`] (the [`crate::payload`] rule: only
+/// `drive` may cast).
+pub type DeclareDrive = fn(i32, *const ()) -> i64;
 
 /// Monomorphized body driver: casts `body` back to its fn type and runs it.
-/// `(player_id, arg, body) -> Asked`. See [`BodyShape`].
+/// `(player_id, body) -> Asked`. A [`BodyShape::WithArg`] body pulls its `T`
+/// with [`ctx::declared_arg`](crate::ctx::declared_arg) and passes it on, so
+/// `T` is still a literal parameter of `fn(i32, T) -> Asked`.
 ///
-/// The cast lives only in [`drive_body_plain`] / [`drive_body_arg`] (the
-/// [`crate::payload`] rule: only `drive` may cast).
-pub type BodyDrive = fn(i32, i32, *const ()) -> Asked;
+/// The cast lives only in [`drive_body_plain`] / [`drive_body_arg`].
+pub type BodyDrive = fn(i32, *const ()) -> Asked;
 
 /// Which function type an entry's erased `body` pointer is (the
 /// [`crate::kinds::FilterShape`] pattern, so the ~310 existing `fn(i32) ->
 /// Asked` bodies compile unchanged).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BodyShape {
-    /// `fn(i32) -> Asked` -- no [`On::declare`].
+    /// `fn(i32) -> Asked` -- no [`On::declare_arg`].
     Plain,
-    /// `fn(i32, i32) -> Asked` -- second parameter is the [`Activation::Arg`].
+    /// `fn(i32, T) -> Asked` -- second parameter is the [`Activation::Arg`].
     WithArg,
 }
 
-/// `fn(i32) -> Asked`. Ignores `arg`.
-pub fn drive_body_plain(player_id: i32, _arg: i32, body: *const ()) -> Asked {
+/// Fold one `fn(i32) -> Declared<T>` collector to the wire. The returned `i64`
+/// is `EXIT_DECLINED`, `EXIT_NEED_INPUT`, or packed `(ptr<<32)|len` of
+/// `postcard(T)` -- a buffer address, so no sentinel collision is possible.
+pub fn drive_declare<T: ActivationArg>(player_id: i32, decl: *const ()) -> i64 {
+    // SAFETY: `decl` was packed from a `fn(i32) -> Declared<T>` and is never
+    // reinterpreted as another `T`.
+    let f: fn(i32) -> Declared<T> = unsafe { core::mem::transmute(decl) };
+    match f(player_id) {
+        Ok(Activation::Decline) => crate::abi::EXIT_DECLINED as i64,
+        Ok(Activation::Arg(v)) => {
+            #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+            {
+                let bytes = postcard::to_allocvec(&v).unwrap_or_default();
+                crate::rt::leak(bytes)
+            }
+            #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+            {
+                let _ = v;
+                0
+            }
+        }
+        Err(Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+    }
+}
+
+/// `fn(i32) -> Asked`.
+pub fn drive_body_plain(player_id: i32, body: *const ()) -> Asked {
     // SAFETY: `body` was packed from a `fn(i32) -> Asked` and is never
     // reinterpreted as another shape.
     let body: fn(i32) -> Asked = unsafe { core::mem::transmute(body) };
     body(player_id)
 }
 
-/// `fn(i32, i32) -> Asked` -- the second parameter is the [`Activation::Arg`].
-pub fn drive_body_arg(player_id: i32, arg: i32, body: *const ()) -> Asked {
-    // SAFETY: `body` was packed from a `fn(i32, i32) -> Asked` and is never
+/// `fn(i32, T) -> Asked` -- the second parameter is the [`Activation::Arg`],
+/// pulled from the host's per-activation store.
+pub fn drive_body_arg<T: ActivationArg>(player_id: i32, body: *const ()) -> Asked {
+    // SAFETY: `body` was packed from a `fn(i32, T) -> Asked` and is never
     // reinterpreted as another shape.
-    let body: fn(i32, i32) -> Asked = unsafe { core::mem::transmute(body) };
-    body(player_id, arg)
+    let body: fn(i32, T) -> Asked = unsafe { core::mem::transmute(body) };
+    #[cfg(any(target_arch = "wasm32", feature = "guest"))]
+    {
+        let arg = crate::ctx::declared_arg::<T>().unwrap_or_default();
+        body(player_id, arg)
+    }
+    #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+    {
+        // Declaration-only build (manifest / pin tests): never called.
+        body(player_id, T::default())
+    }
 }
 
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
@@ -630,6 +683,11 @@ impl CardDef {
 /// Play-from-hand entry ([`On::Play`]).
 #[derive(Clone, Copy)]
 pub struct PlayEntry {
+    /// External identifier for cross-card applicability queries
+    /// ([`On::id`], `ctx::entry_admits`, docs/ACTIVATION.md §3).
+    /// `""` = not externally addressable (the common case, free). Unique per
+    /// card, not globally.
+    pub id: &'static str,
     /// Gate condition (docs/GUARDS.md §4.3). `""` = no condition.
     pub pre: &'static str,
     /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
@@ -648,7 +706,8 @@ pub struct PlayEntry {
     /// Activation-argument collector ([`On::declare`], docs/ACTIVATION.md §2).
     /// Runs before the point of no return; `Activation::Arg` becomes the
     /// body's second parameter. `None` = no declare (body is [`BodyShape::Plain`]).
-    pub declare: Option<fn(player_id: i32) -> Declared>,
+    pub declare: Option<*const ()>,
+    pub declare_drive: Option<DeclareDrive>,
     /// Opaque display text for the 「效果适用」 line (「（1）」 and kin). Moves
     /// with the entry; `""` = the line shows just the card name. **Not** a key
     /// into the card text -- nothing resolves this against [`crate::text::CardText`].
@@ -659,6 +718,8 @@ pub struct PlayEntry {
 /// [反击] entry ([`On::Counteract`]).
 #[derive(Clone, Copy)]
 pub struct CounteractEntry {
+    /// See [`PlayEntry::id`].
+    pub id: &'static str,
     /// The chain links this [反击] answers.
     pub links: &'static [abi::ChainKind],
     /// The guard's condition (docs/GUARDS.md §4.3). `""` = no condition.
@@ -675,8 +736,10 @@ pub struct CounteractEntry {
     pub drive: BodyDrive,
     /// See [`PlayEntry::shape`].
     pub shape: BodyShape,
-    /// See [`PlayEntry::declare`].
-    pub declare: Option<fn(player_id: i32) -> Declared>,
+    /// See [`PlayEntry::declare`]. Erased; see [`DeclareDrive`].
+    pub declare: Option<*const ()>,
+    /// See [`PlayEntry::declare_drive`].
+    pub declare_drive: Option<DeclareDrive>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
 }
@@ -685,6 +748,8 @@ pub struct CounteractEntry {
 /// "Same shape as On::Settle" for all of them.
 #[derive(Clone, Copy)]
 pub struct RuleEntry {
+    /// See [`PlayEntry::id`].
+    pub id: &'static str,
     /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
     pub pre: &'static str,
     /// Residual guard. `None` = G4-deleted (condition-only entry).
@@ -695,8 +760,10 @@ pub struct RuleEntry {
     pub drive: BodyDrive,
     /// See [`PlayEntry::shape`].
     pub shape: BodyShape,
-    /// See [`PlayEntry::declare`].
-    pub declare: Option<fn(player_id: i32) -> Declared>,
+    /// See [`PlayEntry::declare`]. Erased; see [`DeclareDrive`].
+    pub declare: Option<*const ()>,
+    /// See [`PlayEntry::declare_drive`].
+    pub declare_drive: Option<DeclareDrive>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
 }
@@ -704,6 +771,8 @@ pub struct RuleEntry {
 /// Cross-card message entry ([`On::Message`]).
 #[derive(Clone, Copy)]
 pub struct MessageEntry {
+    /// See [`PlayEntry::id`].
+    pub id: &'static str,
     /// Message names this card answers (`ctx::send`); empty = never dispatched.
     pub names: &'static [&'static str],
     /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
@@ -716,8 +785,10 @@ pub struct MessageEntry {
     pub drive: BodyDrive,
     /// See [`PlayEntry::shape`].
     pub shape: BodyShape,
-    /// See [`PlayEntry::declare`].
-    pub declare: Option<fn(player_id: i32) -> Declared>,
+    /// See [`PlayEntry::declare`]. Erased; see [`DeclareDrive`].
+    pub declare: Option<*const ()>,
+    /// See [`PlayEntry::declare_drive`].
+    pub declare_drive: Option<DeclareDrive>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
 }
@@ -854,6 +925,7 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::PlayBody(PlayEntry {
+            id: "",
             pre,
             counter_reason,
             why_not,
@@ -861,6 +933,7 @@ impl On {
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -876,6 +949,7 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::CounteractBody(CounteractEntry {
+            id: "",
             links,
             pre,
             counter_reason,
@@ -884,6 +958,7 @@ impl On {
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -896,12 +971,14 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::SettleBody(RuleEntry {
+            id: "",
             pre,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -914,12 +991,14 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::MortgageBody(RuleEntry {
+            id: "",
             pre,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -932,12 +1011,14 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::RedeemBody(RuleEntry {
+            id: "",
             pre,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -950,12 +1031,14 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::BuyBody(RuleEntry {
+            id: "",
             pre,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -968,12 +1051,14 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::BuildBody(RuleEntry {
+            id: "",
             pre,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -987,6 +1072,7 @@ impl On {
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::MessageBody(MessageEntry {
+            id: "",
             names,
             pre,
             guard,
@@ -994,6 +1080,7 @@ impl On {
             drive: drive_body_plain,
             shape: BodyShape::Plain,
             declare: None,
+            declare_drive: None,
             label: "",
         })
     }
@@ -1071,48 +1158,113 @@ impl On {
     /// `PaySplitMul` / `MoveGate` / `DiceRollPlan` mid-pipeline is the same
     /// mistake as letting a filter emit effects. This arm panics at compile
     /// time, and `build-ruleset` rejects it too.
-    pub const fn declare(self, pick: fn(player_id: i32) -> Declared) -> Self {
+    pub const fn declare<T: ActivationArg>(self, pick: fn(player_id: i32) -> Declared<T>) -> Self {
         match self {
             On::PlayBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::PlayBody(e)
             }
             On::CounteractBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::CounteractBody(e)
             }
             On::Action(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::Action(e)
             }
             On::SettleBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::SettleBody(e)
             }
             On::MortgageBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::MortgageBody(e)
             }
             On::RedeemBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::RedeemBody(e)
             }
             On::BuyBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::BuyBody(e)
             }
             On::BuildBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::BuildBody(e)
             }
             On::MessageBody(mut e) => {
-                e.declare = Some(pick);
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
                 On::MessageBody(e)
             }
             // Fail closed at compile time: a filter is a pure value fold and
             // cannot pause for a player (docs/ACTIVATION.md §2).
             On::Filter(_) => {
                 panic!("On::Filter cannot declare -- use an On::Action pre-stage instead")
+            }
+        }
+    }
+
+    /// Name this entry for cross-card applicability queries
+    /// (`ctx::entry_admits`, docs/ACTIVATION.md §3). `""` (the default) means
+    /// not externally addressable. Ids are unique **per card**, not globally.
+    ///
+    /// The name is the target card's to choose -- a rulebook clause reads best:
+    ///
+    /// ```ignore
+    /// On::Play("", None, Some(can_use), use_skill).id("（2）")
+    /// // elsewhere:
+    /// ctx::entry_admits(player_id, "skill:美竹兰:叛逆的红挑染", "（2）")
+    /// ```
+    pub const fn id(self, id: &'static str) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.id = id;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.id = id;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.id = id;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.id = id;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.id = id;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.id = id;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.id = id;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.id = id;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.id = id;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.id = id;
+                On::MessageBody(e)
             }
         }
     }
@@ -1129,63 +1281,63 @@ impl On {
     /// ```
     ///
     /// Same [`Self::declare`] rules: not allowed on `On::Filter`.
-    pub const fn declare_arg(
+    pub const fn declare_arg<T: ActivationArg>(
         self,
-        pick: fn(player_id: i32) -> Declared,
-        body: fn(player_id: i32, arg: i32) -> Asked,
+        pick: fn(player_id: i32) -> Declared<T>,
+        body: fn(player_id: i32, arg: T) -> Asked,
     ) -> Self {
         match self.declare(pick) {
             On::PlayBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::PlayBody(e)
             }
             On::CounteractBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::CounteractBody(e)
             }
             On::Action(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::Action(e)
             }
             On::SettleBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::SettleBody(e)
             }
             On::MortgageBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::MortgageBody(e)
             }
             On::RedeemBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::RedeemBody(e)
             }
             On::BuyBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::BuyBody(e)
             }
             On::BuildBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::BuildBody(e)
             }
             On::MessageBody(mut e) => {
                 e.body = body as *const ();
-                e.drive = drive_body_arg;
+                e.drive = drive_body_arg::<T>;
                 e.shape = BodyShape::WithArg;
                 On::MessageBody(e)
             }

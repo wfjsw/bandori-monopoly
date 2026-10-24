@@ -84,6 +84,8 @@ impl KindInfo {
 /// `body` is cast back to a typed `fn`. `rt` calls `(e.drive)(player_id, e.body)`.
 #[derive(Clone, Copy)]
 pub struct FilterEntry {
+    /// See [`crate::PlayEntry::id`].
+    pub id: &'static str,
     pub kind: FilterKind,
     pub pre: &'static str,
     pub guard: Option<fn(i32) -> bool>,
@@ -107,6 +109,8 @@ unsafe impl Sync for ActionEntry {}
 /// One action registration: an event reaction at a single kind.
 #[derive(Clone, Copy)]
 pub struct ActionEntry {
+    /// See [`crate::PlayEntry::id`].
+    pub id: &'static str,
     pub kind: ActionKind,
     pub pre: &'static str,
     /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
@@ -119,8 +123,10 @@ pub struct ActionEntry {
     pub drive: crate::BodyDrive,
     /// See [`crate::BodyShape`].
     pub shape: crate::BodyShape,
-    /// See [`crate::PlayEntry::declare`].
-    pub declare: Option<fn(i32) -> crate::Declared>,
+    /// See [`crate::PlayEntry::declare`]. Erased; see [`crate::DeclareDrive`].
+    pub declare: Option<*const ()>,
+    /// See [`crate::PlayEntry::declare_drive`].
+    pub declare_drive: Option<crate::DeclareDrive>,
     /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
     pub label: &'static str,
 }
@@ -134,6 +140,7 @@ pub const fn filter_value(
     body: fn(i32, i32) -> i32,
 ) -> FilterEntry {
     FilterEntry {
+        id: "",
         kind,
         pre,
         guard,
@@ -153,6 +160,7 @@ pub const fn filter_flag(
     body: fn(i32, i32) -> bool,
 ) -> FilterEntry {
     FilterEntry {
+        id: "",
         kind,
         pre,
         guard,
@@ -174,6 +182,7 @@ pub const fn filter_payload<P: FilterPayload>(
     body: fn(i32, P) -> P,
 ) -> FilterEntry {
     FilterEntry {
+        id: "",
         kind,
         pre,
         guard,
@@ -194,6 +203,7 @@ pub const fn action(
     body: fn(i32) -> Asked,
 ) -> ActionEntry {
     ActionEntry {
+        id: "",
         kind,
         pre,
         counter_reason,
@@ -202,6 +212,7 @@ pub const fn action(
         drive: crate::drive_body_plain,
         shape: crate::BodyShape::Plain,
         declare: None,
+        declare_drive: None,
         label: "",
     }
 }

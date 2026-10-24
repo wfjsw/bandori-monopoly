@@ -134,7 +134,7 @@ pub fn metadata(bands: &'static [&'static [CardDef]], sources: &RosterSources) -
 /// `native::read` would look up a garbage slot. The arena is cleared at the
 /// start of the next [`on`], which is long enough for the host to read the
 /// buffer it just asked for.
-fn leak(bytes: Vec<u8>) -> i64 {
+pub(crate) fn leak(bytes: Vec<u8>) -> i64 {
     // Real pointers only for a pure wasm32 guest module. Native **and**
     // the wasm32-linked monolith (`native-rules`) go through the arena:
     // `NativeHost` always reads `card_sdk::native::read`.

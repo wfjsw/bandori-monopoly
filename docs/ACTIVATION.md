@@ -6,7 +6,7 @@ Status: **design** (2026-10-23). Two ABI gaps that `detour.rs`
 | # | gap | mechanism |
 |---|---|---|
 | 1 | a decision that is part of *declaring* an activation cannot be asked for after the trigger, because the activation cannot be cancelled | **`declare`** -- an optional per-entry collector that runs before the point of no return and hands its result to the body as a **typed argument** (the card's own struct: a pick, a tile, a card, …) |
-| 2 | a hook's guard must ask whether *another* card's hook / gate would admit, without running that entry's body | **`ctx::entry_admits`** -- a probe-mode applicability query by the entry id the target declares, routed through `admits` |
+| 2 | a hook's guard must ask whether *another* card's hook / gate would admit, without running that entry's body | **`ctx::query_guard`** -- a probe-mode applicability query by the entry id the target declares, routed through `admits` |
 
 Both are generalisations of seams that already exist
 (`COUNTERACT_MOVE_EXTENSION`, `ctx::card_replayable`). Neither invents a third
@@ -159,7 +159,7 @@ the body never runs and nothing is announced. (A body-level `ask_yes` + early
 return still leaves the entry "fired", and any effect before the ask has
 already been re-run once by the prompt's multi-pass replay.)
 
-`declare` may call `ctx::ask_*`, including `ctx::entry_admits` to build its option
+`declare` may call `ctx::ask_*`, including `ctx::query_guard` to build its option
 list (mechanism B). That is how the options shown are exactly the ones that
 would work.
 
@@ -338,7 +338,7 @@ at that index, and **re-prompt the player** (or pause the match). Rule: *a
 decline that came from a prompt records that prompt's answer; only a
 prompt-free `Decline` is log-silent.*
 
-## 3. Mechanism B -- `ctx::entry_admits` (cross-card applicability)
+## 3. Mechanism B -- `ctx::query_guard` (cross-card applicability)
 
 ### Named entries
 
@@ -348,20 +348,51 @@ the tree: entries carry names, the other side matches by name. It removes the
 "which of this card's three hooks did you mean?" ambiguity outright, and the
 name is a deliberate contract the target owns.
 
+### Identity is not display text
+
+An entry's `id` is **internal identity**. It is never shown to a player and it
+is not the rulebook's printable clause label. The tree already keeps these
+apart, and `id` must land on the identity side of that line:
+
+| field | what it is | example | shown to players? |
+|---|---|---|---|
+| `id` (**new**) | stable internal slug, ASCII, per-card unique | `"press"`, `"decay"` | **never** |
+| `label` (existing, `ManifestOn::label`) | opaque display text for the 「效果适用」 line | `"（2）"` | yes |
+| `counter_reason` (existing) | a `MsgKey` -- a locale **key**, resolved per player | `key!("himari_plus_one_when")` | resolved text |
+| `On::Message(names)` | same family as `id` -- internal slugs | `"clear_cp"` | never |
+
+An id that is printable rulebook text is a bug even though it "works":
+
+* renumbering or re-styling the clause would silently break every query;
+* `（2）` and `(2)` are different strings -- full-width vs half-width parens is
+  a mismatch that looks identical in a diff;
+* it invites someone to "fix the wording" in the one place that is not wording.
+
+So: the skill's press entry is `.id("press")` with the clause as its **label**,
+and the query names `"press"`. `build-ruleset` **rejects a non-slug id** (the
+same fail-closed net as `On::Filter` cannot declare): an id must match
+`[A-Za-z0-9_][A-Za-z0-9_.:-]*`. The rulebook clause is not an id.
+
 ```rust
-// In the skill's file -- the id is the rulebook clause it answers.
-On::Play("", None, Some(can_use), use_skill).id("（2）")
+// In the skill's file -- identity and display are separate fields.
+On::Play("", None, Some(can_use), use_skill).id("press").label("（2）")
 
 On::Action(Action::TurnEnd("card.placed", None, None, tick)).id("decay")
 
-// In detour's file:
-ctx::entry_admits(player_id, "skill:美竹兰:叛逆的红挑染", "（2）")
+// In detour's file -- the query names the slug, never the label.
+ctx::query_guard(player_id, "skill:美竹兰:叛逆的红挑染", "press")
 ```
 
 `id` is `&'static str` on the entry, `""` = not externally addressable (the
 common case; nothing pays for it). It rides the manifest as
 `ManifestOn::id: Option<String>`, always serialized. Ids are unique **per
 card**, not globally.
+
+(Pre-existing, not introduced here: a **card** id like
+`skill:美竹兰:叛逆的红挑染` is itself CJK text. That is the established
+identity of a card and it is load-bearing -- `rules/rulebook/cards.json` keys
+are those strings -- so it is out of scope. The new field is the per-entry
+`id`, and that one must be a slug.)
 
 ### Guest surface
 
@@ -375,7 +406,7 @@ card**, not globally.
 /// answers `false`, the same way an eligibility probe folds
 /// `RuleError::GuardPrompted` to "not eligible". Unknown card, unknown or
 /// unnamed entry, or nesting overflow (`MAX_NESTING`) also answer `false`.
-pub fn entry_admits(player_id: i32, card_id: &str, entry_id: &str) -> bool;
+pub fn query_guard(player_id: i32, card_id: &str, entry_id: &str) -> bool;
 
 /// Could `player_id` play `id` right now (it has a `play` effect and its
 /// `cant_play` gate is open)? The **press surface** question -- "may I use
@@ -389,13 +420,12 @@ Two clear questions, two spellings, no positional selector:
 | question | call |
 |---|---|
 | "may I press this card / use this skill?" | `card_replayable(player_id, id)` |
-| "does that named entry on that card admit?" | `entry_admits(player_id, id, entry_id)` |
+| "does that named entry on that card admit?" | `query_guard(player_id, id, entry_id)` |
 
-The name is `entry_admits` rather than `can_fire` because it is the guest
-spelling of the host function the doc already mandates -- `admits(entry, ctx)`
--- so the vocabulary stays one word. (If the rulebook verb reads better at the
-call site, `ctx::can_activate(player_id, id, "（2）")` is the alternative;
-pick one and delete the other.)
+The name is `query_guard` -- the verb from the originating ask ("a guard
+querying the guard of other cards"), and the doc's own phrasing ("any host
+request that asks another card's guard"). It replaces `can_fire` and
+`entry_admits`; neither is kept as an alias.
 
 This generalises the existing `card_replayable` seam
 (`card-sdk/src/ctx.rs`, `crates/game-rules/src/hostfns.rs`, which already
@@ -407,7 +437,7 @@ case:
 > through one host function `admits(entry, ctx) = pre(ctx) && guard(ctx)`.
 > No caller may call a guard directly.
 
-`entry_admits` **is** that host request. It is callable from a residual guard,
+`query_guard` **is** that host request. It is callable from a residual guard,
 from a `declare`, and from a body -- guards are guest code and may make host
 calls (`detour.rs` already calls `rules_status::move_blocked` from its guards).
 
@@ -425,7 +455,7 @@ kept. The identifier is the fix for the ambiguity they carried.
   「若你的抽牌堆与弃牌堆中都没有卡」 gate).
 * **Cost.** One nested wasm instantiation per query, same as today's
   `card_replayable`. Prefer a CEL `pre` when the question is expressible
-  there; `entry_admits` is for "the answer lives in another card's residual
+  there; `query_guard` is for "the answer lives in another card's residual
   guard", which `pre` cannot see.
 
 ### Who may query whom
@@ -459,7 +489,7 @@ So the card is: *pick one of those (2)s, and only when that (2) is activatable.*
 ```rust
 // In the skill's file — the id *is* the rulebook clause.
 // rules/skills/skill-personas/src/ran_red.rs
-On::Play("", None, Some(can_use), use_skill).id("（2）")
+On::Play("", None, Some(can_use), use_skill).id("press").label("（2）")
 
 // In detour's file.
 const PLANS: [&str; 4] = [
@@ -478,13 +508,13 @@ struct DetourPick {
 }
 
 fn detour_eligible(player_id: i32) -> bool {
-    PLANS.iter().any(|id| ctx::entry_admits(player_id, id, "（2）"))
+    PLANS.iter().any(|id| ctx::query_guard(player_id, id, "press"))
 }
 
 fn pick_afterglow_2(player_id: i32) -> Declared<DetourPick> {
     // Only the (2)s that actually admit are offered.
     let live: Vec<usize> = (0..PLANS.len())
-        .filter(|&i| ctx::entry_admits(player_id, PLANS[i], "（2）"))
+        .filter(|&i| ctx::query_guard(player_id, PLANS[i], "press"))
         .collect();
     let k = ctx::ask_pick(player_id, &title, &text, &labels(&live))?;
     Ok(Activation::Arg(DetourPick {
@@ -504,8 +534,8 @@ On::Counteract(
 .declare_arg(pick_afterglow_2, counteract_with_plan),
 ```
 
-* `pick_afterglow_2` builds its option list with `ctx::entry_admits` per
-  candidate skill's `"（2）"`, then `ctx::ask_pick`. Decline = no counter
+* `pick_afterglow_2` builds its option list with `ctx::query_guard` per
+  candidate skill's `"press"` entry, then `ctx::ask_pick`. Decline = no counter
   declared. The whole `DetourPick` is the arg.
 * `counteract_with_plan(player_id, pick)` receives it. Until
   **OPEN-afterglow式移动** (docs/rulebook/spec/OPEN-QUESTIONS.md:224) is
@@ -537,10 +567,10 @@ moves into its `declare`).
 
   The decisive argument is not "less machinery" -- it is that **an asking
   residual poisons every eligibility probe.** Probes (`can_counteract` /
-  `cant_play` / `ai_play`, and `entry_admits` itself) wrap the guard so a pause
+  `cant_play` / `ai_play`, and `query_guard` itself) wrap the guard so a pause
   surfaces as `RuleError::GuardPrompted`, which every caller folds to "not
   eligible". So a card whose 「可选择」 ask lives in its *guard* answers
-  `false` to `ctx::entry_admits` -- i.e. it looks inapplicable to *other cards*
+  `false` to `ctx::query_guard` -- i.e. it looks inapplicable to *other cards*
   that are only asking "may this fire?", when in fact it would fire the moment
   someone asked the player. That is exactly mechanism B's motivating shape
   (`detour`: "can I activate depends on can that (2) activate?"), and an
@@ -548,15 +578,15 @@ moves into its `declare`).
 
   With the ask in `declare` and the residual guard staying pure
   (`Option<fn(i32) -> bool>`, no enum whose only variant is `Pure`),
-  `entry_admits` answers "may I press this?" truthfully and never predicts the
+  `query_guard` answers "may I press this?" truthfully and never predicts the
   player -- the same split `cant_play` already has, which does not predict
   whether the player will actually play the card.
 
 * **No `On::Skill`.** A skill's press is `On::Play`; its passives are
-  `On::Action`. `declare` and `entry_admits` attach to the entries that exist.
+  `On::Action`. `declare` and `query_guard` attach to the entries that exist.
 * **No direct Rust call into another card's body.** `ctx::invoke_skill` /
   `ctx::play_card` (nested `On::Play` body) and `ctx::send` remain the only
-  cross-card effect seams; `entry_admits` is the query half next to them.
+  cross-card effect seams; `query_guard` is the query half next to them.
 * **No `declare` on `On::Filter`** (§2) and **no hand-window one-gesture
   labels** in v98.
 
@@ -569,17 +599,17 @@ moves into its `declare`).
 | `rules/card-sdk/src/kinds.rs` | same for `ActionEntry`; `filter_*` unchanged |
 | `rules/card-sdk/src/rt.rs` | `OP_DECLARE` arm returning packed `(ptr<<32)|len` of postcard, or `EXIT_DECLINED` / `EXIT_NEED_INPUT`; `OP_RUN` drives `BodyShape` (the drive pulls the arg) |
 | `rules/card-sdk/src/abi.rs` | `ABI_VERSION = 98`; `export::ON` **stays 4 params**; `OP_DECLARE`; `EXIT_DECLINED`; `export::DECLARED_ARG`; `ManifestOn::{has_declare, id}`; v98 changelog |
-| `rules/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `declared_arg::<T>()`, `entry_admits` |
+| `rules/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `declared_arg::<T>()`, `query_guard` |
 | `rules/card-sdk/src/kani_host.rs` | `Op::declared_arg`, `Op::entry_admits`; Kani passes an unconstrained `T` so a proof sees every pick |
-| `tools/build-ruleset.mjs` | reject `declare` on `On::Filter`; reject duplicate `id` within a card |
-| `crates/game-rules/src/hostfns.rs` | `entry_admits` host (named-entry lookup + `admits_gate`); `declared_arg` host (serve the stored bytes) |
+| `tools/build-ruleset.mjs` | reject `declare` on `On::Filter`; reject a duplicate `id` within a card; **reject a non-slug `id`** (`[A-Za-z0-9_][A-Za-z0-9_.:-]*`) so identity cannot be dressed up as display text |
+| `crates/game-rules/src/hostfns.rs` | `query_guard` host (named-entry lookup + `admits_gate`); `declared_arg` host (serve the stored bytes) |
 | `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` carry `arg: Vec<u8>`; `entry_admitted` returns `Admitted` with the `next_answer` cursor *after* `admits` + `OP_DECLARE`; `on_trap` follow-up unchanged |
 | `crates/game-rules/src/wasm_rules.rs` | `finish_offer` runs `OP_DECLARE` before `declare_one` commits; `build_round` stores `arg: Vec<u8>` on the chain link; `resolve_jobs` serves it to `OP_RUN`; `play` path runs `OP_DECLARE` before `play_from_hand` |
 | `crates/game-rules/src/native_shims.rs` + `crates/rules-native/src/lib.rs` | `op_entry_admits`, `op_declared_arg`, the `on` mirror |
-| `rules/cards/card-ag/src/detour.rs` | `.id("（2）")` on the skill entries it queries; `Declared<DetourPick>` carrying at least `plan` (+ `tile`/`seat` as the plan needs); guard / option list via `entry_admits` |
-| `rules/skills/skill-personas` | `.id("（2）")` on each Afterglow press entry (the rulebook clause number as the identifier) |
-| `rules/fixtures/test-cards` | one fixture with a **struct** arg (pick + tile + seat), one with `i32`; a named-entry pair for `entry_admits`; the trap fixture |
-| `rules/tests` / `crates/game-rules/tests` | every existing `declare_arg` case, plus: the body sees a **struct** with a tile; `entry_admits` true/false by id; querying an unnamed or wrong id answers `false` (the ambiguity is gone by construction) |
+| `rules/cards/card-ag/src/detour.rs` | queries the `"press"` entry; `Declared<DetourPick>` carrying at least `plan` (+ `tile`/`seat` as the plan needs); guard / option list via `query_guard` |
+| `rules/skills/skill-personas` | `.id("press").label("（2）")` on each Afterglow press entry -- slug is identity, label is display |
+| `rules/fixtures/test-cards` | one fixture with a **struct** arg (pick + tile + seat), one with `i32`; a named-entry pair for `query_guard`; the trap fixture |
+| `rules/tests` / `crates/game-rules/tests` | every existing `declare_arg` case, plus: the body sees a **struct** with a tile; `query_guard` true/false by id; querying an unnamed or wrong id answers `false` (the ambiguity is gone by construction) |
 | `docs/CARDS.md`, `docs/GUARDS.md` | pointers here |
 
 `build-ruleset.mjs` must re-run after any `rules/cards` edit (the ruleset wasm
