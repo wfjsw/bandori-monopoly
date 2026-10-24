@@ -112,6 +112,14 @@ impl NativeRulesHandle {
                         },
                         has_guard: o.has_guard(),
                         has_declare: o.has_declare(),
+                        id: {
+                            let i = o.id_of();
+                            if i.is_empty() {
+                                None
+                            } else {
+                                Some(String::from(i))
+                            }
+                        },
                         messages: match o {
                             On::MessageBody(e) => {
                                 e.names.iter().map(|s| String::from(*s)).collect()
@@ -363,7 +371,7 @@ impl HostCtx for NativeHost {
         entry: i32,
         op: i32,
         player_id: i32,
-        arg: i32,
+        arg: &[u8],
         want_msg: bool,
     ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
         let fuel = self.fuel;
@@ -436,7 +444,7 @@ fn run_on(
     entry: i32,
     op: i32,
     player_id: i32,
-    arg: i32,
+    arg: &[u8],
     want_msg: bool,
     fuel: u64,
 ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
@@ -457,7 +465,7 @@ fn run_on(
     // the slot again and restores it below, so the outer run continues after.
     let prev = game_rules::native_shims::install_host(Box::new(host));
     let res = catch_unwind(AssertUnwindSafe(|| {
-        card_sdk::rt::on(RULESET, card, entry, op, player_id, arg)
+        card_sdk::rt::on(RULESET, card, entry, op, player_id)
     }));
     let host_box = game_rules::native_shims::take_host().expect("host installed");
     if let Some(p) = prev {
@@ -610,7 +618,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
-                     0,
+                     &[],
                     true,
                     DEFAULT_FUEL,
                 )
@@ -663,7 +671,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
-                     0,
+                     &[],
                     false,
                     DEFAULT_FUEL,
                 )
@@ -792,7 +800,7 @@ impl CardModules for NativeModules {
             entry,
             export::OP_RUN,
             player_id,
-             0,
+             &[],
             false,
             DEFAULT_FUEL,
         );
@@ -855,7 +863,7 @@ impl CardModules for NativeModules {
                                     entry,
                                     export::OP_GUARD,
                                     player_id,
-                                     0,
+                                     &[],
                                     false,
                                     DEFAULT_FUEL,
                                 )
@@ -884,7 +892,7 @@ impl CardModules for NativeModules {
                 entry,
                 export::OP_RUN,
                 player_id,
-                 0,
+                 &[],
                 false,
                 DEFAULT_FUEL,
             );
@@ -949,7 +957,7 @@ impl CardModules for NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
-                     0,
+                     &[],
                     false,
                     DEFAULT_FUEL,
                 )
@@ -1001,7 +1009,7 @@ impl CardModules for NativeModules {
                         entry,
                         export::OP_GUARD,
                         player_id,
-                         0,
+                         &[],
                         true,
                         DEFAULT_FUEL,
                     )
@@ -1030,7 +1038,7 @@ impl CardModules for NativeModules {
             .card(card)
             .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
         if !info.on.get(entry as usize).map(|o| o.has_declare).unwrap_or(false) {
-            return Ok(DeclareOut::Arg(0));
+            return Ok(DeclareOut::Arg(Vec::new()));
         }
         let state = HostState::new(self.index.clone(), world.clone(), answers.to_vec(), 0);
         let (res, st, _fuel) = run_on(
@@ -1039,7 +1047,7 @@ impl CardModules for NativeModules {
             entry,
             export::OP_DECLARE,
             player_id,
-            0,
+            &[],
             false,
             DEFAULT_FUEL,
         );
@@ -1047,8 +1055,19 @@ impl CardModules for NativeModules {
             Ok(CallOut::Code(v)) if v == card_sdk::abi::EXIT_DECLINED as i64 => {
                 Ok(DeclareOut::Declined)
             }
-            Ok(CallOut::Code(v)) => Ok(DeclareOut::Arg(v as i32)),
-            Ok(_) => Ok(DeclareOut::Arg(0)),
+            Ok(CallOut::Code(v)) => {
+                // Packed `(ptr << 32) | len` of `postcard(T)` -- see
+                // `rt::leak` / docs/ACTIVATION.md §2. A buffer address, so it
+                // cannot collide with an `EXIT_*` sentinel.
+                let bytes = if v <= 0 {
+                    Vec::new()
+                } else {
+                    let (h, len) = card_sdk::abi::unpack(v);
+                    card_sdk::native::read(h as i32, len as usize)
+                };
+                Ok(DeclareOut::Arg(bytes))
+            }
+            Ok(_) => Ok(DeclareOut::Arg(Vec::new())),
             Err(HostErr::NeedInput) => {
                 if let Some(p) = st.asked {
                     Ok(DeclareOut::Paused(p))
