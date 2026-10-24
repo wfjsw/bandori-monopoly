@@ -141,14 +141,14 @@ fn drew(player_id: i32) -> card_sdk::Asked {
     // C# `Drew(player_id, cards)` takes `cards[0]` -- the first card of the batch
     // (`trigger::cards()` = the drawn cards in draw order, C# `t.cards`).
     let cards = trigger::cards();
-    let Some(id) = cards.first().cloned() else {
+    let Some(&id) = cards.first() else {
         return Ok(());
     };
     // C# `H._hidden[Player].hand.Remove(id)` -- hold it face-down (out of hand).
-    if !ctx::take_card(player_id, &id, ctx::CardPile::Hand) {
+    if !ctx::take_card(player_id, id.as_str(), ctx::CardPile::Hand) {
         return Ok(());
     }
-    store_held(player_id, &id);
+    store_held(player_id, id.as_str());
     // 规则书（2）: 「并为其放置3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(

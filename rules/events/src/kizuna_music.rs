@@ -26,7 +26,7 @@ fn song_count() -> i32 {
     let mut n = 0;
     for p in all_players() {
         for c in ctx::cards_in(p, CardPile::Deck) {
-            if ctx::card_prop(&c, prop::SONG) != 0 {
+            if ctx::card_prop(c.as_str(), prop::SONG) != 0 {
                 n += 1;
             }
         }

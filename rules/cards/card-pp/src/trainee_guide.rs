@@ -92,7 +92,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
     let mut seen: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
     for c in deck.iter() {
-        let band = c.split(':').next().unwrap_or("");
+        let band = c.as_str().split(':').next().unwrap_or("");
         if !band.is_empty() && !seen.contains(&band) {
             seen.push(band);
         }

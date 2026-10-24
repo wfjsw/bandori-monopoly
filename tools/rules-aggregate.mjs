@@ -83,6 +83,10 @@ description = "The shipped ruleset: every band's cards in one wasm module."
 [lib]
 crate-type = ["cdylib"]
 
+# Every dep is \`workspace = true\`, same as the peer band crates: the names
+# live in the guest workspace root (\`rules/Cargo.toml\`) and are mirrored in
+# the repository root for the host workspace. Do not emit \`path =\` here --
+# that is the drift d4d63a2a moved away from.
 [dependencies]
 card-sdk = { workspace = true, features = ["guest"] }
 bandori-std = { workspace = true }

@@ -29,6 +29,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, CardPile};
+use card_sdk::ctx::{intern, NameId};
 use card_sdk::{CardText, it, items, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -129,13 +130,13 @@ fn exclusive_of(player_id: i32) -> Option<&'static str> {
 }
 
 /// C# `DeckRules.Pool(c)` ids minus anything already in the draw pile or hand.
-fn pool_for(player_id: i32) -> Vec<String> {
-    let mut have: Vec<String> = ctx::cards_in(player_id, CardPile::Deck);
+fn pool_for(player_id: i32) -> Vec<NameId> {
+    let mut have: Vec<NameId> = ctx::cards_in(player_id, CardPile::Deck);
     have.extend(ctx::cards_in(player_id, CardPile::Hand));
-    let mut out: Vec<String> = Vec::new();
-    let push = |id: &'static str, out: &mut Vec<String>| {
-        if !have.iter().any(|h| h == id) && !out.iter().any(|o| o == id) {
-            out.push(String::from(id));
+    let mut out: Vec<NameId> = Vec::new();
+    let push = |id: &'static str, out: &mut Vec<NameId>| {
+        if !have.iter().any(|h| *h == id) && !out.iter().any(|o| *o == id) {
+            out.push(intern(id));
         }
     };
     if let Some(ex) = exclusive_of(player_id) {
@@ -183,7 +184,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
         let id = pool.remove(index);
         // C# `h.draw.Add(pool[index])` then `H.Shuffle(h.draw)` at the end; each
         // insert here shuffles, which leaves the same shuffled pile.
-        ctx::add_to_dest(player_id, &id, ctx::Dest::DeckRandom);
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckRandom);
         added += 1;
     }
     ctx::log(
@@ -250,7 +251,9 @@ fn on_played_is_general(_player_id: i32) -> bool {
     ctx::trigger::cards()
         .into_iter()
         .next()
-        .is_some_and(|id| id.starts_with("通用") || id.starts_with("G:"))
+        // `as_str().starts_with` is a memcmp — fine in production, a CBMC
+        // unwind cliff under Kani. Compare whole ids where the book allows.
+        .is_some_and(|id| id.as_str().starts_with("通用") || id.as_str().starts_with("G:"))
 }
 
 /// （4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.

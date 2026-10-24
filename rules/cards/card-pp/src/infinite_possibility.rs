@@ -88,10 +88,10 @@ fn swap(player_id: i32) -> card_sdk::Asked {
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
     let disc = ctx::cards_in(player_id, ctx::CardPile::Graveyard);
     for c in &deck {
-        ctx::to_discard(player_id, c);
+        ctx::to_discard(player_id, c.as_str());
     }
     for c in &disc {
-        ctx::add_to_dest(player_id, c, ctx::Dest::DeckTop);
+        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckTop);
     }
     ctx::log(player_id, &Msg::new(key!("infinite_possibility_swapped")));
     Ok(())
