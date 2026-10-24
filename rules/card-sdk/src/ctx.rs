@@ -743,51 +743,31 @@ pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
     Ok(())
 }
 
+/// Put one copy of `card` into `player_id`'s pile at `dest`.
+///
+/// The named-card counterpart of [`send_to_dest`] / [`transfer_to_dest`], which
+/// move the *running instance*. `Dest::Hand` is 「加入手牌」; `Dest::Graveyard` is
+/// 「放入弃卡区」 (prefer [`to_discard`] when you want the discarded hooks); the
+/// deck fates name the draw-pile insert position (`Dest::DeckTop` /
+/// `DeckBottom` / `DeckRandom` -- the default is **shuffle**).
+/// `Dest::Field` / `Dest::Banished` are not piles and trap.
+///
+/// Replaces `add_to_hand` / `add_to_deck` / `add_to_deck_at`.
 #[cfg_attr(kani, inline(always))]
-pub fn add_to_hand(player_id: i32, card: &str) {
+pub fn add_to_dest(player_id: i32, card: &str, dest: Dest) {
     let (p, l) = s(card);
-    unsafe { sys::add_to_hand(player_id, p, l) }
+    unsafe { sys::add_to_dest(player_id, p, l, dest as i32) }
 }
 
+/// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
+/// anywhere -- the caller decides where it goes next. Returns whether it was
+/// there. Card before zone, matching [`add_to_dest`].
+///
+/// Replaces `take_from_hand` (that was `src = CardPile::Hand`).
 #[cfg_attr(kani, inline(always))]
-pub fn add_to_deck(player_id: i32, card: &str, shuffle: bool) {
+pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
     let (p, l) = s(card);
-    unsafe { sys::add_to_deck(player_id, p, l, shuffle as i32) }
-}
-
-/// Where `add_to_deck_at` inserts into the draw pile. The default is
-/// [`DeckPos::Random`].
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum DeckPos {
-    /// `"top"` -- the next `draw` gets it.
-    Top = 0,
-    /// `"bottom"` -- the pile is emptied first.
-    Bottom = 1,
-    /// `"shuffle"` -- mixed into the pile.
-    Random = 2,
-}
-
-/// Put one specific card into the draw
-/// pile at a position. (`add_to_deck(player_id, card, shuffle)` is the older
-/// top/shuffle shape and remains.)
-#[cfg_attr(kani, inline(always))]
-pub fn add_to_deck_at(player_id: i32, card: &str, pos: DeckPos) {
-    let (p, l) = s(card);
-    unsafe { sys::add_to_deck_at(player_id, p, l, pos as i32) }
-}
-
-/// Take one copy of `card` out of `pile` *without* sending it anywhere -- the
-/// caller decides where it goes next. Returns whether it was there.
-#[cfg_attr(kani, inline(always))]
-pub fn take_card(player_id: i32, pile: CardPile, card: &str) -> bool {
-    let (p, l) = s(card);
-    unsafe { sys::take_card(player_id, pile as i32, p, l) != 0 }
-}
-
-/// [`take_card`] from the hand -- for moving a card straight to the field or
-/// the deck without discarding it.
-pub fn take_from_hand(player_id: i32, card: &str) -> bool {
-    take_card(player_id, CardPile::Hand, card)
+    unsafe { sys::take_card(player_id, p, l, src as i32) != 0 }
 }
 
 /// Every card id in a player's `pile`, in pile order (the deck's top card
@@ -840,6 +820,19 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     }
     let buf = out_read(p, got, scratch);
     postcard::from_bytes(&buf).unwrap_or_default()
+}
+
+/// Distinct card ids in `pile`, first-seen order. A pile can hold several
+/// copies of one card; when the player is picking a *title*, list each id
+/// once (C# `Distinct()`).
+pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    for c in cards_in(player_id, pile) {
+        if !ids.contains(&c) {
+            ids.push(c);
+        }
+    }
+    ids
 }
 
 #[cfg_attr(kani, inline(always))]
@@ -1836,8 +1829,7 @@ pub fn turn_key() -> i32 {
 /// Planned: the draw-pile fates, one per insert position -- `DeckTop` = 4,
 /// `DeckBottom` = 5, `DeckRandom` = 6 (the default is **shuffle**, not top).
 /// When they land they need arms in `game-rules`'s `dest_from` and
-/// `game-core`'s play-from-hand dest handling. (`ctx::add_to_deck`'s `shuffle`
-/// flag already covers top vs random; bottom-insert is still missing there.)
+/// `game-core`'s play-from-hand dest handling.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Dest {
     /// The discard pile (弃卡区) -- the default.
@@ -2031,6 +2023,82 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
     }
 }
 
+/// Pick exactly `count` distinct options in one multi-select prompt. The answer
+/// is a bitmask (bit *i* = option *i*); the chosen indices come back
+/// **ascending**. `count` is clamped to `1..=options.len()`.
+///
+/// The decode never trusts the host: a mask with too few bits is padded with
+/// the lowest unset indices, too many keeps the lowest `count` set bits, so
+/// the result is always exactly `count` distinct in-range indices -- including
+/// under Kani's symbolic answers.
+pub fn ask_pick_multi(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    options: &[Msg],
+    count: u32,
+) -> Result<Vec<usize>, Prompt> {
+    let n = options.len().min(31);
+    let want = (count as usize).clamp(1, n.max(1));
+    #[cfg(kani)]
+    {
+        // Same bounded zero-loop push as `ask_pick`; 5 options (this card's
+        // widest multi) sit well under the 16-slot cap, so the existing
+        // proofs keep compiling.
+        const CAP: usize = 16;
+        let mut i = 0usize;
+        while i < CAP {
+            if let Some(o) = options.get(i) {
+                let (p, l) = mj(o);
+                unsafe { sys::opt_str(p, l) }
+            }
+            i += 1;
+        }
+        if options.len() > CAP {
+            kani::assert(false, "ask_pick_multi: more than 16 options under Kani");
+        }
+    }
+    #[cfg(not(kani))]
+    {
+        for o in options {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+    }
+    unsafe { sys::opt_count(want as i32) }
+    let mask = ask_raw(PromptKind::ChoiceMulti, player_id, title, text)?;
+    Ok(decode_multi_mask(mask, n, want))
+}
+
+/// Turn a multi-select answer mask into exactly `count` distinct indices in
+/// `0..n`, ascending. Pads short masks with the lowest unset indices; keeps
+/// the lowest `count` bits of a fat mask. Host answers that are negative or
+/// name bits past `n` are treated as empty and padded.
+fn decode_multi_mask(mask: i32, n: usize, count: usize) -> Vec<usize> {
+    let count = count.min(n);
+    let mut picked: Vec<usize> = Vec::with_capacity(count);
+    let bits = if mask < 0 { 0u32 } else { mask as u32 };
+    for i in 0..n {
+        if picked.len() >= count {
+            break;
+        }
+        if bits & (1u32 << i) != 0 {
+            picked.push(i);
+        }
+    }
+    // Pad with the lowest unset indices so the result is always `count` long.
+    for i in 0..n {
+        if picked.len() >= count {
+            break;
+        }
+        if bits & (1u32 << i) == 0 {
+            picked.push(i);
+        }
+    }
+    picked.sort_unstable();
+    picked
+}
+
 /// A yes/no ask.
 pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> Result<bool, Prompt> {
     Ok(ask_raw(PromptKind::YesNo, player_id, title, text)? == 0)
@@ -2164,6 +2232,45 @@ pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Resu
     }
 }
 
+/// Ask which of `cards` (ids) to take out of `pile`, then remove that copy.
+/// Returns the id taken.
+///
+/// `None` when `cards` is empty -- `empty`, if given, is logged first -- or
+/// when the take found nothing. Pass a pre-filtered list to narrow the
+/// candidates; [`pick_from_pile`] is the unfiltered pile-wide shape.
+pub fn pick_take_from(
+    player_id: i32,
+    pile: CardPile,
+    title: &Msg,
+    text: &Msg,
+    empty: Option<&Msg>,
+    cards: &[String],
+) -> Result<Option<String>, Prompt> {
+    if cards.is_empty() {
+        if let Some(m) = empty {
+            log(player_id, m);
+        }
+        return Ok(None);
+    }
+    let refs: Vec<&str> = cards.iter().map(|c| c.as_str()).collect();
+    let pick = ask_card(player_id, title, text, &refs)?;
+    let id = cards[pick.min(cards.len() - 1)].clone();
+    Ok(take_card(player_id, &id, pile).then_some(id))
+}
+
+/// [`pick_take_from`] over [`distinct_cards_in`]: the player picks one card
+/// out of `pile` and that copy leaves it -- the usual 「从弃牌堆中选择一张牌」.
+pub fn pick_from_pile(
+    player_id: i32,
+    pile: CardPile,
+    title: &Msg,
+    text: &Msg,
+    empty: Option<&Msg>,
+) -> Result<Option<String>, Prompt> {
+    let ids = distinct_cards_in(player_id, pile);
+    pick_take_from(player_id, pile, title, text, empty, &ids)
+}
+
 /// A number in `min..=max`, built as an [`ask_pick`] over the range (ranges in
 /// the card pool are small; for a wide range, narrow the candidates yourself
 /// first).
@@ -2222,12 +2329,60 @@ pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
     Ok(Dest::from_i32(v))
 }
 
-/// Could `player_id` play `id` right now (it has a `play` effect and
-/// its `cant_play` gate is open)?
+/// Reserved entry ids -- see [`query_guard`]. Re-exported from
+/// [`crate::abi::entry`] so the guest and the host share one spelling.
+pub use crate::abi::entry;
+
+/// Does the **named entry** of `card_id` admit for `player_id` right now?
+///
+/// Evaluates that entry's **condition + residual guard / play gate** through
+/// `admits` (docs/GUARDS.md §4.4 item 6) and does **not** run its body. The
+/// query half next to [`play_card`] / [`invoke_skill`] / [`send`] -- see
+/// docs/ACTIVATION.md §3.
+///
+/// There is one query, not two. "May I press this card / use this skill?" is
+/// "does the press entry admit?", asked of [`entry::PRESS`]:
+///
+/// ```ignore
+/// ctx::query_guard(p, "skill:美竹兰:叛逆的红挑染", ctx::entry::PRESS)
+/// ctx::query_guard(p, "AG:回家的路上绕个道", "decay")
+/// ```
+///
+/// The entry is addressed by a stable **internal** slug the target card
+/// declared (`On::….id("decay")`) or by a reserved [`entry`] id -- never by a
+/// positional `(kind, trigger)` pair. That is what removes "which of this
+/// card's three hooks?" ambiguity. Slugs are identity, not display text, and
+/// are unique per card.
+///
+/// **Probe mode** -- never prompts. An entry whose residual guard would ask
+/// answers `false`, the same way an eligibility probe folds
+/// `RuleError::GuardPrompted` to "not eligible". Unknown card, unknown or
+/// unnamed entry, or nesting overflow answer `false` too.
 #[cfg_attr(kani, inline(always))]
-pub fn card_replayable(player_id: i32, id: &str) -> bool {
-    let (p, l) = s(id);
-    unsafe { sys::card_replayable(player_id, p, l) != 0 }
+pub fn query_guard(player_id: i32, card_id: &str, entry_id: &str) -> bool {
+    let (p, l) = s(card_id);
+    let (ep, el) = s(entry_id);
+    unsafe { sys::query_guard(player_id, p, l, ep, el) != 0 }
+}
+
+/// The activation argument the running entry's `OP_DECLARE` collected
+/// (docs/ACTIVATION.md §2), as the card's own `T`. `None` when nothing was
+/// collected (no `declare` on the entry, or the host has no store).
+///
+/// Only the body's `drive` normally calls this -- it hands `T` on as the
+/// body's second parameter. A body that wants the value directly may call it.
+pub fn declared_arg<T: crate::ActivationArg>() -> Option<T> {
+    let need = unsafe { sys::declared_arg(0, 0) };
+    if need <= 0 {
+        return None;
+    }
+    let (p, scratch) = out_buf(need as usize);
+    let got = unsafe { sys::declared_arg(p, need) };
+    if got != need {
+        return None;
+    }
+    let buf = out_read(p, got, scratch);
+    postcard::from_bytes(&buf).ok()
 }
 
 /// The move being planned: what an

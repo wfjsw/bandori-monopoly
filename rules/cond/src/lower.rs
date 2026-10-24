@@ -291,7 +291,7 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
             continue;
         };
         // Phase 3 typed DSL: `On::Filter(Filter::Name(pre, …))` /
-        // `On::Action(Action::Name(pre, reason, …))` (and ruleset `Filters::` /
+        // `On::Action(Action::Name(pre, …))` (and ruleset `Filters::` /
         // `Actions::` namespaces). Retired `On::FilterFlag` / `On::FilterValue`
         // are not recognized.
         for kind in [
@@ -323,7 +323,7 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
 /// After `On::Kind(`, the `pre` argument.
 ///
 /// `On::Filter` / `On::Action` take one nested ctor
-/// (`Ns::Name(pre, …)` / `Ns::Name(pre, counter_reason, …)`); `pre` is ctor
+/// (`Ns::Name(pre, …)` / `Ns::Name(pre, guard, body)`); `pre` is ctor
 /// arg 1 inside the inner parentheses. The namespace is whatever the ruleset
 /// named it (`Filter`/`Action` engine, `Filters`/`Actions`/… downstream).
 /// Everything else keeps the flat first-arg shape (no `&[kinds]` slice since

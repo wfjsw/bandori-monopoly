@@ -8,18 +8,20 @@
 //! stays in play.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
-pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", None, None, pipopa)])
+pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", None, pipopa)])
     .meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"Pipopa"#)
             .raw_name(r#"[衍生]Pipopa"#)
             .derived(true)
             .tags(&[r#"手"#, r#"衍生"#])
-            .text(
-                r#"[手]：
-获得1000资金，然后将一张“Popipapapipopa”放置在自身场上，然后此卡[移除]"#,
-            )
+            .text(CardText::of(&[
+                sec(r#"[手]："#, &[
+                    para(r#"获得1000资金，然后将一张“Popipapapipopa”放置在自身场上，然后此卡[移除]"#),
+                ]),
+            ]))
             // sheet cell B3
             .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
     );

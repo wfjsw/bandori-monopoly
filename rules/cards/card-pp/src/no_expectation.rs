@@ -17,12 +17,13 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind, FilterKind};
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue, RollValue};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
     &[
-        On::Play("", None, None, no_expectation),
+        On::Play("", None, no_expectation),
         // ABI v74 Filter/Action split of the old shared `hook` body; v79
         // folded the shave + the 「为0则不[结算]」 clamp into one pure
         // FilterValue at DiceRollValue (option C -- the text is a result
@@ -30,7 +31,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         // PaySplitAdd is the pure payment bend.
         On::Filter(Filter::DiceRollValue("card.placed", None, roll_shave)),
         On::Filter(Filter::PaySplitAdd("card.placed", None, pay_add)),
-        On::Action(Action::Reshuffled("actor == owner && card.placed", None, None, reshuffled)),
+        On::Action(Action::Reshuffled("actor == owner && card.placed", None, reshuffled)),
     ],
 )
 // 规则书[特]: 「此卡不受任何其他效果影响」 -- static [特] property, stamped at
@@ -41,13 +42,20 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         .name(r#"不要背负期待"#)
         .raw_name(r#"不要背负期待"#)
         .tags(&[r#"手"#, r#"持续"#, r#"特"#])
-        .text(r#"[特]：
-此卡不受任何其他效果影响。
-[手]：
-将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。
-[持续]：
-（1）以下效果对[拥有者]持续生效：非回合开始时进行投掷的投掷结果减少2（如果是移动投掷则最终结果最小为0，如果为0则此次移动不[结算]）；手卡上限数量减1。
-（2）以下效果此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次：[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）。"#)
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"此卡不受任何其他效果影响。"#),
+            ]),
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"以下效果对[拥有者]持续生效：非回合开始时进行投掷的投掷结果减少2（如果是移动投掷则最终结果最小为0，如果为0则此次移动不[结算]）；手卡上限数量减1。"#),
+                    it(r#"以下效果此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次：[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell D7
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
@@ -71,7 +79,7 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
     // `H.PlaceFromPlay(c).Mem["stacks"] = 2`.
     ctx::set_slot(player_id, SLOT_STACKS, 2);
     // 规则书[手]: 「并将1张“共鸣”加入卡组」
-    ctx::add_to_deck(player_id, "PP:[衍生]共鸣", true);
+    ctx::add_to_dest(player_id, "PP:[衍生]共鸣", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("no_expectation_added"))

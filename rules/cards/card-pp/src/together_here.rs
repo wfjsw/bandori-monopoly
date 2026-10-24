@@ -11,15 +11,19 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 use skill_groups::fans;
 
 pub const TOGETHER_HERE: CardDef =
-    CardDef::new("PP:有你与我在这里共度", &[On::Play("", None, None, together_here)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("PP:有你与我在这里共度", &[On::Play("", None, together_here)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"有你与我在这里共度"#)
         .raw_name(r#"有你与我在这里共度"#)
         .tags(&[r#"手"#])
-        .text(r#"[手]：
-将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。"#),
+            ]),
+        ]))
         // sheet cell D9
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 

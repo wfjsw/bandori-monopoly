@@ -22,7 +22,7 @@ use game_core::msg::Msg;
 
 #[cfg(feature = "sandbox")]
 use crate::host::Ruleset;
-use crate::host::{Call, CardModules, HostRequest, Outcome, Prompt, PromptOption, RuleError};
+use crate::host::{Call, CardModules, DeclareOut, HostRequest, Outcome, Prompt, PromptOption, RuleError};
 use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
@@ -611,7 +611,7 @@ impl Run {
         if dest == DEST_GRAVEYARD {
             self.to_discard(who, &card);
         } else if dest == 1 {
-            self.add_to_hand(who, &card);
+            self.add_to_dest(who, &card, dest);
         }
         // Banished (「banish」) is just "gone" -- it left above and goes nowhere.
         Some(left)
@@ -957,21 +957,48 @@ impl CardWorld for Run {
         }
         got
     }
-    fn add_to_hand(&mut self, player_id: i32, card: &str) {
-        self.world.add_to_hand(player_id, card);
-        // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
-        // *is* the draw: the after points (`drawn` / `drew`) run for it
-        // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
-        // bounce, a tutor) is not a draw and must not raise them.
-        if self.trigger.kind == TriggerKind::DrewBefore {
-            self.draw_log.push((player_id, card.to_string()));
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
+        match dest {
+            0 => self.to_discard(player_id, card),
+            1 => {
+                self.world.add_to_hand(player_id, card);
+                // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
+                // *is* the draw: the after points (`drawn` / `drew`) run for it
+                // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
+                // bounce, a tutor) is not a draw and must not raise them.
+                if self.trigger.kind == TriggerKind::DrewBefore {
+                    self.draw_log.push((player_id, card.to_string()));
+                }
+            }
+            // Deck fates: 4 = top = draw.push (the end of the vec is the top),
+            // 5 = bottom = Insert(0), 6 = shuffle in.
+            4 | 5 | 6 => {
+                let idx = player_id.max(0) as usize;
+                if self.world.hidden.get(idx).is_none() {
+                    return;
+                }
+                match dest {
+                    5 => self.world.hidden[idx].draw.insert(0, card.to_string()),
+                    6 => {
+                        self.world.hidden[idx].draw.push(card.to_string());
+                        let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
+                        self.world.rng.shuffle(&mut draw);
+                        self.world.hidden[idx].draw = draw;
+                    }
+                    _ => self.world.hidden[idx].draw.push(card.to_string()),
+                }
+            }
+            // Field / Banished are not piles: `place_card` / "gone" is the
+            // right verb. The hostcall layer traps; this is the non-trapping
+            // trait edge.
+            _ => {}
         }
     }
-    fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
+    fn take_card(&mut self, player_id: i32, card: &str, src: CardPile) -> bool {
         let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
             return false;
         };
-        let list = match pile {
+        let list = match src {
             CardPile::Hand => &mut h.hand,
             CardPile::Discard => &mut h.discard,
             CardPile::Deck => &mut h.draw,
@@ -980,7 +1007,7 @@ impl CardWorld for Run {
         match list.iter().position(|c| c == card) {
             Some(k) => {
                 list.remove(k);
-                if pile == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
+                if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
                 {
                     self.reshuffle_log.push(player_id);
                 }
@@ -999,27 +1026,6 @@ impl CardWorld for Run {
             // The end of the vec is the top of the pile; list top first.
             CardPile::Deck => h.draw.iter().rev().cloned().collect(),
             CardPile::Field => self.world.placed_cards(player_id),
-        }
-    }
-    fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool) {
-        self.world.add_to_deck(player_id, card, shuffle);
-    }
-    fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32) {
-        // `pos`: top = draw.Add (the end of the vec is the top),
-        // bottom = Insert(0), anything else = add + shuffle.
-        let idx = player_id.max(0) as usize;
-        if self.world.hidden.get(idx).is_none() {
-            return;
-        }
-        match pos {
-            1 => self.world.hidden[idx].draw.insert(0, card.to_string()),
-            2 => {
-                self.world.hidden[idx].draw.push(card.to_string());
-                let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
-                self.world.rng.shuffle(&mut draw);
-                self.world.hidden[idx].draw = draw;
-            }
-            _ => self.world.hidden[idx].draw.push(card.to_string()),
         }
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {
@@ -2598,7 +2604,7 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         cx.overlay_guest_state(&run.world);
         let linger = run.linger_props.clone();
         let live_before = cx.live_event_count();
-        match bridge.apply_host_request(cx, req, &linger, self.call, card_id) {
+        match bridge.apply_host_request(cx, req, &linger, self.call.clone(), card_id) {
             Ok(v) => {
                 cx.stamp_parent_since(live_before, run.parent);
                 self.answers.push(v);
@@ -2653,7 +2659,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// repeating 「<卡名> 的效果：」 on every line is noise. A fresh activation
     /// (hand play, counteraction, skill press, drawn event) already logged its action
     /// and likewise leaves its outcome lines bare.
-    fn wraps_effect(_call: Call, _card_id: &str) -> bool {
+    fn wraps_effect(_call: &Call, _card_id: &str) -> bool {
         false
     }
 
@@ -2745,7 +2751,7 @@ impl<M: CardModules> RulesBridge<M> {
         let who = if owner >= 0 { owner } else { target };
         // Entry label (「（1）」 and kin) from the manifest, when the card
         // declared one for this entry.
-        let label = self.entry_label(card_id, call, entry);
+        let label = self.entry_label(card_id, call.clone(), entry);
         // Wording:
         // * a skill press has no declaration line of its own -> 「发动」
         // * a hand play / a counteraction declaration / a drawn event already logged
@@ -2998,7 +3004,7 @@ impl<M: CardModules> RulesBridge<M> {
                 state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
-                wrap_effect: Self::wraps_effect(call, card_id),
+                wrap_effect: Self::wraps_effect(&call, card_id),
                 live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
                 posted: std::mem::take(&mut posted_ids),
                 log_idx: 0,
@@ -3024,7 +3030,7 @@ impl<M: CardModules> RulesBridge<M> {
             let mut inline = cx.has_provider().then(|| DriveInline {
                 bridge: self as *const _,
                 cx: cx as *mut Cx<'_> as *mut Cx<'static>,
-                call,
+                call: call.clone(),
                 card_id: card_id as *const str,
                 halt: None,
                 answers: Vec::new(),
@@ -3071,7 +3077,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // commit's precedence check can see `Never` / `Always`.
                 w.flash_policy = pres.flash;
                 flash_policy_cell.set(pres.flash);
-                let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
+                let id = self.announce_drive(w, call.clone(), card_id, uid, target, tile, trigger, entry);
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
                 }
@@ -3089,7 +3095,7 @@ impl<M: CardModules> RulesBridge<M> {
                 if guarded {
                     match self
                         .ruleset
-                        .run_hook(&run, call, &answers, Some(&mut announce))
+                        .run_hook(&run, call.clone(), &answers, Some(&mut announce))
                     {
                         Err(e) => Ok(Some(Err(e))),
                         // Not activated -- the guard refused. Nothing ran, and
@@ -3100,7 +3106,7 @@ impl<M: CardModules> RulesBridge<M> {
                 } else {
                     Ok(Some(self.ruleset.run(
                         &run,
-                        call,
+                        call.clone(),
                         &answers,
                         Some(&mut announce),
                     )))
@@ -3218,7 +3224,7 @@ impl<M: CardModules> RulesBridge<M> {
                         state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
-                        wrap_effect: Self::wraps_effect(call, card_id),
+                        wrap_effect: Self::wraps_effect(&call, card_id),
                         live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
                         posted: std::mem::take(&mut posted_ids),
                         log_idx: 0,
@@ -3248,14 +3254,14 @@ impl<M: CardModules> RulesBridge<M> {
                     let outcome2 = if guarded {
                         match self
                             .ruleset
-                            .run_hook(&run, call, &answers, Some(&mut announce))
+                            .run_hook(&run, call.clone(), &answers, Some(&mut announce))
                         {
                             Err(e) => Err(e),
                             Ok(None) => return Ok(DEST_UNSET),
                             Ok(Some(hr)) => Ok(hr.outcome),
                         }
                     } else {
-                        self.ruleset.run(&run, call, &answers, Some(&mut announce))
+                        self.ruleset.run(&run, call.clone(), &answers, Some(&mut announce))
                     };
                     match outcome2 {
                         Ok(Outcome::Done(after2)) => {
@@ -3478,7 +3484,7 @@ impl<M: CardModules> RulesBridge<M> {
                         flushed_header = run.own_activation;
                     }
                     let live_before = cx.live_event_count();
-                    let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
+                    let v = self.apply_host_request(cx, req, &run.linger_props, call.clone(), card_id)?;
                     if run.own_activation >= 0 {
                         cx.stamp_parent_since(live_before, run.parent);
                     }
@@ -3505,19 +3511,7 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 Err(e) => {
                     // A trapping module must not take the match down with it.
-                    let detail = match &e {
-                        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => {
-                            m.clone()
-                        }
-                        RuleError::NoSuchCard(i) => format!("no such card {i}"),
-                        RuleError::GuardPrompted => "guard prompted".into(),
-                        RuleError::BadPre {
-                            card,
-                            entry,
-                            source,
-                            err,
-                        } => format!("bad guard pre on {card}/{entry}: {err} ({source})"),
-                    };
+                    let detail = declare_err_detail(&e);
                     let player_id = call.player_id();
                     cx.log(
                         player_id,
@@ -4698,6 +4692,7 @@ impl<M: CardModules> RulesBridge<M> {
                     Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
+                        arg: Vec::new(),
                     },
                     &own,
                     -1,
@@ -5128,7 +5123,7 @@ impl<M: CardModules> RulesBridge<M> {
         job: &HookJob,
         resume: CounteractResume,
     ) -> Flow<()> {
-        match self.drive_hook(cx, job.call, &job.card_id, job.uid, trigger) {
+        match self.drive_hook(cx, job.call.clone(), &job.card_id, job.uid, trigger) {
             Err(e) if e.is_suspended() => {
                 cx.set_counteract_resume(Box::new(resume));
                 Err(e)
@@ -5693,6 +5688,7 @@ impl<M: CardModules> RulesBridge<M> {
             id: t.card.clone().unwrap_or_default(),
             uid: -1,
             move_extension: 0,
+            arg: Vec::new(),
             answered: 0,
             link: trigger.clone(),
             answers: Vec::new(),
@@ -5792,7 +5788,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 .copied()
                         })
                         .collect();
-                    let Some((id, idx, uid, move_extension)) =
+                    let Some((id, idx, uid, move_extension, arg)) =
                         self.declare_one(cx, cursor, &chain[timing].link, &mut memo, &groups)?
                     else {
                         // Explicit pass, or nothing eligible left: the visit
@@ -5948,6 +5944,7 @@ impl<M: CardModules> RulesBridge<M> {
                         id,
                         uid,
                         move_extension,
+                        arg,
                         answered: timing,
                         link: bridge_trigger(&link),
                         answers: Vec::new(),
@@ -6053,6 +6050,7 @@ impl<M: CardModules> RulesBridge<M> {
                 Call::Counteract {
                     card,
                     player_id: seat as i32,
+                    arg: Vec::new(),
                 },
                 &id,
                 uid,
@@ -6178,6 +6176,10 @@ impl<M: CardModules> RulesBridge<M> {
                     Call::Counteract {
                         card,
                         player_id: seat as i32,
+                        // The stored arg is the only source of truth at
+                        // resolve time (docs/ACTIVATION.md §2): `OP_DECLARE`
+                        // ran at the offer pass and is never re-entered here.
+                        arg: chain[idx].arg.clone(),
                     },
                     &id,
                     uid,
@@ -6416,7 +6418,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         memo: &mut ProbeMemo,
         groups: &[i32],
-    ) -> Flow<Option<(String, i32, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32, Vec<u8>)>> {
         // Hand cards that answer this link, deduped to one entry per id.
         // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
         // index in the hand `Vec` (the authoritative state list), decl = 0 (one
@@ -6655,7 +6657,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         order: Vec<(u8, u32, u32)>,
         options: Vec<(String, i32, i32)>,
-    ) -> Flow<Option<(String, i32, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32, Vec<u8>)>> {
         if options.is_empty() {
             return Ok(None);
         }
@@ -6761,7 +6763,11 @@ impl<M: CardModules> RulesBridge<M> {
                     .filter(|&x| x >= 0)
                     .unwrap_or(reply.fallback) as usize;
                 if let Some((id, idx, uid)) = options.get(pick) {
-                    return Ok(Some((id.clone(), *idx, *uid, extension)));
+                    let Some(arg) = self.declare_for_card(cx, s, id, *idx, top)? else {
+                        // Declined at the declare: no counter this visit.
+                        return Ok(None);
+                    };
+                    return Ok(Some((id.clone(), *idx, *uid, extension, arg)));
                 }
                 // Back (also the payment timeout) reopens the distance choice.
             }
@@ -6784,15 +6790,150 @@ impl<M: CardModules> RulesBridge<M> {
             .copied()
             .filter(|&x| x >= 0)
             .unwrap_or(reply.fallback) as usize;
-        Ok(options
-            .get(pick)
-            .map(|(id, idx, uid)| (id.clone(), *idx, *uid, 0)))
+        Ok(match options.get(pick) {
+            Some((id, idx, uid)) => {
+                let Some(arg) = self.declare_for_card(cx, s, id, *idx, top)? else {
+                    return Ok(None);
+                };
+                Some((id.clone(), *idx, *uid, 0, arg))
+            }
+            None => None,
+        })
+    }
+
+    /// Run the chosen card's `OP_DECLARE` before the counter declaration
+    /// commits (docs/ACTIVATION.md §2). One answer cursor across a multi-step
+    /// declare. `Ok(None)` = declined and **no counter is declared this
+    /// visit**; `Ok(Some(arg))` = the declaration carries `arg`.
+    ///
+    /// A **prompted** decline has already consumed its answer-log slot: the
+    /// prompt's answer is recorded like any other, so a replay does not
+    /// re-ask (docs/ACTIVATION.md "Bots and the answer log").
+    fn declare_for_card(
+        &self,
+        cx: &mut Cx,
+        s: usize,
+        id: &str,
+        idx: i32,
+        top: &Trigger,
+    ) -> Flow<Option<Vec<u8>>> {
+        // The declared entry is the [反击] at this trigger -- not the card's
+        // `On::Play`. A declare on the counteract entry is what `finish_offer`
+        // is collecting (docs/ACTIVATION.md §2).
+        let Some(entry) = self
+            .ruleset
+            .cards()
+            .get(idx as usize)
+            .and_then(|c| c.entry(card_sdk::abi::OnKind::Counteract, Some(top.kind)))
+        else {
+            return Ok(Some(Vec::new()));
+        };
+        let mut answers: Vec<i32> = Vec::new();
+        loop {
+            let run = self.declare_run(cx, s, id, idx, top);
+            match self.ruleset.declare_entry(&run, idx, entry, s as i32, &answers) {
+                Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
+                Ok(DeclareOut::Declined) => return Ok(None),
+                Ok(DeclareOut::Paused(p)) => {
+                    let ask = prompt_to_ask(p);
+                    let reply = cx.ask(ask)?;
+                    let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
+                    answers.push(a);
+                }
+                // A collector that traps must not run the effect on a made-up
+                // arg (`Prompt`'s `#[must_use]` antipattern). Decline, and say
+                // why: the same policy a trapping *body* gets -- log
+                // `log.card_trap`, do not take the match down. `HaltKind` has
+                // no trap arm, so this cannot be a `Flow::Err`.
+                Err(e) => {
+                    cx.log(
+                        s as i32,
+                        Msg::new("log.card_trap")
+                            .card("card", id)
+                            .text("detail", declare_err_detail(&e)),
+                    );
+                    return Ok(None);
+                }
+            }
+        }
+    }
+
+    /// A `Run` bound to `id` on seat `s`, for a declare probe (no writes are
+    /// committed -- see [`Self::cant_play`]). Distinct from [`Self::probe_run`],
+    /// which binds to the trigger's player.
+    ///
+    /// `top` is the trigger the declaration is answering: a [反击]'s collector
+    /// reads `trigger::*` (`value` / `target` / `tile` / `move.roll`) against
+    /// the real trigger, not a default. The play path passes a default -- a
+    /// play answers no trigger.
+    fn declare_run(&self, cx: &Cx, s: usize, id: &str, _idx: i32, top: &Trigger) -> Run {
+        let uid = cx
+            .world()
+            .field_instances(s as i32)
+            .into_iter()
+            .find(|(_, c)| c == id)
+            .map_or(-1, |(uid, _)| uid);
+        Run {
+            world: cx.share_world(),
+            pile_checkpoints: Default::default(),
+            data: self.data.clone(),
+            props: self.modules_props(),
+            trigger: top.clone(),
+            activation_player: s as i32,
+            current_card: id.to_string(),
+            current_uid: uid,
+            carried_owner: None,
+            dest: DEST_UNSET,
+            dest_to: None,
+            paid_log: vec![],
+            discard_log: vec![],
+            draw_log: vec![],
+            reshuffle_log: vec![],
+            marker_spent_log: vec![],
+            house_log: vec![],
+            counter_log: vec![],
+            abnormal_log: vec![],
+            named_raise_log: vec![],
+            state_log: vec![],
+            doubled: -1,
+            linger_props: Default::default(),
+            wrap_effect: false,
+            live: None,
+            posted: vec![],
+            log_idx: 0,
+            logged: 0,
+            silent_body: false,
+            quiet_when_empty: false,
+            pending_header: None,
+            own_activation: -1,
+            prompted: false,
+            parent: -1,
+            flash_policy: card_sdk::abi::Flash::Auto,
+            flash_ordinal: 0,
+        }
     }
 }
 
 /// The module's view of an engine trigger (the bridge `Trigger`). The move
 /// payload's `roll` is the guest-visible `t.Move.Roll`, which a counteraction
 /// may rewrite; the engine reads it back.
+/// One-line detail for a [`RuleError`], for `log.card_trap`. Shared by the
+/// body trap path and the `OP_DECLARE` collector path -- a trapping module is
+/// reported the same way wherever it traps.
+fn declare_err_detail(e: &RuleError) -> String {
+    match e {
+        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => m.clone(),
+        RuleError::NoSuchCard(i) => format!("no such card {i}"),
+        RuleError::GuardPrompted => "guard prompted".into(),
+        RuleError::BadPre {
+            card,
+            entry,
+            source,
+            err,
+        } => format!("bad guard pre on {card}/{entry}: {err} ({source})"),
+    }
+}
+
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
         trigger_kind(t.kind.as_str()),
@@ -6887,6 +7028,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
         answer_slot: _,
         prices,
         ai_hint,
+        count,
     } = p;
     match kind {
         PromptKind::YesNo => Ask::choice(
@@ -6907,6 +7049,24 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 })
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
+        }
+        PromptKind::ChoiceMulti => {
+            let labels: Vec<Msg> = options
+                .into_iter()
+                .map(|o| match o {
+                    PromptOption::Str(m) => m,
+                    PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
+                    PromptOption::Tile { label, .. } => label,
+                })
+                .collect();
+            let n = labels.len().min(31) as i32;
+            // Guest 0 is treated as 1; anything past the option list clamps.
+            let want = count.clamp(1, n.max(1));
+            let mut ask = Ask::multi(players, title, text, labels, want, 15.0);
+            if ai_hint >= 0 {
+                ask = ask.with_ai(|_| ai_hint);
+            }
+            ask
         }
         PromptKind::Tile | PromptKind::TileId | PromptKind::TileWalk => {
             // Bare-Int options keep the auto `ask.tileOption` labels so
@@ -6999,6 +7159,10 @@ struct ChainLink {
     uid: i32,
     /// Extension chosen before declaring this movement source; zero otherwise.
     move_extension: i32,
+    /// Activation argument the declaration's `OP_DECLARE` collected
+    /// (docs/ACTIVATION.md §2). Stored here at declaration time; `resolve_jobs`
+    /// reads it back and never re-enters `OP_DECLARE`.
+    arg: Vec<u8>,
     /// Node index of the timing this answers.
     answered: usize,
     /// This node's own link -- what its answers read and rewrite.
@@ -8672,6 +8836,99 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             .flatten()
     }
 
+    /// Collect the activation argument before the play commits
+    /// (docs/ACTIVATION.md §2). Runs the entry's `OP_DECLARE` in a loop over
+    /// one answer cursor -- a two-step declare (pick, then confirm) is one
+    /// cursor, both prompts advance it. `Ok(None)` = declined and the card
+    /// must not leave the hand.
+    fn declare_activation(
+        &self,
+        cx: &mut Cx,
+        player_id: usize,
+        card: &str,
+    ) -> Flow<Option<Vec<u8>>> {
+        let Some(idx) = self.ruleset.card(card) else {
+            return Ok(Some(Vec::new()));
+        };
+        let uid = cx
+            .world()
+            .field_instances(player_id as i32)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-1, |(uid, _)| uid);
+        // One cursor across every `OP_DECLARE` step of this activation: the
+        // collector re-runs on each pause and reads the shared log in order.
+        let mut answers: Vec<i32> = Vec::new();
+        loop {
+            let run = Run {
+                world: cx.share_world(),
+                pile_checkpoints: Default::default(),
+                data: self.data.clone(),
+                props: self.modules_props(),
+                trigger: Trigger::default(),
+                activation_player: player_id as i32,
+                current_card: card.to_string(),
+                current_uid: uid,
+                carried_owner: None,
+                dest: DEST_UNSET,
+                dest_to: None,
+                paid_log: vec![],
+                discard_log: vec![],
+                draw_log: vec![],
+                reshuffle_log: vec![],
+                marker_spent_log: vec![],
+                house_log: vec![],
+                counter_log: vec![],
+                abnormal_log: vec![],
+                named_raise_log: vec![],
+                state_log: vec![],
+                doubled: -1,
+                linger_props: Default::default(),
+                wrap_effect: false,
+                live: None,
+                posted: vec![],
+                log_idx: 0,
+                logged: 0,
+                silent_body: false,
+                quiet_when_empty: false,
+                pending_header: None,
+                own_activation: -1,
+                prompted: false,
+                parent: -1,
+                flash_policy: card_sdk::abi::Flash::Auto,
+                flash_ordinal: 0,
+            };
+            // The play path declares the card's `On::Play` entry -- the press
+            // surface, `OnKind::Play` (docs/ACTIVATION.md §2).
+            let entry = self
+                .ruleset
+                .cards()
+                .get(idx as usize)
+                .and_then(|c| c.entry(card_sdk::abi::OnKind::Play, None))
+                .unwrap_or(0);
+            match self.ruleset.declare_entry(&run, idx, entry, player_id as i32, &answers) {
+                Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
+                Ok(DeclareOut::Declined) => return Ok(None),
+                Ok(DeclareOut::Paused(p)) => {
+                    let ask = prompt_to_ask(p);
+                    let reply = cx.ask(ask)?;
+                    let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
+                    answers.push(a);
+                }
+                // Same as `declare_for_card`: never proceed on a made-up arg.
+                Err(e) => {
+                    cx.log(
+                        player_id as i32,
+                        Msg::new("log.card_trap")
+                            .card("card", card)
+                            .text("detail", declare_err_detail(&e)),
+                    );
+                    return Ok(None);
+                }
+            }
+        }
+    }
+
     /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
     /// charged for each tile, and may they buy it at all?
     ///
@@ -8850,6 +9107,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             Call::Play {
                 card: idx,
                 player_id: player_id as i32,
+                arg: cx.world().turn.play_arg.clone(),
             },
             card,
             uid,
@@ -8889,6 +9147,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             Call::Play {
                 card: idx,
                 player_id: player_id as i32,
+                arg: Vec::new(),
             },
             &rid,
             uid,
@@ -8945,6 +9204,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
+                        arg: Vec::new(),
                     },
                     &own,
                     -1,

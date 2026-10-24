@@ -41,7 +41,7 @@ pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
         On::Settle("", None, settle),
-        On::Action(Action::PassTile("", None, Some(pass_pays), on_pass)),
+        On::Action(Action::PassTile("", Some(pass_pays), on_pass)),
         // The cross-card face of the same reward body. No `pass_pays` here:
         // that residual is the [经过] arm's applicability (tile match, exile
         // gate, 「[移动起点]不为CiRCLE」). A message is a card asking for the
@@ -261,4 +261,10 @@ pub fn settle_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_message_settle_reward_kani(player_id: i32) -> card_sdk::Asked {
+    on_message_settle_reward(player_id)
 }

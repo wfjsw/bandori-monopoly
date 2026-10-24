@@ -455,14 +455,13 @@ pub trait CardWorld: Clone + 'static {
     // ------------------------------------------------------------ hand/deck
     /// Draw `n` cards (reshuffles when needed). Returns drawn count.
     fn draw(&mut self, player_id: i32, n: i32) -> i32;
-    fn add_to_hand(&mut self, player_id: i32, card: &str);
-    fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool);
-    /// Add a card to the draw pile at a position: `pos` 0 = top, 1 = bottom,
-    /// 2 = shuffle in (the default).
-    fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32);
-    /// Take one copy of `card` out of `pile` *without* sending it anywhere;
-    /// returns whether it was there.
-    fn take_card(&mut self, player_id: i32, pile: crate::CardPile, card: &str) -> bool;
+    /// Put one copy of `card` into `player_id`'s pile at `dest` (wire [`Dest`] code
+    /// -- 0 graveyard, 1 hand, 2 field, 3 banished, 4 deck top, 5 deck bottom,
+    /// 6 deck shuffle). Named-card counterpart of [`Self::send_to_dest`].
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32);
+    /// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
+    /// anywhere; returns whether it was there.
+    fn take_card(&mut self, player_id: i32, card: &str, src: crate::CardPile) -> bool;
     /// Every card id in a player's `pile`, in pile order (the deck top first).
     fn cards_in(&self, player_id: i32, pile: crate::CardPile) -> Vec<String>;
     fn to_discard(&mut self, player_id: i32, card: &str);

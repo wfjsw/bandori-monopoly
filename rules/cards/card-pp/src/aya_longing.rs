@@ -19,13 +19,14 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 use skill_groups::fans;
 
 pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
-        On::Play("", None, None, aya_longing),
+        On::Play("", None, aya_longing),
         // 规则书[持续]（1）: the passive X shave is a pure amount modifier, so it
         // rides `PaySplitAdd` (支付阶段 2) where it belongs and composes with
         // sibling add modifiers. No prompt, so no purity problem.
@@ -47,17 +48,23 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         // TODO(规则书): local `.max(0)` per clause vs a final floor after the
         //   whole add/sub stage is still unnamed by the book (the file's existing
         //   order-independence claim covers X-then-1500, not add-then-floor).
-        On::Action(Action::PaySplitMulBefore("actor == owner && value > 0", Some(key!("aya_longing_when")), None, pay_res)),
+        On::Action(Action::PaySplitMulBefore("actor == owner && value > 0", None, pay_res).counter_reason(key!("aya_longing_when"))),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)
         .raw_name(r#"[丸山彩]憧憬的前方"#)
         .tags(&[r#"手"#, r#"反击"#, r#"持续"#])
-        .text(r#"[手]：
-将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。
-[持续]：
-（1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
-（2）[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。"#),
+                    it(r#"[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell D16
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
 
@@ -105,8 +112,8 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
         &refs,
     )?;
     let id = ids.swap_remove(pick.min(ids.len() - 1));
-    if ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
-        ctx::add_to_hand(player_id, &id);
+    if ctx::take_card(player_id, &id, ctx::CardPile::Discard) {
+        ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
         ctx::log(
             player_id,
             &Msg::new(key!("aya_longing_back"))

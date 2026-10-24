@@ -24,19 +24,15 @@ pub const MYGO: CardDef = CardDef::new(
     &[
         // （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」 -- a start
         // position: the before-match-start point decides those.
-        On::Action(Action::DeckBeforeGame("", None, None, at_start)),
+        On::Action(Action::DeckBeforeGame("", None, at_start)),
         On::Action(Action::DiceRollAfter(
             "actor == owner && move.roll >= 16",
             None,
-            None,
-            after_roll,
-        )),
+            after_roll)),
         On::Action(Action::Discarded(
             card_sdk::pre::MINE,
             None,
-            None,
-            on_discarded,
-        )),
+            on_discarded)),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（2）/（3） give two independent 「可」 abilities
         // (move-1 before the move roll for 1 crystal; draw 1 for 2 crystals)
@@ -44,7 +40,7 @@ pub const MYGO: CardDef = CardDef::new(
         // them and the player presses again for the other. The gate admits
         // whenever either is available; the body lists the available options
         // and skips the prompt when only one is.
-        On::Play("", None, Some(cant_play), press),
+        On::Play("", Some(cant_play), press),
     ],
 );
 

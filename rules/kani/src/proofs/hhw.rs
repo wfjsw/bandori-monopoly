@@ -31,7 +31,7 @@
 //!   `charity_show`, `black_suits`) are outside this unit's harness list.
 //!   If a later harness reaches them the subset will loud-FAIL — correct.
 //! * `arm_cards_in` / `arm_take_card` do not model `CardPile::Deck`
-//!   (`deck_pile` is written by `add_to_deck*` but never read). believe-04
+//!   (`deck_pile` is written by `add_to_dest` but never read). believe-04
 //!   (keep two from the deck) and backstage's flip count are blocked-by this
 //!   host gap: the body sees an empty deck and takes the short-pile path.
 //!   Assertions stay fail-closed; the covers for the unreachable deck branches
@@ -87,8 +87,7 @@ crate::host_subset!(believe_dispatch {
     ask => arm_ask,
     discard_from_hand => arm_discard_from_hand,
     take_card => arm_take_card,
-    add_to_hand => arm_add_to_hand,
-    add_to_deck_at => arm_add_to_deck_at,
+    add_to_dest => arm_add_to_dest,
 });
 
 /// `HHW:出发！后台之旅！` / `On::Play` (`backstage_tour::play`).
@@ -98,7 +97,7 @@ crate::host_subset!(backstage_dispatch {
     discard_size => arm_discard_size,
     cards_in => arm_cards_in,
     take_card => arm_take_card,
-    add_to_deck_at => arm_add_to_deck_at,
+    add_to_dest => arm_add_to_dest,
     log | effect => arm_log,
     opt_int | opt_str | opt_tile | opt_price | opt_ai => arm_opt,
     ask => arm_ask,

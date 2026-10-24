@@ -12,6 +12,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, CardPile, TriggerKind};
+use card_sdk::{CardText, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:[衍生]拍卖撤下来了";
@@ -19,16 +20,19 @@ const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(
     ID,
-    &[On::Action(Action::Drawn("", None, None, hook)),
-    On::Action(Action::TurnStart("", None, None, hook))],
+    &[On::Action(Action::Drawn("", None, hook)),
+    On::Action(Action::TurnStart("", None, hook))],
 ).props(&[(card_sdk::abi::prop::EST_COST, 540)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"拍卖撤下来了"#)
         .raw_name(r#"[衍生]拍卖撤下来了"#)
         .derived(true)
         .tags(&[r#"持续"#, r#"特"#, r#"衍生"#])
-        .text(r#"[特]：
-此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）
-[持续]：此卡拥有者火罐上限加1且不受任何其他效果影响。"#)
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）
+        [持续]：此卡拥有者火罐上限加1且不受任何其他效果影响。"#),
+            ]),
+        ]))
         // sheet cell B13
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
@@ -42,7 +46,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if !trigger::card_is(ID) {
                 return Ok(());
             }
-            if !ctx::take_from_hand(player_id, ID) {
+            if !ctx::take_card(player_id, ID, CardPile::Hand) {
                 return Ok(());
             }
             ctx::set_dest(ctx::Dest::Field);
@@ -71,7 +75,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             }
             // C# `H.Unplace(star, "removed", ...)` -- off the field, out of the
             // game. `take_card(Field, ..)` drops it without sending it anywhere.
-            if ctx::take_card(player_id, CardPile::Field, STAR) {
+            if ctx::take_card(player_id, STAR, CardPile::Field) {
                 ctx::log(
                     player_id,
                     &Msg::new(key!("auction_pulled_removed")).player_id("who", player_id),

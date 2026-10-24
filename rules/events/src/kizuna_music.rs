@@ -5,14 +5,15 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{prop, CardPile};
+use card_sdk::{CardText};
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const KIZUNA_MUSIC: CardDef = CardDef::new("event:Kizuna Music", &[On::Play("", None, None, play)])
+pub const KIZUNA_MUSIC: CardDef = CardDef::new("event:Kizuna Music", &[On::Play("", None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"Kizuna Music"#)
-            .text(r#"触发此卡的玩家投掷X+1d20并所有玩家依次[传送]到投掷结果mod60所对应的格子并获得1层[除外]，X为所有玩家卡组里卡名为歌名的卡数量的总数"#)
+            .text(CardText::para(r#"触发此卡的玩家投掷X+1d20并所有玩家依次[传送]到投掷结果mod60所对应的格子并获得1层[除外]，X为所有玩家卡组里卡名为歌名的卡数量的总数"#))
             // sheet cell A23
             .derived(false));
 

@@ -10,15 +10,16 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const SWEET_ESCAPE: CardDef = CardDef::new(
     "Sumimi:Sweet Escape",
-    &[On::Play("", None, Some(cant_play), sweet_escape)],
+    &[On::Play("", Some(cant_play), sweet_escape)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Sweet Escape"#)
         .raw_name(r#"Sweet Escape"#)
         .tags(&[])
-        .text(r#"回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子并触发结算，若为可购买格子则必须购买，视为你的主要移动。"#)
+        .text(CardText::para(r#"回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子并触发结算，若为可购买格子则必须购买，视为你的主要移动。"#))
         // sheet cell L8
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

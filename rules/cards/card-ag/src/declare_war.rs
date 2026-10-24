@@ -1,4 +1,4 @@
-//! `AG:宣战布告` -- C# `CardDeclareWar` (MatchHost.cs:921-955):
+//! `AG:宣战布告`
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:宣战布告`）:
 //! > 宣战布告：
@@ -6,21 +6,28 @@
 //! > [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。
 //!
 //! [反击] when another player's card affects you, they pay you 500 and you draw.
+//! 
+//! Reviewed 10/23/2026
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
-    &[On::Counteract(&[ChainKind::Effect], "", Some(key!("declare_war_when")), Some(can_counteract), counteract)],
-)
-.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+    &[
+        // > [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。
+        On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract).counter_reason(key!("declare_war_when"))],
+).props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"宣战布告"#)
         .raw_name(r#"宣战布告"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(r#"[手]：
-[反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"[反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。"#),
+            ]),
+        ]))
         // sheet cell C2
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
@@ -38,6 +45,10 @@ fn can_counteract(player_id: i32) -> bool {
     // effect aims at a tile, so the [指定] half lands here; effects that touch a
     // tile without naming its owner (house removal and friends) declare nothing
     // aimed at the owner and stay out of reach -- the same gap the C# has.
+
+    // TODO: Move some to CEL?
+    // TODO: Check: effects that touch a tile without naming its owner should still be
+    // handled for this card's counteract condition.
     let Some(by) = trigger::by_card().filter(|&by| by != player_id) else {
         return false;
     };
@@ -61,9 +72,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(by) = trigger::by_card() else {
         return Ok(());
     };
-    if by == player_id {
-        return Ok(());
-    }
+
+    // No by == player_id check needed: Handled by the guard
+
     // 规则书[反击]: 「[指定]那名玩家」 -- the designation is the card's player.
     // C# `H.Target(c, byCard, r)`: the full targeting gate (out / exile /
     // ImmuneAll / Untargetable / Redirect / the `target` [反击] window), and

@@ -14,6 +14,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
@@ -23,15 +24,14 @@ pub const LISA_BOND: CardDef = CardDef::new(
     // the move-end point every movement case raises.
     &[On::Counteract(
         &[ChainKind::MoveAfter],
-        "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0", Some(key!("lisa_bond_when")),
+        "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("lisa_bond_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"必然的联系"#)
         .raw_name(r#"必然的联系（莉莎）"#)
         .tags(&[r#"反击"#])
-        .text(r#"【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。"#)
+        .text(CardText::para(r#"【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。"#))
         // sheet cell E16
         .fields(&[("group", r#"Roselia"#), ("owner", r#"今井莉莎"#)]));
 

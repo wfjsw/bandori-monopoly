@@ -7,15 +7,16 @@
 //! copy the last non-placed card another player played.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     "Mujica:（睦/mortis）表演的本能",
-    &[On::Play("", None, None, play), On::Counteract(&[], "", Some(key!("mortis_instinct_when")), Some(can_counteract), counteract)],
+    &[On::Play("", None, play), On::Counteract(&[], "", Some(can_counteract), counteract).counter_reason(key!("mortis_instinct_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"表演的本能"#)
         .raw_name(r#"（睦/mortis）表演的本能"#)
         .tags(&[r#"反击"#])
-        .text(r#"此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）"#)
+        .text(CardText::para(r#"此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）"#))
         // sheet cell J2
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"若叶睦"#)]));
 

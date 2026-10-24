@@ -7,6 +7,7 @@
 //! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
 use card_sdk::abi::{FilterKind, Payee, Seat};
+use card_sdk::{CardText};
 use card_sdk::{ctx, key, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const NO_ROAD: CardDef = CardDef::new(
@@ -20,14 +21,14 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // ABI v75: the payee rewrite is `PayAddValue.payee` (the body returns
         // the new target; the wrapper calls `set_pay_target`). Pure.
         On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner", Some(redirect_applies), redirect)),
-        On::Play("", None, Some(cant_play), no_road),
+        On::Play("", Some(cant_play), no_road),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"无路矢"#)
         .raw_name(r#"无路矢"#)
         .tags(&[])
-        .text(r#"指定场上自己以外的一位玩家所在格子，获得2层[除外]并在[除外]层数归0后[传送]至该格子，视为当回合的主要移动。[除外]期间本应获得的格子收入由此前指定的那名玩家获得。"#)
+        .text(CardText::para(r#"指定场上自己以外的一位玩家所在格子，获得2层[除外]并在[除外]层数归0后[传送]至该格子，视为当回合的主要移动。[除外]期间本应获得的格子收入由此前指定的那名玩家获得。"#))
         // sheet cell I6
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 

@@ -16,20 +16,19 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
 pub const JENNIFER: CardDef = CardDef::new(
     "PP:找回珍妮弗",
     &[
-        On::Play("", None, Some(cant_play), jennifer),
+        On::Play("", Some(cant_play), jennifer),
         // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
         On::Action(Action::PassTile(
             "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')",
             None,
-            None,
-            pass_tile,
-        )),
+            pass_tile)),
     ],
 )
 .meta(
@@ -37,15 +36,19 @@ pub const JENNIFER: CardDef = CardDef::new(
         .name(r#"找回珍妮弗"#)
         .raw_name(r#"找回珍妮弗"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(
-            r#"[手]：
-将此卡放置在除[使用者]以外的一名玩家的[场地]。
-[持续]：
-[拥有者][经过]“偶像经纪公司”时依次进行以下操作：
-1. [使用者][支付][拥有者]400资金；
-2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
-3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"将此卡放置在除[使用者]以外的一名玩家的[场地]。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                para(r#"[拥有者][经过]“偶像经纪公司”时依次进行以下操作："#),
+                steps(&[
+                    r#"[使用者][支付][拥有者]400资金；"#,
+                    r#"[使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；"#,
+                    r#"此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#,
+                ]),
+            ]),
+        ]))
         // sheet cell D13
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );
@@ -122,7 +125,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::send_to_dest(ctx::Dest::Banished);
     ctx::set_slot(player_id, SLOT_USER, -1);
     if user >= 0 && !ctx::player_out(user) {
-        ctx::add_to_hand(user, "PP:[衍生]魔法战队Pastel✽Ranger");
+        ctx::add_to_dest(user, "PP:[衍生]魔法战队Pastel✽Ranger", ctx::Dest::Hand);
         ctx::log(
             user,
             &Msg::new(key!("jennifer_ranger")).player_id("who", user),

@@ -31,21 +31,15 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_start,
-        )),
+            at_turn_start)),
         On::Action(Action::HouseAdded(
             card_sdk::pre::MINE,
             None,
-            None,
-            on_built,
-        )),
+            on_built)),
         On::Action(Action::TurnEnd(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_end,
-        )),
+            at_turn_end)),
     ],
 )
 .silent(&[1, 2]);

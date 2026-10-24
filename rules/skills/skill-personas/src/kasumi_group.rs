@@ -28,15 +28,11 @@ pub const KASUMI_GROUP: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             "slot('skill.kasumiGroup.start') == 0",
             None,
-            None,
-            at_start,
-        )),
+            at_start)),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
     ],
 );
 

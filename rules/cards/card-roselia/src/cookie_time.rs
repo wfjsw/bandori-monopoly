@@ -8,14 +8,15 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const COOKIE_TIME: CardDef =
-    CardDef::new("R:曲奇时间", &[On::Play("", None, Some(cant_play), play)]).meta(
+    CardDef::new("R:曲奇时间", &[On::Play("", Some(cant_play), play)]).meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"曲奇时间"#)
             .raw_name(r#"曲奇时间"#)
             .tags(&[])
-            .text(r#"将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。"#)
+            .text(CardText::para(r#"将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。"#))
             // sheet cell E5
             .fields(&[("group", r#"Roselia"#), ("owner", "")]),
     );

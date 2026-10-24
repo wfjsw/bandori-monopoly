@@ -29,7 +29,7 @@ const X: &str = "skill.yuriCrit.x";
 pub const YURI_CRIT: CardDef = CardDef::new(
     "skill:八潮瑠唯:正论暴击",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare)),
+        On::Action(Action::TurnStartBefore("", None, declare)),
         // 「当你即将获得或失去资金（在所有其他资金量改动效果生效后并结果不等于0）时」
         // -- the *final* figure after every modifier, which is what the `pay`
         // settlement hook carries (`ActionKind::Pay`, a non-filter kind whose
@@ -39,7 +39,7 @@ pub const YURI_CRIT: CardDef = CardDef::new(
         // paySplitAt (closer to 「在所有其他资金量改动效果生效后」 than the old
         // PaySplitChoose stage) and still sees a negative running figure for
         // 「无需失去资金」. PayAfter is too late to rewrite.
-        On::Action(Action::Pay("", None, Some(mine), on_pay)),
+        On::Action(Action::Pay("", Some(mine), on_pay)),
     ],
 )
 .silent(&[0]);

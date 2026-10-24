@@ -5,6 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};
@@ -19,17 +20,17 @@ const TURNS: &str = "turns";
 pub const SURPRISE_DUEL: CardDef = CardDef::new(
     "event:意外的对邦",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
         On::Filter(Filter::DiceRollPlan("", Some(on_plan_others), on_plan)),
-        On::Action(Action::TurnStartBefore("", None, None, on_turn_start)),
+        On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"意外的对邦"#)
-            .text(r#"将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。"#)
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。"#))
             // sheet cell A19
             .derived(false));
 

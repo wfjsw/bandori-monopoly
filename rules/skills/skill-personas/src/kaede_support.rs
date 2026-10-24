@@ -40,30 +40,24 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
         // 状态1's offer: another player's turn start, not in 状态2, and the
         // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
         // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
         On::Action(Action::TurnStartBefore(
             "actor != owner && slot('skillState') != 2",
-            None,
             Some(offer_support_open),
-            offer_support,
-        )),
+            offer_support)),
         On::Action(Action::TurnStartBefore(
             "actor == owner && slot('skillState') != 2",
             None,
-            None,
-            at_turn_start,
-        )),
+            at_turn_start)),
         On::Action(Action::TurnEnd(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_end,
-        )),
-        On::Play("", None, Some(can_enter_two), enter_two),
+            at_turn_end)),
+        On::Play("", Some(can_enter_two), enter_two),
         // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
         // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
         // Effect Action pays the other half out. Effect (not PayAfter) so the
@@ -80,10 +74,8 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         )),
         On::Action(Action::Effect(
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
-            None,
             Some(split_rent_applies),
-            split_rent_gain,
-        )),
+            split_rent_gain)),
     ],
 )
 .silent(&[0, 1, 4])

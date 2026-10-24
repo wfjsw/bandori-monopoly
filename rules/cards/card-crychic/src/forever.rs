@@ -12,12 +12,13 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const FOREVER: CardDef = CardDef::new(
     "CRYCHIC:如果能一直持续下去...",
     &[
-        On::Play("", None, None, forever),
+        On::Play("", None, forever),
         // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a
         // continuous condition, so the check runs at every point a hand size
         // moves (draw, discard-from-hand, play-from-hand) and at the turn
@@ -25,33 +26,23 @@ pub const FOREVER: CardDef = CardDef::new(
         On::Action(Action::Drew(
             "card.placed && owner.hand >= 7",
             None,
-            None,
-            on_drew,
-        )),
+            on_drew)),
         On::Action(Action::DiscardAfter(
             "card.placed && owner.hand >= 7",
             None,
-            None,
-            on_drew,
-        )),
+            on_drew)),
         On::Action(Action::CardPlayed(
             "card.placed && owner.hand >= 7",
             None,
-            None,
-            on_drew,
-        )),
+            on_drew)),
         On::Action(Action::TurnEndBefore(
             "card.placed && owner.hand >= 7",
             None,
-            None,
-            on_drew,
-        )),
+            on_drew)),
         On::Action(Action::TurnEnd(
             "card.placed && owner.hand >= 7",
             None,
-            None,
-            on_drew,
-        )),
+            on_drew)),
     ],
 )
 .meta(
@@ -59,10 +50,10 @@ pub const FOREVER: CardDef = CardDef::new(
         .name(r#"如果能一直持续下去..."#)
         .raw_name(r#"如果能一直持续下去..."#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(
-            r#"（1）[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。
-（2）[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。"#,
-        )
+        .text(CardText::items(&[
+            it(r#"[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。"#),
+            it(r#"[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。"#),
+        ]))
         // sheet cell M8
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );

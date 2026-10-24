@@ -12,12 +12,13 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         On::Counteract(
             &[
                 ChainKind::Effect,
@@ -29,23 +30,26 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             "(kind == DiceRollResult && actor == owner && move.roll != null) \
              || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
-                 && target == owner && tile.id >= 0 && value > 0)", Some(key!("haruhikage_when")),
+                 && target == owner && tile.id >= 0 && value > 0)",
             None,
             counteract
-        ),
+        ).counter_reason(key!("haruhikage_when")),
         // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择…」 -- the
         // offer exists only at that asset *and* hand-size threshold. `assets_of`
         // is a derived list (money + land + houses), residual (docs/GUARDS.md
         // §4.2). `Drawn` fires with the card already in hand (`wasm_rules.rs`
         // 「it is still in hand」), so 「手牌」 counts this card.
-        On::Action(Action::Drawn("trigger_card == card.id", None, Some(assets_ready), on_drawn)),
+        On::Action(Action::Drawn("trigger_card == card.id", Some(assets_ready), on_drawn)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"春日影"#)
         .raw_name(r#"春日影"#)
         .tags(&[r#"反击"#, r#"特"#])
-        .text(r#"（1）[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。（2）（此卡可作为[反击]打出）使用一次Crychic角色的技能"#)
+        .text(CardText::items(&[
+            it(r#"[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。"#),
+            it(r#"（此卡可作为[反击]打出）使用一次Crychic角色的技能"#),
+        ]))
         // sheet cell M3
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
@@ -134,7 +138,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // The card was just drawn, so it is in hand (C# `hand.Remove(Id)`).
-    if !ctx::take_from_hand(player_id, ID) {
+    if !ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
         return Ok(());
     }
     ctx::log(

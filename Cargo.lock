@@ -286,6 +286,7 @@ dependencies = [
  "bandori-std",
  "card-sdk",
  "rules-status",
+ "serde",
 ]
 
 [[package]]

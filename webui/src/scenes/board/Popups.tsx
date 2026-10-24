@@ -352,15 +352,16 @@ export function showDeck(m: Model): void {
 }
 
 function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => void; exit: () => void }) {
-  const auto = useAutoplay(sess); // 托管: settle / forfeit are locked
   const solo = sess.kind !== "online";
   return (
     <div className={s.confirm}>
       <p>{solo ? tr("board.leaveSoloText") : tr("board.leaveOnlineText")}</p>
       <div className={s.btns}>
+        {/* The exit paths stay live over 托管 / 混沌: the seat may belong to the
+            autopilot, but the player must still be able to settle or walk away. */}
         {solo ? <Btn onClick={() => { close(); exit(); }}>{tr("board.leaveStay")}</Btn> : <Btn onClick={close}>{tr("board.continue")}</Btn>}
-        <Btn kind="blue" disabled={auto} onClick={async () => { if (await act(sess, { act: "vote", value: 1 })) close(); }}>{solo ? tr("board.settleOk") : tr("board.voteStart")}</Btn>
-        <Btn kind="pink" disabled={auto} onClick={async () => { close(); await act(sess, { act: "leave" }); exit(); }}>{tr("board.leaveForfeit")}</Btn>
+        <Btn kind="blue" onClick={async () => { if (await act(sess, { act: "vote", value: 1 }, true)) close(); }}>{solo ? tr("board.settleOk") : tr("board.voteStart")}</Btn>
+        <Btn kind="pink" onClick={async () => { close(); await act(sess, { act: "leave" }, true); exit(); }}>{tr("board.leaveForfeit")}</Btn>
       </div>
     </div>
   );

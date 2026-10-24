@@ -241,8 +241,10 @@
   align-items: center;
   min-height: var(--hand-peek);
 }
+/* Room for the floating 托管 pill only -- the speed toggle moved up into the
+   TopBar title. */
 .handTools.withAuto {
-  padding-right: 206px;
+  padding-right: 120px;
 }
 .autoSlot {
   right: 0;
@@ -250,36 +252,6 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-}
-.speeds {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: var(--hand-peek);
-  padding: 2px;
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: 15px;
-}
-.speed {
-  width: 32px;
-  height: 23px;
-  border-radius: var(--r-lg);
-  color: var(--sub);
-  font-size: var(--fs-sm);
-  font-weight: 700;
-}
-.speed:hover {
-  color: var(--pink);
-  background: var(--light-pill);
-}
-.speed.speedOn {
-  background: var(--pink);
-  color: #fff;
-}
-.speed:focus-visible {
-  outline: 2px solid var(--pink);
-  outline-offset: 2px;
 }
 .thinkingSlot {
   position: absolute;
@@ -529,7 +501,6 @@
   }
 }
 /* Phone canvas: the hand strip's controls are the thing pressed all game -- bigger. */
-:global(:root[data-compact]) .speed { width: 40px; height: 32px; }
 :global(:root[data-compact]) .handHint { font-size: 11px; }
 :global(:root[data-compact]) .act { height: 68px; min-height: 68px; }
 :global(:root[data-compact]) .dice { height: 68px; }

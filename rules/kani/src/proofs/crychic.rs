@@ -657,7 +657,7 @@ pub fn ifonly_02_user1_discard_at_seven_iff() {
 /// BMC/symex cliff (class E). Branch 1 gets its own harness when one exists.
 fn soyoreturn_01_branch2_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
-    // Hand: this card + one other, so `take_from_hand(ID)` succeeds and the
+    // Hand: this card + one other, so `take_card(..., Hand)` succeeds and the
     // discard-all cashout is `500 * 1`. Host `card_slot` aliases a 29-byte
     // name to pilot slot 0 (AYA heuristic), so the taken card is `hand[0]`.
     sparse2(soyoreturn_on_drawn_dispatch, user, |w| {

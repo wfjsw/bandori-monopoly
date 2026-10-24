@@ -9,6 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{AbKind, ChainKind};
+use card_sdk::{CardText, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ENCORE: CardDef = CardDef::new(
@@ -16,20 +17,19 @@ pub const ENCORE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "target == owner && effect.has(Abnormal)",
-        Some(key!("encore_when")),
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("encore_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"安可"#)
         .raw_name(r#"安可"#)
         .tags(&[r#"手"#, r#"反击"#])
-        .text(
-            r#"[手]：
-[反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次[异常移动效果]和其导致的所有效果。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"[反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次[异常移动效果]和其导致的所有效果。"#),
+            ]),
+        ]))
         // sheet cell A13
         .fields(&[("group", r#"通用"#), ("owner", "")]),
 );

@@ -19,6 +19,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";
@@ -40,7 +41,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // "弦卷集团"格子交换位置」 share one `SettleBody` entry: the host runs
         // only the first hook of a kind per card, so the two body-replaces
         // cannot be separate entries.
-        On::Action(Action::SettleBody("tile.id >= 0", None, Some(settle_body_guard), settle_body)),
+        On::Action(Action::SettleBody("tile.id >= 0", Some(settle_body_guard), settle_body)),
         // Consume an in-flight redirect / (2) arrival at its `tileResolved`,
         // and (3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
         // `tileResolved` is the settle's terminal (SETTLE-STAGES §4 M5), after
@@ -49,7 +50,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // discard; (2) parks `PROP_ARRIVED` when it drops the card onto the
         // endpoint so this same settle does not read as (3)'s discard; later
         // settles do, owner included.
-        On::Action(Action::TileResolved("card.placed", None, Some(resolve_guard), on_resolved)),
+        On::Action(Action::TileResolved("card.placed", Some(resolve_guard), on_resolved)),
         // 规则书（2）: 「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
         // settle is a real move's endpoint. `move.kind != Teleport` keeps the
@@ -57,20 +58,24 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // onto the card's own tile) from offering 「移动终点」 = 弦卷集团 and
         // clearing crystals while the card is still there (which would trip
         // the zero-crystal discard).
-        On::Action(Action::SettleAfter("actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport", None, None, move_after)),
+        On::Action(Action::SettleAfter("actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport", None, move_after)),
         On::Counteract(
             &[ChainKind::Pass],
-            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null", Some(key!("smile_parade_when")),
+            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null",
             None,
-            counteract),
-        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, turn_end)),
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
+            counteract).counter_reason(key!("smile_parade_when")),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)
         .raw_name(r#"笑容大游行"#)
         .tags(&[r#"反击"#, r#"持续"#])
-        .text(r#"（1）[反击]经过“弦卷集团”（#29格）时可将此卡放置在其上，当次移动的移动终点视为“弦卷集团”地产商；为此卡添加3个[奇迹水晶]，你的每回合结束时移除一个，奇迹水晶为0时若此卡仍位于“弦卷集团”则将其放入弃牌堆。（2）[持续] [触发结算]后可将“弦卷集团”格子上的此卡放置于[移动终点]格子上并移除其上全部奇迹水晶（3）[持续] 当此卡位于格子上时，那格视为与“弦卷集团”格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。"#)
+        .text(CardText::items(&[
+            it(r#"[反击]经过“弦卷集团”（#29格）时可将此卡放置在其上，当次移动的移动终点视为“弦卷集团”地产商；为此卡添加3个[奇迹水晶]，你的每回合结束时移除一个，奇迹水晶为0时若此卡仍位于“弦卷集团”则将其放入弃牌堆。"#),
+            it(r#"[持续] [触发结算]后可将“弦卷集团”格子上的此卡放置于[移动终点]格子上并移除其上全部奇迹水晶"#),
+            it(r#"[持续] 当此卡位于格子上时，那格视为与“弦卷集团”格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。"#),
+        ]))
         // sheet cell F3
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

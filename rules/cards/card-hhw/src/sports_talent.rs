@@ -7,6 +7,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const ID: &str = "HHW:运动的天赋";
@@ -14,24 +15,24 @@ const ID: &str = "HHW:运动的天赋";
 pub const SPORTS_TALENT: CardDef = CardDef::new(
     "HHW:运动的天赋",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 规则书: 「每回合结束时失去一个」 -- the owner's own turn end.
-        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, at_turn_end)),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, at_turn_end)),
         // 规则书: 「每次掷骰获得一次资金」 -- the owner's own main-move dice
         // (`m.Seat == Seat && m.Main`). The free-roll check is residual.
-        On::Action(Action::DiceRollAfter("actor == owner && card.placed && move.main", None, Some(roll_after_applies), on_roll_after)),
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed && move.main", Some(roll_after_applies), on_roll_after)),
         // The body-top applicability checks are the condition now (C#
         // `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's own main
         // move, with no fixed face yet. `plan.fixed_roll` carries the "no fixed
         // face" half now.
         On::Filter(Filter::DiceRollPlan("card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan)),
-        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"运动的天赋"#)
         .raw_name(r#"运动的天赋"#)
         .tags(&[])
-        .text(r#"将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。"#)
+        .text(CardText::para(r#"将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。"#))
         // sheet cell F9
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

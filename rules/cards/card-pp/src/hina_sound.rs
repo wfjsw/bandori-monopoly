@@ -13,21 +13,25 @@
 //! and the [共鸣] swap need hooks the ABI lacks (below).
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, it, items, sec};
 
 pub const HINA_SOUND: CardDef = CardDef::new(
     "PP:[冰川日菜]会发出怎样的声音呢？",
-    &[On::Play("", None, None, hina_sound)],
+    &[On::Play("", None, hina_sound)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"会发出怎样的声音呢？"#)
         .raw_name(r#"[冰川日菜]会发出怎样的声音呢？"#)
         .tags(&[r#"特"#])
-        .text(
-            r#"[特]：
-（1）此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡。
-（2）[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。"#,
-        )
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                items(&[
+                    it(r#"此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡。"#),
+                    it(r#"[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell D19
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"冰川日菜"#)]),
 );

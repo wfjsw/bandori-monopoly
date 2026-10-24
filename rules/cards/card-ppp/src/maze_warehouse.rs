@@ -8,12 +8,13 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::FilterKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, DealValue, Filter, Msg, On};
 
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
     "PPP:迷宫般的仓库",
     &[
-        On::Play("", None, Some(cant_play), play),
+        On::Play("", Some(cant_play), play),
         // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).
@@ -24,7 +25,7 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         .name(r#"迷宫般的仓库"#)
         .raw_name(r#"迷宫般的仓库"#)
         .tags(&[])
-        .text(r#"位于“流星堂”前后5格内时，可打出此卡，投掷1d10，从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地，视为你的主要移动且本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋。如果[经过]“流星堂”则[强制停下]且[消耗]6000资金"#)
+        .text(CardText::para(r#"位于“流星堂”前后5格内时，可打出此卡，投掷1d10，从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地，视为你的主要移动且本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋。如果[经过]“流星堂”则[强制停下]且[消耗]6000资金"#))
         // sheet cell B10
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 

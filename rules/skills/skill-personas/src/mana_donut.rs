@@ -44,18 +44,14 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart(
             "card.placed",
             None,
-            None,
-            declare_cap,
-        )),
+            declare_cap)),
         On::Action(Action::TurnStartBefore(
             "card.placed",
-            None,
             Some(cap_unset),
-            declare_cap,
-        )),
+            declare_cap)),
         // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
         // branch. The choice / spend / pay stay in the body.
-        On::Action(Action::Pass(PASS_PRE, None, None, on_pass)),
+        On::Action(Action::Pass(PASS_PRE, None, on_pass)),
         // 「你的资金消耗减半」 -- only the owner's own pays, and only while
         // the window is armed. `value > 0` is the amount floor.
         //

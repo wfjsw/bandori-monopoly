@@ -9,12 +9,13 @@
 //! and the fallback branch keys off the grants.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
-pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
+pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"心の雨"#)
         .raw_name(r#"心の雨"#)
         .tags(&[])
-        .text(r#"使你前方20格内的所有玩家各自骰1d20，骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金"#)
+        .text(CardText::para(r#"使你前方20格内的所有玩家各自骰1d20，骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金"#))
         // sheet cell J10
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

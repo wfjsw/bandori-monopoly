@@ -545,13 +545,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- cards / piles ----
         Op::draw => arm_draw(a),
         Op::draw_event => 0,
-        Op::add_to_hand => arm_add_to_hand(a),
-        Op::add_to_deck => arm_add_to_deck(a),
-        Op::add_to_deck_at => {
-            let id = card_u16(a1, a2);
-            world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
-            0
-        }
+        Op::add_to_dest => arm_add_to_dest(a),
         Op::take_card => arm_take_card(a),
         Op::cards_in => arm_cards_in(a),
         Op::to_discard => arm_to_discard(a),
@@ -909,6 +903,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- prompts ----
         Op::opt_int | Op::opt_str | Op::opt_tile => arm_opt(a),
         Op::opt_price | Op::opt_ai => arm_opt_price(a),
+        // v97: multi-select -- stores the count on the prompt; not an option,
+        // so it must not bump `opt_n` (that would widen the symbolic answer
+        // range past the real option list).
+        Op::opt_count => 0,
         Op::ask => arm_ask(a),
 
         // ---- trigger context ----
@@ -1092,7 +1090,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::card_offer_build
         | Op::card_settle_at
         | Op::card_mortgage
-        | Op::card_replayable
+        | Op::query_guard
+        | Op::declared_arg
         | Op::card_text_mentions
         | Op::card_prop
         | Op::buy
@@ -1307,22 +1306,20 @@ pub fn arm_add_house(a: Args) -> i64 {
     }
 }
 
-pub fn arm_add_to_deck(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    {
-        let id = card_u16(a1, a2);
-        world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
-        0
+/// `add_to_dest(player, ptr, len, dest)` — pile by the wire `Dest` code.
+/// Field / Banished are not piles (`place_card` / "gone"); no-op here.
+pub fn arm_add_to_dest(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    match a3 {
+        0 => arm_to_discard([a0, a1, a2, 0, 0, 0]),
+        1 => arm_add_to_hand([a0, a1, a2, 0, 0, 0]),
+        4 | 5 | 6 => {
+            let id = card_u16(a1, a2);
+            world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
+            0
+        }
+        _ => 0,
     }
-}
-
-pub fn arm_add_to_deck_at(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    let id = card_u16(a1, a2);
-    world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
-    0
 }
 
 pub fn arm_add_to_hand(a: Args) -> i64 {
@@ -2939,10 +2936,10 @@ pub fn arm_stun_layers(a: Args) -> i64 {
 
 pub fn arm_take_card(a: Args) -> i64 {
     let [a0, a1, a2, a3, ..] = a;
-    let id = card_u16(a2, a3);
-    let slot = card_slot(a2, a3);
+    let id = card_u16(a1, a2);
+    let slot = card_slot(a1, a2);
     let player_id = a0;
-    let pile = a1;
+    let pile = a3;
     world::with_world_mut(|w| {
         let ok = if pile == 1 {
             world::pile_take(&mut w.discard_pile, &mut w.discard_n, id) || {

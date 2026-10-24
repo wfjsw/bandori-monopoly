@@ -27,7 +27,7 @@ pub const SUMIMI: CardDef = CardDef::new(
         // when this player is the *payer*, which is the opposite of an inbound
         // charge; the raise's `actor` is `from`. Fire on every placed pay and
         // let the body keep the from/to filter.
-        On::Action(Action::PayAfter("card.placed", None, None, after_pay)),
+        On::Action(Action::PayAfter("card.placed", None, after_pay)),
         // 「向其他人收费」 -- this player is the payee of a charge from another
         // seat. Again `MINE` is the payer side; `target == owner` is the charge.
         On::Filter(Filter::PaySplitMul(
@@ -41,9 +41,7 @@ pub const SUMIMI: CardDef = CardDef::new(
         On::Action(Action::TurnEndBefore(
             "actor == owner",
             None,
-            None,
-            at_turn_end,
-        )),
+            at_turn_end)),
     ],
 )
 .silent(&[0]);

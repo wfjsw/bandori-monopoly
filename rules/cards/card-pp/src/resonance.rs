@@ -18,6 +18,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg};
+use card_sdk::{CardText, para, sec};
 
 /// The [共鸣] fuel card. Empty `On`: it has no hand play and no hook of its own
 /// -- it is fuel for other cards' [共鸣] branches, offered by [`try_resonance`].
@@ -26,8 +27,11 @@ pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]).meta(&card
         .raw_name(r#"[衍生]共鸣"#)
         .derived(true)
         .tags(&[r#"特"#, r#"衍生"#])
-        .text(r#"[特]：
-拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。"#)
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                para(r#"拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。"#),
+            ]),
+        ]))
         // sheet cell D8
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
@@ -49,7 +53,7 @@ pub fn try_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
     if !yes {
         return Ok(false);
     }
-    if !ctx::take_from_hand(player_id, RESONANCE.id) {
+    if !ctx::take_card(player_id, RESONANCE.id, ctx::CardPile::Hand) {
         return Ok(false);
     }
     // 「将此卡放入弃卡区」

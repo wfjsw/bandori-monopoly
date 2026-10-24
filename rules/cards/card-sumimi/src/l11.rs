@@ -3,24 +3,24 @@
 //! 规则书（the roster, id `Sumimi:#L11`）:
 //! > 将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。
 //!
-//! crystals that stand in for band-skill crystal removal. Not in
-//! docs/rulebook/cards.json -- translated from the C# class and the card text.
+//! crystals that stand in for band-skill crystal removal.
 
 use bandori_std::ctx;
 use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
-        On::Play("", None, None, l11),
-        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", None, None, sweep)),
+        On::Play("", None, l11),
+        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", None, sweep)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         // sheet cell L11 -- the name line is blank; `#L11` is the name.
         .name("#L11")
         .raw_name("")
         .tags(&[])
-        .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。"#)
+        .text(CardText::para(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。"#))
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 fn l11(player_id: i32) -> card_sdk::Asked {

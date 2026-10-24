@@ -8,6 +8,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText};
 
 use bandori_std::ctx;
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -19,23 +20,22 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         // first): the placement from hand (「可打出此卡」), or the later press
         // that spends a 火罐 on a kept die. The gate admits whenever either
         // branch is available.
-        On::Play("", None, Some(cant_play), play),
-        On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, None, roll_after)),
+        On::Play("", Some(cant_play), play),
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, roll_after)),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::CHARGE` (「使用火罐进行掷骰」).
         On::Counteract(
             &[ChainKind::DiceRollBefore],
-            "actor == owner && roll_source == 1", None,
+            "actor == owner && roll_source == 1",
             None,
-            counter_fire,
-        ),
+            counter_fire),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"寄于指尖的执念"#)
         .raw_name(r#"（和奏瑞依）寄于指尖的执念"#)
         .tags(&[])
-        .text(r#"[反击] 当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。"#)
+        .text(CardText::para(r#"[反击] 当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。"#))
         // sheet cell H16
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"和奏瑞依"#)]));
 

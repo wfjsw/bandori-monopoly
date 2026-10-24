@@ -321,24 +321,14 @@ mod abi {
         pub fn offer_build(player_id: i32, tile: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_hand"
+            link_name = "ruleset_add_to_dest"
         )]
-        pub fn add_to_hand(player_id: i32, ptr: i32, len: i32);
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_deck"
-        )]
-        pub fn add_to_deck(player_id: i32, ptr: i32, len: i32, shuffle: i32);
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_deck_at"
-        )]
-        pub fn add_to_deck_at(player_id: i32, ptr: i32, len: i32, pos: i32);
+        pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_take_card"
         )]
-        pub fn take_card(player_id: i32, pile: i32, ptr: i32, len: i32) -> i32;
+        pub fn take_card(player_id: i32, ptr: i32, len: i32, src: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_cards_in"
@@ -947,6 +937,12 @@ mod abi {
             link_name = "ruleset_opt_ai"
         )]
         pub fn opt_ai(ai: i32);
+        // v97: multi-select choice -- how many of the pushed options the ask wants.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_opt_count"
+        )]
+        pub fn opt_count(count: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_ask"
@@ -1227,11 +1223,26 @@ mod abi {
             link_name = "ruleset_card_move"
         )]
         pub fn card_move(player_id: i32) -> i32;
+        /// Cross-card applicability query by named entry id
+        /// (docs/ACTIVATION.md §3).
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_card_replayable"
+            link_name = "ruleset_query_guard"
         )]
-        pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32;
+        pub fn query_guard(
+            player_id: i32,
+            ptr: i32,
+            len: i32,
+            e_ptr: i32,
+            e_len: i32,
+        ) -> i32;
+        /// The running activation's declared arg as postcard bytes
+        /// (docs/ACTIVATION.md §2). `out_ptr=0` asks for the size.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_declared_arg"
+        )]
+        pub fn declared_arg(out_ptr: i32, cap: i32) -> i32;
         // movement shaping: the move being planned
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),

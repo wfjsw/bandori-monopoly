@@ -18,7 +18,7 @@ import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
 import { CardFace } from "../../ui/Card";
-import { TopBar } from "../../ui/TopBar";
+import { TopBar, AnimationSpeed } from "../../ui/TopBar";
 import { useBoardSession, type Animator } from "./anim";
 import { act, modeName, model, type Model } from "./model";
 import { Log, Players } from "./Players";
@@ -203,6 +203,7 @@ export function Board({ sess }: { sess: GameSession }) {
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
         onBack={leave}
+        titleRight={<AnimationSpeed sess={sess} />}
         right={<></>}
       />
       <AutoBanner sess={sess} />

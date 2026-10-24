@@ -4,7 +4,6 @@
 //! > [手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。
 //!
 //! from discard/draw, place this card, hand limit -1, crystals on fire spent.
-//! Not in docs/rulebook/cards.json -- translated from the C# class and the card text.
 
 use alloc::vec::Vec;
 
@@ -12,13 +11,14 @@ use alloc::string::String;
 use bandori_std::ctx::{self, trigger, CardPile};
 use bandori_std::state_key;
 use card_sdk::abi::prop;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
-        On::Play("", None, None, l12),
-        On::Action(Action::MarkerSpent("", None, Some(fire_spent_guard), fire_spent)),
+        On::Play("", None, l12),
+        On::Action(Action::MarkerSpent("", Some(fire_spent_guard), fire_spent)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()
@@ -26,7 +26,16 @@ pub const L12: CardDef = CardDef::new(
         .name("#L12")
         .raw_name("")
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#)
+        .text(CardText::of(&[
+            sec("", &[
+                para(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续]"#),
+                items(&[
+                    it(r#"[拥有者]手卡上限数量减1。"#),
+                    it(r#"每当你消耗火罐时，为此卡添加一个[奇迹水晶]"#),
+                    it(r#"当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#),
+                ]),
+            ]),
+        ]))
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]))// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
 // property (C# `Card.HandLimitDelta`), continuous while this instance sits on
 // the field.
@@ -74,12 +83,12 @@ fn l12(player_id: i32) -> card_sdk::Asked {
     let id = pool[i].clone();
     // C# `hidden.discard.Remove(text)`, else `hidden.draw.Remove(text)` +
     // `H.Shuffle(hidden.draw)`. `take_card` pulls one copy out of the pile
-    // without moving it; `add_to_hand` then files it. (The reshuffle of the
+    // without moving it; `add_to_dest` then files it. (The reshuffle of the
     // remaining draw pile is cosmetic and not expressible here.)
-    if !ctx::take_card(player_id, CardPile::Discard, &id) {
-        ctx::take_card(player_id, CardPile::Deck, &id);
+    if !ctx::take_card(player_id, &id, CardPile::Discard) {
+        ctx::take_card(player_id, &id, CardPile::Deck);
     }
-    ctx::add_to_hand(player_id, &id);
+    ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
     ctx::log(
         player_id,
         &Msg::new(key!("l12_taken"))

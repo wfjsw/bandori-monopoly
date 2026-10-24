@@ -9,7 +9,7 @@ import { useSyncExternalStore, type CSSProperties, type ReactElement } from "rea
 import { useMountEffect } from "../hooks/mount";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
-import { cardColor, cardText, cardTitle, D } from "../core/data";
+import { cardBody, cardColor, cardText, cardTitle, D } from "../core/data";
 import { t as tr } from "../i18n/t";
 import type { PersonaData } from "../core/types";
 import { Avatar } from "./Character";
@@ -71,7 +71,7 @@ export function CardPreview({ id, note, pills, place = "auto", className, style,
         </div>
       )}
       {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <PreviewTag key={t} tag={t} />)}</div>}
-      <div className={s.text} tabIndex={scrollable ? 0 : undefined}><SkillBody text={cardText(id)} /></div>
+      <div className={s.text} tabIndex={scrollable ? 0 : undefined}><SkillBody blocks={cardBody(id)} text={cardText(id)} /></div>
       {!!note && <div className={s.note}>{note}</div>}
     </div>
   );

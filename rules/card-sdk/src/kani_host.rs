@@ -64,9 +64,8 @@ pub enum Op {
     offer_buy = 48,
     offer_force_buy = 49,
     offer_build = 50,
-    add_to_hand = 51,
-    add_to_deck = 52,
-    add_to_deck_at = 53,
+    add_to_dest = 51,
+    // 52/53 freed (was add_to_deck / add_to_deck_at)
     take_card = 54,
     cards_in = 55,
     to_discard = 56,
@@ -222,6 +221,8 @@ pub enum Op {
     trig_card_is = 206,
     play_card = 207,
     card_move = 208,
+    /// Retired (v98): folded into `query_guard` via `entry::PRESS`.
+    /// Never reuse this id.
     card_replayable = 209,
     set_roller = 210,
     set_steps = 211,
@@ -357,7 +358,14 @@ pub enum Op {
     // v89: state flag word + post-commit raise with opaque wire name.
     state_set_flags = 333,
     raise_after = 334,
-    tok_max = 335,
+    // v97: multi-select choice -- how many of the pushed options the ask wants.
+    opt_count = 335,
+    // v98: named-entry applicability + the activation arg buffer.
+    query_guard = 336,
+    declared_arg = 337,
+    // v99: live ceiling on a held-token row (`Counter.max`), `max < 0` leaves
+    // the stored one alone. Fire's 「上限M」 reads back through this.
+    tok_max = 338,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

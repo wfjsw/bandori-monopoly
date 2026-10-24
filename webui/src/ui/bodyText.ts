@@ -1,13 +1,14 @@
 // Effect text as structured blocks: lead paragraphs, section labels, lists.
 // Rendered by `SkillBody`; shared by skill bodies and card effect text.
 //
-// One shape -- the full rulebook text:
+// Cards and events carry their structure as data (`CardText` -> `body` on the
+// display export, see ../core/body.ts) and skip this parser. Persona / group
+// skill text is still a flat rulebook string, so it is parsed here at render
+// time:
 //
 //   `（1）effect one（2）effect two（3）effect three`
 //   numbered effects run inline, sometimes restarting at （1） for a second
 //   section. -> <ol>
-//
-// Card text is that shape plus two things of its own:
 //
 //   * section labels on a line of their own (`[特]：`, `[手]：`, `[持续]`), each
 //     restarting the numbering under it -- so the text is cut into sections at
@@ -19,15 +20,9 @@
 // items, so they are left in the prose (see `isXref`). Prose with no marker at
 // all falls through to a single paragraph, so the call sites stay one component.
 
-export interface Item {
-  text: string;
-  sub: string[];
-}
+import type { Block, Item } from "../core/body";
 
-export type Block =
-  | { t: "p"; text: string }
-  | { t: "label"; text: string }
-  | { t: "ol"; items: Item[] };
+export type { Block, Item };
 
 /** `（1）` or halfwidth `(1)`; the digits are the list's own numbering. */
 const MARK = /[（(](\d+)[）)]/g;
