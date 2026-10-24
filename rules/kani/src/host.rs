@@ -1089,7 +1089,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::card_offer_build
         | Op::card_settle_at
         | Op::card_mortgage
-        | Op::card_replayable
+        | Op::query_guard
+        | Op::declared_arg
         | Op::card_text_mentions
         | Op::card_prop
         | Op::buy

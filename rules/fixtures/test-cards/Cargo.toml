@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 card-sdk = { path = "../../card-sdk", features = ["guest"] }
 bandori-std = { path = "../../bandori-std" }
 rules-status = { path = "../../status" }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }

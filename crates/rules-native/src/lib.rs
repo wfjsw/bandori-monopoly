@@ -27,7 +27,8 @@ use card_sdk::On;
 use game_rules::hostfns;
 use game_rules::tile_class;
 use game_rules::{
-    Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome, RuleError,
+    Call, CallOut, CardInfo, CardModules, DeclareOut, HookRun, HostCtx, HostErr, HostState, Outcome,
+    RuleError,
     RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
 };
 use game_rules::{CardWorld, Msg, RulesBridge};
@@ -110,6 +111,15 @@ impl NativeRulesHandle {
                             }
                         },
                         has_guard: o.has_guard(),
+                        has_declare: o.has_declare(),
+                        id: {
+                            let i = o.id_of();
+                            if i.is_empty() {
+                                None
+                            } else {
+                                Some(String::from(i))
+                            }
+                        },
                         messages: match o {
                             On::MessageBody(e) => {
                                 e.names.iter().map(|s| String::from(*s)).collect()
@@ -361,10 +371,11 @@ impl HostCtx for NativeHost {
         entry: i32,
         op: i32,
         player_id: i32,
+        arg: &[u8],
         want_msg: bool,
     ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
         let fuel = self.fuel;
-        let (res, state, left) = run_on(nested, card, entry, op, player_id, want_msg, fuel);
+        let (res, state, left) = run_on(nested, card, entry, op, player_id, arg, want_msg, fuel);
         (res, state, left)
     }
 }
@@ -433,6 +444,7 @@ fn run_on(
     entry: i32,
     op: i32,
     player_id: i32,
+    arg: &[u8],
     want_msg: bool,
     fuel: u64,
 ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
@@ -606,6 +618,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
+                     &[],
                     true,
                     DEFAULT_FUEL,
                 )
@@ -658,6 +671,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
+                     &[],
                     false,
                     DEFAULT_FUEL,
                 )
@@ -786,6 +800,7 @@ impl CardModules for NativeModules {
             entry,
             export::OP_RUN,
             player_id,
+             &[],
             false,
             DEFAULT_FUEL,
         );
@@ -848,6 +863,7 @@ impl CardModules for NativeModules {
                                     entry,
                                     export::OP_GUARD,
                                     player_id,
+                                     &[],
                                     false,
                                     DEFAULT_FUEL,
                                 )
@@ -876,6 +892,7 @@ impl CardModules for NativeModules {
                 entry,
                 export::OP_RUN,
                 player_id,
+                 &[],
                 false,
                 DEFAULT_FUEL,
             );
@@ -940,6 +957,7 @@ impl CardModules for NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
+                     &[],
                     false,
                     DEFAULT_FUEL,
                 )
@@ -991,6 +1009,7 @@ impl CardModules for NativeModules {
                         entry,
                         export::OP_GUARD,
                         player_id,
+                         &[],
                         true,
                         DEFAULT_FUEL,
                     )
@@ -1004,6 +1023,60 @@ impl CardModules for NativeModules {
                 }
             },
         )
+    }
+
+    fn declare_entry(
+        &self,
+        world: &Run,
+        card: i32,
+        entry: i32,
+        player_id: i32,
+        answers: &[i32],
+    ) -> Result<DeclareOut, RuleError> {
+        let info = self
+            .index
+            .card(card)
+            .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
+        if !info.on.get(entry as usize).map(|o| o.has_declare).unwrap_or(false) {
+            return Ok(DeclareOut::Arg(Vec::new()));
+        }
+        let state = HostState::new(self.index.clone(), world.clone(), answers.to_vec(), 0);
+        let (res, st, _fuel) = run_on(
+            state,
+            card,
+            entry,
+            export::OP_DECLARE,
+            player_id,
+            &[],
+            false,
+            DEFAULT_FUEL,
+        );
+        match res {
+            Ok(CallOut::Code(v)) if v == card_sdk::abi::EXIT_DECLINED as i64 => {
+                Ok(DeclareOut::Declined)
+            }
+            Ok(CallOut::Code(v)) => {
+                // Packed `(ptr << 32) | len` of `postcard(T)` -- see
+                // `rt::leak` / docs/ACTIVATION.md §2. A buffer address, so it
+                // cannot collide with an `EXIT_*` sentinel.
+                let bytes = if v <= 0 {
+                    Vec::new()
+                } else {
+                    let (h, len) = card_sdk::abi::unpack(v);
+                    card_sdk::native::read(h as i32, len as usize)
+                };
+                Ok(DeclareOut::Arg(bytes))
+            }
+            Ok(_) => Ok(DeclareOut::Arg(Vec::new())),
+            Err(HostErr::NeedInput) => {
+                if let Some(p) = st.asked {
+                    Ok(DeclareOut::Paused(p))
+                } else {
+                    Err(RuleError::Trap("need-input without a prompt".into()))
+                }
+            }
+            Err(HostErr::Trap(m)) => Err(RuleError::Trap(m)),
+        }
     }
 }
 

@@ -2289,12 +2289,60 @@ pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
     Ok(Dest::from_i32(v))
 }
 
-/// Could `player_id` play `id` right now (it has a `play` effect and
-/// its `cant_play` gate is open)?
+/// Reserved entry ids -- see [`query_guard`]. Re-exported from
+/// [`crate::abi::entry`] so the guest and the host share one spelling.
+pub use crate::abi::entry;
+
+/// Does the **named entry** of `card_id` admit for `player_id` right now?
+///
+/// Evaluates that entry's **condition + residual guard / play gate** through
+/// `admits` (docs/GUARDS.md §4.4 item 6) and does **not** run its body. The
+/// query half next to [`play_card`] / [`invoke_skill`] / [`send`] -- see
+/// docs/ACTIVATION.md §3.
+///
+/// There is one query, not two. "May I press this card / use this skill?" is
+/// "does the press entry admit?", asked of [`entry::PRESS`]:
+///
+/// ```ignore
+/// ctx::query_guard(p, "skill:美竹兰:叛逆的红挑染", ctx::entry::PRESS)
+/// ctx::query_guard(p, "AG:回家的路上绕个道", "decay")
+/// ```
+///
+/// The entry is addressed by a stable **internal** slug the target card
+/// declared (`On::….id("decay")`) or by a reserved [`entry`] id -- never by a
+/// positional `(kind, trigger)` pair. That is what removes "which of this
+/// card's three hooks?" ambiguity. Slugs are identity, not display text, and
+/// are unique per card.
+///
+/// **Probe mode** -- never prompts. An entry whose residual guard would ask
+/// answers `false`, the same way an eligibility probe folds
+/// `RuleError::GuardPrompted` to "not eligible". Unknown card, unknown or
+/// unnamed entry, or nesting overflow answer `false` too.
 #[cfg_attr(kani, inline(always))]
-pub fn card_replayable(player_id: i32, id: &str) -> bool {
-    let (p, l) = s(id);
-    unsafe { sys::card_replayable(player_id, p, l) != 0 }
+pub fn query_guard(player_id: i32, card_id: &str, entry_id: &str) -> bool {
+    let (p, l) = s(card_id);
+    let (ep, el) = s(entry_id);
+    unsafe { sys::query_guard(player_id, p, l, ep, el) != 0 }
+}
+
+/// The activation argument the running entry's `OP_DECLARE` collected
+/// (docs/ACTIVATION.md §2), as the card's own `T`. `None` when nothing was
+/// collected (no `declare` on the entry, or the host has no store).
+///
+/// Only the body's `drive` normally calls this -- it hands `T` on as the
+/// body's second parameter. A body that wants the value directly may call it.
+pub fn declared_arg<T: crate::ActivationArg>() -> Option<T> {
+    let need = unsafe { sys::declared_arg(0, 0) };
+    if need <= 0 {
+        return None;
+    }
+    let (p, scratch) = out_buf(need as usize);
+    let got = unsafe { sys::declared_arg(p, need) };
+    if got != need {
+        return None;
+    }
+    let buf = out_read(p, got, scratch);
+    postcard::from_bytes(&buf).ok()
 }
 
 /// The move being planned: what an

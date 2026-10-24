@@ -13,3 +13,6 @@ crate-type = ["rlib"]
 card-sdk = { path = "../../card-sdk", features = ["guest"] }
 bandori-std = { path = "../../bandori-std" }
 rules-status = { path = "../../status" }
+# ActivationArg's bounds (docs/ACTIVATION.md §2): a card's own activation
+# struct is a postcard record, so it derives Serialize/Deserialize.
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }

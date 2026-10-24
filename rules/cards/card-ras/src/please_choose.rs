@@ -69,7 +69,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     //   the clause under-specifies -- see the note above it
     // -- C# filters `other`'s hand for `Normal && Targeting && WhyNot == null`,
     // `H.AskCard`, then `H.PlayCard` with `Tags["force"] = player_id`. Hand listing
-    // (`ctx::cards_in`) and the replayable gate (`ctx::card_replayable`) are
+    // (`ctx::cards_in`) and the press gate (`ctx::query_guard(p, id, ctx::entry::PRESS)`) are
     // ready; the targeting flags (`H.Target` / `Card.Targeting`) and the
     // force-target play tag are still missing, so option (1) is offered but
     // not executed.

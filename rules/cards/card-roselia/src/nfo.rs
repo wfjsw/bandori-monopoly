@@ -192,7 +192,7 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
         if id == ID || ok.contains(&id) {
             continue;
         }
-        if ctx::card_replayable(player_id, &id) {
+        if ctx::query_guard(player_id, &id, ctx::entry::PRESS) {
             ok.push(id);
         }
     }

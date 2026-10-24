@@ -155,19 +155,70 @@ fn find_or_fail(id: &str) -> &'static card_sdk::CardDef {
     }
 }
 
-/// Entry body of `On` (the `fn(i32) -> Asked`).
-fn body_of(on: &On) -> fn(i32) -> Asked {
+/// One entry's erased body + its drive (docs/ACTIVATION.md §2). The only
+/// correct way to run it: `call` goes through the entry's `drive`, which owns
+/// the cast. A [`BodyShape::WithArg`] body takes an activation argument --
+/// `call` passes one through, `call_any_arg` supplies an unconstrained one
+/// under Kani so a proof sees every pick the player could make.
+struct BodyRef {
+    body: *const (),
+    drive: card_sdk::BodyDrive,
+    shape: card_sdk::BodyShape,
+}
+
+impl BodyRef {
+    fn call(&self, player_id: i32) -> Asked {
+        (self.drive)(player_id, self.body)
+    }
+
+    /// Drive the body with whatever the host holds. Under Kani the host
+    /// cannot synthesise an arbitrary `T` over the buffer ABI, so
+    /// `ctx::declared_arg` answers `T::default()`; a proof that needs a
+    /// particular pick should call the body through its `*_kani` export
+    /// (the direct-call pattern the cards already carry).
+    fn call_any_arg(&self, player_id: i32) -> Asked {
+        let _ = self.shape;
+        self.call(player_id)
+    }
+}
+
+/// Entry body of `On`, erased + driven (see [`BodyRef`]).
+fn body_of(on: &On) -> BodyRef {
     match on {
-        On::PlayBody(card_sdk::PlayEntry { body: f, .. })
-        | On::CounteractBody(card_sdk::CounteractEntry { body: f, .. })
-        | On::SettleBody(card_sdk::RuleEntry { body: f, .. })
-        | On::MortgageBody(card_sdk::RuleEntry { body: f, .. })
-        | On::RedeemBody(card_sdk::RuleEntry { body: f, .. })
-        | On::BuyBody(card_sdk::RuleEntry { body: f, .. })
-        | On::BuildBody(card_sdk::RuleEntry { body: f, .. })
-        | On::MessageBody(card_sdk::MessageEntry { body: f, .. }) => *f,
-        On::Action(e) => e.body,
-        // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
+        On::PlayBody(card_sdk::PlayEntry {
+            body, drive, shape, ..
+        })
+        | On::CounteractBody(card_sdk::CounteractEntry {
+            body, drive, shape, ..
+        })
+        | On::SettleBody(card_sdk::RuleEntry {
+            body, drive, shape, ..
+        })
+        | On::MortgageBody(card_sdk::RuleEntry {
+            body, drive, shape, ..
+        })
+        | On::RedeemBody(card_sdk::RuleEntry {
+            body, drive, shape, ..
+        })
+        | On::BuyBody(card_sdk::RuleEntry {
+            body, drive, shape, ..
+        })
+        | On::BuildBody(card_sdk::RuleEntry {
+            body, drive, shape, ..
+        })
+        | On::MessageBody(card_sdk::MessageEntry {
+            body, drive, shape, ..
+        }) => BodyRef {
+            body: *body,
+            drive: *drive,
+            shape: *shape,
+        },
+        On::Action(e) => BodyRef {
+            body: e.body,
+            drive: e.drive,
+            shape: e.shape,
+        },
+        // Filter bodies are not `-> Asked`; kani proofs call them
         // through `filter_*_idx` / direct trampolines instead.
         On::Filter(..) => fail_no_kind("Filter (use filter_idx)"),
     }
@@ -225,7 +276,7 @@ pub fn entry_idx(idx: usize, entry_index: usize, player: i32) -> Asked {
             Some(o) => o,
             None => fail_entry_oob(idx, entry_index),
         };
-        body_of(on)(player)
+        body_of(on).call_any_arg(player)
     }
 }
 
@@ -260,7 +311,7 @@ pub fn play_c<const IDX: usize>(player: i32) -> Asked {
                     Some(o) => o,
                     None => fail_entry_oob(IDX, i),
                 };
-                return body_of(on)(player);
+                return body_of(on).call_any_arg(player);
             }
         }
     }
@@ -281,7 +332,7 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
             Some(o) => o,
             None => fail_entry_oob(IDX, entry_index),
         };
-        body_of(on)(player)
+        body_of(on).call_any_arg(player)
     }
 }
 

@@ -104,7 +104,7 @@ crate::host_subset!(nfo_play_dispatch {
     set_dest => arm_set_dest,
     place_card_at => arm_place_card,
     cards_in => arm_cards_in,
-    card_replayable | play_card => arm_protocol_stub,
+    query_guard | declared_arg | play_card => arm_protocol_stub,
     ask | opt_str | opt_int | opt_tile | opt_price | opt_ai => arm_ask,
     take_card => arm_take_card,
     to_discard => arm_to_discard,

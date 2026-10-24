@@ -203,7 +203,8 @@ const ARRAY_OPS: &[&str] = &[
     "trig_card_is",
     "play_card",
     "card_move",
-    "card_replayable",
+    "query_guard",
+    "declared_arg",
     "set_roller",
     "set_steps",
     "set_reverse",
@@ -650,6 +651,13 @@ fn gen_body_dispatch() {
                     // indices stay aligned with the manifest.
                     let call = match on.shape {
                         BodyShape::Action => format!("{target}(player)"),
+                        // An `On::declare_arg` body takes the activation
+                        // argument (docs/ACTIVATION.md §2). Under Kani it is
+                        // unconstrained -- a proof must see every arg the
+                        // player could have picked.
+                        BodyShape::ActionArg => {
+                            format!("{target}(player, kani::any())")
+                        }
                         shape => format!(
                             "{{ let _ = {target}(player, {}); Ok(()) }}",
                             default_expr(shape)

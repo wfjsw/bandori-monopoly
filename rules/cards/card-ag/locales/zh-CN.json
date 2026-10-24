@@ -37,6 +37,7 @@
   "detour_opt_tomoe": "起点向银河拉面馆移动 10 格（宇田川巴）",
   "detour_planned": "回家的路上绕个道 的效果：{{who}} 这回合进行 Afterglow 式的移动，移动掷骰改为 1d6",
   "detour_title": "回家的路上绕个道",
+  "detour_no_skill": "初始 Afterglow 角色的（2）效果当前无法发动",
   "himari_plus_one": "{{who}} 的掷骰结果 +1（{{card}}），现在 {{total}}",
   "himari_plus_one_when": "你的一次掷骰小于6",
   "moca_half_decayed": "{{who}} 的「0.5倍速」奇迹水晶用完了，放入弃牌堆",
