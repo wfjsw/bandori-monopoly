@@ -770,6 +770,77 @@ pub mod pre {
     pub const MINE: &str = "actor == owner";
 }
 
+/// Emit a `const fn` setter + getter pair for one field present on every
+/// [`On`] entry variant. Adding an eleventh variant means two more arms here
+/// instead of a dozen more copy-pasted pairs. Only fields that are uniform
+/// across every entry go through this; `counter_reason` / `declare` /
+/// `no_guard` / `guard` / `has_guard` / `kind` / `triggers` / `message_names`
+/// are not, so they stay hand-written.
+macro_rules! on_entry_field {
+    ($(#[$sdoc:meta])* $setter:ident, $field:ident, $ty:ty, $(#[$gdoc:meta])* $getter:ident) => {
+        $(#[$sdoc])*
+        pub const fn $setter(self, v: $ty) -> Self {
+            match self {
+                On::PlayBody(mut e) => {
+                    e.$field = v;
+                    On::PlayBody(e)
+                }
+                On::CounteractBody(mut e) => {
+                    e.$field = v;
+                    On::CounteractBody(e)
+                }
+                On::Action(mut e) => {
+                    e.$field = v;
+                    On::Action(e)
+                }
+                On::Filter(mut e) => {
+                    e.$field = v;
+                    On::Filter(e)
+                }
+                On::SettleBody(mut e) => {
+                    e.$field = v;
+                    On::SettleBody(e)
+                }
+                On::MortgageBody(mut e) => {
+                    e.$field = v;
+                    On::MortgageBody(e)
+                }
+                On::RedeemBody(mut e) => {
+                    e.$field = v;
+                    On::RedeemBody(e)
+                }
+                On::BuyBody(mut e) => {
+                    e.$field = v;
+                    On::BuyBody(e)
+                }
+                On::BuildBody(mut e) => {
+                    e.$field = v;
+                    On::BuildBody(e)
+                }
+                On::MessageBody(mut e) => {
+                    e.$field = v;
+                    On::MessageBody(e)
+                }
+            }
+        }
+        $(#[$gdoc])*
+        pub const fn $getter(&self) -> $ty {
+            match self {
+                On::PlayBody(e) => e.$field,
+                On::CounteractBody(e) => e.$field,
+                On::Action(e) => e.$field,
+                On::Filter(e) => e.$field,
+                On::SettleBody(e) => e.$field,
+                On::MortgageBody(e) => e.$field,
+                On::RedeemBody(e) => e.$field,
+                On::BuyBody(e) => e.$field,
+                On::BuildBody(e) => e.$field,
+                On::MessageBody(e) => e.$field,
+            }
+        }
+    };
+}
+
 impl On {
     /// Play this card from hand.
     ///
@@ -969,55 +1040,17 @@ impl On {
         })
     }
 
-    /// Replace the entry's condition string (docs/GUARDS.md §4.3). A const
-    /// builder so a declaration can remain a one-liner:
-    ///
-    /// ```ignore
-    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_pay")), Some(can_counteract), counteract).pre(pre::MINE)
-    /// ```
-    pub const fn pre(self, pre: &'static str) -> Self {
-        match self {
-            On::PlayBody(mut e) => {
-                e.pre = pre;
-                On::PlayBody(e)
-            }
-            On::CounteractBody(mut e) => {
-                e.pre = pre;
-                On::CounteractBody(e)
-            }
-            On::Action(mut e) => {
-                e.pre = pre;
-                On::Action(e)
-            }
-            On::Filter(mut e) => {
-                e.pre = pre;
-                On::Filter(e)
-            }
-            On::SettleBody(mut e) => {
-                e.pre = pre;
-                On::SettleBody(e)
-            }
-            On::MortgageBody(mut e) => {
-                e.pre = pre;
-                On::MortgageBody(e)
-            }
-            On::RedeemBody(mut e) => {
-                e.pre = pre;
-                On::RedeemBody(e)
-            }
-            On::BuyBody(mut e) => {
-                e.pre = pre;
-                On::BuyBody(e)
-            }
-            On::BuildBody(mut e) => {
-                e.pre = pre;
-                On::BuildBody(e)
-            }
-            On::MessageBody(mut e) => {
-                e.pre = pre;
-                On::MessageBody(e)
-            }
-        }
+    on_entry_field! {
+        /// Replace the entry's condition string (docs/GUARDS.md §4.3). A const
+        /// builder so a declaration can remain a one-liner:
+        ///
+        /// ```ignore
+        /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_pay")), Some(can_counteract), counteract).pre(pre::MINE)
+        /// ```
+        pre, pre, &'static str,
+        /// The entry's condition source (`""` = none). Compiled by the host at
+        /// ruleset build (`docs/GUARDS.md` §4.3).
+        condition
     }
 
     /// Attach an **activation-argument collector** (docs/ACTIVATION.md §2).
@@ -1097,67 +1130,29 @@ impl On {
         }
     }
 
-    /// Give this entry a stable **internal** identifier for cross-card
-    /// applicability queries (`ctx::query_guard`, docs/ACTIVATION.md §3).
-    /// `""` (the default) means not externally addressable. Ids are unique
-    /// **per card**, not globally.
-    ///
-    /// **This is identity, not display text.** It is never shown to players.
-    /// It must be an ASCII slug -- `[A-Za-z0-9_][A-Za-z0-9_.:-]*` -- which
-    /// `build-ruleset` and `Ruleset::build` enforce. Rulebook wording belongs
-    /// in [`Self::label`] ("（2）") or [`Self::counter_reason`]; renaming a
-    /// clause must not silently break a query, and full-width vs half-width
-    /// parens are different strings that look identical in a diff.
-    ///
-    /// ```ignore
-    /// // the skill's press entry:
-    /// On::Play("", Some(can_use), use_skill).id("press").label("（2）")
-    /// // elsewhere -- the slug, never the label:
-    /// ctx::query_guard(player_id, "skill:美竹兰:叛逆的红挑染", "press")
-    /// ```
-    pub const fn id(self, id: &'static str) -> Self {
-        match self {
-            On::PlayBody(mut e) => {
-                e.id = id;
-                On::PlayBody(e)
-            }
-            On::CounteractBody(mut e) => {
-                e.id = id;
-                On::CounteractBody(e)
-            }
-            On::Action(mut e) => {
-                e.id = id;
-                On::Action(e)
-            }
-            On::Filter(mut e) => {
-                e.id = id;
-                On::Filter(e)
-            }
-            On::SettleBody(mut e) => {
-                e.id = id;
-                On::SettleBody(e)
-            }
-            On::MortgageBody(mut e) => {
-                e.id = id;
-                On::MortgageBody(e)
-            }
-            On::RedeemBody(mut e) => {
-                e.id = id;
-                On::RedeemBody(e)
-            }
-            On::BuyBody(mut e) => {
-                e.id = id;
-                On::BuyBody(e)
-            }
-            On::BuildBody(mut e) => {
-                e.id = id;
-                On::BuildBody(e)
-            }
-            On::MessageBody(mut e) => {
-                e.id = id;
-                On::MessageBody(e)
-            }
-        }
+    on_entry_field! {
+        /// Give this entry a stable **internal** identifier for cross-card
+        /// applicability queries (`ctx::query_guard`, docs/ACTIVATION.md §3).
+        /// `""` (the default) means not externally addressable. Ids are unique
+        /// **per card**, not globally.
+        ///
+        /// **This is identity, not display text.** It is never shown to players.
+        /// It must be an ASCII slug -- `[A-Za-z0-9_][A-Za-z0-9_.:-]*` -- which
+        /// `build-ruleset` and `Ruleset::build` enforce. Rulebook wording belongs
+        /// in [`Self::label`] ("（2）") or [`Self::counter_reason`]; renaming a
+        /// clause must not silently break a query, and full-width vs half-width
+        /// parens are different strings that look identical in a diff.
+        ///
+        /// ```ignore
+        /// // the skill's press entry:
+        /// On::Play("", Some(can_use), use_skill).id("press").label("（2）")
+        /// // elsewhere -- the slug, never the label:
+        /// ctx::query_guard(player_id, "skill:美竹兰:叛逆的红挑染", "press")
+        /// ```
+        id, id, &'static str,
+        /// This entry's stable internal identifier (see [`Self::id`]); `""` = not
+        /// externally addressable. Never display text -- that is [`Self::label_of`].
+        id_of
     }
 
     /// [`Self::declare`] plus an arg-taking body: `body` replaces the
@@ -1255,122 +1250,60 @@ impl On {
         }
     }
 
-    /// Opaque display text for this entry's 「效果适用」 line (「（1）」 and kin).
-    /// Attaches to the entry, so it moves with it; `""` (the default) shows
-    /// just the card name.
-    ///
-    /// Not a key: nothing resolves this against [`crate::text::CardText`] or
-    /// the rulebook text. If the line needs prose, **duplicate** it here.
-    ///
-    /// ```ignore
-    /// On::Action(Action::Pass("", None, on_pass)).label("（1）")
-    /// ```
-    pub const fn label(self, label: &'static str) -> Self {
-        match self {
-            On::PlayBody(mut e) => {
-                e.label = label;
-                On::PlayBody(e)
-            }
-            On::CounteractBody(mut e) => {
-                e.label = label;
-                On::CounteractBody(e)
-            }
-            On::Action(mut e) => {
-                e.label = label;
-                On::Action(e)
-            }
-            On::Filter(mut e) => {
-                e.label = label;
-                On::Filter(e)
-            }
-            On::SettleBody(mut e) => {
-                e.label = label;
-                On::SettleBody(e)
-            }
-            On::MortgageBody(mut e) => {
-                e.label = label;
-                On::MortgageBody(e)
-            }
-            On::RedeemBody(mut e) => {
-                e.label = label;
-                On::RedeemBody(e)
-            }
-            On::BuyBody(mut e) => {
-                e.label = label;
-                On::BuyBody(e)
-            }
-            On::BuildBody(mut e) => {
-                e.label = label;
-                On::BuildBody(e)
-            }
-            On::MessageBody(mut e) => {
-                e.label = label;
-                On::MessageBody(e)
-            }
-        }
+    on_entry_field! {
+        /// Opaque display text for this entry's 「效果适用」 line (「（1）」 and kin).
+        /// Attaches to the entry, so it moves with it; `""` (the default) shows
+        /// just the card name.
+        ///
+        /// Not a key: nothing resolves this against [`crate::text::CardText`] or
+        /// the rulebook text. If the line needs prose, **duplicate** it here.
+        ///
+        /// ```ignore
+        /// On::Action(Action::Pass("", None, on_pass)).label("（1）")
+        /// ```
+        label, label, &'static str,
+        /// This entry's 「效果适用」 display text (see [`Self::label`]); `""` = none.
+        label_of
     }
 
-    /// Override this entry's **flash policy**. Attaches to the entry, so it
-    /// rides along when entries are reordered -- no index to drift.
-    ///
-    /// [`abi::Flash::Auto`] (the default) lets the host classify by scope
-    /// (owner-self-only ⇒ no flash). [`abi::Flash::Always`] /
-    /// [`abi::Flash::Never`] are the rule's own opinion and win over that
-    /// classification: `Always` flashes even an owner-self-only effect the
-    /// player should notice; `Never` keeps the log entry but suppresses the
-    /// flash / pulse even for a cross-player one. Body code can still override
-    /// at runtime via `ctx::flash` / `ctx::no_flash` under the precedence
-    /// documented on [`abi::Flash`].
-    ///
-    /// ```ignore
-    /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", None, use_skill),                                    // Auto
-    ///     On::Action(Action::TurnEnd("", None, tick)).flash(Flash::Always), // Always (self-only)
-    /// ]);
-    /// ```
-    pub const fn flash(self, policy: crate::abi::Flash) -> Self {
-        match self {
-            On::PlayBody(mut e) => {
-                e.flash = policy;
-                On::PlayBody(e)
-            }
-            On::CounteractBody(mut e) => {
-                e.flash = policy;
-                On::CounteractBody(e)
-            }
-            On::Action(mut e) => {
-                e.flash = policy;
-                On::Action(e)
-            }
-            On::Filter(mut e) => {
-                e.flash = policy;
-                On::Filter(e)
-            }
-            On::SettleBody(mut e) => {
-                e.flash = policy;
-                On::SettleBody(e)
-            }
-            On::MortgageBody(mut e) => {
-                e.flash = policy;
-                On::MortgageBody(e)
-            }
-            On::RedeemBody(mut e) => {
-                e.flash = policy;
-                On::RedeemBody(e)
-            }
-            On::BuyBody(mut e) => {
-                e.flash = policy;
-                On::BuyBody(e)
-            }
-            On::BuildBody(mut e) => {
-                e.flash = policy;
-                On::BuildBody(e)
-            }
-            On::MessageBody(mut e) => {
-                e.flash = policy;
-                On::MessageBody(e)
-            }
-        }
+    on_entry_field! {
+        /// Override this entry's **flash policy**. Attaches to the entry, so it
+        /// rides along when entries are reordered -- no index to drift.
+        ///
+        /// [`abi::Flash::Auto`] (the default) lets the host classify by scope
+        /// (owner-self-only ⇒ no flash). [`abi::Flash::Always`] /
+        /// [`abi::Flash::Never`] are the rule's own opinion and win over that
+        /// classification: `Always` flashes even an owner-self-only effect the
+        /// player should notice; `Never` keeps the log entry but suppresses the
+        /// flash / pulse even for a cross-player one. Body code can still override
+        /// at runtime via `ctx::flash` / `ctx::no_flash` under the precedence
+        /// documented on [`abi::Flash`].
+        ///
+        /// ```ignore
+        /// pub const T: CardDef = CardDef::new("skill:…", &[
+        ///     On::Play("", None, use_skill),                                    // Auto
+        ///     On::Action(Action::TurnEnd("", None, tick)).flash(Flash::Always), // Always (self-only)
+        /// ]);
+        /// ```
+        flash, flash, crate::abi::Flash,
+        /// This entry's flash policy (see [`Self::flash`]); [`abi::Flash::Auto`] =
+        /// host classifies by scope.
+        flash_of
+    }
+
+    on_entry_field! {
+        /// Set this entry's 「效果适用」 **header presentation**. Attaches to the
+        /// entry, so it rides along when entries are reordered -- no index to
+        /// drift. [`abi::Presentation::Visible`] (the default) announces
+        /// normally; [`abi::Presentation::Silent`] posts no header at all;
+        /// [`abi::Presentation::QuietWhenEmpty`] retracts the header when the
+        /// body produced nothing visible. [`Self::silent`] /
+        /// [`Self::quiet_when_empty`] are the named spellings of the latter two.
+        /// Mutually exclusive in effect -- last call wins.
+        header, header, crate::abi::Presentation,
+        /// This entry's 「效果适用」 header presentation (see [`Self::header`]);
+        /// [`abi::Presentation::Visible`] announces normally.
+        header_of
     }
 
     /// Mark this entry **silent** (bookkeeping): it runs its body but posts
@@ -1393,48 +1326,7 @@ impl On {
     /// ]);
     /// ```
     pub const fn silent(self) -> Self {
-        match self {
-            On::PlayBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::PlayBody(e)
-            }
-            On::CounteractBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::CounteractBody(e)
-            }
-            On::Action(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::Action(e)
-            }
-            On::Filter(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::Filter(e)
-            }
-            On::SettleBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::SettleBody(e)
-            }
-            On::MortgageBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::MortgageBody(e)
-            }
-            On::RedeemBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::RedeemBody(e)
-            }
-            On::BuyBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::BuyBody(e)
-            }
-            On::BuildBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::BuildBody(e)
-            }
-            On::MessageBody(mut e) => {
-                e.header = crate::abi::Presentation::Silent;
-                On::MessageBody(e)
-            }
-        }
+        self.header(crate::abi::Presentation::Silent)
     }
 
     /// Mark this entry **quiet when empty**: it runs normally but its
@@ -1451,206 +1343,40 @@ impl On {
     /// On::Action(Action::PaySplitChooseBefore("", None, None, pay)).quiet_when_empty(),
     /// ```
     pub const fn quiet_when_empty(self) -> Self {
-        match self {
-            On::PlayBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::PlayBody(e)
-            }
-            On::CounteractBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::CounteractBody(e)
-            }
-            On::Action(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::Action(e)
-            }
-            On::Filter(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::Filter(e)
-            }
-            On::SettleBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::SettleBody(e)
-            }
-            On::MortgageBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::MortgageBody(e)
-            }
-            On::RedeemBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::RedeemBody(e)
-            }
-            On::BuyBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::BuyBody(e)
-            }
-            On::BuildBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::BuildBody(e)
-            }
-            On::MessageBody(mut e) => {
-                e.header = crate::abi::Presentation::QuietWhenEmpty;
-                On::MessageBody(e)
-            }
-        }
+        self.header(crate::abi::Presentation::QuietWhenEmpty)
     }
 
-    /// Declare the deed-popup **tile text** this entry speaks for, as
-    /// `(slot, tile, key)` rows. Attaches to the entry, so it moves with it
-    /// when entries are reordered -- no index to drift. Replaces any earlier
-    /// `texts` call on this entry.
-    ///
-    /// Shape (see [`PlayEntry::texts`] and docs/TILES.md 「Tile text」):
-    /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
-    /// - `tile`: `""` = the instance's own tile; a board tile *name* for a
-    ///   tile-bound text on a tile-less instance.
-    /// - `key`: `deed.note.*`; `""` suppresses the slot.
-    ///
-    /// A **slice**, not a fluent additive `.text(slot, tile, key)`: `const fn`
-    /// cannot grow a `&'static` slice, and slice-valued fields are already
-    /// the house style on entries ([`CounteractEntry::links`],
-    /// [`MessageEntry::names`]). Declaration order of the rows is preserved
-    /// on the wire (the view's text precedence uses it).
-    ///
-    /// ```ignore
-    /// use card_sdk::abi::text_slot;
-    /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
-    ///     On::Settle("", None, settle)
-    ///         .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
-    ///     On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
-    ///         .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
-    /// ]);
-    /// ```
-    pub const fn texts(
-        self,
-        rows: &'static [(&'static str, &'static str, &'static str)],
-    ) -> Self {
-        match self {
-            On::PlayBody(mut e) => {
-                e.texts = rows;
-                On::PlayBody(e)
-            }
-            On::CounteractBody(mut e) => {
-                e.texts = rows;
-                On::CounteractBody(e)
-            }
-            On::Action(mut e) => {
-                e.texts = rows;
-                On::Action(e)
-            }
-            On::Filter(mut e) => {
-                e.texts = rows;
-                On::Filter(e)
-            }
-            On::SettleBody(mut e) => {
-                e.texts = rows;
-                On::SettleBody(e)
-            }
-            On::MortgageBody(mut e) => {
-                e.texts = rows;
-                On::MortgageBody(e)
-            }
-            On::RedeemBody(mut e) => {
-                e.texts = rows;
-                On::RedeemBody(e)
-            }
-            On::BuyBody(mut e) => {
-                e.texts = rows;
-                On::BuyBody(e)
-            }
-            On::BuildBody(mut e) => {
-                e.texts = rows;
-                On::BuildBody(e)
-            }
-            On::MessageBody(mut e) => {
-                e.texts = rows;
-                On::MessageBody(e)
-            }
-        }
-    }
-
-    /// This entry's 「效果适用」 display text (see [`Self::label`]); `""` = none.
-    pub const fn label_of(&self) -> &'static str {
-        match self {
-            On::PlayBody(e) => e.label,
-            On::CounteractBody(e) => e.label,
-            On::Action(e) => e.label,
-            On::Filter(e) => e.label,
-            On::SettleBody(e) => e.label,
-            On::MortgageBody(e) => e.label,
-            On::RedeemBody(e) => e.label,
-            On::BuyBody(e) => e.label,
-            On::BuildBody(e) => e.label,
-            On::MessageBody(e) => e.label,
-        }
-    }
-
-    /// This entry's flash policy (see [`Self::flash`]); [`abi::Flash::Auto`] =
-    /// host classifies by scope.
-    pub const fn flash_of(&self) -> crate::abi::Flash {
-        match self {
-            On::PlayBody(e) => e.flash,
-            On::CounteractBody(e) => e.flash,
-            On::Action(e) => e.flash,
-            On::Filter(e) => e.flash,
-            On::SettleBody(e) => e.flash,
-            On::MortgageBody(e) => e.flash,
-            On::RedeemBody(e) => e.flash,
-            On::BuyBody(e) => e.flash,
-            On::BuildBody(e) => e.flash,
-            On::MessageBody(e) => e.flash,
-        }
-    }
-
-    /// This entry's 「效果适用」 header presentation (see [`Self::header`]);
-    /// [`abi::Presentation::Visible`] announces normally.
-    pub const fn header_of(&self) -> crate::abi::Presentation {
-        match self {
-            On::PlayBody(e) => e.header,
-            On::CounteractBody(e) => e.header,
-            On::Action(e) => e.header,
-            On::Filter(e) => e.header,
-            On::SettleBody(e) => e.header,
-            On::MortgageBody(e) => e.header,
-            On::RedeemBody(e) => e.header,
-            On::BuyBody(e) => e.header,
-            On::BuildBody(e) => e.header,
-            On::MessageBody(e) => e.header,
-        }
-    }
-
-    /// This entry's tile-text rows (see [`Self::texts`]); empty = the entry
-    /// speaks for no deed-popup slot.
-    pub const fn texts_of(&self) -> &'static [(&'static str, &'static str, &'static str)] {
-        match self {
-            On::PlayBody(e) => e.texts,
-            On::CounteractBody(e) => e.texts,
-            On::Action(e) => e.texts,
-            On::Filter(e) => e.texts,
-            On::SettleBody(e) => e.texts,
-            On::MortgageBody(e) => e.texts,
-            On::RedeemBody(e) => e.texts,
-            On::BuyBody(e) => e.texts,
-            On::BuildBody(e) => e.texts,
-            On::MessageBody(e) => e.texts,
-        }
-    }
-
-    /// This entry's stable internal identifier (see [`Self::id`]); `""` = not
-    /// externally addressable. Never display text -- that is [`Self::label_of`].
-    pub const fn id_of(&self) -> &'static str {
-        match self {
-            On::PlayBody(e) => e.id,
-            On::CounteractBody(e) => e.id,
-            On::Action(e) => e.id,
-            On::Filter(e) => e.id,
-            On::SettleBody(e) => e.id,
-            On::MortgageBody(e) => e.id,
-            On::RedeemBody(e) => e.id,
-            On::BuyBody(e) => e.id,
-            On::BuildBody(e) => e.id,
-            On::MessageBody(e) => e.id,
-        }
+    on_entry_field! {
+        /// Declare the deed-popup **tile text** this entry speaks for, as
+        /// `(slot, tile, key)` rows. Attaches to the entry, so it moves with it
+        /// when entries are reordered -- no index to drift. Replaces any earlier
+        /// `texts` call on this entry.
+        ///
+        /// Shape (see [`PlayEntry::texts`] and docs/TILES.md 「Tile text」):
+        /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
+        /// - `tile`: `""` = the instance's own tile; a board tile *name* for a
+        ///   tile-bound text on a tile-less instance.
+        /// - `key`: `deed.note.*`; `""` suppresses the slot.
+        ///
+        /// A **slice**, not a fluent additive `.text(slot, tile, key)`: `const fn`
+        /// cannot grow a `&'static` slice, and slice-valued fields are already
+        /// the house style on entries ([`CounteractEntry::links`],
+        /// [`MessageEntry::names`]). Declaration order of the rows is preserved
+        /// on the wire (the view's text precedence uses it).
+        ///
+        /// ```ignore
+        /// use card_sdk::abi::text_slot;
+        /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
+        ///     On::Settle("", None, settle)
+        ///         .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+        ///     On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
+        ///         .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+        /// ]);
+        /// ```
+        texts, texts, &'static [(&'static str, &'static str, &'static str)],
+        /// This entry's tile-text rows (see [`Self::texts`]); empty = the entry
+        /// speaks for no deed-popup slot.
+        texts_of
     }
 
     /// Attach the 「…时」 clause the counteraction prompt shows (a locale key).
@@ -1756,23 +1482,6 @@ impl On {
             On::MessageBody(e) => e.guard.is_some(),
             On::Action(e) => e.guard.is_some(),
             On::Filter(e) => e.guard.is_some(),
-        }
-    }
-
-    /// The entry's condition source (`""` = none). Compiled by the host at
-    /// ruleset build (`docs/GUARDS.md` §4.3).
-    pub const fn condition(&self) -> &'static str {
-        match self {
-            On::PlayBody(e) => e.pre,
-            On::CounteractBody(e) => e.pre,
-            On::SettleBody(e) => e.pre,
-            On::MortgageBody(e) => e.pre,
-            On::RedeemBody(e) => e.pre,
-            On::BuyBody(e) => e.pre,
-            On::BuildBody(e) => e.pre,
-            On::MessageBody(e) => e.pre,
-            On::Action(e) => e.pre,
-            On::Filter(e) => e.pre,
         }
     }
 
