@@ -22,12 +22,12 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 ///
 /// Migrated to CEL: the former Rust residual guard (`trigger::card_is(ID) &&
 /// trigger::name() == card_sdk::abi::counter::CRYSTALS`) is folded into this
-/// pre as `card_is('…') && counter_is('crystals')`. `const_format` interpolates
-/// [`ID`] at compile time so the card id cannot drift from the constant.
-const CRYSTALS_CHANGED_PRE: &str = const_format::formatcp!(
-    "actor == owner && card.placed && card_is('{ID}') && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0",
-    ID = ID,
-);
+/// pre as `trigger_card == card.id && counter_is('crystals')`. The cond
+/// vocabulary has no `card_is` function; `trigger_card` / `card.id` are the
+/// same `id_of` hashes and this entry only runs as this card, so the
+/// comparison is the exact `trigger::card_is(ID)` spelling.
+const CRYSTALS_CHANGED_PRE: &str =
+    "actor == owner && card.placed && trigger_card == card.id && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0";
 
 pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",

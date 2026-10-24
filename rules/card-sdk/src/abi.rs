@@ -836,7 +836,7 @@ use std::borrow::Cow;
 ///      commit and the window opens after it) -- the mode is part of declaring
 ///      the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///      declaration. SAVE_VERSION / RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 99;
+pub const ABI_VERSION: i32 = 100;
 /// v99: **named-card pile movers collapse onto `Dest`**. `add_to_hand` /
 ///      `add_to_deck` / `add_to_deck_at` (`DeckPos`) die; the one
 ///      `add_to_dest(player_id, card, dest)` speaks the same wire `Dest`
@@ -847,6 +847,13 @@ pub const ABI_VERSION: i32 = 99;
 ///      is `take_card(..., CardPile::Hand)`. Hostcalls: `ruleset_add_to_dest`
 ///      replaces the three adds; `ruleset_take_card` is
 ///      `(player_id, ptr, len, src)`. SAVE_VERSION / RECORD_VERSION unchanged.
+/// v100: **mark refs**. `place_mark` returns the mark row's stable uid (a
+///      [`MarkRef`], packed as one `i32`; `-1` = none) instead of the row
+///      count, so a card can store the handle and retrieve the pick later.
+///      New `mark_tile` / `remove_mark` resolve and drop one row by that uid.
+///      `designate_tile` returns the same handle; new `undesignate` drops one
+///      designation row. Handles are monotonic and never recycled for the
+///      lifetime of a match.
 
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
@@ -1059,6 +1066,44 @@ pub mod mark {
     pub const DESIGNATE_KIND: &str = "mark:designate";
     /// Mark-filter sentinel: any owner / any src / any instance.
     pub const ANY: i32 = -2;
+}
+
+/// A durable reference to one tile-mark row (`TileMark::uid`). Packs to one
+/// `i32` for card state (`ctx::set_slot` / `ctx::state::set`), so a card can
+/// store the pick and retrieve it later. `MarkRef::NONE` = no mark.
+///
+/// Handles are unique for the lifetime of a match and are never recycled, so a
+/// stored ref either resolves to exactly the row it was issued for or reports
+/// dead (`tile()` = -1) once that row is gone. It never aliases onto a later
+/// mark.
+///
+/// Pure data only; the resolving verbs live in `ctx` (`mark_tile` /
+/// `mark_alive` / `remove_mark`), with the ergonomic `tile()` / `is_live()`
+/// shortcuts defined there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MarkRef(i32);
+
+impl MarkRef {
+    /// No mark / a dead handle.
+    pub const NONE: Self = Self(-1);
+
+    pub fn from_i32(v: i32) -> Self {
+        Self(v)
+    }
+
+    pub fn as_i32(self) -> i32 {
+        self.0
+    }
+
+    pub fn is_none(self) -> bool {
+        self.0 < 0
+    }
+}
+
+impl Default for MarkRef {
+    fn default() -> Self {
+        Self::NONE
+    }
 }
 
 /// A filter over tile marks (the generic tile-mark API). Empty `kind` /

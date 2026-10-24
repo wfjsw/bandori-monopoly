@@ -1139,6 +1139,12 @@ pub fn add_card_counter(player_id: i32, card: &str, name: &str, n: i32, max: i32
 /// [`abi::Stack::Merge`] (onto the first match) or [`abi::Stack::Fresh`] (a
 /// new row per call).
 ///
+/// Returns a durable [`crate::abi::MarkRef`] to the row that now holds the
+/// units: the new row's uid on `Fresh`, the merged row's uid on `Merge`, or
+/// [`crate::abi::MarkRef::NONE`] on failure. Store the ref in card state
+/// (`set_slot` / `state::set`) and retrieve it later via [`mark_tile`] /
+/// [`mark_alive`] / [`remove_mark`].
+///
 /// This is the one place-mark verb: 通用:该清CP了 asks `mark:cp` to bind CP
 /// units this way via `send`; a skill like 要乐奈 binds 抹茶芭菲 units here.
 #[cfg_attr(kani, inline(always))]
@@ -1151,11 +1157,11 @@ pub fn place_mark(
     count: i32,
     note: &Msg,
     stack: crate::abi::Stack,
-) -> i32 {
+) -> crate::abi::MarkRef {
     let (kp, kl) = s(kind);
     let (cp, cl) = s(category);
     let (np, nl) = mj(note);
-    unsafe {
+    crate::abi::MarkRef::from_i32(unsafe {
         sys::place_mark(
             tile,
             kp,
@@ -1169,7 +1175,7 @@ pub fn place_mark(
             np,
             nl,
         )
-    }
+    })
 }
 
 /// Place **one** paired mark spanning tiles `a` and `b` (the miracle-crystal
@@ -1251,6 +1257,26 @@ pub fn mark_partner(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
     unsafe { sys::mark_partner(tile, fp, fl) }
 }
 
+/// The marked tile of the row at `r`, or -1 when no such row (the handle is
+/// dead -- never recycled onto a later mark).
+#[cfg_attr(kani, inline(always))]
+pub fn mark_tile(r: crate::abi::MarkRef) -> i32 {
+    unsafe { sys::mark_tile(r.as_i32()) }
+}
+
+/// Is the row at `r` still on the board? No extra syscall -- this is just
+/// [`mark_tile`] `>= 0`.
+#[cfg_attr(kani, inline(always))]
+pub fn mark_alive(r: crate::abi::MarkRef) -> bool {
+    mark_tile(r) >= 0
+}
+
+/// Drop the exact mark row at `r`. Returns whether that row was present.
+#[cfg_attr(kani, inline(always))]
+pub fn remove_mark(r: crate::abi::MarkRef) -> bool {
+    unsafe { sys::remove_mark(r.as_i32()) != 0 }
+}
+
 /// Units of **this** instance's counter `kind` bound to `tile`.
 pub fn count_on_tile(kind: &str, tile: i32) -> i32 {
     count_marks(
@@ -1271,9 +1297,14 @@ pub fn count_on_tile(kind: &str, tile: i32) -> i32 {
 /// Record that **this** instance designates `tile` (「指定」 that tile / 地契 /
 /// 地块). `owner` is the designating seat (the label's colour in the view);
 /// `note` explains the pick. One row per call ([`abi::Stack::Fresh`]), so a
-/// card that designates several tiles stacks one label each. Returns the
-/// count on the new row (1, or 0 when `tile` is off-board).
-pub fn designate_tile(tile: i32, owner: i32, note: &Msg) -> i32 {
+/// card that designates several tiles stacks one label each.
+///
+/// Returns the [`crate::abi::MarkRef`] to that designation row. The mark is
+/// the displayed record; the stored ref is the retrievable handle -- keep it
+/// in card state (`set_slot` / `state::set`) and later resolve the pick
+/// (`MarkRef::tile`), check liveness (`MarkRef::is_live`), or drop it
+/// ([`undesignate`]).
+pub fn designate_tile(tile: i32, owner: i32, note: &Msg) -> crate::abi::MarkRef {
     place_mark(
         tile,
         crate::abi::mark::DESIGNATE_KIND,
@@ -1284,6 +1315,17 @@ pub fn designate_tile(tile: i32, owner: i32, note: &Msg) -> i32 {
         note,
         crate::abi::Stack::Fresh,
     )
+}
+
+/// Drop **this one** designation row (the designation ended early -- the card
+/// is still in play). Pass the [`crate::abi::MarkRef`] returned by
+/// [`designate_tile`]. Returns whether that row was present. When the instance
+/// itself leaves the field, `destroy_instance_units` already clears every
+/// designation; call this only for an early end of one pick. The batch /
+/// early-end-of-everything verb is [`undesignate_tile`].
+#[cfg_attr(kani, inline(always))]
+pub fn undesignate(r: crate::abi::MarkRef) -> bool {
+    remove_mark(r)
 }
 
 /// Drop **this** instance's designation mark(s) on `tile` (the designation
@@ -1326,6 +1368,19 @@ pub fn designates(tile: i32) -> bool {
 pub fn count_held(name: &str, player_id: i32) -> i32 {
     let (p, l) = s(name);
     unsafe { sys::count_held(p, l, player_id) }
+}
+
+impl crate::abi::MarkRef {
+    /// The marked tile, or -1 when the row is gone.
+    #[cfg_attr(kani, inline(always))]
+    pub fn tile(self) -> i32 {
+        mark_tile(self)
+    }
+    /// Is the row still on the board?
+    #[cfg_attr(kani, inline(always))]
+    pub fn is_live(self) -> bool {
+        mark_alive(self)
+    }
 }
 
 /// Bind `n` more units of this instance's counter `name` to `player_id`

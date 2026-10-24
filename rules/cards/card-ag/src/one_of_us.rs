@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{ActionKind, MarkRef};
 use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -146,9 +146,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "one_of_us_partner", partner + 1);
     // 规则书: 「指定双方各一块地契」 -- the pair of deeds is the lasting [指定]
     // while this card is in play: one designation mark per deed, owned by this
-    // field instance (dies with the card via `destroy_instance_units`). This
-    // replaces the old `one_of_us_mine` / `one_of_us_theirs` tile slots.
-    ctx::designate_tile(
+    // field instance (dies with the card via `destroy_instance_units`). The
+    // mark is the displayed record; the stored `MarkRef` is the retrievable
+    // handle (the old `one_of_us_mine` / `one_of_us_theirs` slots now hold
+    // refs to the marks, not bare tile ids).
+    let a_ref = ctx::designate_tile(
         a,
         player_id,
         &Msg::new(key!("one_of_us_note"))
@@ -156,7 +158,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .tile("a", a)
             .tile("b", b),
     );
-    ctx::designate_tile(
+    let b_ref = ctx::designate_tile(
         b,
         player_id,
         &Msg::new(key!("one_of_us_note"))
@@ -164,6 +166,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .tile("a", a)
             .tile("b", b),
     );
+    ctx::set_slot(player_id, "one_of_us_mine", a_ref.as_i32());
+    ctx::set_slot(player_id, "one_of_us_theirs", b_ref.as_i32());
     // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金
     // 直接增加，不受其他任何效果影响）」 -- the split is `measure_rent` +
     // `share_at_resolved` below: the settle completes at the original owner
@@ -274,11 +278,16 @@ fn before_out(owner: i32) -> card_sdk::Asked {
     if ctx::player_out(survivor) && survivor != out {
         return Ok(());
     }
-    // The pair's designated deeds -- this instance's [指定] marks (one per
-    // deed). Same iteration the old `one_of_us_mine` / `one_of_us_theirs` slots
-    // did; the marks stay as the record of 「两张被指定地契」 (the pair is done
-    // once `one_of_us_partner` is cleared below, so nothing re-reads them).
-    for t in ctx::designated_tiles() {
+    // The pair's designated deeds -- the `MarkRef`s stored at play time (the
+    // mark is the displayed record of 「两张被指定地契」; the stored ref is the
+    // handle). A dead ref is skipped; the pair is done once `one_of_us_partner`
+    // is cleared below, so nothing re-reads them after that.
+    for key in ["one_of_us_mine", "one_of_us_theirs"] {
+        let r = MarkRef::from_i32(ctx::slot(owner, key));
+        if !r.is_live() {
+            continue;
+        }
+        let t = r.tile();
         // C# `owners[num2] == player_id` -> `owners[num2] = num`.
         if t >= 0 && ctx::tile_owner(t) == out {
             ctx::set_owner(t, survivor);

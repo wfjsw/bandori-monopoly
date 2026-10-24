@@ -795,8 +795,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::bump_mark_f => 0,
         Op::remove_marks_f => 0,
         // `mark_partner` is BLOCKED-HOST (no partner field on the kani world
-        // `Mark`) -- same stub shape as `mark_src_at`.
-        Op::mark_src_at | Op::mark_instance_at | Op::mark_partner => -1,
+        // `Mark`) -- same stub shape as `mark_src_at`. `mark_tile` / `remove_mark`
+        // are likewise stubbed (no uid on the kani world `Mark`).
+        Op::mark_src_at | Op::mark_instance_at | Op::mark_partner | Op::mark_tile => -1,
+        Op::remove_mark => 0,
 
         // ---- status ----
         Op::gain_marker => arm_gain_marker(a),
@@ -2268,28 +2270,28 @@ pub fn arm_place_card_on(a: Args) -> i64 {
 }
 
 pub fn arm_place_mark(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    {
-        // ABI is filter-based; record a mark on tile a0.
-        world::with_world_mut(|w| {
-            let i = w.marks_n as usize;
-            if i < world::MAX_MARKS {
-                w.marks[i] = world::Mark {
-                    tile: a0,
-                    key: NameId::INVALID,
-                    src_card: u16::MAX,
-                    instance: 0,
-                    n: 1,
-                };
-                w.marks_n += 1;
-            }
-            w.push(Effect::PlaceMark {
+    let [a0, ..] = a;
+    // ABI is filter-based; record a mark on tile a0.
+    world::with_world_mut(|w| {
+        let i = w.marks_n as usize;
+        if i < world::MAX_MARKS {
+            w.marks[i] = world::Mark {
                 tile: a0,
                 key: NameId::INVALID,
-            });
+                src_card: u16::MAX,
+                instance: 0,
+                n: 1,
+            };
+            w.marks_n += 1;
+        }
+        w.push(Effect::PlaceMark {
+            tile: a0,
+            key: NameId::INVALID,
         });
-        0
-    }
+        // Return a plausible never-zero mark uid (the real allocator is
+        // monotonic from 1; the kani world has no uid field).
+        (w.marks_n.max(1)) as i64
+    })
 }
 
 pub fn arm_placed_cards(a: Args) -> i64 {

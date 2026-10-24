@@ -366,6 +366,9 @@ pub enum Op {
     // v99: live ceiling on a held-token row (`Counter.max`), `max < 0` leaves
     // the stored one alone. Fire's 「上限M」 reads back through this.
     tok_max = 338,
+    // v100: mark refs -- resolve / drop one row by its stable uid.
+    mark_tile = 339,
+    remove_mark = 340,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

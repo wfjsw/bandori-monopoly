@@ -647,6 +647,10 @@ pub trait HostOps {
     fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
     /// `ruleset_mark_partner`
     fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
+    /// `ruleset_mark_tile` -- the marked tile of the row at `uid`, or -1.
+    fn op_mark_tile(&mut self, uid: i32) -> Result<i64, HostErr>;
+    /// `ruleset_remove_mark` -- drop the exact row at `uid`; 1 = removed.
+    fn op_remove_mark(&mut self, uid: i32) -> Result<i64, HostErr>;
     /// `ruleset_counter_self`
     fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr>;
     /// `ruleset_add_counter_self`
@@ -1769,6 +1773,12 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::mark_partner(self, tile, fp, fl)? as i64)
+    }
+    fn op_mark_tile(&mut self, uid: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::mark_tile(self, uid)? as i64)
+    }
+    fn op_remove_mark(&mut self, uid: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::remove_mark(self, uid)? as i64)
     }
     fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::counter_self(self, np, nl)? as i64)
@@ -4688,6 +4698,20 @@ pub unsafe extern "C-unwind" fn ruleset_mark_instance_at(tile: i32, fp: i32, fl:
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_mark_partner(tile: i32, fp: i32, fl: i32) -> i32 {
     with_host(|h| match h.op_mark_partner(tile, fp, fl) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_mark_tile(uid: i32) -> i32 {
+    with_host(|h| match h.op_mark_tile(uid) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_remove_mark(uid: i32) -> i32 {
+    with_host(|h| match h.op_remove_mark(uid) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

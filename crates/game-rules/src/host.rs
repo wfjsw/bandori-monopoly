@@ -3545,6 +3545,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::mark_partner(&mut c, tile, fp, fl).map_err(HostErr::into_err)
         },
     )?;
+    l.func_wrap(m, "mark_tile", |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+        hostfns::mark_tile(&mut c, uid).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "remove_mark",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::remove_mark(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "counter_self",
@@ -5741,7 +5751,7 @@ impl CardWorld for NullWorld {
         _: crate::Msg,
         _: bool,
     ) -> i32 {
-        0
+        -1
     }
     fn count_marks(&self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
         0

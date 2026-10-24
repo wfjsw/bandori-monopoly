@@ -1327,7 +1327,8 @@ impl CardWorld for Run {
     /// Marker ownership (user ruling 2026-10-07): the rule that creates a
     /// mark owns it -- `skill:要乐奈` owns every 抹茶芭菲 copy, on any tile
     /// or player counter. `instance` is stamped as the current uid and `src`
-    /// (provenance, -1 → current uid).
+    /// (provenance, -1 → current uid). Returns the mark row's uid (the new
+    /// row's, or the merged row's), or `-1` when `count <= 0`.
     fn place_mark(
         &mut self,
         tile: i32,
@@ -1478,6 +1479,24 @@ impl CardWorld for Run {
     }
     fn mark_partner(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         self.world.mark_partner(tile, filter)
+    }
+    fn mark_tile_by_uid(&self, uid: i32) -> i32 {
+        self.world.mark_tile_by_uid(uid)
+    }
+    fn remove_mark_by_uid(&mut self, uid: i32) -> bool {
+        let tile = self.world.mark_tile_by_uid(uid);
+        let got = self.world.remove_mark_by_uid(uid);
+        if got {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.mark_remove")
+                    .tile("tile", tile)
+                    .msg("kind", Msg::new("log.mark.generic"))
+                    .i("n", 1),
+            );
+        }
+        got
     }
     /// Units of the running instance's counter `name` held by `player_id`.
     fn count_held(&self, name: &str, player_id: i32) -> i32 {

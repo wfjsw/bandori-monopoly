@@ -470,6 +470,14 @@ pub fn mark_partner(tile: i32, fp: i32, fl: i32) -> i32 {
     kani_host::call_i32(Op::mark_partner, [tile, fp, fl, 0, 0, 0])
 }
 
+pub fn mark_tile(uid: i32) -> i32 {
+    kani_host::call_i32(Op::mark_tile, [uid, 0, 0, 0, 0, 0])
+}
+
+pub fn remove_mark(uid: i32) -> i32 {
+    kani_host::call_i32(Op::remove_mark, [uid, 0, 0, 0, 0, 0])
+}
+
 pub fn count_held(np: i32, nl: i32, player_id: i32) -> i32 {
     kani_host::call_i32(Op::count_held, [np, nl, player_id, 0, 0, 0])
 }
