@@ -4,7 +4,7 @@
 //! `docs/rulebook/cards.json` keys `通用:*`. Never derived from engine behaviour.
 //!
 //! Effect-log notes (host model limits, not book re-reads):
-//! * `Op::add_to_deck` / `Op::to_discard` mutate piles but push **no** `Effect`
+//! * `Op::add_to_dest` / `Op::to_discard` mutate piles but push **no** `Effect`
 //!   (there is no `AddToDeck` / `ToDiscard` variant). Those halves are checked
 //!   on post-state (pile membership / counts).
 //! * `Op::set_dest` writes `World::dest` only (no `Effect`). The dest is part
@@ -65,7 +65,7 @@ pub fn recruit_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 pub const DEST_BANISHED: i32 = 3;
 
 /// Exactly one logged effect: the +2000 gain.
-/// (add_to_deck / set_dest are unlogged in the host model; see module docs.)
+/// (add_to_dest / set_dest are unlogged in the host model; see module docs.)
 pub fn great_01_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == 2000)

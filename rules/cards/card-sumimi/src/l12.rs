@@ -74,12 +74,12 @@ fn l12(player_id: i32) -> card_sdk::Asked {
     let id = pool[i].clone();
     // C# `hidden.discard.Remove(text)`, else `hidden.draw.Remove(text)` +
     // `H.Shuffle(hidden.draw)`. `take_card` pulls one copy out of the pile
-    // without moving it; `add_to_hand` then files it. (The reshuffle of the
+    // without moving it; `add_to_dest` then files it. (The reshuffle of the
     // remaining draw pile is cosmetic and not expressible here.)
-    if !ctx::take_card(player_id, CardPile::Discard, &id) {
-        ctx::take_card(player_id, CardPile::Deck, &id);
+    if !ctx::take_card(player_id, &id, CardPile::Discard) {
+        ctx::take_card(player_id, &id, CardPile::Deck);
     }
-    ctx::add_to_hand(player_id, &id);
+    ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
     ctx::log(
         player_id,
         &Msg::new(key!("l12_taken"))

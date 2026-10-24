@@ -34,8 +34,8 @@ const ID: &str = "AG:朝同一片天空迈进";
 fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.
     let mut returned = 0;
-    while ctx::take_from_hand(player_id, ID) {
-        ctx::add_to_deck(player_id, ID, true);
+    while ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
+        ctx::add_to_dest(player_id, ID, ctx::Dest::DeckRandom);
         returned += 1;
     }
     if returned > 0 {
@@ -52,7 +52,7 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `trigger_card == card.id` owns "this card was drawn".
     // C# `Drawn` pulls the card out of hand first (`hand.Remove(Id)`).
-    if !ctx::take_from_hand(player_id, ID) {
+    if !ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
         return Ok(());
     }
     let n = ctx::hand_size(player_id);

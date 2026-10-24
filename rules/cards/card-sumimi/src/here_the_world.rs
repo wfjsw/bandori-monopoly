@@ -142,7 +142,7 @@ fn drew(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     // C# `H._hidden[Player].hand.Remove(id)` -- hold it face-down (out of hand).
-    if !ctx::take_from_hand(player_id, &id) {
+    if !ctx::take_card(player_id, &id, ctx::CardPile::Hand) {
         return Ok(());
     }
     store_held(player_id, &id);
@@ -168,7 +168,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     let user = ctx::slot(player_id, SLOT_USER) - 1;
     if let Some(id) = load_held(player_id) {
         // C# `H.AddToHand(Seat, held)`.
-        ctx::add_to_hand(player_id, &id);
+        ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
     }
     clear_held(player_id);
     ctx::log(

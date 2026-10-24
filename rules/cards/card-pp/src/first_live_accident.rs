@@ -46,7 +46,7 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     // the band's real spelling (`skill_blocked` builds `skillBlock:<band>`).
     ctx::set_tok(player_id, "skillBlock:Pastel✽Palettes", 1);
     // 规则书[手]: 「并将1张“重叠的声音”加入抽卡区并洗切」
-    ctx::add_to_deck(player_id, "PP:[衍生]重叠的声音", true);
+    ctx::add_to_dest(player_id, "PP:[衍生]重叠的声音", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("first_live_added"))

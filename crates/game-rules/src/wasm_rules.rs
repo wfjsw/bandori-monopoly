@@ -611,7 +611,7 @@ impl Run {
         if dest == DEST_GRAVEYARD {
             self.to_discard(who, &card);
         } else if dest == 1 {
-            self.add_to_hand(who, &card);
+            self.add_to_dest(who, &card, dest);
         }
         // Banished (「banish」) is just "gone" -- it left above and goes nowhere.
         Some(left)
@@ -957,21 +957,48 @@ impl CardWorld for Run {
         }
         got
     }
-    fn add_to_hand(&mut self, player_id: i32, card: &str) {
-        self.world.add_to_hand(player_id, card);
-        // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
-        // *is* the draw: the after points (`drawn` / `drew`) run for it
-        // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
-        // bounce, a tutor) is not a draw and must not raise them.
-        if self.trigger.kind == TriggerKind::DrewBefore {
-            self.draw_log.push((player_id, card.to_string()));
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
+        match dest {
+            0 => self.to_discard(player_id, card),
+            1 => {
+                self.world.add_to_hand(player_id, card);
+                // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
+                // *is* the draw: the after points (`drawn` / `drew`) run for it
+                // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
+                // bounce, a tutor) is not a draw and must not raise them.
+                if self.trigger.kind == TriggerKind::DrewBefore {
+                    self.draw_log.push((player_id, card.to_string()));
+                }
+            }
+            // Deck fates: 4 = top = draw.push (the end of the vec is the top),
+            // 5 = bottom = Insert(0), 6 = shuffle in.
+            4 | 5 | 6 => {
+                let idx = player_id.max(0) as usize;
+                if self.world.hidden.get(idx).is_none() {
+                    return;
+                }
+                match dest {
+                    5 => self.world.hidden[idx].draw.insert(0, card.to_string()),
+                    6 => {
+                        self.world.hidden[idx].draw.push(card.to_string());
+                        let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
+                        self.world.rng.shuffle(&mut draw);
+                        self.world.hidden[idx].draw = draw;
+                    }
+                    _ => self.world.hidden[idx].draw.push(card.to_string()),
+                }
+            }
+            // Field / Banished are not piles: `place_card` / "gone" is the
+            // right verb. The hostcall layer traps; this is the non-trapping
+            // trait edge.
+            _ => {}
         }
     }
-    fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
+    fn take_card(&mut self, player_id: i32, card: &str, src: CardPile) -> bool {
         let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
             return false;
         };
-        let list = match pile {
+        let list = match src {
             CardPile::Hand => &mut h.hand,
             CardPile::Discard => &mut h.discard,
             CardPile::Deck => &mut h.draw,
@@ -980,7 +1007,7 @@ impl CardWorld for Run {
         match list.iter().position(|c| c == card) {
             Some(k) => {
                 list.remove(k);
-                if pile == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
+                if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
                 {
                     self.reshuffle_log.push(player_id);
                 }
@@ -999,27 +1026,6 @@ impl CardWorld for Run {
             // The end of the vec is the top of the pile; list top first.
             CardPile::Deck => h.draw.iter().rev().cloned().collect(),
             CardPile::Field => self.world.placed_cards(player_id),
-        }
-    }
-    fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool) {
-        self.world.add_to_deck(player_id, card, shuffle);
-    }
-    fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32) {
-        // `pos`: top = draw.Add (the end of the vec is the top),
-        // bottom = Insert(0), anything else = add + shuffle.
-        let idx = player_id.max(0) as usize;
-        if self.world.hidden.get(idx).is_none() {
-            return;
-        }
-        match pos {
-            1 => self.world.hidden[idx].draw.insert(0, card.to_string()),
-            2 => {
-                self.world.hidden[idx].draw.push(card.to_string());
-                let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
-                self.world.rng.shuffle(&mut draw);
-                self.world.hidden[idx].draw = draw;
-            }
-            _ => self.world.hidden[idx].draw.push(card.to_string()),
         }
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {

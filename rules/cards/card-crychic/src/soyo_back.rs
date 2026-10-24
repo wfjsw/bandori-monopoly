@@ -67,7 +67,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
 /// 为你的一个格子付费加盖一间房屋，然后[移除]此卡」
 fn branch_discard(player_id: i32) -> card_sdk::Asked {
     // C# `hand.Remove(Id)` first so this card is not among the discarded.
-    if !ctx::take_from_hand(player_id, ID) {
+    if !ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
         return Ok(());
     }
     // 规则书（1）1: 「将你的所有手牌放入弃牌堆」 -- the hand is listable now
@@ -129,7 +129,7 @@ fn branch_keep(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）2: 「获得1000资金」
     ctx::gain(player_id, 1000, &Msg::new(key!("soyo_back_why")))?;
     // 规则书（1）2: 「并将此卡加入手牌」 -- the card is already in hand from the draw
-    // (C# leaves it there); `add_to_hand` is a no-op-looking second copy guard
+    // (C# leaves it there); `add_to_dest` is a no-op-looking second copy guard
     // and is skipped so the draw's copy is the one kept.
     Ok(())
 }

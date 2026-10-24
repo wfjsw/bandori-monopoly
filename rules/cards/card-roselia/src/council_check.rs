@@ -48,7 +48,7 @@ fn near(player_id: i32) -> Vec<i32> {
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击] (sheet 2026-10-06 新卡组卡 E3): 「向抽牌堆中加入一张“觉悟”」
     // (was 「压」) -- C# `H.AddToDeck(i, "R:[衍生] 觉悟")`.
-    ctx::add_to_deck(player_id, "R:[衍生] 觉悟", true);
+    ctx::add_to_dest(player_id, "R:[衍生] 觉悟", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("council_check_added"))

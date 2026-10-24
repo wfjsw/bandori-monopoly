@@ -64,9 +64,8 @@ pub enum Op {
     offer_buy = 48,
     offer_force_buy = 49,
     offer_build = 50,
-    add_to_hand = 51,
-    add_to_deck = 52,
-    add_to_deck_at = 53,
+    add_to_dest = 51,
+    // 52/53 freed (was add_to_deck / add_to_deck_at)
     take_card = 54,
     cards_in = 55,
     to_discard = 56,

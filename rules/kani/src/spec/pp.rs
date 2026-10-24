@@ -343,7 +343,7 @@ pub fn ranger_05_draw(count: i32) -> i32 {
 // 「[手]：将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。」
 // ===========================================================================
 
-/// Effects: PlaceCard(Field) + Draw(1). `add_to_deck` is silent in the
+/// Effects: PlaceCard(Field) + Draw(1). `add_to_dest` is silent in the
 /// effect log (host does not record it); post-state covers that half.
 /// SetState from the 持续 stacks stamp (`set_slot`) is bookkeeping, not a
 /// clause effect — ignored (class B: the exact-match originally rejected it).

@@ -138,12 +138,8 @@ pub trait HostOps {
     fn op_offer_force_buy(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_offer_build`
     fn op_offer_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_to_hand`
-    fn op_add_to_hand(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_to_deck`
-    fn op_add_to_deck(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_to_deck_at`
-    fn op_add_to_deck_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_add_to_dest`
+    fn op_add_to_dest(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_take_card`
     fn op_take_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_cards_in`
@@ -933,16 +929,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_offer_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::offer_build(self, a[0], a[1])? as i64)
     }
-    fn op_add_to_hand(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::add_to_hand(self, a[0], a[1], a[2])?;
-        Ok(0)
-    }
-    fn op_add_to_deck(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::add_to_deck(self, a[0], a[1], a[2], a[3])?;
-        Ok(0)
-    }
-    fn op_add_to_deck_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::add_to_deck_at(self, a[0], a[1], a[2], a[3])?;
+    fn op_add_to_dest(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::add_to_dest(self, a[0], a[1], a[2], a[3])?;
         Ok(0)
     }
     fn op_take_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -2433,52 +2421,27 @@ pub unsafe extern "C-unwind" fn ruleset_offer_build(player_id: i32, tile: i32) -
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_hand(player_id: i32, ptr: i32, len: i32) {
-    with_host(|h| match h.op_add_to_hand([player_id, ptr, len, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_add_to_dest(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    dest: i32,
+) {
+    with_host(|h| match h.op_add_to_dest([player_id, ptr, len, dest, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_deck(
-    player_id: i32,
-    ptr: i32,
-    len: i32,
-    shuffle: i32,
-) {
-    with_host(
-        |h| match h.op_add_to_deck([player_id, ptr, len, shuffle, 0, 0]) {
-            Ok(_) => {}
-            Err(e) => abort_host(e),
-        },
-    )
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_deck_at(
-    player_id: i32,
-    ptr: i32,
-    len: i32,
-    pos: i32,
-) {
-    with_host(
-        |h| match h.op_add_to_deck_at([player_id, ptr, len, pos, 0, 0]) {
-            Ok(_) => {}
-            Err(e) => abort_host(e),
-        },
-    )
-}
-
-#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_take_card(
     player_id: i32,
-    pile: i32,
     ptr: i32,
     len: i32,
+    src: i32,
 ) -> i32 {
     with_host(
-        |h| match h.op_take_card([player_id, pile, ptr, len, 0, 0]) {
+        |h| match h.op_take_card([player_id, ptr, len, src, 0, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },

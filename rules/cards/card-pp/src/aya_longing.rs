@@ -105,8 +105,8 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
         &refs,
     )?;
     let id = ids.swap_remove(pick.min(ids.len() - 1));
-    if ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
-        ctx::add_to_hand(player_id, &id);
+    if ctx::take_card(player_id, &id, ctx::CardPile::Discard) {
+        ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
         ctx::log(
             player_id,
             &Msg::new(key!("aya_longing_back"))

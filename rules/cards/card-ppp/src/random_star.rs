@@ -47,7 +47,7 @@ fn random_star(player_id: i32) -> card_sdk::Asked {
     ctx::sweep_to_deck(player_id);
     // 规则书（1）: 「然后将一张“拍卖撤下来了”放置在卡组底端」 -- C#
     // `H.AddToDeck(seat, "PPP:[衍生]拍卖撤下来了", "bottom")`.
-    ctx::add_to_deck_at(player_id, "PPP:[衍生]拍卖撤下来了", ctx::DeckPos::Bottom);
+    ctx::add_to_dest(player_id, "PPP:[衍生]拍卖撤下来了", ctx::Dest::DeckBottom);
     ctx::log(
         player_id,
         &Msg::new(key!("random_star_swept")).player_id("who", player_id),

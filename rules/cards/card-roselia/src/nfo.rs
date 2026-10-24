@@ -209,7 +209,7 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
     )?;
     let id = ok.swap_remove(pick.min(ok.len() - 1));
     // C# `h.discard.Remove(text)` -- the card leaves the discard before it resolves.
-    if !ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
+    if !ctx::take_card(player_id, &id, ctx::CardPile::Discard) {
         return Ok(());
     }
     ctx::log(
@@ -230,11 +230,8 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
 fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
     match dest {
         ctx::Dest::Graveyard => ctx::to_discard(player_id, id),
-        ctx::Dest::Hand => ctx::add_to_hand(player_id, id),
         ctx::Dest::Field | ctx::Dest::Banished => {}
-        ctx::Dest::DeckTop => ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Top),
-        ctx::Dest::DeckBottom => ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Bottom),
-        ctx::Dest::DeckRandom => ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Random),
+        _ => ctx::add_to_dest(player_id, id, dest),
     }
 }
 

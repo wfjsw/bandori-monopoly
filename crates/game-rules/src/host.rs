@@ -3729,30 +3729,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "add_to_hand",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-            hostfns::add_to_hand(&mut c, player_id, p, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "add_to_deck",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, shuffle: i32| -> Result<(), Error> {
-            hostfns::add_to_deck(&mut c, player_id, p, n, shuffle).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "add_to_deck_at",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, pos: i32| -> Result<(), Error> {
-            hostfns::add_to_deck_at(&mut c, player_id, p, n, pos).map_err(HostErr::into_err)
+        "add_to_dest",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, dest: i32| -> Result<(), Error> {
+            hostfns::add_to_dest(&mut c, player_id, p, n, dest).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "take_card",
-        |mut c: C<W>, player_id: i32, pile: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::take_card(&mut c, player_id, pile, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, src: i32| -> Result<i32, Error> {
+            hostfns::take_card(&mut c, player_id, p, n, src).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5272,15 +5258,13 @@ impl CardWorld for NullWorld {
     fn draw(&mut self, _: i32, _: i32) -> i32 {
         0
     }
-    fn add_to_hand(&mut self, _: i32, _: &str) {}
-    fn take_card(&mut self, _: i32, _: crate::CardPile, _: &str) -> bool {
+    fn add_to_dest(&mut self, _: i32, _: &str, _: i32) {}
+    fn take_card(&mut self, _: i32, _: &str, _: crate::CardPile) -> bool {
         false
     }
     fn cards_in(&self, _: i32, _: crate::CardPile) -> Vec<String> {
         Vec::new()
     }
-    fn add_to_deck(&mut self, _: i32, _: &str, _: bool) {}
-    fn add_to_deck_at(&mut self, _: i32, _: &str, _: i32) {}
     fn to_discard(&mut self, _: i32, _: &str) {}
     fn place_card(&mut self, _: i32, _: &str, _: crate::Msg) -> i32 {
         -1

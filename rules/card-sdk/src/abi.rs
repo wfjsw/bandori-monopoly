@@ -793,7 +793,17 @@ use std::borrow::Cow;
 ///      `PaySplitAdd` and `PaySplitMul` (规则书 支付阶段 3 「支付计算后」).
 ///      Source-only for the wire: `ManifestOn` is unchanged. SAVE_VERSION /
 ///      RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 96;
+/// v97: **named-card pile movers collapse onto `Dest`**. `add_to_hand` /
+///      `add_to_deck` / `add_to_deck_at` (`DeckPos`) die; the one
+///      `add_to_dest(player_id, card, dest)` speaks the same wire `Dest`
+///      codes as `send_to_dest` / `transfer_to_dest` (0 graveyard, 1 hand,
+///      4/5/6 deck top / bottom / shuffle -- default shuffle). `Field` /
+///      `Banished` are not piles and trap. `take_card`'s args reorder to
+///      card-before-zone `take_card(player_id, card, src)`; `take_from_hand`
+///      is `take_card(..., CardPile::Hand)`. Hostcalls: `ruleset_add_to_dest`
+///      replaces the three adds; `ruleset_take_card` is
+///      `(player_id, ptr, len, src)`. SAVE_VERSION / RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 97;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

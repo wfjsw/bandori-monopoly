@@ -108,8 +108,7 @@ crate::host_subset!(nfo_play_dispatch {
     ask | opt_str | opt_int | opt_tile | opt_price | opt_ai => arm_ask,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
-    add_to_hand => arm_add_to_hand,
-    add_to_deck | add_to_deck_at => arm_add_to_deck_at,
+    add_to_dest => arm_add_to_dest,
     add_held => arm_add_held,
 });
 
@@ -123,7 +122,7 @@ crate::host_subset!(nfo_at_end_dispatch {
 /// Isolation (no owned deed with a house cost) keeps the body at the insert;
 /// the post-return ops are listed so an isolation break is a spec failure.
 crate::host_subset!(council_dispatch {
-    add_to_deck | add_to_deck_at => arm_add_to_deck_at,
+    add_to_dest => arm_add_to_dest,
     log | effect => arm_log,
     set_self_prop => arm_set_self_prop,
     linger => arm_protocol_stub,
@@ -793,7 +792,7 @@ fn student_council_add_resolve_iff_at(user: i32) {
     );
     let _ = pre;
     let _ = post;
-    // No effect-log entry: `add_to_deck` is a silent pile write.
+    // No effect-log entry: `add_to_dest` is a silent pile write.
     let (logbuf, log_n) = log_slice();
     let _ = logbuf;
     crate::kassert!(

@@ -122,7 +122,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::send_to_dest(ctx::Dest::Banished);
     ctx::set_slot(player_id, SLOT_USER, -1);
     if user >= 0 && !ctx::player_out(user) {
-        ctx::add_to_hand(user, "PP:[衍生]魔法战队Pastel✽Ranger");
+        ctx::add_to_dest(user, "PP:[衍生]魔法战队Pastel✽Ranger", ctx::Dest::Hand);
         ctx::log(
             user,
             &Msg::new(key!("jennifer_ranger")).player_id("who", user),

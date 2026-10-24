@@ -1156,7 +1156,7 @@ pub fn student_council_add_resolve(step: &Step<'_>) -> Result<(), String> {
     if !played(step, COUNCIL) {
         return Ok(());
     }
-    // The play's zone write (`add_to_deck`) lands when the body commits. A
+    // The play's zone write (`add_to_dest`) lands when the body commits. A
     // follow-up prompt (the optional 「可支付…」 placement) pauses the body, so
     // the counteract step itself is still mid-effect -- same at-rest rule as
     // `g_counter_05` / the PP clauses. The test body checks the pile after
