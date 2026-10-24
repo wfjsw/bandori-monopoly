@@ -16,6 +16,13 @@ use crate::abi::{MoveKind, PromptKind, TriggerKind};
 use crate::msg::Msg;
 use crate::Prompt;
 
+/// Interned name ids returned by the identity-list seams ([`cards_in`],
+/// [`tok_names`], …). Re-exported here so a body that names the item type can
+/// say `use card_sdk::ctx::NameId` without reaching into `intern`.
+/// [`intern`] is re-exported alongside it for pushing literals into a
+/// `Vec<NameId>` (`out.push(intern("PP:…"))`).
+pub use crate::intern::{intern, NameId};
+
 pub mod sys;
 
 #[cfg(target_arch = "wasm32")]
@@ -770,18 +777,48 @@ pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
     unsafe { sys::take_card(player_id, p, l, src as i32) != 0 }
 }
 
+/// Decode a host name list (`postcard::to_allocvec(&Vec<String>)`) into
+/// interned [`NameId`]s.
+///
+/// **This is where the `String` clone dies.** The host still encodes
+/// `Vec<String>` (wire format unchanged — Batch 3 may re-encode as ids);
+/// the guest deserializes borrowed `&str` out of the scratch buffer and
+/// interns each one. Zero `String` construction. A name that fails to intern
+/// (table full / too long) becomes [`NameId::INVALID`] so the list length
+/// stays exact — bodies that read `.len()` must see the true count
+/// (`docs/rulebook/spec/kani/ras.md` `ranger_01_02_steps_by_count_iff`).
+fn decode_name_list(buf: &[u8]) -> Vec<NameId> {
+    let borrowed: Vec<&str> = postcard::from_bytes(buf).unwrap_or_default();
+    let mut out = Vec::with_capacity(borrowed.len());
+    for s in borrowed {
+        out.push(crate::intern::intern(s));
+    }
+    out
+}
+
+/// Decode a host `(uid, name)` list (`postcard::to_allocvec(&Vec<(i32, String)>)`).
+/// No `String` construction — see [`decode_name_list`].
+fn decode_uid_name_list(buf: &[u8]) -> Vec<(i32, NameId)> {
+    let borrowed: Vec<(i32, &str)> = postcard::from_bytes(buf).unwrap_or_default();
+    let mut out = Vec::with_capacity(borrowed.len());
+    for (uid, s) in borrowed {
+        out.push((uid, crate::intern::intern(s)));
+    }
+    out
+}
+
 /// Every card id in a player's `pile`, in pile order (the deck's top card
 /// first). Duplicates are listed once per copy.
 ///
-/// Under `cfg(kani)` the result is a `Vec<String>` of **exact** length `n`
+/// Under `cfg(kani)` the result is a `Vec<NameId>` of **exact** length `n`
 /// (the real pile count, `0..=MAX_CARDS`). Host `arm_cards_in` encodes
-/// `[n, id…]` and the first probe returns `1 + n`. Short static strings
-/// (`"c0"`..`"c3"`) — no `from_raw_parts`, no arena intern, no `postcard`.
-/// Bodies that read `hand.len()` / `placed_count` (riot redraw amount,
-/// ranger's 「数量」) therefore see the true count, not a padded 0|4 shape.
-/// A bounded `while` keeps the unwind at `MAX_CARDS`.
+/// `[n, id…]` and the first probe returns `1 + n`. Short static names
+/// (`"c0"`..`"c3"`, interned — no `String`, no `from_raw_parts`, no
+/// `postcard`). Bodies that read `hand.len()` / `placed_count` (riot redraw
+/// amount, ranger's 「数量」) therefore see the true count, not a padded 0|4
+/// shape. A bounded `while` keeps the unwind at `MAX_CARDS`.
 #[cfg(kani)]
-pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
+pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     // `need` is the encoded buffer size `1 + n`; `n = 0` is the empty pile.
     if need < 2 {
@@ -793,22 +830,22 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // Short static strings — `String::from` over a literal is a single
-    // small `alloc` + byte copy (no `from_raw_parts`, no `memchr`).
+    // Interned short static names. The literal FNV hashes constant-fold;
+    // no `String::from`, no `memcmp` on the proof path.
     const SLOTS: [&str; 4] = ["c0", "c1", "c2", "c3"];
     let n = (need - 1).min(8) as usize;
-    let mut out: Vec<String> = Vec::new();
+    let mut out: Vec<NameId> = Vec::new();
     let mut i = 0usize;
     while i < n {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
-        out.push(String::from(SLOTS[slot as usize]));
+        out.push(crate::intern::intern(SLOTS[slot as usize]));
         i += 1;
     }
     out
 }
 
 #[cfg(not(kani))]
-pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
+pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     if need <= 0 {
         return Vec::new();
@@ -819,14 +856,14 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    postcard::from_bytes(&buf).unwrap_or_default()
+    decode_name_list(&buf)
 }
 
 /// Distinct card ids in `pile`, first-seen order. A pile can hold several
 /// copies of one card; when the player is picking a *title*, list each id
 /// once (C# `Distinct()`).
-pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
-    let mut ids: Vec<String> = Vec::new();
+pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
+    let mut ids: Vec<NameId> = Vec::new();
     for c in cards_in(player_id, pile) {
         if !ids.contains(&c) {
             ids.push(c);
@@ -2244,8 +2281,8 @@ pub fn pick_take_from(
     title: &Msg,
     text: &Msg,
     empty: Option<&Msg>,
-    cards: &[String],
-) -> Result<Option<String>, Prompt> {
+    cards: &[NameId],
+) -> Result<Option<NameId>, Prompt> {
     if cards.is_empty() {
         if let Some(m) = empty {
             log(player_id, m);
@@ -2254,8 +2291,8 @@ pub fn pick_take_from(
     }
     let refs: Vec<&str> = cards.iter().map(|c| c.as_str()).collect();
     let pick = ask_card(player_id, title, text, &refs)?;
-    let id = cards[pick.min(cards.len() - 1)].clone();
-    Ok(take_card(player_id, &id, pile).then_some(id))
+    let id = cards[pick.min(cards.len() - 1)];
+    Ok(take_card(player_id, id.as_str(), pile).then_some(id))
 }
 
 /// [`pick_take_from`] over [`distinct_cards_in`]: the player picks one card
@@ -2266,7 +2303,7 @@ pub fn pick_from_pile(
     title: &Msg,
     text: &Msg,
     empty: Option<&Msg>,
-) -> Result<Option<String>, Prompt> {
+) -> Result<Option<NameId>, Prompt> {
     let ids = distinct_cards_in(player_id, pile);
     pick_take_from(player_id, pile, title, text, empty, &ids)
 }
@@ -2902,7 +2939,7 @@ pub mod trigger {
     /// The cards the trigger is about: the drawn cards on a `drew` trigger (in
     /// draw order), the skill id on a `skillUsed` trigger, the played card on
     /// `card` / `cardAfter` / `cardPlayed`. Empty otherwise.
-    pub fn cards() -> Vec<String> {
+    pub fn cards() -> Vec<NameId> {
         let need = unsafe { sys::trig_cards(0, 0) };
         if need <= 0 {
             return Vec::new();
@@ -2912,7 +2949,7 @@ pub mod trigger {
             return Vec::new();
         }
         let buf = out_read(p, need, scratch);
-        postcard::from_bytes(&buf).unwrap_or_default()
+        decode_name_list(&buf)
     }
 
     /// `t.Move.Remaining` -- steps the move has left to walk.
@@ -3160,7 +3197,7 @@ pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
 /// Names of the player's non-zero counters whose name starts with `prefix`.
 /// The listing half of the counter query; [`tok`] reads one by name.
 #[cfg_attr(kani, inline(always))]
-pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
+pub fn tok_names(player_id: i32, prefix: &str) -> Vec<NameId> {
     let (p, l) = s(prefix);
     let cap = 4096;
     let (bp, scratch) = out_buf(cap as usize);
@@ -3169,7 +3206,7 @@ pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(bp, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+    decode_name_list(&buf[..n as usize])
 }
 
 /// Ask the engine whether an abnormal effect of
@@ -3208,8 +3245,8 @@ pub fn do_move_roll(player_id: i32) -> i32 {
 /// Is this card in play at the player?
 /// Ids of the player's placed field cards, in placement order.
 #[cfg(kani)]
-pub fn placed_cards(player_id: i32) -> Vec<String> {
-    // Short static strings — no `postcard`, no `from_raw_parts`.
+pub fn placed_cards(player_id: i32) -> Vec<NameId> {
+    // Interned short static names — no `postcard`, no `from_raw_parts`.
     let cap = 16;
     let (p, scratch) = out_buf(cap as usize);
     let n = unsafe { sys::placed_cards(player_id, p, cap) };
@@ -3223,14 +3260,14 @@ pub fn placed_cards(player_id: i32) -> Vec<String> {
     let mut i = 0usize;
     while i < count {
         let slot = buf.get(1 + i).copied().unwrap_or(0) & 3;
-        out.push(String::from(SLOTS[slot as usize]));
+        out.push(crate::intern::intern(SLOTS[slot as usize]));
         i += 1;
     }
     out
 }
 
 #[cfg(not(kani))]
-pub fn placed_cards(player_id: i32) -> Vec<String> {
+pub fn placed_cards(player_id: i32) -> Vec<NameId> {
     let cap = 4096;
     let (p, scratch) = out_buf(cap as usize);
     let n = unsafe { sys::placed_cards(player_id, p, cap) };
@@ -3238,7 +3275,7 @@ pub fn placed_cards(player_id: i32) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+    decode_name_list(&buf[..n as usize])
 }
 
 /// 「加盖房屋时半价」 / 「本回合加盖房屋变为免费」 -- the build cost as a
@@ -3573,10 +3610,11 @@ pub fn set_self_immune(on: bool) -> bool {
 /// op would hit the first copy twice when one player holds two.
 ///
 /// Under `cfg(kani)` the host writes LE `i32` pairs `[uid, name_id]` (never
-/// postcard — the `Vec<(i32, String)>` deserializer is a BMC cliff). Names are
-/// rebuilt from the intern table without the UTF-8 validation loop.
+/// postcard — the `Vec<(i32, String)>` deserializer is a BMC cliff). The
+/// name is the interned [`NameId`] itself: no rebuild, no UTF-8 validation
+/// loop, no `String`.
 #[cfg(kani)]
-pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
+pub fn field_instances(player_id: i32) -> Vec<(i32, NameId)> {
     const MAX_F: usize = 8;
     let n = unsafe { sys::field_instances(player_id, 0, 0) };
     if n <= 0 || n > MAX_F as i32 {
@@ -3589,7 +3627,7 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
         return Vec::new();
     }
     let buf = out_read(p, need as i32, scratch);
-    let mut out: Vec<(i32, String)> = Vec::new();
+    let mut out: Vec<(i32, NameId)> = Vec::new();
     let mut i = 0usize;
     while i < n as usize {
         let base = i * 8;
@@ -3603,18 +3641,14 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
             buf.get(base + 4).copied().unwrap_or(0),
             buf.get(base + 5).copied().unwrap_or(0),
         ]);
-        // Interned names came from `&str`, so the bytes are UTF-8; skip the
-        // validation loop (TUNING: `resolve_str` is a kani cliff).
-        let bytes = crate::intern::resolve(crate::intern::NameId(nid));
-        let s = unsafe { String::from_utf8_unchecked(bytes.to_vec()) };
-        out.push((uid, s));
+        out.push((uid, NameId(nid)));
         i += 1;
     }
     out
 }
 
 #[cfg(not(kani))]
-pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
+pub fn field_instances(player_id: i32) -> Vec<(i32, NameId)> {
     let cap = 8192;
     let (p, scratch) = out_buf(cap as usize);
     let n = unsafe { sys::field_instances(player_id, p, cap) };
@@ -3622,7 +3656,7 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
         return Vec::new();
     }
     let buf = out_read(p, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+    decode_uid_name_list(&buf[..n as usize])
 }
 
 /// Take the instance at `uid` off the field; returns the owner it left.
@@ -3667,7 +3701,7 @@ pub fn set_immune_at(uid: i32, on: bool) -> bool {
 /// [`place_card`] instead of asking by name.
 ///
 /// Under `cfg(kani)` this walks the compact `[uid, name_id]` host encoding and
-/// compares intern ids — no `field_instances` `Vec<(i32, String)>`, no postcard.
+/// compares intern ids — no postcard `Vec<(i32, String)>` decode at all.
 #[cfg(kani)]
 pub fn find_card(player_id: i32, name: &str) -> Option<i32> {
     const MAX_F: usize = 8;

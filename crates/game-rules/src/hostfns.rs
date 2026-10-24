@@ -910,6 +910,10 @@ pub fn cards_in<C: HostCtx>(
     let pile = crate::CardPile::from_i32(pile)
         .ok_or_else(|| HostErr::trap(format!("bad card pile {pile}")))?;
     let list = c.st().wr().cards_in(player_id, pile);
+    // Wire format is `postcard::to_allocvec(&Vec<String>)` on purpose: the
+    // guest interns on decode (`ctx::decode_name_list`) so the `String` clone
+    // is already gone. Batch 3 may re-encode as raw `NameId`s and drop this
+    // host alloc too — keep the two sides in lockstep.
     let bytes =
         postcard::to_allocvec(&list).map_err(|e| HostErr::trap(format!("cards_in encode: {e}")))?;
     if bytes.len() as i32 <= cap {

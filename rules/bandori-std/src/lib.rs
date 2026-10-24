@@ -291,7 +291,12 @@ pub fn persona_skill(player_id: i32) -> Option<String> {
 }
 
 /// Band-skill attachments: `(uid, rule id, extra)` in placement order.
-pub fn group_skills(player_id: i32) -> Vec<(i32, String, i32)> {
+///
+/// The rule id is an interned [`NameId`] (identity, not display) — compare
+/// with a literal (`id == "skill:…"`) or pass `id.as_str()` to `invoke_skill`.
+/// Wire format is still `postcard::to_allocvec(&Vec<(i32, String, i32)>)`;
+/// the guest interns on decode (no `String` construction).
+pub fn group_skills(player_id: i32) -> Vec<(i32, card_sdk::ctx::NameId, i32)> {
     let cap = 8192;
     let (p, scratch) = raw::out_buf(cap as usize);
     let n = unsafe { raw::sys::group_skills(player_id, p, cap) };
@@ -299,7 +304,13 @@ pub fn group_skills(player_id: i32) -> Vec<(i32, String, i32)> {
         return Vec::new();
     }
     let buf = raw::out_read(p, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+    let borrowed: Vec<(i32, &str, i32)> =
+        postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
+    let mut out = Vec::with_capacity(borrowed.len());
+    for (uid, id, extra) in borrowed {
+        out.push((uid, card_sdk::intern::intern(id), extra));
+    }
+    out
 }
 
 /// Attach a band-skill instance to `player_id`. Returns the uid, or -1.
