@@ -992,6 +992,9 @@ impl RulesetBuilder {
         for c in &self.cards {
             let mut cm = KindMask::default();
             let mut hm = KindMask::default();
+            // ABI v98 entry ids: stable internal slugs, identity not display
+            // (docs/ACTIVATION.md §3). Unique per card.
+            let mut seen_ids = std::collections::BTreeSet::new();
             for (ei, o) in c.on.iter().enumerate() {
                 let ok = OnKind::from_i32(o.kind);
                 // ABI v73: kind/variant agreement -- a Filter may only list
@@ -1023,6 +1026,31 @@ impl RulesetBuilder {
                         "{} entry {ei}: On::Filter cannot declare -- use an On::Action pre-stage instead",
                         c.id,
                     )));
+                }
+                // ABI v98: an entry id is a stable internal slug, never display
+                // text (docs/ACTIVATION.md §3 "Identity is not display text").
+                // `entry::PRESS` is reserved for the press entry and cannot be
+                // declared; the rest must match `[A-Za-z0-9_][A-Za-z0-9_.:-]*`
+                // and be unique per card.
+                if let Some(id) = o.id.as_deref().filter(|s| !s.is_empty()) {
+                    if id == card_sdk::abi::entry::PRESS {
+                        return Err(RuleError::Load(format!(
+                            "{} entry {ei}: id {id:?} is reserved for the press entry (entry::PRESS)",
+                            c.id,
+                        )));
+                    }
+                    if !is_entry_slug(id) {
+                        return Err(RuleError::Load(format!(
+                            "{} entry {ei}: id {id:?} is not an ASCII slug ([A-Za-z0-9_][A-Za-z0-9_.:-]*) -- identity, not display text (use `label`)",
+                            c.id,
+                        )));
+                    }
+                    if !seen_ids.insert(String::from(id)) {
+                        return Err(RuleError::Load(format!(
+                            "{} entry {ei}: duplicate entry id {id:?}",
+                            c.id,
+                        )));
+                    }
                 }
                 for s in &o.triggers {
                     let tk = crate::TriggerKind::from_str(s);
@@ -2975,6 +3003,21 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
 /// wire form, the marker is this module's error. Nothing raises the marker *into*
 /// the guest any more for the imports a card reads as `Result` -- see the note on
 /// [`need_input`] for which ones still trap and why.
+/// Is `s` a well-formed entry id -- a stable internal **slug**, not display
+/// text (docs/ACTIVATION.md §3 "Identity is not display text")?
+/// `[A-Za-z0-9_][A-Za-z0-9_.:-]*`. Rulebook wording belongs in
+/// `ManifestOn::label` / a locale key; renumbering a clause must not silently
+/// break a query, and full-width vs half-width parens are different strings
+/// that look identical in a diff.
+fn is_entry_slug(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphanumeric() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':' | '-'))
+}
+
 fn fold_exit(v: i64) -> Result<i64, Error> {
     if v == abi::EXIT_NEED_INPUT as i64 {
         Err(need_input())
