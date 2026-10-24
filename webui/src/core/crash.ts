@@ -71,13 +71,18 @@ export function crashEnv(): Pick<CrashInfo, "time" | "url" | "ua"> {
  * that a page-fatal crash may still replace a recorded non-fatal one so a stray
  * rejection cannot bury the real failure. Later crashes never replace the first
  * among equals.
+ *
+ * Rank is checked **before** any message dedupe on purpose: a `rejection` that
+ * happens to share its message with a later render failure must never swallow
+ * that failure. Among equals the rank check alone collapses a burst, so the
+ * dedupe window is not consulted here at all -- callers that want to skip the
+ * work of a tight retry loop gate on [`isRepeatCrash`] themselves.
  */
 export function reportCrash(
   info: Omit<CrashInfo, "time" | "url" | "ua"> & Partial<Pick<CrashInfo, "time" | "url" | "ua">>,
 ): void {
+  if (current && rank(info.kind) <= rank(current.kind)) return;
   const full: CrashInfo = { ...crashEnv(), ...info };
-  if (isRepeatCrash(full.message, full.time)) return;
-  if (current && rank(full.kind) <= rank(current.kind)) return;
   current = full;
   for (const cb of listeners) cb(full);
 }

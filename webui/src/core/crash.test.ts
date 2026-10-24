@@ -47,6 +47,17 @@ test("a page-fatal crash may still replace a recorded non-fatal one", () => {
   assert.equal(getCrash()?.message, "render boom");
 });
 
+// The same bug can arrive twice: once out of a void promise and once out of the
+// render it poisoned. The second is the one the user needs to see, so the
+// message dedupe must never outrank a page-fatal crash.
+test("a rejection does not swallow a later render crash with the same message", () => {
+  clearCrash();
+  reportCrash(info("rejection", "Cannot read properties of undefined", { time: base.time }));
+  reportCrash(info("render", "Cannot read properties of undefined", { time: base.time + 10 }));
+  assert.equal(getCrash()?.kind, "render");
+  assert.equal(getCrash()?.message, "Cannot read properties of undefined");
+});
+
 test("subscribeCrash notifies the kept crash and unsubscribe works", () => {
   clearCrash();
   const seen: string[] = [];

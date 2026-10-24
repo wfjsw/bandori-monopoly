@@ -2,7 +2,7 @@
 
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { playSceneBgm, sfx, unlockAudio } from "../core/audio";
-import { reportCrash } from "../core/crash";
+import { isRepeatCrash, reportCrash } from "../core/crash";
 import { useLangVersion, useProfile } from "../core/hooks";
 import { preloadRoute, warmAllWhenIdle, within } from "../core/preload";
 import { useCrossfade } from "../hooks/scene";
@@ -56,18 +56,26 @@ document.addEventListener("click", (e) => {
 // these; here we only record the crash. A lone `"error"` / `"rejection"` does
 // not put the panel up (see CrashBoundary) -- the codebase fires and ignores
 // many promises on purpose, and a healthy board must stay up.
+//
+// `isRepeatCrash` gates the *report*, not the registry: a timer that rejects
+// every 50 ms would otherwise rebuild the env fields forever for a crash
+// `reportCrash` is already going to refuse.
 window.addEventListener("error", (e) => {
+  const message = e.message || String(e.error ?? "error");
+  if (isRepeatCrash(message)) return;
   reportCrash({
     kind: "error",
-    message: e.message || String(e.error ?? "error"),
+    message,
     stack: e.error instanceof Error ? e.error.stack : undefined,
   });
 });
 window.addEventListener("unhandledrejection", (e) => {
   const reason = e.reason;
+  const message = reason instanceof Error ? reason.message : String(reason);
+  if (isRepeatCrash(message)) return;
   reportCrash({
     kind: "rejection",
-    message: reason instanceof Error ? reason.message : String(reason),
+    message,
     stack: reason instanceof Error ? reason.stack : undefined,
   });
 });
