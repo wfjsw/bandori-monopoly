@@ -372,7 +372,7 @@ fn seeyou_declined_echo_keeps_card_in_hand() {
 // ============================================================ PP:不要背负期待
 
 /// 规则书: 「将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。」
-/// 「加入卡组」 shuffles the card in (`ctx::add_to_deck(..., shuffle: true)`), so
+/// 「加入卡组」 shuffles the card in (`ctx::add_to_dest(..., Dest::DeckRandom)`), so
 /// which of the two cards the 「抽1张牌」 takes is not specified. Assert what the
 /// text says: 共鸣 is in the deck (draw ∪ hand -- it may be the card drawn), and
 /// one card was drawn.

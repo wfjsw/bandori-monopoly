@@ -138,7 +138,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // The card was just drawn, so it is in hand (C# `hand.Remove(Id)`).
-    if !ctx::take_from_hand(player_id, ID) {
+    if !ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
         return Ok(());
     }
     ctx::log(

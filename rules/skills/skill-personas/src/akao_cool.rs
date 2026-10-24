@@ -8,7 +8,7 @@
 //! > （3）若自己场上背面朝上放置的卡为[反击]卡，可在符合条件时将其直接打出。
 //!
 //! 「背面朝上放置在自己场上」 is a face-down field card, which is what
-//! `card_face_down` reads and `set_dest(Dest::Field)` + `place_card` writes.
+//! `card_face_down` reads and `set_dest(ctx::Dest::Field)` + `place_card` writes.
 //! (2) and (3) are both keyed on that flag.
 //!
 //! (1) 「若选择抽卡」 is the CiRCLE reward being the card, which is the
@@ -48,7 +48,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     if !down.is_empty() {
         for (uid, c) in down {
             ctx::unplace_at(uid);
-            ctx::add_to_hand(player_id, &c);
+            ctx::add_to_dest(player_id, &c, ctx::Dest::Hand);
             ctx::log(
                 player_id,
                 &Msg::new(key!("akao_cool_taken")).card("card", &c),
@@ -76,10 +76,10 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     let Some(keep) = look.get(pick).cloned() else {
         return Ok(());
     };
-    if !ctx::take_card(player_id, CardPile::Deck, &keep) {
+    if !ctx::take_card(player_id, &keep, CardPile::Deck) {
         return Ok(());
     }
-    ctx::add_to_hand(player_id, &keep);
+    ctx::add_to_dest(player_id, &keep, ctx::Dest::Hand);
     // 「剩余的卡放入弃牌堆或花费500资金将其背面朝上放置在自己场上」
     for c in look.iter().filter(|c| **c != keep) {
         let paid = ctx::ask_yes(
@@ -99,7 +99,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
                 &Msg::new(key!("akao_cool_placed")).card("card", &c),
             );
         } else {
-            ctx::take_card(player_id, CardPile::Deck, c);
+            ctx::take_card(player_id, c, CardPile::Deck);
             ctx::to_discard(player_id, c);
         }
     }

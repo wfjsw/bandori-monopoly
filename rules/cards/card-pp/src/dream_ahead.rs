@@ -98,7 +98,7 @@ fn fans(player_id: i32) -> i32 {
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     // The hook fires on this card while it sits in a draw pile (once per
     // distinct id per player, up to 5 passes before the opening deal).
-    if !ctx::take_card(player_id, CardPile::Deck, "PP:梦在前方，结彩当下") {
+    if !ctx::take_card(player_id, "PP:梦在前方，结彩当下", CardPile::Deck) {
         return Ok(());
     }
     // 规则书[特]: 「将此卡放置在[使用者]的[场地]」

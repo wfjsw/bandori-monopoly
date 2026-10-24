@@ -95,14 +95,14 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
     let Some(keep) = look.get(pick).cloned() else {
         return Ok(());
     };
-    if ctx::take_card(player_id, CardPile::Deck, &keep) {
-        ctx::add_to_hand(player_id, &keep);
+    if ctx::take_card(player_id, &keep, CardPile::Deck) {
+        ctx::add_to_dest(player_id, &keep, ctx::Dest::Hand);
         trigger::set_cancelled();
     }
     // 「剩余观看的牌洗回卡组」
     for c in look.iter().filter(|c| **c != keep) {
-        ctx::take_card(player_id, CardPile::Deck, c);
-        ctx::add_to_deck(player_id, c, true);
+        ctx::take_card(player_id, c, CardPile::Deck);
+        ctx::add_to_dest(player_id, c, ctx::Dest::DeckRandom);
     }
     // The fan tail, identical to the other three.
     if ctx::in_group(player_id, "Pastel✽Palettes") {

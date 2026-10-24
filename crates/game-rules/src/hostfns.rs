@@ -861,47 +861,33 @@ pub fn offer_build<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i
     }
 }
 
-pub fn add_to_hand<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
-    let card = guest_str(c, p, n)?;
-    c.st_mut().w().add_to_hand(player_id, &card);
-    Ok(())
-}
-
-pub fn add_to_deck<C: HostCtx>(
+pub fn add_to_dest<C: HostCtx>(
     c: &mut C,
     player_id: i32,
     p: i32,
     n: i32,
-    shuffle: i32,
+    dest: i32,
 ) -> Result<(), HostErr> {
+    // Field / Banished are not piles; `place_card` / "gone" is the right verb.
+    if !matches!(dest, 0 | 1 | 4 | 5 | 6) {
+        return Err(HostErr::trap(format!("add_to_dest: dest {dest} is not a pile")));
+    }
     let card = guest_str(c, p, n)?;
-    c.st_mut().w().add_to_deck(player_id, &card, shuffle != 0);
-    Ok(())
-}
-
-pub fn add_to_deck_at<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    p: i32,
-    n: i32,
-    pos: i32,
-) -> Result<(), HostErr> {
-    let card = guest_str(c, p, n)?;
-    c.st_mut().w().add_to_deck_at(player_id, &card, pos);
+    c.st_mut().w().add_to_dest(player_id, &card, dest);
     Ok(())
 }
 
 pub fn take_card<C: HostCtx>(
     c: &mut C,
     player_id: i32,
-    pile: i32,
     p: i32,
     n: i32,
+    src: i32,
 ) -> Result<i32, HostErr> {
-    let pile = crate::CardPile::from_i32(pile)
-        .ok_or_else(|| HostErr::trap(format!("bad card pile {pile}")))?;
+    let src = crate::CardPile::from_i32(src)
+        .ok_or_else(|| HostErr::trap(format!("bad card pile {src}")))?;
     let id = guest_str(c, p, n)?;
-    Ok(c.st_mut().w().take_card(player_id, pile, &id) as i32)
+    Ok(c.st_mut().w().take_card(player_id, &id, src) as i32)
 }
 
 pub fn cards_in<C: HostCtx>(

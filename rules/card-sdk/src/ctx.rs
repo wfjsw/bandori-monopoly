@@ -743,51 +743,31 @@ pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
     Ok(())
 }
 
+/// Put one copy of `card` into `player_id`'s pile at `dest`.
+///
+/// The named-card counterpart of [`send_to_dest`] / [`transfer_to_dest`], which
+/// move the *running instance*. `Dest::Hand` is 「加入手牌」; `Dest::Graveyard` is
+/// 「放入弃卡区」 (prefer [`to_discard`] when you want the discarded hooks); the
+/// deck fates name the draw-pile insert position (`Dest::DeckTop` /
+/// `DeckBottom` / `DeckRandom` -- the default is **shuffle**).
+/// `Dest::Field` / `Dest::Banished` are not piles and trap.
+///
+/// Replaces `add_to_hand` / `add_to_deck` / `add_to_deck_at`.
 #[cfg_attr(kani, inline(always))]
-pub fn add_to_hand(player_id: i32, card: &str) {
+pub fn add_to_dest(player_id: i32, card: &str, dest: Dest) {
     let (p, l) = s(card);
-    unsafe { sys::add_to_hand(player_id, p, l) }
+    unsafe { sys::add_to_dest(player_id, p, l, dest as i32) }
 }
 
+/// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
+/// anywhere -- the caller decides where it goes next. Returns whether it was
+/// there. Card before zone, matching [`add_to_dest`].
+///
+/// Replaces `take_from_hand` (that was `src = CardPile::Hand`).
 #[cfg_attr(kani, inline(always))]
-pub fn add_to_deck(player_id: i32, card: &str, shuffle: bool) {
+pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
     let (p, l) = s(card);
-    unsafe { sys::add_to_deck(player_id, p, l, shuffle as i32) }
-}
-
-/// Where `add_to_deck_at` inserts into the draw pile. The default is
-/// [`DeckPos::Random`].
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum DeckPos {
-    /// `"top"` -- the next `draw` gets it.
-    Top = 0,
-    /// `"bottom"` -- the pile is emptied first.
-    Bottom = 1,
-    /// `"shuffle"` -- mixed into the pile.
-    Random = 2,
-}
-
-/// Put one specific card into the draw
-/// pile at a position. (`add_to_deck(player_id, card, shuffle)` is the older
-/// top/shuffle shape and remains.)
-#[cfg_attr(kani, inline(always))]
-pub fn add_to_deck_at(player_id: i32, card: &str, pos: DeckPos) {
-    let (p, l) = s(card);
-    unsafe { sys::add_to_deck_at(player_id, p, l, pos as i32) }
-}
-
-/// Take one copy of `card` out of `pile` *without* sending it anywhere -- the
-/// caller decides where it goes next. Returns whether it was there.
-#[cfg_attr(kani, inline(always))]
-pub fn take_card(player_id: i32, pile: CardPile, card: &str) -> bool {
-    let (p, l) = s(card);
-    unsafe { sys::take_card(player_id, pile as i32, p, l) != 0 }
-}
-
-/// [`take_card`] from the hand -- for moving a card straight to the field or
-/// the deck without discarding it.
-pub fn take_from_hand(player_id: i32, card: &str) -> bool {
-    take_card(player_id, CardPile::Hand, card)
+    unsafe { sys::take_card(player_id, p, l, src as i32) != 0 }
 }
 
 /// Every card id in a player's `pile`, in pile order (the deck's top card
@@ -1840,8 +1820,7 @@ pub fn turn_key() -> i32 {
 /// Planned: the draw-pile fates, one per insert position -- `DeckTop` = 4,
 /// `DeckBottom` = 5, `DeckRandom` = 6 (the default is **shuffle**, not top).
 /// When they land they need arms in `game-rules`'s `dest_from` and
-/// `game-core`'s play-from-hand dest handling. (`ctx::add_to_deck`'s `shuffle`
-/// flag already covers top vs random; bottom-insert is still missing there.)
+/// `game-core`'s play-from-hand dest handling.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Dest {
     /// The discard pile (弃卡区) -- the default.
@@ -2267,7 +2246,7 @@ pub fn pick_take_from(
     let refs: Vec<&str> = cards.iter().map(|c| c.as_str()).collect();
     let pick = ask_card(player_id, title, text, &refs)?;
     let id = cards[pick.min(cards.len() - 1)].clone();
-    Ok(take_card(player_id, pile, &id).then_some(id))
+    Ok(take_card(player_id, &id, pile).then_some(id))
 }
 
 /// [`pick_take_from`] over [`distinct_cards_in`]: the player picks one card

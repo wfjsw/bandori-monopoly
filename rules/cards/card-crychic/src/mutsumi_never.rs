@@ -113,7 +113,7 @@ fn branch_shuffle(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);
     // 规则书（3）: 「并向抽牌堆中加入一张“表演的本能”」 -- C#
     // `H.AddToDeck(i, "Mujica:（睦/mortis）表演的本能")`.
-    ctx::add_to_deck(player_id, "Mujica:（睦/mortis）表演的本能", true);
+    ctx::add_to_dest(player_id, "Mujica:（睦/mortis）表演的本能", ctx::Dest::DeckRandom);
     ctx::sweep_to_deck(player_id); // 规则书（3）: 「将手牌与弃牌堆全部放入抽牌堆并洗切」
     ctx::log(
         player_id,

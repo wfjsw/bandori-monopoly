@@ -71,7 +71,7 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 
 // [持续]（2）「[共鸣]交换[拥有者]的抽卡区和弃卡区」 -- a press. The resonance
 // cost is the same `try_resonance` every other [共鸣] card uses; the swap is an
-// exchange of the two piles through `add_to_deck` / `to_discard`.
+// exchange of the two piles through `add_to_dest` / `to_discard`.
 
 /// （2）「[共鸣]交换[拥有者]的抽卡区和弃卡区」.
 fn can_swap(player_id: i32) -> Option<Msg> {
@@ -91,7 +91,7 @@ fn swap(player_id: i32) -> card_sdk::Asked {
         ctx::to_discard(player_id, c);
     }
     for c in &disc {
-        ctx::add_to_deck(player_id, c, false);
+        ctx::add_to_dest(player_id, c, ctx::Dest::DeckTop);
     }
     ctx::log(player_id, &Msg::new(key!("infinite_possibility_swapped")));
     Ok(())

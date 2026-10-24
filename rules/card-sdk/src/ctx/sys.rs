@@ -321,24 +321,14 @@ mod abi {
         pub fn offer_build(player_id: i32, tile: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_hand"
+            link_name = "ruleset_add_to_dest"
         )]
-        pub fn add_to_hand(player_id: i32, ptr: i32, len: i32);
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_deck"
-        )]
-        pub fn add_to_deck(player_id: i32, ptr: i32, len: i32, shuffle: i32);
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_deck_at"
-        )]
-        pub fn add_to_deck_at(player_id: i32, ptr: i32, len: i32, pos: i32);
+        pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_take_card"
         )]
-        pub fn take_card(player_id: i32, pile: i32, ptr: i32, len: i32) -> i32;
+        pub fn take_card(player_id: i32, ptr: i32, len: i32, src: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_cards_in"

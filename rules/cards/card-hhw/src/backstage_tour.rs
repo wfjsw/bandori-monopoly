@@ -43,8 +43,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if ctx::deck_count(player_id) < 2 && ctx::discard_size(player_id) > 0 {
         let discard = ctx::cards_in(player_id, CardPile::Discard);
         for id in &discard {
-            ctx::take_card(player_id, CardPile::Discard, id);
-            ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Bottom);
+            ctx::take_card(player_id, id, CardPile::Discard);
+            ctx::add_to_dest(player_id, id, ctx::Dest::DeckBottom);
         }
         ctx::log(
             player_id,
@@ -65,7 +65,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // C# removes the peeked cards from the draw pile before the keep/discard
     // prompts, then puts the keepers back on top.
     for id in &top {
-        ctx::take_card(player_id, CardPile::Deck, id);
+        ctx::take_card(player_id, id, CardPile::Deck);
     }
     // 规则书: 「选择0~2张以任意顺序放回」 -- C# `H.AskYes(..., "放回", "翻入弃卡区")`
     // per card (yes = keep on top of the draw pile).
@@ -103,11 +103,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let top_i = pick.min(1);
         let under = keep[1 - top_i].clone();
         let over = keep[top_i].clone();
-        ctx::add_to_deck_at(player_id, &under, ctx::DeckPos::Top);
-        ctx::add_to_deck_at(player_id, &over, ctx::DeckPos::Top);
+        ctx::add_to_dest(player_id, &under, ctx::Dest::DeckTop);
+        ctx::add_to_dest(player_id, &over, ctx::Dest::DeckTop);
     } else {
         for id in keep {
-            ctx::add_to_deck_at(player_id, &id, ctx::DeckPos::Top);
+            ctx::add_to_dest(player_id, &id, ctx::Dest::DeckTop);
         }
     }
     Ok(())

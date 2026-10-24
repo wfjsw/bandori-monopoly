@@ -525,7 +525,7 @@ pub fn student_council_add_resolve_ok(
 }
 
 /// The insert is unconditional on the optional placement branch (r.md ruling).
-/// Body-local observable: `add_to_deck` of one `R:[衍生] 觉悟` (silent write
+/// Body-local observable: `add_to_dest` of one `R:[衍生] 觉悟` (silent write
 /// under the current host — no effect-log entry).
 pub fn student_council_add_resolve_delta(pre_deck_n: i32, post_deck_n: i32) -> bool {
     post_deck_n == pre_deck_n + 1

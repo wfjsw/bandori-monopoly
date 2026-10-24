@@ -53,7 +53,7 @@ pub fn try_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
     if !yes {
         return Ok(false);
     }
-    if !ctx::take_from_hand(player_id, RESONANCE.id) {
+    if !ctx::take_card(player_id, RESONANCE.id, ctx::CardPile::Hand) {
         return Ok(false);
     }
     // 「将此卡放入弃卡区」

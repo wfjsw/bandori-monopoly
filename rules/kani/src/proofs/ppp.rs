@@ -40,8 +40,7 @@ crate::host_subset!(ppp_dispatch {
     pay => arm_pay,
     pay_to => arm_pay_to,
     draw => arm_draw,
-    add_to_deck | add_to_deck_at => arm_add_to_deck_at,
-    add_to_hand => arm_add_to_hand,
+    add_to_dest => arm_add_to_dest,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     cards_in => arm_cards_in,
@@ -935,7 +934,7 @@ fn auction_off_01_at(user: i32, match_id: bool) {
     let w = world::with_world(|ww| ww.clone());
     let player = user;
     let mut w = w;
-    // Hand holds the auction card so `take_from_hand` succeeds on the
+    // Hand holds the auction card so `take_card(..., Hand)` succeeds on the
     // unblocked path.
     w.hand_n = 1;
     w.hand_pile[0] = crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0;

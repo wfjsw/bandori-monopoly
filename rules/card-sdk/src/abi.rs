@@ -836,7 +836,18 @@ use std::borrow::Cow;
 ///      commit and the window opens after it) -- the mode is part of declaring
 ///      the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///      declaration. SAVE_VERSION / RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 98;
+pub const ABI_VERSION: i32 = 99;
+/// v99: **named-card pile movers collapse onto `Dest`**. `add_to_hand` /
+///      `add_to_deck` / `add_to_deck_at` (`DeckPos`) die; the one
+///      `add_to_dest(player_id, card, dest)` speaks the same wire `Dest`
+///      codes as `send_to_dest` / `transfer_to_dest` (0 graveyard, 1 hand,
+///      4/5/6 deck top / bottom / shuffle -- default shuffle). `Field` /
+///      `Banished` are not piles and trap. `take_card`'s args reorder to
+///      card-before-zone `take_card(player_id, card, src)`; `take_from_hand`
+///      is `take_card(..., CardPile::Hand)`. Hostcalls: `ruleset_add_to_dest`
+///      replaces the three adds; `ruleset_take_card` is
+///      `(player_id, ptr, len, src)`. SAVE_VERSION / RECORD_VERSION unchanged.
+
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

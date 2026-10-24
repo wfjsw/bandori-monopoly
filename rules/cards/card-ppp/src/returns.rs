@@ -183,7 +183,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
         let id = pool.remove(index);
         // C# `h.draw.Add(pool[index])` then `H.Shuffle(h.draw)` at the end; each
         // insert here shuffles, which leaves the same shuffled pile.
-        ctx::add_to_deck(player_id, &id, true);
+        ctx::add_to_dest(player_id, &id, ctx::Dest::DeckRandom);
         added += 1;
     }
     ctx::log(
@@ -202,8 +202,8 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
 fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     // `trigger_card == card.id` owns "this card was opened".
     // C# `hidden.draw.Remove(Id) || hidden.hand.Remove(Id)` then `H.PlaceCard`.
-    if !ctx::take_card(player_id, CardPile::Deck, ID)
-        && !ctx::take_card(player_id, CardPile::Hand, ID)
+    if !ctx::take_card(player_id, ID, CardPile::Deck)
+        && !ctx::take_card(player_id, ID, CardPile::Hand)
     {
         return Ok(());
     }

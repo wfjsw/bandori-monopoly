@@ -79,7 +79,7 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
     // `H.PlaceFromPlay(c).Mem["stacks"] = 2`.
     ctx::set_slot(player_id, SLOT_STACKS, 2);
     // 规则书[手]: 「并将1张“共鸣”加入卡组」
-    ctx::add_to_deck(player_id, "PP:[衍生]共鸣", true);
+    ctx::add_to_dest(player_id, "PP:[衍生]共鸣", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("no_expectation_added"))

@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 
-use bandori_std::ctx::{self, CardPile, DeckPos};
+use bandori_std::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -105,8 +105,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
             &ids,
         )?;
         let id = ids[pick.min(ids.len() - 1)];
-        if ctx::take_card(player_id, CardPile::Deck, id) {
-            ctx::add_to_hand(player_id, id);
+        if ctx::take_card(player_id, id, CardPile::Deck) {
+            ctx::add_to_dest(player_id, id, ctx::Dest::Hand);
             ctx::log(
                 player_id,
                 &Msg::new(key!("believe_you_kept")).card("card", id),
@@ -115,11 +115,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「重洗你的抽牌堆」 -- C# `H.Shuffle(h.draw)`. There is no in-place
     // shuffle hook, so each remaining draw-pile card is taken out and mixed back
-    // in (`DeckPos::Random`); reshuffles stay on `add_to_deck_at`.
+    // in (`Dest::DeckRandom`); reshuffles stay on `add_to_dest`.
     let rest = ctx::cards_in(player_id, CardPile::Deck);
     for id in rest {
-        ctx::take_card(player_id, CardPile::Deck, &id);
-        ctx::add_to_deck_at(player_id, &id, DeckPos::Random);
+        ctx::take_card(player_id, &id, CardPile::Deck);
+        ctx::add_to_dest(player_id, &id, ctx::Dest::DeckRandom);
     }
     ctx::log(
         player_id,

@@ -46,7 +46,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if !trigger::card_is(ID) {
                 return Ok(());
             }
-            if !ctx::take_from_hand(player_id, ID) {
+            if !ctx::take_card(player_id, ID, CardPile::Hand) {
                 return Ok(());
             }
             ctx::set_dest(ctx::Dest::Field);
@@ -75,7 +75,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             }
             // C# `H.Unplace(star, "removed", ...)` -- off the field, out of the
             // game. `take_card(Field, ..)` drops it without sending it anywhere.
-            if ctx::take_card(player_id, CardPile::Field, STAR) {
+            if ctx::take_card(player_id, STAR, CardPile::Field) {
                 ctx::log(
                     player_id,
                     &Msg::new(key!("auction_pulled_removed")).player_id("who", player_id),

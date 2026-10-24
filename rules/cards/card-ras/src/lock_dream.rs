@@ -55,7 +55,7 @@ fn deck_before_game_guard(player_id: i32) -> bool {
 
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     // C# pulls the id out of the deck and `H.PlaceCard(seat, seat, Id)`.
-    if !ctx::take_card(player_id, CardPile::Deck, "RAS:（LOCK）追逐梦想的步伐") {
+    if !ctx::take_card(player_id, "RAS:（LOCK）追逐梦想的步伐", CardPile::Deck) {
         return Ok(());
     }
     ctx::set_dest(ctx::Dest::Field);

@@ -229,20 +229,12 @@ pub fn offer_build(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::offer_build, [player_id, tile, 0, 0, 0, 0])
 }
 
-pub fn add_to_hand(player_id: i32, ptr: i32, len: i32) {
-    kani_host::call_unit(Op::add_to_hand, [player_id, ptr, len, 0, 0, 0]);
+pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32) {
+    kani_host::call_unit(Op::add_to_dest, [player_id, ptr, len, dest, 0, 0]);
 }
 
-pub fn add_to_deck(player_id: i32, ptr: i32, len: i32, shuffle: i32) {
-    kani_host::call_unit(Op::add_to_deck, [player_id, ptr, len, shuffle, 0, 0]);
-}
-
-pub fn add_to_deck_at(player_id: i32, ptr: i32, len: i32, pos: i32) {
-    kani_host::call_unit(Op::add_to_deck_at, [player_id, ptr, len, pos, 0, 0]);
-}
-
-pub fn take_card(player_id: i32, pile: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::take_card, [player_id, pile, ptr, len, 0, 0])
+pub fn take_card(player_id: i32, ptr: i32, len: i32, src: i32) -> i32 {
+    kani_host::call_i32(Op::take_card, [player_id, ptr, len, src, 0, 0])
 }
 
 pub fn cards_in(player_id: i32, pile: i32, buf: i32, cap: i32) -> i32 {

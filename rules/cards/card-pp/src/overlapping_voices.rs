@@ -109,7 +109,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]3: 「和1个正面的[P✽P粉丝]」 -- C# `H.GainFans(i, 1, up: true)`.
     let _ = fans::grant(player_id, 1, 0)?;
     // 规则书[手]3: 「将1张“明天见”加入手卡」
-    ctx::add_to_hand(player_id, "PP:[衍生]明天见");
+    ctx::add_to_dest(player_id, "PP:[衍生]明天见", ctx::Dest::Hand);
     ctx::log(
         player_id,
         &Msg::new(key!("overlapping_voices_after")).player_id("who", player_id),
