@@ -4,10 +4,6 @@
    `.back` is z-index 40 in the stage's stacking context), so its slot is lifted
    above them. Use it on a wrapper that is NOT inside a stacking context of its
    own (e.g. not inside the TopBar, which is z-index 5). */
-.float {
-  position: absolute;
-  z-index: var(--z-auto-float);
-}
 
 .toggle {
   display: inline-flex;

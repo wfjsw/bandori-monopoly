@@ -342,7 +342,6 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
         </div>
         <div className={s.bar}>
           <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit ?? "∞" })}</PanelTab>
-          <span className={cx(s.handHint, m.overHand && s.warn)}>{m.overHand ? tr("board.overHand") : canPlay ? tr("board.canPlay") : tr("board.tapCard")}</span>
           {/* Your draw pile, at the head of the hand it feeds (it used to sit in
               the board centre). Hover lists what is left; click opens the cards. */}
           <div className={cx(s.handTools, !sess.readOnly && s.withAuto)}>
