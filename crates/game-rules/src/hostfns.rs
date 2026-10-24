@@ -118,6 +118,8 @@ pub fn tile_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 /// Bind `count` units of the running instance's counter `kind` to `tile`.
+/// Returns the mark row's uid (the new row's, or the merged row's), or `-1`
+/// when `count <= 0`.
 pub fn place_mark<C: HostCtx>(
     c: &mut C,
     tile: i32,
@@ -228,6 +230,16 @@ pub fn mark_instance_at<C: HostCtx>(
 pub fn mark_partner<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
     let f = guest_filter(c, fp, fl)?;
     Ok(c.st().wr().mark_partner(tile, &f))
+}
+
+/// The marked tile of the row at `uid`, or -1 when no such row.
+pub fn mark_tile<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
+    Ok(c.st().wr().mark_tile_by_uid(uid))
+}
+
+/// Drop the exact mark row at `uid`. Returns 1 when that row was present.
+pub fn remove_mark<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().remove_mark_by_uid(uid) as i32)
 }
 
 pub fn counter_self<C: HostCtx>(c: &mut C, np: i32, nl: i32) -> Result<i32, HostErr> {

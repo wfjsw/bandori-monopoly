@@ -41,12 +41,13 @@ serde_json = "1"
 wasmi = { version = "2", default-features = false, features = ["stable", "std", "validate", "memory64", "auto-dispatch"] }
 sha2 = "0.10"
 card-sdk = { path = "crates/card-sdk" }
-bitflags = { version = "2", default-features = false }
-# card-sdk and the card/skill crates are members of the rules/ guest workspace
-# but are also path deps of this one. Their `workspace = true` deps resolve
-# against the root manifest here, so mirror every rules/Cargo.toml entry.
 game-kinds = { path = "crates/game-kinds" }
 postcard = { version = "1", default-features = false }
+bitflags = { version = "2", default-features = false }
+# Nested `rules/` workspace members use `workspace = true` (commit d4d63a2a).
+# When the root workspace path-depends on them (rules-native / rules-worker /
+# rules/tests / rules/kani), cargo resolves that inheritance against THIS
+# manifest, so mirror the rules/ table here.
 const_format = { version = "0.2.37", features = ["fmt"] }
 bandori-std = { path = "rules/bandori-std" }
 card-ag = { path = "rules/cards/card-ag" }

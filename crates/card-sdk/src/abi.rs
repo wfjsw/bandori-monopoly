@@ -838,7 +838,14 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 100;
+pub const ABI_VERSION: i32 = 101;
+/// v101: **mark refs**. `place_mark` returns the mark row's stable uid (a
+///      [`MarkRef`], packed as one `i32`; `-1` = none) instead of the row
+///      count, so a card can store the handle and retrieve the pick later.
+///      New `mark_tile` / `remove_mark` resolve and drop one row by that uid.
+///      `designate_tile` returns the same handle; new `undesignate` drops one
+///      designation row. Handles are monotonic and never recycled for the
+///      lifetime of a match.
 /// v100: **slot sugar translates to the state field channel**. `ctx::slot` /
 ///    `set_slot` / `inc_slot` desugar to `state_get` / `state_set` /
 ///    `state_add` before the ABI, and `state::set_flags` rides `state_set`
@@ -1067,6 +1074,58 @@ pub mod mark {
     pub const DESIGNATE_KIND: &str = "mark:designate";
     /// Mark-filter sentinel: any owner / any src / any instance.
     pub const ANY: i32 = -2;
+}
+
+/// A durable reference to one tile-mark row (`TileMark::uid`). Packs to one
+/// `i32` for card state (`ctx::set_slot` / `ctx::state::set`), so a card can
+/// store the pick and retrieve it later. `MarkRef::NONE` = no mark.
+///
+/// Handles are unique for the lifetime of a match and are never recycled, so a
+/// stored ref either resolves to exactly the row it was issued for or reports
+/// dead (`tile()` = -1) once that row is gone. It never aliases onto a later
+/// mark.
+///
+/// Pure data only; the resolving verbs live in `ctx` (`mark_tile` /
+/// `mark_alive` / `remove_mark`), with the ergonomic `tile()` / `is_live()`
+/// shortcuts defined there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MarkRef(i32);
+
+impl MarkRef {
+    /// No mark / a dead handle.
+    pub const NONE: Self = Self(-1);
+
+    /// No handle: [`Self::NONE`], or anything an unset slot would produce.
+    /// Uid 0 is never issued, so it is none too.
+    pub fn is_none(self) -> bool {
+        self.0 <= 0
+    }
+}
+
+/// Unpack a handle from card state. An **unset** slot / state item reads back
+/// `0`, which is never a live uid (allocation starts at 1), so it normalises
+/// to [`MarkRef::NONE`] rather than looking like a real handle.
+impl From<i32> for MarkRef {
+    fn from(v: i32) -> Self {
+        if v <= 0 {
+            Self::NONE
+        } else {
+            Self(v)
+        }
+    }
+}
+
+/// Pack the handle for card state (`ctx::set_slot` / `ctx::state::set`).
+impl From<MarkRef> for i32 {
+    fn from(r: MarkRef) -> Self {
+        r.0
+    }
+}
+
+impl Default for MarkRef {
+    fn default() -> Self {
+        Self::NONE
+    }
 }
 
 /// A filter over tile marks (the generic tile-mark API). Empty `kind` /

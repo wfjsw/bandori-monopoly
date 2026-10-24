@@ -1885,8 +1885,10 @@ impl World {
     /// `owner` colours the mark in the view; `src` is provenance (which run
     /// placed it); `category` is the display category ([`crate::state::mark_category`]).
     /// `fresh`: `false` merges onto the first match (same tile/kind/category/
-    /// instance/src), `true` always pushes a fresh row. Returns the count now
-    /// on that row.
+    /// instance/src), `true` always pushes a fresh row. Returns the row's
+    /// [`TileMark::uid`] (the new row's, or the merged row's), or `-1` when
+    /// `count <= 0`. Uids are monotonic and never recycled; see
+    /// [`Self::next_mark_uid`].
     pub fn place_mark(
         &mut self,
         instance: i32,
@@ -1900,7 +1902,7 @@ impl World {
         fresh: bool,
     ) -> i32 {
         if count <= 0 {
-            return 0;
+            return -1;
         }
         let instance = (instance >= 0).then_some(instance);
         let src = (src >= 0).then_some(src);
@@ -1918,14 +1920,14 @@ impl World {
                     && m.src == src
             }) {
                 m.count += count;
-                return m.count;
+                return m.uid;
             }
         }
         let card = src
             .and_then(|s| self.field_by_uid(s))
             .map(|f| f.card.clone())
             .unwrap_or_default();
-        let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+        let uid = self.next_mark_uid();
         self.st.marks.push(TileMark {
             uid,
             tile,
@@ -1939,7 +1941,42 @@ impl World {
             partner: None,
             note,
         });
-        count
+        uid
+    }
+
+    /// Allocate the next mark-row uid. Monotonic and never-reuse for the
+    /// lifetime of the match; floors at `max(existing.uid)+1` so a deserialised
+    /// save that predates [`crate::state::MatchState::next_mark_uid`] can never
+    /// hand out a colliding handle.
+    fn next_mark_uid(&mut self) -> i32 {
+        let floor = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+        let uid = self.st.next_mark_uid.max(floor);
+        self.st.next_mark_uid = uid.saturating_add(1);
+        uid
+    }
+
+    /// The marked tile of the row at `uid`, or -1 when no such row (the handle
+    /// is dead -- never recycled onto a later mark).
+    pub fn mark_tile_by_uid(&self, uid: i32) -> i32 {
+        if uid < 0 {
+            return -1;
+        }
+        self.st
+            .marks
+            .iter()
+            .find(|m| m.uid == uid)
+            .map(|m| m.tile)
+            .unwrap_or(-1)
+    }
+
+    /// Drop the exact mark row at `uid`. Returns whether that row was present.
+    pub fn remove_mark_by_uid(&mut self, uid: i32) -> bool {
+        if uid < 0 {
+            return false;
+        }
+        let before = self.st.marks.len();
+        self.st.marks.retain(|m| m.uid != uid);
+        self.st.marks.len() != before
     }
 
     /// Partner tile (`TileMark::partner`) of the first matching mark on `tile`,
@@ -1998,10 +2035,11 @@ impl World {
             .and_then(|s| self.field_by_uid(s))
             .map(|f| f.card.clone())
             .unwrap_or_default();
-        let mut next = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
-        for (tile, partner) in [(a, b), (b, a)] {
+        let uid_a = self.next_mark_uid();
+        let uid_b = self.next_mark_uid();
+        for (uid, tile, partner) in [(uid_a, a, b), (uid_b, b, a)] {
             self.st.marks.push(TileMark {
-                uid: next,
+                uid,
                 tile,
                 kind: kind.to_string(),
                 category: cat.to_string(),
@@ -2013,7 +2051,6 @@ impl World {
                 partner: Some(partner),
                 note: note.clone(),
             });
-            next += 1;
         }
         true
     }

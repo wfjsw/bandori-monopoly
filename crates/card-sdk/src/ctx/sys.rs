@@ -617,6 +617,18 @@ mod abi {
             link_name = "ruleset_mark_partner"
         )]
         pub fn mark_partner(tile: i32, fp: i32, fl: i32) -> i32;
+        /// The marked tile of the row at `uid`, or -1 when no such row.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_mark_tile"
+        )]
+        pub fn mark_tile(uid: i32) -> i32;
+        /// Drop the exact mark row at `uid`. 1 = removed, 0 = not present.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_remove_mark"
+        )]
+        pub fn remove_mark(uid: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_count_held"
