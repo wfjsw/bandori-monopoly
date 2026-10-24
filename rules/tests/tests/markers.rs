@@ -205,6 +205,78 @@ fn temp_fire_is_a_second_row_of_the_same_instance() {
 }
 
 // =====================================================================
+// ceiling writes are tri-state (regression: max == 0 must clear)
+// =====================================================================
+
+/// `Counter.max` writes are tri-state: `>= 0` writes that ceiling, `< 0` leaves
+/// the stored one alone. A `max > 0` spelling could not express "clear the cap
+/// to 0", so `redeclare`/`end_overlay` (「退出状态2时，失去所有剩余火罐」)
+/// silently kept the borrowed ceiling and the UI showed `0/3` while `fire::gain`
+/// still admitted up to 3. Clearing drops the row.
+#[test]
+fn clearing_the_cap_to_zero_drops_the_row() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    let skill = t.place_raw(0, "skill:千早爱音:重新开始");
+    t.set_fire(0, 2, 3);
+    // `redeclare(0, 0)` / `end_overlay` end up here: value 0, ceiling 0.
+    t.m
+        .world_mut()
+        .set_tok(0, bandori_std::fire::KEY, 0, skill, 0);
+    assert_eq!(t.charge(0), 0, "value cleared");
+    assert_eq!(t.charge_max(0), 0, "ceiling cleared, not left at 3");
+    assert!(
+        t.m
+            .world()
+            .st
+            .players[0]
+            .tokens
+            .iter()
+            .all(|c| c.name != bandori_std::fire::KEY),
+        "a row with no value and no ceiling is gone"
+    );
+    // And a later gain refuses: undeclared pool, no room under a cap of 0.
+    assert_eq!(t.gain_fire(0, 1), 0, "gain refuses an undeclared pool");
+}
+
+/// `adjust_cap` (「火罐上限加1」) binds its row to the persona-skill instance, so
+/// the ceiling dies with the skill. Going through `add_marker_max` instead
+/// stamped `instance: None` on a fresh row, which `destroy_instance_units`
+/// never drops -- an orphan that also tripped `declare`'s "already declared"
+/// latch and hid the face's real 「上限M」.
+#[test]
+fn adjust_cap_binds_the_row_to_the_skill() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    let skill = t.place_raw(0, "skill:千早爱音:重新开始");
+    // No pool yet -- the card's 「此卡拥有者火罐上限加1」 runs over a baseline of 0.
+    assert_eq!(t.charge(0), 0);
+    assert_eq!(t.charge_max(0), 0);
+    assert_eq!(t.adjust_fire_cap(0, 1), 1, "ceiling created at 1");
+    let row = t
+        .m
+        .world()
+        .st
+        .players[0]
+        .tokens
+        .iter()
+        .find(|c| c.name == bandori_std::fire::KEY)
+        .expect("ceiling row");
+    assert_eq!(row.instance, Some(skill), "owned by the persona-skill uid");
+    t.m.world_mut().unplace_at(skill);
+    assert!(
+        t.m
+            .world()
+            .st
+            .players[0]
+            .tokens
+            .iter()
+            .all(|c| c.name != bandori_std::fire::KEY),
+        "the ceiling dies with the skill -- no orphan row"
+    );
+}
+
+// =====================================================================
 // I2 -- value <= declared max 「在任意时刻」
 // =====================================================================
 

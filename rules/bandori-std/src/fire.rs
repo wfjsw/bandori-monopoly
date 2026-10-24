@@ -100,9 +100,11 @@ fn writable(player_id: i32) -> bool {
     skill_uid(player_id) >= 0 || row_live(player_id, KEY)
 }
 
-/// Write the named row of the persona-skill instance. `max <= 0` leaves any
-/// stored ceiling alone. Used by `adjust_cap` even before a pool exists
-/// (it advertises the ceiling); `gain` / `spend` go through [`writable`].
+/// Write the named row of the persona-skill instance. `max` is the production
+/// tri-state: `>= 0` writes that ceiling (0 clears it and drops the row),
+/// `< 0` leaves any stored ceiling alone. Used by `adjust_cap` even before a
+/// pool exists (it advertises the ceiling); `gain` / `spend` go through
+/// [`writable`].
 fn set_row(player_id: i32, name: &str, value: i32, max: i32) {
     let uid = skill_uid(player_id);
     ctx::set_tok(player_id, name, value, max, uid);
@@ -178,9 +180,15 @@ pub fn declare(player_id: i32, initial: i32, cap: i32) {
         return;
     }
     // Cap only on first declaration (row absent). A per-turn `TurnStartBefore`
-    // re-hook finds the live row and leaves the ceiling alone.
+    // re-hook finds the live row and leaves the ceiling alone -- `adjust_cap`'s
+    // 「火罐上限加1」 must survive it.
     if !row_live(player_id, KEY) {
         set_row(player_id, KEY, 0, cap.max(0));
+    } else {
+        // Row already live (an `adjust_cap` ceiling, or a swap remnant): keep
+        // its ceiling and value, but re-stamp the owner so it still dies with
+        // the persona-skill instance.
+        set_row(player_id, KEY, get(player_id), -1);
     }
     if ctx::trigger::kind() == TriggerKind::DeckAtGameStart {
         let live = max(player_id);
@@ -331,23 +339,20 @@ fn spend_pool(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
 }
 
 /// Move the cap by `n`; pulls the value down under the new ceiling (I2
-/// 「在任意时刻」). The host verb only moves the advertised ceiling -- the
-/// pull-under is this kernel's job. Returns the new cap.
+/// 「在任意时刻」). Returns the new cap.
 ///
 /// Allowed even when the seat has no fire skill (「此卡拥有者火罐上限加1」
 /// creates the ceiling over a baseline of 0); [`gain`] still refuses until
 /// there is a live pool.
+///
+/// One `set_row` does both jobs -- it binds the row to the persona-skill
+/// instance and advertises the ceiling. Going through `add_marker_max` instead
+/// would create an **unowned** row (it preserves an existing owner and stamps
+/// `-1` on a fresh one), which `destroy_instance_units` then never drops.
 pub fn adjust_cap(player_id: i32, n: i32) -> i32 {
-    // Make sure the row exists (and is bound) before moving its ceiling.
-    if !row_live(player_id, KEY) {
-        set_row(player_id, KEY, 0, 0);
-    }
-    let cap = ctx::add_marker_max(player_id, KEY, n);
-    let have = get(player_id);
-    let want = pull_under_cap(have, cap);
-    if have != want {
-        set_row(player_id, KEY, want, 0);
-    }
+    let cap = max(player_id).saturating_add(n).max(0);
+    let want = pull_under_cap(get(player_id), cap);
+    set_row(player_id, KEY, want, cap);
     cap
 }
 
@@ -448,7 +453,8 @@ pub mod temp {
         let room = (max(player_id) - get(player_id)).max(0);
         let got = n.min(room);
         if got > 0 {
-            set_row(player_id, TEMP_KEY, get(player_id) + got, 0);
+            // `-1` = leave the stored temp ceiling alone (its own bound).
+            set_row(player_id, TEMP_KEY, get(player_id) + got, -1);
         }
         got
     }
@@ -465,7 +471,8 @@ pub mod temp {
             return Ok(false);
         }
         let left = get(player_id) - n;
-        set_row(player_id, TEMP_KEY, left, 0);
+        // `-1` = leave the stored temp ceiling alone.
+        set_row(player_id, TEMP_KEY, left, -1);
         ctx::log(
             player_id,
             &Msg::new("log.spend_charge")

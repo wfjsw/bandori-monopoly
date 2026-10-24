@@ -615,8 +615,10 @@ impl World {
     /// stamped on a **new** row (user ruling 2026-10-10: every held unit is a
     /// unit of some instance's counter). An existing row keeps its instance
     /// unless `instance >= 0` (a re-declare / swap rebinds the owner).
-    /// `max` is the live ceiling (`0` = uncapped); a row with `max > 0` is kept
-    /// even at `value == 0` so the declaration latch survives a spent pool.
+    /// `max` is the live ceiling (`>= 0` writes it, `0` clearing the cap and
+    /// dropping the row; `< 0` leaves any stored ceiling alone). A row with
+    /// `max > 0` is kept even at `value == 0` so the declaration latch survives
+    /// a spent pool.
     pub fn set_tok(&mut self, player_id: i32, name: &str, value: i32, instance: i32, max: i32) {
         if let Some(s) = self.player_mut(player_id) {
             set_named(&mut s.tokens, name, value, instance, max);
@@ -2411,6 +2413,11 @@ impl World {
 /// `value == 0` (a declared pool's latch); `max == 0` leaves any stored
 /// ceiling alone. Zero-terminated otherwise: drop rows with no value and no
 /// ceiling.
+/// `max` is a tri-state: **`>= 0` writes that ceiling** (including `0`, which
+/// clears it and lets the row drop below), **`< 0` leaves any stored ceiling
+/// alone**. An earlier `max > 0` spelling could not express "clear the cap to
+/// 0", so `redeclare`/`end_overlay`/`add_marker_max` reductions silently kept
+/// the old ceiling.
 fn set_named(list: &mut Vec<Counter>, name: &str, value: i32, instance: i32, max: i32) {
     let v = value.max(0);
     match list.iter_mut().find(|c| c.name == name) {
@@ -2419,12 +2426,12 @@ fn set_named(list: &mut Vec<Counter>, name: &str, value: i32, instance: i32, max
             if instance >= 0 {
                 c.instance = (instance >= 0).then_some(instance);
             }
-            if max > 0 {
+            if max >= 0 {
                 c.max = max;
             }
         }
         None => {
-            if v > 0 || max > 0 {
+            if v > 0 || max >= 0 {
                 list.push(Counter {
                     name: name.to_string(),
                     value: v,

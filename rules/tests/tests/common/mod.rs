@@ -804,18 +804,23 @@ impl Table {
     /// Drive the fire kernel's cap-change policy (`pull_under_cap`, what
     /// `fire::adjust_cap` calls after the host verb moves the ceiling).
     /// Returns the new cap.
+    /// Drive the fire kernel's `adjust_cap` (「火罐上限加1」): one write binds the
+    /// row to the persona-skill instance and advertises the ceiling. Going
+    /// through `add_marker_max` would create an unowned row -- that is the bug
+    /// this helper deliberately does not reproduce.
     pub fn adjust_fire_cap(&mut self, who: usize, n: i32) -> i32 {
         let cap = self
             .m
-            .world_mut()
-            .add_marker_max(who as i32, bandori_std::fire::KEY, n);
+            .world()
+            .tok_max(who as i32, bandori_std::fire::KEY)
+            .saturating_add(n)
+            .max(0);
         let have = self.m.world().tok(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::pull_under_cap(have, cap);
-        if have != want {
-            self.m
-                .world_mut()
-                .set_tok(who as i32, bandori_std::fire::KEY, want, -1, 0);
-        }
+        let uid = self.m.world().persona_skill_uid(who as i32);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, bandori_std::fire::KEY, want, uid, cap);
         cap
     }
 

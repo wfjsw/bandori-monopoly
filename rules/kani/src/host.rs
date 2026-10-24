@@ -2614,18 +2614,28 @@ pub fn arm_tok_max(a: Args) -> i64 {
 }
 
 pub fn arm_set_held_name(a: Args) -> i64 {
-    let [a0, a1, a2, a3, ..] = a;
+    // Wire: (name_p, name_l, player_id, v, max, instance). `max` is the
+    // production tri-state (`>= 0` writes that ceiling, `< 0` leaves the stored
+    // one alone) -- see `game_core::engine::ops::set_named`.
+    let [a0, a1, a2, a3, a4, ..] = a;
     let key = name_id(a0, a1);
     let p = a2;
     let v = a3;
+    let max = a4;
     world::with_world_mut(|w| {
         if key == known().tok_pp_pos {
             w.fans_pos[player_idx(p)] = v;
         } else if key == known().tok_pp_neg {
             w.fans_neg[player_idx(p)] = v;
         } else if key == known().tok_charge {
-            // Fire lives on the same store `gain_marker` writes.
+            // Fire lives on the same store `gain_marker` writes. `set_row`
+            // advertises the ceiling here too -- without this, `fire::declare`
+            // left `charge_max` at 0 under the proof host and every gain was
+            // refused while production accepted it.
             w.charge[player_idx(p)] = v;
+            if max >= 0 {
+                w.charge_max[player_idx(p)] = max;
+            }
         } else {
             w.key_set(p, key, v);
             w.sync_views_player(p);
