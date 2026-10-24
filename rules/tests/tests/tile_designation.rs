@@ -162,6 +162,18 @@ fn one_of_us_refs_store_and_retrieve_the_pair() {
     assert_eq!(theirs.category, mark_category::DESIGNATE, "{theirs:?}");
     assert_eq!(mine.instance, Some(uid), "{mine:?}");
     assert_eq!(theirs.instance, Some(uid), "{theirs:?}");
+    // An **unset** slot reads back 0. Uid 0 is never issued (allocation starts
+    // at 1), so unpacking it must yield `MarkRef::NONE`, never a live handle.
+    let unset = t.state(0, "no_such_ref");
+    assert_eq!(unset, 0, "unset slot reads 0");
+    assert!(
+        card_sdk::abi::MarkRef::from_i32(unset).is_none(),
+        "unset slot unpacks to MarkRef::NONE"
+    );
+    assert!(
+        !card_sdk::abi::MarkRef::from_i32(mine_ref).is_none(),
+        "a stored ref unpacks to a live handle"
+    );
 }
 
 // Pure API: a stored mark handle dies with its creating instance and is never

@@ -1087,16 +1087,25 @@ impl MarkRef {
     /// No mark / a dead handle.
     pub const NONE: Self = Self(-1);
 
+    /// Unpack a handle from card state. An **unset** slot / state item reads
+    /// back `0`, which is never a live uid (allocation starts at 1), so it
+    /// normalises to [`Self::NONE`] rather than looking like a real handle.
     pub fn from_i32(v: i32) -> Self {
-        Self(v)
+        if v <= 0 {
+            Self::NONE
+        } else {
+            Self(v)
+        }
     }
 
     pub fn as_i32(self) -> i32 {
         self.0
     }
 
+    /// No handle: [`Self::NONE`], or anything an unset slot would produce.
+    /// Uid 0 is never issued, so it is none too.
     pub fn is_none(self) -> bool {
-        self.0 < 0
+        self.0 <= 0
     }
 }
 
