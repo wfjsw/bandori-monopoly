@@ -565,22 +565,6 @@ pub fn state_add(player_id: i32, ptr: i32, len: i32, delta: i32) -> i32 {
     kani_host::call_i32(Op::state_add, [player_id, ptr, len, delta, 0, 0])
 }
 
-pub fn state_set_flags(player_id: i32, ptr: i32, len: i32, flags: i32) {
-    let _ = kani_host::call_i32(Op::state_set_flags, [player_id, ptr, len, flags, 0, 0]);
-}
-
-pub fn slot(player_id: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::slot, [player_id, ptr, len, 0, 0, 0])
-}
-
-pub fn set_slot(player_id: i32, ptr: i32, len: i32, v: i32) {
-    kani_host::call_unit(Op::set_slot, [player_id, ptr, len, v, 0, 0]);
-}
-
-pub fn inc_slot(player_id: i32, ptr: i32, len: i32, by: i32) -> i32 {
-    kani_host::call_i32(Op::inc_slot, [player_id, ptr, len, by, 0, 0])
-}
-
 pub fn group_pool(player_id: i32, np: i32, nl: i32) -> i32 {
     kani_host::call_i32(Op::group_pool, [player_id, np, nl, 0, 0, 0])
 }

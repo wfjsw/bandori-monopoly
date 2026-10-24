@@ -94,7 +94,7 @@ crate::host_subset!(same_dream_dispatch {
     // fans:: state dict + FansFlip raise → pastel `on_fans_flip`.
     state_get => arm_state_get,
     state_set => arm_state_set,
-    state_add | inc_slot => arm_state_add,
+    state_add => arm_state_add,
     raise => arm_raise,
     trig_value => arm_trig_value,
     send => arm_send,

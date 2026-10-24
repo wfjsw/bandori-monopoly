@@ -10,9 +10,10 @@ description = "Official ag cards (one crate per band, one file per card)."
 crate-type = ["rlib"]
 
 [dependencies]
-card-sdk = { path = "../../../crates/card-sdk", features = ["guest"] }
-bandori-std = { path = "../../bandori-std" }
-rules-status = { path = "../../status" }
+card-sdk = { workspace = true, features = ["guest"] }
+bandori-std = { workspace = true }
+rules-status = { workspace = true }
 # ActivationArg's bounds (docs/ACTIVATION.md §2): a card's own activation
 # struct is a postcard record, so it derives Serialize/Deserialize.
-serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
+const_format = { workspace = true }

@@ -8,6 +8,13 @@ description = "Card authoring SDK + host/guest ABI for the BandoriMonopoly WASM 
 # Used from two places:
 #  * the rules/ guest card crates (wasm32) -> constants + `ctx` host imports + `ruleset!`
 #  * crates/game-rules (host, native and wasm32) -> constants only (`abi`)
+#
+# Deps are explicit (not `workspace = true`): this crate is a member of the
+# root workspace but is also a path dep of the rules/ guest workspace, and
+# `workspace = true` inherits from the *loading* workspace. The root table's
+# serde has default features (std); the guest wasm32 build must stay no_std or
+# std's panic handler collides with the `guest` one. Same pattern as
+# `game-kinds`.
 [dependencies]
 game-kinds = { path = "../game-kinds" }
 

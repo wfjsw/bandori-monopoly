@@ -93,7 +93,6 @@ fn hitoshizuku_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Arg
             let [a0, ..] = a;
             world::with_world(|w| w.stun[a0 as usize]) as i64
         }
-        Op::slot => host::arm_slot(a),
         Op::give_stay => host::arm_apply_abnormal(a),
         Op::give_stun => host::arm_apply_abnormal(a),
         Op::state_get => host::arm_state_get(a),
@@ -109,7 +108,7 @@ fn hitoshizuku_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Arg
 /// crystals. Isolation: empty hand (the `cards_in` String loop is a no-op).
 crate::host_subset!(tomori_no_longer_dispatch {
     apply_abnormal => arm_apply_abnormal,
-    state_add | inc_slot => arm_state_add,
+    state_add => arm_state_add,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     cards_in => arm_cards_in,

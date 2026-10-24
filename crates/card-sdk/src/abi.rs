@@ -7,6 +7,7 @@ use alloc::{borrow::Cow, boxed::Box, format, string::String, string::ToString, v
 #[cfg(not(target_arch = "wasm32"))]
 use std::borrow::Cow;
 
+/// ```text
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
@@ -836,7 +837,14 @@ use std::borrow::Cow;
 ///    commit and the window opens after it) -- the mode is part of declaring
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 99;
+/// ```
+pub const ABI_VERSION: i32 = 100;
+/// v100: **slot sugar translates to the state field channel**. `ctx::slot` /
+///    `set_slot` / `inc_slot` desugar to `state_get` / `state_set` /
+///    `state_add` before the ABI, and `state::set_flags` rides `state_set`
+///    field `FLAGS = 4`. `ruleset_slot` / `ruleset_set_slot` /
+///    `ruleset_inc_slot` / `ruleset_state_set_flags` are gone.
+///    SAVE_VERSION / RECORD_VERSION unchanged.
 /// v99: **named-card pile movers collapse onto `Dest`**. `add_to_hand` /
 ///      `add_to_deck` / `add_to_deck_at` (`DeckPos`) die; the one
 ///      `add_to_dest(player_id, card, dest)` speaks the same wire `Dest`
@@ -1902,6 +1910,9 @@ impl ActionKind {
     /// Action. A player is about to leave the game (bankrupt or forfeit), before
     /// the seat is cleared. Payload: none beyond the raise seat.
     pub const BeforeOut: Self = Self(TriggerKind::BeforeOut);
+    /// Alias of [`Self::BeforeOut`] -- kinds.rs declares the constructor as
+    /// `BeforeBankrupt`; the wire table still spells `beforeOut`.
+    pub const BeforeBankrupt: Self = Self(TriggerKind::BeforeOut);
 
     /// Action. A teleport finished (after its settlement, or at once if it does
     /// not settle). Payload: the move, tile = the destination.
@@ -2468,6 +2479,9 @@ impl TriggerKind {
 
     /// `beforeOut`
     pub const BeforeOut: Self = Self::engine(65);
+    /// Alias of [`Self::BeforeOut`] -- `kinds.rs` names the constructor
+    /// `BeforeBankrupt`.
+    pub const BeforeBankrupt: Self = Self::engine(65);
 
     /// `teleported`
     pub const Teleported: Self = Self::engine(66);

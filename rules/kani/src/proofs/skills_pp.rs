@@ -69,9 +69,6 @@ crate::host_subset!(skills_pp_dispatch {
     take_card => arm_take_card,
     draw => arm_draw,
     add_to_dest => arm_add_to_dest,
-    slot => arm_slot,
-    set_slot => arm_set_slot,
-    inc_slot => arm_inc_slot,
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_inc_slot,  // same keyed-add as inc_slot (real)

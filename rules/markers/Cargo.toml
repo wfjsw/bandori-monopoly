@@ -10,5 +10,5 @@ description = "Marker rules: one CardDef per mark:* category (kind-owned hosts),
 crate-type = ["rlib"]
 
 [dependencies]
-card-sdk = { path = "../../crates/card-sdk", features = ["guest"] }
-bandori-std = { path = "../bandori-std" }
+card-sdk = { workspace = true, features = ["guest"] }
+bandori-std = { workspace = true }

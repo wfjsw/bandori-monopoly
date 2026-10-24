@@ -4374,27 +4374,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "slot",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::slot(&mut c, player_id, p, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "set_slot",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
-            hostfns::set_slot(&mut c, player_id, p, n, v).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "inc_slot",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32| -> Result<i32, Error> {
-            hostfns::inc_slot(&mut c, player_id, p, n, by).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "group_pool",
         |mut c: C<W>, player_id: i32, np: i32, nl: i32| -> Result<i32, Error> {
             hostfns::group_pool(&mut c, player_id, np, nl).map_err(HostErr::into_err)
@@ -4500,15 +4479,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "apply_abnormal",
         |mut c: C<W>, player_id: i32, kind: i32, n: i32, to: i32| -> Result<(), Error> {
             hostfns::apply_abnormal(&mut c, player_id, kind, n, to).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "state_set_flags",
-        |mut c: C<W>, player_id: i32, kp: i32, kn: i32, flags: i32| -> Result<(), Error> {
-            let key = hostfns::guest_str(&mut c, kp, kn).map_err(HostErr::into_err)?;
-            hostfns::state_set_flags(&mut c, player_id, &key, flags as u8)
-                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5771,13 +5741,6 @@ impl CardWorld for NullWorld {
     }
     fn self_uid(&self) -> i32 {
         -1
-    }
-    fn slot(&self, _: i32, _: &str) -> i32 {
-        0
-    }
-    fn set_slot(&mut self, _: i32, _: &str, _: i32) {}
-    fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
-        0
     }
     fn group_pool(&self, _: i32, _: &str) -> i32 {
         0

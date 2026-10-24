@@ -15,7 +15,7 @@ crate-type = ["rlib"]
 cel-ext = ["dep:rules-cond", "dep:rules-cond-ir"]
 
 [dependencies]
-postcard = { version = "1", default-features = false, features = ["alloc"] }
+postcard = { workspace = true, features = ["alloc"] }
 # The typed `CondExt` (kernel `Name` rows for this ruleset's CEL sugar) lives
 # in `cel::ext`. `runtime-only` keeps the cel parser out of the guest wasm
 # build; the parser stays on the host side via game-rules' default-features dep.
@@ -29,6 +29,8 @@ rules-cond-ir = { path = "../../crates/cond-ir", optional = true }
 # wasm32 crate -- game-rules under web-glue / bot-glue -- must NOT pull the
 # handler in. So the feature is native-only. Card crates enable `card-sdk/guest`
 # themselves, which unifies back on for the guest workspace build.
+# Explicit paths (not `workspace = true`) so the target-gated feature set is
+# expressible: workspace inheritance cannot split features per target.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 card-sdk = { path = "../../crates/card-sdk", features = ["guest"] }
 

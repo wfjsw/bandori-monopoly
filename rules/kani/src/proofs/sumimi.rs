@@ -52,7 +52,6 @@ crate::host_subset!(two_donuts_dispatch {
     apply_abnormal => arm_apply_abnormal,
     state_get => arm_state_get,
     state_set => arm_state_set,
-    set_slot => arm_set_slot,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,

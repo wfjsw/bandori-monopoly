@@ -115,9 +115,6 @@ const ARRAY_OPS: &[&str] = &[
     "state_get",
     "state_set",
     "state_add",
-    "slot",
-    "set_slot",
-    "inc_slot",
     "group_pool",
     "add_group_pool",
     "group_skill",
@@ -301,7 +298,6 @@ const ARRAY_OPS: &[&str] = &[
     "set_join_used",
     "adjust_money",
     "card_prop",
-    "state_set_flags",
     "raise_after",
 ];
 

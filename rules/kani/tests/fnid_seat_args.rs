@@ -4,7 +4,7 @@
 //! (aya_with_01 VACUOUS regression) unless this test catches it.
 //!
 //! Dead discriminants (7/8/11/12/14/15/16) are reserved holes and must not
-//! reappear. `CandHas = 34` is append-only.
+//! reappear. `CandHas = 34` and `CardIs = 35` are append-only.
 
 use rules_cond_ir::ctx::{FnId, SeatField};
 
@@ -39,6 +39,7 @@ const LIVE_FN_IDS: &[FnId] = &[
     FnId::TileIn,
     FnId::State,
     FnId::CandHas,
+    FnId::CardIs,
 ];
 
 /// Fns that read a seat's `SeatField` (must appear in `seat_field_bits`).
@@ -82,9 +83,10 @@ fn fnid_discriminants_are_stable() {
     assert_eq!(FnId::Neighbor as i64, 17);
     assert_eq!(FnId::State as i64, 33);
     assert_eq!(FnId::CandHas as i64, 34);
+    assert_eq!(FnId::CardIs as i64, 35);
     // Holes stay holes: the live list skips 7/8/11/12/14/15/16.
     let mut expected = vec![0i64, 1, 2, 3, 4, 5, 6, 9, 10, 13];
-    expected.extend(17..=34);
+    expected.extend(17..=35);
     let got: Vec<i64> = LIVE_FN_IDS.iter().map(|f| *f as i64).collect();
     assert_eq!(got, expected, "FnId hole layout drifted");
 }
@@ -106,7 +108,7 @@ fn seat_arg0_fns_are_all_covered() {
     for &fid in SEAT_ARG0_FNS {
         let d = fid as i64;
         assert!(
-            (0..=34).contains(&d),
+            (0..=35).contains(&d),
             "FnId::{fid:?} discriminant {d} out of range"
         );
     }

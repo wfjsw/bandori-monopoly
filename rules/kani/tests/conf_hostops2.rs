@@ -35,7 +35,8 @@ fn base() -> KWorld {
 }
 
 /// `state_set(player, ptr, len, field, v)`: a3 = field, a4 = value.
-/// Field 0 writes VALUE and logs `SetState`; 1/2/3 write MAX/MIN/EXPIRES.
+/// Field 0 writes VALUE and logs `SetState`; 1/2/3 write MIN/MAX/EXPIRES
+/// (SDK `state::{MIN,MAX,EXPIRES}` column ids).
 #[test]
 fn state_set_packs_field_and_value() {
     let _g = model_lock();
@@ -59,14 +60,14 @@ fn state_set_packs_field_and_value() {
     assert_eq!(got, 7, "VALUE column must be a4, not a3");
     let _ = (ptr, len);
 
-    // field 1 = MAX
-    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 1, 9, 0]);
-    let max = kworld::with_world(|w| w.key_max(0, key));
-    assert_eq!(max, 9, "field 1 writes MAX");
-    // field 2 = MIN
-    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 2, 3, 0]);
+    // field 1 = MIN (SDK `state::MIN`)
+    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 1, 3, 0]);
     let min = kworld::with_world(|w| w.key_min(0, key));
-    assert_eq!(min, 3, "field 2 writes MIN");
+    assert_eq!(min, 3, "field 1 writes MIN");
+    // field 2 = MAX (SDK `state::MAX`)
+    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 2, 9, 0]);
+    let max = kworld::with_world(|w| w.key_max(0, key));
+    assert_eq!(max, 9, "field 2 writes MAX");
     // field 3 = EXPIRES
     rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 3, 2, 0]);
     let exp = kworld::with_world(|w| w.key_expires(0, key));

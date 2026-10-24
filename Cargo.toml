@@ -42,6 +42,32 @@ wasmi = { version = "2", default-features = false, features = ["stable", "std", 
 sha2 = "0.10"
 card-sdk = { path = "crates/card-sdk" }
 bitflags = { version = "2", default-features = false }
+# card-sdk and the card/skill crates are members of the rules/ guest workspace
+# but are also path deps of this one. Their `workspace = true` deps resolve
+# against the root manifest here, so mirror every rules/Cargo.toml entry.
+game-kinds = { path = "crates/game-kinds" }
+postcard = { version = "1", default-features = false }
+const_format = { version = "0.2.37", features = ["fmt"] }
+bandori-std = { path = "rules/bandori-std" }
+card-ag = { path = "rules/cards/card-ag" }
+card-crychic = { path = "rules/cards/card-crychic" }
+card-general = { path = "rules/cards/card-general" }
+card-hhw = { path = "rules/cards/card-hhw" }
+card-morfonica = { path = "rules/cards/card-morfonica" }
+card-mujica = { path = "rules/cards/card-mujica" }
+card-mygo = { path = "rules/cards/card-mygo" }
+card-pp = { path = "rules/cards/card-pp" }
+card-ppp = { path = "rules/cards/card-ppp" }
+card-ras = { path = "rules/cards/card-ras" }
+card-roselia = { path = "rules/cards/card-roselia" }
+card-sumimi = { path = "rules/cards/card-sumimi" }
+personas = { path = "rules/personas" }
+rules-events = { path = "rules/events" }
+rules-markers = { path = "rules/markers" }
+rules-status = { path = "rules/status" }
+rules-tiles = { path = "rules/tiles" }
+skill-groups = { path = "rules/skills/skill-groups" }
+skill-personas = { path = "rules/skills/skill-personas" }
 
 [profile.release]
 opt-level = 3

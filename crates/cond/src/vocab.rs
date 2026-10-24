@@ -720,6 +720,28 @@ pub const VOCAB: &[Name] = &[
         doc: "counter_is('name') -> this window's `Trigger.name` is that counter / message",
     },
     Name {
+        cel: "card_is",
+        aliases: &[],
+        flat: "card_is",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Bool,
+        get: NO_GET,
+        get_str: NO_GET_STR,
+        fx: Fx::IntHas {
+            var: "_trigger_card",
+            fill: |v| {
+                let h = v.trigger_card();
+                if h == 0 {
+                    Vec::new()
+                } else {
+                    vec![h]
+                }
+            },
+        },
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "card_is('id') -> this window's `Trigger.card` is that card id",
+    },
+    Name {
         cel: "tile_named",
         aliases: &[],
         flat: "tile_named",

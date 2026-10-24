@@ -57,6 +57,9 @@ pub enum FnId {
     /// `cand_has(key, member)` -- membership in a named candidate set
     /// (`cand_pairs`). The key is an `id_of` hash baked at lower time.
     CandHas = 34,
+    /// `card_is('id')` -- the trigger's card id hash equals `id_of(id)`.
+    /// Pair of [`FnId::CounterIs`]; compared against `VarId::TriggerCard`.
+    CardIs = 35,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).
