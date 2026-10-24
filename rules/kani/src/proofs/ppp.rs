@@ -341,7 +341,7 @@ fn signpost_02_lose_1000_at_end_iff_at(user: i32) {
     let player = user;
     let pre_money = w.money[player as usize];
 
-    // single-source guard: the real CEL string on `On::AtEnd`
+    // single-source guard: the real CEL string on `On::Schedule`
     let gid = crate::guard_id!("owner.out == 0");
     let ov = TriggerOverlay::default();
     let ctx = ir_fill::fill_for_guard(&w, gid, player, 0, false, -1, &ov);

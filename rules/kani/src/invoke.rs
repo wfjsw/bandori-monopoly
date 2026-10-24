@@ -206,6 +206,9 @@ fn body_of(on: &On) -> BodyRef {
         | On::BuildBody(card_sdk::RuleEntry {
             body, drive, shape, ..
         })
+        | On::ScheduleBody(card_sdk::RuleEntry {
+            body, drive, shape, ..
+        })
         | On::MessageBody(card_sdk::MessageEntry {
             body, drive, shape, ..
         }) => BodyRef {
@@ -339,7 +342,7 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 /// First entry of card `idx` whose kind matches `kind` / `hook_name`.
 ///
 /// `kind` is one of `"Play"`, `"Counteract"`, `"Action"` /
-/// `"Filter"`, `"Gate"`, `"AtEnd"`,
+/// `"Filter"`, `"Gate"`, `"Schedule"`,
 /// `"DiceRollPlan"`, `"Settle"`, `"Message"`. For `Action`/`Filter`, `hook_name` may filter
 /// by kind short name (`"PaySplitAdd"`); `""` matches the first hook.
 ///
@@ -364,10 +367,7 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::DiceRollPlan, On::Filter(e)) => {
                 e.kind == card_sdk::abi::FilterKind::DiceRollPlan
             }
-            (KindTag::AtEnd, On::Action(e)) => {
-                e.kind == card_sdk::abi::ActionKind::AtEnd
-                    || hook_name_matches(e.kind.as_trigger(), hook_name)
-            }
+            (KindTag::Schedule, On::ScheduleBody(..)) => true,
             (KindTag::Settle, On::SettleBody(..)) => true,
             (KindTag::Mortgage, On::MortgageBody(..)) => true,
             (KindTag::Redeem, On::RedeemBody(..)) => true,
@@ -391,7 +391,7 @@ enum KindTag {
     Action,
     Filter,
     Gate,
-    AtEnd,
+    Schedule,
     DiceRollPlan,
     Settle,
     Message,
@@ -485,7 +485,7 @@ fn kind_tag(kind: &str) -> KindTag {
     const ACTION: (u8, u64, u64) = tag_key_const("Action");
     const FILTER: (u8, u64, u64) = tag_key_const("Filter");
     const GATE: (u8, u64, u64) = tag_key_const("Gate");
-    const AT_END: (u8, u64, u64) = tag_key_const("AtEnd");
+    const SCHEDULE: (u8, u64, u64) = tag_key_const("Schedule");
     const ROLL_PLAN: (u8, u64, u64) = tag_key_const("DiceRollPlan");
     const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
     const MESSAGE: (u8, u64, u64) = tag_key_const("Message");
@@ -499,7 +499,7 @@ fn kind_tag(kind: &str) -> KindTag {
         ACTION => KindTag::Action,
         FILTER => KindTag::Filter,
         GATE => KindTag::Gate,
-        AT_END => KindTag::AtEnd,
+        SCHEDULE => KindTag::Schedule,
         ROLL_PLAN => KindTag::DiceRollPlan,
         SETTLE => KindTag::Settle,
         MESSAGE => KindTag::Message,

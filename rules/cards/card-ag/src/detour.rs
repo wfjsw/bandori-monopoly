@@ -76,12 +76,11 @@ pub const DETOUR: CardDef = CardDef::new(
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
         // > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
         // > （2）效果），并将下一次的移动掷骰变更为1d6
-        On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", None, consume_next_roll)),
+        On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", None, consume_next_roll)).silent(),
 
     ],
 )
-// TODO: Move this .silent to the actual onlist
-    .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回家的路上绕个道"#)
         .raw_name(r#"回家的路上绕个道"#)
         .tags(&[r#"手"#, r#"反击"#])
@@ -295,7 +294,9 @@ fn arm_no_reward(player_id: i32) {
         return;
     }
     ctx::set_tile_prop(circle, prop::NO_REWARD, 1);
-    ctx::at_turn_end(player_id);
+    // TODO(规则书): the historical `ctx::at_turn_end` here was a silent no-op
+    // (this card declares no `On::Schedule` entry). Deleted rather than given
+    // an entry -- behaviour is identical.
 }
 
 // TODO: Remove

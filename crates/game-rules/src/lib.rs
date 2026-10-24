@@ -46,7 +46,7 @@ mod world;
 /// through.
 pub mod cond_pre;
 
-pub use card_sdk::abi::{AbKind, CardPile, MoveKind, PromptKind, TriggerKind, ABI_VERSION};
+pub use card_sdk::abi::{AbKind, CardPile, MoveKind, OnKind, PromptKind, TriggerKind, ABI_VERSION};
 pub use cond_pre::{
     admits, admits_gate, admits_pre, CompiledPre, PrecompiledCond, PrecompiledConds,
     PRECOMPILED_CONDS_VERSION,

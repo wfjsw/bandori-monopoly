@@ -26,11 +26,11 @@ pub const MIRACLE: CardDef = CardDef::new(
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
         // counts, not only the end-tile [重叠]. Bookkeeping (the running mask)
         // is silent; the reward is the visible entry.
-        On::Action(Action::PassTile("actor == owner && card.placed && players_on(tile.id, owner) > 0", Some(record_pass_applies), record_pass)),
+        On::Action(Action::PassTile("actor == owner && card.placed && players_on(tile.id, owner) > 0", Some(record_pass_applies), record_pass)).silent(),
         On::Action(Action::PassTile("actor == owner && card.placed", Some(all_others_passed), pass_player)),
     ],
 )
-.silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"难以复刻的奇迹"#)
         .raw_name(r#"难以复刻的奇迹"#)
         .tags(&[r#"手"#, r#"持续"#])

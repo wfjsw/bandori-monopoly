@@ -17,7 +17,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
     &[
         // 将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契
-        On::Play("", Some(cant_play), play),
+        On::Play("", Some(play_guard), play),
         // 规则书: 「当其中一方破产时」 -- the leaver is one of the pair.
         On::Action(Action::BeforeBankrupt(
             "card.placed && slot('one_of_us_partner') > 0 && (actor == owner || actor == slot('one_of_us_partner') - 1)", 
@@ -30,10 +30,10 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // the partner's share land. `PayAfter` just measures the rent income
         // the settle produced; the split is the terminal's job.
         On::Action(Action::PayAfter(
-            "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0", 
-            Some(measure_rent_guard), 
+            "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0",
+            Some(measure_rent_guard),
             measure_rent
-        )),
+        )).silent(),
         // The split only speaks when a designated deed produced income.
         // Runs before the silent consume below so it can read the measured rent.
         On::Action(Action::TileResolved(
@@ -47,12 +47,12 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // visible share above, and the per-drive silent check would see the
         // share's logs and accuse this bookkeeping of hiding a real effect.
         On::Action(Action::TileResolved(
-            "card.placed && slot('one_of_us_partner') > 0", 
-            None, 
+            "card.placed && slot('one_of_us_partner') > 0",
+            None,
             clear_measured_rent
-        )),
+        )).quiet_when_empty(),
     ],
-).props(&[(card_sdk::abi::prop::SONG, 1)]).silent(&[2]).quiet_when_empty(&[4]).meta(&card_sdk::meta::CardMeta::new()
+).props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"ONE OF US"#)
         .raw_name(r#"ONE OF US"#)
         .tags(&[])
@@ -79,7 +79,7 @@ fn candidates(player_id: i32) -> Vec<i32> {
 }
 
 /// refuses without deeds or without a partner.
-fn cant_play(player_id: i32) -> Option<Msg> {
+fn play_guard(player_id: i32) -> Option<Msg> {
     if ctx::owned_count(player_id) == 0 {
         return Some(Msg::new(key!("one_of_us_no_deeds")));
     }

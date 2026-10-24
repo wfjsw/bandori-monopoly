@@ -96,6 +96,14 @@ pub struct FilterEntry {
     pub shape: FilterShape,
     /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
     pub label: &'static str,
+    /// See [`crate::PlayEntry::flash`]. `Auto` (the default) = host classifies
+    /// by scope (owner-self-only ⇒ no flash); `Always` / `Never` are the
+    /// rule's own opinion and win over that classification.
+    pub flash: crate::abi::Flash,
+    /// See [`crate::PlayEntry::header`].
+    pub header: crate::abi::Presentation,
+    /// See [`crate::PlayEntry::texts`].
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 // Safety: `body` always points at a `fn` item in static code (constructed by
@@ -129,6 +137,14 @@ pub struct ActionEntry {
     pub declare_drive: Option<crate::DeclareDrive>,
     /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
     pub label: &'static str,
+    /// See [`crate::PlayEntry::flash`]. `Auto` (the default) = host classifies
+    /// by scope (owner-self-only ⇒ no flash); `Always` / `Never` are the
+    /// rule's own opinion and win over that classification.
+    pub flash: crate::abi::Flash,
+    /// See [`crate::PlayEntry::header`].
+    pub header: crate::abi::Presentation,
+    /// See [`crate::PlayEntry::texts`].
+    pub texts: &'static [(&'static str, &'static str, &'static str)],
 }
 
 impl ActionEntry {
@@ -161,6 +177,9 @@ pub const fn filter_value(
         body: body as *const (),
         shape: FilterShape::Value,
         label: "",
+        flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 
@@ -181,6 +200,9 @@ pub const fn filter_flag(
         body: body as *const (),
         shape: FilterShape::Flag,
         label: "",
+        flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 
@@ -203,6 +225,9 @@ pub const fn filter_payload<P: FilterPayload>(
         body: body as *const (),
         shape,
         label: "",
+        flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 
@@ -227,6 +252,9 @@ pub const fn action(
         declare: None,
         declare_drive: None,
         label: "",
+        flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
+        texts: &[],
     }
 }
 
@@ -678,7 +706,6 @@ action_kinds! {
     MoveAfter;
     MarkerSpend;
     MarkerGain;
-    AtEnd;
     PaySplitChooseBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;

@@ -674,7 +674,7 @@ impl Cx<'_> {
             s.tick_state(Tick::TurnEnd);
         }
         // 「并在回合结束时额外进行一次[触发结算]」 is no longer an engine
-        // counter: it is a scheduled turn-end rule op (`On::AtEnd`, whose body
+        // counter: it is a scheduled turn-end rule op (`On::Schedule`, whose body
         // calls `ctx::settle`) -- `docs/TILES.md`.
         self.w.next_turn_pending = true;
         // `turnEnd` (Fx hook point) -- every placed card decays/acts here.

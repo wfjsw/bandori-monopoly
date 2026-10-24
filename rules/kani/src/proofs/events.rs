@@ -590,7 +590,7 @@ pub fn moca_02_expiry_tick_files_away() {
     // Expiry entry (「在你的下个回合结束时永久移除此事件」).
     invoke::unwrap_done(invoke::hook_idx(
         crate::card_id!("event:Forbidden Moca"),
-        "AtEnd",
+        "Schedule",
         "",
         0,
     ));
@@ -614,7 +614,7 @@ pub fn moca_02_mutant_is_detected() {
     }
     invoke::unwrap_done(invoke::hook_idx(
         crate::card_id!("event:Forbidden Moca"),
-        "AtEnd",
+        "Schedule",
         "",
         0,
     ));
@@ -709,7 +709,7 @@ pub fn aao_01_expiry_tick_files_away() {
     }
     invoke::unwrap_done(invoke::hook_idx(
         crate::card_id!("event:A！A！O！"),
-        "AtEnd",
+        "Schedule",
         "",
         0,
     ));
@@ -1566,7 +1566,7 @@ pub fn heat_head_03_phase_end_files_away() {
     // First AtEnd: phase 1 → 2.
     invoke::unwrap_done(invoke::hook_idx(
         crate::card_id!("event:超燃甩头"),
-        "AtEnd",
+        "Schedule",
         "",
         0,
     ));
@@ -1576,7 +1576,7 @@ pub fn heat_head_03_phase_end_files_away() {
     let n0 = log_n_of();
     invoke::unwrap_done(invoke::hook_idx(
         crate::card_id!("event:超燃甩头"),
-        "AtEnd",
+        "Schedule",
         "",
         0,
     ));

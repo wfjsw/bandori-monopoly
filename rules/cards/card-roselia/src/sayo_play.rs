@@ -22,11 +22,11 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
             "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
             Some(can_counteract),
             counteract).counter_reason(key!("sayo_play_when")),
-        On::Play("", Some(counter_only), no_play),
+        On::Play("", Some(counter_only), no_play).silent(),
     ],
 )
 .props(&[(prop::COUNTERACT_GROUP, 1)])
-.silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"弹奏弹奏弹奏，继续弹奏"#)
         .raw_name(r#"（纱夜）弹奏弹奏弹奏，继续弹奏"#)
         .tags(&[r#"反击"#])

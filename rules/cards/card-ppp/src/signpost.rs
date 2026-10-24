@@ -16,7 +16,7 @@ pub const SIGNPOST: CardDef = CardDef::new(
     // bankrupt seat pays nobody, so the callback must not run (or flash).
     &[
         On::Play("", Some(cant_play), play),
-        On::Action(Action::AtEnd("owner.out == 0", None, at_end)),
+        On::Schedule("at_end", "owner.out == 0", None, at_end),
     ],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 1000)])
@@ -50,8 +50,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     ctx::card_move(player_id);
     // 规则书: 「回合结束时[失去]1000资金」 -- C# `H._turnCtx.AtEnd.Add(() =>
-    // H.LoseR(i, 1000, ...))`, scheduled onto `On::AtEnd`.
-    ctx::before_turn_end(player_id);
+    // H.LoseR(i, 1000, ...))`, scheduled onto `On::Schedule`.
+    ctx::before_turn_end(player_id, "at_end");
     ctx::log(
         player_id,
         &Msg::new(key!("signpost_pending"))
@@ -61,7 +61,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `On::AtEnd` (C# `H._turnCtx.AtEnd` -> `H.LoseR(i, 1000, ...)`) -- scheduled by
+/// `On::Schedule` (C# `H._turnCtx.AtEnd` -> `H.LoseR(i, 1000, ...)`) -- scheduled by
 /// `ctx::before_turn_end` in `play`; runs once when the turn ends. The
 /// "still in the game" gate is the entry's condition (`owner.out == 0`).
 fn at_end(player_id: i32) -> card_sdk::Asked {

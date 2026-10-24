@@ -183,7 +183,7 @@ fn pre_rollplan_does_not_shape_the_move() {
     );
 }
 
-/// `On::AtEnd` whose condition rejects: the scheduled turn-end callback runs
+/// `On::Schedule` whose condition rejects: the scheduled turn-end callback runs
 /// no body (and no flash).
 #[test]
 fn pre_at_end_does_not_run() {
@@ -191,9 +191,16 @@ fn pre_at_end_does_not_run() {
     guard_cost::reset();
     let r = fixtures();
     let card = r.card("TEST:preAtEnd").expect("fixture present");
+    let entry = r.cards()[card as usize]
+        .entry(game_rules::OnKind::Schedule, None)
+        .expect("Schedule entry");
     let mut w = effect_window(0, 0);
     w.trigger.kind = TriggerKind::TurnEndAfter;
-    let call = Call::AtEnd { card, player_id: 0 };
+    let call = Call::AtEnd {
+        card,
+        player_id: 0,
+        entry,
+    };
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();

@@ -21,8 +21,8 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -33,10 +33,9 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
             on_roll)),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
-        On::Action(Action::AtEnd("owner.pos >= 0", None, settle_now)),
+        On::Schedule("settle_now", "owner.pos >= 0", None, settle_now),
     ],
 )
-.silent(&[1, 2])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
@@ -64,7 +63,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     rules_status::stay::add(player_id, 1);
     // 「并在回合结束时触发结算」 -- a scheduled turn-end rule op
     // (`docs/TILES.md`), not an engine counter.
-    ctx::before_turn_end(player_id);
+    ctx::before_turn_end(player_id, "settle_now");
     ctx::log(
         player_id,
         &Msg::new(key!("tomori_crychic_stay")).i("n", face as i64),

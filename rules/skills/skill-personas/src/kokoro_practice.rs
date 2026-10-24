@@ -53,11 +53,10 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
             on_move_end)),
         // （3）「获得一个火罐（上限1）」 -- the cap has to hold from match start,
         // or `gain_charge` (cap 0 = no pots) drops the grant on the floor.
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
     ],
 )
-.silent(&[4, 5])
 // 「（初始0，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

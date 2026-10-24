@@ -290,7 +290,7 @@ pub struct Scheduled {
     /// time: the instance identity belongs here and not to whatever happens to
     /// be on the field when the turn ends.
     ///
-    /// `-1` when the card was not in play when it scheduled (`On::AtEnd` may
+    /// `-1` when the card was not in play when it scheduled (`On::Schedule` may
     /// run for a card in a hand or pile); the run then reads 0 named counters, which
     /// is right -- there is no instance to read them from. Two copies of a card
     /// that both schedule produce two entries with two uids, so the callback is
@@ -298,6 +298,10 @@ pub struct Scheduled {
     /// existed still loads.
     #[serde(default = "no_card_uid")]
     pub uid: i32,
+    /// Which `On::Schedule` entry to run (its `id` slug). `""` on a save from
+    /// before this field existed -- resolve to the card's first Schedule entry.
+    #[serde(default)]
+    pub entry: String,
 }
 
 /// The "no instance" card uid: the callback is not anchored to a field card.

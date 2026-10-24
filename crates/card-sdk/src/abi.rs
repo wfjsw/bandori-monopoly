@@ -191,6 +191,9 @@ use std::borrow::Cow;
 ///    attached [CP点] count is written, so 「…时」 clauses on the count (the
 ///    该清CP了 graveyard rule) live in one event handler instead of at each
 ///    spend site. Mirrors v29's `crystalsChanged`.
+///    **Retired** (v51 / user ruling 2026-10-07): `CpChanged` is gone; the
+///    该清CP了 graveyard rule rides `CounterChanged` with a `counter::CP`
+///    name check in the residual guard (`clear_cp.rs`), not a CP-only trigger.
 /// v37: event rule instances (`docs/EVENTS.md`) -- the `rules/events` category.
 ///    `ctx::event_expire` / `event_is_active` / `event_deck_push` /
 ///    `event_banish` are the rule body's handles on the engine's event deck
@@ -206,7 +209,8 @@ use std::borrow::Cow;
 ///    with `ctx::cp_attached` (the running instance) / `cp_at` (another
 ///    instance). `cp_attached` changed meaning in place: it used to total
 ///    the tile marks carrying the instance as `src`, it now reads
-///    `FieldCard::cp`. `HookKind::CpChanged` rides the on-card writes only.
+///    `FieldCard::cp`. `HookKind::CpChanged` rode the on-card writes only
+///    (retired in v51 -- see the note on v36).
 ///    The per-player 「自己[场上]」 counter `mark::CP_FIELD_TOK` is gone: the
 ///    card's own count replaces it.
 /// v40: the **purchase surface** (`docs/PURCHASE.md`). `TriggerKind`s
@@ -341,9 +345,9 @@ use std::borrow::Cow;
 ///    SAVE_VERSION unchanged.
 /// v54: `ManifestOn::presentation` -- how an entry shows up in the log.
 ///    `Visible` (default) flashes and writes a 「效果适用」 header.
-///    `Silent` (`CardDef::silent`) is bookkeeping: runs its body, posts no
+///    `Silent` (`On::silent`) is bookkeeping: runs its body, posts no
 ///    flash and no header (declare_cap / set_bounds / initial values /
-///    latch clears). `QuietWhenEmpty` (`CardDef::quiet_when_empty`) runs
+///    latch clears). `QuietWhenEmpty` (`On::quiet_when_empty`) runs
 ///    normally but **retracts** its header when the body produced nothing
 ///    visible (no children, no logs): the clause applied and changed
 ///    nothing (capped gain, 「已满」), so the player never sees a flash.
@@ -355,7 +359,7 @@ use std::borrow::Cow;
 ///    the header mode: `Auto` (host classifies by scope, owner-self-only =>
 ///    no flash), `Always` (the rule says this entry always flashes, e.g. a
 ///    self-only effect the player must notice), `Never` (log entry remains,
-///    no flash/pulse). Authored via `CardDef::flash`. The header modes of
+///    no flash/pulse). Authored via `On::flash`. The header modes of
 ///    v54 are unchanged; `CardDef::presentation` is the one lookup that
 ///    folds header + flash into [`EntryPresentation`].
 ///    Imperative flash from the body (like `ctx::log`): new host imports
@@ -442,7 +446,7 @@ use std::borrow::Cow;
 ///    character), `step` (1 = owner is the actor's own character). No new
 ///    host import, no SAVE_VERSION change.
 /// v59: `ManifestEntry::texts` -- per-entry **tile text** declarations
-///    (`CardDef::texts`): the deed-popup description an entry speaks for,
+///    (`On::texts`): the deed-popup description an entry speaks for,
 ///    as `(entry, slot, tile, key)`. `slot` is [`text_slot`] (settle /
 ///    pass); `tile` is `""` = the instance's own tile or a board tile name
 ///    for a tile-bound text on a tile-less instance; `key` is a `ui`
@@ -838,8 +842,8 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 102;
-/// v102: **roll API redesign**. `ctx::roll` is the windowed default (raises
+pub const ABI_VERSION: i32 = 103;
+/// v103: **roll API redesign**. `ctx::roll` is the windowed default (raises
 ///    the 「掷骰结算前」 [反击] window on the face) and `ctx::roll_direct` is the
 ///    windowless one; both return `Result<i32, Prompt>` via `asked()` and pause
 ///    with `Pause::Sentinel` (not `Trap`), matching `gain` / `pay` / `draw` /
@@ -854,6 +858,17 @@ pub const ABI_VERSION: i32 = 102;
 ///    `roll_direct(..., RollPurpose::Move)` and the dedicated
 ///    `ruleset_do_move_roll` import is gone. `roll_source` is unchanged
 ///    (orthogonal attribution). SAVE_VERSION / RECORD_VERSION unchanged.
+/// v102: **named scheduled callbacks**. `On::Action(Action::AtEnd(pre, guard,
+///    body))` becomes `On::Schedule(id, pre, guard, body)` -- a required
+///    stable ASCII slug names the entry, and the scheduling family
+///    (`ctx::at_turn_end` / `ctx::before_turn_end` / `ctx::at_next_turn_end`)
+///    gains that `id` so a schedule call names which entry it wants.
+///    `OnKind::Schedule = 14` (4/5/6 stay retired forever). Host import
+///    `schedule_turn_end` gains `(id_ptr, id_len)`; `Scheduled` gains
+///    `entry` (the named slug, `""` on a save from before this field --
+///    resolve to the card's first Schedule entry). `TriggerKind::AtEnd = 103`
+///    stays as the evaluation window (`turnEndBefore` / `turnEndAfter`).
+///    SAVE_VERSION unchanged (the new save field is `#[serde(default)]`).
 /// v101: **mark refs**. `place_mark` returns the mark row's stable uid (a
 ///      [`MarkRef`], packed as one `i32`; `-1` = none) instead of the row
 ///      count, so a card can store the handle and retrieve the pick later.
@@ -885,10 +900,10 @@ pub const ABI_VERSION: i32 = 102;
 pub enum Presentation {
     /// Flash + 「效果适用」 header (the default).
     Visible = 0,
-    /// Bookkeeping: no flash, no header. `CardDef::silent`.
+    /// Bookkeeping: no flash, no header. `On::silent`.
     Silent = 1,
     /// Flash only if the body produced something visible.
-    /// `CardDef::quiet_when_empty`.
+    /// `On::quiet_when_empty`.
     QuietWhenEmpty = 2,
 }
 
@@ -942,8 +957,9 @@ impl Default for Flash {
 }
 
 /// One entry's log presentation: the header mode plus the flash policy.
-/// Returned by `CardDef::presentation` -- the one lookup that folds
-/// `silent` / `quiet_when_empty` / `flash`. v55.
+/// Returned by `CardDef::presentation` -- the one lookup that folds the
+/// entry's [`On::silent`] / [`On::quiet_when_empty`] header with its
+/// [`On::flash`] policy. v55.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EntryPresentation {
     pub header: Presentation,
@@ -954,7 +970,7 @@ pub struct EntryPresentation {
 /// The host scopes it to one counteraction body, never the resulting walk.
 pub const COUNTERACT_MOVE_EXTENSION: &str = "counteract.moveExtension";
 
-/// Tile-text slots (`CardDef::texts`, [`ManifestTileText::slot`], v59): which
+/// Tile-text slots (`On::texts`, [`ManifestTileText::slot`], v59): which
 /// half of a deed popup an entry speaks for. The settle slot is the 结算
 /// description; the pass slot is the 经过 one. Mirrors the body's
 /// `On::Settle` / `ActionKind::PassTile` split -- the text an entry declares is
@@ -2088,12 +2104,6 @@ impl ActionKind {
     /// A counteraction may cancel the gain.
     pub const MarkerGain: Self = Self(TriggerKind::MarkerGain);
 
-    /// Action. Scheduled turn-end callback. Raised only for the card a schedule
-    /// entry names, at that turn's end (one-shot), inside the TurnEndBefore /
-    /// TurnEndAfter windows. Payload is that window's trigger. A listener may
-    /// emit effects.
-    pub const AtEnd: Self = Self(TriggerKind::AtEnd);
-
     /// Action. Interactive pre-stage immediately before the pure PaySplitChoose
     /// filter, per settled payment leg. Payload: player_id = payer, target =
     /// payee, value = the running figure, the pay flag, tile, by_card.
@@ -2802,7 +2812,7 @@ pub struct ManifestEntry {
     /// declare reads as its default (`0`). Host side becomes a `BTreeMap`.
     #[serde(default)]
     pub props: Vec<(String, i32)>,
-    /// Tile texts this card's entries speak (`CardDef::texts`). v59.
+    /// Tile texts this card's entries speak (`On::texts`). v59.
     /// Trailing field -- postcard is not self-describing, so adding it is an
     /// ABI bump.
     #[serde(default)]
@@ -2832,7 +2842,7 @@ pub struct ManifestEntry {
     pub gate_skip_msgs: Vec<(i32, String)>,
 }
 
-/// One per-entry **tile text** declaration (`CardDef::texts`, v59): the
+/// One per-entry **tile text** declaration (`On::texts`, v59): the
 /// deed-popup description an entry speaks for.
 ///
 /// * `entry` -- the manifest `on` index the text hangs off.
@@ -2893,11 +2903,11 @@ pub struct ManifestOn {
     /// Not a key into the card text; source is [`On::label`] on the entry.
     #[serde(default)]
     pub label: Option<String>,
-    /// How this entry presents itself in the log (`CardDef::silent` /
-    /// `CardDef::quiet_when_empty`). See [`Presentation`]. v54.
+    /// How this entry presents itself in the log (`On::silent` /
+    /// `On::quiet_when_empty`). See [`Presentation`]. v54.
     #[serde(default)]
     pub presentation: Presentation,
-    /// Whether the activation flashes (`CardDef::flash`). See [`Flash`]. v55.
+    /// Whether the activation flashes (`On::flash`). See [`Flash`]. v55.
     #[serde(default)]
     pub flash: Flash,
 }
@@ -2980,6 +2990,13 @@ pub enum OnKind {
     /// runs when a house is built on the deed this rule instance governs.
     /// Same split as [`Self::Buy`].
     Build = 13,
+    /// v102: a **named scheduled callback** (`On::Schedule(id, pre, guard,
+    /// body)`) -- what runs when a `ctx::at_turn_end` / `ctx::before_turn_end` /
+    /// `ctx::at_next_turn_end` call names this entry's `id` slug. The
+    /// evaluation window is still [`TriggerKind::AtEnd`] (`turnEndBefore` /
+    /// `turnEndAfter`); the entry is no longer an anonymous
+    /// `On::Action(Action::AtEnd(…))`. Id 14 (4/5/6 stay retired forever).
+    Schedule = 14,
 }
 
 /// Filter payloads live in [`crate::payload`] -- one typed struct per kind
@@ -3000,6 +3017,7 @@ impl OnKind {
             11 => Self::Filter,
             12 => Self::Buy,
             13 => Self::Build,
+            14 => Self::Schedule,
             _ => return None,
         })
     }

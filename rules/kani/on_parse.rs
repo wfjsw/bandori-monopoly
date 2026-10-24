@@ -94,6 +94,7 @@ const ACTIONISH: &[&str] = &[
     "Buy",
     "Build",
     "Message",
+    "Schedule",
 ];
 
 /// Retired `On` variants / types. A hit is a build error — never a silent skip.
@@ -491,6 +492,7 @@ pub fn default_expr(shape: BodyShape) -> &'static str {
 ///
 /// - `On::Filter` / `On::Action`: `pre` is ctor arg 1 of the inner
 ///   `Ns::Kind(pre, …)` call.
+/// - `On::Schedule(id, pre, …)`: `pre` is the second top-level argument.
 /// - Everything else: the first top-level argument (string literal or
 ///   `pre::MINE` / guard const).
 pub fn on_pre_string(after_on: &str) -> Option<String> {
@@ -510,7 +512,9 @@ pub fn on_pre_string(after_on: &str) -> Option<String> {
         let first = args.iter().find(|p| !p.trim().is_empty())?;
         return pre_string(first.trim());
     }
-    // Flat args: first top-level arg is pre.
+    // Flat args: first top-level arg is pre (second for `On::Schedule(id, pre, …)`,
+    // whose leading id slug is not a condition -- callers that care pass the
+    // second arg via `pre_string` on the split list).
     // `after_on` starts *inside* the outer `(`, so depth 0 + `)` is the closer.
     let mut depth = 0usize;
     let mut j = 0;
@@ -528,6 +532,27 @@ pub fn on_pre_string(after_on: &str) -> Option<String> {
     let args = split_args(&after_on[..j]);
     let first = args.iter().find(|p| !p.trim().is_empty())?;
     pre_string(first.trim())
+}
+
+/// `On::Schedule`'s `pre` (second ctor arg) -- the leading id slug is skipped.
+pub fn on_schedule_pre_string(after_on: &str) -> Option<String> {
+    let b = after_on.as_bytes();
+    let mut depth = 0usize;
+    let mut j = 0;
+    while j < b.len() {
+        if b[j] == b'(' {
+            depth += 1;
+        } else if b[j] == b')' {
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        }
+        j += 1;
+    }
+    let args = split_args(&after_on[..j]);
+    let second = args.iter().filter(|p| !p.trim().is_empty()).nth(1)?;
+    pre_string(second.trim())
 }
 
 /// `pre` argument: a string literal, `pre::MINE`, or a known guard const.

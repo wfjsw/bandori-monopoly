@@ -99,7 +99,7 @@ impl NativeRulesHandle {
                     .on
                     .iter()
                     .enumerate()
-                    .map(|(ei, o)| ManifestOn {
+                    .map(|(_, o)| ManifestOn {
                         kind: o.kind() as i32,
                         triggers: o.triggers(),
                         pre: {
@@ -135,8 +135,9 @@ impl NativeRulesHandle {
                                 Some(String::from(l))
                             }
                         },
-                        presentation: card.presentation(ei as i32).header,
-                        flash: card.presentation(ei as i32).flash,
+                        // The entry's own accessors -- no index walk.
+                        presentation: o.header_of(),
+                        flash: o.flash_of(),
                     })
                     .collect();
                 // Same bitset the sandbox builds (): trigger
@@ -181,13 +182,16 @@ impl NativeRulesHandle {
                     on,
                     props,
                     texts: card
-                        .texts
+                        .on
                         .iter()
-                        .map(|(e, slot, tile, key)| ManifestTileText {
-                            entry: *e,
-                            slot: (*slot).to_string(),
-                            tile: (*tile).to_string(),
-                            key: (*key).to_string(),
+                        .enumerate()
+                        .flat_map(|(ei, o)| {
+                            o.texts_of().iter().map(move |(slot, tile, key)| ManifestTileText {
+                                entry: ei as i32,
+                                slot: (*slot).to_string(),
+                                tile: (*tile).to_string(),
+                                key: (*key).to_string(),
+                            })
                         })
                         .collect(),
                     board_role: card.board_role.to_string(),
@@ -562,7 +566,7 @@ fn entry_of(info: &CardInfo, call: &Call, trigger_kind: TriggerKind) -> Option<i
         // (Play mode selection happens in `NativeModules::play_entry_for`.)
         Call::Counteract { .. } => info.entry(OnKind::Counteract, Some(trigger_kind)),
         Call::Hook { kind, .. } => info.hook_entry(*kind),
-        Call::AtEnd { .. } => info.hook_entry(card_sdk::abi::TriggerKind::AtEnd),
+        Call::AtEnd { entry, .. } => Some(*entry),
         Call::DiceRollPlan { .. } => info.hook_entry(card_sdk::abi::TriggerKind::DiceRollPlan),
         Call::Settle { .. } => info.entry(OnKind::Settle, None),
         Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),

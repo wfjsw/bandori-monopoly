@@ -23,14 +23,13 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         On::Action(Action::PassTile(
             "actor == owner && card.placed",
             None,
-            pass_tile)),
+            pass_tile)).silent(),
         On::Action(Action::TurnEndAfter(
             "card.placed && slot('saaya_sky_passed') != 0",
             None,
             turn_end_after)),
     ],
 )
-.silent(&[1])
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"总有一天要给这片天空命名"#)

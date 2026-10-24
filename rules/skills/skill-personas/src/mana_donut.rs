@@ -44,11 +44,11 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart(
             "card.placed",
             None,
-            declare_cap)),
+            declare_cap)).silent(),
         On::Action(Action::TurnStartBefore(
             "card.placed",
             Some(cap_unset),
-            declare_cap)),
+            declare_cap)).silent(),
         // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
         // branch. The choice / spend / pay stay in the body.
         On::Action(Action::Pass(PASS_PRE, None, on_pass)),
@@ -71,8 +71,7 @@ pub const MANA_DONUT: CardDef = CardDef::new(
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
     (bandori_std::fire::FIRE_CAP, 2),
-])
-.silent(&[0, 1]);
+]);
 
 /// The TurnStartBefore re-declare only does something when the cap is still
 /// unset (a mid-game placement of the skill). `state::max` is not in the CEL

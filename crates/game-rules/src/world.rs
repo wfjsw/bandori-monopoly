@@ -1097,10 +1097,11 @@ pub trait CardWorld: Clone + 'static {
     // ----------------------------------------------- turn plan & scheduling
     // Defaults are no-ops so test worlds need not implement them.
 
-    /// Call the running card's `counteract` (kind `turnEnd`) for `player_id` at a turn
+    /// Call the running card's `On::Schedule(entry)` for `player_id` at a turn
     /// end: this turn's end, or -- `next_of_player` -- the end of `player_id`'s next
-    /// turn (「你的下回合结束时」).
-    fn schedule_turn_end(&mut self, _player: i32, _next_of_player: bool, _early: bool) {}
+    /// turn (「你的下回合结束时」). `entry` names which Schedule entry to run;
+    /// an unknown / unmatching id is a no-op.
+    fn schedule_turn_end(&mut self, _player: i32, _next_of_player: bool, _early: bool, _entry: &str) {}
     /// `player_id`'s money cannot drop this turn.
     fn set_no_money_loss(&mut self, _player: i32) {}
     /// This turn's main-move roll (a fixed face, not a dice table).

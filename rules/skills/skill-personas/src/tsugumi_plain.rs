@@ -29,8 +29,8 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
         On::Play("", Some(can_use), use_skill).label("（2）"),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::TurnEnd("", Some(afterglow), tick)),
         // Pure plan reshape; the one-shot latch / CiRCLE-veto arming ride
         // DiceRollAfter (the next event after the plan, before the walk).
@@ -45,7 +45,6 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
             on_plan_after)),
     ],
 )
-.silent(&[1, 2])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
@@ -88,7 +87,9 @@ fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
 fn on_plan_after(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, OWED, 0);
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
-    ctx::at_turn_end(player_id);
+    // TODO(规则书): the historical `ctx::at_turn_end` here was a silent no-op
+    // (this card declares no `On::Schedule` entry). Deleted rather than given
+    // an entry -- behaviour is identical. The real disarm is `tick`.
     ctx::log(player_id, &Msg::new(key!("tsugumi_plain_owed")));
     Ok(())
 }

@@ -23,8 +23,8 @@ const MARK: &str = "saaya标记";
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1）'s 「一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时」 is the
         // hook's applicability, not its effect (the ask is the effect).
         On::Action(Action::PayAfter(
@@ -46,7 +46,6 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
             on_pay)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始3，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 3),

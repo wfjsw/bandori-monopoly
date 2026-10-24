@@ -23,7 +23,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
             card_sdk::pre::MINE,
             None,
             counteract).counter_reason(key!("elegant_shout_when")),
-        On::Action(Action::AtEnd("", None, at_end)),
+        On::Schedule("at_end", "", None, at_end),
     ],
 )
 .meta(
@@ -44,7 +44,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     );
     // C# `H.ExtraOf<ElegantFx>(c.Seat).Count++` -- each counteraction stacks one
     // draw; scheduling one `AtEnd` per counteraction stacks the same way.
-    ctx::at_next_turn_end(player_id);
+    ctx::at_next_turn_end(player_id, "at_end");
     Ok(())
 }
 

@@ -14,9 +14,11 @@ use bandori_std::ctx;
 use card_sdk::abi::text_slot;
 use card_sdk::{CardDef, Msg, On};
 
-pub const EDOGAWA: CardDef = CardDef::new("tile:edogawa", &[On::Settle("", None, settle)])
-    .board_role("tile")
-    .texts(&[(0, text_slot::SETTLE, "", "deed.note.draw")]);
+pub const EDOGAWA: CardDef = CardDef::new(
+    "tile:edogawa",
+    &[On::Settle("", None, settle).texts(&[(text_slot::SETTLE, "", "deed.note.draw")])],
+)
+.board_role("tile");
 
 /// 规则书: 「江户川乐器店的[结算]是：抽取一张手卡。」
 fn settle(player_id: i32) -> card_sdk::Asked {

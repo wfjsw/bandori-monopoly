@@ -32,7 +32,7 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
         On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, before_build)),
-        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, after_build)),
+        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, after_build)).silent(),
         On::Play("", None, trainee_guide),
         // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- the tick only.
         On::Action(Action::TurnEnd("", Some(turn_end_guard), turn_end)),
@@ -46,7 +46,7 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
 // (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
 .props(&[(prop::HAND_LIMIT_DELTA, -1)])
-    .silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"练习生解密指南"#)
         .raw_name(r#"练习生解密指南"#)
         .tags(&[r#"手"#, r#"持续"#])

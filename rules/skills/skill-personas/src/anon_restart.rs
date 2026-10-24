@@ -18,8 +18,8 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -33,7 +33,6 @@ pub const ANON_RESTART: CardDef = CardDef::new(
             on_abnormal)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始2，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

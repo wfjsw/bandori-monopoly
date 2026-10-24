@@ -28,7 +28,7 @@ through **engine flags** -- side channels the rulebook never names:
 | ~~`buy_discount` / `free_buy` / `raze_on_buy`~~ | ~~`TurnCtx`~~ | tsugu_ycm, roselia band (1) / maze_warehouse | **done** -- `ctx::linger` + `BuyAdd` −1500 / `BuyMul` ½ / `BuySet` 0 + `BuyAssign` houses 0 (`docs/PURCHASE.md`) |
 | ~~`extraColor:<tile>` / `st.tile_colors`~~ | ~~per-player state / `MatchState`~~ | soyo_colors, asahi_aim, roselia band (1), guerrilla, soyo_clear | **done** -- tile props `colorFor:<p>` (per player) and `prop::ANY_COLOR` (「该格获得所有颜色」); `is_color` / `is_live_house_for` read them |
 | ~~`noBuild` (play-from-hand)~~ | ~~per-player state~~ | council_check | **done** -- a `ctx::linger` instance carrying `prop::NO_BUILD`, which `why_not_build_on` reads |
-| ~~`settleAtEnd`~~ | ~~per-player state~~ | rinne_rain, tomori_crychic | **done** -- `ctx::before_turn_end` + `On::Action(&[AtEnd])` whose body calls `ctx::settle` |
+| ~~`settleAtEnd`~~ | ~~per-player state~~ | rinne_rain, tomori_crychic | **done** -- `ctx::before_turn_end` + `On::Schedule` whose body calls `ctx::settle` |
 | ~~`settleInstead`~~ | ~~`ActionKind`~~ | ~~parking_space, smile_parade~~ | **done** -- `ActionKind::SettleBody`; hey_kids moved to `ChainKind::SettleBody` |
 
 Cards and skills are **rule instances** (`CardDef` → manifest → `FieldCard`
@@ -346,8 +346,9 @@ per slot.
 
 ### Declaration
 
-`CardDef::texts` is a per-entry side table `(entry index, slot, tile, key)`
-(`crates/card-sdk`, ABI v59):
+`On::texts` rides the entry itself (`crates/card-sdk`), as `(slot, tile, key)`
+rows -- the same shape the wire always carried, minus the entry-index column
+which is now synthesised from declaration order:
 
 | field | values | |
 |---|---|---|
@@ -359,13 +360,24 @@ per slot.
 | | `""` | suppresses the slot |
 
 The `slot` mirrors the body's own split (`On::Settle` / `ActionKind::PassTile`),
-so a rule that replaces one half only replaces that half's text.
+so a rule that replaces one half only replaces that half's text. A **slice**
+per entry (`const fn` cannot grow a `&'static` slice; slice-valued fields are
+already the house style on entries). Declaration order of the rows is
+preserved on the wire.
+
+```rust
+On::Settle("", None, settle)
+    .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
+    .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+```
 
 ### Manifest
 
-`ManifestEntry::texts: Vec<ManifestTileText>` (v59) carries the side table
-through the wire. The host caches it on `CardInfo`; `CardRules::card_texts`
-exposes it to `game-core` as `TileTextDecl`s.
+`ManifestEntry::texts: Vec<ManifestTileText>` (v59) carries the rows through
+the wire (entry index synthesised from enumeration order). The host caches it
+on `CardInfo`; `CardRules::card_texts` exposes it to `game-core` as
+`TileTextDecl`s.
 
 ### View
 
@@ -472,7 +484,7 @@ Every flag in the table at the top leaves the engine. The home for each:
 | ~~`raze_on_buy`~~ | **done** -- the same instance hooks `BuyAssign` and rewrites `deal_houses` to 0 |
 | ~~`extraColor:` / `st.tile_colors`~~ | **done** -- `prop::ANY_COLOR` (tile-wide 「该格获得所有颜色」) and `colorFor:<p>` (per player) on the tile's rule instance |
 | `noBuild` | prop `noBuild` on the tile instance; `why_not_build_on` reads it |
-| `settleAtEnd` | a scheduled turn-end rule op (`On::Action(&[AtEnd])`) whose body calls `ctx::settle` -- 「并在回合结束时触发结算」 is a scheduling clause, not a tile fact (rinne_rain, tomori_crychic) |
+| `settleAtEnd` | a scheduled turn-end rule op (`On::Schedule`) whose body calls `ctx::settle` -- 「并在回合结束时触发结算」 is a scheduling clause, not a tile fact (rinne_rain, tomori_crychic) |
 | `settleInstead` | **done** -- renamed `ActionKind::SettleBody`, the body-replace gesture on the tile's rule instances |
 
 `buy_price` / `build_cost` / `mortgage_value` / `force_buy_price` / the ring
@@ -586,7 +598,7 @@ report it.
 | 4 | `tile:agent` | the 「若…则…否则…」 branch | **done** -- the body is the branch (同色 set / all-owned half-rent / one buy-build offer). No engine-side `Play::agent_landing` remains: an unbound non-deed just logs a generic landing |
 | 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `paySplitMul` stage (step 9) |
 | 6 | `tile:property` | the four-way branch | **done** -- `land_at`'s `match` is now the **built-in fallback** (`land_at_built_in`) for `StubRules` and unbound kinds, not the only path |
-| 7 | flags | card migrations | **done** -- `settleInstead` → `ActionKind::SettleBody`, `settleAtEnd` → `On::Action(&[AtEnd])`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
+| 7 | flags | card migrations | **done** -- `settleInstead` → `ActionKind::SettleBody`, `settleAtEnd` → `On::Schedule`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
 | 8 | docs + perf | ENGINE.md, CARDS.md, this doc | **done** |
 | 9 | Phase 3 (engine-fix batch) | the flag removal + card migrations | **mostly done** -- see [Left short](#left-short) |
 
@@ -619,7 +631,7 @@ than the only path. Phase 3 landed the following (2026-10-06):
   it fires when **another** player settles rent on my tiles. Parking Space and
   笑容大游行 keep `ActionKind::SettleBody` (the body-replace gesture).
 * **`settleAtEnd` is gone** -- 「并在回合结束时额外进行一次[触发结算]」 is a
-  scheduling clause: `ctx::before_turn_end` + `On::Action(&[AtEnd])` whose body calls
+  scheduling clause: `ctx::before_turn_end` + `On::Schedule` whose body calls
   `ctx::settle`.
 * **「支付减半」** rides the money pipeline's `paySplitMul` stage
   (`scale_settle_payment`), not `pay_rent`, so the scale covers the payment as

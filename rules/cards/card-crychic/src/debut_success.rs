@@ -13,7 +13,7 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",
-    &[On::Play("", None, debut_success), On::Action(Action::AtEnd("", None, at_end))],
+    &[On::Play("", None, debut_success), On::Schedule("at_end", "", None, at_end)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"初演大成功"#)
         .raw_name(r#"初演大成功"#)
@@ -31,7 +31,7 @@ fn debut_success(player_id: i32) -> card_sdk::Asked {
     ctx::set_no_money_loss(player_id);
     // 规则书: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」
     //   -- C# `H._turnCtx.AfterEnd.Add(() => After(i))`.
-    ctx::at_turn_end(player_id);
+    ctx::at_turn_end(player_id, "at_end");
     Ok(())
 }
 

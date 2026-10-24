@@ -28,7 +28,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
         // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
         On::Filter(Filter::DiceRollValue("", None, sub_die_filter)),
-        On::Action(Action::AtEnd("", None, phase_end)),
+        On::Schedule("phase_end", "", None, phase_end),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -43,7 +43,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_crystals(PHASE_UP);
-    ctx::at_next_turn_end(player_id);
+    ctx::at_next_turn_end(player_id, "phase_end");
     ctx::log(
         player_id,
         &Msg::new("log.event.heat_up").player_id("who", player_id),
@@ -99,7 +99,7 @@ fn phase_end(player_id: i32) -> card_sdk::Asked {
         // runs *at* a turn end, so the next occurrence of that player's turn end
         // is 「下回合结束时」: `at_turn_end` (not `at_next_turn_end`, which would
         // also skip the next one and land a turn late).
-        ctx::at_turn_end(player_id);
+        ctx::at_turn_end(player_id, "phase_end");
         ctx::log(
             player_id,
             &Msg::new("log.event.heat_down").player_id("who", player_id),

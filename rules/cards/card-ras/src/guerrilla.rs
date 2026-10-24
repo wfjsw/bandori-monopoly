@@ -23,17 +23,17 @@ pub const GUERRILLA: CardDef = CardDef::new(
         // arms the turn-end check for *this* turn (C# `OnDiscarded`). The
         // counteract body also arms (the card lands in the discard after that
         // counteraction resolves).
-        On::Action(Action::Discarded(card_sdk::pre::MINE, None, on_discarded)),
+        On::Action(Action::Discarded(card_sdk::pre::MINE, None, on_discarded)).silent(),
         // 规则书[特]: 「此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家
         // 支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在
         // 可购买的此类格子，则可选择…」 -- the offer exists only when every
         // clause of that 「如果」 holds. Derived scans, residual. The arm-latch
         // clear is the same entry's bookkeeping (the engine dispatches one
         // `AtEnd` body per entry), so the gate lives in the body.
-        On::Action(Action::AtEnd("", None, at_end)),
+        On::Schedule("at_end", "", None, at_end),
     ],
 )
-.silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"游击演出"#)
         .raw_name(r#"游击演出"#)
         .tags(&[r#"手"#, r#"反击"#, r#"特"#])
@@ -146,7 +146,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // lands in the discard after this counteraction resolves).
     if ctx::turn_player() == player_id && ctx::slot(player_id, SLOT_ARMED) == 0 {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
-        ctx::before_turn_end(player_id);
+        ctx::before_turn_end(player_id, "at_end");
     }
     Ok(())
 }
@@ -156,7 +156,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
     if ctx::turn_player() == player_id && ctx::slot(player_id, SLOT_ARMED) == 0 {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
-        ctx::before_turn_end(player_id);
+        ctx::before_turn_end(player_id, "at_end");
     }
     Ok(())
 }

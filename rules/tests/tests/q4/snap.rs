@@ -421,7 +421,7 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     }
     if p == "scheduled" {
         // A rule's own turn-end callback queue. The rule scheduling itself
-        // (On::AtEnd) is its effect mechanism, not a foreign write.
+        // (On::Schedule) is its effect mechanism, not a foreign write.
         return Some("effects");
     }
     if p == "extra_turns" {

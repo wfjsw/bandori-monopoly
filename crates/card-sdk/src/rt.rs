@@ -19,7 +19,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .on
                 .iter()
                 .enumerate()
-                .map(|(ei, o)| ManifestOn {
+                .map(|(_, o)| ManifestOn {
                     kind: o.kind() as i32,
                     triggers: o.triggers(),
                     pre: {
@@ -54,8 +54,11 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                             Some(String::from(l))
                         }
                     },
-                    presentation: c.presentation(ei as i32).header,
-                    flash: c.presentation(ei as i32).flash,
+                    // The entry's own accessors -- no index walk (the
+                    // `CardDef::presentation` scan exists only for
+                    // lookup-by-index callers).
+                    presentation: o.header_of(),
+                    flash: o.flash_of(),
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of
@@ -71,15 +74,22 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
             },
             // Declaration order -- the view's text precedence uses this as the
             // third component of its order key (docs/ENGINE.md 「Effect
-            // ordering」).
+            // ordering」). Entry index is synthesised from enumeration order
+            // (the rows ride the entry; `On::texts`); rows within an entry
+            // keep their declaration order. Wire shape unchanged.
             texts: c
-                .texts
+                .on
                 .iter()
-                .map(|(e, slot, tile, key)| ManifestTileText {
-                    entry: *e,
-                    slot: String::from(*slot),
-                    tile: String::from(*tile),
-                    key: String::from(*key),
+                .enumerate()
+                .flat_map(|(ei, o)| {
+                    o.texts_of()
+                        .iter()
+                        .map(move |(slot, tile, key)| ManifestTileText {
+                            entry: ei as i32,
+                            slot: String::from(*slot),
+                            tile: String::from(*tile),
+                            key: String::from(*key),
+                        })
                 })
                 .collect(),
             board_role: String::from(c.board_role),
@@ -197,6 +207,7 @@ pub fn on(
             | On::RedeemBody(RuleEntry { guard, .. })
             | On::BuyBody(RuleEntry { guard, .. })
             | On::BuildBody(RuleEntry { guard, .. })
+            | On::ScheduleBody(RuleEntry { guard, .. })
             | On::MessageBody(MessageEntry { guard, .. }),
             export::OP_GUARD,
         ) => match guard {
@@ -261,6 +272,9 @@ pub fn on(
             | On::BuildBody(RuleEntry {
                 body, drive, shape, ..
             })
+            | On::ScheduleBody(RuleEntry {
+                body, drive, shape, ..
+            })
             | On::MessageBody(MessageEntry {
                 body, drive, shape, ..
             }),
@@ -295,6 +309,7 @@ fn declare_of(o: &On) -> Option<(crate::DeclareDrive, *const ())> {
         On::RedeemBody(e) => e.declare_drive.zip(e.declare),
         On::BuyBody(e) => e.declare_drive.zip(e.declare),
         On::BuildBody(e) => e.declare_drive.zip(e.declare),
+        On::ScheduleBody(e) => e.declare_drive.zip(e.declare),
         On::MessageBody(e) => e.declare_drive.zip(e.declare),
     }
 }

@@ -20,8 +20,8 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const RAISE_EFFORT: CardDef = CardDef::new(
     "skill:和奏瑞依:一次又一次竭尽全力",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -35,7 +35,6 @@ pub const RAISE_EFFORT: CardDef = CardDef::new(
             on_roll)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

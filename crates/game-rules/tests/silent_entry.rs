@@ -1,4 +1,4 @@
-//! Silent-entry presentation (`CardDef::silent`): a bookkeeping entry runs its
+//! Silent-entry presentation (`On::silent`): a bookkeeping entry runs its
 //! body but posts no activation flash and no 「效果适用」 header.
 //!
 //! * a silent entry produces no `"card"` event and no header;
@@ -118,7 +118,7 @@ fn nested_activation_from_a_silent_body_still_announces() {
 }
 
 /// A silent body that pays: no flash, but the debug guard records the
-/// violation (`CardDef::silent` must not hide a real effect).
+/// violation (`On::silent` must not hide a real effect).
 #[test]
 fn silent_plus_visible_effect_fires_the_debug_guard() {
     let _ = take_silent_visible();
@@ -222,6 +222,46 @@ fn quiet_when_empty_keeps_a_header_when_the_body_logged() {
         ran.len(),
         1,
         "a logging QuietWhenEmpty body keeps its header: {}",
+        t.recent_keys(25).join(", ")
+    );
+    assert_eq!(ran[0].msg.key(), "log.effect_applied");
+}
+
+/// QuietWhenEmpty must also keep the 「效果适用」 header when the body's only
+/// visible trace is a log vec that `commit_after` flushes into after-hooks
+/// (`counter_log` → `counterChanged`, `named_raise_log` → the named raise).
+/// Those are visible to the player even with no `ctx::log` / pay / draw, so
+/// retracting the header would fire the hooks on an invisible clause.
+#[test]
+fn quiet_when_empty_keeps_a_header_for_a_counter_only_body() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:quietCounter");
+    let ran = activations_since(&t, mark, "TEST:quietCounter");
+    assert_eq!(
+        ran.len(),
+        1,
+        "a counter-only QuietWhenEmpty body keeps its 「效果适用」 header: {}",
+        t.recent_keys(25).join(", ")
+    );
+    assert_eq!(ran[0].msg.key(), "log.effect_applied");
+    // The counter write itself landed (the after-hook's subject).
+    assert!(
+        t.counters(0, "TEST:quietCounter").unwrap_or(0) > 0,
+        "the counter write landed: {}",
+        t.recent_keys(25).join(", ")
+    );
+}
+
+/// Same contract for a body whose only visible trace is `raise_after`.
+#[test]
+fn quiet_when_empty_keeps_a_header_for_a_raise_only_body() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:quietRaise");
+    let ran = activations_since(&t, mark, "TEST:quietRaise");
+    assert_eq!(
+        ran.len(),
+        1,
+        "a raise-only QuietWhenEmpty body keeps its 「效果适用」 header: {}",
         t.recent_keys(25).join(", ")
     );
     assert_eq!(ran[0].msg.key(), "log.effect_applied");

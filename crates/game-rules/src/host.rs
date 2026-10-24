@@ -107,7 +107,7 @@ pub struct CardInfo {
     /// serialization remain deterministic.
     #[serde(default)]
     pub props: std::collections::BTreeMap<String, i32>,
-    /// Tile texts this card's entries speak (`CardDef::texts`, ABI v59), in
+    /// Tile texts this card's entries speak (`On::texts`, ABI v59), in
     /// declaration order. See [`ManifestTileText`].
     #[serde(default)]
     pub texts: Vec<ManifestTileText>,
@@ -227,10 +227,10 @@ impl CardInfo {
             .or_else(|| self.entry(OnKind::Filter, Some(trigger)))
     }
 
-    /// Scheduled turn-end callback (`ctx::at_turn_end`): an `On::Action` at
-    /// [`crate::TriggerKind::AtEnd`].
+    /// Scheduled turn-end callback (`ctx::at_turn_end`): an `On::Schedule`
+    /// entry. True iff the card has any `OnKind::Schedule` entry.
     pub fn has_at_end(&self) -> bool {
-        self.hook_entry(crate::TriggerKind::AtEnd).is_some()
+        self.entry(OnKind::Schedule, None).is_some()
     }
 }
 
@@ -260,8 +260,14 @@ pub enum Call {
         kind: crate::TriggerKind,
         player_id: i32,
     },
-    /// Scheduled turn-end callback (`On::Action(&[AtEnd])`).
-    AtEnd { card: i32, player_id: i32 },
+    /// Scheduled turn-end callback (`On::Schedule`). `entry` is the resolved
+    /// manifest entry index (carried on the call so the run path does not
+    /// re-look-up by kind).
+    AtEnd {
+        card: i32,
+        player_id: i32,
+        entry: i32,
+    },
     /// Movement routine (`On::Filter(Filter::DiceRollPlan(…))`), called while the walk
     /// is being planned.
     DiceRollPlan { card: i32, player_id: i32 },
@@ -1052,6 +1058,15 @@ impl RulesetBuilder {
                         c.id,
                     )));
                 }
+                // ABI v102: a `OnKind::Schedule` entry must carry a non-empty
+                // slug `id` -- the scheduling family names which entry to run.
+                if ok == Some(OnKind::Schedule) && o.id.as_deref().filter(|s| !s.is_empty()).is_none()
+                {
+                    return Err(RuleError::Load(format!(
+                        "{} entry {ei}: On::Schedule requires a non-empty id slug (the schedule call names it)",
+                        c.id,
+                    )));
+                }
                 // ABI v98: an entry id is a stable internal slug, never display
                 // text (docs/ACTIVATION.md §3 "Identity is not display text").
                 // `entry::PRESS` is reserved for the press entry and cannot be
@@ -1433,7 +1448,7 @@ impl Ruleset {
             .map_or_else(Default::default, |c| c.props.clone())
     }
 
-    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// The card rule's declared **tile texts** (`On::texts`), see
     /// [`CardInfo::texts`]. Empty when the card declares none.
     pub fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
         self.card(id)
@@ -1524,8 +1539,9 @@ impl Ruleset {
             Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             // v75: AtEnd / DiceRollPlan are ordinary kind-keyed entries
-            // (`On::Action(&[AtEnd])` / `On::Filter(Filter::DiceRollPlan(…))`).
-            Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
+            // (`On::Schedule` / `On::Filter(Filter::DiceRollPlan(…))`).
+            // v102: the schedule call carries the resolved entry index.
+            Call::AtEnd { entry, .. } => Some(entry),
             Call::DiceRollPlan { .. } => info.hook_entry(crate::TriggerKind::DiceRollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),
             Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
@@ -2354,7 +2370,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     fn card(&self, id: &str) -> Option<i32>;
     fn card_props(&self, id: &str) -> std::collections::BTreeMap<String, i32>;
     fn card_prop(&self, id: &str, key: &str) -> i32;
-    /// Tile texts this card's entries speak (`CardDef::texts`), in declaration
+    /// Tile texts this card's entries speak (`On::texts`), in declaration
     /// order. Empty when the card declares none.
     fn card_texts(&self, id: &str) -> Vec<ManifestTileText>;
     fn declares(&self, kind: crate::TriggerKind) -> bool;
@@ -5306,8 +5322,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "schedule_turn_end",
-        |mut c: C<W>, player_id: i32, mode: i32| -> Result<(), Error> {
-            hostfns::schedule_turn_end(&mut c, player_id, mode).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, mode: i32, id_ptr: i32, id_len: i32| -> Result<(), Error> {
+            hostfns::schedule_turn_end(&mut c, player_id, mode, id_ptr, id_len)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
