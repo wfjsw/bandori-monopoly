@@ -1115,7 +1115,7 @@ fn settle_sib(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Silent-entry presentation (`CardDef::silent`). Three fixtures pin the
+/// Silent-entry presentation (`On::silent`). Three fixtures pin the
 /// contract:
 /// * `TEST:silentPair` -- a silent bookkeeping hook beside a flashing sibling
 ///   on the same settle: only the sibling posts a `"card"` event.
@@ -1127,29 +1127,26 @@ const SILENT_PAIR: CardDef = CardDef::new(
     "TEST:silentPair",
     &[
         On::Play("", None, silent_pair_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pair_book)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pair_book)).silent(),
         On::Action(Action::Settle("", Some(silent_hook_yes), silent_pair_flash)),
     ],
-)
-.silent(&[1]);
+);
 
 const SILENT_NEST: CardDef = CardDef::new(
     "TEST:silentNest",
     &[
         On::Play("", None, silent_nest_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), silent_nest_body)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), silent_nest_body)).silent(),
     ],
-)
-.silent(&[1]);
+);
 
 const SILENT_PAY: CardDef = CardDef::new(
     "TEST:silentPay",
     &[
         On::Play("", None, silent_pay_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pay_body)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pay_body)).silent(),
     ],
-)
-.silent(&[1]);
+);
 
 fn silent_pair_place(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
@@ -1200,7 +1197,7 @@ fn silent_pay_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// QuietWhenEmpty (`CardDef::quiet_when_empty`): the entry runs but its header
+/// QuietWhenEmpty (`On::quiet_when_empty`): the entry runs but its header
 /// is retracted when the body produced nothing visible.
 /// * entry 1 (`TEST.quiet.noop`) — body writes scratch state only → retracted.
 /// * entry 2 (`TEST.quiet.log`) — body logs → keeps its header.
@@ -1208,11 +1205,10 @@ const SILENT_QUIET: CardDef = CardDef::new(
     "TEST:silentQuiet",
     &[
         On::Play("", None, silent_quiet_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_noop)),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, quiet_log)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_noop)).quiet_when_empty(),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, quiet_log)).quiet_when_empty(),
     ],
-)
-.quiet_when_empty(&[1, 2]);
+);
 
 fn silent_quiet_place(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
@@ -1231,6 +1227,61 @@ fn quiet_log(player_id: i32) -> card_sdk::Asked {
     }
     ctx::state::set(player_id, "TEST.quiet.said", 1);
     ctx::log(player_id, &Msg::new(key!("quiet_log_line")));
+    Ok(())
+}
+
+/// QuietWhenEmpty bodies whose only **visible** effect is a log vec the
+/// commit flush turns into after-hooks -- no `ctx::log` / pay / draw.
+/// `body_empty` must count those too or the 「效果适用」 header is retracted
+/// and then `counterChanged` / the named-raise hooks fire on an invisible
+/// clause. The header must also **flush** on those rows: the write/raise is
+/// the first visible outcome, so Ruling 2a posts the clause name above it.
+/// * `TEST:quietCounter` -- only a counter write (`ctx::add_counter_at`, the
+///   path that does **not** auto-narrate `log.outcome.counter`).
+/// * `TEST:quietRaise` -- only a named raise (`ctx::raise_after`).
+const QUIET_COUNTER: CardDef = CardDef::new(
+    "TEST:quietCounter",
+    &[
+        On::Play("", None, quiet_counter_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_counter_body))
+            .quiet_when_empty(),
+    ],
+);
+
+const QUIET_RAISE: CardDef = CardDef::new(
+    "TEST:quietRaise",
+    &[
+        On::Play("", None, quiet_raise_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_raise_body))
+            .quiet_when_empty(),
+    ],
+);
+
+fn quiet_counter_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:quietCounter", &Msg::new(key!("quiet_counter_note")));
+    Ok(())
+}
+
+/// Only the counter write. `ctx::add_counter` / `set_counter` auto-narrate
+/// `log.outcome.counter` (so `logged` would see them); `add_counter_at` is the
+/// silent write, and its `counter_log` row is what raises `counterChanged`
+/// after commit -- and what flushes the lazy header.
+fn quiet_counter_body(_player_id: i32) -> card_sdk::Asked {
+    ctx::add_counter_at(ctx::self_uid(), "quietTick", 1, 0);
+    Ok(())
+}
+
+fn quiet_raise_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:quietRaise", &Msg::new(key!("quiet_raise_note")));
+    Ok(())
+}
+
+/// Only a post-commit named raise -- no log line of its own. The raise row
+/// flushes the lazy header.
+fn quiet_raise_body(player_id: i32) -> card_sdk::Asked {
+    ctx::raise_after(player_id, "TEST.quietRaise.tick", 1);
     Ok(())
 }
 
@@ -1266,8 +1317,10 @@ use card_sdk::abi::Flash;
 
 /// `Flash::Always` on an owner-self-only effect (gain to self): the player
 /// should still see the flash.
-const FLASH_ALWAYS: CardDef = CardDef::new("TEST:flashAlways", &[On::Play("", None, flash_always)])
-    .flash(&[(0, Flash::Always)]);
+const FLASH_ALWAYS: CardDef = CardDef::new(
+    "TEST:flashAlways",
+    &[On::Play("", None, flash_always).flash(Flash::Always)],
+);
 
 fn flash_always(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1, &Msg::new(key!("flash_always_gain")))?;
@@ -1276,12 +1329,106 @@ fn flash_always(player_id: i32) -> card_sdk::Asked {
 
 /// `Flash::Never` on a cross-player effect (a pay leg to another seat): the
 /// log entry stays, no flash / pulse.
-const FLASH_NEVER: CardDef = CardDef::new("TEST:flashNever", &[On::Play("", None, flash_never)])
-    .flash(&[(0, Flash::Never)]);
+const FLASH_NEVER: CardDef = CardDef::new(
+    "TEST:flashNever",
+    &[On::Play("", None, flash_never).flash(Flash::Never)],
+);
 
 fn flash_never(player_id: i32) -> card_sdk::Asked {
     let other = ctx::others(player_id).first().copied().unwrap_or(-1);
     ctx::pay_leg(player_id, other, 1, &Msg::new(key!("flash_never_pay")))?;
+    Ok(())
+}
+
+/// `Flash::Always` **and** `QuietWhenEmpty` on a no-op body. `Always` is the
+/// declarative spelling of `ctx::flash()` -- "cue me" -- so it must survive
+/// the quiet retraction the same way the imperative cue does. Otherwise the
+/// entry promises "always flashes" and then shows nothing at all.
+const FLASH_ALWAYS_QUIET: CardDef = CardDef::new(
+    "TEST:flashAlwaysQuiet",
+    &[On::Play("", None, flash_always_quiet)
+        .flash(Flash::Always)
+        .quiet_when_empty()],
+);
+
+/// Scratch state only -- nothing visible, so the body counts as empty.
+fn flash_always_quiet(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.flashAlwaysQuiet.noop", 1);
+    Ok(())
+}
+
+/// Two settle hooks on the same trigger kind, `Always` then trailing `Auto`.
+/// One drive, one flash decision: the fold must keep the `Always` (a trailing
+/// `Auto` sibling must not drop it). Both bodies are no-ops, so `Auto` alone
+/// would not flash -- the `Always` entry's declarative cue is the only reason
+/// the drive shows anything (and the only header it posts).
+const FLASH_FOLD_ALWAYS: CardDef = CardDef::new(
+    "TEST:flashFoldAlways",
+    &[
+        On::Play("", None, flash_fold_always_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)).flash(Flash::Always),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)),
+    ],
+);
+
+/// Two settle hooks on the same trigger kind, `Never` then trailing `Always`.
+/// The fold's `Never` must suppress the whole drive -- a later `Always`
+/// sibling must not lift it. The `Always` sibling is the one that posts the
+/// header (declarative cue on a no-op body); it must not flash.
+const FLASH_FOLD_NEVER: CardDef = CardDef::new(
+    "TEST:flashFoldNever",
+    &[
+        On::Play("", None, flash_fold_never_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)).flash(Flash::Never),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)).flash(Flash::Always),
+    ],
+);
+
+fn flash_fold_always_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:flashFoldAlways", &Msg::new(key!("flash_fold_note")));
+    Ok(())
+}
+
+fn flash_fold_never_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:flashFoldNever", &Msg::new(key!("flash_fold_note")));
+    Ok(())
+}
+
+/// Three settle hooks on one drive, each body a `ctx::log` so each flushes its
+/// own 「效果适用」 header. Entry 0 is `Flash::Always` (the fold's winning
+/// opinion); the other two are default `Auto`. One drive, one flash decision,
+/// **every** header it posted -- all three must carry the folded `true`. A
+/// trailing sibling's header must not keep the `flush_header` `already`
+/// default-off.
+const FLASH_HEADER_IDS: CardDef = CardDef::new(
+    "TEST:flashHeaderIds",
+    &[
+        On::Play("", None, flash_header_ids_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_header_ids_log))
+            .flash(Flash::Always),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_header_ids_log)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_header_ids_log)),
+    ],
+);
+
+fn flash_header_ids_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:flashHeaderIds", &Msg::new(key!("flash_header_ids_note")));
+    Ok(())
+}
+
+/// A single log line: the first visible outcome for this entry, so the lazy
+/// header flushes here (and only here -- no extra host request to piggyback on).
+fn flash_header_ids_log(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("flash_header_ids_line")));
+    Ok(())
+}
+
+/// Pure no-op: nothing visible, so `Auto` would not flash and the body posts
+/// no second header. Enough to make the drive run both entries.
+fn flash_fold_noop(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
@@ -1761,7 +1908,10 @@ card_sdk::ruleset!(&[
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
-    FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
+    QUIET_COUNTER, QUIET_RAISE,
+    FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,
+    FLASH_HEADER_IDS,
+    FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
     CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE,
     STRUCT_ARG, NAMED_OPEN, NAMED_SHUT, QUERY

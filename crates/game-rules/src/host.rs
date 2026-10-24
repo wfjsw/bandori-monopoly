@@ -107,7 +107,7 @@ pub struct CardInfo {
     /// serialization remain deterministic.
     #[serde(default)]
     pub props: std::collections::BTreeMap<String, i32>,
-    /// Tile texts this card's entries speak (`CardDef::texts`, ABI v59), in
+    /// Tile texts this card's entries speak (`On::texts`, ABI v59), in
     /// declaration order. See [`ManifestTileText`].
     #[serde(default)]
     pub texts: Vec<ManifestTileText>,
@@ -1442,7 +1442,7 @@ impl Ruleset {
             .map_or_else(Default::default, |c| c.props.clone())
     }
 
-    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// The card rule's declared **tile texts** (`On::texts`), see
     /// [`CardInfo::texts`]. Empty when the card declares none.
     pub fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
         self.card(id)
@@ -2364,7 +2364,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     fn card(&self, id: &str) -> Option<i32>;
     fn card_props(&self, id: &str) -> std::collections::BTreeMap<String, i32>;
     fn card_prop(&self, id: &str, key: &str) -> i32;
-    /// Tile texts this card's entries speak (`CardDef::texts`), in declaration
+    /// Tile texts this card's entries speak (`On::texts`), in declaration
     /// order. Empty when the card declares none.
     fn card_texts(&self, id: &str) -> Vec<ManifestTileText>;
     fn declares(&self, kind: crate::TriggerKind) -> bool;

@@ -24,8 +24,8 @@ use super::ran_red::REST_TURNS;
 pub const MOCA_SELF: CardDef = CardDef::new(
     "skill:青叶摩卡:我行我素",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::TurnEnd("", Some(afterglow), tick)),
         // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…」 -- the
         // offer exists only for another seat, with a pot to spend. Fire is CEL.
@@ -39,7 +39,6 @@ pub const MOCA_SELF: CardDef = CardDef::new(
             on_skill)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

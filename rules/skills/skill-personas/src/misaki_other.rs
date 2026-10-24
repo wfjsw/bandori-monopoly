@@ -31,8 +31,8 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
     "skill:奥泽美咲:另一个我",
     &[
         On::Play("", Some(can_use_exile), use_exile),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             "actor == owner && tile.id == tile_named('弦卷集团')",
             None,
@@ -43,7 +43,6 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
             at_turn_start)),
     ],
 )
-.silent(&[1, 2])
 // 「（初始0，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

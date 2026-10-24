@@ -26,8 +26,8 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     "skill:桐谷透子:天上天下，唯我独尊",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -35,10 +35,9 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            reset)),
+            reset)).silent(),
     ],
 )
-.silent(&[1, 2, 4])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

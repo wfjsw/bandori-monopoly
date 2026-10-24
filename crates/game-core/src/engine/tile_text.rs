@@ -2,7 +2,7 @@
 //!
 //! A tile rule (and any other rule instance that speaks for a board tile)
 //! declares the deed-popup description its entries speak for
-//! (`CardRules::card_texts` / `CardDef::texts`). The view composes, per board
+//! (`CardRules::card_texts` / `On::texts`). The view composes, per board
 //! tile, the speaking instances in **body-precedence order** -- the same order
 //! the settle body runs replacements in, so the one that wins the body also
 //! wins the text.

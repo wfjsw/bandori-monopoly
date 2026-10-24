@@ -73,6 +73,34 @@ fn always_flashes_a_self_only_entry() {
     );
 }
 
+/// `Flash::Always` is a cue, so it survives `QuietWhenEmpty`'s retraction of an
+/// empty body -- the same way an explicit `ctx::flash()` does. Without that,
+/// `.flash(Flash::Always).quiet_when_empty()` on a no-op would show nothing at
+/// all, and the policy's "always flashes" promise would be a lie.
+#[test]
+fn always_survives_quiet_when_empty_on_an_empty_body() {
+    let mut t = Table::vanilla(2);
+    let mark = play_marked(&mut t, "TEST:flashAlwaysQuiet");
+    drain(&mut t);
+    let f = card_flashes_since(&t, mark);
+    assert!(
+        f.iter().any(|e| e.card == "TEST:flashAlwaysQuiet"),
+        "Always must still cue the player when QuietWhenEmpty sees an empty body: {}",
+        t.recent_keys(20).join(", ")
+    );
+    // And the 「效果适用」 header naming the clause stays with the cue.
+    let cards: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:flashAlwaysQuiet")
+        .collect();
+    assert!(
+        !cards.is_empty(),
+        "the header must remain (Always cued the player): {}",
+        t.recent_keys(20).join(", ")
+    );
+}
+
 /// `Flash::Never` suppresses a cross-player pay's flash; the log entry remains.
 #[test]
 fn never_suppresses_a_cross_player_one() {
@@ -120,6 +148,108 @@ fn auto_self_only_does_not_flash() {
         card_flashes_since(&t, mark).is_empty(),
         "and no card-flash: {}",
         t.recent_keys(20).join(", ")
+    );
+}
+
+/// Place `card` on player 0's field and land so its settle hooks run.
+/// Returns the event mark taken just before the land.
+fn place_and_land(t: &mut Table, card: &str) -> i32 {
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, card).unwrap();
+    drain(t);
+    assert!(
+        t.on_field(0, card),
+        "the play places the card: {}",
+        t.dump_prompt()
+    );
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(t);
+    mark
+}
+
+/// Multi-entry drive, `Always` then trailing `Auto`: one flash decision for
+/// the whole drive, so the fold keeps the `Always` (a trailing `Auto` sibling
+/// must not drop it). Both bodies are no-ops, so `Auto` alone would not flash
+/// -- seeing a flash proves the `Always` survived. The `Always` entry's
+/// declarative cue is the only header the drive posts.
+#[test]
+fn always_survives_a_trailing_auto_sibling() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:flashFoldAlways");
+    let f = card_flashes_since(&t, mark);
+    assert!(
+        f.iter().any(|e| e.card == "TEST:flashFoldAlways"),
+        "Always must survive a trailing Auto sibling: {}",
+        t.recent_keys(30).join(", ")
+    );
+}
+
+/// Multi-entry drive, `Never` then trailing `Always`: the fold's `Never`
+/// suppresses the whole drive -- a later `Always` sibling must not lift it.
+/// The `Always` sibling posts the header (declarative cue on a no-op body);
+/// that header must not flash.
+#[test]
+fn never_suppresses_the_drive_despite_a_trailing_always_sibling() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:flashFoldNever");
+    let activated: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:flashFoldNever")
+        .collect();
+    assert!(
+        !activated.is_empty(),
+        "the Always sibling still posts its header: {}",
+        t.recent_keys(30).join(", ")
+    );
+    assert!(
+        activated.iter().all(|e| !e.flash),
+        "Never suppresses the drive despite a trailing Always: {activated:?}"
+    );
+    assert!(
+        card_flashes_since(&t, mark).is_empty(),
+        "and no card-flash: {}",
+        t.recent_keys(30).join(", ")
+    );
+}
+
+/// One drive, one flash decision, **every** header it posted. Three settle
+/// siblings each flush their own 「效果适用」 (each body is a `ctx::log`);
+/// entry 0 is `Flash::Always`, the other two default `Auto`, so the fold is
+/// `Always` and all three must flash. Under the old last-flush + `__hdr__`
+/// stamping only the first and last did -- the middle kept `flush_header`'s
+/// `already` default-off.
+#[test]
+fn every_sibling_header_rides_the_folded_flash_decision() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:flashHeaderIds");
+    let headers: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:flashHeaderIds")
+        .collect();
+    assert_eq!(
+        headers.len(),
+        3,
+        "three sibling entries, three headers: {}",
+        t.recent_keys(40).join(", ")
+    );
+    for h in &headers {
+        assert!(
+            h.flash,
+            "the folded Always must flash every header: {h:?} / {}",
+            t.recent_keys(40).join(", ")
+        );
+    }
+    assert_eq!(
+        card_flashes_since(&t, mark).len(),
+        3,
+        "and all three count as card-flashes: {}",
+        t.recent_keys(40).join(", ")
     );
 }
 

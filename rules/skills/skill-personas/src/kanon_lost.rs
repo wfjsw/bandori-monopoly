@@ -38,11 +38,11 @@ pub const KANON_LOST: CardDef = CardDef::new(
         On::Action(Actions::PassRewardAffected(
             "actor == owner && slot('skill.kanonLost.silent') >= 3",
             None,
-            on_circle)),
+            on_circle)).silent(),
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skill.kanonLost.silent') >= 3",
             None,
-            at_turn_end)),
+            at_turn_end)).silent(),
         // TODO(bug): possible engine issue — a `slot()` condition on a
         // FilterValue at DiceRollPlan did not observe a state write made
         // earlier in the same roll (seen while splitting eve_unify: the
@@ -58,8 +58,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
             on_plan,
         )),
     ],
-)
-.silent(&[2, 3]);
+);
 
 /// (1) 「游戏开始起点为#30弦卷豪宅」.
 fn at_start(player_id: i32) -> card_sdk::Asked {

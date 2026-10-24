@@ -32,8 +32,8 @@ const COLOURED: &str = "skill.soyoClear.coloured";
 pub const SOYO_CLEAR: CardDef = CardDef::new(
     "skill:长崎素世:通透的颜色",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -50,7 +50,6 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
             on_settle)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

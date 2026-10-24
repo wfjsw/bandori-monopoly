@@ -65,16 +65,15 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
             Some(roll_ok),
             on_before)),
         // （2） 「为此次投掷结果增加Yd4」 -- pure dice-table append.
-        On::Filter(Filter::DiceRollPlan("actor == owner", None, on_plan)),
+        On::Filter(Filter::DiceRollPlan("actor == owner", None, on_plan)).silent(),
         // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
         On::Action(Action::DiceRollAfter(
             "actor == owner",
             None,
-            clear_pending)),
+            clear_pending)).silent(),
     ],
-)
+);
 // 2 (plan shape) and 3 (stash clear) are bookkeeping; 1 is the visible clause.
-.silent(&[2, 3]);
 
 /// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
 /// (derived plan state) stay here (not yet in the condition vocabulary).

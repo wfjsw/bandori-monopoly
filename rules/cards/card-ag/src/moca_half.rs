@@ -68,10 +68,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书(1): 「将此卡放置在场上」
-    // TODO: Why we need 2 function to place a card on the field?
-    ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("moca_half_note")));
+    // 规则书(1): 「将此卡放置在场上」 -- the place-now + fate-later fold
+    // (`place_card` creates the instance, `Dest::Field` stops the commit from
+    // also spending the hand card); see `ctx::place_self_to_field`.
+    ctx::place_self_to_field(player_id, ID, &Msg::new(key!("moca_half_note")));
     // 规则书(1): 「并获得3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(

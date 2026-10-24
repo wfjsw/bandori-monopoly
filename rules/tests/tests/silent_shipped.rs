@@ -1,6 +1,6 @@
 //! Shipped-card silent-entry bookkeeping: declare-cap / bounds hooks must
 //! stay silent so a turn start does not flash them. The engine mechanism
-//! (`CardDef::silent`) is pinned in `crates/game-rules/tests/silent_entry.rs`.
+//! (`On::silent`) is pinned in `crates/game-rules/tests/silent_entry.rs`.
 
 mod common;
 
@@ -27,6 +27,40 @@ fn shipped_declare_cap_entries_are_silent() {
             card_sdk::abi::Presentation::Silent,
             "{id} entry {entry} must be silent, got {:?}",
             info.on.get(entry).map(|o| o.presentation)
+        );
+    }
+}
+
+/// `非凡之星` 「（1）」's fire-pot gain is owner-self-only, but the rulebook
+/// describes it happening, so that clause carries `Flash::Always`. The policy
+/// must ride the Settle hook that is 「（1）」 -- the old
+/// `.flash(&[(2, Flash::Always)])` pointed at the silent `DeckAtGameStart`
+/// `declare_cap` (entry 2) and was dead there, so the clause never flashed.
+#[test]
+fn extraordinary_star_flashes_its_fire_pot_clause() {
+    let r = rules();
+    let id = "skill:户山香澄:非凡之星";
+    let idx = r
+        .ruleset()
+        .card(id)
+        .unwrap_or_else(|| panic!("{id} loaded"));
+    let info = &r.ruleset().cards()[idx as usize];
+    // 0 Play / 1 TurnStartBefore / 2 DeckAtGameStart / 3 Settle 「（1）」
+    assert_eq!(info.on.len(), 4, "{id} entries");
+    assert_eq!(info.on[1].presentation, card_sdk::abi::Presentation::Silent);
+    assert_eq!(info.on[2].presentation, card_sdk::abi::Presentation::Silent);
+    assert_eq!(
+        info.on[3].flash,
+        card_sdk::abi::Flash::Always,
+        "「（1）」 (Settle) must be Flash::Always, got {:?}",
+        info.on[3].flash
+    );
+    // The silent bookkeeping entries must not claim the policy.
+    for e in [1, 2] {
+        assert_eq!(
+            info.on[e].flash,
+            card_sdk::abi::Flash::Auto,
+            "{id} entry {e} is bookkeeping and must stay Auto"
         );
     }
 }

@@ -32,8 +32,8 @@ const BUMP_X: &str = "skill.mumei.bumpX";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
         // mutating, so they ride `ActionKind::Effect` (the payment declaration,
         // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
@@ -52,7 +52,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         On::Action(Action::PayAfter(
             "actor == owner && slot('skill.mumei.bumpX') >= 0",
             None,
-            clear_bump)),
+            clear_bump)).silent(),
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skillState') != 2",
             Some(fire_at_cap),
@@ -67,7 +67,6 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
             at_turn_end_exit)),
     ],
 )
-.silent(&[0, 1, 4])
 // 「（初始0，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

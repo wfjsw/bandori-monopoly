@@ -40,8 +40,13 @@ pub const CIRCLE_MONEY: i32 = 2000;
 pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
-        On::Settle("", None, settle),
-        On::Action(Action::PassTile("", Some(pass_pays), on_pass)),
+        // Deed-popup text (`docs/TILES.md` 「Tile text」): the two halves the
+        // book splits (line 95 settle draw, line 96 [经过] reward) speak for
+        // one slot each. `event:协助CiRCLE重建` replaces both while it is up.
+        On::Settle("", None, settle)
+            .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+        On::Action(Action::PassTile("", Some(pass_pays), on_pass))
+            .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
         // The cross-card face of the same reward body. No `pass_pays` here:
         // that residual is the [经过] arm's applicability (tile match, exile
         // gate, 「[移动起点]不为CiRCLE」). A message is a card asking for the
@@ -52,14 +57,7 @@ pub const CIRCLE: CardDef = CardDef::new(
 .board_role("tile")
 // The start square: the walk flushes its approach before this tile's
 // pass-reward prompt (`prop::START`).
-.props(&[(card_sdk::abi::prop::START, 1)])
-// Deed-popup text (`docs/TILES.md` 「Tile text」): the two halves the book
-// splits (line 95 settle draw, line 96 [经过] reward) speak for one slot each.
-// `event:协助CiRCLE重建` replaces both while it is up.
-.texts(&[
-    (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
-    (1, text_slot::PASS, "", "deed.note.circlePass"),
-]);
+.props(&[(card_sdk::abi::prop::START, 1)]);
 
 /// The [经过] arm's applicability. Only the tile this instance governs (the
 /// dispatch already filters board instances by tile; this is the belt to that

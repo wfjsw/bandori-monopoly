@@ -21,8 +21,8 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -36,7 +36,6 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Schedule("settle_now", "owner.pos >= 0", None, settle_now),
     ],
 )
-.silent(&[1, 2])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

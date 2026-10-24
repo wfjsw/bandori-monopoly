@@ -10,7 +10,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
-pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", None, resolve)])
+pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", None, resolve).quiet_when_empty()])
     .meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"觉悟"#)
@@ -21,8 +21,7 @@ pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", No
             [手]：[移除]此卡。"#))
             // sheet cell E17
             .fields(&[("group", r#"Roselia"#), ("owner", "")]),
-    )
-    .quiet_when_empty(&[0]);
+    );
 
 fn resolve(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);

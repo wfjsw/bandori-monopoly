@@ -21,8 +21,8 @@ const POT: &str = "skill.uikaIdol.pot";
 pub const UIKA_IDOL: CardDef = CardDef::new(
     "skill:三角初华（Sumimi）:成为偶像",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -44,7 +44,6 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
             on_pass_tile)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始2，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

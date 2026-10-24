@@ -35,10 +35,9 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
             bandori_std::guards::OWN_START,
             None,
             on_pass)),
-        On::Action(Action::DiceRollAfter("", Some(other), latch)),
+        On::Action(Action::DiceRollAfter("", Some(other), latch)).silent(),
     ],
 )
-.silent(&[4])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
