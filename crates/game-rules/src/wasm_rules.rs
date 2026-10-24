@@ -2811,8 +2811,9 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// How `card_id`'s `entry` presents itself: the header mode plus the
-    /// flash policy (`CardDef::silent` / `quiet_when_empty` / `flash`). The
-    /// defaults (`Visible` + `Auto`) when the card or entry is unknown.
+    /// flash policy. Both ride the entry (`On::silent` / `On::quiet_when_empty`
+    /// / `On::flash`); the defaults (`Visible` + `Auto`) when the card or entry
+    /// is unknown.
     fn entry_presentation(&self, card_id: &str, entry: i32) -> card_sdk::abi::EntryPresentation {
         let Some(idx) = self.ruleset.card(card_id) else {
             return card_sdk::abi::EntryPresentation::default();
@@ -3080,6 +3081,17 @@ impl<M: CardModules> RulesBridge<M> {
                 let id = self.announce_drive(w, call.clone(), card_id, uid, target, tile, trigger, entry);
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
+                }
+                if pres.flash == card_sdk::abi::Flash::Always {
+                    // Declarative `Always` (`On::flash`) is the same promise
+                    // as the imperative `ctx::flash()`: cue the player. That
+                    // promise has to include the lazy 「效果适用」 header -- a
+                    // flash with no clause name is noise, and leaving the
+                    // header lazy means a no-op body (a capped gain, 「已满」)
+                    // never posts one at all, so `Always` would show nothing.
+                    // Same move `Run::flash` makes at the flash point; only
+                    // now the header exists (`announce_drive` buffered it).
+                    w.flush_header();
                 }
                 if id >= 0 {
                     // Body lines group under **this** drive's header.
@@ -4441,9 +4453,16 @@ impl<M: CardModules> RulesBridge<M> {
             // QuietWhenEmpty + nothing visible + no prompt: retract the
             // header entirely (no flash, no 「效果适用」, no
             // 「（无事发生）」). A prompt already showed it to the client.
-            // A **requested flash** (`ctx::flash`) counts as visible -- the
-            // player was cued, so the header that names the clause remains.
+            // A **cue** counts as visible -- the player was told something
+            // happened, so the header that names the clause remains. Both
+            // spellings of "cue me" count: the imperative `ctx::flash()` and
+            // the declarative [`card_sdk::abi::Flash::Always`] (`On::flash`),
+            // which is the same promise written on the entry instead of in the
+            // body. Dropping the header under `Always` would make the policy a
+            // lie ("always flashes") the moment the body is a no-op.
             let flash_requested = after.world.flash.lock().requested;
+            let flash_cued = flash_requested
+                || after.flash_policy == card_sdk::abi::Flash::Always;
             let body_empty = after.logged == 0
                 && after.paid_log.is_empty()
                 && after.draw_log.is_empty()
@@ -4453,7 +4472,7 @@ impl<M: CardModules> RulesBridge<M> {
                 && after.abnormal_log.is_empty()
                 && after.state_log.is_empty()
                 && after.marker_spent_log.is_empty();
-            if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
+            if quiet_when_empty && body_empty && !after.prompted && !flash_cued {
                 cx.drop_events(&[header]);
                 after.world.recent = cx.world().recent.clone();
                 cx.activation.retain(|&id| id != header);

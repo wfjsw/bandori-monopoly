@@ -73,6 +73,34 @@ fn always_flashes_a_self_only_entry() {
     );
 }
 
+/// `Flash::Always` is a cue, so it survives `QuietWhenEmpty`'s retraction of an
+/// empty body -- the same way an explicit `ctx::flash()` does. Without that,
+/// `.flash(Flash::Always).quiet_when_empty()` on a no-op would show nothing at
+/// all, and the policy's "always flashes" promise would be a lie.
+#[test]
+fn always_survives_quiet_when_empty_on_an_empty_body() {
+    let mut t = Table::vanilla(2);
+    let mark = play_marked(&mut t, "TEST:flashAlwaysQuiet");
+    drain(&mut t);
+    let f = card_flashes_since(&t, mark);
+    assert!(
+        f.iter().any(|e| e.card == "TEST:flashAlwaysQuiet"),
+        "Always must still cue the player when QuietWhenEmpty sees an empty body: {}",
+        t.recent_keys(20).join(", ")
+    );
+    // And the 「效果适用」 header naming the clause stays with the cue.
+    let cards: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:flashAlwaysQuiet")
+        .collect();
+    assert!(
+        !cards.is_empty(),
+        "the header must remain (Always cued the player): {}",
+        t.recent_keys(20).join(", ")
+    );
+}
+
 /// `Flash::Never` suppresses a cross-player pay's flash; the log entry remains.
 #[test]
 fn never_suppresses_a_cross_player_one() {

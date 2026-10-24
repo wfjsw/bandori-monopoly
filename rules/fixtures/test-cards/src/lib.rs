@@ -1285,6 +1285,23 @@ fn flash_never(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// `Flash::Always` **and** `QuietWhenEmpty` on a no-op body. `Always` is the
+/// declarative spelling of `ctx::flash()` -- "cue me" -- so it must survive
+/// the quiet retraction the same way the imperative cue does. Otherwise the
+/// entry promises "always flashes" and then shows nothing at all.
+const FLASH_ALWAYS_QUIET: CardDef = CardDef::new(
+    "TEST:flashAlwaysQuiet",
+    &[On::Play("", None, flash_always_quiet)
+        .flash(Flash::Always)
+        .quiet_when_empty()],
+);
+
+/// Scratch state only -- nothing visible, so the body counts as empty.
+fn flash_always_quiet(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.flashAlwaysQuiet.noop", 1);
+    Ok(())
+}
+
 /// `ctx::flash()` then `ask_yes`: exactly ONE flash, posted **before** the
 /// prompt. The body re-runs after the answer and must not flash again.
 const FLASH_THEN_ASK: CardDef = CardDef::new("TEST:flashThenAsk", &[On::Play("", None, flash_then_ask)]);
@@ -1761,7 +1778,7 @@ card_sdk::ruleset!(&[
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
-    FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
+    FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
     CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE,
     STRUCT_ARG, NAMED_OPEN, NAMED_SHUT, QUERY
