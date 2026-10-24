@@ -10,6 +10,6 @@ description = "Official roselia cards (one crate per band, one file per card)."
 crate-type = ["rlib"]
 
 [dependencies]
-card-sdk = { path = "../../card-sdk", features = ["guest"] }
-bandori-std = { path = "../../bandori-std" }
-rules-status = { path = "../../status" }
+card-sdk = { workspace = true, features = ["guest"] }
+bandori-std = { workspace = true }
+rules-status = { workspace = true }

@@ -7,11 +7,27 @@
 //!
 //! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
 
-use bandori_std::ctx::{self, trigger};
+use bandori_std::ctx;
 use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
 const ID: &str = "AG:（摩卡）0.5倍速";
+
+
+/// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」
+///
+/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
+/// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
+/// count emptied by *any* write leaves the field just the same.
+///
+/// Migrated to CEL: the former Rust residual guard (`trigger::card_is(ID) &&
+/// trigger::name() == card_sdk::abi::counter::CRYSTALS`) is folded into this
+/// pre as `card_is('…') && counter_is('crystals')`. `const_format` interpolates
+/// [`ID`] at compile time so the card id cannot drift from the constant.
+const CRYSTALS_CHANGED_PRE: &str = const_format::formatcp!(
+    "actor == owner && card.placed && card_is('{ID}') && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0",
+    ID = ID,
+);
 
 pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
@@ -25,15 +41,17 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         // 奇迹水晶为0时此卡放入弃牌堆。
         // TODO: Check, this effect should be silent
         On::Action(Action::CounterChanged(
-            "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", 
-            Some(crystals_changed_guard), 
-            on_crystals_changed)
-        ),
+            CRYSTALS_CHANGED_PRE,
+            None,
+            on_crystals_changed,
+        )),
 
         // > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）
+        // TODO: Check 最终结算
         On::Filter(Filter::DiceRollValue("actor == owner && move.main && card.placed", None, roll_half)),
 
         // 且你的所有资金支付与消耗减半。
+        // Note: Mul happens after Add
         On::Filter(Filter::PaySplitMul("actor == owner && card.placed && value > 0", None, pay_mul)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -69,16 +87,6 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」
-///
-/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
-/// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
-/// count emptied by *any* write leaves the field just the same.
-/// Residual guard for [`on_crystals_changed`] -- `card_is` + the counter name
-/// (`counter_is('crystals')` is also in the pre).
-fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
-}
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
@@ -104,7 +112,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// round" is loose -- 5 → 2 is a *floor* half, and the card says 向上取整. Both
 /// readings are defensible and they disagree by one step, so the composition
 /// order needs a ruling. Filed as OPEN-ROLLRESHAPE-01.
-fn roll_half(player_id: i32, mut v: RollValue) -> RollValue {
+fn roll_half(player_id: i32, v: RollValue) -> RollValue {
     let roll = v.value.max(0);
     let halved = (roll + 1) / 2;
     ctx::log(

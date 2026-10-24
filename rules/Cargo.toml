@@ -4,6 +4,34 @@
 resolver = "2"
 members = ["card-sdk", "bandori-std", "cards/*", "skills/*", "personas", "tiles", "markers", "status", "events", "fixtures/*"]
 
+[workspace.dependencies]
+const_format = { version = "0.2.37", features = ["fmt"] }
+bandori-std = { path = "bandori-std" }
+bitflags = { version = "2", default-features = false }
+card-ag = { path = "cards/card-ag" }
+card-crychic = { path = "cards/card-crychic" }
+card-general = { path = "cards/card-general" }
+card-hhw = { path = "cards/card-hhw" }
+card-morfonica = { path = "cards/card-morfonica" }
+card-mujica = { path = "cards/card-mujica" }
+card-mygo = { path = "cards/card-mygo" }
+card-pp = { path = "cards/card-pp" }
+card-ppp = { path = "cards/card-ppp" }
+card-ras = { path = "cards/card-ras" }
+card-roselia = { path = "cards/card-roselia" }
+card-sdk = { path = "card-sdk" }
+card-sumimi = { path = "cards/card-sumimi" }
+game-kinds = { path = "../crates/game-kinds" }
+personas = { path = "personas" }
+postcard = { version = "1", default-features = false }
+rules-events = { path = "events" }
+rules-markers = { path = "markers" }
+rules-status = { path = "status" }
+rules-tiles = { path = "tiles" }
+serde = { version = "1", default-features = false }
+skill-groups = { path = "skills/skill-groups" }
+skill-personas = { path = "skills/skill-personas" }
+
 [profile.release]
 opt-level = "z"
 lto = true
