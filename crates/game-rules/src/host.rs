@@ -2992,17 +2992,6 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
     }
 }
 
-#[cfg(feature = "sandbox")]
-/// A card stops for a prompt by **returning** [`abi::EXIT_NEED_INPUT`] from
-/// `ruleset_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
-/// value. Fold it back into the host's own [`need_input`] marker so every
-/// caller's `is_need_input` check (`Outcome::NeedInput` / `Outcome::NeedHost` /
-/// [`RuleError::GuardPrompted`]) keeps working unchanged.
-///
-/// The two are one signal at different layers: the sentinel is the guest <-> host
-/// wire form, the marker is this module's error. Nothing raises the marker *into*
-/// the guest any more for the imports a card reads as `Result` -- see the note on
-/// [`need_input`] for which ones still trap and why.
 /// Is `s` a well-formed entry id -- a stable internal **slug**, not display
 /// text (docs/ACTIVATION.md §3 "Identity is not display text")?
 /// `[A-Za-z0-9_][A-Za-z0-9_.:-]*`. Rulebook wording belongs in
@@ -3018,6 +3007,17 @@ fn is_entry_slug(s: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':' | '-'))
 }
 
+#[cfg(feature = "sandbox")]
+/// A card stops for a prompt by **returning** [`abi::EXIT_NEED_INPUT`] from
+/// `ruleset_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
+/// value. Fold it back into the host's own [`need_input`] marker so every
+/// caller's `is_need_input` check (`Outcome::NeedInput` / `Outcome::NeedHost` /
+/// [`RuleError::GuardPrompted`]) keeps working unchanged.
+///
+/// The two are one signal at different layers: the sentinel is the guest <-> host
+/// wire form, the marker is this module's error. Nothing raises the marker *into*
+/// the guest any more for the imports a card reads as `Result` -- see the note on
+/// [`need_input`] for which ones still trap and why.
 fn fold_exit(v: i64) -> Result<i64, Error> {
     if v == abi::EXIT_NEED_INPUT as i64 {
         Err(need_input())
@@ -5936,6 +5936,7 @@ mod gate_tests {
             pre: pre.map(str::to_string),
             has_guard,
             has_declare: false,
+            id: None,
             messages: vec![],
             label: None,
             presentation: Default::default(),

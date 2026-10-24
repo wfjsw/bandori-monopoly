@@ -24,7 +24,7 @@ fn bad_handle_is_rejected() {
             Call::Play {
                 card: bad,
                 player_id: 0,
-                arg: 0
+                arg: Vec::new()
             },
             &[],
             None
@@ -66,7 +66,7 @@ fn runaway_nesting_is_stopped() {
             Call::Play {
                 card,
                 player_id: 0,
-                arg: 0
+                arg: Vec::new()
             },
             &[],
             None,
