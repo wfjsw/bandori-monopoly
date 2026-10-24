@@ -29,7 +29,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, CardPile};
-use card_sdk::ctx::NameId;
+use card_sdk::ctx::{intern, NameId};
 use card_sdk::{CardText, it, items, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -136,7 +136,7 @@ fn pool_for(player_id: i32) -> Vec<NameId> {
     let mut out: Vec<NameId> = Vec::new();
     let push = |id: &'static str, out: &mut Vec<NameId>| {
         if !have.iter().any(|h| *h == id) && !out.iter().any(|o| *o == id) {
-            out.push(NameId::intern(id));
+            out.push(intern(id));
         }
     };
     if let Some(ex) = exclusive_of(player_id) {

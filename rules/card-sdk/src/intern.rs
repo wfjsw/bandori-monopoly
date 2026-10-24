@@ -80,14 +80,6 @@ impl NameId {
         self.0 != u16::MAX
     }
 
-    /// Intern `s` (same as [`intern`]). An inherent alias so body code can
-    /// write `NameId::intern(id)` when it is pushing literals into a
-    /// `Vec<NameId>` without importing the free function.
-    #[inline]
-    pub fn intern(s: &str) -> NameId {
-        intern(s)
-    }
-
     /// The interned bytes as `&'static str` (`""` when `id` is stale or the
     /// stored bytes are not UTF-8).
     ///
