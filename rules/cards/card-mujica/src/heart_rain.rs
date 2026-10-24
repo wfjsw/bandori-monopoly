@@ -8,6 +8,7 @@
 //! refuses a grant in this engine, so "granted stay" and "gained stay" coincide
 //! and the fallback branch keys off the grants.
 
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -31,7 +32,7 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         // 规则书: 「各自骰1d20」
-        let roll = ctx::roll(p, 1, 20);
+        let roll = ctx::roll(p, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
         // 规则书: 「骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]」
         let layers = if roll <= 3 {
             2

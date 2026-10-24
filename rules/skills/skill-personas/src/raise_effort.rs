@@ -14,7 +14,7 @@
 //! whole point of spending the pot.
 
 use bandori_std::ctx;
-use card_sdk::abi::{roll_source, ActionKind};
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RAISE_EFFORT: CardDef = CardDef::new(
@@ -73,10 +73,10 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("raise_effort_spend")))? {
         return Ok(());
     }
-    // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so `roll_ask` with
-    // `roll_source::CHARGE` raises the `Roll` chain link and 寄于指尖的执念
+    // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so a windowed Move roll
+    // with `roll_source::CHARGE` raises the `Roll` chain link and 寄于指尖的执念
     // 「[反击] 当你使用火罐进行掷骰时」 rings on it.
-    let again = ctx::do_move_roll_ask(player_id, roll_source::CHARGE).max(0);
+    let again = ctx::roll(player_id, 0, 0, RollPurpose::Move, roll_source::CHARGE)?.max(0);
     // 「择其一执行」 -- keep whichever the player names.
     let keep = ctx::ask_pick(
         player_id,

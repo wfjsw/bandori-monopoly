@@ -7,6 +7,7 @@
 //!
 //! player either moves without settling or pays you X*20, then you move the sum.
 
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -67,7 +68,7 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」
-        let r = ctx::roll(p, 1, 20);
+        let r = ctx::roll(p, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
         sum += r;
         // C# `H.Walk(p, r, resolve: false, ...)` (MatchHost.cs:5965) builds
         // `MoveCtx { Steps = r, Resolve = false }` -- a walk without settling.

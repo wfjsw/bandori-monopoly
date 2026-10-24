@@ -7,7 +7,7 @@
 //! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::FilterKind;
+use card_sdk::abi::{roll_source, FilterKind, RollPurpose};
 use card_sdk::{CardText};
 use card_sdk::{key, CardDef, DealValue, Filter, Msg, On};
 
@@ -71,7 +71,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「投掷1d10」
-    let want = ctx::roll(player_id, 1, 10);
+    let want = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书: 「从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地」
     // -- C# `CardMazeWarehouse.Play` walks forward from 流星堂, counting buyable
     // unowned tiles; wrapping the whole ring without reaching `want` lands back on

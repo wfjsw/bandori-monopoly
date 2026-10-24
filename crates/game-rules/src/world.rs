@@ -236,7 +236,10 @@ impl Trigger {
 
 pub trait CardWorld: Clone + 'static {
     // ---------------------------------------------------------- dice & log
-    /// Sum of `count` d`sides` from the match RNG; also records a dice event.
+    /// Sum of `count` d`sides` from the match RNG; also records a `"dice"`
+    /// event (the roll animation -- every roll path posts exactly one). The
+    /// Effect-purpose face producer; [`Self::do_move_roll`] is the Move-purpose
+    /// sibling and must post one `"dice"` event too.
     /// Announce which effect a card just applied. Unlike [`Self::log`] this
     /// reaches the player as a popup as well as a log line -- the two are
     /// additive. Defaults to a plain log so test worlds need not implement it.

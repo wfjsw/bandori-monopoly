@@ -2073,9 +2073,19 @@ impl Cx<'_> {
     /// A card- or skill-driven dice roll. Sums `count`d`sides` the
     /// same way `roll_tables` does (a flat `count` when `sides <= 0`); the
     /// caller raises the `Roll` chain link so 「掷骰结算前」 counteractions see it.
+    /// Always logs one `"dice"` event (all rolls animate) -- including the flat
+    /// `sides <= 0` shape.
     pub fn card_roll(&mut self, player_id: usize, count: i32, sides: i32) -> i32 {
         if sides <= 0 {
-            return count;
+            let total = count;
+            let text = Msg::new("log.dice")
+                .player_id("who", player_id as i32)
+                .i("count", count)
+                .i("sides", 0)
+                .i("sum", total)
+                .opt("detail", None);
+            self.w.log("dice", player_id as i32, text).value = total;
+            return total;
         }
         // Each roll gets its own `dice` line (faces included), so a card that
         // rolls several times (热气球演出's four 3d20) shows every roll.
@@ -2084,10 +2094,19 @@ impl Cx<'_> {
 
     /// A card-driven reroll (resource-powered dice): sum the
     /// move plan's `base` + `dice` tables, honouring `TurnCtx::extreme`. The
-    /// caller raises the `Roll` chain link on the face.
-    pub fn card_do_move_roll(&mut self, _player_id: usize) -> i32 {
+    /// caller raises the `Roll` chain link on the face. Logs one `"dice"`
+    /// event (all rolls animate).
+    pub fn card_do_move_roll(&mut self, player_id: usize) -> i32 {
         let plan = self.w.turn.plan.clone();
-        self.roll_tables(&plan)
+        let total = self.roll_tables(&plan);
+        let text = Msg::new("log.dice")
+            .player_id("who", player_id as i32)
+            .i("count", 0)
+            .i("sides", 0)
+            .i("sum", total)
+            .opt("detail", None);
+        self.w.log("dice", player_id as i32, text).value = total;
+        total
     }
 
     /// Resolve the tile a player stopped on.

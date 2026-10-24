@@ -32,12 +32,12 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_roll"
         )]
-        pub fn roll(player_id: i32, count: i32, sides: i32) -> i32;
+        pub fn roll(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_roll_ask"
+            link_name = "ruleset_roll_direct"
         )]
-        pub fn roll_ask(player_id: i32, count: i32, sides: i32, source: i32) -> i32;
+        pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_log"
@@ -1700,11 +1700,6 @@ mod abi {
             link_name = "ruleset_card_offer_build"
         )]
         pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32;
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_do_move_roll"
-        )]
-        pub fn do_move_roll(player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_placed_cards"

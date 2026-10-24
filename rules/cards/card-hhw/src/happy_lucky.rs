@@ -6,7 +6,7 @@
 //!
 //! roll 1d4 mod 4 and teleport along that axis to the farthest tile.
 
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{roll_source, MoveKind, RollPurpose};
 use card_sdk::{CardText};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
@@ -62,7 +62,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「投掷1d4mod4」 -- C# `H.CardRoll(c, 1, 4, CardName) % 4`.
-    let r = ctx::roll(player_id, 1, 4);
+    let r = ctx::roll(player_id, 1, 4, RollPurpose::Effect, roll_source::CARD)?;
     let num = r.rem_euclid(4);
     // 规则书: 「对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子
     // （例：在弦卷豪宅骰到4则传送到商店街）」 -- C# `Grid`/`FromGrid`: the face

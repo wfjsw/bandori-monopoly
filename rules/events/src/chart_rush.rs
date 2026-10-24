@@ -31,7 +31,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             bandori_std::fire::spend(p, lost, &Msg::new("log.event.chart_lose"))?;
         }
         // 「并且投掷Xd20，X为失去的指示物数量加一」
-        let face = roll(p, lost + 1, 20);
+        let face = roll(p, lost + 1, 20)?;
         ctx::log(
             player_id,
             &Msg::new("log.event.dice")

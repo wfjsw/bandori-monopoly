@@ -68,6 +68,7 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::Acquire { .. }
         | HostRequest::AgentOffer { .. } => Some("buy/build"),
         HostRequest::SettleAt { .. } => Some("settle"),
+        HostRequest::Roll { .. } => Some("roll"),
         _ => None,
     }
 }
@@ -3816,8 +3817,10 @@ impl<M: CardModules> RulesBridge<M> {
                 cx.card_offer_build_one(player_id.max(0) as usize, tile.max(0) as usize)?;
                 return Ok(1);
             }
-            // A card- or skill-driven dice roll. The engine rolls and raises
-            // the `Roll` chain link -- the 「掷骰结算前」 counteraction window (Y.O.L.O
+            // A card- or skill-driven dice roll. The engine rolls (Effect =
+            // `count`d`sides`, Move = the move plan's dice tables), logs one
+            // `"dice"` event either way, and -- when `window` -- raises the
+            // `Roll` chain link: the 「掷骰结算前」 counteraction window (Y.O.L.O
             // 「你的任意掷骰结算前」, 寄于指尖的执念 「when you roll using charge pots」)
             // -- with the roller, the face and the `roll_source` code, then
             // answers with whatever a counteraction left on `value`.
@@ -3825,15 +3828,20 @@ impl<M: CardModules> RulesBridge<M> {
                 player_id,
                 count,
                 sides,
+                purpose,
                 source,
+                window,
             } => {
-                // `sides == 0` is the `do_move_roll` shape: sum the move
-                // plan's dice tables instead of `count`d`sides`.
-                let face = if sides == 0 {
+                // `purpose == 1` (Move) sums the move plan's dice tables
+                // instead of `count`d`sides` (the old `sides == 0` hack).
+                let face = if purpose == 1 {
                     cx.card_do_move_roll(player_id.max(0) as usize)
                 } else {
                     cx.card_roll(player_id.max(0) as usize, count, sides)
                 };
+                if !window {
+                    return Ok(face);
+                }
                 let t = self.raise_core(cx, "diceRollBefore", player_id, |t| {
                     t.value = face;
                     t.roll_source = game_core::engine::rules::RollSource::from_i32(source);

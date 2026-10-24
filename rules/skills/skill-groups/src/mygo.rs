@@ -12,7 +12,7 @@
 
 use bandori_std::ctx::{self, plan, state};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "skill:MyGO!!!!!:迷途之星";
@@ -46,7 +46,7 @@ pub const MYGO: CardDef = CardDef::new(
 
 /// （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
-    let roll = ctx::roll(player_id, 3, 20);
+    let roll = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::SKILL)?;
     let start = (roll % ctx::tile_count().max(1) + ctx::tile_count()) % ctx::tile_count().max(1);
     state::set(player_id, "skill.mygo.start", start);
     ctx::teleport_to(player_id, start);

@@ -16,7 +16,7 @@
 //! expiry -- which is what the keyed state's `expires` is for.
 
 use bandori_std::ctx::{self, state};
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -69,7 +69,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 fn roll(player_id: i32) -> card_sdk::Asked {
     // 「在下回合开始前」 -- last round's borrow comes off first.
     expire(player_id)?;
-    let n = ctx::roll(player_id, 1, 4);
+    let n = ctx::roll(player_id, 1, 4, RollPurpose::Effect, roll_source::SKILL)?;
     let Some(id) = POOL.get((n - 1).max(0) as usize) else {
         return Ok(());
     };

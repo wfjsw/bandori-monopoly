@@ -27,7 +27,7 @@
 //! that settle, which is what `PaySplitMul` is.
 
 use bandori_std::ctx::{self, state, trigger};
-use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::abi::{roll_source, ActionKind, FilterKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// Settle this player owes at their own next turn end, from （2）.
@@ -186,7 +186,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     if cost == 4 {
         // （2）「然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的
         // 下回合结束时[触发结算]；在此技能影响下的支付价格变为原本的一半」.
-        let n = ctx::roll(mover, 1, 20);
+        let n = ctx::roll(mover, 1, 20, RollPurpose::Effect, roll_source::SKILL)?;
         if n <= 6 {
             rules_status::stay::add(mover, 1);
             state::set(player_id, DUE, 1);

@@ -77,7 +77,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         // 规则书: `H.DoMoveRoll(move)` re-rolls the move's whole dice table
         // (base + extra dice + flat bonuses).
-        let n = ctx::do_move_roll(player_id).max(0);
+        let n = ctx::do_move_roll(player_id)?.max(0);
         roll += n;
         trigger::set_move_roll(roll);
         // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」 -- each re-roll is logged

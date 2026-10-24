@@ -10,7 +10,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose, TriggerKind};
 use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -112,7 +112,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
         // refuses other players' turns (`turn != Player`).
         TriggerKind::TurnStart => {
             if trigger::player_id() == player_id {
-                rain(player_id);
+                rain(player_id)?;
             }
         }
         // 规则书: 「每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆」
@@ -170,14 +170,13 @@ fn that_day_rain(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书: 「打出此卡时...投掷1d10并按地产商格子顺序使（除“东京外”的）第n个地产商
     // 对应的颜色格子及这些格子相邻格子上的所有玩家获得一层[停留]」
-    rain(player_id);
-    Ok(())
+    rain(player_id)
 }
 
 /// C# `CardThatDayRain.Rain` -- the 1d10 -> agent -> colour-and-neighbours stay.
-fn rain(player_id: i32) {
+fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d10」 -- C# `H.Roll(Seat, 1, 10, CardName)`.
-    let r = ctx::roll(player_id, 1, 10);
+    let r = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书: 「按地产商格子顺序使（除“东京外”的）第n个地产商」
     // 规则书: 「（骰点大于10则固定为高级住宅区对应颜色的格子）」 -- a d10 cannot
     // exceed 10, so the fallback is only a safety net (C# `num > list.Count ||
@@ -227,6 +226,7 @@ fn rain(player_id: i32) {
             ctx::log(p, &Msg::new(key!("that_day_rain_stay")).player_id("who", p));
         }
     }
+    Ok(())
 }
 
 //

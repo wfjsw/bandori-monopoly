@@ -15,7 +15,7 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const MARK: &str = "saaya标记";
@@ -106,7 +106,7 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
 /// （计算后小等于0则移动到下一个可购买格子）」.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, MARK, -1, 1)?;
-    let cut = ctx::roll(player_id, 1, 10).max(0);
+    let cut = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::SKILL)?.max(0);
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     let after = before - cut;
     if after <= 0 {

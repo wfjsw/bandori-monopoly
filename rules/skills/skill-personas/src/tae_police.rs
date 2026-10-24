@@ -18,7 +18,7 @@
 use bandori_std::ctx::{self, state, trigger};
 use bandori_std::kind::Actions;
 use bandori_std::state_key;
-use card_sdk::abi::{prop, ActionKind, ChainKind, MarkFilter};
+use card_sdk::abi::{prop, roll_source, ActionKind, ChainKind, MarkFilter, RollPurpose};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind 「[多惠兔子]」.
@@ -74,7 +74,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// （1）「每次你领取[CiRCLE奖励]时投掷3d20，如果结果对应的格子不是"星空齿科"
 /// 则在结果对应的格子放置一个[多惠兔子]」.
 fn on_circle(player_id: i32) -> card_sdk::Asked {
-    let n = ctx::roll(player_id, 3, 20);
+    let n = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::SKILL)?;
     let total = ctx::tile_count();
     if total <= 0 {
         return Ok(());

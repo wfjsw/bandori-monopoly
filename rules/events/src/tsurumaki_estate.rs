@@ -33,7 +33,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 1..=len from the match RNG, mapped down to a 0-based index.
-    let face = roll(player_id, 1, open.len() as i32);
+    let face = roll(player_id, 1, open.len() as i32)?;
     let tile = open[(face - 1).clamp(0, open.len() as i32 - 1) as usize];
     ctx::log(
         player_id,

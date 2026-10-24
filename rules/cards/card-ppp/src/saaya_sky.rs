@@ -10,7 +10,7 @@
 //! park on 山吹面包房; after the user passes it, +1 fire and the card hops to 3d20.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -82,7 +82,7 @@ fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「获得1个[火罐]」 -- C# `H.GainFire(User, 1, CardName)`.
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_fire")))?;
     // 规则书（2）: 「投掷3d20」 -- C# `H.Roll(User, 3, 20, CardName)`.
-    let num = ctx::roll(player_id, 3, 20);
+    let num = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书（2）: 「将此卡放置在投掷结果的格子上」 -- C# `Tile = (num - 1) %
     // H._tiles.Length` (the roll face minus one is the *tile index*, not a hop).
     let n = ctx::tile_count();

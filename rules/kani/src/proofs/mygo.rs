@@ -45,7 +45,7 @@ crate::host_subset!(endless_journey_dispatch {
 crate::host_subset!(haneoka_dispatch {
     player_pos => arm_player_pos,
     tile_owner => arm_tile_owner,
-    roll_ask => arm_roll_ask,
+    roll => arm_roll,
     mortgaged_of => arm_mortgaged_of,
     add_house => arm_add_house,
     draw => arm_draw,

@@ -46,7 +46,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", x as i64),
     );
-    let face = x + roll(player_id, 1, 20);
+    let face = x + roll(player_id, 1, 20)?;
     ctx::log(
         player_id,
         &Msg::new("log.event.dice")

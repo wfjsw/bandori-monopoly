@@ -92,6 +92,8 @@ pub use text::{
 
 /// A locale key the client resolves (`key!` / `err.*` / `log.*` / `counter.*`).
 pub use abi::MsgKey;
+/// Why a die is being cast (`Effect` / `Move`). See [`abi::RollPurpose`].
+pub use abi::RollPurpose;
 pub use payload::FilterPayload;
 pub use payload::{DealValue, GateValue, PayAddValue, PlanValue, RedirectValue, RollValue};
 

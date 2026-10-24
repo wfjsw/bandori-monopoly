@@ -20,7 +20,7 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::abi::{roll_source, ActionKind, Dice, FilterKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 /// 「回忆地块」 -- the three the clause names.
@@ -164,7 +164,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    let d = ctx::roll(player_id, 1, 6).max(0);
+    let d = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::SKILL)?.max(0);
     state::set(player_id, BONUS, state::get(player_id, BONUS) + 1);
     ctx::plan::set_extra_steps(d);
     ctx::log(

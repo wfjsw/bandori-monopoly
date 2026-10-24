@@ -8,6 +8,7 @@
 //! gain a [停留] layer, the user among them.
 
 use alloc::vec::Vec;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{CardText, para, sec};
 
@@ -30,7 +31,8 @@ fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「投掷2d2并记录结果为X」
     // 投掷2d2并记录结果为X -- `ctx::n(1, ...)` so 「后勤人员的努力」 can double
     // this card's first number (C# `x = (c.Doubled == 0) ? x * 2 : x`).
-    let x = ctx::n(1, ctx::roll(player_id, 2, 2));
+    let r = ctx::roll(player_id, 2, 2, RollPurpose::Effect, roll_source::CARD)?;
+    let x = ctx::n(1, r);
     // 规则书[手]: 「[指定]X名玩家（其中必须包括[使用者]）」 -- the user is always
     // one of them (C# `targets = { i }`), the rest come one prompt at a time.
     let mut targets: Vec<i32> = Vec::new();

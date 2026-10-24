@@ -7,6 +7,7 @@
 //! and teleport to the matching Live House tile.
 
 use bandori_std::ctx;
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -56,7 +57,7 @@ fn be_strongest(player_id: i32) -> card_sdk::Asked {
         live_house
     } else {
         // 规则书: 「roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”）」
-        let r = ctx::roll(player_id, 1, 10);
+        let r = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::CARD)?;
         if r >= 10 || r as usize > LIVEHOUSES.len() {
             live_house
         } else {

@@ -188,31 +188,34 @@ pub mod raw {
 
 // ------------------------------------------------------------- dice & log
 
-/// Sum of `count` d`sides`, logged as a dice event.
+/// Roll, raising the 「掷骰结算前」 [反击] window on the face (the default).
+/// `source` is a [`crate::abi::roll_source`] code (NONE/CHARGE/CARD/SKILL).
+/// Always logs a `"dice"` event (the roll animation).
+/// Returns the face a counteraction left; `Err(Prompt)` pauses the run.
 ///
-/// **No [反击] window.** A roll that 「掷骰结算前」 [反击]s must answer (Y.O.L.O
-/// 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」) goes through
-/// [`roll_ask`] instead, which raises the `Roll` chain link.
-pub fn roll(player_id: i32, count: i32, sides: i32) -> i32 {
+/// [`RollPurpose::Effect`] rolls `count`d`sides`; [`RollPurpose::Move`] sums
+/// the move plan's dice tables and ignores `count`/`sides`.
+pub fn roll(
+    player_id: i32,
+    count: i32,
+    sides: i32,
+    purpose: crate::abi::RollPurpose,
+    source: i32,
+) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::roll");
-    unsafe { sys::roll(player_id, count, sides) }
+    asked(unsafe { sys::roll(player_id, count, sides, purpose as i32, source) })
 }
 
-/// [`roll`], but the engine raises the `Roll` chain link on the face first -- the
-/// 「掷骰结算前」 [反击] window -- with the roller, the face and `source` (a
-/// [`crate::abi::roll_source`] code). Returns the face a counteraction left.
-///
-/// `sides == 0` is the `do_move_roll` shape: the face is the sum of the move
-/// plan's dice tables (「使用火罐进行掷骰」 rerolls) rather than `count`d`sides`.
-/// Pauses like [`card_move`] -- the trap unwinds the body and the replay reads
-/// the answer.
-pub fn roll_ask(player_id: i32, count: i32, sides: i32, source: i32) -> i32 {
-    unsafe { sys::roll_ask(player_id, count, sides, source) }
-}
-
-/// [`roll_ask`] for a move-plan reroll (`sides == 0`).
-pub fn do_move_roll_ask(player_id: i32, source: i32) -> i32 {
-    unsafe { sys::roll_ask(player_id, 0, 0, source) }
+/// [`roll`] without the [反击] window — the face is final as cast.
+/// Still logs a `"dice"` event (all rolls animate).
+pub fn roll_direct(
+    player_id: i32,
+    count: i32,
+    sides: i32,
+    purpose: crate::abi::RollPurpose,
+) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::roll_direct");
+    asked(unsafe { sys::roll_direct(player_id, count, sides, purpose as i32) })
 }
 
 /// Log a message line for `player_id`.
@@ -3342,11 +3345,13 @@ pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
     unsafe { sys::card_offer_build(player_id, p, l) != 0 }
 }
 
-/// Sum the planned move's dice tables into one face. The
-/// `rollAfter` / `diceRollResult` hooks are **not** raised: a re-roll is usually being
-/// requested from inside one of them, and re-raising would recurse.
-pub fn do_move_roll(player_id: i32) -> i32 {
-    unsafe { sys::do_move_roll(player_id) }
+/// Sum the planned move's dice tables into one face, without the [反击] window.
+/// The `rollAfter` / `diceRollResult` hooks are **not** raised: a re-roll is
+/// usually being requested from inside one of them, and re-raising would
+/// recurse. Shorthand for [`roll_direct`] with [`crate::abi::RollPurpose::Move`];
+/// still logs a `"dice"` event.
+pub fn do_move_roll(player_id: i32) -> Result<i32, Prompt> {
+    roll_direct(player_id, 0, 0, crate::abi::RollPurpose::Move)
 }
 
 /// Is this card in play at the player?

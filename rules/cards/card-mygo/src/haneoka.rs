@@ -8,7 +8,7 @@
 //! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{roll_source, ActionKind};
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -50,11 +50,11 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「投掷1d20」
-    // `roll_ask` (not `ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
+    // Windowed (`ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
     // 「你的任意掷骰结算前」) rings on this card's own 1d20 -- the only way to
     // reach the 「大于20」 / 「至少为20」 place branch (a plain d20 tops out at 20).
-    // `ctx::roll_ask` honours a forced extreme (「以理论最大值或最小值结算」).
-    let r = ctx::roll_ask(player_id, 1, 20, roll_source::CARD);
+    // It also honours a forced extreme (「以理论最大值或最小值结算」).
+    let r = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
     if r < 10 {
         // 规则书 (sheet 2026-10-06): 「若小于10，此卡放入弃牌堆且视为此卡未生效」
         ctx::log(

@@ -1186,7 +1186,7 @@ crate::host_subset!(starry_hook_dispatch {
     trig_move_roll => arm_trig_move_roll,
     trig_value => arm_trig_value,
     ask => arm_ask,
-    do_move_roll => arm_do_move_roll,
+    roll_direct => arm_do_move_roll,
     trig_set_move_roll => arm_trig_set_move_roll,
     log | effect => arm_log,
     player_count => arm_player_count,

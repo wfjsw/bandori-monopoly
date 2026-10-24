@@ -109,7 +109,7 @@ crate::host_subset!(backstage_dispatch {
 /// `card_move` is a protocol stub — the teleport frame is blocked-by it.
 crate::host_subset!(balloon_dispatch {
     tile_count => arm_tile_count,
-    roll | roll_ask => arm_roll,
+    roll | roll_direct => arm_roll,
     opt_int | opt_str | opt_tile | opt_price | opt_ai => arm_opt,
     ask => arm_ask,
     set_kind | set_teleport_to | set_resolve | set_steps | set_reverse
@@ -128,7 +128,7 @@ crate::host_subset!(balloon_dispatch {
 /// The PassTile hook and the (2) counteract are separate entries (not called).
 crate::host_subset!(hagumi_dispatch {
     tile_count => arm_tile_count,
-    roll | roll_ask => arm_roll,
+    roll | roll_direct => arm_roll,
     opt_int | opt_str | opt_tile | opt_price | opt_ai => arm_opt,
     ask => arm_ask,
     gain | gain_typed | gain_fixed => arm_gain,

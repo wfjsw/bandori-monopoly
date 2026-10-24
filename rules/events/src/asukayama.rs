@@ -50,7 +50,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             ctx::teleport_to(p, park);
         }
     }
-    let face = roll(player_id, 1, 20);
+    let face = roll(player_id, 1, 20)?;
     ctx::log(
         player_id,
         &Msg::new("log.event.dice")

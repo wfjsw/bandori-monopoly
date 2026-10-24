@@ -3,12 +3,12 @@
 
 use crate::kani_host::{self, Args, Op};
 
-pub fn roll(player_id: i32, count: i32, sides: i32) -> i32 {
-    kani_host::call_i32(Op::roll, [player_id, count, sides, 0, 0, 0])
+pub fn roll(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -> i32 {
+    kani_host::call_i32(Op::roll, [player_id, count, sides, purpose, source, 0])
 }
 
-pub fn roll_ask(player_id: i32, count: i32, sides: i32, source: i32) -> i32 {
-    kani_host::call_i32(Op::roll_ask, [player_id, count, sides, source, 0, 0])
+pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32) -> i32 {
+    kani_host::call_i32(Op::roll_direct, [player_id, count, sides, purpose, 0, 0])
 }
 
 pub fn log(player_id: i32, ptr: i32, len: i32) {
@@ -1322,9 +1322,8 @@ pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::card_offer_build, [player_id, buf, n, 0, 0, 0])
 }
 
-pub fn do_move_roll(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::do_move_roll, [player_id, 0, 0, 0, 0, 0])
-}
+// `do_move_roll` is `roll_direct(..., RollPurpose::Move)` in `ctx`; the old
+// dedicated import is gone (v102).
 
 pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::placed_cards, [player_id, buf, cap, 0, 0, 0])

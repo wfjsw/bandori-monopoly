@@ -6,7 +6,7 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::abi::{roll_source, MoveKind};
+use card_sdk::abi::{roll_source, MoveKind, RollPurpose};
 use card_sdk::{CardText};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
@@ -32,11 +32,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「投掷4次3d20并记录其结果」 -- C# `H.Roll(seat, 3, 20, ...)` four
-    // times. `roll_ask` so the 「掷骰结算前」 [反击] window (Y.O.L.O 「你的任意
-    // 掷骰结算前」) rings on each; source is CARD (a hand card's own roll).
+    // times. Windowed (`ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
+    // 「你的任意掷骰结算前」) rings on each; source is CARD (a hand card's own roll).
     let mut tiles: Vec<i32> = Vec::new();
     for _ in 0..4 {
-        let r = ctx::roll_ask(player_id, 3, 20, roll_source::CARD);
+        let r = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
         let t = (r - 1).rem_euclid(n);
         if !tiles.contains(&t) {
             tiles.push(t);

@@ -20,7 +20,7 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The counter X. 「X初始为0」.
@@ -70,7 +70,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let x = state::get(player_id, X);
-    let n = ctx::roll(player_id, 1, 20);
+    let n = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::SKILL)?;
     if n <= x {
         // 「若结果小于等于X，将X重置为0，此次获得资金翻倍或无需失去资金
         // （收款或付款方同样受到影响）」

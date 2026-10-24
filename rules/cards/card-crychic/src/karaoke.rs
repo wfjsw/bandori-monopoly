@@ -8,6 +8,7 @@
 
 use alloc::vec::Vec;
 
+use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -45,7 +46,7 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
     );
     let mut results: Vec<i32> = Vec::new();
     // The first face is this turn's natural d20 (C# `m.Roll` before `Sing`).
-    results.push(ctx::roll(player_id, 1, 20).max(0));
+    results.push(ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?.max(0));
     ctx::log(
         player_id,
         &Msg::new(key!("karaoke_face"))
@@ -62,7 +63,7 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
         if !again {
             break;
         }
-        let x = ctx::roll(player_id, 1, 20).max(0);
+        let x = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?.max(0);
         results.push(x);
         ctx::log(
             player_id,

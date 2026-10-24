@@ -110,7 +110,7 @@ the CEL `pre`. Every live `On::Play` gate was scanned (`rules/cards/**`,
 
 **What the card-SDK can see in a guard** (`crates/card-sdk/src/ctx.rs`): the
 guest is *capable* of `hand_count` / `cards_in(Hand|Deck|Discard|Field)`,
-`hand_size`, `deck_count`, `discard_count`, `roll` / `roll_ask`, `draw`,
+`hand_size`, `deck_count`, `discard_count`, `roll` / `roll_direct`, `draw`,
 `shuffle_into_deck`. Of those, a **gate** that reaches
 `cards_in(Deck)` (deck order/contents), `hand_count` / `cards_in` on
 **another** seat's hand, or `ctx::roll` would make `playable` / `skills`

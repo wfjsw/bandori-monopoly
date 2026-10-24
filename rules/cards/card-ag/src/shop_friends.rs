@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 use bandori_std::ctx::{self, plan};
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{roll_source, MoveKind, RollPurpose};
 use card_sdk::{CardText};
 
 use card_sdk::{key, CardDef, Msg, On};
@@ -45,7 +45,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         }
     }
     // 规则书: 「投掷1d6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数）」
-    let roll = ctx::roll(player_id, 1, 6);
+    let roll = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     let to = if (1..=list.len() as i32).contains(&roll) {
         list[(roll - 1) as usize]
     } else {

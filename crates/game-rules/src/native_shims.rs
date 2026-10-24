@@ -26,10 +26,10 @@ use crate::host::HostErr;
 /// for every [`crate::host::HostCtx`], so the concrete host never names these
 /// methods -- `rules-native` just boxes its `NativeHost` and installs it.
 pub trait HostOps {
-    /// `ruleset_roll`
+    /// `ruleset_roll` (windowed; args = player_id, count, sides, purpose, source)
     fn op_roll(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_roll_ask`
-    fn op_roll_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_roll_direct` (windowless; args = player_id, count, sides, purpose)
+    fn op_roll_direct(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_log`
     fn op_log(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_effect`
@@ -568,8 +568,6 @@ pub trait HostOps {
     fn op_card_settle_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_offer_build`
     fn op_card_offer_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_do_move_roll`
-    fn op_do_move_roll(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_placed_cards`
     fn op_placed_cards(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_field_instances`
@@ -758,10 +756,10 @@ pub trait HostOps {
 
 impl<C: crate::host::HostCtx> HostOps for C {
     fn op_roll(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::roll(self, a[0], a[1], a[2])? as i64)
+        Ok(crate::hostfns::roll(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
-    fn op_roll_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::roll_ask(self, a[0], a[1], a[2], a[3])? as i64)
+    fn op_roll_direct(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::roll_direct(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_log(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::log(self, a[0], a[1], a[2])?;
@@ -1656,9 +1654,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_offer_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_offer_build(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_do_move_roll(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::do_move_roll(self, a[0])? as i64)
-    }
     fn op_placed_cards(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::placed_cards(self, a[0], a[1], a[2])? as i64)
     }
@@ -1947,22 +1942,28 @@ pub fn abort_host(e: HostErr) -> ! {
 // ---------------------------------------------------------------------------
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_roll(player_id: i32, count: i32, sides: i32) -> i32 {
-    with_host(|h| match h.op_roll([player_id, count, sides, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_roll(
+    player_id: i32,
+    count: i32,
+    sides: i32,
+    purpose: i32,
+    source: i32,
+) -> i32 {
+    with_host(|h| match h.op_roll([player_id, count, sides, purpose, source, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_roll_ask(
+pub unsafe extern "C-unwind" fn ruleset_roll_direct(
     player_id: i32,
     count: i32,
     sides: i32,
-    source: i32,
+    purpose: i32,
 ) -> i32 {
     with_host(
-        |h| match h.op_roll_ask([player_id, count, sides, source, 0, 0]) {
+        |h| match h.op_roll_direct([player_id, count, sides, purpose, 0, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },
@@ -4427,14 +4428,6 @@ pub unsafe extern "C-unwind" fn ruleset_card_offer_build(player_id: i32, buf: i3
             Err(e) => abort_host(e),
         },
     )
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_do_move_roll(player_id: i32) -> i32 {
-    with_host(|h| match h.op_do_move_roll([player_id, 0, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
 }
 
 #[no_mangle]

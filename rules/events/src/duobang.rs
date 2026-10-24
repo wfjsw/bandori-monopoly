@@ -27,7 +27,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     let mut faces: Vec<(i32, i32)> = Vec::new();
     for &p in &players {
-        let face = roll(p, 1, 20);
+        let face = roll(p, 1, 20)?;
         faces.push((p, face));
         ctx::log(
             player_id,

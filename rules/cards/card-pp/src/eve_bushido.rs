@@ -17,7 +17,7 @@
 //! runs on the `Drew` hook.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose, TriggerKind};
 use card_sdk::{CardText, it, it_sub, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -63,7 +63,7 @@ fn eve_bushido(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[手]: 「并投掷12d4，获得投掷结果*60的资金」
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
-    let n = ctx::roll(player_id, 12, 4);
+    let n = ctx::roll(player_id, 12, 4, RollPurpose::Effect, roll_source::CARD)?;
     ctx::gain(
         player_id,
         n * 60,
@@ -108,9 +108,9 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]（2）: 「使用1个[奇迹水晶]」
     ctx::add_crystals(-1, 0)?;
     // 规则书[持续]（2）1: 「地契主人投掷1d6」
-    let a = ctx::roll(owner, 1, 6);
+    let a = ctx::roll(owner, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书[持续]（2）2: 「[拥有者]投掷3d4」
-    let b = ctx::roll(player_id, 3, 4);
+    let b = ctx::roll(player_id, 3, 4, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书[持续]（2）3: 「如果平局则双方互不支付」
     if a == b {
         ctx::log(player_id, &Msg::new(key!("eve_bushido_tie")));

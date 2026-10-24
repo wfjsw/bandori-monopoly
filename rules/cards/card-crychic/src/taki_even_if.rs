@@ -36,7 +36,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // every face rolled this turn (not just this card's own rerolls).
     let mut seen: alloc::vec::Vec<i32> = ctx::turn_rolls().into_iter().map(|r| r.abs()).collect();
     seen.push(before.abs());
-    let mut x = ctx::do_move_roll(player_id);
+    let mut x = ctx::do_move_roll(player_id)?;
     ctx::log(
         player_id,
         &Msg::new(key!("taki_reroll"))
@@ -57,7 +57,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             break;
         }
         seen.push(x.abs());
-        x = ctx::roll(player_id, 1, 20);
+        // Same shape as the first reroll: the move plan's whole dice table.
+        x = ctx::do_move_roll(player_id)?;
         ctx::log(
             player_id,
             &Msg::new(key!("taki_reroll"))

@@ -10,7 +10,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
-use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::abi::{roll_source, ActionKind, FilterKind, RollPurpose};
 use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
@@ -73,7 +73,7 @@ fn nearest_ahead(player_id: i32) -> i32 {
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6」 -- C# `(H.Roll(i, 1, 6, "NFO") - 1) % 6 + 1` wraps above 6.
-    let roll = ctx::roll(player_id, 1, 6);
+    let roll = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书: 「（若结果严格大于6，则从1开始重新计数）」
     let k = (roll - 1).rem_euclid(6) + 1;
     // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H._turnCtx.AfterEnd.Add(() =>

@@ -14,7 +14,7 @@
 use alloc::vec::Vec;
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
-use card_sdk::abi::{FilterKind, MoveKind};
+use card_sdk::abi::{roll_source, FilterKind, MoveKind, RollPurpose};
 use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Filter, Msg, On};
 
@@ -73,7 +73,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「投掷3d10并根据结果依次进行以下操作」 -- C# `H.CardRoll(c, 3, 10, ...)`.
-    let r = ctx::roll(player_id, 3, 10);
+    let r = ctx::roll(player_id, 3, 10, RollPurpose::Effect, roll_source::CARD)?;
     let station = ctx::tile_named(STATION);
 
     // 规则书（1）[手]: 「结果至少为22则抽1张卡」

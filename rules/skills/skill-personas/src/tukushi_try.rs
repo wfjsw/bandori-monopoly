@@ -15,7 +15,7 @@
 
 use bandori_std::ctx::{self, plan, state};
 use bandori_std::state_key;
-use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::abi::{roll_source, ActionKind, FilterKind, RollPurpose};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// The paired player, or -1.
@@ -132,7 +132,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     }
     state::set(player_id, LEFT, left - 1);
     // 「先后-1d6与+1d6」 -- the first is the cut, the second the boost.
-    let d = ctx::roll(player_id, 1, 6).max(0);
+    let d = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::SKILL)?.max(0);
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     let after = if left == 2 { before - d } else { before + d };
     if after <= 0 {

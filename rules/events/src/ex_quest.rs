@@ -19,7 +19,7 @@ pub const EX_QUEST: CardDef = CardDef::new("event:EX任务挑战", &[On::Play(""
 /// 规则书: 「抽出此卡的玩家投掷1d4并记录结果和26相加为X」 -- X = 26 + 1d4
 /// (27..=30), rolled by the drawer as a bare `ctx::roll` (no [反击] window).
 fn play(player_id: i32) -> card_sdk::Asked {
-    let x = 26 + roll(player_id, 1, 4);
+    let x = 26 + roll(player_id, 1, 4)?;
     ctx::log(
         player_id,
         &Msg::new("log.event.ex_quest_x")
@@ -30,7 +30,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「然后所有玩家各自投掷3d20，结果至少为X的玩家可选择更换角色
     // 皮肤（技能相同）」 -- each player rolls 3d20; a face >= X is eligible.
     for &p in &all_players() {
-        let face = roll(p, 3, 20);
+        let face = roll(p, 3, 20)?;
         ctx::log(
             player_id,
             &Msg::new("log.event.dice")

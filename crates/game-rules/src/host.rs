@@ -562,17 +562,23 @@ pub enum HostRequest {
     /// 「可选择spend…房屋建筑费进行升级建造」 on a non-main
     /// landing on one's own land. `ctx::offer_build`.
     OfferBuildOne { player_id: i32, tile: i32 },
-    /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
-    /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 counteraction
-    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行
-    /// 掷骰时」) with the roller, the face and `source`, then answers with the
-    /// face any counteraction left on the link. `source` is an
+    /// A card- or skill-driven dice roll (`ctx::roll` / `ctx::roll_direct`).
+    /// The engine rolls (Effect = `count`d`sides`, Move = the move plan's dice
+    /// tables), logs one `"dice"` event, and -- when `window` -- raises the
+    /// `Roll` chain link (the 「掷骰结算前」 counteraction window -- Y.O.L.O
+    /// 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」) with the
+    /// roller, the face and `source`, then answers with the face any
+    /// counteraction left on the link. `purpose` is a
+    /// `card_sdk::abi::RollPurpose` wire code; `source` is a
     /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = marker-funded, ...).
+    /// `window: false` is `ctx::roll_direct` -- the face is final as cast.
     Roll {
         player_id: i32,
         count: i32,
         sides: i32,
+        purpose: i32,
         source: i32,
+        window: bool,
     },
     /// A card handed a deed over (tomoe_savior's 「从该玩家处收购该地契」) and
     /// is announcing the acquisition: the engine raises the `bought` hook chain
@@ -3431,8 +3437,21 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "roll",
-        |mut c: C<W>, player_id: i32, count: i32, sides: i32| -> Result<i32, Error> {
-            hostfns::roll(&mut c, player_id, count, sides).map_err(HostErr::into_err)
+        |mut c: C<W>,
+         player_id: i32,
+         count: i32,
+         sides: i32,
+         purpose: i32,
+         source: i32|
+         -> Result<i32, Error> {
+            hostfns::roll(&mut c, player_id, count, sides, purpose, source).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_direct",
+        |mut c: C<W>, player_id: i32, count: i32, sides: i32, purpose: i32| -> Result<i32, Error> {
+            hostfns::roll_direct(&mut c, player_id, count, sides, purpose).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4609,13 +4628,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "do_move_roll",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::do_move_roll(&mut c, player_id).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "tok_names",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::tok_names(&mut c, player_id, p, n, buf, cap).map_err(HostErr::into_err)
@@ -4819,13 +4831,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "card_move",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
             hostfns::card_move(&mut c, player_id).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "roll_ask",
-        |mut c: C<W>, player_id: i32, count: i32, sides: i32, source: i32| -> Result<i32, Error> {
-            hostfns::roll_ask(&mut c, player_id, count, sides, source).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
