@@ -2,7 +2,7 @@
 
 import { useCompactValue } from "../../app/Stage";
 import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
-import { stateOf, stateMax } from "../../core/names";
+import { fireMaxOf, fireOf, stateOf } from "../../core/names";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cardTitle } from "../../core/data";
@@ -190,7 +190,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
                 return bb && <span className={s.status} title={tr("board.borrowedTip", { skill: cardTitle(bb.skill), who })}>{tr("board.borrowed", { who })}</span>;
               })()}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "charge")}/{stateMax(x, "charge")}</span>
+              <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{fireOf(x)}/{fireMaxOf(x)}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
               <span className={s.grave} title={tr("board.graveyardPile")} {...holdPeek(() => setPeek(i), () => setPeek(null))} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>

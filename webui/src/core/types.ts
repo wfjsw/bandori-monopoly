@@ -91,6 +91,9 @@ export interface Counter {
   /** Owning card instance (`FieldCard.uid`) whose named counter these units
    *  are bound to; -1 = legacy / unknown. */
   instance: number;
+  /** Live ceiling the rules-layer kernel polices (「上限M」). `0` / absent =
+   *  uncapped (ephemeral tokens, and rows saved before this field existed). */
+  max?: number;
 }
 /**
  * One keyed state item: `value` plus the bounds a consumer may enforce, and
