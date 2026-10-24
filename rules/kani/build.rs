@@ -325,6 +325,8 @@ fn main() {
     writeln!(s, "    fn op_mark_src_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_src_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_instance_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_partner, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_mark_tile(&mut self, uid: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_tile, [uid, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_remove_mark(&mut self, uid: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::remove_mark, [uid, 0, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::counter_self, [np, nl, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_add_counter_self(&mut self, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_counter_self, [np, nl, n, max, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_set_counter_self(&mut self, np: i32, nl: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::set_counter_self, [np, nl, n, 0, 0, 0])) }}").unwrap();
@@ -383,6 +385,8 @@ fn main() {
         "op_mark_src_at",
         "op_mark_instance_at",
         "op_mark_partner",
+        "op_mark_tile",
+        "op_remove_mark",
         "op_counter_self",
         "op_add_counter_self",
         "op_set_counter_self",

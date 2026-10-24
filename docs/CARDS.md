@@ -703,8 +703,8 @@ are `tile_in` classes.
 | players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `turn_player`, `round_no`, `turn_key`, `gains_this_turn` (「当前回合内你每获得过一次资金」 -- the engine's per-turn money-in counter, reset at each turn start). Game: `character_is`, `in_band` |
 | targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
 | hand & deck | `draw`, `add_to_dest(player_id, card, Dest::…)`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, card, CardPile)` (remove without discarding) |
-| marks & tokens | `place_mark`, `place_mark_new`, `count_marks`, `bump_mark`, `remove_marks`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
-| tile designations | `designate_tile`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance (see 「Tile designations」) |
+| marks & tokens | `place_mark` (returns a `MarkRef`), `count_marks`, `bump_mark`, `remove_marks`, `mark_tile`, `remove_mark`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
+| tile designations | `designate_tile`, `undesignate`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance; `designate_tile` returns a `MarkRef` to store in card state (see 「Tile designations」) |
 | named counters (ABI v50) | `counter` / `add_counter` / `set_counter` (this instance), `counter_at` / `add_counter_at` (by uid), `card_counter` / `add_card_counter` (a placed card by id). Wire names `cp` / `crystals` map to `FieldCard::cp` / `FieldCard::crystals`; anything else lives in `FieldCard::counters`. The old CP helpers (`place_cp` / `count_cp` / `clear_cp` / `add_cp` / `cp_attached`) are **gone** -- use the mark / counter API, and see 「Cross-card messages」 for the 该清CP了 ↔ `mark:cp` shape |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
 | pots & status (generic) | `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
@@ -797,22 +797,39 @@ the instance), which is what the board label and tooltip show.
 Lifetime matches 「指定」 lasting while the card is in play: the mark is a unit
 of the designating instance's counter, so `destroy_instance_units` clears it
 when that instance leaves the field. A designation that ends **earlier** (a
-state exit, a turn boundary) calls `ctx::undesignate_tile` at that point.
+state exit, a turn boundary) calls `ctx::undesignate` / `ctx::undesignate_tile`
+at that point.
+
+`designate_tile` returns a [`MarkRef`] -- a durable handle to that mark row.
+The mark is the displayed record; the stored ref is the retrievable handle.
+Keep it in card state and resolve the pick later:
 
 ```rust
-ctx::designate_tile(tile, player_id, &Msg::new(key!("note")))?;
-// later, if the designation ends before the card does:
+let r = ctx::designate_tile(tile, player_id, &Msg::new(key!("note")));
+ctx::set_slot(player_id, "my.deed", r.into());
+// later:
+let r = MarkRef::from(ctx::slot(player_id, "my.deed"));
+if r.is_live() { let t = r.tile(); /* ... */ }
+// designation ends early, card still in play:
+ctx::undesignate(r);
+// batch / every designation of this instance on one tile:
 ctx::undesignate_tile(tile);
 // the pick as the source of truth:
 if ctx::designates(tile) { .. }
 for t in ctx::designated_tiles() { .. }
 ```
 
+Handles are unique for the lifetime of a match and are never recycled, so a
+stored ref either resolves to exactly the row it was issued for or reports
+dead (`r.tile() < 0`) once that row is gone. It never aliases onto a later mark.
+
 `designate_tile` is sugar over `place_mark` with the designation category and
 `Stack::Fresh` (one label per pick). Prefer it over ad-hoc slots / state keys
 when the mark can be the source of truth; where the rule needs a value the
 mark does not carry (a counterpart player, an engine-owned return tile), keep
-that storage and add the mark as the displayed record.
+that storage and add the mark as the displayed record. The `MarkRef` is the
+handle back to the mark -- store it when you need to resolve / drop that one
+pick later (as `AG:ONE OF US` does with `one_of_us_mine` / `one_of_us_theirs`).
 
 ## Activation arguments (`declare`, ABI v98) + cross-card applicability
 

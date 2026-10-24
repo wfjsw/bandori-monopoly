@@ -709,6 +709,8 @@ pub trait CardWorld: Clone + 'static {
     }
     /// Bind `count` units of the running instance's counter `kind` to `tile`.
     /// `stack`: merge onto the first match, or always push a fresh row.
+    /// Returns the mark row's uid (the new row's, or the merged row's), or
+    /// `-1` when `count <= 0`.
     fn place_mark(
         &mut self,
         tile: i32,
@@ -721,7 +723,7 @@ pub trait CardWorld: Clone + 'static {
         fresh: bool,
     ) -> i32 {
         let _ = (tile, kind, category, owner, src, count, note, fresh);
-        0
+        -1
     }
     /// Place **one** paired mark spanning tiles `a` and `b` (one row per tile,
     /// each row's `partner` naming the other). Place-or-refuse atomic: returns
@@ -771,6 +773,16 @@ pub trait CardWorld: Clone + 'static {
     fn mark_partner(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         let _ = (tile, filter);
         -1
+    }
+    /// The marked tile of the row at `uid`, or -1 when no such row.
+    fn mark_tile_by_uid(&self, uid: i32) -> i32 {
+        let _ = uid;
+        -1
+    }
+    /// Drop the exact mark row at `uid`. Returns whether that row was present.
+    fn remove_mark_by_uid(&mut self, uid: i32) -> bool {
+        let _ = uid;
+        false
     }
     /// Units of the running instance's counter `name` held by `player_id`.
     fn count_held(&self, name: &str, player_id: i32) -> i32 {

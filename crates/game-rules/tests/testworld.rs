@@ -172,6 +172,7 @@ impl CardWorld for TestWorld {
         _fresh: bool,
     ) -> i32 {
         self.marks.push((tile, owner, note));
+        // Return a plausible mark uid (the mock does not track real rows).
         1
     }
     fn money(&self, player_id: i32) -> i32 {
