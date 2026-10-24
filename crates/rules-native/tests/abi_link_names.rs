@@ -41,14 +41,43 @@ fn every_sys_import_has_a_native_link_name() {
     let mut missing: Vec<String> = vec![];
     let mut wrong_cfg: Vec<String> = vec![];
     let mut prev_has_attr = false;
+    // `sys.rs` formats `cfg_attr` across lines (`#[cfg_attr(\n  …,\n  link_name = …\n)]`),
+    // so accumulate until the closing `)]` rather than matching one physical line.
+    let mut attr = String::new();
+    let mut in_attr = false;
     for line in block.lines() {
         let trimmed = line.trim_start();
-        if trimmed.starts_with("#[cfg_attr") && trimmed.contains("link_name") {
-            // Must cover both the native and the wasm32-linked configs.
-            if !trimmed.contains(LINKED_GUEST_CFG) {
-                wrong_cfg.push(trimmed.to_string());
+        if in_attr {
+            attr.push(' ');
+            attr.push_str(trimmed);
+            if trimmed.contains(")]") || trimmed.ends_with(']') {
+                in_attr = false;
+                if attr.contains("link_name") {
+                    // Must cover both the native and the wasm32-linked configs.
+                    if !attr.contains(LINKED_GUEST_CFG) {
+                        wrong_cfg.push(attr.clone());
+                    }
+                    prev_has_attr = true;
+                }
+                attr.clear();
             }
-            prev_has_attr = true;
+            continue;
+        }
+        if trimmed.starts_with("#[cfg_attr") {
+            attr.push_str(trimmed);
+            if trimmed.contains(")]") || (trimmed.ends_with(']') && !trimmed.ends_with(")]")) {
+                // Single-line `cfg_attr`.
+                in_attr = false;
+                if attr.contains("link_name") {
+                    if !attr.contains(LINKED_GUEST_CFG) {
+                        wrong_cfg.push(attr.clone());
+                    }
+                    prev_has_attr = true;
+                }
+                attr.clear();
+            } else {
+                in_attr = true;
+            }
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix("pub fn ") {
