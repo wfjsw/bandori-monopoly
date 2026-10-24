@@ -340,9 +340,9 @@ use std::borrow::Cow;
 ///      SAVE_VERSION unchanged.
 /// v54: `ManifestOn::presentation` -- how an entry shows up in the log.
 ///      `Visible` (default) flashes and writes a 「效果适用」 header.
-///      `Silent` (`CardDef::silent`) is bookkeeping: runs its body, posts no
+///      `Silent` (`On::silent`) is bookkeeping: runs its body, posts no
 ///      flash and no header (declare_cap / set_bounds / initial values /
-///      latch clears). `QuietWhenEmpty` (`CardDef::quiet_when_empty`) runs
+///      latch clears). `QuietWhenEmpty` (`On::quiet_when_empty`) runs
 ///      normally but **retracts** its header when the body produced nothing
 ///      visible (no children, no logs): the clause applied and changed
 ///      nothing (capped gain, 「已满」), so the player never sees a flash.
@@ -855,10 +855,10 @@ pub const ABI_VERSION: i32 = 99;
 pub enum Presentation {
     /// Flash + 「效果适用」 header (the default).
     Visible = 0,
-    /// Bookkeeping: no flash, no header. `CardDef::silent`.
+    /// Bookkeeping: no flash, no header. `On::silent`.
     Silent = 1,
     /// Flash only if the body produced something visible.
-    /// `CardDef::quiet_when_empty`.
+    /// `On::quiet_when_empty`.
     QuietWhenEmpty = 2,
 }
 
@@ -913,7 +913,7 @@ impl Default for Flash {
 
 /// One entry's log presentation: the header mode plus the flash policy.
 /// Returned by `CardDef::presentation` -- the one lookup that folds the
-/// `silent` / `quiet_when_empty` header side tables with the entry's
+/// entry's [`On::silent`] / [`On::quiet_when_empty`] header with its
 /// [`On::flash`] policy. v55.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EntryPresentation {
@@ -2790,8 +2790,8 @@ pub struct ManifestOn {
     /// Not a key into the card text; source is [`On::label`] on the entry.
     #[serde(default)]
     pub label: Option<String>,
-    /// How this entry presents itself in the log (`CardDef::silent` /
-    /// `CardDef::quiet_when_empty`). See [`Presentation`]. v54.
+    /// How this entry presents itself in the log (`On::silent` /
+    /// `On::quiet_when_empty`). See [`Presentation`]. v54.
     #[serde(default)]
     pub presentation: Presentation,
     /// Whether the activation flashes (`On::flash`). See [`Flash`]. v55.

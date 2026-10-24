@@ -20,15 +20,14 @@ pub const SATO_RED: CardDef = CardDef::new(
     "skill:佐藤益木:与燃烧的红色一起驰骋",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1）「每次[经过]"白雪学园"或"银河拉面馆"时」 -- the two named tiles
         // are the hook's applicability (`tile_named` is in the condition
         // vocabulary).
         On::Action(Action::Pass("actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))", None, on_pass)),
     ],
 )
-    .silent(&[1, 2])
     // 「（初始0，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 

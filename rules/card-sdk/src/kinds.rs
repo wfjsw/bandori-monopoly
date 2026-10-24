@@ -100,6 +100,8 @@ pub struct FilterEntry {
     /// by scope (owner-self-only ⇒ no flash); `Always` / `Never` are the
     /// rule's own opinion and win over that classification.
     pub flash: crate::abi::Flash,
+    /// See [`crate::PlayEntry::header`].
+    pub header: crate::abi::Presentation,
 }
 
 // Safety: `body` always points at a `fn` item in static code (constructed by
@@ -137,6 +139,8 @@ pub struct ActionEntry {
     /// by scope (owner-self-only ⇒ no flash); `Always` / `Never` are the
     /// rule's own opinion and win over that classification.
     pub flash: crate::abi::Flash,
+    /// See [`crate::PlayEntry::header`].
+    pub header: crate::abi::Presentation,
 }
 
 impl ActionEntry {
@@ -170,6 +174,7 @@ pub const fn filter_value(
         shape: FilterShape::Value,
         label: "",
         flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
     }
 }
 
@@ -191,6 +196,7 @@ pub const fn filter_flag(
         shape: FilterShape::Flag,
         label: "",
         flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
     }
 }
 
@@ -214,6 +220,7 @@ pub const fn filter_payload<P: FilterPayload>(
         shape,
         label: "",
         flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
     }
 }
 
@@ -239,6 +246,7 @@ pub const fn action(
         declare_drive: None,
         label: "",
         flash: crate::abi::Flash::Auto,
+        header: crate::abi::Presentation::Visible,
     }
 }
 

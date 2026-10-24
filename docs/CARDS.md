@@ -391,26 +391,24 @@ The compiled lean form (`Cond::to_bytes(false)`) rides the ruleset so the
 browser glue evaluates with `rules-cond`'s `runtime-only` build and never ships
 the CEL parser.
 
-## Silent bookkeeping entries (`CardDef::silent`, ABI v53)
+## Silent bookkeeping entries (`On::silent`, ABI v53)
 
 Most entries flash the card and write a 「效果适用」 header when their body
 runs. Some entries are **bookkeeping**: a mechanical declaration or reset the
 player never sees as a clause firing. Those run their body but post no
-`"card"` event and no header -- mark them with `CardDef::silent(&[entry, …])`
-(indices into the `&[On]` table, 0-based):
+`"card"` event and no header -- mark them with `.silent()` on the entry:
 
 ```rust
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
+        On::Play("", Some(can_use), use_skill),                         // 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),     // 1: bookkeeping
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),     // 2: bookkeeping
-        On::Action(Action::TurnEnd("", Some(afterglow), tick)),         // 3: 「获得[火罐]」 -- flashes
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        On::Action(Action::TurnEnd("", Some(afterglow), tick)),         // 「获得[火罐]」 -- flashes
     ],
-)
-.silent(&[1, 2]);
+);
 ```
 
 **When to use it.** An effect the rulebook describes as happening (gain, pay,
@@ -432,7 +430,7 @@ entry that produces a visible result is a bug, and the host's debug guard
 (`game_rules::take_silent_visible` / `debug_assert!`) records it. Nested
 activations from a silent body still announce normally.
 
-Path: `CardDef::silent` → `ManifestOn::silent` (ABI v53) →
+Path: `On::silent` → `ManifestOn::presentation` (ABI v53) →
 `announce_drive` skips the `"card"` post and the 「效果适用」 header; the body
 runs the full category → pre → guard layering unchanged.
 

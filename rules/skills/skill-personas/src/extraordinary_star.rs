@@ -37,8 +37,8 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     "skill:户山香澄:非凡之星",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1） is 「其他玩家"星之鼓动山丘"上[结算]时」 -- who and where are the
         // hook's applicability (the residual guard), not its effect.
         // （1） gains a [火罐] -- owner-self-only, but the rulebook describes it
@@ -46,7 +46,6 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
         On::Action(Action::Settle("", Some(on_settle_applies), on_settle)).flash(Flash::Always),
     ],
 )
-.silent(&[1, 2])
 // 「（初始0，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

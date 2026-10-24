@@ -27,8 +27,8 @@ const RABBIT: &str = "多惠兔子";
 pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Actions::PassRewardAffected(
             card_sdk::pre::MINE,
             None,
@@ -62,8 +62,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     // group reservation the ring would re-offer it after the declaration
     // (the seat keeps the floor until it passes).
     (prop::COUNTERACT_GROUP, 1),
-])
-.silent(&[0, 1]);
+]);
 
 /// 「初始2，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

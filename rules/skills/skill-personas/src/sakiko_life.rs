@@ -27,8 +27,8 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
         // exists only at the pot cap. 状态2's auto-play still has to run
         // whenever state is 2, so the residual is the disjunction.
@@ -54,7 +54,6 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
             on_abnormal)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始0，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

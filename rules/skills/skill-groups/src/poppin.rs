@@ -29,7 +29,7 @@ pub const POPPIN: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            at_turn_start)),
+            at_turn_start)).silent(),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
@@ -68,8 +68,7 @@ pub const POPPIN: CardDef = CardDef::new(
             lock_hill,
         )),
     ],
-)
-.silent(&[0]);
+);
 
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].

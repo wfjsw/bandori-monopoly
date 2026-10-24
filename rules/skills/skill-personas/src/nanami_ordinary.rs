@@ -46,8 +46,8 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -61,11 +61,9 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
             "actor != owner && trigger_card != 0 && charge(owner) >= 1",
             Some(on_skill_applies),
             on_skill)),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, tick)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, tick)).quiet_when_empty(),
     ],
 )
-.silent(&[1, 2])
-.quiet_when_empty(&[5])
 // 「（初始2，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

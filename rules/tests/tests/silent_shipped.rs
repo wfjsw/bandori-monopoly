@@ -1,6 +1,6 @@
 //! Shipped-card silent-entry bookkeeping: declare-cap / bounds hooks must
 //! stay silent so a turn start does not flash them. The engine mechanism
-//! (`CardDef::silent`) is pinned in `crates/game-rules/tests/silent_entry.rs`.
+//! (`On::silent`) is pinned in `crates/game-rules/tests/silent_entry.rs`.
 
 mod common;
 

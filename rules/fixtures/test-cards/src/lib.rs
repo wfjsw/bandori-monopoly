@@ -1115,7 +1115,7 @@ fn settle_sib(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Silent-entry presentation (`CardDef::silent`). Three fixtures pin the
+/// Silent-entry presentation (`On::silent`). Three fixtures pin the
 /// contract:
 /// * `TEST:silentPair` -- a silent bookkeeping hook beside a flashing sibling
 ///   on the same settle: only the sibling posts a `"card"` event.
@@ -1127,29 +1127,26 @@ const SILENT_PAIR: CardDef = CardDef::new(
     "TEST:silentPair",
     &[
         On::Play("", None, silent_pair_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pair_book)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pair_book)).silent(),
         On::Action(Action::Settle("", Some(silent_hook_yes), silent_pair_flash)),
     ],
-)
-.silent(&[1]);
+);
 
 const SILENT_NEST: CardDef = CardDef::new(
     "TEST:silentNest",
     &[
         On::Play("", None, silent_nest_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), silent_nest_body)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), silent_nest_body)).silent(),
     ],
-)
-.silent(&[1]);
+);
 
 const SILENT_PAY: CardDef = CardDef::new(
     "TEST:silentPay",
     &[
         On::Play("", None, silent_pay_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pay_body)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), silent_pay_body)).silent(),
     ],
-)
-.silent(&[1]);
+);
 
 fn silent_pair_place(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
@@ -1200,7 +1197,7 @@ fn silent_pay_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// QuietWhenEmpty (`CardDef::quiet_when_empty`): the entry runs but its header
+/// QuietWhenEmpty (`On::quiet_when_empty`): the entry runs but its header
 /// is retracted when the body produced nothing visible.
 /// * entry 1 (`TEST.quiet.noop`) — body writes scratch state only → retracted.
 /// * entry 2 (`TEST.quiet.log`) — body logs → keeps its header.
@@ -1208,11 +1205,10 @@ const SILENT_QUIET: CardDef = CardDef::new(
     "TEST:silentQuiet",
     &[
         On::Play("", None, silent_quiet_place),
-        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_noop)),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, quiet_log)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_noop)).quiet_when_empty(),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, quiet_log)).quiet_when_empty(),
     ],
-)
-.quiet_when_empty(&[1, 2]);
+);
 
 fn silent_quiet_place(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);

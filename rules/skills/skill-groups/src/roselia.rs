@@ -34,7 +34,7 @@ pub const ROSELIA: CardDef = CardDef::new(
         On::Action(Action::Bought(
             "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
             Some(on_bought_applies),
-            on_bought)),
+            on_bought)).silent(),
         On::Action(Action::Bought(
             "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0",
             Some(on_live_bought_applies),
@@ -44,8 +44,7 @@ pub const ROSELIA: CardDef = CardDef::new(
             None,
             at_turn_start)),
     ],
-)
-.silent(&[1]);
+);
 
 /// Residual guard for [`half_price`]: a Live House (always halves) or the
 /// first not-yet-taken non-Live-House buy. `is_live_house_for` is a

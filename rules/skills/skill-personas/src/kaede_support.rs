@@ -40,8 +40,8 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // 状态1's offer: another player's turn start, not in 状态2, and the
         // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
         // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
@@ -56,7 +56,7 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         On::Action(Action::TurnEnd(
             card_sdk::pre::MINE,
             None,
-            at_turn_end)),
+            at_turn_end)).silent(),
         On::Play("", Some(can_enter_two), enter_two),
         // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
         // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
@@ -78,7 +78,6 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
             split_rent_gain)),
     ],
 )
-.silent(&[0, 1, 4])
 // 「（初始0，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

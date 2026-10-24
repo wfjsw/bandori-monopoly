@@ -269,16 +269,6 @@ pub struct CardDef {
     /// Keys are [`abi::prop`] constants; a key not declared reads as its
     /// default (`0`).
     pub props: &'static [(&'static str, i32)],
-    /// Entry indices that are **bookkeeping**: they run their body but post no
-    /// activation flash and no 「效果适用」 header. For declarations and resets
-    /// the player never sees as a clause firing (`declare_cap` / `set_bounds` /
-    /// initial values / latch clears). Fills [`abi::Presentation::Silent`].
-    pub silent: &'static [i32],
-    /// Entry indices that flash only when their body produced something
-    /// visible (`abi::Presentation::QuietWhenEmpty`). For clauses that apply
-    /// and change nothing (capped gain, 「已满」) -- the player does not need
-    /// a flash for a no-op. A body that logs / pays / moves still flashes.
-    pub quiet_when_empty: &'static [i32],
     /// Per-entry **tile text** -- the deed-popup description this entry speaks
     /// for, as `(entry index, slot, tile, key)`.
     /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
@@ -332,8 +322,6 @@ impl CardDef {
             id,
             on,
             props: &[],
-            silent: &[],
-            quiet_when_empty: &[],
             texts: &[],
             meta: None,
             board_role: "",
@@ -351,8 +339,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -363,87 +349,19 @@ impl CardDef {
         }
     }
 
-
-    /// Mark these entry indices **silent** (bookkeeping): they run their body
-    /// but post no activation flash and no 「效果适用」 header. Use for
-    /// declarations and resets the player never sees as a clause firing --
-    /// `declare_cap` / `set_bounds` / initial values / latch clears. An effect
-    /// the rulebook describes as happening (gain, pay, place, move, draw,
-    /// status, mark) must **not** be listed here. Replaces any earlier
-    /// `silent` call.
-    ///
-    /// ```ignore
-    /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", None, use_skill),                                     // 0: flashes
-    ///     On::Action(Action::TurnStartBefore("", None, declare_cap)),         // 1: bookkeeping
-    ///     On::Action(Action::DeckAtGameStart("", None, declare_cap)),         // 2: bookkeeping
-    /// ]).silent(&[1, 2]);
-    /// ```
-    pub const fn silent(self, entries: &'static [i32]) -> Self {
-        Self {
-            id: self.id,
-            on: self.on,
-            props: self.props,
-            silent: entries,
-            quiet_when_empty: self.quiet_when_empty,
-            texts: self.texts,
-            meta: self.meta,
-            board_role: self.board_role,
-            governs: self.governs,
-            gate_msgs: self.gate_msgs,
-            gate_skip_msgs: self.gate_skip_msgs,
-            exemption_prop: self.exemption_prop,
-        }
-    }
-
-    /// Mark these entry indices **quiet when empty**: the entry runs normally
-    /// but its 「效果适用」 header is retracted when the body produced nothing
-    /// visible (no children, no logs). Use for clauses that apply and change
-    /// nothing -- a gain already at its cap, 「已满」, a set that writes the
-    /// same value. A body that logs / pays / moves still flashes. Do **not**
-    /// use for an opt-in the player can decline (「放弃」 is information).
-    pub const fn quiet_when_empty(self, entries: &'static [i32]) -> Self {
-        Self {
-            id: self.id,
-            on: self.on,
-            props: self.props,
-            silent: self.silent,
-            quiet_when_empty: entries,
-            texts: self.texts,
-            meta: self.meta,
-            board_role: self.board_role,
-            governs: self.governs,
-            gate_msgs: self.gate_msgs,
-            gate_skip_msgs: self.gate_skip_msgs,
-            exemption_prop: self.exemption_prop,
-        }
-    }
 
     /// How entry `index` presents itself in the log: the header mode plus the
-    /// flash policy. The header folds from the `silent` / `quiet_when_empty`
-    /// side tables; the flash rides the entry itself ([`On::flash`]), so it
-    /// cannot drift when entries are reordered. An unknown index is
-    /// [`abi::Flash::Auto`]. The one lookup.
+    /// flash policy. Both ride the entry itself ([`On::silent`] /
+    /// [`On::quiet_when_empty`] / [`On::flash`]), so they cannot drift when
+    /// entries are reordered. An unknown index is
+    /// [`abi::Presentation::Visible`] / [`abi::Flash::Auto`]. The one lookup.
     pub const fn presentation(&self, index: i32) -> crate::abi::EntryPresentation {
         let mut header = crate::abi::Presentation::Visible;
-        let mut i = 0;
-        while i < self.silent.len() {
-            if self.silent[i] == index {
-                header = crate::abi::Presentation::Silent;
-            }
-            i += 1;
-        }
-        let mut i = 0;
-        while i < self.quiet_when_empty.len() {
-            if self.quiet_when_empty[i] == index {
-                header = crate::abi::Presentation::QuietWhenEmpty;
-            }
-            i += 1;
-        }
         let mut flash = crate::abi::Flash::Auto;
         let mut i = 0;
         while i < self.on.len() {
             if i as i32 == index {
+                header = self.on[i].header_of();
                 flash = self.on[i].flash_of();
             }
             i += 1;
@@ -473,8 +391,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -504,8 +420,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts: self.texts,
             meta: Some(meta),
             board_role: self.board_role,
@@ -528,8 +442,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts: self.texts,
             meta: self.meta,
             board_role: role,
@@ -554,8 +466,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -574,8 +484,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -594,8 +502,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -613,8 +519,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -629,9 +533,12 @@ impl CardDef {
     /// full three-way presentation.)
     pub const fn is_silent(&self, index: i32) -> bool {
         let mut i = 0;
-        while i < self.silent.len() {
-            if self.silent[i] == index {
-                return true;
+        while i < self.on.len() {
+            if i as i32 == index {
+                return match self.on[i].header_of() {
+                    crate::abi::Presentation::Silent => true,
+                    _ => false,
+                };
             }
             i += 1;
         }
@@ -681,6 +588,12 @@ pub struct PlayEntry {
     /// at runtime via `ctx::flash` / `ctx::no_flash` under the precedence
     /// documented on [`abi::Flash`].
     pub flash: crate::abi::Flash,
+    /// How this entry's 「效果适用」 header presents ([`On::silent`] /
+    /// [`On::quiet_when_empty`]). [`abi::Presentation::Visible`] (the default)
+    /// announces normally; [`abi::Presentation::Silent`] is bookkeeping that
+    /// posts no header and no flash; [`abi::Presentation::QuietWhenEmpty`]
+    /// retracts the header when the body produced nothing visible.
+    pub header: crate::abi::Presentation,
 }
 
 /// [反击] entry ([`On::Counteract`]).
@@ -712,6 +625,8 @@ pub struct CounteractEntry {
     pub label: &'static str,
     /// See [`PlayEntry::flash`].
     pub flash: crate::abi::Flash,
+    /// See [`PlayEntry::header`].
+    pub header: crate::abi::Presentation,
 }
 
 /// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
@@ -738,6 +653,8 @@ pub struct RuleEntry {
     pub label: &'static str,
     /// See [`PlayEntry::flash`].
     pub flash: crate::abi::Flash,
+    /// See [`PlayEntry::header`].
+    pub header: crate::abi::Presentation,
 }
 
 /// Cross-card message entry ([`On::Message`]).
@@ -765,6 +682,8 @@ pub struct MessageEntry {
     pub label: &'static str,
     /// See [`PlayEntry::flash`].
     pub flash: crate::abi::Flash,
+    /// See [`PlayEntry::header`].
+    pub header: crate::abi::Presentation,
 }
 
 // The `body` pointer is code, not data: immutable and never freed (the same
@@ -908,6 +827,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -934,6 +854,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -955,6 +876,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -976,6 +898,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -997,6 +920,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -1018,6 +942,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -1039,6 +964,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -1062,6 +988,7 @@ impl On {
             declare_drive: None,
             label: "",
             flash: crate::abi::Flash::Auto,
+            header: crate::abi::Presentation::Visible,
         })
     }
 
@@ -1469,6 +1396,128 @@ impl On {
         }
     }
 
+    /// Mark this entry **silent** (bookkeeping): it runs its body but posts
+    /// no activation flash and no 「效果适用」 header. Attaches to the entry,
+    /// so it rides along when entries are reordered -- no index to drift.
+    ///
+    /// Use for declarations and resets the player never sees as a clause
+    /// firing -- `declare_cap` / `set_bounds` / initial values / latch clears
+    /// (docs/CARDS.md 「Silent bookkeeping entries」). An effect the rulebook
+    /// describes as happening (gain, pay, place, move, draw, status, mark)
+    /// must **not** be silent.
+    ///
+    /// Mutually exclusive with [`Self::quiet_when_empty`] -- last call wins.
+    ///
+    /// ```ignore
+    /// pub const T: CardDef = CardDef::new("skill:…", &[
+    ///     On::Play("", None, use_skill),                                    // flashes
+    ///     On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+    ///     On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+    /// ]);
+    /// ```
+    pub const fn silent(self) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.header = crate::abi::Presentation::Silent;
+                On::MessageBody(e)
+            }
+        }
+    }
+
+    /// Mark this entry **quiet when empty**: it runs normally but its
+    /// 「效果适用」 header is retracted when the body produced nothing visible
+    /// (no children, no logs). For clauses that apply and change nothing -- a
+    /// gain already at its cap, 「已满」, a set that writes the same value. A
+    /// body that logs / pays / moves still flashes. Do **not** use for an
+    /// opt-in the player can decline (「放弃」 is information). Attaches to the
+    /// entry, so it rides along when entries are reordered.
+    ///
+    /// Mutually exclusive with [`Self::silent`] -- last call wins.
+    ///
+    /// ```ignore
+    /// On::Action(Action::PaySplitChooseBefore("", None, None, pay)).quiet_when_empty(),
+    /// ```
+    pub const fn quiet_when_empty(self) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.header = crate::abi::Presentation::QuietWhenEmpty;
+                On::MessageBody(e)
+            }
+        }
+    }
+
     /// This entry's 「效果适用」 display text (see [`Self::label`]); `""` = none.
     pub const fn label_of(&self) -> &'static str {
         match self {
@@ -1499,6 +1548,23 @@ impl On {
             On::BuyBody(e) => e.flash,
             On::BuildBody(e) => e.flash,
             On::MessageBody(e) => e.flash,
+        }
+    }
+
+    /// This entry's 「效果适用」 header presentation (see [`Self::header`]);
+    /// [`abi::Presentation::Visible`] announces normally.
+    pub const fn header_of(&self) -> crate::abi::Presentation {
+        match self {
+            On::PlayBody(e) => e.header,
+            On::CounteractBody(e) => e.header,
+            On::Action(e) => e.header,
+            On::Filter(e) => e.header,
+            On::SettleBody(e) => e.header,
+            On::MortgageBody(e) => e.header,
+            On::RedeemBody(e) => e.header,
+            On::BuyBody(e) => e.header,
+            On::BuildBody(e) => e.header,
+            On::MessageBody(e) => e.header,
         }
     }
 

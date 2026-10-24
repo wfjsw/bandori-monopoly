@@ -26,8 +26,8 @@ pub const RINKO_1CM: CardDef = CardDef::new(
     "skill:白金燐子:即使1cm也要前进",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -41,8 +41,7 @@ pub const RINKO_1CM: CardDef = CardDef::new(
     (bandori_std::fire::FIRE_INITIAL, 3),
     (bandori_std::fire::FIRE_CAP, 3),
     (bandori_std::prop::PLAYABLE_STUNNED, 1),
-])
-.silent(&[1, 2]);
+]);
 
 /// 「初始3，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

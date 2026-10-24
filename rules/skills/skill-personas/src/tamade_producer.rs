@@ -35,14 +35,13 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         On::Action(Action::HouseAdded(
             card_sdk::pre::MINE,
             None,
-            on_built)),
+            on_built)).silent(),
         On::Action(Action::TurnEnd(
             card_sdk::pre::MINE,
             None,
-            at_turn_end)),
+            at_turn_end)).silent(),
     ],
-)
-.silent(&[1, 2]);
+);
 
 /// 「加盖房屋时半价」, or 「本回合加盖房屋变为免费」 when last turn built.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {

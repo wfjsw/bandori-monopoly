@@ -25,10 +25,10 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
             None,
             counteract),
         On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", None, pass_tile)),
-        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, pay_after)),
+        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, pay_after)).silent(),
         On::Action(Action::SettleAfter("card.placed", None, settle_after)),
     ],
-).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
+).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"学生会的检查"#)
         .raw_name(r#"学生会的检查"#)
         .tags(&[])

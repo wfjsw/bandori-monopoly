@@ -43,12 +43,12 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, Some(state2_or_clean), at_turn_start)),
         // 状态1 「移动改为10+1d10」 -- only while this player is in 状态1.
         On::Filter(Filter::DiceRollPlan("actor == owner && slot('skillState') != 2", None, on_plan)),
-        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)).silent(),
         // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
         // settle that marks the latch is the owner's own settle onto one of the
         // three named tiles. Both facts are CEL (`actor == owner` and the three
         // `tile_named` ids), so a reject runs no body (and so posts no flash).
-        On::Action(Action::Settle("actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))", None, on_settle)),
+        On::Action(Action::Settle("actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))", None, on_settle)).silent(),
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
@@ -59,7 +59,6 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         On::Action(Action::SettleBefore("slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4", None, before_settle)),
     ],
 )
-    .silent(&[2, 3])
     // 「（火罐上限3）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 3)]);
 
