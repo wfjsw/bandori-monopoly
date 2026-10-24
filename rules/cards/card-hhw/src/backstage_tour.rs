@@ -8,8 +8,8 @@
 
 use alloc::vec::Vec;
 
-use alloc::string::String;
 use bandori_std::ctx::{self, CardPile};
+use card_sdk::ctx::NameId;
 use card_sdk::{key, CardDef, Msg, On};
 use card_sdk::{CardText};
 
@@ -43,8 +43,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if ctx::deck_count(player_id) < 2 && ctx::discard_size(player_id) > 0 {
         let discard = ctx::cards_in(player_id, CardPile::Graveyard);
         for id in &discard {
-            ctx::take_card(player_id, id, CardPile::Graveyard);
-            ctx::add_to_dest(player_id, id, ctx::Dest::DeckBottom);
+            ctx::take_card(player_id, id.as_str(), CardPile::Graveyard);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckBottom);
         }
         ctx::log(
             player_id,
@@ -55,7 +55,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「看牌堆顶2张牌」 -- C# `h.draw.Skip(Count - 2).Reverse()` = the top
     // two of the draw pile, top card first (`cards_in(Deck)` is top-first).
-    let top: Vec<String> = ctx::cards_in(player_id, CardPile::Deck)
+    let top: Vec<NameId> = ctx::cards_in(player_id, CardPile::Deck)
         .into_iter()
         .take(2)
         .collect();
@@ -65,28 +65,28 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // C# removes the peeked cards from the draw pile before the keep/discard
     // prompts, then puts the keepers back on top.
     for id in &top {
-        ctx::take_card(player_id, id, CardPile::Deck);
+        ctx::take_card(player_id, id.as_str(), CardPile::Deck);
     }
     // 规则书: 「选择0~2张以任意顺序放回」 -- C# `H.AskYes(..., "放回", "翻入弃卡区")`
     // per card (yes = keep on top of the draw pile).
-    let mut keep: Vec<String> = Vec::new();
+    let mut keep: Vec<NameId> = Vec::new();
     for id in &top {
         let yes = ctx::ask_yes(
             player_id,
             &Msg::new(key!("backstage_tour_ask_title")),
-            &Msg::new(key!("backstage_tour_ask_keep")).card("card", id),
+            &Msg::new(key!("backstage_tour_ask_keep")).card("card", id.as_str()),
         )?;
         if yes {
-            keep.push(id.clone());
+            keep.push(*id);
             continue;
         }
         // 规则书: 「剩余的翻入弃牌堆，每翻入一张获得1000资金」 -- C#
         // `H.ToDiscard(i, id)` + `H.GainR(i, 1000, CardName)`.
-        ctx::to_discard(player_id, id);
+        ctx::to_discard(player_id, id.as_str());
         ctx::gain(
             player_id,
             1000,
-            &Msg::new(key!("backstage_tour_flip")).card("card", id),
+            &Msg::new(key!("backstage_tour_flip")).card("card", id.as_str()),
         )?;
     }
     // 规则书: 「以任意顺序放回」 -- when both are kept, C# `H.AskCard(..., "哪一张
@@ -101,13 +101,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
             &refs,
         )?;
         let top_i = pick.min(1);
-        let under = keep[1 - top_i].clone();
-        let over = keep[top_i].clone();
-        ctx::add_to_dest(player_id, &under, ctx::Dest::DeckTop);
-        ctx::add_to_dest(player_id, &over, ctx::Dest::DeckTop);
+        let under = keep[1 - top_i];
+        let over = keep[top_i];
+        ctx::add_to_dest(player_id, under.as_str(), ctx::Dest::DeckTop);
+        ctx::add_to_dest(player_id, over.as_str(), ctx::Dest::DeckTop);
     } else {
         for id in keep {
-            ctx::add_to_dest(player_id, &id, ctx::Dest::DeckTop);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
         }
     }
     Ok(())

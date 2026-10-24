@@ -139,10 +139,10 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(player_id, ID, &Msg::new(key!("tomori_no_longer_note")));
     // 规则书（1）: 「并将所有手卡置入弃牌堆」 -- C# walks `H._hidden[i].hand`
     // (`cards_in(player_id, CardPile::Hand)`) and `H.DiscardFromHand`s each copy.
-    let hand: Vec<String> = ctx::cards_in(player_id, CardPile::Hand);
+    let hand = ctx::cards_in(player_id, CardPile::Hand);
     let mut discarded = 0;
     for id in &hand {
-        if ctx::discard_from_hand(player_id, id) {
+        if ctx::discard_from_hand(player_id, id.as_str()) {
             discarded += 1;
         }
     }

@@ -118,8 +118,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // in (`Dest::DeckRandom`); reshuffles stay on `add_to_dest`.
     let rest = ctx::cards_in(player_id, CardPile::Deck);
     for id in rest {
-        ctx::take_card(player_id, &id, CardPile::Deck);
-        ctx::add_to_dest(player_id, &id, ctx::Dest::DeckRandom);
+        ctx::take_card(player_id, id.as_str(), CardPile::Deck);
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckRandom);
     }
     ctx::log(
         player_id,

@@ -7,10 +7,10 @@
 
 use alloc::vec::Vec;
 
-use alloc::string::String;
 use bandori_std::ctx::{self, trigger, CardPile};
 use bandori_std::state_key;
 use card_sdk::abi::prop;
+use card_sdk::ctx::NameId;
 use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -46,11 +46,11 @@ const ID: &str = "Sumimi:#L12";
 /// C# `CardL12.Pool` -- distinct ids in the discard then the draw pile that
 /// belong to band `Sumimi`, minus this card. The data key prefix is the band
 /// (`H.Db.Card(id)?.group == "Sumimi"`).
-fn pool(player_id: i32) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
+fn pool(player_id: i32) -> Vec<NameId> {
+    let mut out: Vec<NameId> = Vec::new();
     for pile in [CardPile::Graveyard, CardPile::Deck] {
         for id in ctx::cards_in(player_id, pile) {
-            if id != ID && id.starts_with("Sumimi:") && !out.iter().any(|x| *x == id) {
+            if id != ID && id.as_str().starts_with("Sumimi:") && !out.iter().any(|x| *x == id) {
                 out.push(id);
             }
         }
@@ -80,20 +80,20 @@ fn l12(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("l12_search")),
         &picks,
     )?;
-    let id = pool[i].clone();
+    let id = pool[i];
     // C# `hidden.discard.Remove(text)`, else `hidden.draw.Remove(text)` +
     // `H.Shuffle(hidden.draw)`. `take_card` pulls one copy out of the pile
     // without moving it; `add_to_dest` then files it. (The reshuffle of the
     // remaining draw pile is cosmetic and not expressible here.)
-    if !ctx::take_card(player_id, &id, CardPile::Graveyard) {
-        ctx::take_card(player_id, &id, CardPile::Deck);
+    if !ctx::take_card(player_id, id.as_str(), CardPile::Graveyard) {
+        ctx::take_card(player_id, id.as_str(), CardPile::Deck);
     }
-    ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
+    ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand);
     ctx::log(
         player_id,
         &Msg::new(key!("l12_taken"))
             .player_id("who", player_id)
-            .card("card", &id),
+            .card("card", id.as_str()),
     );
     // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the continuous delta
     // declared on the `CardDef` above (`props(&[(prop::HAND_LIMIT_DELTA, -1)])`), stamped at

@@ -17,6 +17,7 @@
 
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
+use card_sdk::ctx::NameId;
 use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -64,7 +65,7 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
 fn cant_play(player_id: i32) -> Option<Msg> {
     if !ctx::is_placed() {
         let names = ctx::tok_names(player_id, TOKEN_PREFIX);
-        let total: i32 = names.iter().map(|n| ctx::tok(player_id, n)).sum();
+        let total: i32 = names.iter().map(|n| ctx::tok(player_id, n.as_str())).sum();
         if total > 0 {
             return None;
         }
@@ -91,7 +92,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // `角色标记:*` counters; x is chosen from what the player actually holds, then
     // they are spent and one effect is picked.
     let names = ctx::tok_names(player_id, TOKEN_PREFIX);
-    let total: i32 = names.iter().map(|n| ctx::tok(player_id, n)).sum();
+    let total: i32 = names.iter().map(|n| ctx::tok(player_id, n.as_str())).sum();
     if total <= 0 {
         ctx::log(
             player_id,
@@ -112,9 +113,9 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         if left <= 0 {
             break;
         }
-        let take = ctx::tok(player_id, name).min(left);
+        let take = ctx::tok(player_id, name.as_str()).min(left);
         if take > 0 {
-            ctx::add_tok(player_id, name, -take, i32::MAX)?;
+            ctx::add_tok(player_id, name.as_str(), -take, i32::MAX)?;
             left -= take;
         }
     }
@@ -231,7 +232,7 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
         if extra <= 0 {
             break;
         }
-        if ctx::discard_from_hand(player_id, card) {
+        if ctx::discard_from_hand(player_id, card.as_str()) {
             extra -= 1;
         }
     }
@@ -246,10 +247,10 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （3）「移除一个奇迹水晶视为发动你的（2）技能」 -- the placed-press branch.
-fn owner_skill(player_id: i32) -> Option<alloc::string::String> {
+fn owner_skill(player_id: i32) -> Option<NameId> {
     ctx::placed_cards(player_id)
         .into_iter()
-        .find(|c| c.starts_with("skill:"))
+        .find(|c| c.as_str().starts_with("skill:"))
 }
 
 fn use_skill(player_id: i32) -> card_sdk::Asked {
@@ -264,9 +265,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // skill's own gate is what runs; nothing here counts a use.
     ctx::log(
         player_id,
-        &Msg::new(key!("nanami_effort_skill")).card("card", &id),
+        &Msg::new(key!("nanami_effort_skill")).card("card", id.as_str()),
     );
-    ctx::play_card(&id, player_id)?;
+    ctx::play_card(id.as_str(), player_id)?;
     Ok(())
 }
 

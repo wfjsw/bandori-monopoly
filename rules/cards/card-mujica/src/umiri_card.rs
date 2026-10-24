@@ -94,13 +94,13 @@ fn take_bands(holder: i32, user: i32) {
             // Only real attachments are taken; an extra copy is not a second source.
             continue;
         }
-        let got = ctx::add_group_skill(user, &id, true);
+        let got = ctx::add_group_skill(user, id.as_str(), true);
         if got >= 0 {
             ctx::log(
                 user,
                 &Msg::new(key!("umiri_took_band"))
                     .player_id("who", user)
-                    .card("card", &id),
+                    .card("card", id.as_str()),
             );
         }
     }
@@ -169,7 +169,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
             user,
             &Msg::new(key!("umiri_dropped_band"))
                 .player_id("who", user)
-                .card("card", &id),
+                .card("card", id.as_str()),
         );
     }
     ctx::set_dest(ctx::Dest::Graveyard);

@@ -100,9 +100,8 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("sakiko_life_two")));
     // 状态2: 「保留至多一张手牌并将其余置入弃牌堆」
     let mut hand = ctx::cards_in(player_id, CardPile::Hand);
-    while hand.len() > 1 {
-        let c = hand.pop().unwrap();
-        ctx::discard_from_hand(player_id, &c);
+    for c in hand.drain(1..) {
+        ctx::discard_from_hand(player_id, c.as_str());
     }
     play_deck_top(player_id)?;
     Ok(())
@@ -190,9 +189,9 @@ fn play_deck_top(player_id: i32) -> card_sdk::Asked {
     };
     ctx::log(
         player_id,
-        &Msg::new(key!("sakiko_life_auto")).card("card", &top),
+        &Msg::new(key!("sakiko_life_auto")).card("card", top.as_str()),
     );
-    ctx::play_card(&top, player_id)?;
+    ctx::play_card(top.as_str(), player_id)?;
     Ok(())
 }
 

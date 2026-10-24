@@ -9,11 +9,11 @@
 //! card and lands on exactly the chosen card -- never the running card, and
 //! never the whole pool.
 
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::counter;
+use card_sdk::ctx::NameId;
 use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -41,7 +41,7 @@ pub const CRYSTAL_SWAP: CardDef = CardDef::new(
 struct Slot {
     uid: i32,
     player_id: i32,
-    card: String,
+    card: NameId,
     group_skill: bool,
 }
 
@@ -69,7 +69,7 @@ impl Slot {
         } else {
             Msg::new(key!("crystal_swap_card"))
                 .player_id("who", self.player_id)
-                .card("card", &self.card)
+                .card("card", self.card.as_str())
                 .i("n", n)
         }
     }
@@ -108,7 +108,7 @@ fn slots() -> Vec<Slot> {
             v.push(Slot {
                 uid,
                 player_id: s,
-                group_skill: is_group_label(&c, s),
+                group_skill: is_group_label(c.as_str(), s),
                 card: c,
             });
         }

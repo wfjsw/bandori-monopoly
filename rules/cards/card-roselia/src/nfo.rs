@@ -7,7 +7,6 @@
 //! and resolve the matching effect; 6 runs 1 through 5 in order. Whatever the
 //! roll, a [停留] layer lands at turn end.
 
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
@@ -188,10 +187,10 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
 /// discard before it resolves). `H.PlayCard` then applies the card's own `Dest`.
 fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
     // Not this card itself, and only cards the press entry admits.
-    let ok: Vec<String> = ctx::distinct_cards_in(player_id, ctx::CardPile::Graveyard)
+    let ok = ctx::distinct_cards_in(player_id, ctx::CardPile::Graveyard)
         .into_iter()
-        .filter(|id| id != ID && ctx::query_guard(player_id, id, ctx::entry::PRESS))
-        .collect();
+        .filter(|id| id != ID && ctx::query_guard(player_id, id.as_str(), ctx::entry::PRESS))
+        .collect::<Vec<_>>();
     let Some(id) = ctx::pick_take_from(
         player_id,
         ctx::CardPile::Graveyard,
@@ -207,11 +206,11 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new("log.play")
             .player_id("who", player_id)
-            .card("card", &id),
+            .card("card", id.as_str()),
     );
     // C# `H.PlayCard(...)` runs the effect and then applies that card's `Dest`.
-    let dest = ctx::play_card(&id, player_id)?;
-    apply_dest(player_id, &id, dest);
+    let dest = ctx::play_card(id.as_str(), player_id)?;
+    apply_dest(player_id, id.as_str(), dest);
     Ok(())
 }
 

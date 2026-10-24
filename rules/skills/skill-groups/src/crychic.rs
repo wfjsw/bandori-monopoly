@@ -17,6 +17,7 @@ use bandori_std::ctx::{self, state};
 use bandori_std::kind::Actions;
 use bandori_std::state_key;
 use card_sdk::abi::{ActionKind, CardPile, FilterKind};
+use card_sdk::ctx::NameId;
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "skill:CRYCHIC:美好的往日幻影";
@@ -147,7 +148,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     // it here (not on a separate empty-piles hook) is the text: the band (2)
     // effect is what moves the card, and by then the deck is already refilled.
     const SHOUT: &str = "CRYCHIC:（灯）内心的呐喊";
-    let mut shout_at = |player_id: i32, card: &str| {
+    let mut shout_at = |player_id: i32, card: NameId| {
         if card != SHOUT {
             return false;
         }
@@ -159,43 +160,43 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     };
     for (uid, c) in ctx::field_instances(player_id) {
         // The field copy (3) places: unplace it into the draw pile below.
-        if shout_at(player_id, &c) {
+        if shout_at(player_id, c) {
             if ctx::unplace_at(uid) >= 0 {
                 ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
             }
             continue;
         }
-        if c == ID || c.starts_with("CRYCHIC:") {
+        if c == ID || c.as_str().starts_with("CRYCHIC:") {
             ctx::unplace_at(uid);
         }
     }
     for c in ctx::cards_in(player_id, CardPile::Hand) {
-        if shout_at(player_id, &c) {
-            ctx::take_card(player_id, &c, CardPile::Hand);
+        if shout_at(player_id, c) {
+            ctx::take_card(player_id, c.as_str(), CardPile::Hand);
             ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
             continue;
         }
-        if c.starts_with("CRYCHIC:") {
-            ctx::take_card(player_id, &c, CardPile::Hand);
+        if c.as_str().starts_with("CRYCHIC:") {
+            ctx::take_card(player_id, c.as_str(), CardPile::Hand);
         }
     }
     for pile in [CardPile::Deck, CardPile::Graveyard] {
         for c in ctx::cards_in(player_id, pile) {
-            if shout_at(player_id, &c) {
+            if shout_at(player_id, c) {
                 if pile != CardPile::Deck {
-                    ctx::take_card(player_id, &c, pile);
+                    ctx::take_card(player_id, c.as_str(), pile);
                     ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
                 }
                 continue;
             }
-            if c.starts_with("CRYCHIC:") {
-                ctx::take_card(player_id, &c, pile);
+            if c.as_str().starts_with("CRYCHIC:") {
+                ctx::take_card(player_id, c.as_str(), pile);
             }
         }
     }
     // 「将你剩余的所有手牌放入抽牌堆」
     for c in ctx::cards_in(player_id, CardPile::Hand) {
-        ctx::discard_from_hand(player_id, &c);
+        ctx::discard_from_hand(player_id, c.as_str());
     }
     ctx::sweep_to_deck(player_id);
     // 「并向抽牌堆中加入角色对应的自选"MyGO"或"Ave Mujica"卡至抽牌堆中总共有
