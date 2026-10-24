@@ -21,7 +21,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MUTSUMI_NEVER: CardDef = CardDef::new(
     "CRYCHIC:（睦）从没有觉得...",
-    &[On::Play("", None, None, mutsumi_never)],
+    &[On::Play("", None, mutsumi_never)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"从没有觉得..."#)
         .raw_name(r#"（睦）从没有觉得..."#)

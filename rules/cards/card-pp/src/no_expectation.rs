@@ -22,7 +22,7 @@ use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue, RollValue};
 pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
     &[
-        On::Play("", None, None, no_expectation),
+        On::Play("", None, no_expectation),
         // ABI v74 Filter/Action split of the old shared `hook` body; v79
         // folded the shave + the 「为0则不[结算]」 clamp into one pure
         // FilterValue at DiceRollValue (option C -- the text is a result
@@ -30,7 +30,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         // PaySplitAdd is the pure payment bend.
         On::Filter(Filter::DiceRollValue("card.placed", None, roll_shave)),
         On::Filter(Filter::PaySplitAdd("card.placed", None, pay_add)),
-        On::Action(Action::Reshuffled("actor == owner && card.placed", None, None, reshuffled)),
+        On::Action(Action::Reshuffled("actor == owner && card.placed", None, reshuffled)),
     ],
 )
 // 规则书[特]: 「此卡不受任何其他效果影响」 -- static [特] property, stamped at

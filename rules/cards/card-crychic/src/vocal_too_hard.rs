@@ -15,10 +15,8 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
-        Some(key!("vocal_too_hard_when")),
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("vocal_too_hard_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

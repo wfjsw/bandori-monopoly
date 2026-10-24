@@ -10,7 +10,7 @@ use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BE_STRONGEST: CardDef =
-    CardDef::new("RAS:成为最强", &[On::Play("", None, Some(cant_play), be_strongest)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("RAS:成为最强", &[On::Play("", Some(cant_play), be_strongest)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"成为最强"#)
         .raw_name(r#"成为最强"#)
         .tags(&[])

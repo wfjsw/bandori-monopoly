@@ -29,7 +29,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- the hand play. The
         // [共鸣] branch (2) is offered from the `PaySplitChoose` hook below, not as a
         // second `Play` entry (its `is_placed` gate was blocking this play).
-        On::Play("", None, None, shine_again),
+        On::Play("", None, shine_again),
         // 规则书[持续]（1）: 「[拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡
         // 未记录且[拥有者]拥有同色地契的颜色」 -- the offer exists only while
         // short on cash and with an unrecorded owned colour to name. The money
@@ -37,12 +37,12 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
         // The pre's `money(owner) < value` still gates on the figure in flight.
-        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && money(owner) < value", Some(key!("shine_again_when")), Some(has_unrecorded_color), pay_choose)),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && money(owner) < value", Some(has_unrecorded_color), pay_choose).counter_reason(key!("shine_again_when"))),
         // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
         //   turn-start offer is a stand-in for the C# action window.
-        On::Action(Action::TurnStart("actor == owner && card.placed", None, None, offer_resonance)),
+        On::Action(Action::TurnStart("actor == owner && card.placed", None, offer_resonance)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次闪耀"#)

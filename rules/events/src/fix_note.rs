@@ -22,9 +22,9 @@ const REMAIN: &str = "remain";
 pub const FIX_NOTE: CardDef = CardDef::new(
     "event:修复公告",
     &[
-        On::Play("", None, None, play),
-        On::Action(Action::BuildBefore("", None, Some(always), before_build)),
-        On::Action(Action::BuildAfter("", None, Some(always), after_build)),
+        On::Play("", None, play),
+        On::Action(Action::BuildBefore("", Some(always), before_build)),
+        On::Action(Action::BuildAfter("", Some(always), after_build)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

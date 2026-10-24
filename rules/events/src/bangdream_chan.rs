@@ -19,8 +19,8 @@ const TURNS: &str = "turns";
 pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     "event:元祖！邦多利酱",
     &[
-        On::Play("", None, None, play),
-        On::Action(Action::TurnStartBefore("", None, Some(always), on_turn_start)),
+        On::Play("", None, play),
+        On::Action(Action::TurnStartBefore("", Some(always), on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

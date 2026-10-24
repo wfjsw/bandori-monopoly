@@ -26,9 +26,7 @@ pub const MARINA_GIFTS: CardDef = CardDef::new(
     &[On::Action(Action::Pass(
         "actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")",
         None,
-        None,
-        on_pass,
-    ))],
+        on_pass))],
 );
 
 /// The cost of the offer, named in the clause.

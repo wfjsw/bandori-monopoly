@@ -14,13 +14,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TWO_IN_ONE: CardDef = CardDef::new(
     "Sumimi:Sumimi是二人一体的",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         On::Counteract(
             &[ChainKind::DiceRollResult],
-            "actor == owner && (persona_is(owner, \"三角初华（Sumimi）\") || persona_is(owner, \"纯田真奈\"))", Some(key!("two_in_one_when")),
+            "actor == owner && (persona_is(owner, \"三角初华（Sumimi）\") || persona_is(owner, \"纯田真奈\"))",
             None,
-            counteract,
-        ),
+            counteract).counter_reason(key!("two_in_one_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Sumimi是二人一体的"#)

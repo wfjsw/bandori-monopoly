@@ -19,11 +19,11 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // One Play entry for both contexts (the engine dispatches only the
         // first): [场] placement from hand, or the ≥9-marker jump once placed.
         // The gate admits whenever either branch is available.
-        On::Play("", None, Some(cant_play), play),
+        On::Play("", Some(cant_play), play),
         // 「花音每次倒走时」 -- a backward walk that is not a teleport (C#
         // `m.Reverse && !m.Teleport`). `move.dir < 0` is the direction clause:
         // the body-top `move_dir() >= 0` early-out is the condition now.
-        On::Action(Action::Pass("actor == owner && move.kind != Teleport && move.dir < 0", None, None, on_pass)),
+        On::Action(Action::Pass("actor == owner && move.kind != Teleport && move.dir < 0", None, on_pass)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Wacha Mocha 啪嗒进行曲"#)

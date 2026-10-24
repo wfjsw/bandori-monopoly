@@ -10,7 +10,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
+pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"心の雨"#)
         .raw_name(r#"心の雨"#)
         .tags(&[])

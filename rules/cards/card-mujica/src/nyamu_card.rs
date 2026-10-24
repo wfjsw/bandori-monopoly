@@ -20,13 +20,11 @@ const WAS_DOWN: &str = "nyamu.wasDown";
 pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
-        On::Play("", None, None, nyamu_card),
+        On::Play("", None, nyamu_card),
         On::Action(Action::TurnEnd(
             "actor == owner && card.placed",
             None,
-            None,
-            watch_flips,
-        )),
+            watch_flips)),
     ],
 )
 .meta(

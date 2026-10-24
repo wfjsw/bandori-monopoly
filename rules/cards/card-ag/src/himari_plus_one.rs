@@ -16,10 +16,8 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
         "actor == owner && move.roll != null && move.roll < 6",
-        Some(key!("himari_plus_one_when")),
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("himari_plus_one_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

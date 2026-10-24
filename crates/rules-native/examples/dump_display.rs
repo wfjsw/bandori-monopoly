@@ -26,7 +26,7 @@
 //!   carry `counterReason`).
 //! * Event keys are the **bare** event id (`对邦`), not the `event:` rule-id
 //!   prefix. `derived` is engine data and is not exported.
-//! * `counterReason` is read from the card's [`On::counter_reason`] -- the
+//! * `counterReason` is read from the card's [`On::counter_reason_key`] -- the
 //!   「…时」 clause the counteraction prompt shows, as a **locale key** the
 //!   client resolves (`cards:<crate>.…` / `counter.*`). Several entries join
 //!   their keys with `\n`.
@@ -129,13 +129,13 @@ fn cards_map() -> JsonMap {
     map
 }
 
-/// The [反击] trigger's `counterReason`: every [`card_sdk::On::counter_reason`]
+/// The [反击] trigger's `counterReason`: every [`card_sdk::On::counter_reason_key`]
 /// key on this card, joined with `\n`. The manifest carries the key; the UI
 /// resolves it at render.
 fn counter_reason(card: &card_sdk::CardDef) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for entry in card.on {
-        if let Some(reason) = entry.counter_reason() {
+        if let Some(reason) = entry.counter_reason_key() {
             if !reason.is_empty() {
                 parts.push(reason);
             }

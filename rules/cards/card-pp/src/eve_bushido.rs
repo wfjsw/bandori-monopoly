@@ -23,9 +23,9 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const EVE_BUSHIDO: CardDef = CardDef::new(
     "PP:[若宫伊芙]属于我的武士道！",
     &[
-        On::Play("", None, None, eve_bushido),
-        On::Action(Action::Drew("", None, Some(drew_guard), drew)),
-        On::Action(Action::SettleBefore("", None, None, settle_before)),
+        On::Play("", None, eve_bushido),
+        On::Action(Action::Drew("", Some(drew_guard), drew)),
+        On::Action(Action::SettleBefore("", None, settle_before)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"属于我的武士道！"#)

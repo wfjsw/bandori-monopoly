@@ -23,10 +23,9 @@ pub const LISA_BOND: CardDef = CardDef::new(
     // the move-end point every movement case raises.
     &[On::Counteract(
         &[ChainKind::MoveAfter],
-        "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0", Some(key!("lisa_bond_when")),
+        "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("lisa_bond_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"必然的联系"#)
         .raw_name(r#"必然的联系（莉莎）"#)

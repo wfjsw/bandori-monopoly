@@ -36,18 +36,16 @@ const RATE: &str = "skill.tsugushi.rate";
 pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     "skill:二叶筑紫:交给班长吧",
     &[
-        On::Play("", None, Some(can_cash), cash),
-        On::Action(Action::TurnStartBefore("", None, None, declare)),
+        On::Play("", Some(can_cash), cash),
+        On::Action(Action::TurnStartBefore("", None, declare)),
         // （1）/（2） interactive redirects. Rides `PaySplitChooseBefore` (v78),
         // restoring the rulebook PaySplitChoose position: the offers sit immediately
         // before the pure `PaySplitChoose` filter stage (per leg on a split).
-        On::Action(Action::PaySplitChooseBefore("", None, Some(mine), on_gain)),
+        On::Action(Action::PaySplitChooseBefore("", Some(mine), on_gain)),
         On::Action(Action::PaySplitChooseBefore(
             "",
-            None,
             Some(other),
-            on_theirs,
-        )),
+            on_theirs)),
     ],
 )
 .silent(&[1]);

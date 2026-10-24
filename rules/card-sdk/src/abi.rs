@@ -773,10 +773,11 @@ use std::borrow::Cow;
 /// v95: **named-field `On` entries + `counter_reason` locale keys**. The
 ///      remaining positional-tuple variants become `*Body` arms holding
 ///      `PlayEntry` / `CounteractEntry` / `RuleEntry` / `MessageEntry`; the
-///      call spelling stays `On::Play(pre, counter_reason, why_not, body)` via
-///      `const fn` constructors. `counter_reason` is `Option<MsgKey>` (a locale
-///      key the client resolves; `None` replaces `""`); `ActionEntry`'s field
-///      moves with it. Display text for the 「…时」 clause leaves Rust for
+///      call spelling stays `On::Play(pre, why_not, body)` via `const fn`
+///      constructors, with the 「…时」 clause attached by the
+///      `.counter_reason(key)` builder (the entry field is `Option<MsgKey>`;
+///      `None` replaces `""`). `ActionEntry`'s field moves with it. Display
+///      text for the 「…时」 clause leaves Rust for
 ///      `cards:<crate>.…` / `counter.*` locale entries. Source + display export
 ///      only: `ManifestOn` is unchanged. SAVE_VERSION / RECORD_VERSION
 ///      unchanged.
@@ -2704,31 +2705,31 @@ pub struct ManifestOn {
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnKind {
-    /// `On::Play(pre, counter_reason, why_not, body)` -- play this card from
-    /// hand (or press it as a skill via `invoke_skill`). `pre` is the gate's
-    /// CEL condition, `counter_reason` is the 「…时」 clause the counteraction
-    /// prompt shows (a locale key; `None` when this entry is not a [反击]
-    /// window), `why_not` is the playability query (a pure `Option<Msg>`;
+    /// `On::Play(pre, why_not, body)` -- play this card from hand (or press it
+    /// as a skill via `invoke_skill`). `pre` is the gate's CEL condition,
+    /// `why_not` is the playability query (a pure `Option<Msg>`;
     /// `None` = playable, `Some(why)` = blocked with a reason), `body` is the
-    /// effect. The host calls it between the [`TriggerKind::Card`] raise and
-    /// `cardAfter`.
+    /// effect. The 「…时」 clause the counteraction prompt shows is a locale key
+    /// attached with the `.counter_reason(key)` builder (absent when this entry
+    /// is not a [反击] window). The host calls it between the
+    /// [`TriggerKind::Card`] raise and `cardAfter`.
     Play = 0,
     // 1 was `CantPlay`, folded into `Play`'s gate.
-    /// `On::Counteract(kinds, pre, counter_reason, guard, body)` -- a [反击] at
-    /// those [`ChainKind`]s. `pre` (CEL) and `guard` (the residual pure `bool`
+    /// `On::Counteract(kinds, pre, guard, body)` -- a [反击] at those
+    /// [`ChainKind`]s. `pre` (CEL) and `guard` (the residual pure `bool`
     /// query, `None` once G4 folded the whole body into `pre`) decide whether
-    /// the card is offered in the hand window; `counter_reason` is the 「…时」
-    /// clause the counteraction prompt shows (a locale key); `body` resolves
-    /// against the answered link. Called at the counteraction offer, then again
-    /// at LIFO resolution.
+    /// the card is offered in the hand window; `body` resolves against the
+    /// answered link. The 「…时」 clause is a locale key attached with the
+    /// `.counter_reason(key)` builder. Called at the counteraction offer, then
+    /// again at LIFO resolution.
     Counteract = 2,
-    /// `On::Action(Action::Kind(pre, counter_reason, guard, body))` -- an
-    /// **event reaction** at one [`ActionKind`] (v74 rename of `On::Hook`; wire
-    /// id 3 unchanged). Same `pre`/`counter_reason`/`guard`/`body` shape as
-    /// [`Self::Counteract`]. The host calls it **automatically** for every
-    /// placed card (placement order per player) whenever the kind is raised --
-    /// no window. May emit effects; does not modify the triggering value. Kinds
-    /// must be non-filter (`TriggerKind::is_filter() == false`).
+    /// `On::Action(Action::Kind(pre, guard, body))` -- an **event reaction** at
+    /// one [`ActionKind`] (v74 rename of `On::Hook`; wire id 3 unchanged). Same
+    /// `pre`/`guard`/`body` shape as [`Self::Counteract`], plus the optional
+    /// `.counter_reason(key)` builder. The host calls it **automatically** for
+    /// every placed card (placement order per player) whenever the kind is
+    /// raised -- no window. May emit effects; does not modify the triggering
+    /// value. Kinds must be non-filter (`TriggerKind::is_filter() == false`).
     Action = 3,
     // 4 was `AtEnd`, folded into `On::Action(Action::AtEnd(…))` in v76.
     // Wire id 4 is retired -- never reuse.

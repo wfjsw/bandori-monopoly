@@ -24,10 +24,9 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         // `stunned()` counts `stun + stunStart`, and `stunStart` is not in the
         // CEL schema -- `owner.stun == 0` would wrongly admit a stunStart seat.
         // The rent-table `Targets` loop is engine logic.
-        "pay_is_rent && actor >= 0 && actor != owner && target != owner", Some(key!("dream_return_when")),
+        "pay_is_rent && actor >= 0 && actor != owner && target != owner",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("dream_return_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"梦幻的回礼"#)
         .raw_name(r#"梦幻的回礼"#)

@@ -13,7 +13,7 @@ use bandori_std::state_key;
 use card_sdk::abi::prop;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", None, None, hitoshizuku)])
+pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", None, hitoshizuku)])
     // 规则书: 「（此卡可在眩晕时打出）」 -- the `playableStunned` property
     // (C# `Card.PlayableStunned`), skips the stun gate. The exile and no-hand
     // gates have no such exception. The prop name is ruleset vocabulary

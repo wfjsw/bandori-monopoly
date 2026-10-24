@@ -12,15 +12,15 @@ use card_sdk::{key, Action, CardDef, Filter, Msg, On, RedirectValue};
 pub const EXIST: CardDef = CardDef::new(
     "RAS:EXIST",
     &[
-        On::Play("", None, None, exist),
+        On::Play("", None, exist),
         // The body-top `target == owner` early-out is the condition now (C#
         // `return target != Seat`): already aimed at us, nothing to retarget.
         On::Filter(Filter::Redirect("target != owner", None, redirect)),
         // 「造成影响」 latch: the redirect lands, then `Effect` fires at the
         // target window. Mark used there (Action) rather than inside the
         // Redirect Filter (`set_prop` is refuse_if_filter'd).
-        On::Action(Action::Effect("target == owner && actor != owner", None, None, mark_used)),
-        On::Action(Action::TurnStart("", None, Some(turn_start_guard), turn_start)),
+        On::Action(Action::Effect("target == owner && actor != owner", None, mark_used)),
+        On::Action(Action::TurnStart("", Some(turn_start_guard), turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"EXIST"#)

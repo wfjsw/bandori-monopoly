@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const BACKSTAGE_TOUR: CardDef = CardDef::new(
     "HHW:出发！后台之旅！",
-    &[On::Play("", None, Some(cant_play), play)],
+    &[On::Play("", Some(cant_play), play)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

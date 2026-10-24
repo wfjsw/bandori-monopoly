@@ -22,14 +22,14 @@ const CIRCLE_RULE: &str = "tile:circle";
 pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     "event:协助CiRCLE重建",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「每次有人经过CiRCLE时」 / 「CiRCLE的[触发结算]」 -- the two tiles this
         // event re-homes are the hooks' applicability, not their effect. The
         // body-top tile check is the condition now (`is_start(tile.id)` and
         // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
         // bail stays a residual guard (not in the CEL schema).
-        On::Action(Action::PassTile("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, None, on_pass)),
-        On::Action(Action::SettleBody("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, Some(settle_applies), on_settle_body)),
+        On::Action(Action::PassTile("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, on_pass)),
+        On::Action(Action::SettleBody("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", Some(settle_applies), on_settle_body)),
     ],
 )
 // Deed-popup text (`docs/TILES.md` 「Tile text」): one hook covers both tiles,

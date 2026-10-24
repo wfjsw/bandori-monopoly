@@ -15,10 +15,9 @@ pub const AKO_DARK: CardDef = CardDef::new(
     "R:（亚子）黑暗大魔姬亚子",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0", Some(key!("ako_dark_when")),
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("ako_dark_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"黑暗大魔姬亚子"#)
         .raw_name(r#"（亚子）黑暗大魔姬亚子"#)

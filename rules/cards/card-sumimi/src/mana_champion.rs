@@ -20,10 +20,9 @@ pub const MANA_CHAMPION: CardDef = CardDef::new(
     "Sumimi:（真奈）歌唱大赛5连冠",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "by != owner && by >= 0 && effect.hits(owner)", Some(key!("mana_champion_when")),
+        "by != owner && by >= 0 && effect.hits(owner)",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("mana_champion_when"))],
 )
 .props(&[(prop::SELF_REDIRECT, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"歌唱大赛5连冠"#)

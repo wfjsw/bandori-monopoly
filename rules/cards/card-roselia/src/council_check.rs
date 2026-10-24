@@ -20,13 +20,12 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::SettleBefore],
             // 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
-            "actor == owner && turn_player == owner && owned_within(owner, 3) > 0", None,
+            "actor == owner && turn_player == owner && owned_within(owner, 3) > 0",
             None,
-            counteract,
-        ),
-        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", None, None, pass_tile)),
-        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, None, pay_after)),
-        On::Action(Action::SettleAfter("card.placed", None, None, settle_after)),
+            counteract),
+        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", None, pass_tile)),
+        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, pay_after)),
+        On::Action(Action::SettleAfter("card.placed", None, settle_after)),
     ],
 ).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"学生会的检查"#)

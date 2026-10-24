@@ -28,27 +28,21 @@ pub const KANON_LOST: CardDef = CardDef::new(
     &[
         // (1) is a starting square: the before-match-start point decides start
         // positions.
-        On::Action(Action::DeckBeforeGame("", None, None, at_start)),
+        On::Action(Action::DeckBeforeGame("", None, at_start)),
         // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
         // dice, so there are not two faces to subtract.
         On::Action(Action::DiceRollAfter(
             "actor == owner && plan.fixed_roll == null",
             None,
-            None,
-            on_roll,
-        )),
+            on_roll)),
         On::Action(Actions::PassRewardAffected(
             "actor == owner && slot('skill.kanonLost.silent') >= 3",
             None,
-            None,
-            on_circle,
-        )),
+            on_circle)),
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skill.kanonLost.silent') >= 3",
             None,
-            None,
-            at_turn_end,
-        )),
+            at_turn_end)),
         // TODO(bug): possible engine issue — a `slot()` condition on a
         // FilterValue at DiceRollPlan did not observe a state write made
         // earlier in the same roll (seen while splitting eve_unify: the

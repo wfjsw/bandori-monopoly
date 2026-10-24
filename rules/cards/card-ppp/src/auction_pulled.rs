@@ -19,8 +19,8 @@ const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(
     ID,
-    &[On::Action(Action::Drawn("", None, None, hook)),
-    On::Action(Action::TurnStart("", None, None, hook))],
+    &[On::Action(Action::Drawn("", None, hook)),
+    On::Action(Action::TurnStart("", None, hook))],
 ).props(&[(card_sdk::abi::prop::EST_COST, 540)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"拍卖撤下来了"#)
         .raw_name(r#"[衍生]拍卖撤下来了"#)

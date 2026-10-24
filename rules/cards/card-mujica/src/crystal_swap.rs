@@ -18,7 +18,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const CRYSTAL_SWAP: CardDef = CardDef::new(
     "Mujica:会被骗着买水晶的人",
-    &[On::Play("", None, None, crystal_swap)],
+    &[On::Play("", None, crystal_swap)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

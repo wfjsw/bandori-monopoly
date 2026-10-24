@@ -16,10 +16,8 @@ pub const ENCORE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         "target == owner && effect.has(Abnormal)",
-        Some(key!("encore_when")),
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("encore_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

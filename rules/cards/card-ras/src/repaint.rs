@@ -13,10 +13,9 @@ pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
-        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0", Some(key!("repaint_when")),
+        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("repaint_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Repaint"#)
         .raw_name(r#"Repaint"#)

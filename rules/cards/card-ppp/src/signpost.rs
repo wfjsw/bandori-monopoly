@@ -14,8 +14,8 @@ pub const SIGNPOST: CardDef = CardDef::new(
     // The body-top `player_out(owner)` early-out is the condition now: a
     // bankrupt seat pays nobody, so the callback must not run (or flash).
     &[
-        On::Play("", None, Some(cant_play), play),
-        On::Action(Action::AtEnd("owner.out == 0", None, None, at_end)),
+        On::Play("", Some(cant_play), play),
+        On::Action(Action::AtEnd("owner.out == 0", None, at_end)),
     ],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 1000)])

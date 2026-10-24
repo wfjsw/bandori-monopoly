@@ -20,11 +20,9 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::DrawOut],
             card_sdk::pre::MINE,
-            Some(key!("elegant_shout_when")),
             None,
-            counteract,
-        ),
-        On::Action(Action::AtEnd("", None, None, at_end)),
+            counteract).counter_reason(key!("elegant_shout_when")),
+        On::Action(Action::AtEnd("", None, at_end)),
     ],
 )
 .meta(

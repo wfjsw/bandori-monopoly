@@ -332,7 +332,7 @@ macro_rules! ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_when")), Some(can_counteract), counteract)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract).counter_reason(key!("yolo_when"))]);
 /// card_sdk::ruleset_card!(CARD);
 /// ```
 #[macro_export]

@@ -21,10 +21,9 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
     // stays in the residual guard.
     &[On::Counteract(
         &[ChainKind::PassTile],
-        card_sdk::pre::MINE, Some(key!("proud_light_when")),
+        card_sdk::pre::MINE,
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("proud_light_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"刻入天穹傲岸的烈光"#)
         .raw_name(r#"刻入天穹傲岸的烈光"#)

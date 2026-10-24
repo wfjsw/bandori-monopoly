@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TOKO_SWAP: CardDef =
-    CardDef::new("Mor:（toko）", &[On::Play("", None, Some(cant_play), toko_swap)]).meta(&card_sdk::meta::CardMeta::new()
+    CardDef::new("Mor:（toko）", &[On::Play("", Some(cant_play), toko_swap)]).meta(&card_sdk::meta::CardMeta::new()
         .name("")
         .raw_name(r#"（toko）"#)
         .tags(&[])

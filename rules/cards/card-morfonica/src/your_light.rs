@@ -14,10 +14,9 @@ pub const YOUR_LIGHT: CardDef = CardDef::new(
         // The dist clause stays in the residual guard (not `pre`): a play gate
         // must not trade its specific refusal (`your_light_why_not`) for the
         // generic `err.play_pre` a pre-reject surfaces (GUARDS.md §4.4).
-        "", None,
+        "",
         Some(cant_play),
-        your_light,
-    )],
+        your_light)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"你的光芒将照亮前路"#)
         .raw_name(r#"你的光芒将照亮前路"#)

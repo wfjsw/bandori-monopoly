@@ -47,10 +47,8 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // sniffing the grant site.
         On::Action(Action::Abnormal(
             "",
-            None,
             Some(stay_landed),
-            on_stay_landed,
-        )),
+            on_stay_landed)),
         // 「处于该状态时[无法移动]」 + [不可阻挡] 「无视已存在的[停留]」
         // (rules.txt 47/48/51) -- the move gate, **CEL-only**: the condition is
         // the whole answer, so the host evaluates it natively in pure reads

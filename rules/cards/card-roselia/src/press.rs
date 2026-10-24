@@ -2,7 +2,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play("", None, None, press)]).meta(
+pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play("", None, press)]).meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"压"#)
         .raw_name(r#"[衍生] 压"#)

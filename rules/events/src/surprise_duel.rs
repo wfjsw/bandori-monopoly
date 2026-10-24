@@ -19,12 +19,12 @@ const TURNS: &str = "turns";
 pub const SURPRISE_DUEL: CardDef = CardDef::new(
     "event:意外的对邦",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
         On::Filter(Filter::DiceRollPlan("", Some(on_plan_others), on_plan)),
-        On::Action(Action::TurnStartBefore("", None, None, on_turn_start)),
+        On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

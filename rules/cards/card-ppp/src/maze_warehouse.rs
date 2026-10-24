@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, DealValue, Filter, Msg, On};
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
     "PPP:迷宫般的仓库",
     &[
-        On::Play("", None, Some(cant_play), play),
+        On::Play("", Some(cant_play), play),
         // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).

@@ -17,8 +17,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const WELCOME_MUJICA: CardDef = CardDef::new(
     "Mujica:欢迎来到ave mujica的世界",
     &[
-        On::Play("", None, None, play),
-        On::Counteract(&[ChainKind::State], "actor != owner", Some(key!("welcome_mujica_when")), None, counteract),
+        On::Play("", None, play),
+        On::Counteract(&[ChainKind::State], "actor != owner", None, counteract).counter_reason(key!("welcome_mujica_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"欢迎来到ave mujica的世界"#)

@@ -36,9 +36,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
             None,
-            None,
-            at_start,
-        )),
+            at_start)),
         // 「此次支付的分摊前资金减少Y×100（最少0）」 -- the **pre-split** total
         // (「分摊前」), so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not
         // the per-share `paySplitChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
@@ -49,10 +47,8 @@ pub const AYA_WITH: CardDef = CardDef::new(
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(Action::PayCombinedAddBefore(
             "value > 0 && slot('ppFansUp') >= 1",
-            None,
             Some(mine),
-            on_pay,
-        )),
+            on_pay)),
     ],
 );
 

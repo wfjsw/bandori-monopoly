@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const HABINEL: CardDef = CardDef::new("event:前往哈比内尔王国旅游", &[On::Play("", None, None, play)])
+pub const HABINEL: CardDef = CardDef::new("event:前往哈比内尔王国旅游", &[On::Play("", None, play)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"前往哈比内尔王国旅游"#)
             .text(r#"每个玩家获得X层[除外]，每名玩家回合开始时移除1层[除外]，结束后传送到微笑号（不触发场地效果）X=1d2（每个玩家独立投掷1d2）"#)

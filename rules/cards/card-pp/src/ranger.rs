@@ -21,7 +21,7 @@ use skill_groups::fans;
 
 pub const RANGER: CardDef = CardDef::new(
     "PP:[衍生]魔法战队Pastel✽Ranger",
-    &[On::Play("", None, Some(cant_play), ranger)],
+    &[On::Play("", Some(cant_play), ranger)],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 2000)])
 .meta(

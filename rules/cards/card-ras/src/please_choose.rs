@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
-    &[On::Counteract(&[ChainKind::Settle], "", Some(key!("please_choose_when")), Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Settle], "", Some(can_counteract), counteract).counter_reason(key!("please_choose_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"PLEASE CHOOSE"#)
         .raw_name(r#"PLEASE CHOOSE"#)

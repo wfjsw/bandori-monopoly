@@ -15,10 +15,9 @@ pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner", Some(key!("own_stage_when")),
+        "target == owner",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("own_stage_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"选择自己的舞台"#)
         .raw_name(r#"选择自己的舞台"#)

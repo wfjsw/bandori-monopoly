@@ -11,7 +11,7 @@
 //! ```ignore
 //! On::Filter(Filter::DiceRollPlan("", None, on_plan)),
 //! On::Filter(Filters::MyRewrite("", None, on_x)),   // ruleset custom kind
-//! On::Action(Action::TurnStart("", Some("turn"), None, on_turn_start)),
+//! On::Action(Action::TurnStart("", None, on_turn_start).counter_reason("turn")),
 //! ```
 //!
 //! # The one unsafe corner
@@ -105,11 +105,24 @@ unsafe impl Sync for FilterEntry {}
 pub struct ActionEntry {
     pub kind: ActionKind,
     pub pre: &'static str,
-    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
-    /// no clause).
-    pub counter_reason: Option<crate::MsgKey>,
     pub guard: Option<fn(i32) -> bool>,
     pub body: fn(i32) -> Asked,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause). Attach with [`ActionEntry::counter_reason`].
+    pub counter_reason: Option<crate::MsgKey>,
+}
+
+impl ActionEntry {
+    /// Attach the 「…时」 clause the counteraction prompt shows (a locale key).
+    /// `None` (the default) = no clause.
+    ///
+    /// ```ignore
+    /// On::Action(Action::TurnEnd("", None, tick).counter_reason(key!("why")))
+    /// ```
+    pub const fn counter_reason(mut self, reason: crate::MsgKey) -> Self {
+        self.counter_reason = Some(reason);
+        self
+    }
 }
 
 /// Build a [`FilterEntry`] for a `fn(i32, i32) -> i32` fold.
@@ -168,21 +181,21 @@ pub const fn filter_payload<P: FilterPayload>(
     }
 }
 
-/// Build an [`ActionEntry`].
+/// Build an [`ActionEntry`]. Attach the 「…时」 clause with
+/// [`ActionEntry::counter_reason`].
 #[inline]
 pub const fn action(
     kind: ActionKind,
     pre: &'static str,
-    counter_reason: Option<crate::MsgKey>,
     guard: Option<fn(i32) -> bool>,
     body: fn(i32) -> Asked,
 ) -> ActionEntry {
     ActionEntry {
         kind,
         pre,
-        counter_reason,
         guard,
         body,
+        counter_reason: None,
     }
 }
 
@@ -467,16 +480,16 @@ macro_rules! action_kinds {
         impl $ns_ty {
             $(
                 /// Registration constructor. Body is `fn(i32) -> Asked`.
+                /// Attach the 「…时」 clause with
+                /// [`$crate::kinds::ActionEntry::counter_reason`].
                 pub const fn $name(
                     pre: &'static str,
-                    counter_reason: Option<$crate::MsgKey>,
                     guard: Option<fn(i32) -> bool>,
                     body: fn(i32) -> $crate::Asked,
                 ) -> $crate::kinds::ActionEntry {
                     $crate::kinds::action(
                         $crate::abi::ActionKind::$name,
                         pre,
-                        counter_reason,
                         guard,
                         body,
                     )
@@ -489,16 +502,16 @@ macro_rules! action_kinds {
         impl $ns_ty {
             $(
                 /// Registration constructor. Body is `fn(i32) -> Asked`.
+                /// Attach the 「…时」 clause with
+                /// [`$crate::kinds::ActionEntry::counter_reason`].
                 pub const fn $name(
                     pre: &'static str,
-                    counter_reason: Option<$crate::MsgKey>,
                     guard: Option<fn(i32) -> bool>,
                     body: fn(i32) -> $crate::Asked,
                 ) -> $crate::kinds::ActionEntry {
                     $crate::kinds::action(
                         $crate::abi::ActionKind::ruleset($key, $id),
                         pre,
-                        counter_reason,
                         guard,
                         body,
                     )
@@ -709,7 +722,7 @@ mod tests {
         fn act(_p: i32) -> Asked {
             Ok(())
         }
-        let a = Action::TurnStart(crate::pre::MINE, Some("turn"), None, act);
+        let a = Action::TurnStart(crate::pre::MINE, None, act).counter_reason("turn");
         assert_eq!(a.kind, ActionKind::TurnStart);
         assert_eq!(a.pre, "actor == owner");
         assert_eq!(a.counter_reason, Some("turn"));

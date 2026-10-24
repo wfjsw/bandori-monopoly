@@ -11,7 +11,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKIKO_CUT: CardDef = CardDef::new(
     "Mujica:（祥子）斩断留恋，忘却一切",
-    &[On::Play("", None, Some(cant_play), sakiko_cut)],
+    &[On::Play("", Some(cant_play), sakiko_cut)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"斩断留恋，忘却一切"#)
         .raw_name(r#"（祥子）斩断留恋，忘却一切"#)

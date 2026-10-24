@@ -33,23 +33,17 @@ pub const HHW: CardDef = CardDef::new(
         On::Action(Action::PaySplitChooseBefore(
             "actor == owner && target >= 0 && target != owner && pay_is_rent",
             None,
-            None,
-            on_pay_choose,
-        )),
+            on_pay_choose)),
         // （2） a recorded player's rent collection, with a crystal to spend.
         On::Action(Action::PayAfter(
             card_sdk::pre::MINE,
-            None,
             Some(after_pay_applies),
-            after_pay,
-        )),
+            after_pay)),
         // （3） a recorded amount to spend down.
         On::Action(Action::BuildBefore(
             card_sdk::pre::MINE,
-            None,
             Some(has_saved),
-            before_build,
-        )),
+            before_build)),
     ],
 );
 

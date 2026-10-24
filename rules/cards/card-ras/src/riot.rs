@@ -16,10 +16,9 @@ pub const RIOT: CardDef = CardDef::new(
     "RAS:R. I. O. T.",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "by >= 0 && by != owner && effect.hits(owner)", Some(key!("riot_when")),
+        "by >= 0 && by != owner && effect.hits(owner)",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("riot_when"))],
 )
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"R. I. O. T."#)

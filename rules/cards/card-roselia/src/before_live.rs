@@ -15,10 +15,8 @@ pub const BEFORE_LIVE: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Pass],
         "actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')",
-        Some(key!("before_live_when")),
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("before_live_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

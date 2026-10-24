@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const BANG_DREAM: CardDef = CardDef::new(
     "PPP:Bang Dream!",
-    &[On::Play("", None, Some(cant_play), bang_dream)],
+    &[On::Play("", Some(cant_play), bang_dream)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

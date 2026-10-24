@@ -18,7 +18,7 @@ const PHASE_DOWN: i32 = 2;
 pub const HEAT_HEAD: CardDef = CardDef::new(
     "event:超燃甩头",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「所有玩家的移动掷骰」 -- every plan / every face. `always` deleted
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
@@ -27,7 +27,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
         // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
         On::Filter(Filter::DiceRollValue("", None, sub_die_filter)),
-        On::Action(Action::AtEnd("", None, None, phase_end)),
+        On::Action(Action::AtEnd("", None, phase_end)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()

@@ -15,10 +15,9 @@ pub const ORDINARY: CardDef = CardDef::new(
     "MyGO:普通与理所当然",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0", Some(key!("ordinary_when")),
+        "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("ordinary_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"普通与理所当然"#)
         .raw_name(r#"普通与理所当然"#)

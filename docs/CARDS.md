@@ -31,11 +31,11 @@ use card_sdk::{key, CardDef, Filter, Action, Msg, On};
 
 /// C# `CardPress` -- 压: gain 1,000.
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
-    On::Play("", "", None, press),
-    // On::Play("", "", Some(cant_play), press),          // C# `Card.WhyNot` gate
-    // On::Counteract(&[ChainKind::Pay], "", r#"你将要失去或支付资金"#, guard, counteract),  // [反击]: kinds + condition + reason + guard + effect
-    // On::Action(Action::TurnEnd("", "", guard, decay)),          // field hooks, auto-run in play
-    // On::Action(Action::AtEnd("", "", None, at_end)),        // scheduled turn-end body
+    On::Play("", None, press),
+    // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
+    // On::Counteract(&[ChainKind::Pay], "", guard, counteract).counter_reason(r#"你将要失去或支付资金"#),  // [反击]: kinds + condition + guard + effect + reason
+    // On::Action(Action::TurnEnd("", guard, decay)),          // field hooks, auto-run in play
+    // On::Action(Action::AtEnd("", None, at_end)),        // scheduled turn-end body
     // On::Filter(Filter::DiceRollPlan("", None, roll_plan)), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
@@ -50,7 +50,7 @@ guard + the effect, `On::Action` one event-hook kind (`passTile`, `drawn`,
 `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) and `On::Filter` one
 modifier stage (`paySplitAdd`, `buySet`, ...). Constructors come from the
 `filter_kinds!` / `action_kinds!` tables (`Filter::DiceRollPlan(pre, guard, body)`,
-`Action::TurnEnd(pre, counter_reason, guard, body)`). **One kind per entry** --
+`Action::TurnEnd(pre, guard, body)` + optional `.counter_reason(key)`). **One kind per entry** --
 a card that listens at two raises declares two entries. Ruleset kinds use their
 own namespace (`Filters::MyRewrite`, `Actions::Exile`).
 
@@ -72,15 +72,15 @@ final `On` set (ABI v94):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
-| `On::Play(pre, counter_reason, gate, body)` | `fn(i32) -> Asked` | play from hand (`counter_reason` = `Option<MsgKey>`, the prompt's 「…时」 clause) | yes |
-| `On::Counteract(kinds, pre, counter_reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`counter_reason` = `Option<MsgKey>`) | yes |
+| `On::Play(pre, gate, body)` | `fn(i32) -> Asked` | play from hand (`.counter_reason(key)` = the prompt's 「…时」 clause) | yes |
+| `On::Counteract(kinds, pre, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`.counter_reason(key)` = the 「…时」 clause) | yes |
 | `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
 | `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
 | `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
 | `On::Buy(pre, guard, body)` | `fn(i32) -> Asked` | a deed's buy / perform body (v80) | yes (`ctx::pay_buy`, `ctx::assign_deed`, `ctx::raise`, `ctx::log`) |
 | `On::Build(pre, guard, body)` | `fn(i32) -> Asked` | a deed's build / perform body (v80) | yes (`ctx::pay_build`, `ctx::raise`, `ctx::log`) |
-| `On::Action(ActionEntry)` | `fn(i32) -> Asked` | **event reaction** at one kind (`counter_reason` = `Option<MsgKey>`) | yes (`ctx::gain`, log, place, …) |
+| `On::Action(ActionEntry)` | `fn(i32) -> Asked` | **event reaction** at one kind (`.counter_reason(key)` = the 「…时」 clause) | yes (`ctx::gain`, log, place, …) |
 | `On::Filter(FilterEntry)` | shape-dependent, see below | **pure value / decision / gate / payload rewrite** at one kind | no (pure) |
 
 `On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` stay their own
@@ -338,8 +338,8 @@ modifier touched stays exactly as the base formula produced it.
 ### v76: DiceRollPlan / AtEnd fold
 
 `On::RollPlan` is `On::Filter(Filter::DiceRollPlan(pre, guard, body))` (the
-plan is a `PlanValue`). `On::AtEnd` is `On::Action(Action::AtEnd(pre, reason,
-guard, body))`: the one-shot-ness lives in the existing `schedule_turn_end`
+plan is a `PlanValue`). `On::AtEnd` is `On::Action(Action::AtEnd(pre, guard,
+body))`: the one-shot-ness lives in the existing `schedule_turn_end`
 list (`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire
 ids `OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never
 be reused.
@@ -367,13 +367,13 @@ use card_sdk::{pre, On, Action};
 
 // condition (`pre: &'static str`) before the guard
 On::Counteract(&[ChainKind::DiceRollValue], "actor == owner && move.roll != null",
-               r#"你将要失去或支付资金"#, can_counteract, counteract),
+               can_counteract, counteract).counter_reason(r#"你将要失去或支付资金"#),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Action(Action::TurnEnd(pre::MINE, "", guard, decay)),
+On::Action(Action::TurnEnd(pre::MINE, guard, decay)),
 
 // or the const builder
-On::Play("", "", Some(cant_play), play).pre("owner.money >= 1500"),
+On::Play("", Some(cant_play), play).pre("owner.money >= 1500"),
 ```
 
 **Distinct layers (nothing is rejected twice).** The category filter (the
@@ -403,11 +403,11 @@ player never sees as a clause firing. Those run their body but post no
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play("", "", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
+        On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),     // 1: bookkeeping
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),     // 2: bookkeeping
-        On::Action(Action::TurnEnd("", "", Some(afterglow), tick)),         // 3: 「获得[火罐]」 -- flashes
+        On::Action(Action::TurnStartBefore("", None, declare_cap)),     // 1: bookkeeping
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)),     // 2: bookkeeping
+        On::Action(Action::TurnEnd("", Some(afterglow), tick)),         // 3: 「获得[火罐]」 -- flashes
     ],
 )
 .silent(&[1, 2]);
@@ -452,8 +452,8 @@ pulse) shows:
 
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
-    On::Play("", "", None, use_skill),                  // 0: Auto
-    On::Action(Action::TurnEnd("", "", None, tick)),    // 1: Always (self-only)
+    On::Play("", None, use_skill),                  // 0: Auto
+    On::Action(Action::TurnEnd("", None, tick)),    // 1: Always (self-only)
 ]).flash(&[(1, Flash::Always)]);
 ```
 
@@ -497,7 +497,7 @@ expression. Declare it with `CardDef::new(...).props(&[(prop::EST_COST, N)])`.
 `0` (the default) means unknown / assume free.
 
 ```rust
-pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play("", "", None, gacha10)])
+pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play("", None, gacha10)])
     .props(&[(card_sdk::abi::prop::EST_COST, 1500)]);
 ```
 
@@ -852,7 +852,7 @@ The shape:
 
 ```rust
 // 通用:该清CP了
-On::Play("", "", Some(cant_play), clear_cp),
+On::Play("", Some(cant_play), clear_cp),
 On::Action(&[ActionKind::CpChanged], "", "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
@@ -876,8 +876,8 @@ asking it to place CP units; `mark:cp`'s `On::Message` handler runs
 
 ```rust
 // 通用:该清CP了
-On::Play("", "", Some(cant_play), clear_cp),
-On::Action(Action::CounterChanged("", "", Some(cp_empty_guard), on_cp_empty)),
+On::Play("", Some(cant_play), clear_cp),
+On::Action(Action::CounterChanged("", Some(cp_empty_guard), on_cp_empty)),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -911,7 +911,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
 
 // rules/markers/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
-On::Action(Action::SettleBody("", "", Some(lands_on_cp), on_land)),
+On::Action(Action::SettleBody("", Some(lands_on_cp), on_land)),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();

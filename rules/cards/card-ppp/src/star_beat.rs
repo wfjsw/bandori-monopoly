@@ -18,8 +18,8 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         // the offer exists only with a layer banked and a buildable owned
         // tile within 5. Layer is CEL (`slot`); the near-buildable scan is
         // residual (owned ∩ dist ≤ 5 ∩ can_build_on).
-        On::Action(Action::SettleAfter("actor == owner && slot('star_beat.layers') > 0", None, Some(has_near_buildable), after_settle)),
-        On::Play("", None, Some(cant_play), play),
+        On::Action(Action::SettleAfter("actor == owner && slot('star_beat.layers') > 0", Some(has_near_buildable), after_settle)),
+        On::Play("", Some(cant_play), play),
     ],
 )
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
-    &[On::Counteract(&[ChainKind::Effect], "", Some(key!("declare_war_when")), Some(can_counteract), counteract)],
+    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract).counter_reason(key!("declare_war_when"))],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"宣战布告"#)

@@ -14,12 +14,12 @@ const ID: &str = "Forbidden Moca";
 pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
         // deleted (a no-op prefetch); the `value` param is the face being
         // halved (effect), not applicability.
         On::Filter(Filter::DiceRollValue("", None, halve)),
-        On::Action(Action::AtEnd("", None, None, expire)),
+        On::Action(Action::AtEnd("", None, expire)),
     ],
 )
 .meta(

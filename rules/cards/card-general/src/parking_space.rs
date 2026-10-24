@@ -25,20 +25,16 @@ const SLOT_STAY: &str = "parking_space_stay";
 pub const PARKING_SPACE: CardDef = CardDef::new(
     "通用:[都筑诗船]Parking Space",
     &[
-        On::Play("", None, Some(cant_play), play),
+        On::Play("", Some(cant_play), play),
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
         On::Action(Action::SettleBody(
             "",
-            None,
             Some(counteract_guard),
-            counteract,
-        )),
+            counteract)),
         On::Action(Action::TurnEndAfter(
             "",
-            None,
             Some(counteract_guard),
-            counteract,
-        )),
+            counteract)),
     ],
 )
 .meta(

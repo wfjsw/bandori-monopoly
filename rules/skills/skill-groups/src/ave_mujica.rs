@@ -33,13 +33,11 @@ const ORIG: &str = "skill.aveMujica.orig";
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
-        On::Play("", None, Some(can_halve), halve),
+        On::Play("", Some(can_halve), halve),
         On::Action(Action::TurnStartBefore(
             "slot('skillState') != 0",
             None,
-            None,
-            at_turn_start,
-        )),
+            at_turn_start)),
         // Latch the PaySplitMul input for the PayAfter one-sided fixup. Rides
         // `PaySplitMulBefore` (v96) so the stored figure is the one the bend
         // Filter is about to see -- after any `PaySplitAdd` rewrite, before
@@ -47,9 +45,7 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Action(Action::PaySplitMulBefore(
             "slot('skillState') == 2 && card.placed",
             None,
-            None,
-            latch_orig,
-        )),
+            latch_orig)),
         On::Filter(Filter::PaySplitMul(
             "slot('skillState') == 2 && card.placed",
             None,
@@ -60,15 +56,11 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Action(Action::PayAfter(
             "slot('skillState') == 2 && card.placed",
             None,
-            None,
-            after_bend,
-        )),
+            after_bend)),
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skillState') == 2",
             None,
-            None,
-            at_turn_end,
-        )),
+            at_turn_end)),
     ],
 );
 

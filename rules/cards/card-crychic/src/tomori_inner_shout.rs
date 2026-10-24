@@ -22,10 +22,10 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // 规则书（3）: 「你位于此卡前后5格内时可在时机合适时消耗1火罐…」 -- the
         // offer exists only within 5 of this card and with a fire to spend.
         // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
-        On::Action(Action::SettleBefore("actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(owner), card.tile) <= 5", None, Some(not_latched), pull)),
+        On::Action(Action::SettleBefore("actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(owner), card.tile) <= 5", Some(not_latched), pull)),
         // Once-per-move latch drop (the redirect re-raises `settleBefore` at the
         // destination; see `pull`).
-        On::Action(Action::MoveResolved("", None, None, clear_latch)),
+        On::Action(Action::MoveResolved("", None, clear_latch)),
         // 高松灯（MyGO!!!!!）(2): 「在此技能影响下的支付价格变为原本的一半」 -- the
         // mover's payments on the pulled settle.
         On::Filter(Filter::PaySplitMul("", Some(half), on_pay)),
@@ -33,7 +33,7 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // band skill's (2) body (`skill-groups/src/crychic.rs`), not here: the
         // band effect is what moves the card, and by a separate empty-piles hook
         // the deck has already been refilled so the proxy never fires.
-        On::Play("", None, None, tomori_inner_shout),
+        On::Play("", None, tomori_inner_shout),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"内心的呐喊"#)

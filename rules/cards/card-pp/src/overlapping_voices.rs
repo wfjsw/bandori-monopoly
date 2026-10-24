@@ -23,8 +23,8 @@ use skill_groups::fans;
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
-        On::Play("", None, Some(cant_play), overlapping_voices),
-        On::Action(Action::AtEnd("", None, None, at_end)),
+        On::Play("", Some(cant_play), overlapping_voices),
+        On::Action(Action::AtEnd("", None, at_end)),
         // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的
         // [场地]上的"初次演出事故"（如果有）」 -- the own-card `Discarded`
         // dispatch (guerrilla / mygo): the hook fires when *this* card is the
@@ -33,9 +33,7 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
         On::Action(Action::Discarded(
             card_sdk::pre::MINE,
             None,
-            None,
-            on_discarded,
-        )),
+            on_discarded)),
     ],
 )
 .meta(

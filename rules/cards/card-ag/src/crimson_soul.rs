@@ -29,7 +29,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // 「[消耗]1到5次500资金」 is effect content (rulebook L13-14), so there
         // is no `money >= 500` play gate -- an unaffordable in-body payment
         // takes the Q1 shortfall path. C# `CardCrimsonSoul.WhyNot` had one.
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 规则书[持续]（1）: 「[拥有者]因导致的[消耗]或[支付]时可选择移除此卡的
         // 1个[奇迹水晶]」 -- the offer is to *remove a crystal*, so it exists
         // only with a crystal on the card and a positive amount to cut.
@@ -38,9 +38,9 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive -1000 rewrite sits immediately before the pure
         // `PaySplitChoose` filter stage.
-        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && card.counter('crystals') > 0", Some(key!("crimson_soul_when")), None, pay_choose)),
-        On::Action(Action::CardUsed("", None, Some(skill_used_guard), skill_used)),
-        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && card.counter('crystals') > 0", None, pay_choose).counter_reason(key!("crimson_soul_when"))),
+        On::Action(Action::CardUsed("", Some(skill_used_guard), skill_used)),
+        On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 )
 .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])

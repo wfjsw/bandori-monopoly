@@ -24,10 +24,9 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         // `abnormal` (`actor` = the causer). `value > 0` also covers C#
         // `!t.Pay.cancel` -- a payment an earlier counteraction already
         // reduced to 0 reads as `value() == 0`.
-        "value > 0 && chain_has(Pay) && actor >= 0 && target >= 0 && actor != target", Some(key!("secret_rainbow_when")),
+        "value > 0 && chain_has(Pay) && actor >= 0 && target >= 0 && actor != target",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("secret_rainbow_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"秘密与青春的虹彩"#)
         .raw_name(r#"秘密与青春的虹彩"#)

@@ -16,10 +16,9 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
     "Mor:（小白）",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0", Some(key!("mashiro_pay_when")),
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("mashiro_pay_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")
         .raw_name(r#"（小白）"#)

@@ -15,10 +15,9 @@ pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
     &[On::Counteract(
         &[bandori_std::kind::PassRewardAffected.as_trigger()],
-        card_sdk::pre::MINE, Some(key!("marina_work_when")),
+        card_sdk::pre::MINE,
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("marina_work_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"今天也要加油工作喔"#)
         .raw_name(r#"[月岛麻里奈]今天也要加油工作喔"#)

@@ -22,7 +22,7 @@ use card_sdk::{key, CardDef, Filter, Msg, On, PayAddValue};
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
-        On::Play("", None, Some(cant_play), anon_tokyo),
+        On::Play("", Some(cant_play), anon_tokyo),
         On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && value > 0", None, link_rent)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()

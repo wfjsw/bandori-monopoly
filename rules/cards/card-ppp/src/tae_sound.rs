@@ -11,7 +11,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TAE_SOUND: CardDef = CardDef::new(
     "PPP:（多惠）寻找更好的声音",
-    &[On::Play("", None, None, tae_sound)],
+    &[On::Play("", None, tae_sound)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

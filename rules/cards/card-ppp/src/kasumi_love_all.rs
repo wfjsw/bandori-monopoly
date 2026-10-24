@@ -16,13 +16,13 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
     "PPP:（香澄）大家我都喜欢哦",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时」 -- a
         // still-walking (non-teleport) pass by someone other than the owner.
         // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家
         // 在此卡所在格子[强制停下]」 -- the body only acts on a step onto this
         // card's own tile (`card.tile`, docs/GUARDS.md §4.2).
-        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0", None, None, pass_tile)),
+        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0", None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"大家我都喜欢哦"#)

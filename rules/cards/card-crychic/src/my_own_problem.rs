@@ -24,10 +24,9 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     // guard (outside the CEL schema).
     &[On::Counteract(
         &[ChainKind::SettleBefore],
-        "actor == owner && move.main", Some(key!("my_own_problem_when")),
+        "actor == owner && move.main",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("my_own_problem_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"是我自己的问题"#)
         .raw_name(r#"是我自己的问题"#)

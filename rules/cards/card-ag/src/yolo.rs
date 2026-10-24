@@ -19,9 +19,7 @@ pub const YOLO: CardDef = CardDef::new(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
         "actor == owner && (move.roll != null || value >= 0)",
         None,
-        None,
-        counteract,
-    )],
+        counteract)],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)])
 .meta(

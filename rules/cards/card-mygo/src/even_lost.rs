@@ -16,13 +16,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
-        On::Play("", None, Some(can_go), go),
+        On::Play("", Some(can_go), go),
         On::Counteract(
             &[ChainKind::Effect],
-            "by != owner && by >= 0 && effect.hits(owner)", Some(key!("even_lost_when")),
+            "by != owner && by >= 0 && effect.hits(owner)",
             None,
-            counteract,
-        ),
+            counteract).counter_reason(key!("even_lost_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"即使迷茫着"#)

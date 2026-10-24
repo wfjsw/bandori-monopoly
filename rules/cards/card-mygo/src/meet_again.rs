@@ -15,10 +15,9 @@ pub const MEET_AGAIN: CardDef = CardDef::new(
     "MyGO:若能再次交汇",
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
-        "actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0", Some(key!("meet_again_when")),
+        "actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("meet_again_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"若能再次交汇"#)
         .raw_name(r#"若能再次交汇"#)

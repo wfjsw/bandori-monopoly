@@ -15,7 +15,7 @@ use card_sdk::abi::counter;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TITLE_IDOL: CardDef =
-    CardDef::new("PP:TITLE IDOL", &[On::Play("", None, None, title_idol)])
+    CardDef::new("PP:TITLE IDOL", &[On::Play("", None, title_idol)])
         .props(&[(card_sdk::abi::prop::SONG, 1)])
         .meta(
             &card_sdk::meta::CardMeta::new()

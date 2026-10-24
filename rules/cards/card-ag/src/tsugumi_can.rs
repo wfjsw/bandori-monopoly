@@ -14,8 +14,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TSUGUMI_CAN: CardDef = CardDef::new(
     "AG:（鸫）微小的『能做到』的事",
     &[
-        On::Play("", None, Some(cant_play), play),
-        On::Counteract(&[ChainKind::Card], "", Some(key!("tsugumi_can_when")), Some(can_counteract), counteract),
+        On::Play("", Some(cant_play), play),
+        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract).counter_reason(key!("tsugumi_can_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微小的『能做到』的事"#)

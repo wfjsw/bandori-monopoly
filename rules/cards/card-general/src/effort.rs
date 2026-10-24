@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const EFFORT: CardDef = CardDef::new(
     "通用:尽力后的收获",
-    &[On::Play("", None, Some(cant_play), play)],
+    &[On::Play("", Some(cant_play), play)],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

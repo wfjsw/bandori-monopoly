@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", None, None, pipopa)])
+pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play("", None, pipopa)])
     .meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"Pipopa"#)

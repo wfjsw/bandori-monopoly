@@ -15,9 +15,7 @@ pub const AFTERGLOW: CardDef = CardDef::new(
     &[On::Action(Action::Bought(
         card_sdk::pre::MINE,
         None,
-        None,
-        on_bought,
-    ))],
+        on_bought))],
 );
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.

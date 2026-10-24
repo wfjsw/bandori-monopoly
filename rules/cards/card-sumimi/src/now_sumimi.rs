@@ -20,10 +20,9 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         // (> 0); that is not a money loss and must not open this window.
         // `value > 0` also covers C# `!t.Pay.cancel` -- a payment an earlier
         // counteraction already reduced to 0 reads as `value() == 0`.
-        "chain_has(Pay) && actor == owner && value > 0", Some(key!("now_sumimi_when")),
+        "chain_has(Pay) && actor == owner && value > 0",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("now_sumimi_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"现在她是Sumimi的小初啦"#)
         .raw_name(r#"现在她是Sumimi的小初啦"#)

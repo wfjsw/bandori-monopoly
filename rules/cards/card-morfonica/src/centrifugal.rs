@@ -23,15 +23,14 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
             // the `target` effect entry, aimed at the owner, from another
             // player's card. 「第二次」 -- C# `H._targeted[seat] >= 2` --
             // `targeted_count(owner) >= 2` (a derived-list counter).
-            "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2", Some(key!("centrifugal_when")),
+            "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
             None,
-            counteract,
-        ),
+            counteract).counter_reason(key!("centrifugal_when")),
         // The body-top `trigger::player_id() != player_id` early-out is
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
         On::Filter(Filter::ImmuneAll(card_sdk::pre::MINE, None, immune_all)),
-        On::Action(Action::TurnStart("actor == owner && card.placed", None, None, turn_start)),
+        On::Action(Action::TurnStart("actor == owner && card.placed", None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"离心力，不为所动"#)

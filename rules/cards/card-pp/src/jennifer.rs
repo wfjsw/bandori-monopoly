@@ -22,14 +22,12 @@ use skill_groups::fans;
 pub const JENNIFER: CardDef = CardDef::new(
     "PP:找回珍妮弗",
     &[
-        On::Play("", None, Some(cant_play), jennifer),
+        On::Play("", Some(cant_play), jennifer),
         // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
         On::Action(Action::PassTile(
             "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')",
             None,
-            None,
-            pass_tile,
-        )),
+            pass_tile)),
     ],
 )
 .meta(

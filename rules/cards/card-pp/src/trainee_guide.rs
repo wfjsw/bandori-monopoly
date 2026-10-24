@@ -30,16 +30,16 @@ const ID: &str = "PP:练习生解密指南";
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
-        On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, None, before_build)),
-        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, None, after_build)),
-        On::Play("", None, None, trainee_guide),
+        On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, before_build)),
+        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, after_build)),
+        On::Play("", None, trainee_guide),
         // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- the tick only.
-        On::Action(Action::TurnEnd("", None, Some(turn_end_guard), turn_end)),
+        On::Action(Action::TurnEnd("", Some(turn_end_guard), turn_end)),
         // 规则书[持续]（3）: 「此卡拥有至少5个[奇迹水晶]时…随后进入弃卡区」 -- a
         // state clause on the crystal count: any write that lands on >= 5
         // leaves the field, including the [手] placement `set_crystals` and the
         // turn-end +1 (a write like any other, crimson_soul.rs:94-96).
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') >= 5", None, Some(cash_in_guard), cash_in)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') >= 5", Some(cash_in_guard), cash_in)),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property

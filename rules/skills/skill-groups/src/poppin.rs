@@ -29,9 +29,7 @@ pub const POPPIN: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_start,
-        )),
+            at_turn_start)),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
@@ -39,18 +37,14 @@ pub const POPPIN: CardDef = CardDef::new(
         On::Action(Action::Pass(
             "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
         On::Action(Action::SettleBefore(
             "",
-            None,
             Some(before_settle_applies),
-            before_settle,
-        )),
+            before_settle)),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（1） chains two independent 「随后可使用…」 actions
         // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather
@@ -59,7 +53,7 @@ pub const POPPIN: CardDef = CardDef::new(
         // either is available; the body lists the available options and skips
         // the prompt when only one is. The 「或」 inside the crystal half is its
         // own sub-choice (draw 1 vs +2000).
-        On::Play("", None, Some(cant_play), press),
+        On::Play("", Some(cant_play), press),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」

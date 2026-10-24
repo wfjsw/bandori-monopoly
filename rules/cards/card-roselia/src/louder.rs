@@ -8,7 +8,7 @@
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, None, louder)])
+pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, louder)])
     .props(&[(card_sdk::abi::prop::SONG, 1)])
     .meta(
         &card_sdk::meta::CardMeta::new()

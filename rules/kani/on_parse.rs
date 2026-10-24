@@ -5,9 +5,9 @@
 // ```ignore
 // On::Filter(Filter::DiceRollPlan(pre, guard, body)),
 // On::Filter(bandori_std::kind::Filters::MyRewrite(pre, guard, body)),
-// On::Action(Action::TurnStart(pre, counter_reason, guard, body)),
-// On::Action(Actions::Exile(pre, counter_reason, guard, body)),
-// On::Play(pre, reason, guard, body),   // and the other non-Filter variants
+// On::Action(Action::TurnStart(pre, guard, body).counter_reason(..)),
+// On::Action(Actions::Exile(pre, guard, body).counter_reason(..)),
+// On::Play(pre, why_not, body).counter_reason(..),   // and the other non-Filter variants
 // ```
 //
 // Included by `build.rs` (body trampolines) and `tests/on_parse.rs` (loud-miss
@@ -50,7 +50,7 @@ pub struct OnBody {
     /// Kind constructor name for Filter/Action (`"DiceRollPlan"`, `"TurnStart"`).
     /// `None` for the non-namespaced variants.
     pub kind: Option<String>,
-    /// Body function ident (last arg of the inner call).
+    /// Body function ident (the `fn(i32) -> Asked` ctor arg).
     pub body: String,
     pub shape: BodyShape,
 }
@@ -80,7 +80,7 @@ pub fn strip_rust_comments(src: &str) -> String {
     out
 }
 
-/// `On` variants whose body is `fn(i32) -> Asked` (last ctor arg).
+/// `On` variants whose body is `fn(i32) -> Asked` (the `body` ctor arg).
 const ACTIONISH: &[&str] = &[
     "Play",
     "Counteract",
@@ -115,14 +115,6 @@ fn split_args(inner: &str) -> Vec<&str> {
     parts
 }
 
-fn last_nonempty<'a>(parts: &[&'a str]) -> Option<&'a str> {
-    parts
-        .iter()
-        .rev()
-        .find(|p| !p.trim().is_empty())
-        .map(|p| p.trim())
-}
-
 fn is_ident(s: &str) -> bool {
     !s.is_empty()
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -130,6 +122,25 @@ fn is_ident(s: &str) -> bool {
             .next()
             .map(|c| c.is_ascii_alphabetic() || c == '_')
             == Some(true)
+}
+
+/// Body function ident: a bare ident, not a literal (`None`/`true`/`false`).
+/// (`FilterBody::Arm(fn)` is retired and rejected.)
+fn body_ident(arg: &str) -> Option<String> {
+    let s = arg.trim();
+    if matches!(s, "None" | "true" | "false") {
+        return None;
+    }
+    if is_ident(s) {
+        return Some(s.to_string());
+    }
+    None
+}
+
+/// Last arg that qualifies as a body ident. Shapes that carry `counter_reason`
+/// trail with it (`None` / `Some(..)`), so the body is not always last.
+fn find_body_arg<'a>(parts: &[&'a str]) -> Option<&'a str> {
+    parts.iter().rev().find(|p| body_ident(p).is_some()).copied()
 }
 
 /// Balanced-paren span starting at `open` (`src[open] == '('`). Returns the
@@ -151,14 +162,6 @@ fn paren_end(src: &str, open: usize) -> Option<usize> {
             }
         }
         j += 1;
-    }
-    None
-}
-
-/// Last-arg body: a bare ident. (`FilterBody::Arm(fn)` is retired and rejected.)
-fn body_ident(last: &str) -> Option<String> {
-    if is_ident(last) {
-        return Some(last.to_string());
     }
     None
 }
@@ -373,12 +376,10 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
                 panic!("on_parse: unbalanced ctor call for `On::{variant}::{kind}`");
             };
             let args = split_args(&inner[open + 1..end - 1]);
-            let Some(last) = last_nonempty(&args) else {
-                panic!("on_parse: `On::{variant}::{kind}` has no body arg");
+            let Some(body_arg) = find_body_arg(&args) else {
+                panic!("on_parse: `On::{variant}::{kind}` has no body ident arg");
             };
-            let Some(body) = body_ident(last) else {
-                panic!("on_parse: `On::{variant}::{kind}` last arg `{last}` is not a body ident");
-            };
+            let body = body_ident(body_arg).expect("find_body_arg only returns body idents");
             let shape = if variant == "Filter" {
                 *shapes.get(&kind).unwrap_or_else(|| {
                     panic!(
@@ -401,15 +402,12 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             });
         } else if ACTIONISH.contains(&variant.as_str()) {
             let args = split_args(inner);
-            let Some(last) = last_nonempty(&args) else {
-                search_from = j;
-                continue;
-            };
-            let Some(body) = body_ident(last) else {
+            let Some(body_arg) = find_body_arg(&args) else {
                 panic!(
-                    "on_parse: `On::{variant}` last arg `{last}` is not a body ident (byte {start})"
+                    "on_parse: `On::{variant}` has no body ident arg (byte {start})"
                 );
             };
+            let body = body_ident(body_arg).expect("find_body_arg only returns body idents");
             bodies.push(OnBody {
                 variant,
                 kind: None,

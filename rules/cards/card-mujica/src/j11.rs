@@ -16,18 +16,18 @@ const ID: &str = "Mujica:#J11";
 pub const J11: CardDef = CardDef::new(
     "Mujica:#J11",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
         // reactions, not [反击]s.
-        On::Action(Action::TurnEnd("card.placed", None, None, counteract)),
-        On::Action(Action::Targeted("card.placed", None, None, counteract)),
+        On::Action(Action::TurnEnd("card.placed", None, counteract)),
+        On::Action(Action::Targeted("card.placed", None, counteract)),
         // C# `CardJ11.PaySplitChoose` interactive arm: `ask_yes` → `charge` →
         // `set_pay_amount(0)`. Rides `PaySplitChooseBefore` (v78), restoring the
         // rulebook PaySplitChoose position (its own entry; the TurnEnd/Targeted
         // dispatcher is separate). The pure stun cancel stays on FilterFlag.
-        On::Action(Action::PaySplitChooseBefore("card.placed", None, None, pay_choose_ask)),
+        On::Action(Action::PaySplitChooseBefore("card.placed", None, pay_choose_ask)),
         On::Filter(Filter::PaySplitChoose("card.placed", None, pay_choose_cancel)),
-        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         // sheet cell J11 -- the name line is blank; `#J11` is the name.

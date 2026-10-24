@@ -35,7 +35,7 @@ const C: CardDef = CardDef::new("t", &[
     On::Filter(Filter::BuyAssign("", None, deal_body)),
     On::Filter(Filter::PaySplitAdd("", None, payadd_body)),
     On::Filter(Filter::Redirect("", None, redirect_body)),
-    On::Action(Action::TurnStart("", Some("turn"), None, on_turn_start)),
+    On::Action(Action::TurnStart("", None, on_turn_start).counter_reason("turn")),
     On::Filter(bandori_std::kind::Filters::MyRewrite("", None, my_rewrite)),
 ]);
 "#;
@@ -95,9 +95,7 @@ fn parse_on_bodies_trailing_comma_and_multiline() {
     ),
     On::Action(Action::Pass(
         "", None,
-        None,
-        on_pass,
-    )),
+        on_pass)),
 "#;
     let got = parse_on_bodies(src, &shapes);
     assert_eq!(got.len(), 2, "{got:?}");
@@ -382,7 +380,7 @@ fn pre_string_reads_inner_ctor_arg() {
     let after = r#"Filter::DiceRollPlan(pre::MINE, None, on_plan)),"#;
     assert_eq!(on_pre_string(after).as_deref(), Some("actor == owner"));
 
-    let after = r#"Action::PassTile("card.placed && actor == owner", None, None, on_pass)),"#;
+    let after = r#"Action::PassTile("card.placed && actor == owner", None, on_pass)),"#;
     assert_eq!(
         on_pre_string(after).as_deref(),
         Some("card.placed && actor == owner")
@@ -393,6 +391,6 @@ fn pre_string_reads_inner_ctor_arg() {
     assert_eq!(on_pre_string(after).as_deref(), Some("false"));
 
     // Flat On::Play shape (text after `On::Play(`).
-    let after = r#""", "", None, play)"#;
+    let after = r#""", None, play, "")"#;
     assert_eq!(on_pre_string(after).as_deref(), Some(""));
 }

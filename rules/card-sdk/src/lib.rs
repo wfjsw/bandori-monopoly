@@ -119,8 +119,8 @@ pub mod rt;
 ///
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
-///     On::Play("", None, None, play),
-///     On::Action(Action::TurnEnd(pre::MINE, None, guard, tick)),
+///     On::Play("", None, play),
+///     On::Action(Action::TurnEnd(pre::MINE, guard, tick)),
 ///     On::Filter(Filter::ImmuneAll(pre::MINE, None, immune)),
 /// ]);
 /// ```
@@ -291,9 +291,9 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", None, None, use_skill),                                     // 0: flashes
-    ///     On::Action(Action::TurnStartBefore("", None, None, declare_cap)),         // 1: bookkeeping
-    ///     On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),         // 2: bookkeeping
+    ///     On::Play("", None, use_skill),                                     // 0: flashes
+    ///     On::Action(Action::TurnStartBefore("", None, declare_cap)),         // 1: bookkeeping
+    ///     On::Action(Action::DeckAtGameStart("", None, declare_cap)),         // 2: bookkeeping
     /// ]).silent(&[1, 2]);
     /// ```
     pub const fn silent(self, entries: &'static [i32]) -> Self {
@@ -349,8 +349,8 @@ impl CardDef {
     ///
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", None, None, use_skill),                 // 0: Auto
-    ///     On::Action(Action::TurnEnd("", None, None, tick)), // 1: Always (self-only)
+    ///     On::Play("", None, use_skill),                 // 0: Auto
+    ///     On::Action(Action::TurnEnd("", None, tick)), // 1: Always (self-only)
     /// ]).flash(&[(1, Flash::Always)]);
     /// ```
     pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
@@ -410,7 +410,7 @@ impl CardDef {
     /// use card_sdk::abi::text_slot;
     /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
     ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Action(Action::PassTile("", None, Some(pass_pays), on_pass)),      // 1
+    ///     On::Action(Action::PassTile("", Some(pass_pays), on_pass)),      // 1
     /// ]).texts(&[
     ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
     ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
@@ -609,15 +609,15 @@ impl CardDef {
 pub struct PlayEntry {
     /// Gate condition (docs/GUARDS.md §4.3). `""` = no condition.
     pub pre: &'static str,
-    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
-    /// no clause).
-    pub counter_reason: Option<MsgKey>,
     /// The gate (the old `On::CantPlay`): a pure query with no prompts,
     /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
     /// show. `None` for the gate itself means no gate.
     pub why_not: Option<fn(player_id: i32) -> Option<Msg>>,
     /// The effect.
     pub body: fn(player_id: i32) -> Asked,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause).
+    pub counter_reason: Option<MsgKey>,
 }
 
 /// [反击] entry ([`On::Counteract`]).
@@ -627,14 +627,14 @@ pub struct CounteractEntry {
     pub links: &'static [abi::ChainKind],
     /// The guard's condition (docs/GUARDS.md §4.3). `""` = no condition.
     pub pre: &'static str,
-    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
-    /// no clause).
-    pub counter_reason: Option<MsgKey>,
     /// Residual guard (docs/GUARDS.md §2/§4.3). `None` means G4 deleted it
     /// because the condition alone decides.
     pub guard: Option<fn(player_id: i32) -> bool>,
     /// The effect.
     pub body: fn(player_id: i32) -> Asked,
+    /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
+    /// no clause).
+    pub counter_reason: Option<MsgKey>,
 }
 
 /// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
@@ -699,7 +699,7 @@ pub enum On {
     /// while the card is in play. Same body shape as [`On::Counteract`]. May
     /// emit effects; does not modify the triggering value. One kind per entry
     /// -- a card that listens at two raises declares two entries. Built from
-    /// the `action_kinds!` constructors (`Action::TurnStart(pre, reason, guard, body)`).
+    /// the `action_kinds!` constructors (`Action::TurnStart(pre, guard, body)`).
     Action(ActionEntry),
     /// **Pure value / decision / gate / payload rewrite** at one filter kind.
     /// Built from the `filter_kinds!` constructors
@@ -769,43 +769,41 @@ pub mod pre {
 impl On {
     /// Play this card from hand.
     ///
-    /// `pre` is the gate's condition (see the type doc). `counter_reason` is
-    /// the 「…时」 clause the counteraction prompt shows (locale key; `None` =
-    /// no clause). `why_not` is the gate (the old `On::CantPlay`): a pure query
-    /// with no prompts, `None` = playable, `Some(why)` = blocked and `why` is
-    /// the reason to show. `None` for the gate itself means no gate. `body` is
-    /// the effect.
+    /// `pre` is the gate's condition (see the type doc). `why_not` is the gate
+    /// (the old `On::CantPlay`): a pure query with no prompts, `None` =
+    /// playable, `Some(why)` = blocked and `why` is the reason to show. `None`
+    /// for the gate itself means no gate. `body` is the effect. Attach the
+    /// 「…时」 clause with [`Self::counter_reason`].
     #[allow(non_snake_case)]
     pub const fn Play(
         pre: &'static str,
-        counter_reason: Option<MsgKey>,
         why_not: Option<fn(player_id: i32) -> Option<Msg>>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::PlayBody(PlayEntry {
             pre,
-            counter_reason,
             why_not,
             body,
+            counter_reason: None,
         })
     }
 
     /// A [反击] at these chain links: the guard decides whether the card is
-    /// offered in the hand window, then the effect resolves.
+    /// offered in the hand window, then the effect resolves. Attach the 「…时」
+    /// clause with [`Self::counter_reason`].
     #[allow(non_snake_case)]
     pub const fn Counteract(
         links: &'static [abi::ChainKind],
         pre: &'static str,
-        counter_reason: Option<MsgKey>,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::CounteractBody(CounteractEntry {
             links,
             pre,
-            counter_reason,
             guard,
             body,
+            counter_reason: None,
         })
     }
 
@@ -879,7 +877,7 @@ impl On {
     /// builder so a declaration can remain a one-liner:
     ///
     /// ```ignore
-    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_pay")), Some(can_counteract), counteract).pre(pre::MINE)
+    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract).counter_reason(key!("yolo_pay")).pre(pre::MINE)
     /// ```
     pub const fn pre(self, pre: &'static str) -> Self {
         match self {
@@ -923,6 +921,33 @@ impl On {
                 e.pre = pre;
                 On::MessageBody(e)
             }
+        }
+    }
+
+    /// Attach the 「…时」 clause the counteraction prompt shows (a locale key).
+    /// Entries that carry a clause are [反击] windows ([`On::Play`] /
+    /// [`On::Counteract`]) and field hooks ([`On::Action`]); on any other entry
+    /// this is a no-op. `None` (the default) = no clause.
+    ///
+    /// ```ignore
+    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract)
+    ///     .counter_reason(key!("yolo_pay")),
+    /// ```
+    pub const fn counter_reason(self, reason: MsgKey) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.counter_reason = Some(reason);
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.counter_reason = Some(reason);
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.counter_reason = Some(reason);
+                On::Action(e)
+            }
+            other => other,
         }
     }
 
@@ -1024,8 +1049,9 @@ impl On {
 
     /// The trigger's `counterReason` -- the 「…时」 clause the counteraction
     /// prompt shows. A locale key the client resolves; `None` for entries that
-    /// carry no clause.
-    pub const fn counter_reason(&self) -> Option<MsgKey> {
+    /// carry no clause. Named `_key` to leave [`Self::counter_reason`] free for
+    /// the builder.
+    pub const fn counter_reason_key(&self) -> Option<MsgKey> {
         match self {
             On::PlayBody(e) => e.counter_reason,
             On::CounteractBody(e) => e.counter_reason,

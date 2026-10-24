@@ -22,13 +22,11 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
-        On::Play("", None, None, chisato_mask),
+        On::Play("", None, chisato_mask),
         On::Action(Action::Reshuffled(
             "",
-            None,
             Some(reshuffled_guard),
-            reshuffled,
-        )),
+            reshuffled)),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the

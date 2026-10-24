@@ -18,19 +18,15 @@ const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "PPP:（沙绫）总有一天要给这片天空命名",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         On::Action(Action::PassTile(
             "actor == owner && card.placed",
             None,
-            None,
-            pass_tile,
-        )),
+            pass_tile)),
         On::Action(Action::TurnEndAfter(
             "card.placed && slot('saaya_sky_passed') != 0",
             None,
-            None,
-            turn_end_after,
-        )),
+            turn_end_after)),
     ],
 )
 .silent(&[1])

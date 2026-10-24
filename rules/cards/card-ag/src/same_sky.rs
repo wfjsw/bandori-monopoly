@@ -13,8 +13,8 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
-        On::Action(Action::Drawn("trigger_card == card.id", Some(key!("same_sky_when")), None, counteract)),
-        On::Action(Action::DeckAtGameStart("", None, None, return_at_opening)),
+        On::Action(Action::Drawn("trigger_card == card.id", None, counteract).counter_reason(key!("same_sky_when"))),
+        On::Action(Action::DeckAtGameStart("", None, return_at_opening)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"朝同一片天空迈进"#)

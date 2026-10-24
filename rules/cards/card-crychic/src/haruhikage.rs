@@ -17,7 +17,7 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         On::Counteract(
             &[
                 ChainKind::Effect,
@@ -29,16 +29,16 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             "(kind == DiceRollResult && actor == owner && move.roll != null) \
              || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
-                 && target == owner && tile.id >= 0 && value > 0)", Some(key!("haruhikage_when")),
+                 && target == owner && tile.id >= 0 && value > 0)",
             None,
             counteract
-        ),
+        ).counter_reason(key!("haruhikage_when")),
         // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择…」 -- the
         // offer exists only at that asset *and* hand-size threshold. `assets_of`
         // is a derived list (money + land + houses), residual (docs/GUARDS.md
         // §4.2). `Drawn` fires with the card already in hand (`wasm_rules.rs`
         // 「it is still in hand」), so 「手牌」 counts this card.
-        On::Action(Action::Drawn("trigger_card == card.id", None, Some(assets_ready), on_drawn)),
+        On::Action(Action::Drawn("trigger_card == card.id", Some(assets_ready), on_drawn)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

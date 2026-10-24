@@ -24,18 +24,16 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
     "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
     &[
-        On::Play("", None, Some(cant_play), childhood_cheer),
+        On::Play("", Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
         On::Action(Action::MoveAfter(
             "actor == owner && move.main && card.placed",
             None,
-            None,
-            after_move,
-        )),
+            after_move)),
         // The body-top `!is_placed` early-out is the condition now: a card the
         // move already landed (or that otherwise left the field) has nothing
         // left to discard, so the callback must not run (or flash) for it.
-        On::Action(Action::AtEnd("card.placed", None, None, at_end)),
+        On::Action(Action::AtEnd("card.placed", None, at_end)),
     ],
 )
 .meta(

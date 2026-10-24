@@ -25,7 +25,7 @@ use skill_groups::fans;
 pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
-        On::Play("", None, None, aya_longing),
+        On::Play("", None, aya_longing),
         // 规则书[持续]（1）: the passive X shave is a pure amount modifier, so it
         // rides `PaySplitAdd` (支付阶段 2) where it belongs and composes with
         // sibling add modifiers. No prompt, so no purity problem.
@@ -47,7 +47,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         // TODO(规则书): local `.max(0)` per clause vs a final floor after the
         //   whole add/sub stage is still unnamed by the book (the file's existing
         //   order-independence claim covers X-then-1500, not add-then-floor).
-        On::Action(Action::PaySplitMulBefore("actor == owner && value > 0", Some(key!("aya_longing_when")), None, pay_res)),
+        On::Action(Action::PaySplitMulBefore("actor == owner && value > 0", None, pay_res).counter_reason(key!("aya_longing_when"))),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)

@@ -19,10 +19,8 @@ pub const NET_ERROR: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
         "",
-        Some(key!("net_error_when")),
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("net_error_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

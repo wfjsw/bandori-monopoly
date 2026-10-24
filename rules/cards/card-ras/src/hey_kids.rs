@@ -25,10 +25,9 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         // charges no rent (the settle offers a forced purchase instead), so it
         // does not open this. 「将本格上的房屋转移到…」 -- the tile must have
         // houses to transfer (C# `H.State.houses[t.Tile] > 0`).
-        "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0", Some(key!("hey_kids_when")),
+        "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("hey_kids_when"))],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"狂乱Hey Kids!!"#)

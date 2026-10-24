@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play("", None, None, popipa)]).meta(
+pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play("", None, popipa)]).meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Popipa"#)
         .raw_name(r#"Popipa"#)

@@ -27,7 +27,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // and the owner's own pass are the condition; the crystal mark count is
         // the residual guard. `ActionKind::Pass` (not `PassTile`) matches the
         // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki_other.rs`).
-        On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", None, Some(pass_tile_guard), pass_tile)),
+        On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", Some(pass_tile_guard), pass_tile)),
         // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
         // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
         // `PassBefore` is the category; the owner's own pass of CiRCLE is the
@@ -35,10 +35,9 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // missing = -1 never equals a live `tile.id`).
         On::Counteract(
             &[ChainKind::PassBefore],
-            "actor == owner && tile.id == tile_named('CiRCLE')", Some(key!("black_suits_when")),
+            "actor == owner && tile.id == tile_named('CiRCLE')",
             None,
-            counteract,
-        ),
+            counteract).counter_reason(key!("black_suits_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"黑衣人的补给"#)

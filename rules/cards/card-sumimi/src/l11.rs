@@ -12,8 +12,8 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
-        On::Play("", None, None, l11),
-        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", None, None, sweep)),
+        On::Play("", None, l11),
+        On::Action(Action::TurnEnd("actor == owner && card.placed && card.counter('crystals') <= 0", None, sweep)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         // sheet cell L11 -- the name line is blank; `#L11` is the name.
