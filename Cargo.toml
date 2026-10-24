@@ -39,8 +39,37 @@ serde_json = "1"
 # release wasm. Everything else is exactly wasmi's default feature set.
 wasmi = { version = "2", default-features = false, features = ["stable", "std", "validate", "memory64", "auto-dispatch"] }
 sha2 = "0.10"
-card-sdk = { path = "rules/card-sdk" }
 bitflags = { version = "2", default-features = false }
+postcard = { version = "1", default-features = false }
+const_format = { version = "0.2.37", features = ["fmt"] }
+
+# The guest tree under `rules/` is its own workspace (`rules/Cargo.toml`), but
+# this workspace path-depends into it from `game-rules` / `rules-native`, and a
+# path dependency's `workspace = true` resolves against *this* root. Every
+# entry below therefore has a twin in `rules/Cargo.toml` -- the two lists are
+# kept in step, with paths re-rooted at the repository root.
+card-sdk = { path = "rules/card-sdk" }
+game-kinds = { path = "crates/game-kinds" }
+bandori-std = { path = "rules/bandori-std" }
+personas = { path = "rules/personas" }
+rules-events = { path = "rules/events" }
+rules-markers = { path = "rules/markers" }
+rules-status = { path = "rules/status" }
+rules-tiles = { path = "rules/tiles" }
+skill-groups = { path = "rules/skills/skill-groups" }
+skill-personas = { path = "rules/skills/skill-personas" }
+card-ag = { path = "rules/cards/card-ag" }
+card-crychic = { path = "rules/cards/card-crychic" }
+card-general = { path = "rules/cards/card-general" }
+card-hhw = { path = "rules/cards/card-hhw" }
+card-morfonica = { path = "rules/cards/card-morfonica" }
+card-mujica = { path = "rules/cards/card-mujica" }
+card-mygo = { path = "rules/cards/card-mygo" }
+card-pp = { path = "rules/cards/card-pp" }
+card-ppp = { path = "rules/cards/card-ppp" }
+card-ras = { path = "rules/cards/card-ras" }
+card-roselia = { path = "rules/cards/card-roselia" }
+card-sumimi = { path = "rules/cards/card-sumimi" }
 
 [profile.release]
 opt-level = 3
