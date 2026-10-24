@@ -10,7 +10,7 @@ import { useEventListener, useHotkeys } from "../../hooks/dom";
 import { useDockRaise } from "../../hooks/dock";
 import { useResetScroll } from "../../hooks/measure";
 import type { GameSession } from "../../game/session";
-import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
+import { ThinkingPill } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { CardFace, type CardAction, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
@@ -348,9 +348,6 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
             <button type="button" className={s.deck} title={tr("board.drawPile")} onMouseEnter={() => setPeek(true)} onMouseLeave={() => setPeek(false)} onFocus={() => setPeek(true)} onBlur={() => setPeek(false)} onClick={() => { setPeek(false); showDeck(m); }}>
               <img src={sceneImg("card_back")} alt="" /><b>{m.me.draw}</b>
             </button>
-            <div className={cx(autoFloat, s.autoSlot)}>
-              <AutoToggle sess={sess} compact />
-            </div>
             <div className={s.thinkingSlot}><ThinkingPill sess={sess} /></div>
           </div>
         </div>

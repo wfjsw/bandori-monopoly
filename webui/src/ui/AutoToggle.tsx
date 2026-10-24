@@ -1,9 +1,9 @@
 // 托管 / 混沌 / 进阶 mode selector: hands this seat to a browser-side
 // autopilot. Stays clickable in every state, so the player can always take the
-// controls back. On the board it sits at the hand header (`compact`); on
-// character select it is in the TopBar `right` slot. The banner strip is
-// rendered by the match screens. 进阶 is the worker-pool search
-// (`docs/BOT.md` B6), lazy-loaded; it falls back to 托管 on any failure.
+// controls back. On the board it sits in the TopBar title (`compact`), beside
+// the speed toggle. The banner strip is rendered by the match screens. 进阶 is
+// the worker-pool search (`docs/BOT.md` B6), lazy-loaded; it falls back to
+// 托管 on any failure.
 
 import { useState } from "react";
 import { useAutoMode, useThinking } from "../core/hooks";
@@ -19,9 +19,6 @@ import { t as tr } from "../i18n/t";
 const NEXT: Record<AutoMode, AutoMode> = { off: "bot", bot: "chaos", chaos: "advanced", advanced: "off" };
 const LABEL = (m: AutoMode) =>
   m === "bot" ? tr("board.afk") : m === "chaos" ? tr("board.chaos") : m === "advanced" ? tr("board.advanced") : tr("board.autoOff");
-
-/** Class for a wrapper that lifts the pill above modals (see the CSS). */
-export const autoFloat = s.float;
 
 /**
  * The mode pill itself. Click cycles

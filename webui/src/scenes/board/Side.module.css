@@ -233,7 +233,7 @@
   padding: 4px 6px;
   background: linear-gradient(rgba(246, 242, 243, 0), rgba(246, 242, 243, 0.92) 42%);
 }
-/* No stacking context on the hand: the auto switch must stay above modals. */
+/* No stacking context on the hand: the thinking pill must stay above modals. */
 .handTools {
   position: relative;
   flex: none;
@@ -241,13 +241,6 @@
   align-items: center;
   gap: var(--sp-2);
   min-height: var(--hand-peek);
-}
-.autoSlot {
-  right: 0;
-  top: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
 }
 .thinkingSlot {
   position: absolute;
