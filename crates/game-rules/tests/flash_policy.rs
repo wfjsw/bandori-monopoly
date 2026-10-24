@@ -151,6 +151,72 @@ fn auto_self_only_does_not_flash() {
     );
 }
 
+/// Place `card` on player 0's field and land so its settle hooks run.
+/// Returns the event mark taken just before the land.
+fn place_and_land(t: &mut Table, card: &str) -> i32 {
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, card).unwrap();
+    drain(t);
+    assert!(
+        t.on_field(0, card),
+        "the play places the card: {}",
+        t.dump_prompt()
+    );
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(t);
+    mark
+}
+
+/// Multi-entry drive, `Always` then trailing `Auto`: one flash decision for
+/// the whole drive, so the fold keeps the `Always` (a trailing `Auto` sibling
+/// must not drop it). Both bodies are no-ops, so `Auto` alone would not flash
+/// -- seeing a flash proves the `Always` survived. The `Always` entry's
+/// declarative cue is the only header the drive posts.
+#[test]
+fn always_survives_a_trailing_auto_sibling() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:flashFoldAlways");
+    let f = card_flashes_since(&t, mark);
+    assert!(
+        f.iter().any(|e| e.card == "TEST:flashFoldAlways"),
+        "Always must survive a trailing Auto sibling: {}",
+        t.recent_keys(30).join(", ")
+    );
+}
+
+/// Multi-entry drive, `Never` then trailing `Always`: the fold's `Never`
+/// suppresses the whole drive -- a later `Always` sibling must not lift it.
+/// The `Always` sibling posts the header (declarative cue on a no-op body);
+/// that header must not flash.
+#[test]
+fn never_suppresses_the_drive_despite_a_trailing_always_sibling() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:flashFoldNever");
+    let activated: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:flashFoldNever")
+        .collect();
+    assert!(
+        !activated.is_empty(),
+        "the Always sibling still posts its header: {}",
+        t.recent_keys(30).join(", ")
+    );
+    assert!(
+        activated.iter().all(|e| !e.flash),
+        "Never suppresses the drive despite a trailing Always: {activated:?}"
+    );
+    assert!(
+        card_flashes_since(&t, mark).is_empty(),
+        "and no card-flash: {}",
+        t.recent_keys(30).join(", ")
+    );
+}
+
 /// `ctx::no_flash` wins over a cross-player Auto flash.
 #[test]
 fn no_flash_suppresses_an_auto_flash() {

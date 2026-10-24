@@ -1302,6 +1302,51 @@ fn flash_always_quiet(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Two settle hooks on the same trigger kind, `Always` then trailing `Auto`.
+/// One drive, one flash decision: the fold must keep the `Always` (a trailing
+/// `Auto` sibling must not drop it). Both bodies are no-ops, so `Auto` alone
+/// would not flash -- the `Always` entry's declarative cue is the only reason
+/// the drive shows anything (and the only header it posts).
+const FLASH_FOLD_ALWAYS: CardDef = CardDef::new(
+    "TEST:flashFoldAlways",
+    &[
+        On::Play("", None, flash_fold_always_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)).flash(Flash::Always),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)),
+    ],
+);
+
+/// Two settle hooks on the same trigger kind, `Never` then trailing `Always`.
+/// The fold's `Never` must suppress the whole drive -- a later `Always`
+/// sibling must not lift it. The `Always` sibling is the one that posts the
+/// header (declarative cue on a no-op body); it must not flash.
+const FLASH_FOLD_NEVER: CardDef = CardDef::new(
+    "TEST:flashFoldNever",
+    &[
+        On::Play("", None, flash_fold_never_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)).flash(Flash::Never),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_fold_noop)).flash(Flash::Always),
+    ],
+);
+
+fn flash_fold_always_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:flashFoldAlways", &Msg::new(key!("flash_fold_note")));
+    Ok(())
+}
+
+fn flash_fold_never_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:flashFoldNever", &Msg::new(key!("flash_fold_note")));
+    Ok(())
+}
+
+/// Pure no-op: nothing visible, so `Auto` would not flash and the body posts
+/// no second header. Enough to make the drive run both entries.
+fn flash_fold_noop(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
 /// `ctx::flash()` then `ask_yes`: exactly ONE flash, posted **before** the
 /// prompt. The body re-runs after the answer and must not flash again.
 const FLASH_THEN_ASK: CardDef = CardDef::new("TEST:flashThenAsk", &[On::Play("", None, flash_then_ask)]);
@@ -1778,7 +1823,8 @@ card_sdk::ruleset!(&[
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
-    FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
+    FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,
+    FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
     CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE,
     STRUCT_ARG, NAMED_OPEN, NAMED_SHUT, QUERY

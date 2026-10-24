@@ -44,6 +44,23 @@ fn record_silent_visible(card_id: &str, what: &str) {
     SILENT_VISIBLE.with(|v| v.borrow_mut().push((card_id.to_string(), what.to_string())));
 }
 
+/// Fold two declarative flash policies across the sibling entries of one
+/// drive: `Never` if any entry says `Never`; else `Always` if any says
+/// `Always`; else `Auto`. A multi-entry drive (`run_hook` announces once per
+/// matching entry, then `commit_after` takes **one** flash decision for one
+/// header) must not let a trailing `Auto` drop an earlier `Always`, nor a
+/// later `Always` lift an earlier `Never`. Matches the declarative half of
+/// the precedence `commit_after` applies at the flash point
+/// (`Never > ctx::no_flash > ctx::flash / Always > Auto`).
+const fn fold_flash(a: card_sdk::abi::Flash, b: card_sdk::abi::Flash) -> card_sdk::abi::Flash {
+    use card_sdk::abi::Flash::{Always, Auto, Never};
+    match (a, b) {
+        (Never, _) | (_, Never) => Never,
+        (Always, _) | (_, Always) => Always,
+        _ => Auto,
+    }
+}
+
 /// Is this host request a **visible effect** a silent entry must not produce?
 /// `Some(what)` for the pay/move/draw/build class; `None` for setup (gates,
 /// targeting, linger) and for nested activations (`play_card` / `invoke_skill`
@@ -3053,6 +3070,10 @@ impl<M: CardModules> RulesBridge<M> {
                     if flushed_header < 0 && w.pending_header.is_none() {
                         w.pending_header = saved_header.clone();
                     }
+                    // Restore the drive's already-folded flash policy (do
+                    // **not** fold this entry again) so the body's `Never`
+                    // check still sees the sibling's opinion on a re-run.
+                    w.flash_policy = flash_policy_cell.get();
                     return;
                 }
                 w.parent = activation_id;
@@ -3076,8 +3097,17 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 // Declarative flash policy (v55) rides on the Run so the
                 // commit's precedence check can see `Never` / `Always`.
-                w.flash_policy = pres.flash;
-                flash_policy_cell.set(pres.flash);
+                // One decision per drive, so the sibling entries **fold**
+                // (`Never` if any says `Never`; else `Always` if any says
+                // `Always`; else `Auto`) rather than overwrite -- a trailing
+                // `Auto` must not drop an earlier `Always`, and a trailing
+                // `Always` must not lift an earlier `Never`. Both stores
+                // carry the same folded value so they cannot diverge. The
+                // `announced` early-return above fires before any fold, so a
+                // re-run does not fold the same entry twice.
+                let folded = fold_flash(flash_policy_cell.get(), pres.flash);
+                flash_policy_cell.set(folded);
+                w.flash_policy = folded;
                 let id = self.announce_drive(w, call.clone(), card_id, uid, target, tile, trigger, entry);
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
@@ -4502,6 +4532,22 @@ impl<M: CardModules> RulesBridge<M> {
                     self.drive_should_flash(cx, &after, owner, header)
                 };
                 cx.set_event_flash(header, flash);
+                // The drive's canonical header (first flush, the `__hdr__`
+                // once-per-flash identity) is a separate id from `header`
+                // when a multi-entry drive posted later per-entry headers
+                // (`flush_header` treats those as re-run dups and defaults
+                // them off). Stamp the decision on the canonical one too so
+                // `Never` suppresses the whole drive, not just the last
+                // header.
+                {
+                    let hkey = format!("{card_id}|__hdr__");
+                    let first = after.world.flash.lock().seen.get(&hkey).copied();
+                    if let Some(first) = first {
+                        if first != header {
+                            cx.set_event_flash(first, flash);
+                        }
+                    }
+                }
                 after.world.recent = cx.world().recent.clone();
                 cx.activation.retain(|&id| id != header);
             }
@@ -8576,7 +8622,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.card_prop(card, key)
     }
 
-    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// The card rule's declared **tile texts** (`On::texts`), see
     /// [`game_core::engine::CardRules::card_texts`]. Sorted by entry index
     /// (stable, so declaration order within an entry is kept) -- that order is
     /// the third component of the view's text-precedence key.
