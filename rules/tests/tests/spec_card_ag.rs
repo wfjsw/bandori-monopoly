@@ -773,6 +773,137 @@ fn colors_6_picks_three_distinct() {
     .expect("C-AG-colors-07");
 }
 
+/// C-AG-colors-03 -- roll 2 「从弃牌堆中选择一张牌放置到抽牌堆顶」.
+/// The chosen title leaves the discard and becomes the draw-pile top.
+#[test]
+fn colors_2_puts_a_discard_card_on_deck_top() {
+    forall(4, 0xA6_0068, |rng, _i| {
+        let mut t = Table::vanilla(2);
+        let keep = "通用:GREAT";
+        let take = "通用:安可";
+        t.set_discard(0, &[keep, take]);
+        t.set_draw(0, &["通用:尽力后的收获"]);
+        t.set_money(0, 10_000 + rng.range(0, 5) * 100);
+        t.dice(&[2]);
+        t.give(0, &["AG:无论是何种颜色的夕阳"]);
+        let pre = t.snapshot_world();
+        t.play(0, "AG:无论是何种颜色的夕阳")
+            .map_err(|e| format!("play rejected: {e}"))?;
+        let k = t.option(take).ok_or_else(|| {
+            format!(
+                "C-AG-colors-03: {take} not offered in the discard pick: {}",
+                t.dump_prompt()
+            )
+        })?;
+        t.answer(0, k)
+            .map_err(|e| format!("answer rejected: {e}"))?;
+        skip_all(&mut t);
+        let draw = t.draw_pile(0);
+        if draw.first().map(String::as_str) != Some(take) {
+            return Err(format!(
+                "C-AG-colors-03: deck top {draw:?}, expected {take} on top"
+            ));
+        }
+        let disc = t.discard(0);
+        if disc.iter().any(|c| c == take) {
+            return Err(format!("C-AG-colors-03: {take} still in discard: {disc:?}"));
+        }
+        if !disc.iter().any(|c| c == keep) {
+            return Err(format!("C-AG-colors-03: {keep} left the discard: {disc:?}"));
+        }
+        frame(
+            &pre,
+            t.world(),
+            &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
+        )
+    })
+    .expect("C-AG-colors-03");
+}
+
+/// Roll 2 with an empty discard: 「选择一张牌」 has no candidate, so the
+/// effect logs and resolves without a pick.
+#[test]
+fn colors_2_with_empty_discard_does_not_prompt() {
+    let mut t = Table::vanilla(2);
+    t.set_discard(0, &[]);
+    t.set_draw(0, &["通用:GREAT"]);
+    t.dice(&[2]);
+    t.give(0, &["AG:无论是何种颜色的夕阳"]);
+    t.play(0, "AG:无论是何种颜色的夕阳").unwrap();
+    if t.prompt().is_some() {
+        panic!("empty discard must not open a pick: {}", t.dump_prompt());
+    }
+    skip_all(&mut t);
+    assert_eq!(t.draw_pile(0), vec!["通用:GREAT"]);
+    assert!(t.discard(0).iter().all(|c| c == "AG:无论是何种颜色的夕阳"));
+}
+
+/// The discard pick is over card *titles* (C# `Distinct()`): two copies of one
+/// card offer one option, not two.
+#[test]
+fn colors_pick_offers_each_discard_title_once() {
+    let mut t = Table::vanilla(2);
+    t.set_discard(0, &["通用:安可", "通用:安可", "通用:GREAT"]);
+    t.dice(&[2]);
+    t.give(0, &["AG:无论是何种颜色的夕阳"]);
+    t.play(0, "AG:无论是何种颜色的夕阳").unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.options.len(),
+        2,
+        "distinct discard titles only: {}",
+        t.dump_prompt()
+    );
+    assert!(t.option("通用:安可").is_some());
+    assert!(t.option("通用:GREAT").is_some());
+}
+
+/// C-AG-colors-06 -- roll 5 「从弃牌堆中选择一张牌加入手牌」.
+#[test]
+fn colors_5_puts_a_discard_card_in_hand() {
+    forall(4, 0xA6_0065, |rng, _i| {
+        let mut t = Table::vanilla(2);
+        let keep = "通用:GREAT";
+        let take = "通用:安可";
+        t.set_discard(0, &[keep, take]);
+        t.set_draw(0, &["通用:尽力后的收获"]);
+        t.set_money(0, 10_000 + rng.range(0, 5) * 100);
+        t.dice(&[5]);
+        t.give(0, &["AG:无论是何种颜色的夕阳"]);
+        let pre = t.snapshot_world();
+        t.play(0, "AG:无论是何种颜色的夕阳")
+            .map_err(|e| format!("play rejected: {e}"))?;
+        let k = t.option(take).ok_or_else(|| {
+            format!(
+                "C-AG-colors-06: {take} not offered in the discard pick: {}",
+                t.dump_prompt()
+            )
+        })?;
+        t.answer(0, k)
+            .map_err(|e| format!("answer rejected: {e}"))?;
+        skip_all(&mut t);
+        let hand = t.hand(0);
+        if !hand.iter().any(|c| c == take) {
+            return Err(format!(
+                "C-AG-colors-06: {take} must be in hand, got {hand:?}"
+            ));
+        }
+        let disc = t.discard(0);
+        if disc.iter().any(|c| c == take) {
+            return Err(format!("C-AG-colors-06: {take} still in discard: {disc:?}"));
+        }
+        if !disc.iter().any(|c| c == keep) {
+            return Err(format!("C-AG-colors-06: {keep} left the discard: {disc:?}"));
+        }
+        frame(
+            &pre,
+            t.world(),
+            &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
+        )
+    })
+    .expect("C-AG-colors-06");
+}
+
 // =====================================================================
 // C-AG-sky-*  AG:朝同一片天空迈进
 // =====================================================================

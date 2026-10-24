@@ -15,7 +15,6 @@
 //! Reviewed 10/23/2026
 
 use alloc::string::String;
-use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, CardText, Msg, On};
@@ -135,32 +134,21 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `h.discard.Distinct()` -> `H.AskCard` -> `h.discard.Remove(text)`: the
-/// player picks one card out of their discard pile, which is taken out of it.
-/// `None` (and a log line) when the discard is empty.
+/// 规则书「从弃牌堆中选择一张牌」: the player picks one card out of their
+/// discard pile, which is taken out of it. `None` (and a log line) when the
+/// discard is empty. The pick/take mechanism is [`ctx::pick_from_pile`]; this
+/// wrapper only binds this card's prompts.
 fn pick_from_discard(
     player_id: i32,
     ask: &'static str,
 ) -> Result<Option<String>, card_sdk::Prompt> {
-    let mut ids: Vec<String> = Vec::new();
-    for c in ctx::cards_in(player_id, ctx::CardPile::Discard) {
-        if !ids.contains(&c) {
-            ids.push(c);
-        }
-    }
-    if ids.is_empty() {
-        ctx::log(player_id, &Msg::new(key!("any_color_sunset_no_discard")));
-        return Ok(None);
-    }
-    let refs: Vec<&str> = ids.iter().map(|c| c.as_str()).collect();
-    let pick = ctx::ask_card(
+    ctx::pick_from_pile(
         player_id,
+        ctx::CardPile::Discard,
         &Msg::new(key!("any_color_sunset_title")),
         &Msg::new(ask),
-        &refs,
-    )?;
-    let id = ids.swap_remove(pick.min(ids.len() - 1));
-    Ok(ctx::take_card(player_id, ctx::CardPile::Discard, &id).then_some(id))
+        Some(&Msg::new(key!("any_color_sunset_no_discard"))),
+    )
 }
 
 //

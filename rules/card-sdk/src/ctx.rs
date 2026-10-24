@@ -842,6 +842,19 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     postcard::from_bytes(&buf).unwrap_or_default()
 }
 
+/// Distinct card ids in `pile`, first-seen order. A pile can hold several
+/// copies of one card; when the player is picking a *title*, list each id
+/// once (C# `Distinct()`).
+pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    for c in cards_in(player_id, pile) {
+        if !ids.contains(&c) {
+            ids.push(c);
+        }
+    }
+    ids
+}
+
 #[cfg_attr(kani, inline(always))]
 pub fn to_discard(player_id: i32, card: &str) {
     let (p, l) = s(card);
@@ -2229,6 +2242,45 @@ pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Resu
         let i = ask_raw(PromptKind::Card, player_id, title, text)?;
         Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)))
     }
+}
+
+/// Ask which of `cards` (ids) to take out of `pile`, then remove that copy.
+/// Returns the id taken.
+///
+/// `None` when `cards` is empty -- `empty`, if given, is logged first -- or
+/// when the take found nothing. Pass a pre-filtered list to narrow the
+/// candidates; [`pick_from_pile`] is the unfiltered pile-wide shape.
+pub fn pick_take_from(
+    player_id: i32,
+    pile: CardPile,
+    title: &Msg,
+    text: &Msg,
+    empty: Option<&Msg>,
+    cards: &[String],
+) -> Result<Option<String>, Prompt> {
+    if cards.is_empty() {
+        if let Some(m) = empty {
+            log(player_id, m);
+        }
+        return Ok(None);
+    }
+    let refs: Vec<&str> = cards.iter().map(|c| c.as_str()).collect();
+    let pick = ask_card(player_id, title, text, &refs)?;
+    let id = cards[pick.min(cards.len() - 1)].clone();
+    Ok(take_card(player_id, pile, &id).then_some(id))
+}
+
+/// [`pick_take_from`] over [`distinct_cards_in`]: the player picks one card
+/// out of `pile` and that copy leaves it -- the usual 「从弃牌堆中选择一张牌」.
+pub fn pick_from_pile(
+    player_id: i32,
+    pile: CardPile,
+    title: &Msg,
+    text: &Msg,
+    empty: Option<&Msg>,
+) -> Result<Option<String>, Prompt> {
+    let ids = distinct_cards_in(player_id, pile);
+    pick_take_from(player_id, pile, title, text, empty, &ids)
 }
 
 /// A number in `min..=max`, built as an [`ask_pick`] over the range (ranges in

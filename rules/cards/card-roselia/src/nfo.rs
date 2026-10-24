@@ -182,37 +182,27 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- C#
-/// `h.discard.Distinct()` + `H.CanReplay` + `H.AskCard` + `h.discard.Remove` +
-/// `H.PlayCard`, which then applies the card's own `Dest`.
+/// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- distinct discard
+/// titles filtered to the ones [`ctx::query_guard`] admits on
+/// [`ctx::entry::PRESS`], then [`ctx::pick_take_from`] (the card leaves the
+/// discard before it resolves). `H.PlayCard` then applies the card's own `Dest`.
 fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
-    let mut ok: Vec<String> = Vec::new();
-    for id in ctx::cards_in(player_id, ctx::CardPile::Discard) {
-        // C# `where id != Id && H.CanReplay(i, id)` (`Distinct()` drops duplicates).
-        if id == ID || ok.contains(&id) {
-            continue;
-        }
-        if ctx::query_guard(player_id, &id, ctx::entry::PRESS) {
-            ok.push(id);
-        }
-    }
-    if ok.is_empty() {
-        // C# 「弃卡区没有能打出的卡（NFO）」.
-        ctx::log(player_id, &Msg::new(key!("nfo_no_replay")));
-        return Ok(());
-    }
-    let refs: Vec<&str> = ok.iter().map(|c| c.as_str()).collect();
-    let pick = ctx::ask_card(
+    // Not this card itself, and only cards the press entry admits.
+    let ok: Vec<String> = ctx::distinct_cards_in(player_id, ctx::CardPile::Discard)
+        .into_iter()
+        .filter(|id| id != ID && ctx::query_guard(player_id, id, ctx::entry::PRESS))
+        .collect();
+    let Some(id) = ctx::pick_take_from(
         player_id,
+        ctx::CardPile::Discard,
         &Msg::new(key!("nfo_title")),
         &Msg::new(key!("nfo_replay_ask")),
-        &refs,
-    )?;
-    let id = ok.swap_remove(pick.min(ok.len() - 1));
-    // C# `h.discard.Remove(text)` -- the card leaves the discard before it resolves.
-    if !ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
+        Some(&Msg::new(key!("nfo_no_replay"))),
+        &ok,
+    )?
+    else {
         return Ok(());
-    }
+    };
     ctx::log(
         player_id,
         &Msg::new("log.play")
