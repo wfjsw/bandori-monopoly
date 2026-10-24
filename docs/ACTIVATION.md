@@ -5,8 +5,8 @@ Status: **design** (2026-10-23). Two ABI gaps that `detour.rs`
 
 | # | gap | mechanism |
 |---|---|---|
-| 1 | a decision that is part of *declaring* an activation cannot be asked for after the trigger, because the activation cannot be cancelled | **`declare`** -- an optional per-entry collector that runs before the point of no return and hands its result to the body as an argument |
-| 2 | a hook's guard must ask whether *another* card's hook / gate would admit, without running that entry's body | **`ctx::can_fire`** -- a probe-mode applicability query over any entry, routed through `admits` |
+| 1 | a decision that is part of *declaring* an activation cannot be asked for after the trigger, because the activation cannot be cancelled | **`declare`** -- an optional per-entry collector that runs before the point of no return and hands its result to the body as a **typed argument** (the card's own struct: a pick, a tile, a card, …) |
+| 2 | a hook's guard must ask whether *another* card's hook / gate would admit, without running that entry's body | **`ctx::entry_admits`** -- a probe-mode applicability query by the entry id the target declares, routed through `admits` |
 
 Both are generalisations of seams that already exist
 (`COUNTERACT_MOVE_EXTENSION`, `ctx::card_replayable`). Neither invents a third
@@ -59,52 +59,90 @@ collector + a real body argument. (`CounteractHint` at
 
 ### Guest surface
 
+The arg is a **card-authored struct**, not a wire scalar. The collector and the
+body live in one file and share the type; only the wire encoding is fixed
+(postcard), the same way `ctx::message::Message` is a typed record on the wire
+while `FilterPayload` types are card-visible vocabulary.
+
 ```rust
-/// The activation argument a `declare` collector hands the body.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Activation {
+/// A typed activation argument. Blanket-impl'd for any postcard record.
+///
+/// `T` is the **card's own** struct -- a tile, a card id, a seat, a pick, a
+/// count -- whatever that activation decides. Nothing about it has to be
+/// shared with other cards, because the collector and the body are in the
+/// same file and only `postcard` crosses.
+pub trait ActivationArg: serde::Serialize + serde::de::DeserializeOwned + Default {}
+impl<T: serde::Serialize + serde::de::DeserializeOwned + Default> ActivationArg for T {}
+
+/// What a `declare` collector returns.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Activation<T: ActivationArg = i32> {
     /// The player declined. The entry does not fire at all -- no body, no
     /// header, no flash, no log. For a [反击] this is "do not declare"; for a
     /// play it is "the card never left the hand"; for a hook it is the
     /// 「可选择」 opt-out.
     Decline,
-    /// Proceed; the body receives this as its second parameter. `Arg(0)` is
-    /// the plain yes/no accept.
-    Arg(i32),
+    /// Proceed; the body receives `T` as its second parameter.
+    Arg(T),
 }
 
 /// Collect the activation argument **before** the activation commits.
 /// `Err(Prompt)` pauses and re-runs, same multi-pass as [`Asked`].
-pub type Declared = Result<Activation, Prompt>;
+pub type Declared<T: ActivationArg = i32> = Result<Activation<T>, Prompt>;
+```
+
+`T = i32` is the default, so the common "which of N" / yes-no case stays
+`Declared` / `Activation::Arg(7)` with no ceremony and no postcard noise
+beyond two bytes. A pick that is a tile, a card, or several of those is just
+that card's struct:
+
+```rust
+/// The card's own activation argument -- private to this file.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
+struct DetourPick {
+    /// Index into the candidate skill list.
+    plan: i32,
+    /// The tile the plan aims at, or -1.
+    tile: i32,
+    /// The seat it aims at, or -1.
+    seat: i32,
+}
+
+fn pick(player_id: i32) -> Declared<DetourPick> {
+    let tile = ctx::ask_tile(player_id, &title, &text, &tiles)?;
+    Ok(Activation::Arg(DetourPick { plan: 3, tile, seat: -1 }))
+}
+
+fn body(player_id: i32, pick: DetourPick) -> Asked { /* … */ }
+
+On::Counteract(links, pre, reason, guard, body).declare_arg(pick, body),
 ```
 
 `Result` keeps the `?` propagation the codebase's `Asked = Result<(), Prompt>`
-relies on; the three-arm is in `Activation` so "declined" is never confused
-with "proceed with no argument" (`Arg(0)` is the accept arm of a yes/no -- a
-`Result<Option<i32>, _>` would have made `Ok(None)` read as one of the two and
-get written wrong).
+relies on; the two-arm is in `Activation` so "declined" is never confused with
+"proceed".
 
 Attached with a builder, same style as `On::pre`:
 
 ```rust
-On::Counteract(links, pre, counter_reason, guard, body_with_arg)
-    .declare(pick),          // pick: fn(player_id: i32) -> Declared
+On::Counteract(links, pre, counter_reason, guard, body)
+    .declare_arg(pick, body),   // pick: fn(i32) -> Declared<T>, body: fn(i32, T) -> Asked
 
-On::Play(pre, counter_reason, why_not, body_with_arg)
-    .declare(pick),
+On::Play(pre, counter_reason, why_not, body)
+    .declare_arg(pick, body),
 ```
 
-Body shapes (erased + driven, the `FilterShape` pattern in
-`card-sdk/src/kinds.rs` -- so the 310 existing `fn(i32) -> Asked` bodies are
-untouched):
+`T` is inferred from the two fns. Bodies are erased + driven (the
+`FilterShape` pattern in `card-sdk/src/kinds.rs`), so the ~310 existing
+`fn(i32) -> Asked` bodies are untouched:
 
 | shape | signature | when |
 |---|---|---|
-| `BodyShape::Plain` | `fn(i32) -> Asked` | no `declare` (default) |
-| `BodyShape::WithArg` | `fn(i32, i32) -> Asked` | entry has `declare` |
+| `BodyShape::Plain` | `fn(i32) -> Asked` | no `declare` |
+| `BodyShape::WithArg` | `fn(i32, T) -> Asked` | entry has `declare` |
 
-`arg` is an `i32` -- the wire's lingua franca (prompt answers already are). A
-card that needs more packs it, or reads the rest from `ctx`.
+`On::….declare(f)` (decline-only, body stays `fn(i32) -> Asked`) remains as
+sugar for `declare_arg` with `T = ()`.
 
 ### When `declare` runs
 
@@ -121,7 +159,7 @@ the body never runs and nothing is announced. (A body-level `ask_yes` + early
 return still leaves the entry "fired", and any effect before the ask has
 already been re-run once by the prompt's multi-pass replay.)
 
-`declare` may call `ctx::ask_*`, including `ctx::can_fire` to build its option
+`declare` may call `ctx::ask_*`, including `ctx::entry_admits` to build its option
 list (mechanism B). That is how the options shown are exactly the ones that
 would work.
 
@@ -143,25 +181,36 @@ event reaction immediately before the pure `PaySplitChoose` fold (v78).
 
 ### Wire
 
+The arg is **postcard bytes**, carried the way `group_skills` and
+`ruleset_metadata` already carry structured guest data: the guest hands a
+buffer out and pulls one back. `export::ON` therefore stays at **four**
+params -- the arg is not a call parameter, it is per-activation state the host
+holds between `OP_DECLARE` and `OP_RUN`.
+
 ```
-ruleset_on(card, entry, op, player_id, arg) -> i64
-    OP_RUN     = 0      // body; `arg` is the declared activation argument
-    OP_GUARD   = 1      // unchanged, pure; `arg` ignored
-    OP_DECLARE = 2      // returns the arg, EXIT_NEED_INPUT, or EXIT_DECLINED
+ruleset_on(card, entry, op, player_id) -> i64
+    OP_RUN     = 0      // body; the drive pulls the arg via ctx::declared_arg
+    OP_GUARD   = 1      // unchanged, pure
+    OP_DECLARE = 2      // returns packed (ptr<<32)|len of postcard(T),
+                        // or EXIT_NEED_INPUT, or EXIT_DECLINED
+
+ruleset_declared_arg(out_ptr, cap) -> n     // host fills `out_ptr`; n = bytes
+                                            // (the group_skills out_buf shape)
 ```
 
-* `export::ON` widens from 4 params to 5 (`arg`).
-* `EXIT_NEED_INPUT` (`0x0B_A0_D0`) is unchanged -- `OP_DECLARE` uses the same
-  multi-pass / `Prompt` machinery as a body `Asked`.
-* `EXIT_DECLINED` is a new sentinel (a dedicated `i32`, next to
-  `EXIT_NEED_INPUT`) so the host can tell "player said no" from "paused".
-* **Sentinel collision is a trap, not a silent misread.** `OP_DECLARE` returns
-  a raw `i32` arg, so an `Arg(n)` whose `n` happens to be either sentinel
-  would be read as "paused" / "declined". The guest's `declare` boundary
-  **asserts** that the returned arg is neither `EXIT_NEED_INPUT` nor
-  `EXIT_DECLINED` and fails the activation loudly. (`EXIT_NEED_INPUT` is
-  already safe by the "published a prompt and kept going" trap; `EXIT_DECLINED`
-  would otherwise be a *silent* wrong answer.)
+* **`OP_DECLARE`'s return** uses the existing packed-`(ptr<<32)|len` convention
+  (`export::MANIFEST` / `METADATA` already do). `EXIT_NEED_INPUT`
+  (`0x0B_A0_D0`) is unchanged -- `OP_DECLARE` uses the same multi-pass /
+  `Prompt` machinery as a body `Asked`. `EXIT_DECLINED` (`0x0B_A0_D1`) is a
+  new sentinel so the host can tell "player said no" from "paused".
+* **No sentinel collision.** The sentinels are small integers and the arg is a
+  buffer address, so an `Arg(T)` can never be mistaken for "paused" /
+  "declined". The raw-`i32` assert the first cut needed is gone with the
+  raw-`i32` arg.
+* The host **stores `Vec<u8>`** on the activation (the chain link for a [反击],
+  the in-flight play for a play) and serves it back on `OP_RUN` through
+  `ruleset_declared_arg`. The body's `drive` calls `ctx::declared_arg::<T>()`
+  and passes `T` to `fn(i32, T) -> Asked`, so `T` is still a literal parameter.
 * **Trap severity: a trapping `OP_DECLARE` never commits and never costs the
   card.** The collector runs *before* the point of no return, so there is
   nothing to graveyard -- the card is still in hand (a play / [反击]) or still
@@ -220,7 +269,7 @@ them trapped". The callback is the one that survives that.
 **Land both arms together** -- the hook `OP_DECLARE` *and* the residual
 guard's trap decline -- or the table above gains a fifth row and we are back
 to a half-fix.
-* `Call::{Play, Counteract}` and the chain link carry `arg: i32`; `resolve_jobs`
+* `Call::{Play, Counteract}` and the chain link carry the arg as `Vec<u8>` (postcard); `resolve_jobs`
   / `drive` pass it into `OP_RUN` exactly the way `COUNTERACT_MOVE_EXTENSION`
   is stamped today, but as a real parameter rather than a move tag. **The
   stored `arg` is the only source of truth at resolve time.** `OP_DECLARE` runs
@@ -289,61 +338,81 @@ at that index, and **re-prompt the player** (or pause the match). Rule: *a
 decline that came from a prompt records that prompt's answer; only a
 prompt-free `Decline` is log-silent.*
 
-## 3. Mechanism B -- `ctx::can_fire` (cross-card applicability)
+## 3. Mechanism B -- `ctx::entry_admits` (cross-card applicability)
+
+### Named entries
+
+The query is by **identifier the target card declares**, not by a positional
+`(kind, trigger)` pair. That is the `On::Message(names, …)` shape already in
+the tree: entries carry names, the other side matches by name. It removes the
+"which of this card's three hooks did you mean?" ambiguity outright, and the
+name is a deliberate contract the target owns.
+
+```rust
+// In the skill's file -- the id is the rulebook clause it answers.
+On::Play("", None, Some(can_use), use_skill).id("（2）")
+
+On::Action(Action::TurnEnd("card.placed", None, None, tick)).id("decay")
+
+// In detour's file:
+ctx::entry_admits(player_id, "skill:美竹兰:叛逆的红挑染", "（2）")
+```
+
+`id` is `&'static str` on the entry, `""` = not externally addressable (the
+common case; nothing pays for it). It rides the manifest as
+`ManifestOn::id: Option<String>`, always serialized. Ids are unique **per
+card**, not globally.
 
 ### Guest surface
 
 ```rust
-/// Can `card_id`'s entry at `kind` + `trigger` fire for `player_id` right now?
+/// Does the named entry of `card_id` admit for `player_id` right now?
 ///
 /// Evaluates that entry's **condition + residual guard / play gate** through
 /// `admits` (`docs/GUARDS.md` §4.4 item 6) and does **not** run its body.
 ///
 /// **Probe mode** -- never prompts. An entry whose residual guard would ask
 /// answers `false`, the same way an eligibility probe folds
-/// `RuleError::GuardPrompted` to "not eligible". Unknown id, no such entry,
-/// or nesting overflow (`MAX_NESTING`) also answer `false`.
-///
-/// `trigger` is **required for every kind except `OnKind::Play`** (which has
-/// one press surface and is selected with `play_entry_preferring_gated`). A
-/// card with three `On::Action` hooks must not answer "yes" because one of
-/// them admits -- a hook question is per-kind, so it is asked per-kind.
-pub fn can_fire(
-    player_id: i32,
-    card_id: &str,
-    kind: OnKind,
-    trigger: Option<TriggerKind>,   // must be Some(_) unless kind == Play
-) -> bool;
-
-/// Explicit OR: does **any** entry of `kind` admit? Only for callers that
-/// genuinely mean "is any of these open" -- do not use it to dodge naming the
-/// trigger.
-pub fn can_fire_any(player_id: i32, card_id: &str, kind: OnKind) -> bool;
+/// `RuleError::GuardPrompted` to "not eligible". Unknown card, unknown or
+/// unnamed entry, or nesting overflow (`MAX_NESTING`) also answer `false`.
+pub fn entry_admits(player_id: i32, card_id: &str, entry_id: &str) -> bool;
 
 /// Could `player_id` play `id` right now (it has a `play` effect and its
-/// `cant_play` gate is open)? -- unchanged spelling; sugar for
-/// `can_fire(player_id, id, OnKind::Play, None)`.
+/// `cant_play` gate is open)? The **press surface** question -- "may I use
+/// this?", which is what a skill button asks. Unchanged spelling; internally
+/// the press entry, via `play_entry_preferring_gated`.
 pub fn card_replayable(player_id: i32, id: &str) -> bool;
 ```
 
-This is the existing `card_replayable` seam
-(`card-sdk/src/ctx.rs:2292`, `crates/game-rules/src/hostfns.rs:2750-2814`,
-which already nests `OP_GUARD` under `admits_gate`) generalised from
-`On::Play` to any entry. GUARDS.md §4.4 item 6 already names this case:
+Two clear questions, two spellings, no positional selector:
+
+| question | call |
+|---|---|
+| "may I press this card / use this skill?" | `card_replayable(player_id, id)` |
+| "does that named entry on that card admit?" | `entry_admits(player_id, id, entry_id)` |
+
+The name is `entry_admits` rather than `can_fire` because it is the guest
+spelling of the host function the doc already mandates -- `admits(entry, ctx)`
+-- so the vocabulary stays one word. (If the rulebook verb reads better at the
+call site, `ctx::can_activate(player_id, id, "（2）")` is the alternative;
+pick one and delete the other.)
+
+This generalises the existing `card_replayable` seam
+(`card-sdk/src/ctx.rs`, `crates/game-rules/src/hostfns.rs`, which already
+nests `OP_GUARD` under `admits_gate`). GUARDS.md §4.4 item 6 already names the
+case:
 
 > **Every other path that reaches a guard** (UI `playable` / `why_not_act`,
 > `ai_play`, **any host request that asks another card's guard**, …) goes
 > through one host function `admits(entry, ctx) = pre(ctx) && guard(ctx)`.
 > No caller may call a guard directly.
 
-`can_fire` **is** that host request. It is callable from a residual guard,
+`entry_admits` **is** that host request. It is callable from a residual guard,
 from a `declare`, and from a body -- guards are guest code and may make host
 calls (`detour.rs` already calls `rules_status::move_blocked` from its guards).
 
-For `OnKind::Play`, use `play_entry_preferring_gated` (the "alternative
-activations" selection at `host.rs:153-164`) rather than "the first Play
-entry", so a card with several press modes answers "is *any* press open" the
-way the engine picks a mode.
+`can_fire` / `can_fire_any` (the first cut's positional forms) are **not**
+kept. The identifier is the fix for the ambiguity they carried.
 
 ### What it deliberately does not answer
 
@@ -356,7 +425,7 @@ way the engine picks a mode.
   「若你的抽牌堆与弃牌堆中都没有卡」 gate).
 * **Cost.** One nested wasm instantiation per query, same as today's
   `card_replayable`. Prefer a CEL `pre` when the question is expressible
-  there; `can_fire` is for "the answer lives in another card's residual
+  there; `entry_admits` is for "the answer lives in another card's residual
   guard", which `pre` cannot see.
 
 ### Who may query whom
@@ -388,25 +457,62 @@ entry (`skill-personas`: "Started by the user … `On::Play`, gate and effect").
 So the card is: *pick one of those (2)s, and only when that (2) is activatable.*
 
 ```rust
+// In the skill's file — the id *is* the rulebook clause.
+// rules/skills/skill-personas/src/ran_red.rs
+On::Play("", None, Some(can_use), use_skill).id("（2）")
+
+// In detour's file.
+const PLANS: [&str; 4] = [
+    "skill:美竹兰:叛逆的红挑染",
+    "skill:宇田川巴:豚骨酱油拉面大姐",
+    "skill:上原绯玛丽:大家一起迈出新的一步",
+    "skill:上原绯玛丽:大家一起迈出新的一步",
+];
+
+/// The card's own activation argument -- private to this file.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
+struct DetourPick {
+    plan: i32,   // index into PLANS
+    tile: i32,   // the plan's landing tile, or -1
+    seat: i32,   // the seat it aims at, or -1
+}
+
+fn detour_eligible(player_id: i32) -> bool {
+    PLANS.iter().any(|id| ctx::entry_admits(player_id, id, "（2）"))
+}
+
+fn pick_afterglow_2(player_id: i32) -> Declared<DetourPick> {
+    // Only the (2)s that actually admit are offered.
+    let live: Vec<usize> = (0..PLANS.len())
+        .filter(|&i| ctx::entry_admits(player_id, PLANS[i], "（2）"))
+        .collect();
+    let k = ctx::ask_pick(player_id, &title, &text, &labels(&live))?;
+    Ok(Activation::Arg(DetourPick {
+        plan: live[k] as i32,
+        tile: ctx::tile_named("银河拉面馆"),
+        seat: -1,
+    }))
+}
+
 On::Counteract(
     &[ChainKind::DiceRollResult],
     "actor == owner && move.roll != null && move.kind != Teleport",
     None,
-    Some(detour_eligible),      // mechanism B: some (2) can fire
-    counteract,                 // fn(i32, i32) -> Asked
+    Some(detour_eligible),
+    counteract_with_plan,           // fn(i32, DetourPick) -> Asked
 )
-.declare(pick_afterglow_2),     // mechanism A: which (2), before commit
+.declare_arg(pick_afterglow_2, counteract_with_plan),
 ```
 
-* `pick_afterglow_2` builds its option list with `ctx::card_replayable` per
-  candidate skill, then `ctx::ask_pick`. Decline = no counter declared. The
-  pick is the `arg`.
-* `counteract(player_id, pick)` receives the pick. Until
+* `pick_afterglow_2` builds its option list with `ctx::entry_admits` per
+  candidate skill's `"（2）"`, then `ctx::ask_pick`. Decline = no counter
+  declared. The whole `DetourPick` is the arg.
+* `counteract_with_plan(player_id, pick)` receives it. Until
   **OPEN-afterglow式移动** (docs/rulebook/spec/OPEN-QUESTIONS.md:224) is
   resolved it keeps the inlined C# plan mutations and the existing
   `TODO(规则书)[judgement]`; once the book names which (2), the body becomes
-  `ctx::invoke_skill(player_id, PLANS[pick])` plus the 「并将下一次的移动掷骰
-  变更为1d6」 half.
+  `ctx::invoke_skill(player_id, PLANS[pick.plan as usize])` plus the
+  「并将下一次的移动掷骰变更为1d6」 half.
 
 The same split applies to the `On::Play` entry (the play path's four-way pick
 moves into its `declare`).
@@ -431,10 +537,10 @@ moves into its `declare`).
 
   The decisive argument is not "less machinery" -- it is that **an asking
   residual poisons every eligibility probe.** Probes (`can_counteract` /
-  `cant_play` / `ai_play`, and `can_fire` itself) wrap the guard so a pause
+  `cant_play` / `ai_play`, and `entry_admits` itself) wrap the guard so a pause
   surfaces as `RuleError::GuardPrompted`, which every caller folds to "not
   eligible". So a card whose 「可选择」 ask lives in its *guard* answers
-  `false` to `ctx::can_fire` -- i.e. it looks inapplicable to *other cards*
+  `false` to `ctx::entry_admits` -- i.e. it looks inapplicable to *other cards*
   that are only asking "may this fire?", when in fact it would fire the moment
   someone asked the player. That is exactly mechanism B's motivating shape
   (`detour`: "can I activate depends on can that (2) activate?"), and an
@@ -442,37 +548,38 @@ moves into its `declare`).
 
   With the ask in `declare` and the residual guard staying pure
   (`Option<fn(i32) -> bool>`, no enum whose only variant is `Pure`),
-  `can_fire` answers "may I press this?" truthfully and never predicts the
+  `entry_admits` answers "may I press this?" truthfully and never predicts the
   player -- the same split `cant_play` already has, which does not predict
   whether the player will actually play the card.
 
 * **No `On::Skill`.** A skill's press is `On::Play`; its passives are
-  `On::Action`. `declare` and `can_fire` attach to the entries that exist.
+  `On::Action`. `declare` and `entry_admits` attach to the entries that exist.
 * **No direct Rust call into another card's body.** `ctx::invoke_skill` /
   `ctx::play_card` (nested `On::Play` body) and `ctx::send` remain the only
-  cross-card effect seams; `can_fire` is the query half next to them.
+  cross-card effect seams; `entry_admits` is the query half next to them.
 * **No `declare` on `On::Filter`** (§2) and **no hand-window one-gesture
   labels** in v98.
 
-## 6. Implementation map
+## 6. Implementation map (rev 2 — generic `T`, named entry ids)
 
 | layer | change |
 |---|---|
-| `rules/card-sdk/src/lib.rs` | `Activation`, `Declared`, `BodyShape`; `PlayEntry` / `CounteractEntry` / `RuleEntry` / `ActionEntry` / `MessageEntry` gain `declare: Option<fn(i32) -> Declared>` + erased body + `drive`; `On::declare` builder. **`FilterEntry` gains no `declare`.** `Guard` goes back to `Option<fn(i32) -> bool>` (no enum). |
-| `rules/card-sdk/src/kinds.rs` | same for `ActionEntry`; `action` ctors keep `fn(i32) -> Asked` sugar; `filter_*` unchanged |
-| `rules/card-sdk/src/rt.rs` | `OP_DECLARE` arm folding `Activation::{Decline, Arg}` to `EXIT_DECLINED` / the arg (asserting the arg is not a sentinel); `OP_RUN` takes `arg` and drives `BodyShape` |
-| `rules/card-sdk/src/abi.rs` | `ABI_VERSION = 98`; `export::ON` 5 params; `OP_DECLARE`; `EXIT_DECLINED`; `ManifestOn::has_declare`; v98 changelog note (incl. the Play-before-`card`-window ordering sentence) |
-| `rules/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `can_fire` / `can_fire_any` |
-| `rules/card-sdk/src/kani_host.rs` | `Op::can_fire` |
-| `tools/build-ruleset.mjs` (and its check) | reject `declare` on `On::Filter` at build, like a mixed Action/Filter kind list |
-| `crates/game-rules/src/hostfns.rs` | `can_fire` host (generalise `card_replayable`); `call_entry` gains `arg` |
-| `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` gain `arg`; `entry_admitted` returns `Admitted` carrying the `next_answer` cursor *after* `admits` + `OP_DECLARE`; `run` / `run_hook` thread that cursor to `OP_RUN` in the same `HostState` |
-| `crates/game-rules/src/wasm_rules.rs` | `finish_offer` runs `OP_DECLARE` before `declare_one` commits; `build_round` stores `arg` on the chain link; `resolve_jobs` passes it to `OP_RUN`; `play` path runs `OP_DECLARE` before `play_from_hand` |
-| `crates/game-rules/src/native_shims.rs` | `op_can_fire`, widened `ruleset_on` |
-| `crates/rules-native/src/lib.rs` | mirror the widened `on` + `can_fire` |
-| `crates/game-core/src/engine/play.rs` / `mod.rs` | `act:"play"` / `act:"skill"` collect the arg before `hand.remove`; `NetMessage` gains an optional `arg` only if the UI wants to pre-declare (v98: host runs `OP_DECLARE`, so no net change) |
-| `rules/fixtures/test-cards` | a fixture card with a `declare` (pick one of N, cancel declines); the declaring body has **no decline path and logs unconditionally**, so silence proves it never ran; a fixture pair whose guard reads the other via `can_fire` |
-| `rules/tests` / `crates/game-rules/tests` | decline leaves the card **in hand** (LOY-SEEYOU-01 observable) / no counter declared / no header, flash, log; sibling entry still runs after a decline; the body sees the pick; `can_fire` true/false across a gated pair; probe mode does not prompt; `can_counteract_scoped` on a would-asking guard → `Err(RuleError::GuardPrompted)`; **replay**: decline at `finish_offer`, replay, assert no re-prompt and the same absence (the prompted decline's answer is in the log) |
+| `rules/card-sdk/src/lib.rs` | `ActivationArg`, `Activation<T>`, `Declared<T>`, `BodyShape`; entry structs gain `id: &'static str` + `declare` (erased) + `declare_drive` + body `drive`; `On::id` / `On::declare_arg` builders. **`FilterEntry` gains no `declare`.** `Guard` is `Option<fn(i32) -> bool>`. |
+| `rules/card-sdk/src/payload.rs` or `declare.rs` | `drive_declare::<T>` / `drive_declared_arg::<T>` — the **only** place the erased fns are cast back |
+| `rules/card-sdk/src/kinds.rs` | same for `ActionEntry`; `filter_*` unchanged |
+| `rules/card-sdk/src/rt.rs` | `OP_DECLARE` arm returning packed `(ptr<<32)|len` of postcard, or `EXIT_DECLINED` / `EXIT_NEED_INPUT`; `OP_RUN` drives `BodyShape` (the drive pulls the arg) |
+| `rules/card-sdk/src/abi.rs` | `ABI_VERSION = 98`; `export::ON` **stays 4 params**; `OP_DECLARE`; `EXIT_DECLINED`; `export::DECLARED_ARG`; `ManifestOn::{has_declare, id}`; v98 changelog |
+| `rules/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `declared_arg::<T>()`, `entry_admits` |
+| `rules/card-sdk/src/kani_host.rs` | `Op::declared_arg`, `Op::entry_admits`; Kani passes an unconstrained `T` so a proof sees every pick |
+| `tools/build-ruleset.mjs` | reject `declare` on `On::Filter`; reject duplicate `id` within a card |
+| `crates/game-rules/src/hostfns.rs` | `entry_admits` host (named-entry lookup + `admits_gate`); `declared_arg` host (serve the stored bytes) |
+| `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` carry `arg: Vec<u8>`; `entry_admitted` returns `Admitted` with the `next_answer` cursor *after* `admits` + `OP_DECLARE`; `on_trap` follow-up unchanged |
+| `crates/game-rules/src/wasm_rules.rs` | `finish_offer` runs `OP_DECLARE` before `declare_one` commits; `build_round` stores `arg: Vec<u8>` on the chain link; `resolve_jobs` serves it to `OP_RUN`; `play` path runs `OP_DECLARE` before `play_from_hand` |
+| `crates/game-rules/src/native_shims.rs` + `crates/rules-native/src/lib.rs` | `op_entry_admits`, `op_declared_arg`, the `on` mirror |
+| `rules/cards/card-ag/src/detour.rs` | `.id("（2）")` on the skill entries it queries; `Declared<DetourPick>` carrying at least `plan` (+ `tile`/`seat` as the plan needs); guard / option list via `entry_admits` |
+| `rules/skills/skill-personas` | `.id("（2）")` on each Afterglow press entry (the rulebook clause number as the identifier) |
+| `rules/fixtures/test-cards` | one fixture with a **struct** arg (pick + tile + seat), one with `i32`; a named-entry pair for `entry_admits`; the trap fixture |
+| `rules/tests` / `crates/game-rules/tests` | every existing `declare_arg` case, plus: the body sees a **struct** with a tile; `entry_admits` true/false by id; querying an unnamed or wrong id answers `false` (the ambiguity is gone by construction) |
 | `docs/CARDS.md`, `docs/GUARDS.md` | pointers here |
 
 `build-ruleset.mjs` must re-run after any `rules/cards` edit (the ruleset wasm
