@@ -22,7 +22,7 @@ pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, gre
                 para(r#"依次进行以下操作："#),
                 steps(&[
                     r#"[移除]此卡；"#,
-                    r#"将一张“PERFECT”加入抽卡区并洗切；"#,
+                    r#"将一张“PERFECT“加入抽卡区并洗切；"#,
                     r#"[获得]2000资金。"#,
                 ]),
             ]),

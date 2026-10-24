@@ -5,7 +5,9 @@ The sheet (docs/rulebook/cards-sheet.csv, one column per band) holds one cell pe
 card: "卡名：[标签]：效果文本". Cells encode line breaks as the two-character
 sequence `\\n`, and the name is the id's text after "BAND:" (with its prefix).
 Matching is by prefix against each card in the ruleset roster dump
-(tools/roster-dump.mjs; not data/cards.json -- that file is gone).
+(tools/roster-dump.mjs; not data/cards.json -- that file is gone). A row whose
+name line is blank is named after its sheet cell instead (`#J11`), and matches
+on that A1 reference.
 
 Note: docs/rulebook/cards.json here is the rulebook sheet extract, a different
 file from the retired data/cards.json.
@@ -27,17 +29,32 @@ SHEET = ROOT / "docs" / "rulebook" / "cards-sheet.csv"
 OUT = ROOT / "docs" / "rulebook" / "cards.json"
 
 
+def a1(row_i: int, col_i: int) -> str:
+    """Spreadsheet A1 reference for a 0-based CSV (row, col) -- CSV row 0 is
+    the header, i.e. spreadsheet row 1; column 0 is A."""
+    n, letters = col_i, ""
+    while True:
+        n, r = divmod(n, 26)
+        letters = chr(ord("A") + r) + letters
+        if n == 0:
+            return f"{letters}{row_i + 1}"
+        n -= 1
+
+
 def cells():
+    """Yield ``(a1, text)`` for every non-empty body cell."""
     rows = list(csv.reader(open(SHEET, encoding="utf-8-sig")))
-    for row in rows[1:]:
-        for cell in row:
+    for row_i, row in enumerate(rows):
+        if row_i == 0:
+            continue
+        for col_i, cell in enumerate(row):
             # the export writes line breaks as the two-character sequence \n
             c = cell.replace("\\n", "\n").strip()
             # list markers （1）（2）… each start their own line: the sheet often
             # runs them together mid-line
             c = re.sub(r"(?<!^)（\d+）", lambda m: "\n" + m.group(0), c)
             if c:
-                yield c
+                yield a1(row_i, col_i), c
 
 
 def head_of(cell: str) -> str:
@@ -62,7 +79,16 @@ def main() -> int:
     all_cells = list(cells())
     found, missing = {}, []
     for card in cards:
-        hit = next((cell for cell in all_cells if any(cell.startswith(n) for n in names_of(card))), None)
+        names = names_of(card)
+        hit = None
+        for ref, cell in all_cells:
+            # a row whose name line is blank is named after its sheet cell
+            # (`#J11`); every other row leads with its name
+            if any(n == f"#{ref}" for n in names) or any(
+                cell.startswith(n) for n in names if not n.startswith("#")
+            ):
+                hit = cell
+                break
         if hit:
             found[card["id"]] = hit
         else:

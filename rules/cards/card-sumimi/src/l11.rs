@@ -3,8 +3,7 @@
 //! 规则书（the roster, id `Sumimi:#L11`）:
 //! > 将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。
 //!
-//! crystals that stand in for band-skill crystal removal. Not in
-//! docs/rulebook/cards.json -- translated from the C# class and the card text.
+//! crystals that stand in for band-skill crystal removal.
 
 use bandori_std::ctx;
 use card_sdk::{key, Action, CardDef, Msg, On};

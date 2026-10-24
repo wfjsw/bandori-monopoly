@@ -1,7 +1,9 @@
 //! `Mujica:#J11` -- C# `CardJ11` (MatchHost.cs:5876-5928): a crystal-decay card
 //! you may discard to stun yourself and your 1-tile neighbours.
 //!
-//! Not in `docs/rulebook/cards.json`; translated from the C# class.
+//! 规则书（docs/rulebook/cards.json, id `Mujica:#J11`）:
+//! > 将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。
+//!
 //! C# `CardJ11 : DecayCard` (MatchHost.cs:5876-5928): placed with 2 miracle
 //! crystals; on pay-choose / targeted, may discard to 1 [stun] self and the
 //! players within 1 tile (and cancel the payment when stunned).

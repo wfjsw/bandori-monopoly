@@ -24,7 +24,7 @@ pub const PERFECT: CardDef =
                     para(r#"依次进行以下操作："#),
                     steps(&[
                         r#"[移除]此卡；"#,
-                        r#"将一张“FEVER!”加入弃卡区；"#,
+                        r#"将一张“FEVER!“加入弃卡区；"#,
                         r#"[获得]3000资金。"#,
                     ]),
                 ]),

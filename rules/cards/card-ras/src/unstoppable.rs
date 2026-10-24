@@ -14,7 +14,7 @@ pub const UNSTOPPABLE: CardDef =
         .name(r#"UNSTOPPABLE"#)
         .raw_name(r#"UNSTOPPABLE"#)
         .tags(&[])
-        .text(CardText::para(r#"投掷1d6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。本次传送不触发结算，视为你的主要移动。且若骰点为1-3获得2000资金，若为4-6则获得1000资金。"#))
+        .text(CardText::para(r#"投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。本次传送不触发结算，视为你的主要移动。且若骰点为1-3获得2000资金，若为4-6则获得1000资金。"#))
         // sheet cell H10
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
@@ -35,7 +35,7 @@ const SPOTS: [&str; 6] = [
 ];
 
 fn unstoppable(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「投掷1d6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」
+    // 规则书: 「投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」
     let r = ctx::roll(player_id, 1, 6);
     let spot = SPOTS[(r.clamp(1, 6) - 1) as usize];
     let to = ctx::tile_named(spot);
