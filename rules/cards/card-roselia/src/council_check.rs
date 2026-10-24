@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, MoveKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
@@ -20,19 +21,18 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::SettleBefore],
             // 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
-            "actor == owner && turn_player == owner && owned_within(owner, 3) > 0", None,
+            "actor == owner && turn_player == owner && owned_within(owner, 3) > 0",
             None,
-            counteract,
-        ),
-        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", None, None, pass_tile)),
-        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, None, pay_after)),
-        On::Action(Action::SettleAfter("card.placed", None, None, settle_after)),
+            counteract),
+        On::Action(Action::PassTile("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport", None, pass_tile)),
+        On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, pay_after)).silent(),
+        On::Action(Action::SettleAfter("card.placed", None, settle_after)),
     ],
-).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
+).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"学生会的检查"#)
         .raw_name(r#"学生会的检查"#)
         .tags(&[])
-        .text(r#"移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出，向抽牌堆中加入一张“觉悟”，本回合无法加盖房屋，但可支付那格一层房屋的建造价格一半将此卡放于那个格子上，使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算。因此卡强制停下的玩家的结算地租价格为原价格一半。若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金。"#)
+        .text(CardText::para(r#"移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出，向抽牌堆中加入一张“觉悟”，本回合无法加盖房屋，但可支付那格一层房屋的建造价格一半将此卡放于那个格子上，使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算。因此卡强制停下的玩家的结算地租价格为原价格一半。若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金。"#))
         // sheet cell E3
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
@@ -48,7 +48,7 @@ fn near(player_id: i32) -> Vec<i32> {
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击] (sheet 2026-10-06 新卡组卡 E3): 「向抽牌堆中加入一张“觉悟”」
     // (was 「压」) -- C# `H.AddToDeck(i, "R:[衍生] 觉悟")`.
-    ctx::add_to_deck(player_id, "R:[衍生] 觉悟", true);
+    ctx::add_to_dest(player_id, "R:[衍生] 觉悟", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("council_check_added"))

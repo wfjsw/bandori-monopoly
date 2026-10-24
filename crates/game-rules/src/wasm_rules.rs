@@ -22,7 +22,7 @@ use game_core::msg::Msg;
 
 #[cfg(feature = "sandbox")]
 use crate::host::Ruleset;
-use crate::host::{Call, CardModules, HostRequest, Outcome, Prompt, PromptOption, RuleError};
+use crate::host::{Call, CardModules, DeclareOut, HostRequest, Outcome, Prompt, PromptOption, RuleError};
 use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
@@ -32,7 +32,7 @@ use rules_cond::WindowScope;
 // ------------------------------------------------- silent-entry debug guard
 
 thread_local! {
-    /// Violations of the silent-entry contract: a `CardDef::silent` body that
+    /// Violations of the silent-entry contract: a `On::silent` body that
     /// produced a visible effect (see [`RulesBridge::check_silent_body`]).
     /// Tests read this via [`take_silent_visible`]; debug builds also
     /// `debug_assert!` for shipped (non-`TEST:`) card ids.
@@ -42,6 +42,50 @@ thread_local! {
 
 fn record_silent_visible(card_id: &str, what: &str) {
     SILENT_VISIBLE.with(|v| v.borrow_mut().push((card_id.to_string(), what.to_string())));
+}
+
+/// Fold two declarative flash policies across the sibling entries of one
+/// drive: `Never` if any entry says `Never`; else `Always` if any says
+/// `Always`; else `Auto`. A multi-entry drive (`run_hook` announces once per
+/// matching entry, then `commit_after` takes **one** flash decision for one
+/// header) must not let a trailing `Auto` drop an earlier `Always`, nor a
+/// later `Always` lift an earlier `Never`. Matches the declarative half of
+/// the precedence `commit_after` applies at the flash point
+/// (`Never > ctx::no_flash > ctx::flash / Always > Auto`).
+///
+/// Why `Never` wins here while [`fold_header`] lets `Visible` win: the flash
+/// is one shared animation, so the **strongest opinion** (`Never` = "do not
+/// cue") must silence the whole drive; the header is one shared clause name,
+/// so the **strongest demand** (`Visible` = "show my clause") must keep it.
+/// The asymmetry is deliberate -- do not "fix" one fold to match the other.
+const fn fold_flash(a: card_sdk::abi::Flash, b: card_sdk::abi::Flash) -> card_sdk::abi::Flash {
+    use card_sdk::abi::Flash::{Always, Auto, Never};
+    match (a, b) {
+        (Never, _) | (_, Never) => Never,
+        (Always, _) | (_, Always) => Always,
+        _ => Auto,
+    }
+}
+
+/// Fold two entry header modes across the sibling entries of one drive:
+/// `Visible` if any entry says `Visible`; else `QuietWhenEmpty` if any says
+/// `QuietWhenEmpty`; else `Silent`. Same one-header-per-drive constraint as
+/// [`fold_flash`] (`run_hook` announces once per matching entry, then
+/// `commit_after` takes **one** header), but the opposite polarity: a
+/// trailing `Silent` / `QuietWhenEmpty` sibling must not retract a leading
+/// `Visible` clause, and a trailing `Visible` must not cancel a leading
+/// `QuietWhenEmpty` -- in either order. See [`fold_flash`] for why the two
+/// folds disagree on which end wins.
+const fn fold_header(
+    a: card_sdk::abi::Presentation,
+    b: card_sdk::abi::Presentation,
+) -> card_sdk::abi::Presentation {
+    use card_sdk::abi::Presentation::{QuietWhenEmpty, Silent, Visible};
+    match (a, b) {
+        (Visible, _) | (_, Visible) => Visible,
+        (QuietWhenEmpty, _) | (_, QuietWhenEmpty) => QuietWhenEmpty,
+        _ => Silent,
+    }
 }
 
 /// Is this host request a **visible effect** a silent entry must not produce?
@@ -214,9 +258,6 @@ pub struct Run {
     /// instance's own `counter(name)`. One log for every named counter
     /// (ruleset counter keys and any card-declared name).
     counter_log: Vec<(i32, String, String, i32)>,
-    /// Players this run granted off-board layers to -- the engine raises the caller-supplied name
-    /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
-    abnormal_log: Vec<(i32, i32)>,
     named_raise_log: Vec<(i32, String, i32)>,
     /// Skill-state 1↔2 toggles this run made, `(who, from, to)` -- the engine
     /// raises `state` for each once the run commits (Mujica:欢迎来到ave
@@ -281,7 +322,7 @@ pub struct Run {
     /// 0 -- see [`RulesBridge::check_silent_body`]. Not taken by the
     /// multi-pass replace bookkeeping (unlike [`Self::posted`]).
     logged: u32,
-    /// This run's entry is silent (`CardDef::silent`): no activation flash and
+    /// This run's entry is silent (`On::silent`): no activation flash and
     /// no outcome lines for its state / plan writes either (the flag hides
     /// the whole presentation, and the body must be pure bookkeeping).
     silent_body: bool,
@@ -297,6 +338,12 @@ pub struct Run {
     /// The header this run flushed (Ruling 2a), or -1 if none was posted
     /// (silent / nothing visible). `commit_after` completes this one only.
     own_activation: i32,
+    /// Every 「效果适用」 header this run actually posted (`flush_header`'s
+    /// take-succeeded path), in post order. One drive, one flash decision,
+    /// every header it posted -- `commit_after` stamps them all. Sibling
+    /// entries each flush their own header; the `__hdr__` once-per-flash
+    /// identity only names the first.
+    header_ids: Vec<i32>,
     /// What the body produced (for the flash-scope classification).
     /// ...
     /// This run halted for a prompt (the header is already on the stream and
@@ -311,6 +358,14 @@ pub struct Run {
     /// `world.flash_*` so they survive a prompt's routine re-run the same way
     /// the event tail does.
     flash_policy: card_sdk::abi::Flash,
+    /// Did **any** sibling entry cue the player? OR of the imperative
+    /// `ctx::flash()` and every `Flash::Always` declaration on this drive.
+    /// Distinct from [`Self::flash_policy`] (the folded *decision*, `Never` >
+    /// `Always` > `Auto`): "was the player cued" and "should the drive flash"
+    /// are different questions, and a `Never` sibling may still lose the
+    /// flash while an `Always` sibling already flushed the header. ORs across
+    /// entries -- never folded, never reset per entry.
+    flash_cued: bool,
     /// Next flash ordinal **this pass** (resets each re-run so the same call
     /// site maps to the same identity). `SharedFlash.seen` holds the posted.
     flash_ordinal: u32,
@@ -375,10 +430,15 @@ impl Run {
         );
         self.parent = id;
         self.own_activation = id;
+        self.header_ids.push(id);
         if already {
-            // Re-run's duplicate header: keep the log line, suppress the
-            // second flash (the first pass already showed it before the
-            // prompt).
+            // Default the second-and-later headers' flash off. This is **not**
+            // the once-per-flash guarantee (that lives in the `"flash"` cue
+            // event's `flash_key("ord:N")` identity) and not the drive's flash
+            // decision either: sibling entries of the same drive also land
+            // here, and `commit_after` overrides this default with the folded
+            // decision for every id in `header_ids`. Kept as the safe default
+            // for any id the vec somehow misses.
             if let Some(live) = self.live {
                 let cx = unsafe { &mut *live };
                 cx.set_event_flash(id, false);
@@ -548,6 +608,8 @@ impl Run {
         // clause (2)'s 「所有本回合切换了状态的玩家」 never lit.
         let turn_key = self.world.st.round * 100 + self.world.st.turn + 1;
         self.world.state_set(who, "switchedRound", turn_key);
+        // Visible outcome: `commit_after` raises `state` on this row.
+        self.flush_header();
         self.state_log.push((who, was, now));
     }
 
@@ -577,23 +639,27 @@ impl Run {
     /// count still raises -- a card placed with no named counters has to hear
     /// about its own count. A write to an instance that is not on a field
     /// raises nothing.
+    ///
+    /// The header names the clause, so any visible outcome must flush it (the
+    /// same contract `post_log_value` already honours). A counter write is
+    /// visible: `commit_after` raises `counterChanged` on it and `body_empty`
+    /// counts it, so a pure counter body must still post its 「效果适用」.
     fn note_counter_changed(&mut self, uid: i32, was: i32, now: i32, name: &str) {
         let Some(f) = self.world.field_by_uid(uid) else {
             return;
         };
         // The holder hears its card's counter change, not the card's owner.
         let (owner, card) = (self.world.holder_of(uid), f.card.clone());
+        self.flush_header();
         self.counter_log
             .push((owner, card, name.to_string(), now - was));
     }
 
-    /// Record an **on-card** [tile marks] write against the instance at `uid` so the
-    /// commit point can raise `cpChanged` (the same shape as
-    /// [`Self::note_counter_changed`]). `was` and `now` bracket that instance's
-    /// on-card mark count, so a write that lands on the same count still raises
-    /// and a count emptied by *any* path -- this run's settle, another effect's
-    /// removal -- leaves the field the same way. A write with no live instance
-    /// raises nothing.
+    // On-card [CP点] writes ride `note_counter_changed` as `counter::CP` (v51).
+    // `CpChanged` is retired (user ruling 2026-10-07): the 「its on-card [CP点]
+    // is empty → graveyard」 rule lives on `Action::CounterChanged` with a
+    // `counter::CP` name check in the residual guard
+    // (`rules/cards/card-general/src/clear_cp.rs`), not a CP-only trigger.
 
     /// Move the running instance to `dest` **now** -- unplace-and-send, applied
     /// mid-effect rather than at the run's commit, for a card that must be gone
@@ -611,7 +677,7 @@ impl Run {
         if dest == DEST_GRAVEYARD {
             self.to_discard(who, &card);
         } else if dest == 1 {
-            self.add_to_hand(who, &card);
+            self.add_to_dest(who, &card, dest);
         }
         // Banished (「banish」) is just "gone" -- it left above and goes nowhere.
         Some(left)
@@ -674,6 +740,10 @@ impl CardWorld for Run {
         // change. Logged as `(-1, player, n)` for money in and `(player, -1, n)`
         // for money out, so the Done handler can raise `payAfter` for both and
         // open the `paid` counteraction window only for the loss.
+        if got != 0 {
+            // Visible outcome: `commit_after` raises `payAfter` / `paid`.
+            self.flush_header();
+        }
         if got > 0 {
             self.paid_log.push((-1, player_id, got));
         } else if got < 0 {
@@ -943,45 +1013,86 @@ impl CardWorld for Run {
             .world
             .hidden
             .get(player_id.max(0) as usize)
-            .is_some_and(|h| !h.discard.is_empty() && n > 0 && h.draw.len() <= n as usize);
+            .is_some_and(|h| !h.graveyard.is_empty() && n > 0 && h.deck.len() <= n as usize);
         let got = self.world.draw_cards(player_id, n, true);
         if will_refill && got > 0 {
+            // Visible outcome: `commit_after` raises `reshuffled`.
+            self.flush_header();
             self.reshuffle_log.push(player_id);
         }
         if got > 0 {
-            if let Some(h) = self.world.hidden.get(player_id.max(0) as usize) {
-                for id in &h.hand[before..] {
-                    self.draw_log.push((player_id, id.clone()));
+            let drawn: Vec<String> = self
+                .world
+                .hidden
+                .get(player_id.max(0) as usize)
+                .map(|h| h.hand[before..].to_vec())
+                .unwrap_or_default();
+            if !drawn.is_empty() {
+                // Visible outcome: `commit_after` raises `drawn` / `drew`.
+                self.flush_header();
+                for id in drawn {
+                    self.draw_log.push((player_id, id));
                 }
             }
         }
         got
     }
-    fn add_to_hand(&mut self, player_id: i32, card: &str) {
-        self.world.add_to_hand(player_id, card);
-        // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
-        // *is* the draw: the after points (`drawn` / `drew`) run for it
-        // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
-        // bounce, a tutor) is not a draw and must not raise them.
-        if self.trigger.kind == TriggerKind::DrewBefore {
-            self.draw_log.push((player_id, card.to_string()));
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
+        match dest {
+            0 => self.to_discard(player_id, card),
+            1 => {
+                self.world.add_to_hand(player_id, card);
+                // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
+                // *is* the draw: the after points (`drawn` / `drew`) run for it
+                // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
+                // bounce, a tutor) is not a draw and must not raise them.
+                if self.trigger.kind == TriggerKind::DrewBefore {
+                    // Visible outcome: `commit_after` raises `drawn` / `drew`.
+                    self.flush_header();
+                    self.draw_log.push((player_id, card.to_string()));
+                }
+            }
+            // Deck fates: 4 = top = draw.push (the end of the vec is the top),
+            // 5 = bottom = Insert(0), 6 = shuffle in.
+            4 | 5 | 6 => {
+                let idx = player_id.max(0) as usize;
+                if self.world.hidden.get(idx).is_none() {
+                    return;
+                }
+                match dest {
+                    5 => self.world.hidden[idx].deck.insert(0, card.to_string()),
+                    6 => {
+                        self.world.hidden[idx].deck.push(card.to_string());
+                        let mut draw = std::mem::take(&mut self.world.hidden[idx].deck);
+                        self.world.rng.shuffle(&mut draw);
+                        self.world.hidden[idx].deck = draw;
+                    }
+                    _ => self.world.hidden[idx].deck.push(card.to_string()),
+                }
+            }
+            // Field / Banished are not piles: `place_card` / "gone" is the
+            // right verb. The hostcall layer traps; this is the non-trapping
+            // trait edge.
+            _ => {}
         }
     }
-    fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
+    fn take_card(&mut self, player_id: i32, card: &str, src: CardPile) -> bool {
         let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
             return false;
         };
-        let list = match pile {
+        let list = match src {
             CardPile::Hand => &mut h.hand,
-            CardPile::Discard => &mut h.discard,
-            CardPile::Deck => &mut h.draw,
+            CardPile::Graveyard => &mut h.graveyard,
+            CardPile::Deck => &mut h.deck,
             CardPile::Field => return self.world.unplace_card(player_id, card).is_some(),
         };
         match list.iter().position(|c| c == card) {
             Some(k) => {
                 list.remove(k);
-                if pile == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
+                if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
                 {
+                    // Visible outcome: `commit_after` raises `reshuffled`.
+                    self.flush_header();
                     self.reshuffle_log.push(player_id);
                 }
                 true
@@ -995,34 +1106,16 @@ impl CardWorld for Run {
         };
         match pile {
             CardPile::Hand => h.hand.clone(),
-            CardPile::Discard => h.discard.clone(),
+            CardPile::Graveyard => h.graveyard.clone(),
             // The end of the vec is the top of the pile; list top first.
-            CardPile::Deck => h.draw.iter().rev().cloned().collect(),
+            CardPile::Deck => h.deck.iter().rev().cloned().collect(),
             CardPile::Field => self.world.placed_cards(player_id),
         }
     }
-    fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool) {
-        self.world.add_to_deck(player_id, card, shuffle);
-    }
-    fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32) {
-        // `pos`: top = draw.Add (the end of the vec is the top),
-        // bottom = Insert(0), anything else = add + shuffle.
-        let idx = player_id.max(0) as usize;
-        if self.world.hidden.get(idx).is_none() {
-            return;
-        }
-        match pos {
-            1 => self.world.hidden[idx].draw.insert(0, card.to_string()),
-            2 => {
-                self.world.hidden[idx].draw.push(card.to_string());
-                let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
-                self.world.rng.shuffle(&mut draw);
-                self.world.hidden[idx].draw = draw;
-            }
-            _ => self.world.hidden[idx].draw.push(card.to_string()),
-        }
-    }
     fn to_discard(&mut self, player_id: i32, card: &str) {
+        // Visible outcome: `commit_after` raises `discarded` (and maybe
+        // `reshuffled`). The header names the clause that discarded.
+        self.flush_header();
         if self.world.to_discard(player_id, card) {
             self.reshuffle_log.push(player_id);
         }
@@ -1321,7 +1414,8 @@ impl CardWorld for Run {
     /// Marker ownership (user ruling 2026-10-07): the rule that creates a
     /// mark owns it -- `skill:要乐奈` owns every 抹茶芭菲 copy, on any tile
     /// or player counter. `instance` is stamped as the current uid and `src`
-    /// (provenance, -1 → current uid).
+    /// (provenance, -1 → current uid). Returns the mark row's uid (the new
+    /// row's, or the merged row's), or `-1` when `count <= 0`.
     fn place_mark(
         &mut self,
         tile: i32,
@@ -1473,6 +1567,24 @@ impl CardWorld for Run {
     fn mark_partner(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         self.world.mark_partner(tile, filter)
     }
+    fn mark_tile_by_uid(&self, uid: i32) -> i32 {
+        self.world.mark_tile_by_uid(uid)
+    }
+    fn remove_mark_by_uid(&mut self, uid: i32) -> bool {
+        let tile = self.world.mark_tile_by_uid(uid);
+        let got = self.world.remove_mark_by_uid(uid);
+        if got {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.mark_remove")
+                    .tile("tile", tile)
+                    .msg("kind", Msg::new("log.mark.generic"))
+                    .i("n", 1),
+            );
+        }
+        got
+    }
     /// Units of the running instance's counter `name` held by `player_id`.
     fn count_held(&self, name: &str, player_id: i32) -> i32 {
         self.world.count_held(self.current_uid, name, player_id)
@@ -1488,11 +1600,21 @@ impl CardWorld for Run {
         // Name-keyed (any owner / instance): the legacy `tok` lookup.
         self.world.tok(player_id, name)
     }
-    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, max: i32, instance: i32) {
         let who = self.current_card.clone();
         self.world.note_marker_owner(name, &who);
         // Stamp the owning instance on a new row (user ruling 2026-10-10).
-        self.world.set_tok(player_id, name, v, self.current_uid);
+        // `instance < 0` keeps an existing row's owner and falls back to the
+        // running card for a fresh row.
+        let inst = if instance >= 0 {
+            instance
+        } else {
+            self.current_uid
+        };
+        self.world.set_tok(player_id, name, v, inst, max);
+    }
+    fn tok_max(&self, player_id: i32, name: &str) -> i32 {
+        self.world.tok_max(player_id, name)
     }
     fn move_units(
         &mut self,
@@ -1578,6 +1700,9 @@ impl CardWorld for Run {
     fn group_skill_uid(&self, player_id: i32) -> i32 {
         self.world.group_skill_uid(player_id)
     }
+    fn persona_skill_uid(&self, player_id: i32) -> i32 {
+        self.world.persona_skill_uid(player_id)
+    }
     fn group_skill_id(&self, player_id: i32) -> Option<String> {
         self.world.group_skill_id(player_id)
     }
@@ -1626,7 +1751,7 @@ impl CardWorld for Run {
             // (the kernel logs its own `log.gain_charge_capped` when it refuses
             // before the write).
             if let Some(p) = self.world.st.players.get(player_id.max(0) as usize) {
-                let (cap, have) = (p.state_max(name), p.state_get(name));
+                let (cap, have) = (self.world.tok_max(player_id, name), self.world.tok(player_id, name));
                 if cap > 0 && have >= cap && !p.out() {
                     let msg = Msg::new("log.gain_charge_capped")
                         .player_id("who", player_id)
@@ -1645,6 +1770,11 @@ impl CardWorld for Run {
         // the split form.
     }
     fn raise_after(&mut self, player_id: i32, name: &str, value: i32) {
+        // The header names the clause, so any visible outcome must flush it
+        // (the same contract `post_log_value` already honours). A named raise
+        // is visible: `commit_after` fires its hooks and `body_empty` counts
+        // the row, so a raise-only body must still post its 「效果适用」.
+        self.flush_header();
         self.named_raise_log
             .push((player_id, name.to_string(), value));
     }
@@ -1799,6 +1929,8 @@ impl CardWorld for Run {
                     .copied()
                     .unwrap_or(-1);
                 if owner >= 0 {
+                    // Visible outcome: `commit_after` raises `houseAdded`.
+                    self.flush_header();
                     self.house_log.push((owner, tile, now));
                 }
             }
@@ -1879,21 +2011,21 @@ impl CardWorld for Run {
         self.world
             .hidden
             .get(player_id.max(0) as usize)
-            .map(|h| h.discard.iter().filter(|c| c.as_str() == card).count() as i32)
+            .map(|h| h.graveyard.iter().filter(|c| c.as_str() == card).count() as i32)
             .unwrap_or(0)
     }
     fn deck_count(&self, player_id: i32) -> i32 {
         self.world
             .hidden
             .get(player_id.max(0) as usize)
-            .map(|h| h.draw.len() as i32)
+            .map(|h| h.deck.len() as i32)
             .unwrap_or(0)
     }
     fn discard_size(&self, player_id: i32) -> i32 {
         self.world
             .hidden
             .get(player_id.max(0) as usize)
-            .map(|h| h.discard.len() as i32)
+            .map(|h| h.graveyard.len() as i32)
             .unwrap_or(0)
     }
     fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32 {
@@ -1905,7 +2037,10 @@ impl CardWorld for Run {
             return 0;
         };
         h.hand.remove(p);
-        h.discard.push(card.to_string());
+        h.graveyard.push(card.to_string());
+        // Visible outcome: `commit_after` raises `discarded` (and maybe
+        // `reshuffled`). The header names the clause that discarded.
+        self.flush_header();
         self.discard_log.push((player_id, card.to_string()));
         if self.world.refill_draw_pile(player_id.max(0) as usize) {
             self.reshuffle_log.push(player_id);
@@ -1923,13 +2058,15 @@ impl CardWorld for Run {
             moved.append(&mut self.world.hidden[idx].hand);
         }
         if discard {
-            moved.append(&mut self.world.hidden[idx].discard);
+            moved.append(&mut self.world.hidden[idx].graveyard);
         }
         let n = moved.len() as i32;
-        self.world.hidden[idx].draw.append(&mut moved);
-        let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
+        self.world.hidden[idx].deck.append(&mut moved);
+        let mut draw = std::mem::take(&mut self.world.hidden[idx].deck);
         self.world.rng.shuffle(&mut draw);
-        self.world.hidden[idx].draw = draw;
+        self.world.hidden[idx].deck = draw;
+        // Visible outcome: `commit_after` raises `reshuffled`.
+        self.flush_header();
         self.reshuffle_log.push(player_id);
         n
     }
@@ -2014,15 +2151,11 @@ impl CardWorld for Run {
         if n <= 0 {
             return 1;
         }
-        let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
-            return 0;
-        };
         // A consumer of the counter: all-or-nothing, and it logs the spend. It
         // does not consult any cap -- spending is not the capped direction.
-        if s.state_get(name) < n {
+        if self.world.spend_marker(player_id, name, n) == 0 {
             return 0;
         }
-        s.state_add(name, -n);
         self.post_log_value(name, player_id, why.clone(), "", -n);
         if self.live.is_none() {
             self.world.log(name, player_id, why).value = -n;
@@ -2144,7 +2277,7 @@ impl CardWorld for Run {
     }
 
     // turn plan & scheduling -------------------------------------------------
-    fn schedule_turn_end(&mut self, player_id: i32, next_of_player: bool, early: bool) {
+    fn schedule_turn_end(&mut self, player_id: i32, next_of_player: bool, early: bool, entry: &str) {
         let now = self.world.turn.player_id;
         let (target, skip) = if next_of_player {
             let s = player_id.max(0) as usize;
@@ -2162,8 +2295,9 @@ impl CardWorld for Run {
             // The instance asking for the callback, captured now. The
             // identity belongs to the entry rather than being resolved from the
             // field at trigger time (which copy would it be?). `-1` when the card
-            // is not in play: `On::AtEnd` may run for a card in a hand or pile.
+            // is not in play: `On::Schedule` may run for a card in a hand or pile.
             uid: self.current_uid,
+            entry: String::from(entry),
         });
     }
     fn set_no_money_loss(&mut self, player_id: i32) {
@@ -2589,7 +2723,7 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         cx.overlay_guest_state(&run.world);
         let linger = run.linger_props.clone();
         let live_before = cx.live_event_count();
-        match bridge.apply_host_request(cx, req, &linger, self.call, card_id) {
+        match bridge.apply_host_request(cx, req, &linger, self.call.clone(), card_id) {
             Ok(v) => {
                 cx.stamp_parent_since(live_before, run.parent);
                 self.answers.push(v);
@@ -2644,7 +2778,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// repeating 「<卡名> 的效果：」 on every line is noise. A fresh activation
     /// (hand play, counteraction, skill press, drawn event) already logged its action
     /// and likewise leaves its outcome lines bare.
-    fn wraps_effect(_call: Call, _card_id: &str) -> bool {
+    fn wraps_effect(_call: &Call, _card_id: &str) -> bool {
         false
     }
 
@@ -2672,7 +2806,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// does not flash -- a *card* placed on the square still does. `On::Message`
     /// never reaches here (internal plumbing, no `Call::Message`).
     ///
-    /// A **silent** entry (`ManifestOn::silent`, `CardDef::silent`) is
+    /// A **silent** entry (`ManifestOn::silent`, `On::silent`) is
     /// bookkeeping -- `declare_cap` / `set_bounds` / initial values / latch
     /// clears: a mechanical declaration the player never sees as a clause
     /// ficycle. It runs its body (the category → pre → guard layers are
@@ -2702,7 +2836,7 @@ impl<M: CardModules> RulesBridge<M> {
         if matches!(call, Call::Buy { .. } | Call::Build { .. }) && card_id.starts_with("tile:") {
             return -1;
         }
-        // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
+        // Silent entry (`On::silent`): bookkeeping. Body runs, no flash
         // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
         // the header is retracted at commit if the body produced nothing.
         if self.entry_presentation(card_id, entry).header == card_sdk::abi::Presentation::Silent {
@@ -2736,7 +2870,7 @@ impl<M: CardModules> RulesBridge<M> {
         let who = if owner >= 0 { owner } else { target };
         // Entry label (「（1）」 and kin) from the manifest, when the card
         // declared one for this entry.
-        let label = self.entry_label(card_id, call, entry);
+        let label = self.entry_label(card_id, call.clone(), entry);
         // Wording:
         // * a skill press has no declaration line of its own -> 「发动」
         // * a hand play / a counteraction declaration / a drawn event already logged
@@ -2796,8 +2930,9 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// How `card_id`'s `entry` presents itself: the header mode plus the
-    /// flash policy (`CardDef::silent` / `quiet_when_empty` / `flash`). The
-    /// defaults (`Visible` + `Auto`) when the card or entry is unknown.
+    /// flash policy. Both ride the entry (`On::silent` / `On::quiet_when_empty`
+    /// / `On::flash`); the defaults (`Visible` + `Auto`) when the card or entry
+    /// is unknown.
     fn entry_presentation(&self, card_id: &str, entry: i32) -> card_sdk::abi::EntryPresentation {
         let Some(idx) = self.ruleset.card(card_id) else {
             return card_sdk::abi::EntryPresentation::default();
@@ -2940,21 +3075,35 @@ impl<M: CardModules> RulesBridge<M> {
         // is the parent for body lines and starts as the *outer* activation.
         // `-1` when the drive is silent or posts no header (tile settle).
         let mut own_activation = -1i32;
-        // Set at body entry when the entry is silent (`CardDef::silent`); the
-        // commit pass then checks the run produced no visible effect (the
-        // flag must not hide a real one). `Cell` so the `announce` closure can
-        // share it (same shape as the raw `cx_ptr` write-through).
+        // Header mode folded across sibling entries (see [`fold_header`]).
+        // `Silent` is the fold identity -- start there and fold each entry in.
+        // The bool cells below are derived from the fold so `commit_after`
+        // keeps its two-flag signature. `silent_body` is set at body entry
+        // when the (folded) mode is silent; the commit pass then checks the
+        // run produced no visible effect (the flag must not hide a real one).
+        // `Cell` so the `announce` closure can share it (same shape as the
+        // raw `cx_ptr` write-through).
+        let header_mode = std::cell::Cell::new(card_sdk::abi::Presentation::Silent);
         let silent_body = std::cell::Cell::new(false);
         let quiet_when_empty = std::cell::Cell::new(false);
         // Declarative flash policy (v55) rides across passes like silent_body:
         // the commit pass's announce is a no-op and must not lose it.
         let flash_policy_cell: std::cell::Cell<card_sdk::abi::Flash> =
             std::cell::Cell::new(card_sdk::abi::Flash::Auto);
+        // "Was the player cued?" -- OR of `ctx::flash()` and any
+        // `Flash::Always` sibling. Never folded, never reset per entry (see
+        // [`Run::flash_cued`]). Separate from `flash_policy_cell` because
+        // `Never` can win the flash decision while `Always` already cued.
+        let flash_cued_cell = std::cell::Cell::new(false);
         let mut prompted = false;
         // Ruling 2a: the lazy header survives across passes (learn + commit
         // run share one buffer; a pause must not drop it).
         let mut saved_header: Option<PendingHeader> = None;
         let mut flushed_header: i32 = -1;
+        // Every header the drive has posted across passes (learn + re-run).
+        // A re-run's fresh `Run` starts from this so `commit_after` can stamp
+        // the folded flash decision on headers the learn pass already posted.
+        let mut drive_header_ids: Vec<i32> = Vec::new();
         let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
@@ -2984,12 +3133,11 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
-                wrap_effect: Self::wraps_effect(call, card_id),
+                wrap_effect: Self::wraps_effect(&call, card_id),
                 live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
                 posted: std::mem::take(&mut posted_ids),
                 log_idx: 0,
@@ -2998,9 +3146,11 @@ impl<M: CardModules> RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: drive_header_ids.clone(),
                 prompted: false,
                 parent: activation_id,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             run.world.skip_log = true;
@@ -3015,7 +3165,7 @@ impl<M: CardModules> RulesBridge<M> {
             let mut inline = cx.has_provider().then(|| DriveInline {
                 bridge: self as *const _,
                 cx: cx as *mut Cx<'_> as *mut Cx<'static>,
-                call,
+                call: call.clone(),
                 card_id: card_id as *const str,
                 halt: None,
                 answers: Vec::new(),
@@ -3037,34 +3187,75 @@ impl<M: CardModules> RulesBridge<M> {
                     if flushed_header < 0 && w.pending_header.is_none() {
                         w.pending_header = saved_header.clone();
                     }
+                    // Restore the drive's already-folded flash policy (do
+                    // **not** fold this entry again) so the body's `Never`
+                    // check still sees the sibling's opinion on a re-run.
+                    w.flash_policy = flash_policy_cell.get();
+                    // Same for the header mode and the cue flag: a fresh `Run`
+                    // starts `silent_body = false`, and a silent entry's
+                    // bookkeeping body must not post an outcome line via
+                    // `outcome_plan` on the re-run just because the cell was
+                    // not copied across.
+                    let folded_hdr = header_mode.get();
+                    w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
+                    w.quiet_when_empty =
+                        folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                    w.flash_cued = flash_cued_cell.get();
                     return;
                 }
                 w.parent = activation_id;
                 w.live = Some(cx_ptr as *mut Cx<'static>);
                 let pres = self.entry_presentation(card_id, entry);
-                // Per-entry presentation: a multi-entry drive (every
-                // `TurnStartBefore` of one card, say) must not inherit the
-                // previous sibling's silent flag -- otherwise a silent
-                // declare-cap poisons the visible clause that follows it.
-                if pres.header == card_sdk::abi::Presentation::Silent {
-                    silent_body.set(true);
-                    w.silent_body = true;
-                } else {
-                    silent_body.set(false);
-                    w.silent_body = false;
-                }
-                if pres.header == card_sdk::abi::Presentation::QuietWhenEmpty {
-                    quiet_when_empty.set(true);
-                } else {
-                    quiet_when_empty.set(false);
-                }
+                // Header mode folds across siblings (see [`fold_header`]):
+                // one decision per drive, so `Visible` wins over
+                // `QuietWhenEmpty` wins over `Silent` -- a trailing silent
+                // sibling must not poison a leading visible one, and a
+                // trailing `QuietWhenEmpty` must not retract a leading
+                // `Visible`'s header on an empty body. Do not overwrite per
+                // entry. The `announced` early-return above fires before any
+                // fold, so a re-run does not fold the same entry twice.
+                let folded_hdr = fold_header(header_mode.get(), pres.header);
+                header_mode.set(folded_hdr);
+                let is_silent = folded_hdr == card_sdk::abi::Presentation::Silent;
+                let is_quiet = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                silent_body.set(is_silent);
+                w.silent_body = is_silent;
+                quiet_when_empty.set(is_quiet);
+                w.quiet_when_empty = is_quiet;
                 // Declarative flash policy (v55) rides on the Run so the
                 // commit's precedence check can see `Never` / `Always`.
-                w.flash_policy = pres.flash;
-                flash_policy_cell.set(pres.flash);
-                let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
+                // One decision per drive, so the sibling entries **fold**
+                // (`Never` if any says `Never`; else `Always` if any says
+                // `Always`; else `Auto`) rather than overwrite -- a trailing
+                // `Auto` must not drop an earlier `Always`, and a trailing
+                // `Always` must not lift an earlier `Never`. Both stores
+                // carry the same folded value so they cannot diverge. The
+                // `announced` early-return above fires before any fold, so a
+                // re-run does not fold the same entry twice.
+                let folded = fold_flash(flash_policy_cell.get(), pres.flash);
+                flash_policy_cell.set(folded);
+                w.flash_policy = folded;
+                // "Was the player cued?" ORs across entries and is **not**
+                // the folded decision: an `Always` sibling cues (and flushes
+                // its header) even when a `Never` sibling wins the flash.
+                if pres.flash == card_sdk::abi::Flash::Always {
+                    flash_cued_cell.set(true);
+                }
+                w.flash_cued = flash_cued_cell.get();
+                let id = self.announce_drive(w, call.clone(), card_id, uid, target, tile, trigger, entry);
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
+                }
+                if pres.flash == card_sdk::abi::Flash::Always {
+                    // Declarative `Always` (`On::flash`) is the same promise
+                    // as the imperative `ctx::flash()`: cue the player. That
+                    // promise has to include the lazy 「效果适用」 header -- a
+                    // flash with no clause name is noise, and leaving the
+                    // header lazy means a no-op body (a capped gain, 「已满」)
+                    // never posts one at all, so `Always` would show nothing.
+                    // Same move `Run::flash` makes at the flash point; only
+                    // now the header exists (`announce_drive` buffered it).
+                    w.flush_header();
                 }
                 if id >= 0 {
                     // Body lines group under **this** drive's header.
@@ -3080,7 +3271,7 @@ impl<M: CardModules> RulesBridge<M> {
                 if guarded {
                     match self
                         .ruleset
-                        .run_hook(&run, call, &answers, Some(&mut announce))
+                        .run_hook(&run, call.clone(), &answers, Some(&mut announce))
                     {
                         Err(e) => Ok(Some(Err(e))),
                         // Not activated -- the guard refused. Nothing ran, and
@@ -3091,7 +3282,7 @@ impl<M: CardModules> RulesBridge<M> {
                 } else {
                     Ok(Some(self.ruleset.run(
                         &run,
-                        call,
+                        call.clone(),
                         &answers,
                         Some(&mut announce),
                     )))
@@ -3152,6 +3343,7 @@ impl<M: CardModules> RulesBridge<M> {
                         {
                             let mut after = after;
                             after.flash_policy = flash_policy_cell.get();
+                            after.flash_cued = flash_cued_cell.get();
                             if after.own_activation < 0 {
                                 after.own_activation = flushed_header;
                             }
@@ -3175,6 +3367,9 @@ impl<M: CardModules> RulesBridge<M> {
                     // Recover the learn pass's write-through log so the commit
                     // pass replaces those lines instead of appending duplicates.
                     posted_ids = std::mem::take(&mut after.posted);
+                    // And the headers it already posted, so the commit pass's
+                    // `commit_after` can still stamp every one of them.
+                    drive_header_ids = after.header_ids.clone();
                     let mut world = cx.share_world();
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
@@ -3204,12 +3399,11 @@ impl<M: CardModules> RulesBridge<M> {
                         marker_spent_log: vec![],
                         house_log: vec![],
                         counter_log: vec![],
-                        abnormal_log: vec![],
-                        named_raise_log: vec![],
+                                named_raise_log: vec![],
                         state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
-                        wrap_effect: Self::wraps_effect(call, card_id),
+                        wrap_effect: Self::wraps_effect(&call, card_id),
                         live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
                         posted: std::mem::take(&mut posted_ids),
                         log_idx: 0,
@@ -3218,9 +3412,11 @@ impl<M: CardModules> RulesBridge<M> {
                         quiet_when_empty: false,
                         pending_header: None,
                         own_activation: -1,
+                        header_ids: drive_header_ids.clone(),
                         prompted: false,
                         parent: activation_id,
                         flash_policy: card_sdk::abi::Flash::Auto,
+                        flash_cued: false,
                         flash_ordinal: 0,
                     };
                     // Same as the learn pass: the guest copy must not allocate
@@ -3235,18 +3431,29 @@ impl<M: CardModules> RulesBridge<M> {
                         // outside), so no slot to consume here.
                         w.parent = activation_id;
                         w.live = Some(cx_ptr as *mut Cx<'static>);
+                        // Same restore as the multi-pass early-return: this
+                        // pass's fresh `Run` must see the drive's already-
+                        // folded header mode / flash policy / cue flag, or a
+                        // silent entry's bookkeeping body posts an outcome
+                        // line via `outcome_plan` that must stay invisible.
+                        let folded_hdr = header_mode.get();
+                        w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
+                        w.quiet_when_empty =
+                            folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                        w.flash_policy = flash_policy_cell.get();
+                        w.flash_cued = flash_cued_cell.get();
                     };
                     let outcome2 = if guarded {
                         match self
                             .ruleset
-                            .run_hook(&run, call, &answers, Some(&mut announce))
+                            .run_hook(&run, call.clone(), &answers, Some(&mut announce))
                         {
                             Err(e) => Err(e),
                             Ok(None) => return Ok(DEST_UNSET),
                             Ok(Some(hr)) => Ok(hr.outcome),
                         }
                     } else {
-                        self.ruleset.run(&run, call, &answers, Some(&mut announce))
+                        self.ruleset.run(&run, call.clone(), &answers, Some(&mut announce))
                     };
                     match outcome2 {
                         Ok(Outcome::Done(after2)) => {
@@ -3259,6 +3466,7 @@ impl<M: CardModules> RulesBridge<M> {
                             {
                                 let mut after2 = after2;
                                 after2.flash_policy = flash_policy_cell.get();
+                                after2.flash_cued = flash_cued_cell.get();
                                 if after2.own_activation < 0 {
                                     after2.own_activation = flushed_header;
                                 }
@@ -3292,6 +3500,7 @@ impl<M: CardModules> RulesBridge<M> {
                             {
                                 let mut after = after;
                                 after.flash_policy = flash_policy_cell.get();
+                                after.flash_cued = flash_cued_cell.get();
                                 if after.own_activation < 0 {
                                     after.own_activation = flushed_header;
                                 }
@@ -3347,6 +3556,9 @@ impl<M: CardModules> RulesBridge<M> {
                         if run.own_activation >= 0 {
                             flushed_header = run.own_activation;
                         }
+                        if !run.header_ids.is_empty() {
+                            drive_header_ids = run.header_ids.clone();
+                        }
                     }
                     // A card prompt has one player: the module's i-th answer is that
                     // player's answer to its i-th prompt.
@@ -3369,6 +3581,9 @@ impl<M: CardModules> RulesBridge<M> {
                     posted_ids = std::mem::take(&mut run.posted);
                     if run.own_activation >= 0 {
                         flushed_header = run.own_activation;
+                    }
+                    if !run.header_ids.is_empty() {
+                        drive_header_ids = run.header_ids.clone();
                     }
                     // The host routine runs against the **live** world and is
                     // not replayed, so the turn-ctx policy the card just set up
@@ -3468,8 +3683,11 @@ impl<M: CardModules> RulesBridge<M> {
                     if run.own_activation >= 0 {
                         flushed_header = run.own_activation;
                     }
+                    if !run.header_ids.is_empty() {
+                        drive_header_ids = run.header_ids.clone();
+                    }
                     let live_before = cx.live_event_count();
-                    let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
+                    let v = self.apply_host_request(cx, req, &run.linger_props, call.clone(), card_id)?;
                     if run.own_activation >= 0 {
                         cx.stamp_parent_since(live_before, run.parent);
                     }
@@ -3482,7 +3700,7 @@ impl<M: CardModules> RulesBridge<M> {
                             debug_assert!(
                                 card_id.starts_with("TEST:"),
                                 "silent entry on {card_id} produced a visible host effect ({what}); \
-                                 `CardDef::silent` must not hide a real effect"
+                                 `On::silent` must not hide a real effect"
                             );
                         }
                     }
@@ -3496,19 +3714,7 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 Err(e) => {
                     // A trapping module must not take the match down with it.
-                    let detail = match &e {
-                        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => {
-                            m.clone()
-                        }
-                        RuleError::NoSuchCard(i) => format!("no such card {i}"),
-                        RuleError::GuardPrompted => "guard prompted".into(),
-                        RuleError::BadPre {
-                            card,
-                            entry,
-                            source,
-                            err,
-                        } => format!("bad guard pre on {card}/{entry}: {err} ({source})"),
-                    };
+                    let detail = declare_err_detail(&e);
                     let player_id = call.player_id();
                     cx.log(
                         player_id,
@@ -4222,10 +4428,6 @@ impl<M: CardModules> RulesBridge<M> {
         if !after.house_log.is_empty() {
             return true;
         }
-        if !after.abnormal_log.is_empty() {
-            // A layer write is a player hit -- Other (it lands on a player).
-            return true;
-        }
         // Draw / discard: own = SelfOnly (proposed); another player's = Other.
         for (who, _id) in &after.draw_log {
             if *who != owner {
@@ -4316,7 +4518,7 @@ impl<M: CardModules> RulesBridge<M> {
         false
     }
 
-    /// Debug guard: a **silent** entry (`CardDef::silent`) is bookkeeping --
+    /// Debug guard: a **silent** entry (`On::silent`) is bookkeeping --
     /// declarations, resets, latch clears the player never sees as a clause
     /// ficycle. It must not produce a visible effect (money, cards, marks,
     /// houses, charge spend, narration lines); the flag exists to hide the
@@ -4336,8 +4538,6 @@ impl<M: CardModules> RulesBridge<M> {
             Some("reshuffle")
         } else if !after.house_log.is_empty() {
             Some("house")
-        } else if !after.abnormal_log.is_empty() {
-            Some("named-raise")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
         } else if after.logged > 0 {
@@ -4352,8 +4552,8 @@ impl<M: CardModules> RulesBridge<M> {
         debug_assert!(
             card_id.starts_with("TEST:"),
             "silent entry on {card_id} produced a visible effect ({what}); \
-             `CardDef::silent` must not hide a real effect -- drop it from the \
-             silent list or make the body pure bookkeeping"
+             `On::silent` must not hide a real effect -- drop the `.silent()` \
+             mark or make the body pure bookkeeping"
         );
     }
 
@@ -4366,7 +4566,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// adopts the live tail before the swap. Then it completes the activation
     /// entry with its outcome (「无事发生」 when the body changed nothing).
     ///
-    /// `silent` marks a bookkeeping body (`CardDef::silent`): it posted no
+    /// `silent` marks a bookkeeping body (`On::silent`): it posted no
     /// activation, and it must not have produced a visible effect either --
     /// see [`Self::check_silent_body`].
     fn commit_after(
@@ -4438,19 +4638,37 @@ impl<M: CardModules> RulesBridge<M> {
             // QuietWhenEmpty + nothing visible + no prompt: retract the
             // header entirely (no flash, no 「效果适用」, no
             // 「（无事发生）」). A prompt already showed it to the client.
-            // A **requested flash** (`ctx::flash`) counts as visible -- the
-            // player was cued, so the header that names the clause remains.
+            // A **cue** counts as visible -- the player was told something
+            // happened, so the header that names the clause remains. Both
+            // spellings of "cue me" count: the imperative `ctx::flash()` and
+            // the declarative [`card_sdk::abi::Flash::Always`] (`On::flash`),
+            // which is the same promise written on the entry instead of in the
+            // body. Dropping the header under `Always` would make the policy a
+            // lie ("always flashes") the moment the body is a no-op.
+            //
+            // `flash_cued` is "did any entry cue the player" -- the OR of
+            // `ctx::flash()` and any `Flash::Always` sibling -- **not** the
+            // folded `after.flash_policy` (which `Never` can win). A drive
+            // that was cued keeps its header naming the clause even when
+            // `Never` wins the flash decision below ("log entry remains").
             let flash_requested = after.world.flash.lock().requested;
+            let flash_cued = flash_requested || after.flash_cued;
+            // Body emptiness must see every log that the flush below turns
+            // into after-hooks the player can observe: a counter move raises
+            // `counterChanged`, a named raise fires its hooks. Missing those
+            // would retract the 「效果适用」 header and then fire the hooks on
+            // an invisible clause. (`state_log` is likewise a hook raiser.)
             let body_empty = after.logged == 0
                 && after.paid_log.is_empty()
                 && after.draw_log.is_empty()
                 && after.discard_log.is_empty()
                 && after.reshuffle_log.is_empty()
                 && after.house_log.is_empty()
-                && after.abnormal_log.is_empty()
                 && after.state_log.is_empty()
-                && after.marker_spent_log.is_empty();
-            if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
+                && after.marker_spent_log.is_empty()
+                && after.counter_log.is_empty()
+                && after.named_raise_log.is_empty();
+            if quiet_when_empty && body_empty && !after.prompted && !flash_cued {
                 cx.drop_events(&[header]);
                 after.world.recent = cx.world().recent.clone();
                 cx.activation.retain(|&id| id != header);
@@ -4480,6 +4698,26 @@ impl<M: CardModules> RulesBridge<M> {
                     self.drive_should_flash(cx, &after, owner, header)
                 };
                 cx.set_event_flash(header, flash);
+                // One drive, one flash decision, every header it posted.
+                // Sibling entries each flush their own 「效果适用」; `flush_header`
+                // defaults the second-and-later ones' flash off (its `already`
+                // branch), but that is a default, not the decision -- the fold
+                // is. Stamp the folded `flash` on every id `header_ids` recorded
+                // so a trailing `Auto` sibling's header still rides the leading
+                // `Always` (and a `Never` suppresses all of them).
+                for &hid in &after.header_ids {
+                    cx.set_event_flash(hid, flash);
+                }
+                // Belt-and-braces: the `__hdr__` once-per-flash identity names
+                // the first flush. If some id somehow missed the vec, still
+                // stamp that one so `Never` cannot leave a stray flash.
+                {
+                    let hkey = format!("{card_id}|__hdr__");
+                    let first = after.world.flash.lock().seen.get(&hkey).copied();
+                    if let Some(first) = first {
+                        cx.set_event_flash(first, flash);
+                    }
+                }
                 after.world.recent = cx.world().recent.clone();
                 cx.activation.retain(|&id| id != header);
             }
@@ -4571,12 +4809,12 @@ impl<M: CardModules> RulesBridge<M> {
                 t.by_card = by;
             })?;
         }
-        // `cpChanged` -- the mark-emptying card 「its on-card [tile marks] is empty →
-        // graveyard」 rule (user ruling 2026-10-07) lives here, for
-        // the same reason: a count emptied by *any* write (this
-        // run's `add_cp_at`, another effect's removal) leaves the
-        // field. The count watched is the on-card mark counter attached
-        // to the card -- not the tile marks.
+        // The mark-emptying card 「its on-card [CP点] is empty → graveyard」
+        // rule (user ruling 2026-10-07) does **not** raise here: `CpChanged`
+        // is retired. It lives on `Action::CounterChanged` with a
+        // `counter::CP` name check in the residual guard (`clear_cp.rs`) --
+        // one event handler on the count, not a check at each spend site.
+        // A count emptied by *any* write still leaves the field.
 
         // Post-commit named raise -- the wire event name is caller-supplied
         // data (the ruleset owns the vocabulary). 「任意玩家获得[除外]…时」
@@ -4589,9 +4827,9 @@ impl<M: CardModules> RulesBridge<M> {
                 t.by_card = by;
             })?;
         }
-        for (player_id, kind) in after.abnormal_log {
-            let _ = (player_id, kind);
-        }
+        // TODO(规则书): a layer write is a player hit -- Other (it lands on a
+        // player). Raise here once the off-board layer concept lands
+        // (「任意玩家获得[除外]…时」); nothing pushes a layer log yet.
         // `state` -- 「当有其他玩家切换状态时」 (Mujica:欢迎来到ave
         // mujica的世界 (2)). Raised once per real skill-state 1↔2 toggle
         // this run made, same post-commit shape as a named raise. The counter's
@@ -4689,6 +4927,7 @@ impl<M: CardModules> RulesBridge<M> {
                     Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
+                        arg: Vec::new(),
                     },
                     &own,
                     -1,
@@ -4938,21 +5177,29 @@ impl<M: CardModules> RulesBridge<M> {
                             s.skip = false;
                             return true;
                         }
-                        due.push((s.card.clone(), s.owner, s.uid));
+                        due.push((s.card.clone(), s.owner, s.uid, s.entry.clone()));
                         false
                     });
                     cx.swap_world(w);
-                    for (id, owner, uid) in due {
-                        if let Some(idx) = self
-                            .ruleset
-                            .card(&id)
-                            .filter(|&i| self.ruleset.cards()[i as usize].has_at_end())
-                        {
+                    for (id, owner, uid, entry) in due {
+                        let resolved = self.ruleset.card(&id).and_then(|idx| {
+                            let info = &self.ruleset.cards()[idx as usize];
+                            let e = if entry.is_empty() {
+                                // Legacy save: resolve to the card's first
+                                // Schedule entry (the old AtEnd behaviour).
+                                info.entry(card_sdk::abi::OnKind::Schedule, None)
+                            } else {
+                                info.entry_by_id(&entry)
+                            };
+                            e.map(|e| (idx, e))
+                        });
+                        if let Some((idx, entry_idx)) = resolved {
                             self.drive(
                                 cx,
                                 Call::AtEnd {
                                     card: idx,
                                     player_id: owner,
+                                    entry: entry_idx,
                                 },
                                 &id,
                                 uid,
@@ -5119,7 +5366,7 @@ impl<M: CardModules> RulesBridge<M> {
         job: &HookJob,
         resume: CounteractResume,
     ) -> Flow<()> {
-        match self.drive_hook(cx, job.call, &job.card_id, job.uid, trigger) {
+        match self.drive_hook(cx, job.call.clone(), &job.card_id, job.uid, trigger) {
             Err(e) if e.is_suspended() => {
                 cx.set_counteract_resume(Box::new(resume));
                 Err(e)
@@ -5181,7 +5428,7 @@ impl<M: CardModules> RulesBridge<M> {
             }
             // Card ids in the piles (and, after the mulligan, the hand).
             let mut ids: Vec<String> = Vec::new();
-            for id in &world.hidden[p].draw {
+            for id in &world.hidden[p].deck {
                 if !ids.contains(id) {
                     ids.push(id.clone());
                 }
@@ -5684,6 +5931,7 @@ impl<M: CardModules> RulesBridge<M> {
             id: t.card.clone().unwrap_or_default(),
             uid: -1,
             move_extension: 0,
+            arg: Vec::new(),
             answered: 0,
             link: trigger.clone(),
             answers: Vec::new(),
@@ -5783,7 +6031,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 .copied()
                         })
                         .collect();
-                    let Some((id, idx, uid, move_extension)) =
+                    let Some((id, idx, uid, move_extension, arg)) =
                         self.declare_one(cx, cursor, &chain[timing].link, &mut memo, &groups)?
                     else {
                         // Explicit pass, or nothing eligible left: the visit
@@ -5939,6 +6187,7 @@ impl<M: CardModules> RulesBridge<M> {
                         id,
                         uid,
                         move_extension,
+                        arg,
                         answered: timing,
                         link: bridge_trigger(&link),
                         answers: Vec::new(),
@@ -6044,6 +6293,7 @@ impl<M: CardModules> RulesBridge<M> {
                 Call::Counteract {
                     card,
                     player_id: seat as i32,
+                    arg: Vec::new(),
                 },
                 &id,
                 uid,
@@ -6066,7 +6316,7 @@ impl<M: CardModules> RulesBridge<M> {
         match dest_from(dest) {
             Dest::Graveyard => {
                 if !w.out(seat) {
-                    w.hidden[seat].discard.push(id.clone());
+                    w.hidden[seat].graveyard.push(id.clone());
                     refilled = w.refill_draw_pile(seat);
                 }
             }
@@ -6169,6 +6419,10 @@ impl<M: CardModules> RulesBridge<M> {
                     Call::Counteract {
                         card,
                         player_id: seat as i32,
+                        // The stored arg is the only source of truth at
+                        // resolve time (docs/ACTIVATION.md §2): `OP_DECLARE`
+                        // ran at the offer pass and is never re-entered here.
+                        arg: chain[idx].arg.clone(),
                     },
                     &id,
                     uid,
@@ -6217,7 +6471,7 @@ impl<M: CardModules> RulesBridge<M> {
                 match dest_from(dest) {
                     Dest::Graveyard => {
                         if !w.out(seat) {
-                            w.hidden[seat].discard.push(id.clone());
+                            w.hidden[seat].graveyard.push(id.clone());
                             refilled = w.refill_draw_pile(seat);
                         }
                     }
@@ -6278,7 +6532,6 @@ impl<M: CardModules> RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -6292,9 +6545,11 @@ impl<M: CardModules> RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         }
     }
@@ -6407,7 +6662,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         memo: &mut ProbeMemo,
         groups: &[i32],
-    ) -> Flow<Option<(String, i32, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32, Vec<u8>)>> {
         // Hand cards that answer this link, deduped to one entry per id.
         // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
         // index in the hand `Vec` (the authoritative state list), decl = 0 (one
@@ -6505,7 +6760,6 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
@@ -6519,9 +6773,11 @@ impl<M: CardModules> RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: vec![],
                 prompted: false,
                 parent: -1,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             let win_scope =
@@ -6646,7 +6902,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         order: Vec<(u8, u32, u32)>,
         options: Vec<(String, i32, i32)>,
-    ) -> Flow<Option<(String, i32, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32, Vec<u8>)>> {
         if options.is_empty() {
             return Ok(None);
         }
@@ -6752,7 +7008,11 @@ impl<M: CardModules> RulesBridge<M> {
                     .filter(|&x| x >= 0)
                     .unwrap_or(reply.fallback) as usize;
                 if let Some((id, idx, uid)) = options.get(pick) {
-                    return Ok(Some((id.clone(), *idx, *uid, extension)));
+                    let Some(arg) = self.declare_for_card(cx, s, id, *idx, top)? else {
+                        // Declined at the declare: no counter this visit.
+                        return Ok(None);
+                    };
+                    return Ok(Some((id.clone(), *idx, *uid, extension, arg)));
                 }
                 // Back (also the payment timeout) reopens the distance choice.
             }
@@ -6775,15 +7035,151 @@ impl<M: CardModules> RulesBridge<M> {
             .copied()
             .filter(|&x| x >= 0)
             .unwrap_or(reply.fallback) as usize;
-        Ok(options
-            .get(pick)
-            .map(|(id, idx, uid)| (id.clone(), *idx, *uid, 0)))
+        Ok(match options.get(pick) {
+            Some((id, idx, uid)) => {
+                let Some(arg) = self.declare_for_card(cx, s, id, *idx, top)? else {
+                    return Ok(None);
+                };
+                Some((id.clone(), *idx, *uid, 0, arg))
+            }
+            None => None,
+        })
+    }
+
+    /// Run the chosen card's `OP_DECLARE` before the counter declaration
+    /// commits (docs/ACTIVATION.md §2). One answer cursor across a multi-step
+    /// declare. `Ok(None)` = declined and **no counter is declared this
+    /// visit**; `Ok(Some(arg))` = the declaration carries `arg`.
+    ///
+    /// A **prompted** decline has already consumed its answer-log slot: the
+    /// prompt's answer is recorded like any other, so a replay does not
+    /// re-ask (docs/ACTIVATION.md "Bots and the answer log").
+    fn declare_for_card(
+        &self,
+        cx: &mut Cx,
+        s: usize,
+        id: &str,
+        idx: i32,
+        top: &Trigger,
+    ) -> Flow<Option<Vec<u8>>> {
+        // The declared entry is the [反击] at this trigger -- not the card's
+        // `On::Play`. A declare on the counteract entry is what `finish_offer`
+        // is collecting (docs/ACTIVATION.md §2).
+        let Some(entry) = self
+            .ruleset
+            .cards()
+            .get(idx as usize)
+            .and_then(|c| c.entry(card_sdk::abi::OnKind::Counteract, Some(top.kind)))
+        else {
+            return Ok(Some(Vec::new()));
+        };
+        let mut answers: Vec<i32> = Vec::new();
+        loop {
+            let run = self.declare_run(cx, s, id, idx, top);
+            match self.ruleset.declare_entry(&run, idx, entry, s as i32, &answers) {
+                Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
+                Ok(DeclareOut::Declined) => return Ok(None),
+                Ok(DeclareOut::Paused(p)) => {
+                    let ask = prompt_to_ask(p);
+                    let reply = cx.ask(ask)?;
+                    let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
+                    answers.push(a);
+                }
+                // A collector that traps must not run the effect on a made-up
+                // arg (`Prompt`'s `#[must_use]` antipattern). Decline, and say
+                // why: the same policy a trapping *body* gets -- log
+                // `log.card_trap`, do not take the match down. `HaltKind` has
+                // no trap arm, so this cannot be a `Flow::Err`.
+                Err(e) => {
+                    cx.log(
+                        s as i32,
+                        Msg::new("log.card_trap")
+                            .card("card", id)
+                            .text("detail", declare_err_detail(&e)),
+                    );
+                    return Ok(None);
+                }
+            }
+        }
+    }
+
+    /// A `Run` bound to `id` on seat `s`, for a declare probe (no writes are
+    /// committed -- see [`Self::cant_play`]). Distinct from [`Self::probe_run`],
+    /// which binds to the trigger's player.
+    ///
+    /// `top` is the trigger the declaration is answering: a [反击]'s collector
+    /// reads `trigger::*` (`value` / `target` / `tile` / `move.roll`) against
+    /// the real trigger, not a default. The play path passes a default -- a
+    /// play answers no trigger.
+    fn declare_run(&self, cx: &Cx, s: usize, id: &str, _idx: i32, top: &Trigger) -> Run {
+        let uid = cx
+            .world()
+            .field_instances(s as i32)
+            .into_iter()
+            .find(|(_, c)| c == id)
+            .map_or(-1, |(uid, _)| uid);
+        Run {
+            world: cx.share_world(),
+            pile_checkpoints: Default::default(),
+            data: self.data.clone(),
+            props: self.modules_props(),
+            trigger: top.clone(),
+            activation_player: s as i32,
+            current_card: id.to_string(),
+            current_uid: uid,
+            carried_owner: None,
+            dest: DEST_UNSET,
+            dest_to: None,
+            paid_log: vec![],
+            discard_log: vec![],
+            draw_log: vec![],
+            reshuffle_log: vec![],
+            marker_spent_log: vec![],
+            house_log: vec![],
+            counter_log: vec![],
+            named_raise_log: vec![],
+            state_log: vec![],
+            doubled: -1,
+            linger_props: Default::default(),
+            wrap_effect: false,
+            live: None,
+            posted: vec![],
+            log_idx: 0,
+            logged: 0,
+            silent_body: false,
+            quiet_when_empty: false,
+            pending_header: None,
+            own_activation: -1,
+            header_ids: vec![],
+            prompted: false,
+            parent: -1,
+            flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
+            flash_ordinal: 0,
+        }
     }
 }
 
 /// The module's view of an engine trigger (the bridge `Trigger`). The move
 /// payload's `roll` is the guest-visible `t.Move.Roll`, which a counteraction
 /// may rewrite; the engine reads it back.
+/// One-line detail for a [`RuleError`], for `log.card_trap`. Shared by the
+/// body trap path and the `OP_DECLARE` collector path -- a trapping module is
+/// reported the same way wherever it traps.
+fn declare_err_detail(e: &RuleError) -> String {
+    match e {
+        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => m.clone(),
+        RuleError::NoSuchCard(i) => format!("no such card {i}"),
+        RuleError::GuardPrompted => "guard prompted".into(),
+        RuleError::BadPre {
+            card,
+            entry,
+            source,
+            err,
+        } => format!("bad guard pre on {card}/{entry}: {err} ({source})"),
+    }
+}
+
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
         trigger_kind(t.kind.as_str()),
@@ -6878,6 +7274,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
         answer_slot: _,
         prices,
         ai_hint,
+        count,
     } = p;
     match kind {
         PromptKind::YesNo => Ask::choice(
@@ -6898,6 +7295,24 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 })
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
+        }
+        PromptKind::ChoiceMulti => {
+            let labels: Vec<Msg> = options
+                .into_iter()
+                .map(|o| match o {
+                    PromptOption::Str(m) => m,
+                    PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
+                    PromptOption::Tile { label, .. } => label,
+                })
+                .collect();
+            let n = labels.len().min(31) as i32;
+            // Guest 0 is treated as 1; anything past the option list clamps.
+            let want = count.clamp(1, n.max(1));
+            let mut ask = Ask::multi(players, title, text, labels, want, 15.0);
+            if ai_hint >= 0 {
+                ask = ask.with_ai(|_| ai_hint);
+            }
+            ask
         }
         PromptKind::Tile | PromptKind::TileId | PromptKind::TileWalk => {
             // Bare-Int options keep the auto `ask.tileOption` labels so
@@ -6990,6 +7405,10 @@ struct ChainLink {
     uid: i32,
     /// Extension chosen before declaring this movement source; zero otherwise.
     move_extension: i32,
+    /// Activation argument the declaration's `OP_DECLARE` collected
+    /// (docs/ACTIVATION.md §2). Stored here at declaration time; `resolve_jobs`
+    /// reads it back and never re-enters `OP_DECLARE`.
+    arg: Vec<u8>,
     /// Node index of the timing this answers.
     answered: usize,
     /// This node's own link -- what its answers read and rewrite.
@@ -7569,22 +7988,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn owner_charge(&self) -> i64 {
-        let o = self.owner();
-        if o >= 0 {
-            self.world.state_get(o as i32, "charge") as i64
-        } else {
-            0
-        }
-    }
-    fn owner_group_pool(&self, name: &str) -> i64 {
-        let o = self.owner();
-        if o >= 0 {
-            self.world.group_pool(o as i32, name) as i64
-        } else {
-            0
-        }
-    }
     fn owner_hand(&self) -> i64 {
         let o = self.owner();
         if o >= 0 {
@@ -7612,43 +8015,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         } else {
             0
         }
-    }
-    fn owner_persona(&self) -> i64 {
-        let o = self.owner();
-        if o < 0 {
-            return 0;
-        }
-        // The persona **name** (`ctx::persona_is` spelling), not the
-        // skill id -- `persona_is(p, "名")` hashes the name.
-        let name = self
-            .world
-            .st
-            .players
-            .get(o.max(0) as usize)
-            .map(|s| s.persona.clone())
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&name)
-    }
-    fn owner_group(&self) -> i64 {
-        let o = self.owner();
-        if o < 0 {
-            return 0;
-        }
-        // The group **name** (`ctx::in_group` spelling).
-        let group_str = self
-            .world
-            .st
-            .players
-            .get(o.max(0) as usize)
-            .and_then(|s| {
-                self.data
-                    .personas
-                    .iter()
-                    .find(|c| c.name == s.persona)
-                    .map(|c| c.group.clone())
-            })
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&group_str)
     }
     fn owner_tiles(&self) -> i64 {
         let o = self.owner();
@@ -7689,17 +8055,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn blocked(&self, _group: i64) -> bool {
-        false
+    fn cand_set(&self, key: &str) -> Vec<i64> {
+        // Host fills the blocked list from the skill dispatch, not the raw world.
+        let _ = key;
+        Vec::new()
     }
     fn money(&self, seat: i64) -> i64 {
         self.world.player_money(seat as i32) as i64
-    }
-    fn charge(&self, seat: i64) -> i64 {
-        self.world.state_get(seat as i32, "charge") as i64
-    }
-    fn group_pool(&self, seat: i64, name: &str) -> i64 {
-        self.world.group_pool(seat as i32, name) as i64
     }
     fn hand(&self, seat: i64) -> i64 {
         self.world
@@ -7715,42 +8077,58 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.world.player_out(seat as i32) as i64
     }
     fn state(&self, seat: i64, key: &str) -> i64 {
-        self.world.state_get(seat as i32, key) as i64
+        // Sugar keys published through the one `state` door (CondView contract).
+        match key {
+            bandori_std::cel::KEY_CHARGE => {
+                self.world.tok(seat as i32, bandori_std::cel::KEY_CHARGE) as i64
+            }
+            bandori_std::cel::KEY_CRYSTALS => {
+                self.world.group_pool(seat as i32, bandori_std::cel::KEY_CRYSTALS) as i64
+            }
+            bandori_std::cel::KEY_PERSONA => {
+                let name = self
+                    .world
+                    .st
+                    .players
+                    .get(seat.max(0) as usize)
+                    .map(|s| s.persona.clone())
+                    .unwrap_or_default();
+                crate::cond_pre::id_of(&name)
+            }
+            bandori_std::cel::KEY_GROUP => {
+                let group_str = self
+                    .world
+                    .st
+                    .players
+                    .get(seat.max(0) as usize)
+                    .and_then(|s| {
+                        self.data
+                            .personas
+                            .iter()
+                            .find(|c| c.name == s.persona)
+                            .map(|c| c.group.clone())
+                    })
+                    .unwrap_or_default();
+                crate::cond_pre::id_of(&group_str)
+            }
+            _ => self.world.state_get(seat as i32, key) as i64,
+        }
     }
     fn state_table(&self) -> Vec<(i64, String, i64)> {
         let mut rows = Vec::new();
-        for (s, p) in self.world.st.players.iter().enumerate() {
-            for (k, v) in &p.state {
-                rows.push((s as i64, k.clone(), v.value as i64));
+        for (s, _p) in self.world.st.players.iter().enumerate() {
+            // Sugar keys first so the eager fill and `IrCtx.state` agree.
+            let s = s as i64;
+            for k in bandori_std::cel::STATE_KEYS {
+                rows.push((s, (*k).to_string(), self.state(s, k)));
+            }
+            for (k, v) in &self.world.st.players[s as usize].state {
+                if !bandori_std::cel::STATE_KEYS.contains(&k.as_str()) {
+                    rows.push((s, k.clone(), v.value as i64));
+                }
             }
         }
         rows
-    }
-    fn persona(&self, seat: i64) -> i64 {
-        let name = self
-            .world
-            .st
-            .players
-            .get(seat.max(0) as usize)
-            .map(|s| s.persona.clone())
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&name)
-    }
-    fn group(&self, seat: i64) -> i64 {
-        let group_str = self
-            .world
-            .st
-            .players
-            .get(seat.max(0) as usize)
-            .and_then(|s| {
-                self.data
-                    .personas
-                    .iter()
-                    .find(|c| c.name == s.persona)
-                    .map(|c| c.group.clone())
-            })
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&group_str)
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.world.owned_tiles(seat as i32).len() as i64
@@ -7775,6 +8153,10 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             |k| self.world.tile_prop(tile as i32, k),
         )
     }
+    fn tile_class_names(&self) -> Vec<String> {
+        // Ruleset class vocabulary (no engine class table).
+        crate::cond_pre::class_names()
+    }
     fn slot_table(&self) -> Vec<(String, i64)> {
         crate::cond_pre::SLOT_NAMES
             .iter()
@@ -7796,24 +8178,18 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .collect()
     }
     fn card_counter_table(&self) -> Vec<(String, i64)> {
-        // On-card ruleset counter keys plus any
-        // card-declared named counter on the candidate instance.
+        // Instance keys (the two on-card wire names live content-side in
+        // `card-sdk::abi::counter`; `card_counter` reads them by name).
         let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {
             return Vec::new();
         };
-        let mut out = Vec::new();
-        let points_val = self.world.card_counter(o, c, "points") as i64;
-        if points_val != 0 {
-            out.push(("points".to_string(), points_val));
-        }
-        let bonus_val = self.world.card_counter(o, c, "bonus") as i64;
-        if bonus_val != 0 {
-            out.push(("bonus".to_string(), bonus_val));
-        }
-        out
-    }
-    fn blocked_groups(&self) -> Vec<i64> {
-        Vec::new()
+        crate::cond_pre::SnapSrc::card_counter_names(self, o, c)
+            .into_iter()
+            .map(|n| {
+                let v = self.world.card_counter(o, c, &n) as i64;
+                (n, v)
+            })
+            .collect()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
         crate::cond_pre::collect_tile_ids(self)
@@ -8382,7 +8758,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.card_prop(card, key)
     }
 
-    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// The card rule's declared **tile texts** (`On::texts`), see
     /// [`game_core::engine::CardRules::card_texts`]. Sorted by entry index
     /// (stable, so declaration order within an entry is kept) -- that order is
     /// the third component of the view's text-precedence key.
@@ -8636,7 +9012,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -8650,15 +9025,111 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         };
         self.ruleset
             .cant_play(&run, idx, player_id as i32)
             .ok()
             .flatten()
+    }
+
+    /// Collect the activation argument before the play commits
+    /// (docs/ACTIVATION.md §2). Runs the entry's `OP_DECLARE` in a loop over
+    /// one answer cursor -- a two-step declare (pick, then confirm) is one
+    /// cursor, both prompts advance it. `Ok(None)` = declined and the card
+    /// must not leave the hand.
+    fn declare_activation(
+        &self,
+        cx: &mut Cx,
+        player_id: usize,
+        card: &str,
+    ) -> Flow<Option<Vec<u8>>> {
+        let Some(idx) = self.ruleset.card(card) else {
+            return Ok(Some(Vec::new()));
+        };
+        let uid = cx
+            .world()
+            .field_instances(player_id as i32)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-1, |(uid, _)| uid);
+        // One cursor across every `OP_DECLARE` step of this activation: the
+        // collector re-runs on each pause and reads the shared log in order.
+        let mut answers: Vec<i32> = Vec::new();
+        loop {
+            let run = Run {
+                world: cx.share_world(),
+                pile_checkpoints: Default::default(),
+                data: self.data.clone(),
+                props: self.modules_props(),
+                trigger: Trigger::default(),
+                activation_player: player_id as i32,
+                current_card: card.to_string(),
+                current_uid: uid,
+                carried_owner: None,
+                dest: DEST_UNSET,
+                dest_to: None,
+                paid_log: vec![],
+                discard_log: vec![],
+                draw_log: vec![],
+                reshuffle_log: vec![],
+                marker_spent_log: vec![],
+                house_log: vec![],
+                counter_log: vec![],
+                named_raise_log: vec![],
+                state_log: vec![],
+                doubled: -1,
+                linger_props: Default::default(),
+                wrap_effect: false,
+                live: None,
+                posted: vec![],
+                log_idx: 0,
+                logged: 0,
+                silent_body: false,
+                quiet_when_empty: false,
+                pending_header: None,
+                own_activation: -1,
+                header_ids: vec![],
+                prompted: false,
+                parent: -1,
+                flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
+                flash_ordinal: 0,
+            };
+            // The play path declares the card's `On::Play` entry -- the press
+            // surface, `OnKind::Play` (docs/ACTIVATION.md §2).
+            let entry = self
+                .ruleset
+                .cards()
+                .get(idx as usize)
+                .and_then(|c| c.entry(card_sdk::abi::OnKind::Play, None))
+                .unwrap_or(0);
+            match self.ruleset.declare_entry(&run, idx, entry, player_id as i32, &answers) {
+                Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
+                Ok(DeclareOut::Declined) => return Ok(None),
+                Ok(DeclareOut::Paused(p)) => {
+                    let ask = prompt_to_ask(p);
+                    let reply = cx.ask(ask)?;
+                    let a = reply.a.answers.first().copied().unwrap_or(reply.fallback);
+                    answers.push(a);
+                }
+                // Same as `declare_for_card`: never proceed on a made-up arg.
+                Err(e) => {
+                    cx.log(
+                        player_id as i32,
+                        Msg::new("log.card_trap")
+                            .card("card", card)
+                            .text("detail", declare_err_detail(&e)),
+                    );
+                    return Ok(None);
+                }
+            }
+        }
     }
 
     /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
@@ -8731,7 +9202,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -8745,9 +9215,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         };
         q.tiles
@@ -8839,6 +9311,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             Call::Play {
                 card: idx,
                 player_id: player_id as i32,
+                arg: cx.world().turn.play_arg.clone(),
             },
             card,
             uid,
@@ -8878,6 +9351,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             Call::Play {
                 card: idx,
                 player_id: player_id as i32,
+                arg: Vec::new(),
             },
             &rid,
             uid,
@@ -8934,6 +9408,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
+                        arg: Vec::new(),
                     },
                     &own,
                     -1,
@@ -9052,21 +9527,29 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         s.skip = false;
                         return true;
                     }
-                    due.push((s.card.clone(), s.owner, s.uid));
+                    due.push((s.card.clone(), s.owner, s.uid, s.entry.clone()));
                     false
                 });
                 cx.swap_world(w);
-                for (id, owner, uid) in due {
-                    if let Some(idx) = self
-                        .ruleset
-                        .card(&id)
-                        .filter(|&i| self.ruleset.cards()[i as usize].has_at_end())
-                    {
+                for (id, owner, uid, entry) in due {
+                    let resolved = self.ruleset.card(&id).and_then(|idx| {
+                        let info = &self.ruleset.cards()[idx as usize];
+                        let e = if entry.is_empty() {
+                            // Legacy save: resolve to the card's first
+                            // Schedule entry (the old AtEnd behaviour).
+                            info.entry(card_sdk::abi::OnKind::Schedule, None)
+                        } else {
+                            info.entry_by_id(&entry)
+                        };
+                        e.map(|e| (idx, e))
+                    });
+                    if let Some((idx, entry_idx)) = resolved {
                         match self.drive(
                             cx,
                             Call::AtEnd {
                                 card: idx,
                                 player_id: owner,
+                                entry: entry_idx,
                             },
                             &id,
                             uid,

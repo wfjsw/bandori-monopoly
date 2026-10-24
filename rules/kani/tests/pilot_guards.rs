@@ -69,7 +69,8 @@ fn is_start_guard_evaluates() {
         c.set_scalar(VarId::Owner, owner);
         c.set_scalar(VarId::TileId, tile);
         if on_circle {
-            c.set_insert(SetId::Circle, 1);
+            // `tile_is(t, kind)` reads `tile_kind_ids[t] == id_of(kind)`.
+            c.tile_kind_ids[1] = rules_cond_ir::ctx::id_of("circle");
         }
         assert_eq!(
             prog.eval_bool(&c),

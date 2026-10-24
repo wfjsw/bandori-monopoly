@@ -27,26 +27,22 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
         // exists only at the pot cap. 状态2's auto-play still has to run
         // whenever state is 2, so the residual is the disjunction.
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
-            None,
             Some(state2_or_fire_capped),
-            at_turn_start,
-        )),
+            at_turn_start)),
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
         On::Action(Action::PassTile(
             "actor == owner && move.main && slot('skillState') != 2",
             None,
-            None,
-            on_pass_player,
-        )),
+            on_pass_player)),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
@@ -54,13 +50,10 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // (`trigger::target()`), not the causer.
         On::Action(Action::Abnormal(
             "target == owner",
-            None,
             Some(im_hit),
-            on_abnormal,
-        )),
+            on_abnormal)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始0，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),
@@ -83,7 +76,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// pot is at cap (the 状态2 offer). `state::max` is the declared fire cap.
 fn state2_or_fire_capped(player_id: i32) -> bool {
     state::get(player_id, state_key::SKILL_STATE) == 2
-        || state::get(player_id, state_key::CHARGE) >= state::max(player_id, state_key::CHARGE)
+        || bandori_std::fire::get(player_id) >= bandori_std::fire::max(player_id)
 }
 
 /// 状态1's pass clause, and 状态2's entry offer.
@@ -105,10 +98,16 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, state_key::SKILL_STATE, 2);
     ctx::log(player_id, &Msg::new(key!("sakiko_life_two")));
     // 状态2: 「保留至多一张手牌并将其余置入弃牌堆」
+    //
+    // Discard from the end so the graveyard keeps its historical order (the
+    // last card is discarded first). 「保留至多一张手牌并将其余置入弃牌堆」 does
+    // not name an order, but a later 「弃牌堆顶」 reader sees whatever landed
+    // last -- a `drain(1..)` here would silently reverse that for no gain.
     let mut hand = ctx::cards_in(player_id, CardPile::Hand);
     while hand.len() > 1 {
-        let c = hand.pop().unwrap();
-        ctx::discard_from_hand(player_id, &c);
+        if let Some(c) = hand.pop() {
+            ctx::discard_from_hand(player_id, c.as_str());
+        }
     }
     play_deck_top(player_id)?;
     Ok(())
@@ -196,9 +195,9 @@ fn play_deck_top(player_id: i32) -> card_sdk::Asked {
     };
     ctx::log(
         player_id,
-        &Msg::new(key!("sakiko_life_auto")).card("card", &top),
+        &Msg::new(key!("sakiko_life_auto")).card("card", top.as_str()),
     );
-    ctx::play_card(&top, player_id)?;
+    ctx::play_card(top.as_str(), player_id)?;
     Ok(())
 }
 

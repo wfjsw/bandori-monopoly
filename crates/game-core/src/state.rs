@@ -174,6 +174,14 @@ pub struct MatchState {
     /// still loads (it re-numbers from 0 on the next placement).
     #[serde(default)]
     pub next_card_uid: i32,
+    /// Next [`TileMark::uid`] to hand out. Monotonic and never recycled for the
+    /// lifetime of the match, so a stored mark handle either resolves to exactly
+    /// the row it was issued for or reports dead -- it never aliases onto a
+    /// later mark. `#[serde(default)]` so a save from before this field still
+    /// loads (0); the allocator also floors at `max(st.marks.uid)+1`, so an old
+    /// save can never hand out a uid that collides with a row already present.
+    #[serde(default)]
+    pub next_mark_uid: i32,
     pub players: Vec<MatchPlayer>,
     /// The **neutral board owner**'s field ([`BOARD_OWNER`]): one rule instance
     /// per board tile, placed at match start by `bind_tiles` the way
@@ -241,6 +249,7 @@ impl Default for MatchState {
             bonus_time: 0.0,
             clock_paused: false,
             next_card_uid: 1,
+            next_mark_uid: 0,
             players: vec![],
             board_field: vec![],
             bans: vec![],
@@ -838,6 +847,14 @@ impl MatchPlayer {
             .find(|c| c.name == name)
             .map_or(0, |c| c.value)
     }
+
+    /// Live ceiling on the held row (`Counter::max`; 0 = uncapped / undeclared).
+    pub fn token_max(&self, name: &str) -> i32 {
+        self.tokens
+            .iter()
+            .find(|c| c.name == name)
+            .map_or(0, |c| c.max)
+    }
 }
 
 /// A prompt asking players to choose.
@@ -1282,6 +1299,12 @@ pub struct Counter {
     /// wire spelling is still `-1`).
     #[serde(default, with = "opt_i32_neg1")]
     pub instance: Option<i32>,
+    /// Live ceiling the rules-layer kernel polices (「上限M」). `0` = uncapped
+    /// (the default for ephemeral tokens and for rows saved before this
+    /// field existed). Stored for display and for the pull-under; the engine
+    /// does not clamp writes to it.
+    #[serde(default)]
+    pub max: i32,
 }
 
 impl Default for Counter {
@@ -1290,6 +1313,7 @@ impl Default for Counter {
             name: String::new(),
             value: 0,
             instance: None,
+            max: 0,
         }
     }
 }

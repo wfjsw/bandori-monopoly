@@ -22,9 +22,7 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
             None,
-            None,
-            at_start,
-        )),
+            at_start)),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
         // so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not the per-share
         // `paySplitChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
@@ -36,10 +34,8 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(Action::PayCombinedAddBefore(
             "target == owner && value > 0 && slot('ppFansUp') >= 1",
-            None,
             Some(mine),
-            on_gain,
-        )),
+            on_gain)),
     ],
 );
 

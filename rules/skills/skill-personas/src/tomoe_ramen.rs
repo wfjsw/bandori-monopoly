@@ -33,13 +33,12 @@ fn shop() -> i32 {
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
+        On::Play("", Some(can_use), use_skill).label("（2）"),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        On::Action(Action::TurnEnd("", Some(afterglow), tick)),
     ],
 )
-.silent(&[1, 2])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
@@ -69,7 +68,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ctx::player_pos(player_id) == shop() {
         return Some(Msg::new(key!("tomoe_ramen_at_shop")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("tomoe_ramen_no_fire")));
     }
     None

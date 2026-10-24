@@ -182,11 +182,11 @@ impl Table {
             let w = m.world_mut();
             for h in w.hidden.iter_mut() {
                 h.hand.clear();
-                h.draw.clear();
-                h.discard.clear();
+                h.deck.clear();
+                h.graveyard.clear();
             }
             for card in top_first.iter().rev() {
-                w.hidden[0].draw.insert(0, card.to_string());
+                w.hidden[0].deck.insert(0, card.to_string());
             }
         }
         m.quick_start();
@@ -650,8 +650,8 @@ impl Table {
         let w = self.m.world_mut();
         for h in w.hidden.iter_mut() {
             h.hand.clear();
-            h.draw.clear();
-            h.discard.clear();
+            h.deck.clear();
+            h.graveyard.clear();
             h.next_steps = None;
         }
         for p in w.st.players.iter_mut() {
@@ -674,8 +674,14 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(K_TILE_SLOT, -1);
-            // Start-time resources: the value, not the cap.
-            p.state_set(K_CHARGE, 0);
+            // Start-time resources: fire is a held token of the persona-skill
+            // instance (MARKERS.md §7). Clear the value only -- the declared cap
+            // is the already-declared latch.
+            for tok in p.tokens.iter_mut() {
+                if tok.name == K_CHARGE {
+                    tok.value = 0;
+                }
+            }
             p.tokens.retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
         for f in w.st.board_field.iter_mut() {
@@ -733,12 +739,12 @@ impl Table {
 
     /// Replace the draw pile; `top_first[0]` is drawn first.
     pub fn set_draw(&mut self, who: usize, top_first: &[&str]) {
-        self.m.world_mut().hidden[who].draw =
+        self.m.world_mut().hidden[who].deck =
             top_first.iter().rev().map(|s| s.to_string()).collect();
     }
 
     pub fn set_discard(&mut self, who: usize, cards: &[&str]) {
-        self.m.world_mut().hidden[who].discard = cards.iter().map(|s| s.to_string()).collect();
+        self.m.world_mut().hidden[who].graveyard = cards.iter().map(|s| s.to_string()).collect();
     }
 
     pub fn set_state(&mut self, who: usize, key: &str, value: i32) {
@@ -751,12 +757,11 @@ impl Table {
             .insert(key.into(), v);
     }
 
-    /// Charge pots: `value` held, `max` cap.
+    /// Charge pots: `value` held, `max` cap. Arranges the held-token row.
     pub fn set_charge(&mut self, who: usize, value: i32, max: i32) {
-        let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(K_CHARGE, value);
-        let min = p.state_min(K_CHARGE);
-        p.state_set_bounds(K_CHARGE, min, max);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, K_CHARGE, value, -1, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -887,7 +892,7 @@ impl Table {
     /// The draw pile, top first.
     pub fn draw_pile(&self, who: usize) -> Vec<String> {
         self.m.world().hidden[who]
-            .draw
+            .deck
             .iter()
             .rev()
             .cloned()
@@ -895,7 +900,7 @@ impl Table {
     }
 
     pub fn discard(&self, who: usize) -> Vec<String> {
-        self.m.world().hidden[who].discard.clone()
+        self.m.world().hidden[who].graveyard.clone()
     }
 
     pub fn field(&self, who: usize) -> Vec<FieldCard> {
@@ -991,7 +996,8 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, K_CHARGE)
+        // Fire is a held token of the persona-skill instance.
+        self.token(who, K_CHARGE)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

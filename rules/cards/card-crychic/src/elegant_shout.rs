@@ -12,6 +12,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
@@ -20,11 +21,9 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
         On::Counteract(
             &[ChainKind::DrawOut],
             card_sdk::pre::MINE,
-            Some(key!("elegant_shout_when")),
             None,
-            counteract,
-        ),
-        On::Action(Action::AtEnd("", None, None, at_end)),
+            counteract).counter_reason(key!("elegant_shout_when")),
+        On::Schedule("at_end", "", None, at_end),
     ],
 )
 .meta(
@@ -32,7 +31,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
         .name(r#"优雅的呐喊"#)
         .raw_name(r#"优雅的呐喊"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。"#)
+        .text(CardText::para(r#"[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。"#))
         // sheet cell M6
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );
@@ -45,7 +44,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     );
     // C# `H.ExtraOf<ElegantFx>(c.Seat).Count++` -- each counteraction stacks one
     // draw; scheduling one `AtEnd` per counteraction stacks the same way.
-    ctx::at_next_turn_end(player_id);
+    ctx::at_next_turn_end(player_id, "at_end");
     Ok(())
 }
 

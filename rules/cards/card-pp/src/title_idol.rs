@@ -12,22 +12,26 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::counter;
+use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TITLE_IDOL: CardDef =
-    CardDef::new("PP:TITLE IDOL", &[On::Play("", None, None, title_idol)])
+    CardDef::new("PP:TITLE IDOL", &[On::Play("", None, title_idol)])
         .props(&[(card_sdk::abi::prop::SONG, 1)])
         .meta(
             &card_sdk::meta::CardMeta::new()
                 .name(r#"TITLE IDOL"#)
                 .raw_name(r#"TITLE IDOL"#)
                 .tags(&[r#"手"#])
-                .text(
-                    r#"[手]：
-依次进行以下效果：
-1. 为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；
-2. 为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。"#,
-                )
+                .text(CardText::of(&[
+                    sec(r#"[手]："#, &[
+                        para(r#"依次进行以下效果："#),
+                        steps(&[
+                            r#"为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；"#,
+                            r#"为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。"#,
+                        ]),
+                    ]),
+                ]))
                 // sheet cell D11
                 .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
         );
@@ -52,7 +56,7 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
         if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
             continue;
         }
-        if !ctx::card_text_mentions(&c, "奇迹水晶") {
+        if !ctx::card_text_mentions(c.as_str(), "奇迹水晶") {
             continue;
         }
         ctx::add_counter_at(uid, counter::CRYSTALS, n, 0);

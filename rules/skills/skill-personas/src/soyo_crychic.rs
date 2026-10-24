@@ -42,9 +42,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::PaySplitChooseBefore(
             "actor != owner && tile.owner == owner && value > 0",
             None,
-            None,
-            on_pay,
-        )),
+            on_pay)),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
         // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
@@ -60,9 +58,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::MoveAfter(
             "actor == owner && slot('skill.soyoCrychic.armed') != 0",
             None,
-            None,
-            on_plan_after,
-        )),
+            on_plan_after)),
     ],
 );
 

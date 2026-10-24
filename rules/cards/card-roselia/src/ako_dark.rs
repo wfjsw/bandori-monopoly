@@ -9,21 +9,23 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AKO_DARK: CardDef = CardDef::new(
     "R:（亚子）黑暗大魔姬亚子",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0", Some(key!("ako_dark_when")),
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("ako_dark_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"黑暗大魔姬亚子"#)
         .raw_name(r#"（亚子）黑暗大魔姬亚子"#)
         .tags(&[r#"反击"#])
-        .text(r#"（1）[反击] 当你即将向其他玩家支付资金时可打出此卡，使自己获得一层[眩晕]。若此卡从手牌以外的地方打出，你抽一张卡。"#)
+        .text(CardText::items(&[
+            it(r#"[反击] 当你即将向其他玩家支付资金时可打出此卡，使自己获得一层[眩晕]。若此卡从手牌以外的地方打出，你抽一张卡。"#),
+        ]))
         // sheet cell E11
         .fields(&[("group", r#"Roselia"#), ("owner", r#"宇田川亚子"#)]));
 

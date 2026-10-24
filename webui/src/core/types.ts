@@ -12,6 +12,9 @@
 // not a data-table string is a localizable `Msg` (see i18n/msg.ts).
 
 import type { Msg } from "../i18n/msg";
+import type { Block } from "./body";
+
+export type { Block, Item } from "./body";
 
 /** One board tile, from `data/board.json` (identity + display together). */
 export interface TileData {
@@ -24,6 +27,9 @@ export interface TileData {
 export interface CardData {
   id: string; group: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string;
+  /** Rule text as sections / bulletpoints (`CardText`), from
+   *  `generated/display.json`. Preferred over re-parsing `text`. */
+  body?: Block[];
   /** The [反击] card's trigger-condition clause (「…时」), from
    *  `generated/display.json`. Why the card is offered. */
   counterReason?: string;
@@ -48,14 +54,18 @@ export interface GroupData {
 }
 /** Merged event row: identity + game prose from `glue.roster_json()`, display
  *  (`name` / `text`) from `generated/display.json`. */
-export interface EventData { id: string; name: string; derived: boolean; text: string }
+export interface EventData {
+  id: string; name: string; derived: boolean; text: string;
+  /** Rule text as sections / bulletpoints (`CardText`). */
+  body?: Block[];
+}
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }
 
 /** `generated/display.json`: the build-exported presentation fields (empty
  *  fields omitted). Merged onto the identity roster in `core/data.ts`. */
 export interface DisplayFile {
   cards: Record<string, {
-    text?: string; rawName?: string; counterReason?: string;
+    text?: string; body?: Block[]; rawName?: string; counterReason?: string;
   }>;
   personas: Record<string, {
     display?: string; text?: string; color?: string; variantTag?: string;
@@ -66,7 +76,7 @@ export interface DisplayFile {
   }>;
   /** Event display chrome. Absent on a stale export; `dump_display` writes it. */
   events?: Record<string, {
-    name?: string; text?: string;
+    name?: string; text?: string; body?: Block[];
   }>;
 }
 
@@ -91,6 +101,9 @@ export interface Counter {
   /** Owning card instance (`FieldCard.uid`) whose named counter these units
    *  are bound to; -1 = legacy / unknown. */
   instance: number;
+  /** Live ceiling the rules-layer kernel polices (「上限M」). `0` / absent =
+   *  uncapped (ephemeral tokens, and rows saved before this field existed). */
+  max?: number;
 }
 /**
  * One keyed state item: `value` plus the bounds a consumer may enforce, and
@@ -148,6 +161,9 @@ export interface TileMark {
 }
 export interface MatchPrompt {
   id: number; kind: string; title: Msg; text: Msg; card: string; options: Msg[];
+  /** The timeout default: an option index -- except `"multi"`, where it is a
+   *  valid answer bitmask (the first `count` options). Never clamp a multi
+   *  answer to `0..options.length`. */
   fallback: number; players: number[]; answers: number[]; timeLeft: number; tile: number;
   bid: number; bidder: number; items: string[]; count: number;
   /** The quoted price on a buy / force_buy prompt; -1 when not a purchase. */

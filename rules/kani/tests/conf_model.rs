@@ -207,7 +207,7 @@ impl ConfWorld {
     fn pile_of(&mut self, pile: CardPile) -> &mut Vec<Vec<String>> {
         match pile {
             CardPile::Hand => &mut self.hands,
-            CardPile::Discard => &mut self.discards,
+            CardPile::Graveyard => &mut self.discards,
             CardPile::Deck => &mut self.decks,
             _ => &mut self.hands,
         }
@@ -216,7 +216,7 @@ impl ConfWorld {
     fn pile_ref(&self, pile: CardPile) -> &Vec<Vec<String>> {
         match pile {
             CardPile::Hand => &self.hands,
-            CardPile::Discard => &self.discards,
+            CardPile::Graveyard => &self.discards,
             CardPile::Deck => &self.decks,
             _ => &self.hands,
         }
@@ -495,24 +495,29 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("draw {player_id} {n}"));
         n
     }
-    fn add_to_hand(&mut self, player_id: i32, card: &str) {
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
         let p = player_id.max(0) as usize % 4;
-        self.hands[p].push(card.to_string());
-        self.events.push(format!("add_to_hand {player_id} {card}"));
+        match dest {
+            0 => {
+                self.discards[p].push(card.to_string());
+                self.events.push(format!("to_discard {player_id} {card}"));
+            }
+            1 => {
+                self.hands[p].push(card.to_string());
+                self.events.push(format!("add_to_dest {player_id} {card}"));
+            }
+            4 | 5 | 6 => {
+                self.decks[p].push(card.to_string());
+            }
+            // Field / Banished are not piles.
+            _ => {}
+        }
     }
-    fn add_to_deck(&mut self, player_id: i32, card: &str, _shuffle: bool) {
+    fn take_card(&mut self, player_id: i32, card: &str, src: CardPile) -> bool {
         let p = player_id.max(0) as usize % 4;
-        self.decks[p].push(card.to_string());
-    }
-    fn add_to_deck_at(&mut self, player_id: i32, card: &str, _pos: i32) {
-        let p = player_id.max(0) as usize % 4;
-        self.decks[p].push(card.to_string());
-    }
-    fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
-        let p = player_id.max(0) as usize % 4;
-        let v = self.pile_of(pile)[p].clone();
+        let v = self.pile_of(src)[p].clone();
         if let Some(i) = v.iter().position(|c| c == card) {
-            self.pile_of(pile)[p].remove(i);
+            self.pile_of(src)[p].remove(i);
             self.events.push(format!("take_card {player_id} {card}"));
             true
         } else {
@@ -552,7 +557,7 @@ impl CardWorld for ConfWorld {
         self.discards[p].len() as i32
     }
     fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32 {
-        if self.take_card(player_id, CardPile::Hand, card) {
+        if self.take_card(player_id, card, CardPile::Hand) {
             self.to_discard(player_id, card);
             1
         } else {
@@ -686,7 +691,7 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("add_held {player_id} {name} {n}"));
         *e
     }
-    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, _max: i32, _instance: i32) {
         self.held.insert((player_id, name.to_string()), v);
         self.events.push(format!("set_held {player_id} {name} {v}"));
     }
@@ -962,6 +967,7 @@ impl HostCtx for ConfHost {
         _entry: i32,
         _op: i32,
         _player_id: i32,
+        _arg: &[u8],
         _want_msg: bool,
     ) -> (
         Result<CallOut, HostErr>,
@@ -1503,24 +1509,24 @@ fn op_set_owner_tile_owner_match() {
 }
 
 #[test]
-fn op_add_to_hand_take_card_cards_in_hand_size_match() {
+fn op_add_to_dest_take_card_cards_in_hand_size_match() {
     let _g = model_lock();
     // Use a non-resonance card name so the model's pilot-compat `hand_size`
     // (bitset + pile hybrid) is exercised on an empty-start hand.
     let (cp, cl) = intern_str("R:[衍生] 压");
     diff_op_seq(
-        "add_to_hand+take_card+cards_in",
+        "add_to_dest+take_card+cards_in",
         &[],
         |c| {
-            game_rules::hostfns::add_to_hand(c, 0, cp, cl).unwrap();
-            let ok = game_rules::hostfns::take_card(c, 0, 0, cp, cl).unwrap();
+            game_rules::hostfns::add_to_dest(c, 0, cp, cl, 1).unwrap();
+            let ok = game_rules::hostfns::take_card(c, 0, cp, cl, 0).unwrap();
             let (buf, cap) = card_sdk::native::reserve(64);
             let _need = game_rules::hostfns::cards_in(c, 0, 0, buf, cap).unwrap();
             ok as i64
         },
         || {
-            rules_kani::host::dispatch(Op::add_to_hand, [0, cp, cl, 0, 0, 0]);
-            let ok = rules_kani::host::dispatch(Op::take_card, [0, 0, cp, cl, 0, 0]);
+            rules_kani::host::dispatch(Op::add_to_dest, [0, cp, cl, 1, 0, 0]);
+            let ok = rules_kani::host::dispatch(Op::take_card, [0, cp, cl, 0, 0, 0]);
             let (buf, cap) = card_sdk::native::reserve(64);
             rules_kani::host::dispatch(Op::cards_in, [0, 0, buf, cap, 0, 0]);
             ok
@@ -1552,19 +1558,19 @@ fn op_to_discard_and_hand_size() {
 }
 
 #[test]
-fn op_set_slot_slot_match() {
+fn state_set_get_value_match() {
     let _g = model_lock();
     let (kp, kl) = intern_str("conf.key");
     diff_op_seq(
-        "set_slot+slot",
+        "state_set+state_get",
         &[],
         |c| {
-            game_rules::hostfns::set_slot(c, 1, kp, kl, 9).unwrap();
-            game_rules::hostfns::slot(c, 1, kp, kl).unwrap() as i64
+            game_rules::hostfns::state_set(c, 1, kp, kl, 0, 9).unwrap();
+            game_rules::hostfns::state_get(c, 1, kp, kl, 0).unwrap() as i64
         },
         || {
-            rules_kani::host::dispatch(Op::set_slot, [1, kp, kl, 9, 0, 0]);
-            rules_kani::host::dispatch(Op::slot, [1, kp, kl, 0, 0, 0])
+            rules_kani::host::dispatch(Op::state_set, [1, kp, kl, 0, 9, 0]);
+            rules_kani::host::dispatch(Op::state_get, [1, kp, kl, 0, 0, 0])
         },
     );
 }
@@ -1577,7 +1583,7 @@ fn op_count_held_set_held_name_match() {
         "set_held_name+count_held_name",
         &[],
         |c| {
-            game_rules::hostfns::set_held_name(c, np, nl, 2, 5).unwrap();
+            game_rules::hostfns::set_held_name(c, np, nl, 2, 5, 0, -1).unwrap();
             game_rules::hostfns::count_held_name(c, np, nl, 2).unwrap() as i64
         },
         || {

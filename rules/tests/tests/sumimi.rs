@@ -350,7 +350,7 @@ fn mana_skill_fire_on_circle_pass() {
     // 规则书: 「每次[经过]CiRCLE时获得1个[火罐]（初始1，上限2）」
     t.set_fire(0, 1, 2);
     assert_eq!(t.charge(0), 1);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 2);
+    assert_eq!(t.charge_max(0), 2);
 }
 
 /// 规则书: 「之后，直到你的下个回合结束，你的资金消耗减半」 -- the window
@@ -459,7 +459,7 @@ fn hina_sumimi_skill_fire_cap() {
     // 规则书: 「每次[经过]CiRCLE时获得1个[火罐]（初始2，上限2）」
     t.set_fire(0, 2, 2);
     assert_eq!(t.charge(0), 2);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 2);
+    assert_eq!(t.charge_max(0), 2);
 }
 
 // =====================================================================

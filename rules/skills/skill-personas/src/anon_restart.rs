@@ -18,26 +18,21 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         // （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐」 --
         // the offer exists only for those two abnormal kinds and with two
         // pots to spend. Kind is a residual (`AbKind` match); fire is CEL.
         On::Action(Action::Abnormal(
             "actor == owner && charge(owner) >= 2",
-            None,
             Some(stay_or_teleport),
-            on_abnormal,
-        )),
+            on_abnormal)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始2，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

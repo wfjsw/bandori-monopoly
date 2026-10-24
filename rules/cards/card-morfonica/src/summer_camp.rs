@@ -8,6 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";
@@ -18,19 +19,19 @@ const SLOT_BLOCKED: &str = "summer_camp_blocked";
 pub const SUMMER_CAMP: CardDef = CardDef::new(
     "Mor:夏日合宿",
     &[
-        On::Play("", None, None, summer_camp),
+        On::Play("", None, summer_camp),
         // The body-top applicability checks are the condition now: only our own
         // seat, and only against another player's card (C#
         // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
         // the targeting is not card-caused, so `by >= 0` is "there is a card".
         On::Filter(Filter::Untargetable("actor == owner && by >= 0 && by != owner", None, untargetable)),
-        On::Action(Action::TurnStart("actor == owner && card.placed", None, None, turn_start)),
+        On::Action(Action::TurnStart("actor == owner && card.placed", None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"夏日合宿"#)
         .raw_name(r#"夏日合宿"#)
         .tags(&[])
-        .text(r#"打出此卡，直到下个自己的回合开始前，你只会被自己发动的效果指定。当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌"#)
+        .text(CardText::para(r#"打出此卡，直到下个自己的回合开始前，你只会被自己发动的效果指定。当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌"#))
         // sheet cell G3
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 

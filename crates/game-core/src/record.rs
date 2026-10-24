@@ -114,7 +114,7 @@ pub struct EngineStamp {
     pub format: u32,
     /// [`SAVE_VERSION`] of the writer's `Match::save`.
     pub save_version: u32,
-    /// Host/guest card ABI (`rules/card-sdk`'s `ABI_VERSION`). game-core cannot
+    /// Host/guest card ABI (`crates/card-sdk`'s `ABI_VERSION`). game-core cannot
     /// see that crate, so callers fill it in; 0 means "unknown" and is skipped
     /// by [`compat`].
     pub abi: u32,

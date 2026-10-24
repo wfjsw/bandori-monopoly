@@ -7,6 +7,7 @@ use bandori_std::ctx::{self, trigger};
 use bandori_std::kind::Actions;
 use bandori_std::state_key;
 use card_sdk::abi::{AbKind, ActionKind, MarkFilter, TriggerKind};
+use card_sdk::{CardText, it};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{all_players, keep};
@@ -24,28 +25,30 @@ const SPREAD: &str = "spread";
 pub const EMBERS: CardDef = CardDef::new(
     "event:火种燃尽之后会怎么样呢？",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // Safety net: 「任意玩家获得[除外]…时，移除所有此卡的复制品」 re-checked
         // at a turn boundary for grants that did not raise `exile`. Residual
         // admits only when someone is actually exiled, so a no-op turn start
         // does not activate.
-        On::Action(Action::TurnStartBefore("", None, Some(any_exiled_guard), on_turn_start_clear)),
+        On::Action(Action::TurnStartBefore("", Some(any_exiled_guard), on_turn_start_clear)),
         // 「触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格」
         // -- one-shot at the drawer's own turn start.
-        On::Action(Action::TurnStartBefore("", None, Some(spread_applies), on_turn_start)),
+        On::Action(Action::TurnStartBefore("", Some(spread_applies), on_turn_start)),
         // 「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect list
         // (`SETTLE-STAGES.md` §4 M2), not a pre-settle write and not an after
         // hook. `settleBody` is the list; a field card that replaces the body
         // (`trigger::cancelled()`) skips this entry like every other.
-        On::Action(Action::SettleBody("", None, Some(on_settle_applies), on_settle)),
-        On::Action(Actions::Exile("", None, Some(on_out_applies), on_out)),
-        On::Action(Action::Bankrupt("", None, Some(on_out_applies), on_out)),
-        On::Action(Action::Abnormal("", None, Some(on_out_applies), on_out)),
+        On::Action(Action::SettleBody("", Some(on_settle_applies), on_settle)),
+        On::Action(Actions::Exile("", Some(on_out_applies), on_out)),
+        On::Action(Action::Bankrupt("", Some(on_out_applies), on_out)),
+        On::Action(Action::Abnormal("", Some(on_out_applies), on_out)),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"火种燃尽之后会怎么样呢？"#)
-            .text(r#"（1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。"#)
+            .text(CardText::items(&[
+                it(r#"将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。"#),
+            ]))
             // sheet cell A29
             .derived(false));
 

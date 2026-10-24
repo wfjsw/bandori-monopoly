@@ -17,6 +17,7 @@
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The passer this card is waiting for, or -1. A slot rather than a `GrabFx`
@@ -26,21 +27,23 @@ const PASSER: &str = "want_to_grab_passer";
 pub const WANT_TO_GRAB: CardDef = CardDef::new(
     "CRYCHIC:想要抓住...",
     &[
-        On::Play("", None, None, want_to_grab),
+        On::Play("", None, want_to_grab),
         // TODO(规则书) R5 (`SETTLE-STAGES.md` §9): 「当第一位其他玩家经过你」 is
         // 经过 (行动阶段 12, a mid-route pass of my tile) or 重叠 (`passPlayer`,
         // the end-tile overlap)? The C# `GrabFx` used `PassPlayer`; the text
         // says 「经过」. Pending ruling -- left as `PassPlayer` (C#-carried).
-        On::Action(Action::PassPlayer("actor != owner && actor >= 0", None, None, on_pass)),
-        On::Action(Action::SettleBefore("", None, None, grab)),
+        On::Action(Action::PassPlayer("actor != owner && actor >= 0", None, on_pass)).silent(),
+        On::Action(Action::SettleBefore("", None, grab)),
     ],
-).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想要抓住..."#)
         .raw_name(r#"想要抓住..."#)
         .tags(&[])
-        .text(r#"（1）获得一层[停留]。
-（2）你的下回合开始前，当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]。
-（3）你的下回合开始前，若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）并[触发结算]，视为你的主要移动。"#)
+        .text(CardText::items(&[
+            it(r#"获得一层[停留]。"#),
+            it(r#"你的下回合开始前，当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]。"#),
+            it(r#"你的下回合开始前，若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）并[触发结算]，视为你的主要移动。"#),
+        ]))
         // sheet cell M5
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 

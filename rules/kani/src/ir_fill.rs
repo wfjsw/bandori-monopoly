@@ -42,21 +42,20 @@
 //! | `effect_count` | `ov.chain_n` (default 0) |
 //! | `owner` / `owner_id` | the candidate seat |
 //! | `owner_money` | `w.money[owner]` |
-//! | `owner_fire` | `w.charge[owner]` |
-//! | `owner_crystals` | `w.group_pool[owner]` |
 //! | `owner_hand` | `hand_size` view (resonance + non-slot-1 bits + `hand_n`) |
 //! | `owner_pos` | `w.pos[owner]` |
 //! | `owner_out` | `w.out[owner]` as 0/1 |
 //! | `owner_stay` | `w.stay[owner]` |
 //! | `owner_stun` | `w.key_get(owner, STUN)` |
 //! | `owner_exile` | `w.key_get(owner, EXILE)` |
-//! | `owner_no_hand` | `w.key_get(owner, NO_HAND)` |
-//! | `owner_character` | `id_of(resolve(w.persona_id[owner]))` (name hash, matching `fill_window`) |
-//! | `owner_band` | `id_of(resolve(w.group_id[owner]))` |
 //! | `owner_tiles` | count of `w.tiles[*].owner == owner` |
 //! | `card_id` | argument (`id_of(card_name)`) |
 //! | `card_placed` | argument |
 //! | `card_tile` | `-2` = not placed, else the field-card tile (or `-1` with owner) |
+//!
+//! Content sugar keys (`charge` / `crystals` / `persona` / `group` / `noHand`)
+//! are `IrCtx.state` rows, keys from `bandori_std::cel::STATE_KEYS`. The owner
+//! overlay is written as `state[owner]` rows (one door).
 //!
 //! ### Per-seat (`SeatField`)
 //!
@@ -79,16 +78,13 @@
 //! Missing names answer 0 (`tok` / `slot` / `card.counter` default) or -1
 //! (`tile_named`), matching production.
 //!
-//! ### Sets
+//! ### Board-derived tables
 //!
-//! | set | source |
+//! | table | source |
 //! |---|---|
-//! | `Circle` | `board::TILES[i].kind == 0` |
-//! | `Ring` | `board::TILES[i].kind == 3` |
-//! | `LiveHouse` | buyable ∧ `group == 6` |
-//! | `Buyable` | kind ∈ {property=1, ring=3} |
+//! | `tile_kind_ids[t]` | `id_of(kind_spelling(board::TILES[t].kind))` |
+//! | `cand_pairs` | `(id_of("blocked"), b)` for each currently blocked band |
 //! | `ChainKinds` / `ChainHits` | `TriggerOverlay.chain` |
-//! | `BlockedBands` | `w.blocked_bands[..blocked_bands_n]` (band name ids) |
 //!
 //! ### Other
 //!
@@ -118,31 +114,29 @@ pub const TOK_PP_NEG: &str = world::TOK_PP_NEG;
 /// (not a runtime `id_of` call) keeps those hashes out of the CBMC unwind path.
 pub const ID_TOK_PP_POS: i64 = rules_cond_ir::ctx::id_of(TOK_PP_POS);
 pub const ID_TOK_PP_NEG: i64 = rules_cond_ir::ctx::id_of(TOK_PP_NEG);
-/// Player-state keys the host reads as `stun` / `exile` / `noHand`.
+/// Player-state keys the host reads as `stun` / `exile` / the `noHand` flag.
 pub const KEY_STUN: &str = "stun";
 pub const KEY_STUN_START: &str = "stunStart";
 pub const KEY_EXILE: &str = "exile";
-pub const KEY_NO_HAND: &str = "noHand";
 pub const KEY_UNSTOPPABLE: &str = "unstoppable";
-/// The finite player-state key set the IR `state(p, 'key')` table carries
-/// (`STATE_CAP = 64` = 4 seats x these). `stay` lives on `World::stay`, not
-/// `player_keys`, and is folded in by [`fill_state_rows`]. Fan counters are
-/// the `ppFansUp` / `ppFansDown` dict keys (`skill_groups::fans`).
-pub const STATE_KEYS: [&str; 7] = [
+pub const KEY_NO_HAND: &str = bandori_std::cel::KEY_NO_HAND;
+/// The finite `MatchPlayer.state` key set the IR `state(p, 'key')` table
+/// carries besides the sugar keys and `stay`. `stay` lives on `World::stay`,
+/// not `player_keys`, and is folded in by [`fill_state_rows`]. Fan counters
+/// are the `ppFansUp` / `ppFansDown` dict keys (`skill_groups::fans`).
+pub const STATE_KEYS: [&str; 6] = [
     KEY_STUN,
     KEY_STUN_START,
     KEY_EXILE,
-    KEY_NO_HAND,
     KEY_UNSTOPPABLE,
     TOK_PP_POS,
     TOK_PP_NEG,
 ];
 /// `id_of` of each [`STATE_KEYS`] entry (const, so never a CBMC hash walk).
-pub const STATE_KEY_IDS: [i64; 7] = [
+pub const STATE_KEY_IDS: [i64; 6] = [
     rules_cond_ir::ctx::id_of(KEY_STUN),
     rules_cond_ir::ctx::id_of(KEY_STUN_START),
     rules_cond_ir::ctx::id_of(KEY_EXILE),
-    rules_cond_ir::ctx::id_of(KEY_NO_HAND),
     rules_cond_ir::ctx::id_of(KEY_UNSTOPPABLE),
     rules_cond_ir::ctx::id_of(TOK_PP_POS),
     rules_cond_ir::ctx::id_of(TOK_PP_NEG),
@@ -150,6 +144,14 @@ pub const STATE_KEY_IDS: [i64; 7] = [
 /// `id_of("stay")` -- the one state key backed by `World::stay` rather than
 /// `player_keys`.
 pub const ID_STATE_STAY: i64 = rules_cond_ir::ctx::id_of("stay");
+// Sugar `state(p, key)` rows, keys shared with `bandori_std::cel::STATE_KEYS`.
+pub const ID_STATE_CHARGE: i64 = rules_cond_ir::ctx::id_of(bandori_std::cel::KEY_CHARGE);
+pub const ID_STATE_CRYSTALS: i64 = rules_cond_ir::ctx::id_of(bandori_std::cel::KEY_CRYSTALS);
+pub const ID_STATE_PERSONA: i64 = rules_cond_ir::ctx::id_of(bandori_std::cel::KEY_PERSONA);
+pub const ID_STATE_GROUP: i64 = rules_cond_ir::ctx::id_of(bandori_std::cel::KEY_GROUP);
+pub const ID_STATE_NO_HAND: i64 = rules_cond_ir::ctx::id_of(bandori_std::cel::KEY_NO_HAND);
+/// `id_of("blocked")` -- `cand_has('blocked', b)` set key.
+pub const ID_CAND_BLOCKED: i64 = rules_cond_ir::ctx::id_of("blocked");
 
 /// Board tile names (`tile_named('…')`), 0-based slot → spelling from
 /// `data/board.json`. Production `fill_window` registers every one so a
@@ -479,21 +481,17 @@ fn id_of_name_id(id: NameId) -> i64 {
     id_of_bytes(intern::resolve(id))
 }
 
-/// Fill every seat's [`SeatField`] row from the world.
+/// Fill every seat's [`SeatField`] row from the world. Sugar keys
+/// (charge/crystals/persona/group/noHand) are `state` rows, not seat fields.
 fn fill_seat(c: &mut IrCtx, w: &World) {
     for p in 0..world::MAX_PLAYERS {
         c.seat[p][SeatField::Money as usize] = w.money[p] as i64;
-        c.seat[p][SeatField::Fire as usize] = w.charge[p] as i64;
-        c.seat[p][SeatField::Crystals as usize] = w.group_pool[p] as i64;
         c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
         c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
         c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
         c.seat[p][SeatField::Stay as usize] = w.stay[p] as i64;
         c.seat[p][SeatField::Stun as usize] = key_get_name(w, p as i32, KEY_STUN);
         c.seat[p][SeatField::Exile as usize] = key_get_name(w, p as i32, KEY_EXILE);
-        c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
-        c.seat[p][SeatField::Character as usize] = id_of_name_id(NameId(w.persona_id[p]));
-        c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.group_id[p]));
         c.seat[p][SeatField::Tiles as usize] = owned_tiles(w, p as i32);
         // Turn trackers (World `gains_this_turn` / `targeted_count` /
         // `between_seat`). `gains_this_turn` is incremented by `Op::gain`;
@@ -507,11 +505,20 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
     }
 }
 
-/// Fill seat `p`'s `state(p, 'key')` rows: the finite [`STATE_KEYS`] set plus
-/// `stay` (backed by `World::stay`, not `player_keys`). 7 key-ids + stay =
-/// 8 rows per seat; 4 seats = 32 of `STATE_CAP = 64`.
+/// Fill seat `p`'s `state(p, 'key')` rows: the sugar keys (charge / crystals /
+/// persona / group / noHand) plus the finite [`STATE_KEYS`] set and `stay`.
+/// 5 sugar + 7 keys + stay = 13 rows per seat; 4 seats = 52 of `STATE_CAP = 80`.
 fn fill_state_rows(c: &mut IrCtx, w: &World, p: usize) {
     c.state_set(p as i64, ID_STATE_STAY, w.stay[p] as i64);
+    c.state_set(p as i64, ID_STATE_CHARGE, w.charge[p] as i64);
+    c.state_set(p as i64, ID_STATE_CRYSTALS, w.group_pool[p] as i64);
+    c.state_set(p as i64, ID_STATE_PERSONA, id_of_name_id(NameId(w.persona_id[p])));
+    c.state_set(p as i64, ID_STATE_GROUP, id_of_name_id(NameId(w.group_id[p])));
+    c.state_set(
+        p as i64,
+        ID_STATE_NO_HAND,
+        key_get_name(w, p as i32, KEY_NO_HAND),
+    );
     let mut i = 0usize;
     while i < STATE_KEYS.len() {
         let v = key_get_name(w, p as i32, STATE_KEYS[i]);
@@ -522,8 +529,23 @@ fn fill_state_rows(c: &mut IrCtx, w: &World, p: usize) {
     }
 }
 
-/// Board-derived membership sets (static, independent of the world).
-/// 8×8 chunk walk over the 60-tile board (unwind bound 8).
+/// Board kind code -> wire spelling (`tile_is(t, kind)` / `tile_kind_ids`).
+fn kind_spelling(kind: u8) -> &'static str {
+    match kind {
+        0 => "circle",
+        1 => "property",
+        2 => "agent",
+        3 => "ring",
+        4 => "cafe",
+        5 => "edogawa",
+        6 => "ryuseido",
+        _ => "event",
+    }
+}
+
+/// Board-derived fills (static, independent of the world): `tile_kind_ids`
+/// plus the `blocked` candidate set. 8×8 chunk walk over the 60-tile board
+/// (unwind bound 8).
 fn fill_board_sets(c: &mut IrCtx, w: &World) {
     let mut outer = 0usize;
     while outer < 8 {
@@ -532,36 +554,19 @@ fn fill_board_sets(c: &mut IrCtx, w: &World) {
             let i = outer * 8 + k;
             if i < 60 {
                 let t = board::TILES[i];
-                // Membership ids are the **0-based slot** (`tile.id` / `is_start(t)`).
-                // `TILES[i].index` is the 1-based board.json index — do not insert that.
-                let id = i as i64;
-                match t.kind {
-                    0 => {
-                        c.set_insert(SetId::Circle, id);
-                    }
-                    3 => {
-                        c.set_insert(SetId::Ring, id);
-                    }
-                    _ => {}
-                }
-                if t.kind == 1 || t.kind == 3 {
-                    c.set_insert(SetId::Buyable, id);
-                }
-                if (t.kind == 1 || t.kind == 3) && t.group == 6 {
-                    c.set_insert(SetId::LiveHouse, id);
-                }
+                c.tile_kind_ids[i] = rules_cond_ir::ctx::id_of(kind_spelling(t.kind));
             }
             k += 1;
         }
         outer += 1;
     }
-    // `BlockedBands` — band name ids the world currently blocks from skills.
+    // `cand_has('blocked', b)` — band name ids the world currently blocks.
     let mut b = 0usize;
     while b < 4 {
         if (b as u8) < w.blocked_bands_n {
             let id = w.blocked_bands[b];
             if id != 0 {
-                c.set_insert(SetId::BlockedBands, id as i64);
+                c.cand_insert(ID_CAND_BLOCKED, id as i64);
             }
         }
         b += 1;
@@ -901,20 +906,12 @@ pub fn fill_from_world(
     c.set_scalar(VarId::Owner, owner as i64);
     c.set_scalar(VarId::OwnerId, owner as i64);
     c.set_scalar(VarId::OwnerMoney, w.money[op] as i64);
-    c.set_scalar(VarId::OwnerFire, w.charge[op] as i64);
-    c.set_scalar(VarId::OwnerCrystals, w.group_pool[op] as i64);
     c.set_scalar(VarId::OwnerHand, hand_size_view(w, op));
     c.set_scalar(VarId::OwnerPos, w.pos[op] as i64);
     c.set_scalar(VarId::OwnerOut, w.out[op] as i64);
     c.set_scalar(VarId::OwnerStay, w.stay[op] as i64);
     c.set_scalar(VarId::OwnerStun, key_get_name(w, owner, KEY_STUN));
     c.set_scalar(VarId::OwnerExile, key_get_name(w, owner, KEY_EXILE));
-    c.set_scalar(VarId::OwnerNoHand, key_get_name(w, owner, KEY_NO_HAND));
-    c.set_scalar(
-        VarId::OwnerCharacter,
-        id_of_name_id(NameId(w.persona_id[op])),
-    );
-    c.set_scalar(VarId::OwnerBand, id_of_name_id(NameId(w.group_id[op])));
     c.set_scalar(VarId::OwnerTiles, owned_tiles(w, owner));
     c.set_scalar(VarId::CardId, card);
     c.set_scalar(VarId::CardPlaced, card_placed as i64);
@@ -922,6 +919,24 @@ pub fn fill_from_world(
     c.set_scalar(VarId::CardTile, if card_placed { card_tile } else { -2 });
 
     fill_seat(&mut c, w);
+    // Owner overlay as `state[owner]` rows (one door; no `owner_attr`).
+    c.state_set(owner as i64, ID_STATE_CHARGE, w.charge[op] as i64);
+    c.state_set(owner as i64, ID_STATE_CRYSTALS, w.group_pool[op] as i64);
+    c.state_set(
+        owner as i64,
+        ID_STATE_PERSONA,
+        id_of_name_id(NameId(w.persona_id[op])),
+    );
+    c.state_set(
+        owner as i64,
+        ID_STATE_GROUP,
+        id_of_name_id(NameId(w.group_id[op])),
+    );
+    c.state_set(
+        owner as i64,
+        ID_STATE_NO_HAND,
+        key_get_name(w, owner, KEY_NO_HAND),
+    );
     fill_board_sets(&mut c, w);
     fill_named(&mut c, w, owner);
     fill_geometry_bins(&mut c, w);
@@ -978,10 +993,11 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     c.set_scalar(VarId::TurnKey, w.turn_key as i64);
     let op = if owner >= 0 { owner as usize } else { 0 };
     c.set_scalar(VarId::OwnerMoney, w.money[op] as i64);
-    c.set_scalar(VarId::OwnerFire, w.charge[op] as i64);
     c.set_scalar(VarId::OwnerOut, w.out[op] as i64);
     c.set_scalar(VarId::OwnerStay, w.stay[op] as i64);
     c.set_scalar(VarId::OwnerPos, w.pos[op] as i64);
+    // Owner overlay as a `state[owner]` row (one door).
+    c.state_set(owner as i64, ID_STATE_CHARGE, w.charge[op] as i64);
     let mut p = 0usize;
     while p < world::MAX_PLAYERS {
         c.seat[p][SeatField::Money as usize] = w.money[p] as i64;
@@ -1041,23 +1057,17 @@ impl GuardNeeds {
 
 /// Seat-field bits a `FnId` call reads (0 when the call is not seat-scalar).
 /// Used by [`guard_needs`] so [`fill_for_guard`] fills only what the IR reads.
-/// `state(p, 'key')` (FnId 37) reads the separate `IrCtx::state` table, not a
-/// [`SeatField`].
+/// `state(p, 'key')` / sugar (`charge` → `State`) reads the separate
+/// [`IrCtx::state`] table, not a [`SeatField`].
 /// FnId → SeatField bitmask. Use `FnId::* as i64` (never magic numbers —
 /// the vocab renames shifted discriminants and silently broke the seat fill).
 fn seat_field_bits(fid: i64) -> u32 {
     let bit = |f: SeatField| 1u32 << (f as u32);
     match fid {
         f if f == FnId::Money as i64 => bit(SeatField::Money),
-        f if f == FnId::Fire as i64 => bit(SeatField::Fire),
-        f if f == FnId::Crystals as i64 => bit(SeatField::Crystals),
         f if f == FnId::Hand as i64 => bit(SeatField::Hand),
         f if f == FnId::Pos as i64 => bit(SeatField::Pos),
-        f if f == FnId::Character as i64 => bit(SeatField::Character),
-        f if f == FnId::Band as i64 => bit(SeatField::Band),
         f if f == FnId::Tiles as i64 => bit(SeatField::Tiles),
-        f if f == FnId::CharacterIs as i64 => bit(SeatField::Character),
-        f if f == FnId::BandIs as i64 => bit(SeatField::Band),
         f if f == FnId::GainsThisTurn as i64 => bit(SeatField::Gains),
         f if f == FnId::TargetedCount as i64 => bit(SeatField::Targeted),
         f if f == FnId::Between as i64 => bit(SeatField::Between),
@@ -1072,21 +1082,15 @@ fn fn_takes_seat_arg0(fid: i64) -> bool {
     matches!(
         fid,
         f if f == FnId::Money as i64
-            || f == FnId::Fire as i64
-            || f == FnId::Crystals as i64
             || f == FnId::Hand as i64
             || f == FnId::Pos as i64
-            || f == FnId::Character as i64
-            || f == FnId::Band as i64
             || f == FnId::Tiles as i64
-            || f == FnId::CharacterIs as i64
-            || f == FnId::BandIs as i64
-            || f == FnId::Blocked as i64
             || f == FnId::Neighbor as i64
             || f == FnId::GainsThisTurn as i64
             || f == FnId::TargetedCount as i64
             || f == FnId::Between as i64
             || f == FnId::State as i64
+            || f == FnId::CandHas as i64
     )
 }
 
@@ -1345,24 +1349,34 @@ pub fn fill_for_guard(
     set_if!(VarId::Owner, owner as i64);
     set_if!(VarId::OwnerId, owner as i64);
     set_if!(VarId::OwnerMoney, w.money[op] as i64);
-    set_if!(VarId::OwnerFire, w.charge[op] as i64);
-    set_if!(VarId::OwnerCrystals, w.group_pool[op] as i64);
     set_if!(VarId::OwnerHand, hand_size_view(w, op));
     set_if!(VarId::OwnerPos, w.pos[op] as i64);
     set_if!(VarId::OwnerOut, w.out[op] as i64);
     set_if!(VarId::OwnerStay, w.stay[op] as i64);
     set_if!(VarId::OwnerStun, key_get_name(w, owner, KEY_STUN));
     set_if!(VarId::OwnerExile, key_get_name(w, owner, KEY_EXILE));
-    set_if!(VarId::OwnerNoHand, key_get_name(w, owner, KEY_NO_HAND));
-    set_if!(
-        VarId::OwnerCharacter,
-        id_of_name_id(NameId(w.persona_id[op]))
-    );
-    set_if!(VarId::OwnerBand, id_of_name_id(NameId(w.group_id[op])));
     set_if!(VarId::OwnerTiles, owned_tiles(w, owner));
     set_if!(VarId::CardId, card);
     set_if!(VarId::CardPlaced, card_placed as i64);
     set_if!(VarId::CardTile, if card_placed { card_tile } else { -2 });
+    // Owner overlay as `state[owner]` rows (one door).
+    c.state_set(owner as i64, ID_STATE_CHARGE, w.charge[op] as i64);
+    c.state_set(owner as i64, ID_STATE_CRYSTALS, w.group_pool[op] as i64);
+    c.state_set(
+        owner as i64,
+        ID_STATE_PERSONA,
+        id_of_name_id(NameId(w.persona_id[op])),
+    );
+    c.state_set(
+        owner as i64,
+        ID_STATE_GROUP,
+        id_of_name_id(NameId(w.group_id[op])),
+    );
+    c.state_set(
+        owner as i64,
+        ID_STATE_NO_HAND,
+        key_get_name(w, owner, KEY_NO_HAND),
+    );
 
     // Seats: only the rows the guard reads.
     let seat_lo = if needs.seat_arg_symbolic || needs.seat_const < 0 {
@@ -1387,9 +1401,6 @@ pub fn fill_for_guard(
                 if sf & (1 << (SeatField::Out as u32)) != 0 {
                     c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
                 }
-                if sf & (1 << (SeatField::Fire as u32)) != 0 {
-                    c.seat[p][SeatField::Fire as usize] = w.charge[p] as i64;
-                }
                 if sf & (1 << (SeatField::Pos as u32)) != 0 {
                     c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
                 }
@@ -1402,21 +1413,8 @@ pub fn fill_for_guard(
                 if sf & (1 << (SeatField::Exile as u32)) != 0 {
                     c.seat[p][SeatField::Exile as usize] = key_get_name(w, p as i32, KEY_EXILE);
                 }
-                if sf & (1 << (SeatField::NoHand as u32)) != 0 {
-                    c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
-                }
-                if sf & (1 << (SeatField::Crystals as u32)) != 0 {
-                    c.seat[p][SeatField::Crystals as usize] = w.group_pool[p] as i64;
-                }
                 if sf & (1 << (SeatField::Hand as u32)) != 0 {
                     c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
-                }
-                if sf & (1 << (SeatField::Character as u32)) != 0 {
-                    c.seat[p][SeatField::Character as usize] =
-                        id_of_name_id(NameId(w.persona_id[p]));
-                }
-                if sf & (1 << (SeatField::Band as u32)) != 0 {
-                    c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.group_id[p]));
                 }
                 if sf & (1 << (SeatField::Gains as u32)) != 0 {
                     c.seat[p][SeatField::Gains as usize] = w.gains_this_turn[p] as i64;
@@ -1503,9 +1501,20 @@ pub fn fill_for_guard(
     // kokoro_02 1800 s cliff). Derive the masks from the enum.
     let fid_bit = |f: FnId| 1u64 << (f as u64);
     let needs_sets =
-        (needs.fns & (fid_bit(FnId::TileIs) | fid_bit(FnId::TileIn) | fid_bit(FnId::Blocked))) != 0;
+        (needs.fns & (fid_bit(FnId::TileIs) | fid_bit(FnId::TileIn) | fid_bit(FnId::CandHas)))
+            != 0;
     if needs_sets {
         fill_board_sets(&mut c, w);
+    }
+    // `state(p, key)` / sugar reads the state table.
+    if (needs.fns & fid_bit(FnId::State)) != 0 {
+        let mut p = seat_lo;
+        while p < world::MAX_PLAYERS {
+            if p < seat_hi {
+                fill_state_rows(&mut c, w, p);
+            }
+            p += 1;
+        }
     }
     // Geometry bins are the `bin_get` family only. `Dist` is modular distance
     // on the fly; `Between` is a seat field; `Neighbor`/`RepeatedDigits` are
@@ -1561,7 +1570,6 @@ pub fn fill_chain_pay(w: &World, owner: i32) -> IrCtx {
     c.set_insert(SetId::ChainKinds, rules_cond_ir::ctx::id_of("pay"));
     c.set_insert(SetId::ChainHits, owner as i64);
     c.set_scalar(VarId::EffectCount, 1);
-    let _ = (FnId::Tok, SetId::Circle);
     c
 }
 

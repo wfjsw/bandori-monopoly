@@ -454,8 +454,9 @@ pub fn nfo_stay_n_mutant() -> i32 {
 // ===========================================================================
 // Character skills -- fire-pot deltas (C-R-踏上荆棘之路的觉悟-01,
 // C-R-即使1cm也要前进-01, C-R-慈爱女神-01, C-R-来练习吧-04/05).
-// Caps are host-side (`charge_max`); the Kani `gain_charge` arm does not clamp
-// (see the unit table). Specs pin the *delta* the text names.
+// Caps are policed by the rules-layer kernel (`fire::gain_clamped`); the
+// engine `gain_marker` arm is an uncapped dumb add (matching production).
+// Specs pin the *delta* the text names.
 // ===========================================================================
 
 /// 冰川纱夜 (1): +2 on a CiRCLE pass; +1 when passed; +3 after an elimination.
@@ -525,7 +526,7 @@ pub fn student_council_add_resolve_ok(
 }
 
 /// The insert is unconditional on the optional placement branch (r.md ruling).
-/// Body-local observable: `add_to_deck` of one `R:[衍生] 觉悟` (silent write
+/// Body-local observable: `add_to_dest` of one `R:[衍生] 觉悟` (silent write
 /// under the current host — no effect-log entry).
 pub fn student_council_add_resolve_delta(pre_deck_n: i32, post_deck_n: i32) -> bool {
     post_deck_n == pre_deck_n + 1

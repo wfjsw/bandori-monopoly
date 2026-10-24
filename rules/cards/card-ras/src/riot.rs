@@ -10,22 +10,22 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, CardPile};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, On};
 
 pub const RIOT: CardDef = CardDef::new(
     "RAS:R. I. O. T.",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "by >= 0 && by != owner && effect.hits(owner)", Some(key!("riot_when")),
+        "by >= 0 && by != owner && effect.hits(owner)",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("riot_when"))],
 )
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"R. I. O. T."#)
         .raw_name(r#"R. I. O. T."#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 当你被其他人的卡效果影响时打出此卡，所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。"#)
+        .text(CardText::para(r#"[反击] 当你被其他人的卡效果影响时打出此卡，所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。"#))
         // sheet cell H2
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
@@ -42,7 +42,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         let hand = ctx::cards_in(p, CardPile::Hand);
         for id in &hand {
-            ctx::discard_from_hand(p, id);
+            ctx::discard_from_hand(p, id.as_str());
         }
         redraw.push((p, hand.len() as i32 + (p == player_id) as i32));
     }

@@ -87,7 +87,7 @@ pub fn snapshot(w: &World) -> Snap {
         for (h, c) in w
             .hidden
             .get(i)
-            .map(|h| h.draw.clone())
+            .map(|h| h.deck.clone())
             .unwrap_or_default()
             .iter()
             .enumerate()
@@ -97,7 +97,7 @@ pub fn snapshot(w: &World) -> Snap {
         for (h, c) in w
             .hidden
             .get(i)
-            .map(|h| h.discard.clone())
+            .map(|h| h.graveyard.clone())
             .unwrap_or_default()
             .iter()
             .enumerate()
@@ -421,7 +421,7 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     }
     if p == "scheduled" {
         // A rule's own turn-end callback queue. The rule scheduling itself
-        // (On::AtEnd) is its effect mechanism, not a foreign write.
+        // (On::Schedule) is its effect mechanism, not a foreign write.
         return Some("effects");
     }
     if p == "extra_turns" {

@@ -122,11 +122,11 @@ impl Table {
             let w = m.world_mut();
             for h in w.hidden.iter_mut() {
                 h.hand.clear();
-                h.draw.clear();
-                h.discard.clear();
+                h.deck.clear();
+                h.graveyard.clear();
             }
             for card in top_first.iter().rev() {
-                w.hidden[0].draw.insert(0, card.to_string());
+                w.hidden[0].deck.insert(0, card.to_string());
             }
         }
         m.quick_start();
@@ -628,8 +628,8 @@ impl Table {
         let w = self.m.world_mut();
         for h in w.hidden.iter_mut() {
             h.hand.clear();
-            h.draw.clear();
-            h.discard.clear();
+            h.deck.clear();
+            h.graveyard.clear();
             h.next_steps = None;
         }
         for p in w.st.players.iter_mut() {
@@ -650,7 +650,13 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(bandori_std::state_key::EXILE_TO, -1);
-            p.state_set(bandori_std::state_key::CHARGE, 0);
+            // Fire is a held token of the persona-skill instance (MARKERS.md §7).
+            // Clear the value only -- the declared cap is the already-declared latch.
+            for tok in p.tokens.iter_mut() {
+                if tok.name == bandori_std::fire::KEY {
+                    tok.value = 0;
+                }
+            }
             // Fans live in the state dict (`ppFansUp` / `ppFansDown`), owned
             // by the `mark:pp_fans` host. Clear the once-flag too.
             p.state_set("ppFansUp", 0);
@@ -713,12 +719,12 @@ impl Table {
 
     /// Replace the draw pile; `top_first[0]` is drawn first.
     pub fn set_draw(&mut self, who: usize, top_first: &[&str]) {
-        self.m.world_mut().hidden[who].draw =
+        self.m.world_mut().hidden[who].deck =
             top_first.iter().rev().map(|s| s.to_string()).collect();
     }
 
     pub fn set_discard(&mut self, who: usize, cards: &[&str]) {
-        self.m.world_mut().hidden[who].discard = cards.iter().map(|s| s.to_string()).collect();
+        self.m.world_mut().hidden[who].graveyard = cards.iter().map(|s| s.to_string()).collect();
     }
 
     /// Write a per-player state key. For the status layer counters this also
@@ -763,12 +769,11 @@ impl Table {
             .insert(key.into(), v);
     }
 
-    /// Fire pots: `value` held, `max` cap.
+    /// Fire pots: `value` held, `max` cap. Arranges the held-token row.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
-        let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(bandori_std::state_key::CHARGE, value);
-        let min = p.state_min(bandori_std::state_key::CHARGE);
-        p.state_set_bounds(bandori_std::state_key::CHARGE, min, max);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, bandori_std::fire::KEY, value, -1, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -907,7 +912,7 @@ impl Table {
     /// The draw pile, top first.
     pub fn draw_pile(&self, who: usize) -> Vec<String> {
         self.m.world().hidden[who]
-            .draw
+            .deck
             .iter()
             .rev()
             .cloned()
@@ -915,7 +920,7 @@ impl Table {
     }
 
     pub fn discard(&self, who: usize) -> Vec<String> {
-        self.m.world().hidden[who].discard.clone()
+        self.m.world().hidden[who].graveyard.clone()
     }
 
     pub fn field(&self, who: usize) -> Vec<FieldCard> {
@@ -996,7 +1001,15 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, bandori_std::state_key::CHARGE)
+        // Fire is a held token of the persona-skill instance.
+        self.token(who, bandori_std::fire::KEY)
+    }
+
+    /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
+    pub fn charge_max(&self, who: usize) -> i32 {
+        self.m
+            .world()
+            .tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {
@@ -1023,10 +1036,12 @@ impl Table {
         self.m.events_since(mark)
     }
 
+    /// Message keys of the events after `mark` (see [`spec_kit::event_key`]).
+    /// Walks the tail by reference -- no `MatchEvent` clone.
     pub fn keys_since(&self, mark: i32) -> Vec<String> {
-        self.events_since(mark)
-            .into_iter()
-            .map(|e| spec_kit::event_key(&e))
+        self.m
+            .events_since_ref(mark)
+            .map(|e| spec_kit::event_key(e))
             .collect()
     }
 

@@ -172,6 +172,7 @@ impl CardWorld for TestWorld {
         _fresh: bool,
     ) -> i32 {
         self.marks.push((tile, owner, note));
+        // Return a plausible mark uid (the mock does not track real rows).
         1
     }
     fn money(&self, player_id: i32) -> i32 {
@@ -243,9 +244,7 @@ impl CardWorld for TestWorld {
     fn draw(&mut self, _: i32, _: i32) -> i32 {
         0
     }
-    fn add_to_hand(&mut self, _: i32, _: &str) {}
-    fn add_to_deck(&mut self, _: i32, _: &str, _: bool) {}
-    fn add_to_deck_at(&mut self, _: i32, _: &str, _: i32) {}
+    fn add_to_dest(&mut self, _: i32, _: &str, _: i32) {}
     fn to_discard(&mut self, _: i32, _: &str) {}
     fn place_card(&mut self, _: i32, _: &str, _: game_core::msg::Msg) -> i32 {
         -1
@@ -280,15 +279,8 @@ impl CardWorld for TestWorld {
     fn tok(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn set_tok(&mut self, _: i32, _: &str, _: i32) {}
+    fn set_tok(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn add_tok(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
-        0
-    }
-    fn slot(&self, _: i32, _: &str) -> i32 {
-        0
-    }
-    fn set_slot(&mut self, _: i32, _: &str, _: i32) {}
-    fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
     fn group_pool(&self, _: i32, _: &str) -> i32 {
@@ -328,7 +320,7 @@ impl CardWorld for TestWorld {
     fn add_self_pool(&mut self, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn take_card(&mut self, _: i32, _: game_rules::CardPile, _: &str) -> bool {
+    fn take_card(&mut self, _: i32, _: &str, _: game_rules::CardPile) -> bool {
         false
     }
     fn cards_in(&self, _: i32, _: game_rules::CardPile) -> Vec<String> {

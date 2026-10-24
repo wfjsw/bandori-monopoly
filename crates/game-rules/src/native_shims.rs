@@ -138,12 +138,8 @@ pub trait HostOps {
     fn op_offer_force_buy(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_offer_build`
     fn op_offer_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_to_hand`
-    fn op_add_to_hand(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_to_deck`
-    fn op_add_to_deck(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_to_deck_at`
-    fn op_add_to_deck_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_add_to_dest`
+    fn op_add_to_dest(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_take_card`
     fn op_take_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_cards_in`
@@ -222,12 +218,6 @@ pub trait HostOps {
     fn op_state_set(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_state_add`
     fn op_state_add(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_slot`
-    fn op_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_set_slot`
-    fn op_set_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_inc_slot`
-    fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_group_pool`
     fn op_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_add_group_pool`
@@ -254,8 +244,6 @@ pub trait HostOps {
     fn op_add_marker_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_apply_abnormal` (player, kind, n, to)
     fn op_apply_abnormal(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_state_set_flags` (player, key_p, key_l, flags)
-    fn op_state_set_flags(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_raise_after` (player, name_p, name_l, value)
     fn op_raise_after(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_skip_main_move` (player, locked)
@@ -296,6 +284,8 @@ pub trait HostOps {
     fn op_opt_price(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_opt_ai`
     fn op_opt_ai(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_opt_count`
+    fn op_opt_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_ask`
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_kind` (p, n) -- two-call out-buffer spelling
@@ -398,8 +388,12 @@ pub trait HostOps {
     fn op_play_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_move`
     fn op_card_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_card_replayable`
-    fn op_card_replayable(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_query_guard` -- cross-card applicability by named entry id
+    /// (docs/ACTIVATION.md §3).
+    fn op_query_guard(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_declared_arg` -- the running activation's postcard arg
+    /// (docs/ACTIVATION.md §2).
+    fn op_declared_arg(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_roller`
     fn op_set_roller(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_steps`
@@ -645,6 +639,10 @@ pub trait HostOps {
     fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
     /// `ruleset_mark_partner`
     fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
+    /// `ruleset_mark_tile` -- the marked tile of the row at `uid`, or -1.
+    fn op_mark_tile(&mut self, uid: i32) -> Result<i64, HostErr>;
+    /// `ruleset_remove_mark` -- drop the exact row at `uid`; 1 = removed.
+    fn op_remove_mark(&mut self, uid: i32) -> Result<i64, HostErr>;
     /// `ruleset_counter_self`
     fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr>;
     /// `ruleset_add_counter_self`
@@ -702,7 +700,11 @@ pub trait HostOps {
         nl: i32,
         player_id: i32,
         v: i32,
+        max: i32,
+        instance: i32,
     ) -> Result<i64, HostErr>;
+    /// `ruleset_tok_max`
+    fn op_tok_max(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr>;
     /// `ruleset_move_units`
     fn op_move_units(
         &mut self,
@@ -933,16 +935,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_offer_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::offer_build(self, a[0], a[1])? as i64)
     }
-    fn op_add_to_hand(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::add_to_hand(self, a[0], a[1], a[2])?;
-        Ok(0)
-    }
-    fn op_add_to_deck(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::add_to_deck(self, a[0], a[1], a[2], a[3])?;
-        Ok(0)
-    }
-    fn op_add_to_deck_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::add_to_deck_at(self, a[0], a[1], a[2], a[3])?;
+    fn op_add_to_dest(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::add_to_dest(self, a[0], a[1], a[2], a[3])?;
         Ok(0)
     }
     fn op_take_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -1069,16 +1063,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_state_add(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::state_add(self, a[0], a[1], a[2], a[3])? as i64)
     }
-    fn op_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::slot(self, a[0], a[1], a[2])? as i64)
-    }
-    fn op_set_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::set_slot(self, a[0], a[1], a[2], a[3])?;
-        Ok(0)
-    }
-    fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::inc_slot(self, a[0], a[1], a[2], a[3])? as i64)
-    }
     fn op_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::group_pool(self, a[0], a[1], a[2])? as i64)
     }
@@ -1121,11 +1105,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_apply_abnormal(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::apply_abnormal(self, a[0], a[1], a[2], a[3])?;
-        Ok(0)
-    }
-    fn op_state_set_flags(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        let key = crate::hostfns::guest_str(self, a[1], a[2])?;
-        crate::hostfns::state_set_flags(self, a[0], &key, a[3] as u8)?;
         Ok(0)
     }
     fn op_raise_after(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -1200,6 +1179,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_opt_ai(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::opt_ai(self, a[0])?;
+        Ok(0)
+    }
+
+    fn op_opt_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::opt_count(self, a[0])?;
         Ok(0)
     }
     fn op_ask(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -1368,8 +1352,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_move(self, a[0])? as i64)
     }
-    fn op_card_replayable(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::card_replayable(self, a[0], a[1], a[2])? as i64)
+    fn op_query_guard(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::query_guard(self, a[0], a[1], a[2], a[3], a[4])? as i64)
+    }
+    fn op_declared_arg(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::declared_arg(self, a[0], a[1])? as i64)
     }
     fn op_set_roller(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_roller(self, a[0])?;
@@ -1526,7 +1513,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(0)
     }
     fn op_schedule_turn_end(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::schedule_turn_end(self, a[0], a[1])?;
+        crate::hostfns::schedule_turn_end(self, a[0], a[1], a[2], a[3])?;
         Ok(0)
     }
     fn op_set_no_money_loss(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -1764,6 +1751,12 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::mark_partner(self, tile, fp, fl)? as i64)
     }
+    fn op_mark_tile(&mut self, uid: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::mark_tile(self, uid)? as i64)
+    }
+    fn op_remove_mark(&mut self, uid: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::remove_mark(self, uid)? as i64)
+    }
     fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::counter_self(self, np, nl)? as i64)
     }
@@ -1830,9 +1823,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
         nl: i32,
         player_id: i32,
         v: i32,
+        max: i32,
+        instance: i32,
     ) -> Result<i64, HostErr> {
-        crate::hostfns::set_held_name(self, np, nl, player_id, v)?;
+        crate::hostfns::set_held_name(self, np, nl, player_id, v, max, instance)?;
         Ok(0)
+    }
+    fn op_tok_max(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::tok_max(self, np, nl, player_id)? as i64)
     }
     fn op_move_units(
         &mut self,
@@ -2433,52 +2431,27 @@ pub unsafe extern "C-unwind" fn ruleset_offer_build(player_id: i32, tile: i32) -
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_hand(player_id: i32, ptr: i32, len: i32) {
-    with_host(|h| match h.op_add_to_hand([player_id, ptr, len, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_add_to_dest(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    dest: i32,
+) {
+    with_host(|h| match h.op_add_to_dest([player_id, ptr, len, dest, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_deck(
-    player_id: i32,
-    ptr: i32,
-    len: i32,
-    shuffle: i32,
-) {
-    with_host(
-        |h| match h.op_add_to_deck([player_id, ptr, len, shuffle, 0, 0]) {
-            Ok(_) => {}
-            Err(e) => abort_host(e),
-        },
-    )
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_to_deck_at(
-    player_id: i32,
-    ptr: i32,
-    len: i32,
-    pos: i32,
-) {
-    with_host(
-        |h| match h.op_add_to_deck_at([player_id, ptr, len, pos, 0, 0]) {
-            Ok(_) => {}
-            Err(e) => abort_host(e),
-        },
-    )
-}
-
-#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_take_card(
     player_id: i32,
-    pile: i32,
     ptr: i32,
     len: i32,
+    src: i32,
 ) -> i32 {
     with_host(
-        |h| match h.op_take_card([player_id, pile, ptr, len, 0, 0]) {
+        |h| match h.op_take_card([player_id, ptr, len, src, 0, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },
@@ -2843,35 +2816,6 @@ pub unsafe extern "C-unwind" fn ruleset_state_add(
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_slot(player_id: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_slot([player_id, ptr, len, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_slot(player_id: i32, ptr: i32, len: i32, v: i32) {
-    with_host(|h| match h.op_set_slot([player_id, ptr, len, v, 0, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_inc_slot(
-    player_id: i32,
-    ptr: i32,
-    len: i32,
-    by: i32,
-) -> i32 {
-    with_host(|h| match h.op_inc_slot([player_id, ptr, len, by, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_group_pool(player_id: i32, np: i32, nl: i32) -> i32 {
     with_host(|h| match h.op_group_pool([player_id, np, nl, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -3009,21 +2953,6 @@ pub unsafe extern "C-unwind" fn ruleset_add_marker_max(
             Err(e) => abort_host(e),
         },
     )
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_state_set_flags(
-    player_id: i32,
-    kp: i32,
-    kn: i32,
-    flags: i32,
-) {
-    with_host(
-        |h| match h.op_state_set_flags([player_id, kp, kn, flags, 0, 0]) {
-            Ok(_) => 0,
-            Err(e) => abort_host(e),
-        },
-    );
 }
 
 #[no_mangle]
@@ -3210,6 +3139,14 @@ pub unsafe extern "C-unwind" fn ruleset_opt_price(price: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_opt_ai(ai: i32) {
     with_host(|h| match h.op_opt_ai([ai, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_opt_count(n: i32) {
+    with_host(|h| match h.op_opt_count([n, 0, 0, 0, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
@@ -3644,13 +3581,27 @@ pub unsafe extern "C-unwind" fn ruleset_card_move(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_replayable(player_id: i32, ptr: i32, len: i32) -> i32 {
+pub unsafe extern "C-unwind" fn ruleset_query_guard(
+    player_id: i32,
+    ptr: i32,
+    len: i32,
+    e_ptr: i32,
+    e_len: i32,
+) -> i32 {
     with_host(
-        |h| match h.op_card_replayable([player_id, ptr, len, 0, 0, 0]) {
+        |h| match h.op_query_guard([player_id, ptr, len, e_ptr, e_len, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },
     )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_declared_arg(out_ptr: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_declared_arg([out_ptr, cap, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]
@@ -3999,9 +3950,14 @@ pub unsafe extern "C-unwind" fn ruleset_set_play_doubled(n: i32) {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_schedule_turn_end(player_id: i32, mode: i32) {
+pub unsafe extern "C-unwind" fn ruleset_schedule_turn_end(
+    player_id: i32,
+    mode: i32,
+    id_ptr: i32,
+    id_len: i32,
+) {
     with_host(
-        |h| match h.op_schedule_turn_end([player_id, mode, 0, 0, 0, 0]) {
+        |h| match h.op_schedule_turn_end([player_id, mode, id_ptr, id_len, 0, 0]) {
             Ok(_) => {}
             Err(e) => abort_host(e),
         },
@@ -4685,6 +4641,20 @@ pub unsafe extern "C-unwind" fn ruleset_mark_partner(tile: i32, fp: i32, fl: i32
     })
 }
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_mark_tile(uid: i32) -> i32 {
+    with_host(|h| match h.op_mark_tile(uid) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_remove_mark(uid: i32) -> i32 {
+    with_host(|h| match h.op_remove_mark(uid) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_counter_self(np: i32, nl: i32) -> i32 {
     with_host(|h| match h.op_counter_self(np, nl) {
         Ok(v) => v as i32,
@@ -4788,9 +4758,23 @@ pub unsafe extern "C-unwind" fn ruleset_count_held_name(np: i32, nl: i32, player
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_held_name(np: i32, nl: i32, player_id: i32, v: i32) {
-    with_host(|h| match h.op_set_held_name(np, nl, player_id, v) {
+pub unsafe extern "C-unwind" fn ruleset_set_held_name(
+    np: i32,
+    nl: i32,
+    player_id: i32,
+    v: i32,
+    max: i32,
+    instance: i32,
+) {
+    with_host(|h| match h.op_set_held_name(np, nl, player_id, v, max, instance) {
         Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_tok_max(np: i32, nl: i32, player_id: i32) -> i32 {
+    with_host(|h| match h.op_tok_max(np, nl, player_id) {
+        Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }

@@ -10,24 +10,25 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
     "MyGO:哪怕这旅程没有终点",
     &[
-        On::Play("", None, None, endless_journey),
-        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, turn_end)),
+        On::Play("", None, endless_journey),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
         // （2）「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect
         // list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」 window. A
         // field card that replaces the body skips this entry.
-        On::Action(Action::SettleBody("actor == owner && move.main && card.placed", None, None, settle_body)),
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::SettleBody("actor == owner && move.main && card.placed", None, settle_body)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"哪怕这旅程没有终点"#)
         .raw_name(r#"哪怕这旅程没有终点"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶，每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹水晶数量为0时，将此卡置入弃牌堆。（2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数"#)
+        .text(CardText::para(r#"[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶，每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹水晶数量为0时，将此卡置入弃牌堆。（2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数"#))
         // sheet cell I14
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
@@ -60,7 +61,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     if ctx::turn_main_steps() <= 6 {
         return Ok(());
     }
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 

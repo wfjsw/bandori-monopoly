@@ -73,8 +73,8 @@ fn open_at_mulligan(chars: &[&str], top_first: &[&str]) -> Match {
         let w = m.world_mut();
         for h in w.hidden.iter_mut() {
             h.hand.clear();
-            h.draw.clear();
-            h.discard.clear();
+            h.deck.clear();
+            h.graveyard.clear();
         }
         // `submit_deck` (run by `quick_start` when `!deck_ready`) replaces the
         // draw pile wholesale. Mark the decks ready so the seed below survives
@@ -106,7 +106,7 @@ fn open_at_mulligan(chars: &[&str], top_first: &[&str]) -> Match {
             }
         }
         // `hidden.draw` top is the **end** of the vec.
-        w.hidden[0].draw = pile.into_iter().rev().collect();
+        w.hidden[0].deck = pile.into_iter().rev().collect();
     }
     m.quick_start();
     m
@@ -361,7 +361,7 @@ fn g_cards_10_mulligan_redraws_two_exactly_once() {
     ];
     let mut m = open_at_mulligan(&["美竹兰", "青叶摩卡"], &top);
     let hand_before: Vec<String> = m.world().hidden[0].hand.clone();
-    let pile_before: Vec<String> = m.world().hidden[0].draw.clone();
+    let pile_before: Vec<String> = m.world().hidden[0].deck.clone();
     let before = piles(m.world(), 0);
     assert_eq!(
         before.values().sum::<usize>(),

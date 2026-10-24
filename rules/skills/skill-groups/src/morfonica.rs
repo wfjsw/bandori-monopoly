@@ -25,17 +25,13 @@ pub const MORFONICA: CardDef = CardDef::new(
         On::Action(Action::PayAfter(
             "actor == owner && value >= 2000 && target != owner",
             None,
-            None,
-            after_pay,
-        )),
+            after_pay)),
         // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
         // half of the CiRCLE pick.
         On::Action(Actions::PassRewardAffected(
             "actor == owner && value == 0",
             None,
-            None,
-            on_circle,
-        )),
+            on_circle)),
     ],
 );
 

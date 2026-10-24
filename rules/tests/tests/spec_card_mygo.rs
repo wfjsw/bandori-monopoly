@@ -2069,7 +2069,7 @@ fn tomori_skill_fire_cap_and_initial() {
     let t = Table::new(&["高松灯", "千早爱音"]);
     assert_eq!(t.charge(0), 4, "C-MYGO-tomori-skill-01: initial 4");
     assert_eq!(
-        t.p(0).state_max("charge"),
+        t.charge_max(0),
         4,
         "C-MYGO-tomori-skill-01: cap 4"
     );
@@ -2188,7 +2188,7 @@ fn anon_skill_fire_on_passing_circle() {
 fn anon_skill_fire_cap_and_initial() {
     let t = Table::new(&["千早爱音", "高松灯"]);
     assert_eq!(t.charge(0), 2, "C-MYGO-anon-skill-01: initial 2");
-    assert_eq!(t.p(0).state_max("charge"), 3, "C-MYGO-anon-skill-01: cap 3");
+    assert_eq!(t.charge_max(0), 3, "C-MYGO-anon-skill-01: cap 3");
 }
 
 /// C-MYGO-anon-skill-02: after [停留]/[传送] resolves, spend 2 pots to draw.
@@ -2279,7 +2279,7 @@ fn rana_skill_fire_on_passing_circle() {
 fn rana_skill_fire_cap_and_initial() {
     let t = Table::new(&["要乐奈", "高松灯"]);
     assert_eq!(t.charge(0), 3, "C-MYGO-rana-skill-01: initial 3");
-    assert_eq!(t.p(0).state_max("charge"), 3, "C-MYGO-rana-skill-01: cap 3");
+    assert_eq!(t.charge_max(0), 3, "C-MYGO-rana-skill-01: cap 3");
 }
 
 /// C-MYGO-rana-skill-02/03/04/06: Space teleport, foreign-owner settle,
@@ -2461,7 +2461,7 @@ fn soyo_skill_fire_on_passing_circle() {
 fn soyo_skill_fire_cap_and_initial() {
     let t = Table::new(&["长崎素世", "高松灯"]);
     assert_eq!(t.charge(0), 1, "C-MYGO-soyo-skill-01: initial 1");
-    assert_eq!(t.p(0).state_max("charge"), 1, "C-MYGO-soyo-skill-01: cap 1");
+    assert_eq!(t.charge_max(0), 1, "C-MYGO-soyo-skill-01: cap 1");
 }
 
 /// C-MYGO-soyo-skill-02: after the move dice, spend 1 pot to treat the
@@ -2539,7 +2539,7 @@ fn rikki_skill_fire_cap_and_initial() {
     let t = Table::new(&["椎名立希", "高松灯"]);
     assert_eq!(t.charge(0), 0, "C-MYGO-rikki-skill-01: initial 0");
     assert_eq!(
-        t.p(0).state_max("charge"),
+        t.charge_max(0),
         5,
         "C-MYGO-rikki-skill-01: cap 5"
     );

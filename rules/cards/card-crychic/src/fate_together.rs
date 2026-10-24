@@ -12,20 +12,24 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const FATE_TOGETHER: CardDef = CardDef::new(
     "CRYCHIC:一起演奏音乐的命运共同体",
     &[
-        On::Play("", None, None, fate_together),
-        On::Action(Action::PayAfter("", None, Some(counteract_guard), counteract)),
-        On::Action(Action::TurnStart("", None, Some(counteract_guard), counteract)),
+        On::Play("", None, fate_together),
+        On::Action(Action::PayAfter("", Some(counteract_guard), counteract)),
+        On::Action(Action::TurnStart("", Some(counteract_guard), counteract)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一起演奏音乐的命运共同体"#)
         .raw_name(r#"一起演奏音乐的命运共同体"#)
         .tags(&[r#"手"#])
-        .text(r#"（1）[手] 直到你的下回合开始，每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。（2）若此卡打出后（1）效果未产生作用，将此卡返回手牌（不触发乐队技能的（3）效果）。"#)
+        .text(CardText::items(&[
+            it(r#"[手] 直到你的下回合开始，每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。"#),
+            it(r#"若此卡打出后（1）效果未产生作用，将此卡返回手牌（不触发乐队技能的（3）效果）。"#),
+        ]))
         // sheet cell M9
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 

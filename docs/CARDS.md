@@ -11,7 +11,7 @@ The same authoring shape covers the other rule categories: board tiles
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
 the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
-what runs while it is active, `On::Action(Action::AtEnd(...))` for expiry.
+what runs while it is active, `On::Schedule(id, …)` for expiry.
 
 ## How a card runs
 
@@ -31,11 +31,11 @@ use card_sdk::{key, CardDef, Filter, Action, Msg, On};
 
 /// C# `CardPress` -- 压: gain 1,000.
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
-    On::Play("", "", None, press),
-    // On::Play("", "", Some(cant_play), press),          // C# `Card.WhyNot` gate
-    // On::Counteract(&[ChainKind::Pay], "", r#"你将要失去或支付资金"#, guard, counteract),  // [反击]: kinds + condition + reason + guard + effect
-    // On::Action(Action::TurnEnd("", "", guard, decay)),          // field hooks, auto-run in play
-    // On::Action(Action::AtEnd("", "", None, at_end)),        // scheduled turn-end body
+    On::Play("", None, press),
+    // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
+    // On::Counteract(&[ChainKind::Pay], "", guard, counteract).counter_reason(r#"你将要失去或支付资金"#),  // [反击]: kinds + condition + guard + effect + reason
+    // On::Action(Action::TurnEnd("", guard, decay)),          // field hooks, auto-run in play
+    // On::Schedule("at_end", "", None, at_end),           // scheduled turn-end body
     // On::Filter(Filter::DiceRollPlan("", None, roll_plan)), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
@@ -50,7 +50,7 @@ guard + the effect, `On::Action` one event-hook kind (`passTile`, `drawn`,
 `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) and `On::Filter` one
 modifier stage (`paySplitAdd`, `buySet`, ...). Constructors come from the
 `filter_kinds!` / `action_kinds!` tables (`Filter::DiceRollPlan(pre, guard, body)`,
-`Action::TurnEnd(pre, counter_reason, guard, body)`). **One kind per entry** --
+`Action::TurnEnd(pre, guard, body)` + optional `.counter_reason(key)`). **One kind per entry** --
 a card that listens at two raises declares two entries. Ruleset kinds use their
 own namespace (`Filters::MyRewrite`, `Actions::Exile`).
 
@@ -72,15 +72,15 @@ final `On` set (ABI v94):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
-| `On::Play(pre, counter_reason, gate, body)` | `fn(i32) -> Asked` | play from hand (`counter_reason` = `Option<MsgKey>`, the prompt's 「…时」 clause) | yes |
-| `On::Counteract(kinds, pre, counter_reason, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`counter_reason` = `Option<MsgKey>`) | yes |
+| `On::Play(pre, gate, body)` | `fn(i32) -> Asked` | play from hand (`.counter_reason(key)` = the prompt's 「…时」 clause) | yes |
+| `On::Counteract(kinds, pre, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links (`.counter_reason(key)` = the 「…时」 clause) | yes |
 | `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
 | `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
 | `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
 | `On::Buy(pre, guard, body)` | `fn(i32) -> Asked` | a deed's buy / perform body (v80) | yes (`ctx::pay_buy`, `ctx::assign_deed`, `ctx::raise`, `ctx::log`) |
 | `On::Build(pre, guard, body)` | `fn(i32) -> Asked` | a deed's build / perform body (v80) | yes (`ctx::pay_build`, `ctx::raise`, `ctx::log`) |
-| `On::Action(ActionEntry)` | `fn(i32) -> Asked` | **event reaction** at one kind (`counter_reason` = `Option<MsgKey>`) | yes (`ctx::gain`, log, place, …) |
+| `On::Action(ActionEntry)` | `fn(i32) -> Asked` | **event reaction** at one kind (`.counter_reason(key)` = the 「…时」 clause) | yes (`ctx::gain`, log, place, …) |
 | `On::Filter(FilterEntry)` | shape-dependent, see below | **pure value / decision / gate / payload rewrite** at one kind | no (pure) |
 
 `On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` stay their own
@@ -91,7 +91,7 @@ Wire ids 9 / 10 (master's v73) and 12 / 13 (v80).
 
 `On::Action` / `On::Filter` are **one kind per entry** (every multi-kind list
 was split). Constructors come from the `action_kinds!` / `filter_kinds!` macros
-in `rules/card-sdk/src/kinds.rs`; the body shape is pinned by the constructor
+in `crates/card-sdk/src/kinds.rs`; the body shape is pinned by the constructor
 (`FilterShape`), so a filter body can never be registered on the wrong kind
 and there is no `check_kind_variant`. `On::Counteract` still takes a list of
 `ChainKind` (a [反击] may answer several chain links).
@@ -121,7 +121,7 @@ as `None` are not written back.
 
 | id | was | folded into | ABI |
 |---|---|---|---|
-| 4 | `OnKind::AtEnd` | `On::Action(Action::AtEnd(...))` | v76 |
+| 4 | `OnKind::AtEnd` | `On::Action(Action::AtEnd(...))` → v102 `On::Schedule(id, …)` | v76 → v102 |
 | 5 | `OnKind::RollPlan` | `On::Filter(Filter::DiceRollPlan(...))` | v76 |
 | 6 | `OnKind::Gate` | `On::Filter(Filter::ActGate(...))` / `On::Filter(Filter::DiceRollPlan(...))` at the gate kinds | v77 |
 
@@ -145,7 +145,7 @@ Folding would make the tile body just another `Action(SettleBody)` and lose the
 
 ### Filter payload types (the minimal clean set)
 
-Per-kind payloads live in `rules/card-sdk/src/payload.rs`. `None` = leave the
+Per-kind payloads live in `crates/card-sdk/src/payload.rs`. `None` = leave the
 host's answer alone; there is no `UNCHANGED` sentinel and no `i32::MIN`
 encoding. One `FilterPayload` impl each, flattened to `i32` only at the
 `hostfns.rs` wasm-import edge.
@@ -189,7 +189,7 @@ takes.
 per kind plus `Filter::KINDS` / `Action::KINDS` (`&'static [KindInfo]`) for pin
 tests and tooling. The constructor type pins the side -- there is no
 `check_kind_variant`. The engine table (ids, spellings, `is_filter`) lives in
-`crates/game-kinds`; the DSL constructors live in `rules/card-sdk/src/kinds.rs`.
+`crates/game-kinds`; the DSL constructors live in `crates/card-sdk/src/kinds.rs`.
 
 **Dual-role ids** (one wire id, two typed views) are ids used both as a
 [反击] chain link and as an Action-listened event. They have an `ActionKind`
@@ -236,9 +236,9 @@ long gone and those questions are `On::Filter(Filter::ActGate(...))` entries.
 
 Filter bodies may not prompt and may not call mutating `ctx` effects.
 `card_sdk::pure::refuse_if_filter` debug-asserts (and tests enforce) every
-mutating call: `gain` / `draw` / `place_card` / `set_dest` / `set_slot` /
-`inc_slot` / `roll` / `set_prop` / `state::set` / `plan::set_tag` /
-`add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
+mutating call: `gain` / `draw` / `place_card` / `place_self_to_field` /
+`set_dest` / `set_slot` / `inc_slot` / `roll` / `set_prop` / `state::set` /
+`plan::set_tag` / `add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
 log-why rule). A fused hook (value rewrite + gain/place/…) is split into a
 Filter half and an `On::Action` half on the appropriate event (e.g. `PayAfter`).
 
@@ -269,7 +269,7 @@ immediately before the pure filter stage:
 
 The engine kind table in `crates/game-kinds` (`ENGINE_KINDS`) is the **single
 declaration source of truth** for ids, spellings, and `is_filter`. The typed
-mirror is `Filter::KINDS` / `Action::KINDS` in `rules/card-sdk/src/kinds.rs`.
+mirror is `Filter::KINDS` / `Action::KINDS` in `crates/card-sdk/src/kinds.rs`.
 Today (27 filter kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
@@ -338,11 +338,17 @@ modifier touched stays exactly as the base formula produced it.
 ### v76: DiceRollPlan / AtEnd fold
 
 `On::RollPlan` is `On::Filter(Filter::DiceRollPlan(pre, guard, body))` (the
-plan is a `PlanValue`). `On::AtEnd` is `On::Action(Action::AtEnd(pre, reason,
-guard, body))`: the one-shot-ness lives in the existing `schedule_turn_end`
+plan is a `PlanValue`). `On::AtEnd` is `On::Action(Action::AtEnd(pre, guard,
+body))`: the one-shot-ness lives in the existing `schedule_turn_end`
 list (`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire
 ids `OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never
 be reused.
+
+**v102** renames the scheduled-callback entry to `On::Schedule(id, pre, guard,
+body)` -- a required stable ASCII slug names it, and the scheduling family
+(`ctx::at_turn_end` / `ctx::before_turn_end` / `ctx::at_next_turn_end`) takes
+that `id`. `OnKind::Schedule = 14`. The evaluation window is still
+`TriggerKind::AtEnd` (`turnEndBefore` / `turnEndAfter`).
 
 **ChargePaying stays Action.** Its 「可」 opt-in prompts and Filter bodies
 cannot. Everything else that used to be a gate is a Filter.
@@ -367,13 +373,13 @@ use card_sdk::{pre, On, Action};
 
 // condition (`pre: &'static str`) before the guard
 On::Counteract(&[ChainKind::DiceRollValue], "actor == owner && move.roll != null",
-               r#"你将要失去或支付资金"#, can_counteract, counteract),
+               can_counteract, counteract).counter_reason(r#"你将要失去或支付资金"#),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Action(Action::TurnEnd(pre::MINE, "", guard, decay)),
+On::Action(Action::TurnEnd(pre::MINE, guard, decay)),
 
 // or the const builder
-On::Play("", "", Some(cant_play), play).pre("owner.money >= 1500"),
+On::Play("", Some(cant_play), play).pre("owner.money >= 1500"),
 ```
 
 **Distinct layers (nothing is rejected twice).** The category filter (the
@@ -391,26 +397,24 @@ The compiled lean form (`Cond::to_bytes(false)`) rides the ruleset so the
 browser glue evaluates with `rules-cond`'s `runtime-only` build and never ships
 the CEL parser.
 
-## Silent bookkeeping entries (`CardDef::silent`, ABI v53)
+## Silent bookkeeping entries (`On::silent`, ABI v53)
 
 Most entries flash the card and write a 「效果适用」 header when their body
 runs. Some entries are **bookkeeping**: a mechanical declaration or reset the
 player never sees as a clause firing. Those run their body but post no
-`"card"` event and no header -- mark them with `CardDef::silent(&[entry, …])`
-(indices into the `&[On]` table, 0-based):
+`"card"` event and no header -- mark them with `.silent()` on the entry:
 
 ```rust
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play("", "", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
+        On::Play("", Some(can_use), use_skill),                         // 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Action(Action::TurnStartBefore("", "", None, declare_cap)),     // 1: bookkeeping
-        On::Action(Action::DeckAtGameStart("", "", None, declare_cap)),     // 2: bookkeeping
-        On::Action(Action::TurnEnd("", "", Some(afterglow), tick)),         // 3: 「获得[火罐]」 -- flashes
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        On::Action(Action::TurnEnd("", Some(afterglow), tick)),         // 「获得[火罐]」 -- flashes
     ],
-)
-.silent(&[1, 2]);
+);
 ```
 
 **When to use it.** An effect the rulebook describes as happening (gain, pay,
@@ -432,11 +436,11 @@ entry that produces a visible result is a bug, and the host's debug guard
 (`game_rules::take_silent_visible` / `debug_assert!`) records it. Nested
 activations from a silent body still announce normally.
 
-Path: `CardDef::silent` → `ManifestOn::silent` (ABI v53) →
+Path: `On::silent` → `ManifestOn::presentation` (ABI v53) →
 `announce_drive` skips the `"card"` post and the 「效果适用」 header; the body
 runs the full category → pre → guard layering unchanged.
 
-## Flash policy (`CardDef::flash`, ABI v55)
+## Flash policy (`On::flash`, ABI v55)
 
 Beside the header mode (Visible / Silent / QuietWhenEmpty), each entry carries
 a **flash policy** -- whether the activation's centre flash (and field-slot
@@ -452,9 +456,9 @@ pulse) shows:
 
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
-    On::Play("", "", None, use_skill),                  // 0: Auto
-    On::Action(Action::TurnEnd("", "", None, tick)),    // 1: Always (self-only)
-]).flash(&[(1, Flash::Always)]);
+    On::Play("", None, use_skill),                                    // Auto
+    On::Action(Action::TurnEnd("", None, tick)).flash(Flash::Always), // Always (self-only)
+]);
 ```
 
 **Precedence** (highest first): `Flash::Never` > `ctx::no_flash()` >
@@ -480,12 +484,48 @@ stays shown. The identity lives in the drive's persistent state and survives
 halt; the client dedupes by event id so a re-delivered frame never replays a
 flash.
 
-**QuietWhenEmpty interaction**: a requested flash counts as visible -- if
-`ctx::flash()` ran, the header is kept.
+**QuietWhenEmpty interaction**: a **cue** counts as visible -- the header is
+kept. Both spellings of "cue me" count: the imperative `ctx::flash()` and the
+declarative `Flash::Always` (`On::flash`). Cue and flash-decision are two
+separate signals: `flash_cued` is the OR of those two across the drive's
+entries ("was the player cued"), while the `flash` flag stamped on the `"card"`
+event is the **folded** policy (`Never` can still suppress it). A drive that
+was cued keeps its header naming the clause even when `Never` wins the flash
+decision -- `Never`'s promise is "log entry remains, no flash", not "erase the
+clause".
 
-Path: `CardDef::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
+Path: `On::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
 `"card"` event's `flash` flag under the precedence above. Proactive `"flash"`
 events play through the client's cardFlash path.
+
+**Multi-entry drives.** `run_hook` announces once per matching entry, then
+`commit_after` takes **one** flash decision for one header. The sibling
+entries' policies therefore **fold** (`Never` if any says `Never`; else
+`Always` if any says `Always`; else `Auto`) -- a trailing `Auto` must not drop
+an earlier `Always`, and a trailing `Always` must not lift an earlier `Never`.
+`ctx::flash` / `ctx::no_flash` keep their runtime positions in the precedence.
+Header mode folds the same way but with the opposite polarity
+(`Visible` > `QuietWhenEmpty` > `Silent`): one entry demanding its clause be
+shown must not be silenced by a quiet or bookkeeping sibling, in either order.
+
+## Tile text (`On::texts`)
+
+Deed-popup text rides the entry that speaks it (`On::texts(&[(slot, tile,
+key)])`), not an entry-index side table -- so it cannot drift when entries are
+reordered. See [TILES.md 「Tile text」](TILES.md#tile-text) for the shape,
+precedence, and the `event:协助CiRCLE重建` worked example.
+
+```rust
+pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
+    On::Settle("", None, settle)
+        .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+    On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
+        .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+]);
+```
+
+Path: `On::texts` → `ManifestTileText` (v59, entry index synthesised from
+declaration order) → `CardRules::card_texts` → `compose_tile_texts`.
 
 ## Bot-only estimated execution cost
 
@@ -497,7 +537,7 @@ expression. Declare it with `CardDef::new(...).props(&[(prop::EST_COST, N)])`.
 `0` (the default) means unknown / assume free.
 
 ```rust
-pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play("", "", None, gacha10)])
+pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play("", None, gacha10)])
     .props(&[(card_sdk::abi::prop::EST_COST, 1500)]);
 ```
 
@@ -702,9 +742,9 @@ are `tile_in` classes.
 | board (game sugar) | `is_buyable`, `is_shop`, `is_ring`, `is_circle`, `is_live_house`, `is_agent` |
 | players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `turn_player`, `round_no`, `turn_key`, `gains_this_turn` (「当前回合内你每获得过一次资金」 -- the engine's per-turn money-in counter, reset at each turn start). Game: `character_is`, `in_band` |
 | targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
-| hand & deck | `draw`, `add_to_hand`, `add_to_deck`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `add_to_deck_at` (`DeckPos::{Top,Bottom,Random}`), `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, CardPile, id)` / `take_from_hand` (remove without discarding) |
-| marks & tokens | `place_mark`, `place_mark_new`, `count_marks`, `bump_mark`, `remove_marks`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
-| tile designations | `designate_tile`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance (see 「Tile designations」) |
+| hand & deck | `draw`, `add_to_dest(player_id, card, Dest::…)`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, card, CardPile)` (remove without discarding) |
+| marks & tokens | `place_mark` (returns a `MarkRef`), `count_marks`, `bump_mark`, `remove_marks`, `mark_tile`, `remove_mark`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
+| tile designations | `designate_tile`, `undesignate`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance; `designate_tile` returns a `MarkRef` to store in card state (see 「Tile designations」) |
 | named counters (ABI v50) | `counter` / `add_counter` / `set_counter` (this instance), `counter_at` / `add_counter_at` (by uid), `card_counter` / `add_card_counter` (a placed card by id). Wire names `cp` / `crystals` map to `FieldCard::cp` / `FieldCard::crystals`; anything else lives in `FieldCard::counters`. The old CP helpers (`place_cp` / `count_cp` / `clear_cp` / `add_cp` / `cp_attached`) are **gone** -- use the mark / counter API, and see 「Cross-card messages」 for the 该清CP了 ↔ `mark:cp` shape |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
 | pots & status (generic) | `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
@@ -714,7 +754,7 @@ are `tile_in` classes.
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_tiles` (labels + prices + AI hint), `ask_player`, `ask_card`, `ask_number` |
 | nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | purchase (ABI v40/41) | `buy_quotes(player, kind, &[tile])` (batched quote), `buy(player, tile, kind)` (replaces `card_buy`), `acquire(player, from, tile, price)` (「收购」: pipeline pay, then assign → `bought` → `buyAfter`), `agent_offer`, `linger(player, expires)` (bind the running def as a turn-scoped instance in `TurnCtx.lingering` -- the hand-card home for 「本回合」 effects; a `set_prop` before it lands on the instance's props), `buy_price(t)` (the deed's base value). `trigger::{buy_kind, seller, price, set_price, deal_owner, set_deal_owner, deal_houses, set_deal_houses, deal_mortgaged, set_deal_mortgaged, set_reason}` carry the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` / `BuyAssign` payload (`docs/PURCHASE.md`). |
-| field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
+| field cards | `place_card`, `place_card_at`, `place_self_to_field` (「将此卡放置在场上」: `set_dest(Dest::Field)` + `place_card`, for a play body that stays in play; else `place_card` / `place_card_at` and name the card's own `Dest`), `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
 | cross-card messages (ABI v51) | `send(Target, name, &Message)`, `On::Message(names, pre, guard, body)`, `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text, reply}` -- see 「Cross-card messages」 |
 | tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `prop_at`, `set_prop_at`, `draw`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `buy`, `buy_quotes`, `card_build`, `ask_tiles`, `ai_agent_choice`, `is_color`, `raise`, `gain_typed`, `exile_of`, `stun_of`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 | event rules | `event_expire`, `event_is_active`, `event_deck_push`, `event_banish` (the active-list / deck handles; `docs/EVENTS.md`) |
@@ -797,22 +837,62 @@ the instance), which is what the board label and tooltip show.
 Lifetime matches 「指定」 lasting while the card is in play: the mark is a unit
 of the designating instance's counter, so `destroy_instance_units` clears it
 when that instance leaves the field. A designation that ends **earlier** (a
-state exit, a turn boundary) calls `ctx::undesignate_tile` at that point.
+state exit, a turn boundary) calls `ctx::undesignate` / `ctx::undesignate_tile`
+at that point.
+
+`designate_tile` returns a [`MarkRef`] -- a durable handle to that mark row.
+The mark is the displayed record; the stored ref is the retrievable handle.
+Keep it in card state and resolve the pick later:
 
 ```rust
-ctx::designate_tile(tile, player_id, &Msg::new(key!("note")))?;
-// later, if the designation ends before the card does:
+let r = ctx::designate_tile(tile, player_id, &Msg::new(key!("note")));
+ctx::set_slot(player_id, "my.deed", r.into());
+// later:
+let r = MarkRef::from(ctx::slot(player_id, "my.deed"));
+if r.is_live() { let t = r.tile(); /* ... */ }
+// designation ends early, card still in play:
+ctx::undesignate(r);
+// batch / every designation of this instance on one tile:
 ctx::undesignate_tile(tile);
 // the pick as the source of truth:
 if ctx::designates(tile) { .. }
 for t in ctx::designated_tiles() { .. }
 ```
 
+Handles are unique for the lifetime of a match and are never recycled, so a
+stored ref either resolves to exactly the row it was issued for or reports
+dead (`r.tile() < 0`) once that row is gone. It never aliases onto a later mark.
+
 `designate_tile` is sugar over `place_mark` with the designation category and
 `Stack::Fresh` (one label per pick). Prefer it over ad-hoc slots / state keys
 when the mark can be the source of truth; where the rule needs a value the
 mark does not carry (a counterpart player, an engine-owned return tile), keep
-that storage and add the mark as the displayed record.
+that storage and add the mark as the displayed record. The `MarkRef` is the
+handle back to the mark -- store it when you need to resolve / drop that one
+pick later (as `AG:ONE OF US` does with `one_of_us_mine` / `one_of_us_theirs`).
+
+## Activation arguments (`declare`, ABI v98) + cross-card applicability
+
+Two entry-level mechanisms, designed together — see **`docs/ACTIVATION.md`**.
+
+* **`On::….declare(fn(i32) -> Declared)`** collects a decision *before* the
+  activation commits and hands the result to the body as its second parameter
+  (`fn(i32, i32) -> Asked`). `Declared = Result<Option<i32>, Prompt>`;
+  `Ok(None)` declines and the entry does not fire at all. This is the only
+  correct home for a choice that is part of *declaring* an activation: the
+  point of no return is `hand.remove` (`play_from_hand` /
+  `build_round`), and a body ask runs after it. Generalises
+  `COUNTERACT_MOVE_EXTENSION` from one hard-coded tag to a per-entry
+  collector.
+* **`ctx::can_fire(player_id, id, kind, trigger)`** asks whether *another*
+  card's entry would admit — condition + residual guard / play gate through
+  `admits`, body never run, probe-mode (never prompts). `ctx::card_replayable`
+  is the `On::Play` spelling of it. Callable from a residual guard, from a
+  `declare`, and from a body.
+
+A card that wants another card's *effect* still uses `ctx::invoke_skill` /
+  `ctx::play_card` / `ctx::send` — `can_fire` is the query half beside them,
+  not a fourth effect seam.
 
 ## Cross-card messages (ABI v51)
 
@@ -852,7 +932,7 @@ The shape:
 
 ```rust
 // 通用:该清CP了
-On::Play("", "", Some(cant_play), clear_cp),
+On::Play("", Some(cant_play), clear_cp),
 On::Action(&[ActionKind::CpChanged], "", "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
@@ -876,8 +956,8 @@ asking it to place CP units; `mark:cp`'s `On::Message` handler runs
 
 ```rust
 // 通用:该清CP了
-On::Play("", "", Some(cant_play), clear_cp),
-On::Action(Action::CounterChanged("", "", Some(cp_empty_guard), on_cp_empty)),
+On::Play("", Some(cant_play), clear_cp),
+On::Action(Action::CounterChanged("", Some(cp_empty_guard), on_cp_empty)),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -911,7 +991,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
 
 // rules/markers/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
-On::Action(Action::SettleBody("", "", Some(lands_on_cp), on_land)),
+On::Action(Action::SettleBody("", Some(lands_on_cp), on_land)),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();

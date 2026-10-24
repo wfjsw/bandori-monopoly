@@ -50,7 +50,7 @@ events = ["dep:rules-events", "kani-bump"]
 
 [dependencies]
 card-sdk = { workspace = true, features = ["guest"] }
-bandori-std = { path = "../bandori-std" }
+bandori-std = { path = "../bandori-std", features = ["cel-ext"] }
 # Unmodified card / skill / event bodies under proof. Optional per unit
 # (see [features]) so a single-unit kani build links only that unit's crates.
 card-ag = { path = "../cards/card-ag", optional = true }
@@ -71,7 +71,7 @@ rules-tiles = { path = "../tiles", optional = true }
 rules-markers = { path = "../markers", optional = true }
 rules-events = { path = "../events", optional = true }
 # Single-source guard IR (heap-free; the translator output).
-rules-cond-ir = { path = "../cond-ir" }
+rules-cond-ir = { path = "../../crates/cond-ir" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 serde = { workspace = true }
 
@@ -82,13 +82,15 @@ serde = { workspace = true }
 # `build.rs` generates the guard IR table (`generated::cond_irs`) from the guard
 # condition strings on every build; it is never committed.
 [build-dependencies]
-rules-cond = { path = "../cond", features = ["lower"] }
+rules-cond = { path = "../../crates/cond", features = ["lower"] }
+bandori-std = { path = "../bandori-std", features = ["cel-ext"] }
+game-rules = { path = "../../crates/game-rules" }
 
 [dev-dependencies]
 game-rules = { path = "../../crates/game-rules" }
 game-core = { path = "../../crates/game-core" }
 # `lower_src` for the status-fn fill differential (conf_fill_diff).
-rules-cond = { path = "../cond", features = ["lower"] }
+rules-cond = { path = "../../crates/cond", features = ["lower"] }
 
 # The `kani` crate is injected by `cargo kani` / kani-compiler from the Kani
 # sysroot (`~/.kani/kani-<ver>/lib/libkani.rlib`). It is NOT the crates.io

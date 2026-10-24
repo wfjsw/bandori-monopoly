@@ -646,8 +646,12 @@ rulings above.
 * The band tab's alternate Pastel✽Palettes 技能卡/角色卡/團卡 design: is it
   adopted or just a draft? NOT FOUND (clearly a draft; the live band skill
   is `团技能` `D7`).
-* Sheet typos left out of `data/cards.json` (confirmed still present):
-  “PERFECT“ / “FEVER!“ quote marks, 星月夜 「的的」, 游击演出 stray `\[特]`.
+* Sheet typos (still present on the sheet). `CardMeta` text is now the sheet
+  text verbatim -- `tools/rulebook/check-card-text.py` enforces it -- so the
+  quote marks (「PERFECT“ / 「FEVER!“) and 星月夜 「的的」 ship as written. The
+  游击演出 stray `\[特]` is the one exception: the `\` is a sheet escape, not
+  prose, and the face keeps `[特]：`. Fix the sheet and re-sync if any of
+  these are unwanted.
 
 **Timing / order (CROSS-TESTS §G12 R-1..R-7 and the gap `RULING` tests):**
 

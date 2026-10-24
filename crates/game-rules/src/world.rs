@@ -455,14 +455,13 @@ pub trait CardWorld: Clone + 'static {
     // ------------------------------------------------------------ hand/deck
     /// Draw `n` cards (reshuffles when needed). Returns drawn count.
     fn draw(&mut self, player_id: i32, n: i32) -> i32;
-    fn add_to_hand(&mut self, player_id: i32, card: &str);
-    fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool);
-    /// Add a card to the draw pile at a position: `pos` 0 = top, 1 = bottom,
-    /// 2 = shuffle in (the default).
-    fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32);
-    /// Take one copy of `card` out of `pile` *without* sending it anywhere;
-    /// returns whether it was there.
-    fn take_card(&mut self, player_id: i32, pile: crate::CardPile, card: &str) -> bool;
+    /// Put one copy of `card` into `player_id`'s pile at `dest` (wire [`Dest`] code
+    /// -- 0 graveyard, 1 hand, 2 field, 3 banished, 4 deck top, 5 deck bottom,
+    /// 6 deck shuffle). Named-card counterpart of [`Self::send_to_dest`].
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32);
+    /// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
+    /// anywhere; returns whether it was there.
+    fn take_card(&mut self, player_id: i32, card: &str, src: crate::CardPile) -> bool;
     /// Every card id in a player's `pile`, in pile order (the deck top first).
     fn cards_in(&self, player_id: i32, pile: crate::CardPile) -> Vec<String>;
     fn to_discard(&mut self, player_id: i32, card: &str);
@@ -710,6 +709,8 @@ pub trait CardWorld: Clone + 'static {
     }
     /// Bind `count` units of the running instance's counter `kind` to `tile`.
     /// `stack`: merge onto the first match, or always push a fresh row.
+    /// Returns the mark row's uid (the new row's, or the merged row's), or
+    /// `-1` when `count <= 0`.
     fn place_mark(
         &mut self,
         tile: i32,
@@ -722,7 +723,7 @@ pub trait CardWorld: Clone + 'static {
         fresh: bool,
     ) -> i32 {
         let _ = (tile, kind, category, owner, src, count, note, fresh);
-        0
+        -1
     }
     /// Place **one** paired mark spanning tiles `a` and `b` (one row per tile,
     /// each row's `partner` naming the other). Place-or-refuse atomic: returns
@@ -773,6 +774,16 @@ pub trait CardWorld: Clone + 'static {
         let _ = (tile, filter);
         -1
     }
+    /// The marked tile of the row at `uid`, or -1 when no such row.
+    fn mark_tile_by_uid(&self, uid: i32) -> i32 {
+        let _ = uid;
+        -1
+    }
+    /// Drop the exact mark row at `uid`. Returns whether that row was present.
+    fn remove_mark_by_uid(&mut self, uid: i32) -> bool {
+        let _ = uid;
+        false
+    }
     /// Units of the running instance's counter `name` held by `player_id`.
     fn count_held(&self, name: &str, player_id: i32) -> i32 {
         let _ = (name, player_id);
@@ -786,8 +797,16 @@ pub trait CardWorld: Clone + 'static {
     fn count_held_name(&self, name: &str, player_id: i32) -> i32 {
         self.count_held(name, player_id)
     }
-    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
-        let _ = (name, player_id, v);
+    /// Name-keyed held write. `max` is the live ceiling (`0` = uncapped /
+    /// leave any stored ceiling alone). `instance` stamps or rebinds the
+    /// owning card instance (`< 0` keeps an existing row's owner).
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, max: i32, instance: i32) {
+        let _ = (name, player_id, v, max, instance);
+    }
+    /// Live ceiling on the held row (`0` = uncapped / undeclared).
+    fn tok_max(&self, player_id: i32, name: &str) -> i32 {
+        let _ = (player_id, name);
+        0
     }
     fn move_units(
         &mut self,
@@ -818,8 +837,8 @@ pub trait CardWorld: Clone + 'static {
     fn tok(&self, player_id: i32, name: &str) -> i32 {
         self.count_held_name(name, player_id)
     }
-    fn set_tok(&mut self, player_id: i32, name: &str, value: i32) {
-        self.set_held_name(name, player_id, value);
+    fn set_tok(&mut self, player_id: i32, name: &str, value: i32, max: i32) {
+        self.set_held_name(name, player_id, value, max, -1);
     }
     fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
         self.add_held(name, player_id, n, max)
@@ -878,6 +897,12 @@ pub trait CardWorld: Clone + 'static {
     /// <skill>`, `FieldCard::group_skill`), or -1 when the player has none. This
     /// is the the group-skill counter holder -- see [`Self::group_pool`].
     fn group_skill_uid(&self, _player_id: i32) -> i32 {
+        -1
+    }
+    /// The uid of `player_id`'s **persona-skill field instance**
+    /// (`skill:<persona>:<skill>`, not `group_skill`), or -1 when the player has
+    /// none. This is the owner of that seat's skill counters (火罐).
+    fn persona_skill_uid(&self, _player_id: i32) -> i32 {
         -1
     }
     /// A named pool on the player's group-skill field instance
@@ -1069,10 +1094,11 @@ pub trait CardWorld: Clone + 'static {
     // ----------------------------------------------- turn plan & scheduling
     // Defaults are no-ops so test worlds need not implement them.
 
-    /// Call the running card's `counteract` (kind `turnEnd`) for `player_id` at a turn
+    /// Call the running card's `On::Schedule(entry)` for `player_id` at a turn
     /// end: this turn's end, or -- `next_of_player` -- the end of `player_id`'s next
-    /// turn (「你的下回合结束时」).
-    fn schedule_turn_end(&mut self, _player: i32, _next_of_player: bool, _early: bool) {}
+    /// turn (「你的下回合结束时」). `entry` names which Schedule entry to run;
+    /// an unknown / unmatching id is a no-op.
+    fn schedule_turn_end(&mut self, _player: i32, _next_of_player: bool, _early: bool, _entry: &str) {}
     /// `player_id`'s money cannot drop this turn.
     fn set_no_money_loss(&mut self, _player: i32) {}
     /// This turn's main-move roll (a fixed face, not a dice table).

@@ -30,24 +30,19 @@ const GROUP: &str = "skill.misakiOther.group";
 pub const MISAKI_OTHER: CardDef = CardDef::new(
     "skill:奥泽美咲:另一个我",
     &[
-        On::Play("", None, Some(can_use_exile), use_exile),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use_exile), use_exile),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             "actor == owner && tile.id == tile_named('弦卷集团')",
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         On::Action(Action::TurnStartBefore(
             "actor == owner && charge(owner) >= 1",
             None,
-            None,
-            at_turn_start,
-        )),
+            at_turn_start)),
     ],
 )
-.silent(&[1, 2])
 // 「（初始0，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),
@@ -92,7 +87,7 @@ fn can_use_exile(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("misaki_other_no_fire")));
     }
     None

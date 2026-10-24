@@ -55,9 +55,9 @@ import through one generic hook:
 
 | file | role |
 |---|---|
-| `rules/card-sdk/src/kani_host.rs` | `Op` enum (one variant per `ruleset_*`), `install(Backend)`, `call(Op, [i32;6]) -> i64` |
-| `rules/card-sdk/src/ctx/sys_kani.rs` | generated wrappers, same signatures as the `extern` block |
-| `rules/card-sdk/src/ctx/sys.rs` | `#[cfg(not(kani))]` keeps the real `extern "C-unwind"` block; `#[cfg(kani)]` re-exports `sys_kani` |
+| `crates/card-sdk/src/kani_host.rs` | `Op` enum (one variant per `ruleset_*`), `install(Backend)`, `call(Op, [i32;6]) -> i64` |
+| `crates/card-sdk/src/ctx/sys_kani.rs` | generated wrappers, same signatures as the `extern` block |
+| `crates/card-sdk/src/ctx/sys.rs` | `#[cfg(not(kani))]` keeps the real `extern "C-unwind"` block; `#[cfg(kani)]` re-exports `sys_kani` |
 
 No game vocabulary lives in card-sdk. The verifier crate installs a backend
 at proof start (`rules_kani::host::install()`).
@@ -253,11 +253,11 @@ rules/kani/                    crate `rules-kani` (ROOT workspace member,
   src/proofs/money_shave.rs    (a) + mutant
   src/proofs/teleport.rs       (b) + mutant
   src/proofs/prompt.rs         (c) + empty-discard + mutant
-rules/card-sdk/src/kani_host.rs        generic Op table + install()
-rules/card-sdk/src/ctx/sys_kani.rs     generated kani sys surface
-rules/card-sdk/src/ctx/sys.rs          cfg split (extern vs kani)
-rules/card-sdk/src/native.rs           cfg(kani) static arena
-rules/card-sdk/src/msg.rs              cfg(kani) unit payload
+crates/card-sdk/src/kani_host.rs        generic Op table + install()
+crates/card-sdk/src/ctx/sys_kani.rs     generated kani sys surface
+crates/card-sdk/src/ctx/sys.rs          cfg split (extern vs kani)
+crates/card-sdk/src/native.rs           cfg(kani) static arena
+crates/card-sdk/src/msg.rs              cfg(kani) unit payload
 docs/rulebook/spec/KANI.md     this file
 ```
 

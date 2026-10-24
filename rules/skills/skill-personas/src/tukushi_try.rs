@@ -28,18 +28,16 @@ const SPELL: &str = "skill.tukushiTry.spell";
 pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, at_start)),
-        On::Action(Action::DeckAtGameStart("", None, None, at_start)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, at_start)),
+        On::Action(Action::DeckAtGameStart("", None, at_start)),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
-        On::Action(Action::DiceRollAfter("", None, Some(paired), on_roll)),
+            on_pass)),
+        On::Action(Action::DiceRollAfter("", Some(paired), on_roll)),
         On::Filter(Filter::PaySplitMul("", Some(paired), on_pay)),
-        On::Action(Action::HouseAdded("", None, Some(partner), on_built)),
+        On::Action(Action::HouseAdded("", Some(partner), on_built)),
     ],
 )
 // 「（初始1，上限2）」
@@ -85,7 +83,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("tukushi_try_no_fire")));
     }
     None

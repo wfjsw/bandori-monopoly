@@ -82,12 +82,12 @@ pub fn cookie_return(step: &Step<'_>) -> Result<(), String> {
     }
     let who = actor(step);
     let pre_discard: Vec<&str> = step.pre.hidden[who]
-        .discard
+        .graveyard
         .iter()
         .map(String::as_str)
         .collect();
     // Cards that were in the discard at play time must now be in the draw.
-    let post_draw = &step.post.hidden[who].draw;
+    let post_draw = &step.post.hidden[who].deck;
     for c in &pre_discard {
         if !post_draw.iter().any(|d| d == c) {
             return Err(format!(
@@ -104,7 +104,7 @@ pub fn cookie_pay(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = actor(step);
-    let x = step.pre.hidden[who].discard.len() as i64;
+    let x = step.pre.hidden[who].graveyard.len() as i64;
     let delta = step.post_money(who) as i64 - step.pre_money(who) as i64;
     if delta != 500 * x {
         return Err(format!(
@@ -228,13 +228,13 @@ pub fn resolve_hand_removes(step: &Step<'_>) -> Result<(), String> {
     let h = step.post.hidden.get(who);
     let gone = h.is_some_and(|h| {
         !h.hand.iter().any(|c| c == RESOLVE)
-            && !h.draw.iter().any(|c| c == RESOLVE)
-            && !h.discard.iter().any(|c| c == RESOLVE)
+            && !h.deck.iter().any(|c| c == RESOLVE)
+            && !h.graveyard.iter().any(|c| c == RESOLVE)
     });
     if !gone {
         return Err(format!(
             "觉悟 should be [移除]d; hidden={:?}",
-            h.map(|h| (&h.hand, &h.draw, &h.discard))
+            h.map(|h| (&h.hand, &h.deck, &h.graveyard))
         ));
     }
     if step.post.st.players[who]
@@ -511,11 +511,11 @@ pub fn fire_bird_exhaust(step: &Step<'_>) -> Result<(), String> {
     // draw pile may immediately reshuffle it into the draw (G-CARDS); both
     // zones honour the clause.
     let h = &step.post.hidden[who];
-    let landed = h.discard.iter().any(|c| c == FIRE_BIRD) || h.draw.iter().any(|c| c == FIRE_BIRD);
+    let landed = h.graveyard.iter().any(|c| c == FIRE_BIRD) || h.deck.iter().any(|c| c == FIRE_BIRD);
     if pre_on && !post_on && !landed {
         return Err(format!(
             "Fire bird left the field without entering the discard; discard={:?} draw={:?}",
-            h.discard, h.draw
+            h.graveyard, h.deck
         ));
     }
     Ok(())
@@ -1156,7 +1156,7 @@ pub fn student_council_add_resolve(step: &Step<'_>) -> Result<(), String> {
     if !played(step, COUNCIL) {
         return Ok(());
     }
-    // The play's zone write (`add_to_deck`) lands when the body commits. A
+    // The play's zone write (`add_to_dest`) lands when the body commits. A
     // follow-up prompt (the optional 「可支付…」 placement) pauses the body, so
     // the counteract step itself is still mid-effect -- same at-rest rule as
     // `g_counter_05` / the PP clauses. The test body checks the pile after
@@ -1167,14 +1167,14 @@ pub fn student_council_add_resolve(step: &Step<'_>) -> Result<(), String> {
     let who = actor(step);
     let h = &step.post.hidden[who];
     let named = |c: &str| c.contains("觉悟");
-    if h.draw.iter().any(|c| named(c)) {
+    if h.deck.iter().any(|c| named(c)) {
         return Ok(());
     }
     let mut zones = String::new();
     for (i, hid) in step.post.hidden.iter().enumerate() {
         zones.push_str(&format!(
             " P{i} hand={:?} draw={:?} discard={:?}",
-            hid.hand, hid.draw, hid.discard
+            hid.hand, hid.deck, hid.graveyard
         ));
     }
     let bfield: Vec<_> = step.post.st.board_field.iter().map(|f| &f.card).collect();

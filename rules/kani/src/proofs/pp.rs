@@ -94,7 +94,7 @@ crate::host_subset!(same_dream_dispatch {
     // fans:: state dict + FansFlip raise → pastel `on_fans_flip`.
     state_get => arm_state_get,
     state_set => arm_state_set,
-    state_add | inc_slot => arm_state_add,
+    state_add => arm_state_add,
     raise => arm_raise,
     trig_value => arm_trig_value,
     send => arm_send,
@@ -898,7 +898,7 @@ pub fn eve_bushido_01_gain_iff() {
 // ===========================================================================
 // C-PP-no-expect-02
 // 「[手]：将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。」
-// Deck insert is silent in the effect log (host `add_to_deck` records no
+// Deck insert is silent in the effect log (host `add_to_dest` records no
 // effect) — post deck_n is the second half.
 // ===========================================================================
 

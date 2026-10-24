@@ -362,8 +362,8 @@ impl SnapSrc for Fixture {
         board_tile_name(tile)
     }
     fn tile_kind_of(&self, tile: i32) -> String {
-        // Wire kind spelling — same values the IR's `SetId::Circle` /
-        // `SetId::Ring` sets encode (`board::TILES[i].kind` 0 / 3).
+        // Wire kind spelling — same values the IR's `tile_kind_ids`
+        // encode (`board::TILES[i].kind` 0 / 3).
         if board_is_start(tile) {
             "circle".to_string()
         } else if board_is_deed(tile) {
@@ -417,7 +417,7 @@ impl SnapSrc for Fixture {
             return 0;
         };
         match key {
-            // Production `cond_pre` reads fire via `state_get(p, "charge")`
+            // Production `cond_pre` reads fire via `tok(p, "charge")`
             // (the ABI-88 named-marker spelling), not a dedicated `charge()`.
             "charge" => s.charge,
             "stay" => s.stay,
@@ -470,6 +470,11 @@ impl SnapSrc for Fixture {
             .filter(|s| !s.is_empty())
     }
     fn tok(&self, p: i32, name: &str) -> i32 {
+        // `charge` is the ABI-88 named-marker spelling of the seat's fire pot
+        // (same source `state_get` answers for the `charge` key).
+        if name == "charge" {
+            return self.seats.get(p as usize).map(|s| s.charge).unwrap_or(0);
+        }
         self.seats
             .get(p as usize)
             .and_then(|s| s.tokens.iter().find(|(n, _)| *n == name).map(|(_, v)| *v))
@@ -496,6 +501,12 @@ impl SnapSrc for Fixture {
             .find(|(n, _)| *n == name)
             .map(|(_, v)| *v as i32)
             .unwrap_or(0)
+    }
+    fn card_counter_names(&self, _p: i32, _card: &str) -> Vec<String> {
+        self.card_counters
+            .iter()
+            .map(|(n, _)| (*n).to_string())
+            .collect()
     }
     fn tile_owner(&self, tile: i32) -> i32 {
         self.tiles.get(tile as usize).map(|t| t.owner).unwrap_or(-1)

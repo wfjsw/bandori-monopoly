@@ -124,6 +124,27 @@ impl Ask {
         a
     }
 
+    /// `Multi`: pick exactly `count` of `options`. The answer is a **bitmask**
+    /// (bit *i* = option *i*) in the same `i32` the answer log already carries.
+    /// `fallback` is a valid mask -- the first `count` options -- so a timeout
+    /// lands on something the body can apply.
+    pub fn multi(
+        players: Vec<usize>,
+        title: Msg,
+        text: Msg,
+        options: Vec<Msg>,
+        count: i32,
+        time: f32,
+    ) -> Self {
+        let n = options.len().min(31) as i32;
+        let want = count.clamp(1, n.max(1));
+        let mut a = Self::new("multi", players, title, text, time);
+        a.view.options = options;
+        a.view.count = want;
+        a.view.fallback = if want >= 32 { -1 } else { (1i32 << want) - 1 };
+        a
+    }
+
     /// `TileAsk`: pick one of `tiles` (answer == len means "none"). Same AI
     /// fill as [`Self::choice`]; chaos never takes "none" while a tile exists.
     pub fn tile(
@@ -311,6 +332,19 @@ pub fn heuristic_answer(ask: &Ask) -> Answered {
     heuristic_answer_with(ask, &|_seat| crate::strategy::StrategyParams::default())
 }
 
+/// A multi-select answer is a bitmask naming exactly `view.count` options out
+/// of `0..options.len()`. Anything else is not a usable answer.
+fn valid_multi_mask(ask: &Ask, v: i32) -> bool {
+    if v < 0 {
+        return false;
+    }
+    let n = ask.view.options.len().min(31) as i32;
+    if n <= 0 || (v >> n) != 0 {
+        return false;
+    }
+    v.count_ones() as i32 == ask.view.count
+}
+
 /// [`heuristic_answer`] with a per-seat parameter lookup (player index →
 /// [`crate::strategy::StrategyParams`]). Only the auction solver reads it
 /// (the raise step); the other prompts just echo the precomputed `ai` fill.
@@ -324,6 +358,7 @@ pub fn heuristic_answer_with(
         return heuristic_auction(ask, params);
     }
     let picks = matches!(ask.view.kind.as_str(), "pick" | "mortgage");
+    let multi = ask.view.kind == "multi";
     let max = if ask.view.kind == "tile" {
         ask.view.items.len() as i32
     } else {
@@ -333,6 +368,15 @@ pub fn heuristic_answer_with(
     for k in 0..n {
         if picks {
             answers.push(0);
+        } else if multi {
+            // Bitmask answers must not be clamped to an option index -- the
+            // fallback is already a valid `count`-bit mask.
+            let v = ask.ai.get(k).copied().unwrap_or(AI_UNSET);
+            answers.push(if valid_multi_mask(ask, v) {
+                v
+            } else {
+                ask.view.fallback
+            });
         } else {
             let v = ask.ai.get(k).copied().unwrap_or(AI_UNSET);
             answers.push(if v == AI_UNSET {
@@ -1157,6 +1201,15 @@ impl<'a> Cx<'a> {
             ask.view.items.len() as i32
         };
         let counteract = ask.view.title.key() == "ask.counteract.title";
+        if ask.view.kind == "multi" {
+            // Bitmask of exactly `count` distinct options. Standard takes the
+            // fallback (first `count`); chaos rolls a random valid mask.
+            return if self.is_chaos(seat) {
+                self.chaos_multi_pick(ask)
+            } else {
+                fallback
+            };
+        }
         if self.is_chaos(seat) {
             if counteract && n > 1 && self.w.rng.f64() >= super::CHAOS_COUNTER_CHANCE {
                 // This offer it passes (the fallback is the skip option).
@@ -1220,6 +1273,27 @@ impl<'a> Cx<'a> {
             k += 1;
         }
         k
+    }
+
+    /// A random valid multi-select mask: exactly `count` distinct options out
+    /// of `0..options.len()`. Falls back to the prompt's fallback when the
+    /// shape is degenerate (0 options, or `count` past what a 31-bit mask can
+    /// name).
+    fn chaos_multi_pick(&mut self, ask: &Ask) -> i32 {
+        let n = ask.view.options.len().min(31) as i32;
+        let want = ask.view.count.clamp(1, n.max(1));
+        if n <= 0 || want > n {
+            return ask.view.fallback;
+        }
+        // Draw `want` distinct indices without replacement.
+        let mut pool: Vec<i32> = (0..n).collect();
+        let mut mask = 0i32;
+        for _ in 0..want {
+            let i = self.w.rng.below(pool.len()) as usize;
+            let x = pool.swap_remove(i);
+            mask |= 1 << x;
+        }
+        mask
     }
 
     /// Presentation pause, accumulated for the host to drain.

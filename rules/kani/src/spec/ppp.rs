@@ -549,7 +549,7 @@ pub fn random_star_01_effects_ok(
     auction_slot: u8,
 ) -> bool {
     // PlaceCard(this) is the only typed effect the host models on this body
-    // (`add_to_deck_at` is a pile mutation with no Effect arm).
+    // (`add_to_dest` is a pile mutation with no Effect arm).
     if effects.len() != 1 {
         return false;
     }

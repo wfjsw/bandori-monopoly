@@ -30,7 +30,25 @@ LOCALES = ROOT / "webui" / "src" / "i18n" / "locales"
 LANGS = ("zh-CN", "en")
 # webui files that emit protocol messages (their keys belong to the `game` namespace)
 PROTOCOL = {"net/api.ts", "game/session.ts", "i18n/msg.ts"}
-DYNAMIC = ("err.join.", "anim.chainKind.", "anim.chainSrc.", "log.counter.")  # built at run time: net::describe, Board.tsx ChainOrigin, trigger_why::counter_name
+# Built at run time rather than named as a string literal in source:
+#   err.join.       net::describe
+#   anim.chainKind. / anim.chainSrc.  Board.tsx ChainOrigin
+#   log.counter.    trigger_why::counter_name
+#   log.kind.       trigger_why::kind_name (`log.kind.{wire spelling}`, incl. `r:bandori:NN`)
+#   tileQuote.      Ring.tsx `tr(\`tileQuote.${q.kind}\`)`; kinds are `TileQuoteKind`
+#   board.state.    i18n/stateLabel.ts `tr(\`board.state.${key}\`)`
+DYNAMIC = (
+    "err.join.",
+    "anim.chainKind.",
+    "anim.chainSrc.",
+    "log.counter.",
+    "log.kind.",
+    "tileQuote.",
+    "board.state.",
+    # skill.* scratch state names: `stateKeyOf` returns the wire key itself and
+    # the markers list looks it up as a `game` key (`webui/src/i18n/stateKey.ts`).
+    "skill.",
+)
 SPECIAL = ("blank", "list")  # message plumbing, not sentences
 # Tile-mark kinds: `TileMark::kind` **is** the i18n key (`trigger_why::mark_kind_name`
 # -> `Msg::new(kind)`), looked up at render time by fmtMsg, never referenced as a
@@ -47,6 +65,84 @@ RUNTIME_KEYS = (
     "skillBlock",
     "skill.uikaIdol.pot",
 )
+# Exact keys the unused sweep must keep. Two kinds:
+#   * `game.json` -- older archived engine bundles still replay their log
+#     through today's locales («Replays backward compatible»); deleting a key
+#     an old bundle emits would render a raw key in the replay.
+#   * `ui.json` -- retired purchase-UI copy (`deed.fundByMortgage` /
+#     `deed.poor`) that no live `tr()` names; kept so a saved quote from
+#     before the END-step buttons dropped still has a phrase.
+RETAINED_KEYS = {
+    # game.json -- replay / test-fixture phrases no current `Msg::new` emits
+    "err.bad_act",
+    "err.build_not_on_own",
+    "err.no_money",
+    "err.roll_stay",
+    "log.look",
+    "log.lookTile",
+    "log.outcome.hand_limit",
+    "log.outcome.state",
+    "log.played",
+    "log.why.exile",
+    "log.x",
+    "src.raise_funds",
+    "status.exiled",
+    "status.stunned",
+    # ui.json -- retired purchase-UI copy
+    "deed.fundByMortgage",
+    "deed.poor",
+}
+
+
+def strip_doc_comments(text: str) -> str:
+    """Drop rustdoc. `key!(…)` / message keys in `///`, `//!`, `#[doc = …]` are
+    prose (card-sdk builder examples name `yolo_pay` / `when`), not emissions."""
+    text = re.sub(r"^\s*///.*$", "", text, flags=re.M)
+    text = re.sub(r"^\s*//!.*$", "", text, flags=re.M)
+    text = re.sub(r"^\s*#\[doc\b.*$", "", text, flags=re.M)
+    return text
+
+
+def strip_probes(text: str) -> str:
+    """Drop substring probes (`…contains("ask.build")`) -- they match a prompt
+    title shape, not a message emission."""
+    return re.sub(r'\.(?:contains|starts_with|ends_with)\(\s*"[^"]*"\s*\)', "", text)
+
+
+# `ctx::slot` / `ctx::set_slot` / `ctx::inc_slot` take a player-state key.
+# (The `state::{get,set,…}` wrappers are *not* in here on purpose: those
+# `skill.*` scratch names double as markers-list display keys via
+# `webui/src/i18n/stateKey.ts` and do need a `game.json` phrase.)
+SLOT_API = re.compile(r"\b(?:ctx::)?(?:slot|set_slot|inc_slot)\b")
+
+
+def slot_only_literals(text: str) -> set[str]:
+    """String literals that name a `ctx::slot` key, not a message key.
+
+    A `const NAME: &str = "…"` whose NAME is only ever a slot/set_slot/inc_slot
+    argument (card latches like `card.tomoriInnerShout.pulled`) is state-dict
+    spelling -- the checker must not demand a locale phrase for it."""
+    out: set[str] = set()
+    for m in re.finditer(r'const\s+(\w+)\s*:\s*&str\s*=\s*"([^"]+)"', text):
+        name, lit = m.group(1), m.group(2)
+        uses = list(re.finditer(rf"\b{name}\b", text))
+        # Every mention beyond the declaration must sit in a slot API call.
+        ok = len(uses) > 1
+        for r in uses:
+            if r.start() == m.start() + len("const "):
+                continue  # the declaration
+            lo, hi = max(0, r.start() - 80), min(len(text), r.end() + 80)
+            if not SLOT_API.search(text[lo:hi]):
+                ok = False
+                break
+        if ok:
+            out.add(lit)
+    # `"dotted.name"` passed straight in as the key argument.
+    for m in SLOT_API.finditer(text):
+        tail = text[m.end() : m.end() + 120]
+        for lit in re.findall(r'"([^"]+)"', tail.split(")")[0]):
+            out.add(lit)
+    return out
 
 
 def load(lang: str, ns: str) -> dict[str, str]:
@@ -59,7 +155,7 @@ def main() -> int:
     game_all = set(load(LANGS[0], "game")) | set(load(LANGS[1], "game"))
     ui_all = set(load(LANGS[0], "ui")) | set(load(LANGS[1], "ui"))
     # Roots that live only in `ui.json` are client copy even when a `.rs` string
-    # names them (`CardDef::texts` / `deed.note.*` ride the manifest as i18n
+    # names them (`On::texts` / `deed.note.*` ride the manifest as i18n
     # keys). Everything else a `.rs` file emits is a protocol / engine key.
     ui_only_roots = {k.split(".")[0] for k in ui_all} - {k.split(".")[0] for k in game_all}
     # The key shape is taken from the locales themselves, so a new namespace in a
@@ -81,7 +177,11 @@ def main() -> int:
             text = p.read_text(encoding="utf-8")
             if p.suffix == ".rs":
                 text = re.sub(r"#\[cfg\(test\)\][\s\S]*", "", text)
+                text = strip_doc_comments(text)
+                text = strip_probes(text)
             keys = {k for k in key_re.findall(text) if not file_name.search(k)}
+            if p.suffix == ".rs":
+                keys -= slot_only_literals(text)
             keys.update(set(re.findall(r'"(blank|list)"', text)) & set(SPECIAL))
             engine_roots = {"err", "log", "ask", "src", "vote", "end", "status", "blank", "list"}
             from_protocol = rel.removeprefix("webui/src/") in PROTOCOL
@@ -108,9 +208,9 @@ def main() -> int:
         game, ui = load(lang, "game"), load(lang, "ui")
         report(lang, "game.json is missing keys the code emits", (k for k in engine_used if k not in game))
         report(lang, "game.json is missing run-time mark kinds", (k for k in RUNTIME_KEYS if k not in game))
-        report(lang, "game.json has keys no code emits", (k for k in game if k not in engine_used and k not in RUNTIME_KEYS and not any(k.startswith(d) for d in DYNAMIC)))
+        report(lang, "game.json has keys no code emits", (k for k in game if k not in engine_used and k not in RUNTIME_KEYS and k not in RETAINED_KEYS and not any(k.startswith(d) for d in DYNAMIC)))
         report(lang, "ui.json is missing keys the code emits", (k for k in ui_used if k not in ui))
-        report(lang, "ui.json has keys no code uses", (k for k in ui if k not in ui_used and not any(k.startswith(d) for d in DYNAMIC)))
+        report(lang, "ui.json has keys no code uses", (k for k in ui if k not in ui_used and k not in RETAINED_KEYS and not any(k.startswith(d) for d in DYNAMIC)))
 
     # card modules: key!(...) must exist in that crate's locale files
     for crate in sorted(ROOT.glob("rules/*/src/lib.rs")):
@@ -122,7 +222,8 @@ def main() -> int:
             bundle_path = ROOT / "dist" / "cards" / "locales" / f"{lang}.json"
             bundle = json.load(open(bundle_path, encoding="utf-8")) if bundle_path.exists() else {}
             have = bundle.get(name.group(1), {})
-            for k in re.findall(r'key!\("([^"]+)"\)', crate.read_text(encoding="utf-8")):
+            crate_text = strip_doc_comments(crate.read_text(encoding="utf-8"))
+            for k in re.findall(r'key!\("([^"]+)"\)', crate_text):
                 if k not in have:
                     bad += 1
                     print(f"[{lang}] card {name.group(1)}: key {k} not in its locales (run tools/build-ruleset.sh)")

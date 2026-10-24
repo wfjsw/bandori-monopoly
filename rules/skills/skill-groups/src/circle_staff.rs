@@ -22,10 +22,8 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
     // (string match on the played id); hand size is CEL.
     &[On::Action(Action::Card(
         "actor == owner && hand(owner) >= 1",
-        None,
         Some(is_general_card),
-        on_played,
-    ))],
+        on_played))],
 );
 
 /// Residual guard for [`on_played`]: the played card is a 通用 one (a card's
@@ -34,7 +32,7 @@ fn is_general_card(_player_id: i32) -> bool {
     ctx::trigger::cards()
         .into_iter()
         .next()
-        .is_some_and(|id| id.starts_with("G:") || id.starts_with("通用"))
+        .is_some_and(|id| id.as_str().starts_with("G:") || id.as_str().starts_with("通用"))
 }
 
 /// （2）「在你打出的"通用"卡生效时，可额外弃一张牌，将打出的那张卡[手]效果中的
@@ -47,7 +45,7 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("circle_staff_title")),
-        &Msg::new(key!("circle_staff_ask")).card("card", &id),
+        &Msg::new(key!("circle_staff_ask")).card("card", id.as_str()),
     )? {
         return Ok(());
     }
@@ -56,7 +54,7 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
     let Some(dump) = hand.into_iter().next() else {
         return Ok(());
     };
-    ctx::discard_from_hand(player_id, &dump);
+    ctx::discard_from_hand(player_id, dump.as_str());
     // 「将打出的那张卡[手]效果中的一个数字变为两倍」 -- `ctx::n(k, value)` reads
     // the doubling from the play context; `k` is the number's index in the card's
     // own text, so the player names which one.
@@ -71,8 +69,8 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
     ctx::log(
         player_id,
         &Msg::new(key!("circle_staff_doubled"))
-            .card("card", &id)
-            .card("dump", &dump),
+            .card("card", id.as_str())
+            .card("dump", dump.as_str()),
     );
     Ok(())
 }

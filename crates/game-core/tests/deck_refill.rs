@@ -34,8 +34,8 @@ fn setup() -> (Arc<GameData>, World) {
         p.bot = false;
     }
     w.hidden[0].hand.clear();
-    w.hidden[0].draw = vec!["last".into()];
-    w.hidden[0].discard = vec!["a".into(), "b".into()];
+    w.hidden[0].deck = vec!["last".into()];
+    w.hidden[0].graveyard = vec!["a".into(), "b".into()];
     (data, w)
 }
 
@@ -55,7 +55,7 @@ impl CardRules for Probe {
         if matches!(t.kind.as_str(), "reshuffled" | "drawn" | "drew") {
             if t.kind != "reshuffled" {
                 assert!(
-                    !cx.world_copy().hidden[0].draw.is_empty(),
+                    !cx.world_copy().hidden[0].deck.is_empty(),
                     "refill must precede {}",
                     t.kind
                 );
@@ -100,8 +100,8 @@ fn last_card_refills_before_drawn_and_drew() {
     assert_eq!(*rules.seen.lock().unwrap(), ["reshuffled", "drawn", "drew"]);
     let w = cx.world_copy();
     assert_eq!(w.hidden[0].hand, ["last"]);
-    assert_eq!(w.hidden[0].draw.len(), 2);
-    assert!(w.hidden[0].discard.is_empty());
+    assert_eq!(w.hidden[0].deck.len(), 2);
+    assert!(w.hidden[0].graveyard.is_empty());
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn multi_draw_refills_between_cards_without_an_extra_draw() {
     );
     let w = cx.world_copy();
     assert_eq!(w.hidden[0].hand.len(), 2);
-    assert_eq!(w.hidden[0].draw.len(), 1);
+    assert_eq!(w.hidden[0].deck.len(), 1);
 }
 
 #[test]
@@ -130,21 +130,21 @@ fn cancelled_draw_does_not_empty_or_shuffle_the_deck() {
     assert_eq!(cx.draw_cards_with_hooks(0, 1, true).unwrap(), 0);
     assert!(rules.seen.lock().unwrap().is_empty());
     let w = cx.world_copy();
-    assert_eq!(w.hidden[0].draw, ["last"]);
-    assert_eq!(w.hidden[0].discard.len(), 2);
+    assert_eq!(w.hidden[0].deck, ["last"]);
+    assert_eq!(w.hidden[0].graveyard.len(), 2);
 }
 
 #[test]
 fn raw_draw_also_restores_the_deck_and_filing_refills_a_dry_deck() {
     let (_, mut w) = setup();
     assert_eq!(w.draw_cards(0, 1, true), 1);
-    assert_eq!(w.hidden[0].draw.len(), 2);
-    assert!(w.hidden[0].discard.is_empty());
-    w.hidden[0].draw.clear();
+    assert_eq!(w.hidden[0].deck.len(), 2);
+    assert!(w.hidden[0].graveyard.is_empty());
+    w.hidden[0].deck.clear();
     w.hidden[0].hand = vec!["filed".into()];
     assert!(w.to_discard(0, "filed"));
-    assert_eq!(w.hidden[0].draw, ["filed"]);
-    assert!(w.hidden[0].discard.is_empty());
+    assert_eq!(w.hidden[0].deck, ["filed"]);
+    assert!(w.hidden[0].graveyard.is_empty());
     assert!(
         !w.refill_draw_pile(0),
         "a nonempty deck must not reshuffle twice"

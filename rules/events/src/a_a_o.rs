@@ -5,6 +5,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -17,13 +18,13 @@ const DRAWER: &str = "drawer";
 pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
-        On::Play("", None, None, play),
-        On::Action(Action::AtEnd("", None, None, expire_at_end)),
+        On::Play("", None, play),
+        On::Schedule("expire_at_end", "", None, expire_at_end),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"A！A！O！"#)
-            .text(r#"将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。"#)
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。"#))
             // sheet cell A15
             .derived(false));
 
@@ -40,7 +41,7 @@ pub const A_A_O: CardDef = CardDef::new(
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
-    ctx::at_next_turn_end(player_id);
+    ctx::at_next_turn_end(player_id, "expire_at_end");
     ctx::log(
         player_id,
         &Msg::new("log.event.a_a_o_on").player_id("who", player_id),

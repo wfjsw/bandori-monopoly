@@ -1316,7 +1316,7 @@ fn tsugu_skill_gains_fire_on_pass() {
     let mut t = Table::new(&["都筑诗船", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
-    assert_eq!(t.state_var(0, "charge").max, 2, "上限2");
+    assert_eq!(t.charge_max(0), 2, "上限2");
     t.set_pos(0, 55);
     t.dice(&[6]);
     t.roll(0).unwrap();

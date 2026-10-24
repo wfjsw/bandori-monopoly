@@ -7,6 +7,7 @@
 //! lap without settling, then pay 1,000 at end of turn.
 
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 pub const SIGNPOST: CardDef = CardDef::new(
@@ -14,8 +15,8 @@ pub const SIGNPOST: CardDef = CardDef::new(
     // The body-top `player_out(owner)` early-out is the condition now: a
     // bankrupt seat pays nobody, so the callback must not run (or flash).
     &[
-        On::Play("", None, Some(cant_play), play),
-        On::Action(Action::AtEnd("owner.out == 0", None, None, at_end)),
+        On::Play("", Some(cant_play), play),
+        On::Schedule("at_end", "owner.out == 0", None, at_end),
     ],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 1000)])
@@ -24,7 +25,7 @@ pub const SIGNPOST: CardDef = CardDef::new(
         .name(r#"向着未来的路标"#)
         .raw_name(r#"向着未来的路标"#)
         .tags(&[])
-        .text(r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#)
+        .text(CardText::para(r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#))
         // sheet cell B14
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );
@@ -49,8 +50,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     ctx::card_move(player_id);
     // 规则书: 「回合结束时[失去]1000资金」 -- C# `H._turnCtx.AtEnd.Add(() =>
-    // H.LoseR(i, 1000, ...))`, scheduled onto `On::AtEnd`.
-    ctx::before_turn_end(player_id);
+    // H.LoseR(i, 1000, ...))`, scheduled onto `On::Schedule`.
+    ctx::before_turn_end(player_id, "at_end");
     ctx::log(
         player_id,
         &Msg::new(key!("signpost_pending"))
@@ -60,7 +61,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `On::AtEnd` (C# `H._turnCtx.AtEnd` -> `H.LoseR(i, 1000, ...)`) -- scheduled by
+/// `On::Schedule` (C# `H._turnCtx.AtEnd` -> `H.LoseR(i, 1000, ...)`) -- scheduled by
 /// `ctx::before_turn_end` in `play`; runs once when the turn ends. The
 /// "still in the game" gate is the entry's condition (`owner.out == 0`).
 fn at_end(player_id: i32) -> card_sdk::Asked {

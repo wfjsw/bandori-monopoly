@@ -33,25 +33,18 @@ pub const ROSELIA: CardDef = CardDef::new(
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
         On::Action(Action::Bought(
             "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
-            None,
             Some(on_bought_applies),
-            on_bought,
-        )),
+            on_bought)).silent(),
         On::Action(Action::Bought(
             "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0",
-            None,
             Some(on_live_bought_applies),
-            on_live_bought,
-        )),
+            on_live_bought)),
         On::Action(Action::TurnStartBefore(
             "actor == owner && slot('skill.roselia.first') != 0",
             None,
-            None,
-            at_turn_start,
-        )),
+            at_turn_start)),
     ],
-)
-.silent(&[1]);
+);
 
 /// Residual guard for [`half_price`]: a Live House (always halves) or the
 /// first not-yet-taken non-Live-House buy. `is_live_house_for` is a

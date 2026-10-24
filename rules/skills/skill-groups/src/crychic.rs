@@ -17,6 +17,7 @@ use bandori_std::ctx::{self, state};
 use bandori_std::kind::Actions;
 use bandori_std::state_key;
 use card_sdk::abi::{ActionKind, CardPile, FilterKind};
+use card_sdk::ctx::NameId;
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "skill:CRYCHIC:美好的往日幻影";
@@ -29,26 +30,20 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_start,
-        )),
-        On::Action(Action::Drawn(card_sdk::pre::MINE, None, None, on_drawn)),
+            at_turn_start)).silent(),
+        On::Action(Action::Drawn(card_sdk::pre::MINE, None, on_drawn)),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
         On::Action(Action::TurnEndBefore(
             card_sdk::pre::MINE,
-            None,
             Some(decks_empty),
-            at_turn_end,
-        )),
+            at_turn_end)),
         On::Filter(Filter::PaySplitChoose("", Some(in_lock), lock_pay)),
         On::Action(Actions::PassRewardAffected(
             "",
-            None,
             Some(in_lock),
-            force_card,
-        )),
+            force_card)),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
@@ -60,10 +55,9 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
         On::Filter(Filter::ExclusiveUse(EXCLUSIVE_USE_DENIED, None, refuse)),
-        On::Play("", None, Some(can_transform), transform_now),
+        On::Play("", Some(can_transform), transform_now),
     ],
-)
-.silent(&[0]);
+);
 
 /// The condition under which this band skill closes the exclusive-use gate.
 /// CRYCHIC variants may play their own exclusives (`step == 1`) but not the
@@ -153,7 +147,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     // it here (not on a separate empty-piles hook) is the text: the band (2)
     // effect is what moves the card, and by then the deck is already refilled.
     const SHOUT: &str = "CRYCHIC:（灯）内心的呐喊";
-    let mut shout_at = |player_id: i32, card: &str| {
+    let mut shout_at = |player_id: i32, card: NameId| {
         if card != SHOUT {
             return false;
         }
@@ -165,43 +159,43 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     };
     for (uid, c) in ctx::field_instances(player_id) {
         // The field copy (3) places: unplace it into the draw pile below.
-        if shout_at(player_id, &c) {
+        if shout_at(player_id, c) {
             if ctx::unplace_at(uid) >= 0 {
-                ctx::add_to_deck_at(player_id, SHOUT, ctx::DeckPos::Random);
+                ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
             }
             continue;
         }
-        if c == ID || c.starts_with("CRYCHIC:") {
+        if c == ID || c.as_str().starts_with("CRYCHIC:") {
             ctx::unplace_at(uid);
         }
     }
     for c in ctx::cards_in(player_id, CardPile::Hand) {
-        if shout_at(player_id, &c) {
-            ctx::take_from_hand(player_id, &c);
-            ctx::add_to_deck_at(player_id, SHOUT, ctx::DeckPos::Random);
+        if shout_at(player_id, c) {
+            ctx::take_card(player_id, c.as_str(), CardPile::Hand);
+            ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
             continue;
         }
-        if c.starts_with("CRYCHIC:") {
-            ctx::take_from_hand(player_id, &c);
+        if c.as_str().starts_with("CRYCHIC:") {
+            ctx::take_card(player_id, c.as_str(), CardPile::Hand);
         }
     }
-    for pile in [CardPile::Deck, CardPile::Discard] {
+    for pile in [CardPile::Deck, CardPile::Graveyard] {
         for c in ctx::cards_in(player_id, pile) {
-            if shout_at(player_id, &c) {
+            if shout_at(player_id, c) {
                 if pile != CardPile::Deck {
-                    ctx::take_card(player_id, pile, &c);
-                    ctx::add_to_deck_at(player_id, SHOUT, ctx::DeckPos::Random);
+                    ctx::take_card(player_id, c.as_str(), pile);
+                    ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
                 }
                 continue;
             }
-            if c.starts_with("CRYCHIC:") {
-                ctx::take_card(player_id, pile, &c);
+            if c.as_str().starts_with("CRYCHIC:") {
+                ctx::take_card(player_id, c.as_str(), pile);
             }
         }
     }
     // 「将你剩余的所有手牌放入抽牌堆」
     for c in ctx::cards_in(player_id, CardPile::Hand) {
-        ctx::discard_from_hand(player_id, &c);
+        ctx::discard_from_hand(player_id, c.as_str());
     }
     ctx::sweep_to_deck(player_id);
     // 「并向抽牌堆中加入角色对应的自选"MyGO"或"Ave Mujica"卡至抽牌堆中总共有
@@ -213,7 +207,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("crychic_which")),
     )?;
     while ctx::deck_count(player_id) < 10 {
-        ctx::add_to_deck(player_id, if mygo { "MyGO" } else { "Ave Mujica" }, false);
+        ctx::add_to_dest(player_id, if mygo { "MyGO" } else { "Ave Mujica" }, ctx::Dest::DeckTop);
     }
     ctx::shuffle_into_deck(player_id, false, true);
     // 「获得角色对应的"MyGO"或"Ave Mujica"乐队技能卡，然后抽2张卡」
@@ -239,7 +233,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 // （2）「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- a zone-by-zone sweep that
 // **banishes** (「移除」 = out of the game): `field_instances` + `unplace_at`
 // for the field (the band skill itself included -- its id is `skill:CRYCHIC:…`,
-// not `CRYCHIC:…`), `take_from_hand` for the hand, `take_card` for deck and
+// not `CRYCHIC:…`), `take_card` for the hand / deck / discard.
 // discard. 「内心的呐喊」 is exempt everywhere (its own (2)).
 // 「获得角色对应的"MyGO"或"Ave Mujica"乐队技能卡」 is the same pick the reshuffle
 // already offers -- the two band-skill ids are fixed, and the choice names which.

@@ -26,13 +26,12 @@ pub const REST_TURNS: &str = "skill.afterglow.restTurns";
 pub const RAN_RED: CardDef = CardDef::new(
     "skill:美竹兰:叛逆的红挑染",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::TurnEnd("", None, Some(afterglow), tick)),
+        On::Play("", Some(can_use), use_skill).label("（2）"),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        On::Action(Action::TurnEnd("", Some(afterglow), tick)),
     ],
 )
-.silent(&[1, 2])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
@@ -80,7 +79,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("ran_red_no_fire")));
     }
     None

@@ -11,6 +11,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
 
 const ID: &str = "HHW:（薰）怪盗hello happy";
@@ -18,8 +19,8 @@ const ID: &str = "HHW:（薰）怪盗hello happy";
 pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
-        On::Play("", None, Some(cant_play), play),
-        On::Action(Action::TurnEnd("actor == owner && card.placed", None, None, turn_end)),
+        On::Play("", Some(cant_play), play),
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
         // 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下」 -- the
         // offer is about the *marked* player. SETTLE-STAGES §4 M4: 「经过该玩家」
         // is the mover's step onto a tile that player stands on (行动阶段 12
@@ -28,19 +29,19 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // whenever the raise fired, so the mid-walk force-stop never engaged.
         // The mark-match is a dynamic-key residual (the -1 unmarked sentinel is
         // not CEL's `slot` missing=0).
-        On::Action(Action::PassTile("actor == owner && card.placed && move.main && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", None, Some(marked_on_tile), pass_marked)),
+        On::Action(Action::PassTile("actor == owner && card.placed && move.main && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key", Some(marked_on_tile), pass_marked)),
         // The body-top applicability checks are the condition now (C#
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
         // fixed roll yet. (C#'s `m.Seat != Seat` is W3-KAORU-03, a ruling.)
         On::Filter(Filter::DiceRollPlan("card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null", None, roll_plan)),
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"怪盗hello happy"#)
         .raw_name(r#"（薰）怪盗hello happy"#)
         .tags(&[])
-        .text(r#"将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。"#)
+        .text(CardText::para(r#"将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。"#))
         // sheet cell F5
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"濑田薰"#)]));
 
@@ -134,7 +135,7 @@ fn pass_marked(player_id: i32) -> card_sdk::Asked {
 /// the owner's turn) -> `AddCrystals(-1)`. `actor == owner && card.placed` is
 /// the pre.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 

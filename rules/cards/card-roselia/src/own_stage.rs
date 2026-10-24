@@ -9,21 +9,21 @@
 
 use bandori_std::ctx::{self, AbKind};
 use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "target == owner", Some(key!("own_stage_when")),
+        "target == owner",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("own_stage_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"选择自己的舞台"#)
         .raw_name(r#"选择自己的舞台"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算"#)
+        .text(CardText::para(r#"[反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算"#))
         // sheet cell E9
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 

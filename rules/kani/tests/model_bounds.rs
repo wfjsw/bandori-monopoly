@@ -65,7 +65,7 @@ fn intern_lock() -> std::sync::MutexGuard<'static, ()> {
 #[test]
 fn intern_fixed_loop_bounds() {
     let _g = intern_lock();
-    // card-sdk intern: open-addressed, 8 probes, 8×8 byte walks.
+    // card-sdk intern: open-addressed, 8 probes, write-once leaked names.
     card_sdk::intern::reset();
     let a = card_sdk::intern::intern("PP:[丸山彩]憧憬的前方");
     let b = card_sdk::intern::intern("PP:[丸山彩]憧憬的前方");
@@ -73,8 +73,13 @@ fn intern_fixed_loop_bounds() {
     assert_eq!(card_sdk::intern::resolve_str(a), "PP:[丸山彩]憧憬的前方");
     let long = "x".repeat(52);
     assert!(card_sdk::intern::intern(&long).is_valid());
-    let too_long = "y".repeat(card_sdk::intern::MAX_NAME + 1);
-    assert!(!card_sdk::intern::intern(&too_long).is_valid());
+    // Production has no length cap (`MAX_NAME` is the cfg(kani) unwind bound
+    // only). A 65-byte mark name must intern and round-trip.
+    let sixty_five = "角色标记:".to_owned() + &"x".repeat(52);
+    assert_eq!(sixty_five.len(), 65);
+    let id = card_sdk::intern::intern(&sixty_five);
+    assert!(id.is_valid(), "65-byte composite name must intern");
+    assert_eq!(card_sdk::intern::resolve_str(id), sixty_five);
 }
 
 /// Kani intern identity is `(FNV-1a, len)` (bytes_eq dropped from the probe

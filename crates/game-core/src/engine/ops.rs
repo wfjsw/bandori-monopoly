@@ -613,20 +613,36 @@ impl World {
 
     /// Set a name-keyed held counter. `instance` is the owning card instance
     /// stamped on a **new** row (user ruling 2026-10-10: every held unit is a
-    /// unit of some instance's counter). An existing row keeps its instance.
-    pub fn set_tok(&mut self, player_id: i32, name: &str, value: i32, instance: i32) {
+    /// unit of some instance's counter). An existing row keeps its instance
+    /// unless `instance >= 0` (a re-declare / swap rebinds the owner).
+    /// `max` is the live ceiling (`>= 0` writes it, `0` clearing the cap and
+    /// dropping the row; `< 0` leaves any stored ceiling alone). A row with
+    /// `max > 0` is kept even at `value == 0` so the declaration latch survives
+    /// a spent pool.
+    pub fn set_tok(&mut self, player_id: i32, name: &str, value: i32, instance: i32, max: i32) {
         if let Some(s) = self.player_mut(player_id) {
-            set_named(&mut s.tokens, name, value, instance);
+            set_named(&mut s.tokens, name, value, instance, max);
         }
+    }
+
+    /// The live ceiling stored on the held row (`0` = uncapped / undeclared).
+    pub fn tok_max(&self, player_id: i32, name: &str) -> i32 {
+        self.player_id(player_id)
+            .and_then(|s| s.tokens.iter().find(|c| c.name == name))
+            .map_or(0, |c| c.max)
     }
 
     /// Returns how much it actually moved by. This is a *consumer*
     /// of the cap passed in -- the engine is not the one deciding to clamp.
-    /// `instance` is stamped on a new row.
+    /// `instance` is stamped on a new row. `max` is stored on the row (the
+    /// declared ceiling); `0` leaves any already-stored ceiling alone and
+    /// clamps at `i32::MAX`.
     pub fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32, instance: i32) -> i32 {
         let was = self.tok(player_id, name);
-        let now = (was + n).clamp(0, max);
-        self.set_tok(player_id, name, now, instance);
+        let stored_max = self.tok_max(player_id, name);
+        let ceiling = if max > 0 { max } else { i32::MAX };
+        let now = (was + n).clamp(0, ceiling);
+        self.set_tok(player_id, name, now, instance, if max > 0 { max } else { stored_max });
         now - was
     }
 
@@ -650,6 +666,25 @@ impl World {
     pub fn group_skill_uid(&self, player_id: i32) -> i32 {
         self.player_id(player_id)
             .and_then(|s| s.field.iter().find(|f| f.group_skill))
+            .map_or(-1, |f| f.uid)
+    }
+
+    /// The uid of `player_id`'s **persona-skill field instance** -- the
+    /// character skill (`skill:<persona>:<skill>`, not `group_skill`), which is
+    /// where that seat's skill counters live (火罐 is one of them: a 「技能指示物」
+    /// of the face that prints 「（初始N，上限M）」). -1 when the player has none
+    /// (no persona skill bound, or it has left the field).
+    ///
+    /// Edge cases mirror [`Self::group_skill_uid`]: the write target is always
+    /// this one instance; a swap / unplace takes the instance (and its held
+    /// counters) with it via [`Self::destroy_instance_units`].
+    pub fn persona_skill_uid(&self, player_id: i32) -> i32 {
+        self.player_id(player_id)
+            .and_then(|s| {
+                s.field
+                    .iter()
+                    .find(|f| f.card.starts_with("skill:") && !f.group_skill)
+            })
             .map_or(-1, |f| f.uid)
     }
 
@@ -776,21 +811,29 @@ impl World {
     // ---------------------------------------------------------- named markers
     // Name-as-data: the counter is the frozen wire key. Cap / partial-gain
     // **policy** lives in the rules-layer kernel (`bandori_std::fire`), not
-    // here. The advertised `max` is stored for display; this engine does not
-    // police it.
+    // here. Storage is the held-token row (`MatchPlayer.tokens`); the advertised
+    // `max` lives on [`Counter::max`] and this engine does not police it.
 
     /// Move a named counter's advertised *cap* up or down. Storage-only: the
     /// pull-under is the rules-layer kernel's job (`bandori_std::fire`'s
     /// `pull_under_cap`, applied 「在任意时刻」). The name is data -- the frozen
     /// wire key is just one caller.
     pub fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
-        let cap = self.state_max(player_id, name).saturating_add(n).max(0);
-        self.state_set_bounds(player_id, name, 0, cap);
+        let cap = self.tok_max(player_id, name).saturating_add(n).max(0);
+        // Keep any already-bound instance; a fresh row is unowned until a
+        // re-declare stamps the creating rule (user ruling 2026-10-10).
+        let inst = self
+            .player_id(player_id)
+            .and_then(|s| s.tokens.iter().find(|t| t.name == name))
+            .and_then(|t| t.instance)
+            .unwrap_or(-1);
+        self.set_tok(player_id, name, self.tok(player_id, name), inst, cap);
         cap
     }
 
     /// Dumb add of `n` to a named counter; returns how many landed. No cap
     /// policy and no log line -- the rules-layer kernel clamps and narrates.
+    /// Uncapped on purpose (the kernel's `gain_clamped` is the arithmetic).
     pub fn gain_marker(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -798,9 +841,19 @@ impl World {
         if n <= 0 || s.out() {
             return 0;
         }
-        let before = s.state_get(name);
-        let after = s.state_add(name, n);
-        (after - before).max(0)
+        let before = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.value);
+        let after = (before + n).max(0);
+        // Uncapped dumb add: do not clamp to `Counter::max` (policy is the
+        // rules-layer kernel). Keep any existing instance.
+        let inst = s
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .and_then(|t| t.instance)
+            .unwrap_or(-1);
+        let max = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.max);
+        set_named(&mut s.tokens, name, after, inst, max);
+        after - before
     }
 
     /// Spend `n` of a named counter; returns 1 when the player had enough.
@@ -812,10 +865,18 @@ impl World {
         if n <= 0 {
             return 1;
         }
-        if s.state_get(name) < n {
+        let have = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.value);
+        if have < n {
             return 0;
         }
-        s.state_add(name, -n);
+        let inst = s
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .and_then(|t| t.instance)
+            .unwrap_or(-1);
+        let max = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.max);
+        set_named(&mut s.tokens, name, have - n, inst, max);
         1
     }
 
@@ -880,14 +941,14 @@ impl World {
     /// Returns whether a shuffle happened so the caller can raise its hook.
     pub fn refill_draw_pile(&mut self, i: usize) -> bool {
         if self.st.players.get(i).is_none_or(|s| s.out())
-            || !self.hidden[i].draw.is_empty()
-            || self.hidden[i].discard.is_empty()
+            || !self.hidden[i].deck.is_empty()
+            || self.hidden[i].graveyard.is_empty()
         {
             return false;
         }
-        let mut pile = std::mem::take(&mut self.hidden[i].discard);
+        let mut pile = std::mem::take(&mut self.hidden[i].graveyard);
         self.rng.shuffle(&mut pile);
-        self.hidden[i].draw = pile;
+        self.hidden[i].deck = pile;
         self.log(
             "text",
             i as i32,
@@ -908,7 +969,7 @@ impl World {
         let mut got = 0;
         for _ in 0..n.max(0) {
             self.refill_draw_pile(i);
-            let Some(card) = self.hidden[i].draw.pop() else {
+            let Some(card) = self.hidden[i].deck.pop() else {
                 break;
             };
             self.hidden[i].hand.push(card);
@@ -948,9 +1009,9 @@ impl World {
     pub fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool) {
         if let Ok(i) = usize::try_from(player_id) {
             if let Some(h) = self.hidden.get_mut(i) {
-                h.draw.push(card.to_string());
+                h.deck.push(card.to_string());
                 if shuffle {
-                    self.rng.shuffle(&mut h.draw);
+                    self.rng.shuffle(&mut h.deck);
                 }
             }
         }
@@ -962,7 +1023,7 @@ impl World {
                 if let Some(k) = h.hand.iter().position(|c| c == card) {
                     h.hand.remove(k);
                 }
-                h.discard.push(card.to_string());
+                h.graveyard.push(card.to_string());
                 return self.refill_draw_pile(i);
             }
         }
@@ -1824,8 +1885,10 @@ impl World {
     /// `owner` colours the mark in the view; `src` is provenance (which run
     /// placed it); `category` is the display category ([`crate::state::mark_category`]).
     /// `fresh`: `false` merges onto the first match (same tile/kind/category/
-    /// instance/src), `true` always pushes a fresh row. Returns the count now
-    /// on that row.
+    /// instance/src), `true` always pushes a fresh row. Returns the row's
+    /// [`TileMark::uid`] (the new row's, or the merged row's), or `-1` when
+    /// `count <= 0`. Uids are monotonic and never recycled; see
+    /// [`Self::next_mark_uid`].
     pub fn place_mark(
         &mut self,
         instance: i32,
@@ -1839,7 +1902,7 @@ impl World {
         fresh: bool,
     ) -> i32 {
         if count <= 0 {
-            return 0;
+            return -1;
         }
         let instance = (instance >= 0).then_some(instance);
         let src = (src >= 0).then_some(src);
@@ -1857,14 +1920,14 @@ impl World {
                     && m.src == src
             }) {
                 m.count += count;
-                return m.count;
+                return m.uid;
             }
         }
         let card = src
             .and_then(|s| self.field_by_uid(s))
             .map(|f| f.card.clone())
             .unwrap_or_default();
-        let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+        let uid = self.next_mark_uid();
         self.st.marks.push(TileMark {
             uid,
             tile,
@@ -1878,7 +1941,42 @@ impl World {
             partner: None,
             note,
         });
-        count
+        uid
+    }
+
+    /// Allocate the next mark-row uid. Monotonic and never-reuse for the
+    /// lifetime of the match; floors at `max(existing.uid)+1` so a deserialised
+    /// save that predates [`crate::state::MatchState::next_mark_uid`] can never
+    /// hand out a colliding handle.
+    fn next_mark_uid(&mut self) -> i32 {
+        let floor = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+        let uid = self.st.next_mark_uid.max(floor);
+        self.st.next_mark_uid = uid.saturating_add(1);
+        uid
+    }
+
+    /// The marked tile of the row at `uid`, or -1 when no such row (the handle
+    /// is dead -- never recycled onto a later mark).
+    pub fn mark_tile_by_uid(&self, uid: i32) -> i32 {
+        if uid < 0 {
+            return -1;
+        }
+        self.st
+            .marks
+            .iter()
+            .find(|m| m.uid == uid)
+            .map(|m| m.tile)
+            .unwrap_or(-1)
+    }
+
+    /// Drop the exact mark row at `uid`. Returns whether that row was present.
+    pub fn remove_mark_by_uid(&mut self, uid: i32) -> bool {
+        if uid < 0 {
+            return false;
+        }
+        let before = self.st.marks.len();
+        self.st.marks.retain(|m| m.uid != uid);
+        self.st.marks.len() != before
     }
 
     /// Partner tile (`TileMark::partner`) of the first matching mark on `tile`,
@@ -1937,10 +2035,11 @@ impl World {
             .and_then(|s| self.field_by_uid(s))
             .map(|f| f.card.clone())
             .unwrap_or_default();
-        let mut next = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
-        for (tile, partner) in [(a, b), (b, a)] {
+        let uid_a = self.next_mark_uid();
+        let uid_b = self.next_mark_uid();
+        for (uid, tile, partner) in [(uid_a, a, b), (uid_b, b, a)] {
             self.st.marks.push(TileMark {
-                uid: next,
+                uid,
                 tile,
                 kind: kind.to_string(),
                 category: cat.to_string(),
@@ -1952,7 +2051,6 @@ impl World {
                 partner: Some(partner),
                 note: note.clone(),
             });
-            next += 1;
         }
         true
     }
@@ -2105,11 +2203,18 @@ impl World {
                     name: name.to_string(),
                     value: 0,
                     instance,
+                    max: 0,
                 });
                 s.tokens.last_mut().expect("just pushed")
             }
         };
         let before = slot.value;
+        // `max` is a *consumer* of the cap passed in -- the engine is not the
+        // one deciding to clamp. `max > 0` clamps and stores the ceiling;
+        // `max = 0` is uncapped for this call and leaves any stored ceiling.
+        if max > 0 {
+            slot.max = max;
+        }
         slot.value = (slot.value + n).max(0);
         if max > 0 {
             slot.value = slot.value.min(max);
@@ -2339,20 +2444,39 @@ impl World {
     }
 }
 
-/// Zero-terminated named counters: keep only positive values.
-fn set_named(list: &mut Vec<Counter>, name: &str, value: i32, instance: i32) {
+/// Named held counters. `instance >= 0` stamps (or rebinds) the owner; a
+/// negative instance leaves an existing row's owner alone and creates an
+/// unowned row. `max > 0` stores the live ceiling and keeps the row alive at
+/// `value == 0` (a declared pool's latch); `max == 0` leaves any stored
+/// ceiling alone. Zero-terminated otherwise: drop rows with no value and no
+/// ceiling.
+/// `max` is a tri-state: **`>= 0` writes that ceiling** (including `0`, which
+/// clears it and lets the row drop below), **`< 0` leaves any stored ceiling
+/// alone**. An earlier `max > 0` spelling could not express "clear the cap to
+/// 0", so `redeclare`/`end_overlay`/`add_marker_max` reductions silently kept
+/// the old ceiling.
+fn set_named(list: &mut Vec<Counter>, name: &str, value: i32, instance: i32, max: i32) {
     let v = value.max(0);
     match list.iter_mut().find(|c| c.name == name) {
-        Some(c) => c.value = v,
+        Some(c) => {
+            c.value = v;
+            if instance >= 0 {
+                c.instance = (instance >= 0).then_some(instance);
+            }
+            if max >= 0 {
+                c.max = max;
+            }
+        }
         None => {
-            if v > 0 {
+            if v > 0 || max >= 0 {
                 list.push(Counter {
                     name: name.to_string(),
                     value: v,
                     instance: (instance >= 0).then_some(instance),
+                    max: max.max(0),
                 });
             }
         }
     }
-    list.retain(|c| c.value > 0);
+    list.retain(|c| c.value > 0 || c.max > 0);
 }

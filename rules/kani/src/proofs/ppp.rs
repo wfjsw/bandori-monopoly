@@ -40,8 +40,7 @@ crate::host_subset!(ppp_dispatch {
     pay => arm_pay,
     pay_to => arm_pay_to,
     draw => arm_draw,
-    add_to_deck | add_to_deck_at => arm_add_to_deck_at,
-    add_to_hand => arm_add_to_hand,
+    add_to_dest => arm_add_to_dest,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     cards_in => arm_cards_in,
@@ -68,9 +67,9 @@ crate::host_subset!(ppp_dispatch {
     count_held | count_held_name => arm_count_held,
     add_held => arm_add_held,
     set_held_name => arm_set_held_name,
-    slot => arm_slot,
-    set_slot => arm_set_slot,
-    inc_slot => arm_inc_slot,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_state_add,
     roll | roll_ask => arm_roll,
     player_pos => arm_player_pos,
     player_count => arm_player_count,
@@ -342,7 +341,7 @@ fn signpost_02_lose_1000_at_end_iff_at(user: i32) {
     let player = user;
     let pre_money = w.money[player as usize];
 
-    // single-source guard: the real CEL string on `On::AtEnd`
+    // single-source guard: the real CEL string on `On::Schedule`
     let gid = crate::guard_id!("owner.out == 0");
     let ov = TriggerOverlay::default();
     let ctx = ir_fill::fill_for_guard(&w, gid, player, 0, false, -1, &ov);
@@ -935,7 +934,7 @@ fn auction_off_01_at(user: i32, match_id: bool) {
     let w = world::with_world(|ww| ww.clone());
     let player = user;
     let mut w = w;
-    // Hand holds the auction card so `take_from_hand` succeeds on the
+    // Hand holds the auction card so `take_card(..., Hand)` succeeds on the
     // unblocked path.
     w.hand_n = 1;
     w.hand_pile[0] = crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0;

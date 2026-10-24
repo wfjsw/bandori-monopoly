@@ -9,24 +9,25 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
     &[
-        On::Play("", None, Some(cant_play), haneoka),
+        On::Play("", Some(cant_play), haneoka),
         // C# `CardHaneoka.PaySplitChoose` -- while placed, may cancel one payment.
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive `ask_yes` + `set_dest` + `set_pay_amount(0)` offer sits
         // immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0", None, None, pay_choose)),
+        On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0", None, pay_choose)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"羽丘的不可思议女孩"#)
         .raw_name(r#"羽丘的不可思议女孩"#)
         .tags(&[])
-        .text(r#"位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若小于10，此卡放入弃牌堆且视为此卡未生效"#)
+        .text(CardText::para(r#"位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若小于10，此卡放入弃牌堆且视为此卡未生效"#))
         // sheet cell I7
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 

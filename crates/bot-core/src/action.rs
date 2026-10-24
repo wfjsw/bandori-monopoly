@@ -127,7 +127,7 @@ pub fn legal_actions_with_cost(
 /// Is this prompt's kind one the search branches on?
 pub fn searchable_prompt(p: &MatchPrompt) -> bool {
     match p.kind.as_str() {
-        "auction" | "mortgage" | "tile" | "pick" => true,
+        "auction" | "mortgage" | "tile" | "pick" | "multi" => true,
         "choice" => {
             let n = p.options.len();
             if n <= 1 {
@@ -352,6 +352,36 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
                 for i in 0..p.options.len() {
                     out.push(Action::Offer { index: i as i32 });
                 }
+            }
+        }
+        "multi" => {
+            // One action per valid bitmask of exactly `count` options. The
+            // answer is the mask itself (`Action::Offer` already sends it as
+            // `value`). Cap the fan-out so a wide multi cannot explode the
+            // search -- past the cap just offer the valid fallback mask.
+            let n = p.options.len().min(31) as u32;
+            let want = (p.count as u32).clamp(1, n.max(1));
+            let mut emitted = 0usize;
+            if n > 0 && want <= n {
+                // Enumerate masks with popcount == want, lowest first
+                // (Gosper's hack).
+                let mut mask = (1u32 << want) - 1;
+                let limit = 1u32 << n;
+                while mask < limit && emitted < 32 {
+                    out.push(Action::Offer { index: mask as i32 });
+                    emitted += 1;
+                    let c = mask & mask.wrapping_neg();
+                    let r = mask.wrapping_add(c);
+                    if r == 0 || r >= limit {
+                        break;
+                    }
+                    mask = (((r ^ mask) >> 2) / c) | r;
+                }
+            }
+            if emitted == 0 {
+                out.push(Action::Offer {
+                    index: p.fallback.max(0),
+                });
             }
         }
         _ => {}

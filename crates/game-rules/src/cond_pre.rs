@@ -226,20 +226,6 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             0
         }
     }
-    fn owner_charge(&self) -> i64 {
-        if self.owner_seat >= 0 {
-            self.src.state_get(self.owner_seat, "charge") as i64
-        } else {
-            0
-        }
-    }
-    fn owner_group_pool(&self, name: &str) -> i64 {
-        if self.owner_seat >= 0 {
-            self.src.group_pool(self.owner_seat, name) as i64
-        } else {
-            0
-        }
-    }
     fn owner_hand(&self) -> i64 {
         if self.owner_seat >= 0 {
             self.src.hand_size(self.owner_seat) as i64
@@ -260,18 +246,6 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         } else {
             0
         }
-    }
-    fn owner_persona(&self) -> i64 {
-        if self.owner_seat < 0 {
-            return 0;
-        }
-        id_of(&self.src.persona_name(self.owner_seat).unwrap_or_default())
-    }
-    fn owner_group(&self) -> i64 {
-        if self.owner_seat < 0 {
-            return 0;
-        }
-        id_of(&self.src.group_name(self.owner_seat).unwrap_or_default())
     }
     fn owner_tiles(&self) -> i64 {
         if self.owner_seat >= 0 {
@@ -309,22 +283,15 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             0
         }
     }
-    fn blocked(&self, group: i64) -> bool {
-        // Mirror of `fill_candidate`'s empty `blocked_groups`: the host fills
-        // the blocked list from the skill dispatch, not the raw world.
-        let _ = group;
-        false
+    fn cand_set(&self, key: &str) -> Vec<i64> {
+        // Host fills the blocked list from the skill dispatch, not the raw world.
+        let _ = key;
+        Vec::new()
     }
 
     // -- player table -------------------------------------------------------
     fn money(&self, seat: i64) -> i64 {
         self.src.money(seat as i32) as i64
-    }
-    fn charge(&self, seat: i64) -> i64 {
-        self.src.state_get(seat as i32, "charge") as i64
-    }
-    fn group_pool(&self, seat: i64, name: &str) -> i64 {
-        self.src.group_pool(seat as i32, name) as i64
     }
     fn hand(&self, seat: i64) -> i64 {
         self.src.hand_size(seat as i32) as i64
@@ -336,22 +303,35 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.src.player_out(seat as i32) as i64
     }
     fn state(&self, seat: i64, key: &str) -> i64 {
-        self.src.state_get(seat as i32, key) as i64
+        // Sugar keys published through the one `state` door (CondView contract).
+        match key {
+            bandori_std::cel::KEY_CHARGE => self.src.tok(seat as i32, bandori_std::cel::KEY_CHARGE) as i64,
+            bandori_std::cel::KEY_CRYSTALS => {
+                self.src.group_pool(seat as i32, bandori_std::cel::KEY_CRYSTALS) as i64
+            }
+            bandori_std::cel::KEY_PERSONA => {
+                id_of(&self.src.persona_name(seat as i32).unwrap_or_default())
+            }
+            bandori_std::cel::KEY_GROUP => {
+                id_of(&self.src.group_name(seat as i32).unwrap_or_default())
+            }
+            _ => self.src.state_get(seat as i32, key) as i64,
+        }
     }
     fn state_table(&self) -> Vec<(i64, String, i64)> {
         let mut rows = Vec::new();
         for s in 0..self.src.player_count() {
+            // Sugar keys first so the eager fill and `IrCtx.state` agree.
+            for k in bandori_std::cel::STATE_KEYS {
+                rows.push((s as i64, (*k).to_string(), self.state(s as i64, k)));
+            }
             for (k, v) in self.src.state_entries(s) {
-                rows.push((s as i64, k, v as i64));
+                if !bandori_std::cel::STATE_KEYS.contains(&k.as_str()) {
+                    rows.push((s as i64, k, v as i64));
+                }
             }
         }
         rows
-    }
-    fn persona(&self, seat: i64) -> i64 {
-        id_of(&self.src.persona_name(seat as i32).unwrap_or_default())
-    }
-    fn group(&self, seat: i64) -> i64 {
-        id_of(&self.src.group_name(seat as i32).unwrap_or_default())
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.src.owned_count(seat as i32) as i64
@@ -372,6 +352,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     }
     fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool {
         self.src.tile_in(player as i32, tile as i32, class)
+    }
+    fn tile_class_names(&self) -> Vec<String> {
+        // Ruleset class vocabulary (no engine class table).
+        class_names()
     }
 
     // -- eager function tables ---------------------------------------------
@@ -414,9 +398,6 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
                 (n, v)
             })
             .collect()
-    }
-    fn blocked_groups(&self) -> Vec<i64> {
-        Vec::new()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
         collect_tile_ids(self.src)
@@ -692,22 +673,13 @@ pub trait SnapSrc {
         0
     }
     /// Non-zero named counters on that instance (`card.counter('name')`;
-    /// missing = 0). The two on-card wire names (`card-sdk::abi::counter::{CP,
-    /// CRYSTALS}`) are always listed when non-zero. A host that tracks extra
-    /// `FieldCard::counters` keys overrides this.
+    /// missing = 0). Hosts iterate the instance's counter keys. The two
+    /// on-card wire names (`card-sdk::abi::counter::{CP, CRYSTALS}` /
+    /// `bandori_std::counter`) stay a content-side mapping onto the instance's
+    /// named counters -- `card_counter` reads them by name.
     fn card_counter_names(&self, player_id: i32, card: &str) -> Vec<String> {
-        let mut out = Vec::new();
-        // ABI wire names — NOT the neutral vocabulary aliases. The vocab
-        // rename (2b67ce0d) swapped these to ["points","bonus"] but the
-        // actual counter names in `card-sdk::abi::counter` are still
-        // "cp" / "crystals"; the mismatch made `card.counter('crystals')`
-        // read 0 in every CEL guard (conf_fill_diff regression).
-        for n in ["cp", "crystals"] {
-            if self.card_counter(player_id, card, n) != 0 {
-                out.push(n.to_string());
-            }
-        }
-        out
+        let _ = (player_id, card);
+        Vec::new()
     }
     fn tile_owner(&self, tile: i32) -> i32;
     fn houses_of(&self, tile: i32) -> i32;
@@ -945,12 +917,21 @@ pub struct CompiledPre {
     pub cond: Cond,
 }
 
+/// Install this ruleset's CEL extension (sugar names, kind constants,
+/// guard-const expansions). Idempotent; must run before the first `compile`
+/// **or** `eval` -- the wasm32 build has no parser but still evaluates
+/// precompiled conditions, and `install_functions` walks `ext::vocab()`.
+pub fn install_vocab() {
+    let _ = rules_cond::install_ext(bandori_std::cel::ext());
+}
+
 impl CompiledPre {
     /// Host path: parse + lint + rewrite once (docs/GUARDS.md §4.3). Fail-closed:
     /// a parse / unknown-var / float error is a build error, never "treat as
     /// true" -- the clauses the condition carries are gone from the guard.
     #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
     pub fn compile(src: &str) -> Result<Self, rules_cond::CondError> {
+        install_vocab();
         let cond = rules_cond::compile(src)?;
         let blob = cond.to_bytes(false);
         Ok(Self {
@@ -972,6 +953,7 @@ impl CompiledPre {
     }
 
     pub fn eval(&self, win: &WindowCtx, cand: &CandidateCtx) -> bool {
+        install_vocab();
         self.cond.eval(win, cand)
     }
 }
@@ -1128,6 +1110,7 @@ pub fn condition_allows(
         return true;
     };
     let scope = scope.expect("a condition evaluation needs a window scope");
+    install_vocab();
     bump(&guard_cost::COND_EVALS);
     #[cfg(feature = "bot-cost")]
     let t0 = std::time::Instant::now();
@@ -1211,6 +1194,34 @@ pub fn admits_pre(
 /// Build the window snapshot once per trigger / chain window and reuse it
 /// across every candidate probe in that window ([`WindowScope`]). This is
 /// where the G1 savings live: ~48 900 counteract probes share ~250 windows.
+/// Build the `state(p, key)` map: `MatchPlayer.state` rows plus every
+/// [`bandori_std::cel::STATE_KEYS`] sugar row (shared with `ir_fill`).
+fn fill_state_map<S: SnapSrc>(world: &S, p: i32) -> std::collections::BTreeMap<String, i64> {
+    use bandori_std::cel::{KEY_CHARGE, KEY_CRYSTALS, KEY_GROUP, KEY_PERSONA, STATE_KEYS};
+    let mut state: std::collections::BTreeMap<String, i64> = world
+        .state_entries(p)
+        .into_iter()
+        .map(|(k, v)| (k, v as i64))
+        .collect();
+    state.insert(KEY_CHARGE.to_string(), world.tok(p, KEY_CHARGE) as i64);
+    state.insert(
+        KEY_CRYSTALS.to_string(),
+        world.group_pool(p, KEY_CRYSTALS) as i64,
+    );
+    state.insert(
+        KEY_PERSONA.to_string(),
+        id_of(&world.persona_name(p).unwrap_or_default()),
+    );
+    state.insert(
+        KEY_GROUP.to_string(),
+        id_of(&world.group_name(p).unwrap_or_default()),
+    );
+    for k in STATE_KEYS {
+        state.entry((*k).to_string()).or_insert(0);
+    }
+    state
+}
+
 pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let t = world.trigger();
     let tile_ids = collect_tile_ids(world);
@@ -1232,18 +1243,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         .map(|p| {
             let mut snap = PlayerSnap {
                 money: world.money(p) as i64,
-                charge: world.state_get(p, "charge") as i64,
-                group_pool: world.group_pool_total(p) as i64,
                 hand: world.hand_size(p) as i64,
                 pos: world.player_pos(p) as i64,
                 out: world.player_out(p) as i64,
-                state: world
-                    .state_entries(p)
-                    .into_iter()
-                    .map(|(k, v)| (k, v as i64))
-                    .collect(),
-                persona: id_of(&world.persona_name(p).unwrap_or_default()),
-                group: id_of(&world.group_name(p).unwrap_or_default()),
+                state: fill_state_map(world, p),
                 tiles: world.owned_count(p) as i64,
                 gains: world.gains_this_turn(p) as i64,
                 targeted: world.targeted_count(p) as i64,
@@ -1374,18 +1377,10 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         .map(|p| {
             let mut snap = PlayerSnap {
                 money: world.money(p) as i64,
-                charge: world.state_get(p, "charge") as i64,
-                group_pool: world.group_pool_total(p) as i64,
                 hand: world.hand_size(p) as i64,
                 pos: world.player_pos(p) as i64,
                 out: world.player_out(p) as i64,
-                state: world
-                    .state_entries(p)
-                    .into_iter()
-                    .map(|(k, v)| (k, v as i64))
-                    .collect(),
-                persona: id_of(&world.persona_name(p).unwrap_or_default()),
-                group: id_of(&world.group_name(p).unwrap_or_default()),
+                state: fill_state_map(world, p),
                 tiles: world.owned_count(p) as i64,
                 gains: world.gains_this_turn(p) as i64,
                 targeted: world.targeted_count(p) as i64,
@@ -1477,7 +1472,7 @@ fn fill_tile_generic<S: SnapSrc>(
 }
 
 /// The class vocabulary `tile_in` is probed over (built once).
-fn class_names() -> Vec<String> {
+pub fn class_names() -> Vec<String> {
     // Ruleset-registered class names, plus the generic colour classes.
     let mut classes: Vec<String> = crate::tile_class::class_names();
     for g in -2..=32 {
@@ -1517,14 +1512,9 @@ pub fn fill_candidate<S: SnapSrc>(world: &S, owner: i32, card: &str, placed: boo
     let mut cand = CandidateCtx {
         owner: owner as i64,
         owner_money: world.money(p) as i64,
-        owner_charge: world.state_get(p, "charge") as i64,
-        // The ruleset's named-counter key for the group pool.
-        owner_group_pool: world.group_pool(p, "crystals") as i64,
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
         owner_out: world.player_out(p) as i64,
-        owner_persona: id_of(&world.persona_name(p).unwrap_or_default()),
-        owner_group: id_of(&world.group_name(p).unwrap_or_default()),
         owner_tiles: world.owned_count(p) as i64,
         card_id: id_of(card),
         card_placed: placed,
@@ -1554,6 +1544,12 @@ pub fn fill_candidate<S: SnapSrc>(world: &S, owner: i32, card: &str, placed: boo
                 (n, v)
             })
             .collect(),
+        // TODO(规则书): the blocked-group list is never filled, so
+        // `cand_has('blocked', …)` / the `blocked(b)` sugar always answers
+        // false on the CEL path. The IR path (`ir_fill`) does fill
+        // `cand_pairs` from the world's `blocked_bands`, so the two evaluators
+        // disagree. No production guard string reads it yet; wire the skill
+        // dispatch's block list in here before one does.
         blocked_groups: Vec::new(),
         ..CandidateCtx::default()
     };
@@ -1593,7 +1589,8 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.tsugumiPlain.owed",
     // Standard player-state keys used by skill body-top checks.
     "skillState",
-    "charge",
+    // "charge" is not a state key -- it is a held token of the persona-skill
+    // instance. The cond-ir `charge(p)` reader sources it from the token store.
     "skill.aveMujica.inTwo",
     "skill.ras.taken",
     "skill.roselia.first",

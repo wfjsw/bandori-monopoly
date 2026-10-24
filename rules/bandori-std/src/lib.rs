@@ -54,6 +54,9 @@ pub mod counter {
 /// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
 /// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
 pub mod fire;
+/// CEL sugar tables / kind constants / guard-const expansions for this
+/// ruleset. Plain data; the typed `CondExt` is assembled in `game-rules`.
+pub mod cel;
 /// Shared CEL guards.
 pub mod guards;
 /// Ruleset-declared raise-point kind ids and tile kind/class strings.
@@ -122,13 +125,12 @@ pub mod ctx {
     pub use card_sdk::ctx::*;
 
     pub use crate::{
-        add_card_crystals, add_charge_max, add_crystals, add_crystals_at, add_group_crystals,
-        add_group_skill, add_rent_unit_bonus, add_ring_bonus, card_crystals, charge, charge_max,
-        crystals, crystals_at, decay, gain_charge, group_crystals, group_skill, group_skills,
-        in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed, is_live_house_for,
-        is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy, pay_rent, persona_is,
-        persona_skill, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked, spend_charge,
-        turn_snap,
+        add_card_crystals, add_crystals, add_crystals_at, add_group_crystals, add_group_skill,
+        add_rent_unit_bonus, add_ring_bonus, card_crystals, crystals, crystals_at, remove_crystal,
+        group_crystals, group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable,
+        is_color, is_deed, is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy,
+        offer_force_buy, pay_rent, persona_is, persona_skill, rent_unit_mult, ring_multiplier,
+        set_crystals, skill_blocked, turn_snap,
     };
 }
 
@@ -226,50 +228,13 @@ pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
 }
 
 /// Burn one of this card's crystals (the decay tick). Returns the count left.
-pub fn decay() -> Result<i32, Prompt> {
+pub fn remove_crystal() -> Result<i32, Prompt> {
     add_crystals(-1, 0)
 }
 
-// ------------------------------------------------------------- 火罐
-// Readable sugar over the generic `marker_*` / `state_*` family. The wire
-// key is `state_key::CHARGE`; the policy kernel is [`crate::fire`].
-
-pub fn charge(player_id: i32) -> i32 {
-    card_sdk::ctx::state::get(player_id, state_key::CHARGE)
-}
-
-pub fn charge_max(player_id: i32) -> i32 {
-    card_sdk::ctx::state::max(player_id, state_key::CHARGE)
-}
-
-/// Gain fire pots, capped by the player's own cap.
-pub fn gain_charge(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
-    card_sdk::ctx::gain_marker(player_id, state_key::CHARGE, n, why)
-}
-
-/// Spend `n` [火罐]; false when the player has fewer. Logs the spend.
-///
-/// Marker window (user ruling 2026-10-07): `markerSpend` opens **before** the
-/// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
-/// counteraction cancelled the link).
-///
-/// 「以代替此次技能的火罐消耗」 -- `ChargePaying` runs before the pots move.
-/// A hook that substitutes the cost cancels the link and performs its own
-/// payment; the spend is then treated as satisfied.
-pub fn spend_charge(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
-    if n <= 0 {
-        return Ok(true);
-    }
-    if !card_sdk::ctx::raise(player_id, crate::kind::ChargePaying, n)? {
-        return Ok(true);
-    }
-    card_sdk::ctx::spend_marker(player_id, state_key::CHARGE, n, why).map(|v| v != 0)
-}
-
-/// Raise (or lower) `player_id`'s [火罐] cap; returns the new cap.
-pub fn add_charge_max(player_id: i32, n: i32) -> i32 {
-    card_sdk::ctx::add_marker_max(player_id, state_key::CHARGE, n)
-}
+// 火罐: the policy kernel is [`crate::fire`] (held tokens of the persona-skill
+// instance). The uncapped `gain_charge` / `spend_charge` / `add_charge_max`
+// sugar is gone -- it was a bypass footgun. Use `fire::{gain, spend, adjust_cap}`.
 
 // ------------------------------------------------------------- band / character
 
@@ -329,7 +294,12 @@ pub fn persona_skill(player_id: i32) -> Option<String> {
 }
 
 /// Band-skill attachments: `(uid, rule id, extra)` in placement order.
-pub fn group_skills(player_id: i32) -> Vec<(i32, String, i32)> {
+///
+/// The rule id is an interned [`NameId`] (identity, not display) — compare
+/// with a literal (`id == "skill:…"`) or pass `id.as_str()` to `invoke_skill`.
+/// Wire format is still `postcard::to_allocvec(&Vec<(i32, String, i32)>)`;
+/// the guest interns on decode (no `String` construction).
+pub fn group_skills(player_id: i32) -> Vec<(i32, card_sdk::ctx::NameId, i32)> {
     let cap = 8192;
     let (p, scratch) = raw::out_buf(cap as usize);
     let n = unsafe { raw::sys::group_skills(player_id, p, cap) };
@@ -337,7 +307,13 @@ pub fn group_skills(player_id: i32) -> Vec<(i32, String, i32)> {
         return Vec::new();
     }
     let buf = raw::out_read(p, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+    let borrowed: Vec<(i32, &str, i32)> =
+        postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
+    let mut out = Vec::with_capacity(borrowed.len());
+    for (uid, id, extra) in borrowed {
+        out.push((uid, card_sdk::intern::intern(id), extra));
+    }
+    out
 }
 
 /// Attach a band-skill instance to `player_id`. Returns the uid, or -1.

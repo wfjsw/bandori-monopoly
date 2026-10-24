@@ -31,8 +31,8 @@ pub const STATE_EVENTS: usize = 80;
 pub struct Hidden {
     pub hand: Vec<String>,
     /// Top of the pile is the **end** of the vec.
-    pub draw: Vec<String>,
-    pub discard: Vec<String>,
+    pub deck: Vec<String>,
+    pub graveyard: Vec<String>,
     /// The player's next main move walks exactly this many steps instead of
     /// the roll; consumed by that move.
     #[serde(default)]
@@ -174,6 +174,11 @@ pub struct TurnCtx {
     /// from somewhere else). 「若此卡从手牌以外的地方打出」 reads this.
     #[serde(default)]
     pub play_from_hand: bool,
+    /// The activation argument `On::declare` collected for the play being
+    /// resolved (docs/ACTIVATION.md §2). Scoped to one play, like
+    /// `play_from_hand`. `rules.play` reads it into `Call::Play`'s `arg`.
+    #[serde(default)]
+    pub play_arg: Vec<u8>,
     /// Seats whose designation on the play being resolved is cancelled
     /// (「取消其对目标之一的designate」). A per-pair cancel: the rest of the play's
     /// designations still land. Cleared at the start of each play.
@@ -250,6 +255,7 @@ impl Default for TurnCtx {
             abnormal: Vec::new(),
             extreme: Extreme::Plain,
             play_from_hand: false,
+            play_arg: Vec::new(),
             cancelled_designations: Vec::new(),
             play_doubled: None,
             paid_in_settle: 0,
@@ -284,7 +290,7 @@ pub struct Scheduled {
     /// time: the instance identity belongs here and not to whatever happens to
     /// be on the field when the turn ends.
     ///
-    /// `-1` when the card was not in play when it scheduled (`On::AtEnd` may
+    /// `-1` when the card was not in play when it scheduled (`On::Schedule` may
     /// run for a card in a hand or pile); the run then reads 0 named counters, which
     /// is right -- there is no instance to read them from. Two copies of a card
     /// that both schedule produce two entries with two uids, so the callback is
@@ -292,6 +298,10 @@ pub struct Scheduled {
     /// existed still loads.
     #[serde(default = "no_card_uid")]
     pub uid: i32,
+    /// Which `On::Schedule` entry to run (its `id` slug). `""` on a save from
+    /// before this field existed -- resolve to the card's first Schedule entry.
+    #[serde(default)]
+    pub entry: String,
 }
 
 /// The "no instance" card uid: the callback is not anchored to a field card.
@@ -973,8 +983,8 @@ impl World {
         let mut st = self.st.clone();
         for (player_id, h) in st.players.iter_mut().zip(&self.hidden) {
             player_id.hand = h.hand.len() as i32;
-            player_id.draw = h.draw.len() as i32;
-            player_id.discard = h.discard.clone();
+            player_id.draw = h.deck.len() as i32;
+            player_id.discard = h.graveyard.clone();
         }
         // The recent-event window: shared via `Arc`, rebuilt in `EventTail`
         // only when something was logged since the last read.

@@ -2,7 +2,48 @@
 # Build with tools/build-ruleset.sh (wasm32-unknown-unknown only).
 [workspace]
 resolver = "2"
-members = ["card-sdk", "bandori-std", "cards/*", "skills/*", "personas", "tiles", "markers", "status", "events", "fixtures/*"]
+members = ["bandori-std", "cards/*", "skills/*", "personas", "tiles", "markers", "status", "events", "fixtures/*"]
+
+# Match the root workspace values. `crates/cond` / `crates/cond-ir` are root
+# members; this workspace loads them as a path dep of `bandori-std`, so their
+# `*.workspace = true` inherits from here.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# Same vendored cel fork as the root workspace: `rules-cond`'s `wire` feature
+# needs `cel/serde-ast`, which upstream crates.io `cel` does not have.
+[patch.crates-io]
+cel = { path = "../third_party/cel-rust" }
+
+[workspace.dependencies]
+const_format = { version = "0.2.37", features = ["fmt"] }
+bandori-std = { path = "bandori-std" }
+bitflags = { version = "2", default-features = false }
+card-ag = { path = "cards/card-ag" }
+card-crychic = { path = "cards/card-crychic" }
+card-general = { path = "cards/card-general" }
+card-hhw = { path = "cards/card-hhw" }
+card-morfonica = { path = "cards/card-morfonica" }
+card-mujica = { path = "cards/card-mujica" }
+card-mygo = { path = "cards/card-mygo" }
+card-pp = { path = "cards/card-pp" }
+card-ppp = { path = "cards/card-ppp" }
+card-ras = { path = "cards/card-ras" }
+card-roselia = { path = "cards/card-roselia" }
+card-sdk = { path = "../crates/card-sdk" }
+card-sumimi = { path = "cards/card-sumimi" }
+game-kinds = { path = "../crates/game-kinds" }
+personas = { path = "personas" }
+postcard = { version = "1", default-features = false }
+rules-events = { path = "events" }
+rules-markers = { path = "markers" }
+rules-status = { path = "status" }
+rules-tiles = { path = "tiles" }
+serde = { version = "1", default-features = false }
+skill-groups = { path = "skills/skill-groups" }
+skill-personas = { path = "skills/skill-personas" }
 
 [profile.release]
 opt-level = "z"

@@ -11,12 +11,13 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind};
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RAN_AS_USUAL: CardDef = CardDef::new(
     "AG:(兰) 像往常一样",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // G4: kind (Effect) is the category. The condition carries the whole
         // guard body: target rel + `effect.has(Abnormal)` + the once-per-turn
         // slot. Residual guard deleted.
@@ -30,21 +31,22 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         //   place (it narrows, never broadens) until the book rules on it.
         On::Counteract(
             &[ChainKind::Effect],
-            "target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key", None,
+            "target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key",
             None,
-            counteract,
-        ),
+            counteract),
         // The body-top applicability checks are the condition / residual guard
         // now: a seat still in the game (`owner.out == 0`) that actually took
         // an abnormal effect this turn (`at_end_something_to_undo`).
-        On::Action(Action::AtEnd("owner.out == 0", None, Some(at_end_something_to_undo), at_end)),
+        On::Schedule("at_end", "owner.out == 0", Some(at_end_something_to_undo), at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"像往常一样"#)
         .raw_name(r#"(兰) 像往常一样"#)
         .tags(&[])
-        .text(r#"（1）此卡可以当反击使用
-（2）受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#)
+        .text(CardText::items(&[
+            it(r#"此卡可以当反击使用"#),
+            it(r#"受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#),
+        ]))
         // sheet cell C6
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"美竹兰"#)]));
 
@@ -69,8 +71,8 @@ fn arm(player_id: i32) {
         &Msg::new(key!("ran_as_usual_armed")).player_id("who", player_id),
     );
     // C# `H._turnCtx.AtEnd.Add(() => Undo(i))` -- the turn-end queue hook
-    // (`ctx::before_turn_end` + `On::AtEnd`). The card need not be in play.
-    ctx::before_turn_end(player_id);
+    // (`ctx::before_turn_end` + `On::Schedule`). The card need not be in play.
+    ctx::before_turn_end(player_id, "at_end");
 }
 
 /// C# `CardRanAsUsual.Undo`, queued on `H._turnCtx.AtEnd`. The scheduling half

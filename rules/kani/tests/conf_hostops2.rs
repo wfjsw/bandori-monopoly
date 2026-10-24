@@ -35,7 +35,8 @@ fn base() -> KWorld {
 }
 
 /// `state_set(player, ptr, len, field, v)`: a3 = field, a4 = value.
-/// Field 0 writes VALUE and logs `SetState`; 1/2/3 write MAX/MIN/EXPIRES.
+/// Field 0 writes VALUE and logs `SetState`; 1/2/3 write MIN/MAX/EXPIRES
+/// (SDK `state::{MIN,MAX,EXPIRES}` column ids).
 #[test]
 fn state_set_packs_field_and_value() {
     let _g = model_lock();
@@ -59,14 +60,14 @@ fn state_set_packs_field_and_value() {
     assert_eq!(got, 7, "VALUE column must be a4, not a3");
     let _ = (ptr, len);
 
-    // field 1 = MAX
-    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 1, 9, 0]);
-    let max = kworld::with_world(|w| w.key_max(0, key));
-    assert_eq!(max, 9, "field 1 writes MAX");
-    // field 2 = MIN
-    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 2, 3, 0]);
+    // field 1 = MIN (SDK `state::MIN`)
+    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 1, 3, 0]);
     let min = kworld::with_world(|w| w.key_min(0, key));
-    assert_eq!(min, 3, "field 2 writes MIN");
+    assert_eq!(min, 3, "field 1 writes MIN");
+    // field 2 = MAX (SDK `state::MAX`)
+    rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 2, 9, 0]);
+    let max = kworld::with_world(|w| w.key_max(0, key));
+    assert_eq!(max, 9, "field 2 writes MAX");
     // field 3 = EXPIRES
     rules_kani::host::dispatch(Op::state_set, [0, h.0, h.1, 3, 2, 0]);
     let exp = kworld::with_world(|w| w.key_expires(0, key));
@@ -223,22 +224,23 @@ fn add_counter_clamps_to_max() {
     assert_eq!(got, 0, "floor at 0");
 }
 
-/// `gain_marker` (ABI 88's `gain_charge`) clamps at `charge_max` and returns
-/// the amount gained. Wire: (player, name_p, name_l, n, why_p, why_l).
+/// `gain_marker` is an uncapped dumb add (the rules-layer kernel clamps).
+/// Wire: (player, name_p, name_l, n, why_p, why_l).
 #[test]
-fn gain_marker_clamps_at_cap() {
+fn gain_marker_is_uncapped_dumb_add() {
     let _g = model_lock();
     let mut w = base();
     w.charge[0] = 2;
     w.charge_max[0] = 3;
     install(w);
     let (np, nl) = card_sdk::native::intern(b"charge");
+    // Production `World::gain_marker` does not police `Counter.max`.
     let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 5, 0, 0]);
-    assert_eq!(got, 1, "only (cap-was) is gained");
-    assert_eq!(kworld::with_world(|w| w.charge[0]), 3);
-    // at cap → 0
-    let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 5, 0, 0]);
-    assert_eq!(got, 0, "at cap gains nothing");
+    assert_eq!(got, 5, "uncapped dumb add");
+    assert_eq!(kworld::with_world(|w| w.charge[0]), 7);
+    // n <= 0 → 0
+    let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 0, 0, 0]);
+    assert_eq!(got, 0);
 }
 
 /// `tile_in(_, _, "shop")` = buyable && group == 10 (商店街), not `kind == 5`.

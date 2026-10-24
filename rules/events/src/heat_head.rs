@@ -5,6 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, Dice, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue, RollValue};
 
 use crate::util::{expire, keep, roll};
@@ -18,7 +19,7 @@ const PHASE_DOWN: i32 = 2;
 pub const HEAT_HEAD: CardDef = CardDef::new(
     "event:超燃甩头",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「所有玩家的移动掷骰」 -- every plan / every face. `always` deleted
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
@@ -27,12 +28,12 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
         // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
         On::Filter(Filter::DiceRollValue("", None, sub_die_filter)),
-        On::Action(Action::AtEnd("", None, None, phase_end)),
+        On::Schedule("phase_end", "", None, phase_end),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"超燃甩头"#)
-            .text(r#"将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。"#)
+            .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。"#))
             // sheet cell A18
             .derived(false));
 
@@ -42,7 +43,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_crystals(PHASE_UP);
-    ctx::at_next_turn_end(player_id);
+    ctx::at_next_turn_end(player_id, "phase_end");
     ctx::log(
         player_id,
         &Msg::new("log.event.heat_up").player_id("who", player_id),
@@ -98,7 +99,7 @@ fn phase_end(player_id: i32) -> card_sdk::Asked {
         // runs *at* a turn end, so the next occurrence of that player's turn end
         // is 「下回合结束时」: `at_turn_end` (not `at_next_turn_end`, which would
         // also skip the next one and land a turn late).
-        ctx::at_turn_end(player_id);
+        ctx::at_turn_end(player_id, "phase_end");
         ctx::log(
             player_id,
             &Msg::new("log.event.heat_down").player_id("who", player_id),

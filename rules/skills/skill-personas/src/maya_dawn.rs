@@ -16,10 +16,9 @@
 //! top `Y+1` are shown, one goes to hand as a draw, the rest go back to the
 //! deck. 「剩余观看的牌洗回卡组」 is the return Ok(()), not a discard.
 
-use alloc::string::String;
-
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, CardPile};
+use card_sdk::ctx::NameId;
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -29,16 +28,12 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
             None,
-            None,
-            at_start,
-        )),
+            at_start)),
         // （2） replaces the draw, so it runs at the per-card **before** point.
         On::Action(Action::DrewBefore(
             "actor == owner && slot('ppFansUp') >= 1",
             None,
-            None,
-            on_draw,
-        )),
+            on_draw)),
     ],
 );
 
@@ -80,7 +75,7 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
     // 「观看卡组顶端Y+1张卡（卡组数量不足Y+1则观看全部卡组）」
     let deck = ctx::cards_in(player_id, CardPile::Deck);
     let n = deck.len().min((y + 1) as usize);
-    let look: alloc::vec::Vec<String> = deck[..n].to_vec();
+    let look: alloc::vec::Vec<NameId> = deck[..n].to_vec();
     if look.is_empty() {
         return Ok(());
     }
@@ -90,23 +85,23 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("maya_dawn_pick_text")),
         &look
             .iter()
-            .map(|c| Msg::new(key!("maya_dawn_option")).card("card", c))
+            .map(|c| Msg::new(key!("maya_dawn_option")).card("card", c.as_str()))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
     // 「选择一张牌（不公开）加入手牌（此次加手视为抽卡动作）」 -- the pick is
     // the draw: it replaces the plain draw (`set_cancelled`) and the engine's
     // after-draw points fire for the card that entered the hand.
-    let Some(keep) = look.get(pick).cloned() else {
+    let Some(&keep) = look.get(pick) else {
         return Ok(());
     };
-    if ctx::take_card(player_id, CardPile::Deck, &keep) {
-        ctx::add_to_hand(player_id, &keep);
+    if ctx::take_card(player_id, keep.as_str(), CardPile::Deck) {
+        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
         trigger::set_cancelled();
     }
     // 「剩余观看的牌洗回卡组」
     for c in look.iter().filter(|c| **c != keep) {
-        ctx::take_card(player_id, CardPile::Deck, c);
-        ctx::add_to_deck(player_id, c, true);
+        ctx::take_card(player_id, c.as_str(), CardPile::Deck);
+        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckRandom);
     }
     // The fan tail, identical to the other three.
     if ctx::in_group(player_id, "Pastel✽Palettes") {

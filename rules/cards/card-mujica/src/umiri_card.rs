@@ -13,6 +13,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Mujica:（海铃）";
@@ -25,20 +26,22 @@ const USER_KEY: &str = "umiri_user";
 pub const UMIRI_CARD: CardDef = CardDef::new(
     "Mujica:（海铃）",
     &[
-        On::Play("", None, Some(cant_play), umiri_card),
+        On::Play("", Some(cant_play), umiri_card),
         // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-        On::Action(Action::TurnStart("card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1", None, None, turn_start)),
+        On::Action(Action::TurnStart("card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1", None, turn_start)),
         // 规则书（3）: the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
-        On::Action(Action::TurnEnd("card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1", None, None, turn_end)),
+        On::Action(Action::TurnEnd("card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1", None, turn_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")
         .raw_name(r#"（海铃）"#)
         .tags(&[])
-        .text(r#"（1）将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。
-（2）使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。
-（3）当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。"#)
+        .text(CardText::items(&[
+            it(r#"将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。"#),
+            it(r#"使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。"#),
+            it(r#"当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。"#),
+        ]))
         // sheet cell J16
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"八幡海铃"#)]));
 
@@ -91,13 +94,13 @@ fn take_bands(holder: i32, user: i32) {
             // Only real attachments are taken; an extra copy is not a second source.
             continue;
         }
-        let got = ctx::add_group_skill(user, &id, true);
+        let got = ctx::add_group_skill(user, id.as_str(), true);
         if got >= 0 {
             ctx::log(
                 user,
                 &Msg::new(key!("umiri_took_band"))
                     .player_id("who", user)
-                    .card("card", &id),
+                    .card("card", id.as_str()),
             );
         }
     }
@@ -166,7 +169,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
             user,
             &Msg::new(key!("umiri_dropped_band"))
                 .player_id("who", user)
-                .card("card", &id),
+                .card("card", id.as_str()),
         );
     }
     ctx::set_dest(ctx::Dest::Graveyard);

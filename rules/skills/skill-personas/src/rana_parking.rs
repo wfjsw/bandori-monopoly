@@ -34,10 +34,11 @@ const PARFAIT: &str = "抹茶芭菲";
 pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, None, on_pass)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        // （1） 「每次[经过]CiRCLE时获得一个[火罐]」
+        On::Action(Action::Pass(card_sdk::pre::MINE, None, on_pass)).label("（1）"),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
         // rides the settle's effect list below.
         //
@@ -50,32 +51,24 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         // PayAfter is too late to cancel. Effect fires per `money()` call,
         // so on a split-pay the interactive offer is per leg rather than once
         // on the command total (single-pair behaviour is identical).
-        On::Filter(Filter::PayCombinedCancel("", Some(any), exempt_flag)),
-        On::Action(Action::Effect("", None, Some(any), exempt_offer)),
+        On::Filter(Filter::PayCombinedCancel("", Some(any), exempt_flag)).label("（2）"),
+        On::Action(Action::Effect("", Some(any), exempt_offer)).label("（2）"),
         // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
-        On::Action(Action::SettleBody("", None, Some(any), replace_body)),
+        On::Action(Action::SettleBody("", Some(any), replace_body)).label("（2）"),
         // （3）「你与其他玩家重合时」 -- 行动阶段 13 [重叠] (`passPlayer`). The
         // pre puts the owner in the actor seat (the mover); `target` is the
         // other player already standing on the landing tile (one raise per
         // such other). The body must read `target`, not `player_id`.
+        // （3） 「你与其他玩家重合时」
         On::Action(Action::PassPlayer(
             card_sdk::pre::MINE,
             None,
-            None,
-            on_overlap,
-        )),
+            on_overlap))
+        .label("（3）"),
     ],
 )
-.labels(&[
-    (3, "（1）"),
-    (4, "（2）"),
-    (5, "（2）"),
-    (6, "（2）"),
-    (7, "（3）"),
-])
-.silent(&[1, 2])
 // 「（初始3，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 3),
@@ -118,7 +111,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 3 {
+    if bandori_std::fire::get(player_id) < 3 {
         return Some(Msg::new(key!("rana_parking_no_fire")));
     }
     None

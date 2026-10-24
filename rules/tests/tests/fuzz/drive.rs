@@ -283,6 +283,30 @@ fn pick_answer(t: &Table, who: usize, rng: &mut Rng) -> AnswerRec {
                 cards: p.items.clone(),
             }
         }
+        "multi" => {
+            // Bitmask of exactly `count` options. The prompt's fallback is
+            // already a valid mask (first `count`); sometimes draw a random
+            // valid mask so the fuzzer exercises other combinations. Never a
+            // bare option index -- that would be `err.pick_count`.
+            let n = p.options.len().min(31) as i32;
+            let want = p.count.clamp(1, n.max(1));
+            let mut value = p.fallback;
+            if n > 0 && rng.chance(50) {
+                let mut pool: Vec<i32> = (0..n).collect();
+                value = 0;
+                for _ in 0..want.min(pool.len() as i32) {
+                    let i = rng.below(pool.len() as u64) as usize;
+                    let x = pool.swap_remove(i);
+                    value |= 1 << x;
+                }
+            }
+            AnswerRec {
+                who,
+                kind,
+                value,
+                cards: vec![],
+            }
+        }
         "auction" => {
             // value < 0 = pass; otherwise a bid. Passing keeps the run short.
             let pass = rng.chance(70);
@@ -511,21 +535,11 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
     for (i, p) in t.m.world().st.players.iter().enumerate() {
         for (k, v) in &p.state {
             let is_status = k == "stay" || k == "stun" || k == "exile";
-            // The wire key is `charge` (`bandori_std::fire::KEY`), not `fire`.
-            let is_fire = k == "charge";
             if is_status && v.value < 0 {
                 return Err(format!(
                     "negative state {k}={} on P{i} flags={:#x} expires={:?} min={} max={} raw={:?}",
                     v.value, v.flags, v.expires, v.min, v.max, v
                 ));
-            }
-            if is_fire {
-                if v.value < 0 {
-                    return Err(format!("fire {} < 0 on P{i}", v.value));
-                }
-                if v.max > 0 && v.value > v.max {
-                    return Err(format!("fire {} > cap {} on P{i}", v.value, v.max));
-                }
             }
         }
         for f in &p.field {
@@ -540,6 +554,15 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
         for c in &p.tokens {
             if c.value < 0 {
                 return Err(format!("negative token {}={} on P{i}", c.name, c.value));
+            }
+            // Fire is a held token (MARKERS.md §7). The wire key is
+            // `charge` (`bandori_std::fire::KEY`), not `fire`. The live cap
+            // rides `Counter.max`; I2 says value <= max whenever max > 0.
+            if c.name == "charge" && c.max > 0 && c.value > c.max {
+                return Err(format!(
+                    "fire {} > cap {} on P{i}",
+                    c.value, c.max
+                ));
             }
         }
     }
@@ -560,7 +583,7 @@ pub fn check_cards(t: &Table, known: &[String]) -> Result<(), String> {
         c.starts_with("skill:") || c.starts_with("TEST:") || known.iter().any(|k| k == c)
     };
     for (i, h) in w.hidden.iter().enumerate() {
-        for zone in [&h.hand, &h.draw, &h.discard] {
+        for zone in [&h.hand, &h.deck, &h.graveyard] {
             for c in zone {
                 if c.is_empty() {
                     return Err(format!("empty card id in P{i} zone"));

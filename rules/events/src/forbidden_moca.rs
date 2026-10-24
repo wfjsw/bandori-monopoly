@@ -5,6 +5,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Filter, Msg, On, RollValue};
 
 use crate::util::{expire_removed, keep};
@@ -14,18 +15,18 @@ const ID: &str = "Forbidden Moca";
 pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
         // deleted (a no-op prefetch); the `value` param is the face being
         // halved (effect), not applicability.
         On::Filter(Filter::DiceRollValue("", None, halve)),
-        On::Action(Action::AtEnd("", None, None, expire)),
+        On::Schedule("expire", "", None, expire),
     ],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Forbidden Moca"#)
-        .text(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#)
+        .text(CardText::para(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#))
         // sheet cell A20
         .derived(false),
 );
@@ -35,7 +36,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
 /// end. 「永久移除此事件！」 is the `AtEnd` body below.
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
-    ctx::at_next_turn_end(player_id);
+    ctx::at_next_turn_end(player_id, "expire");
     ctx::log(
         player_id,
         &Msg::new("log.event.moca_on").player_id("who", player_id),

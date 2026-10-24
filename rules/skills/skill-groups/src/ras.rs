@@ -28,9 +28,7 @@ pub const RAS: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_start_reset,
-        )),
+            at_turn_start_reset)).silent(),
         // （1）「每回合可选择只获得第一次受到的[异常移动效果]」 -- the drop of the
         // second+ hit belongs on `AbnormalGuard` (the declaration gate that can
         // refuse the effect); the `Abnormal` outcome hook is too late to cancel.
@@ -40,19 +38,16 @@ pub const RAS: CardDef = CardDef::new(
         On::Filter(Filter::AbnormalGuard("target == owner", None, on_abnormal)),
         // One-shot latch for （1）: `Abnormal` reports what actually landed
         // (受到的), self-applied included. Paired with the pure gate above.
-        On::Action(Action::Abnormal("target == owner", None, None, mark_taken)),
-        On::Action(Action::Settle(card_sdk::pre::MINE, None, None, on_settle)),
+        On::Action(Action::Abnormal("target == owner", None, mark_taken)).silent(),
+        On::Action(Action::Settle(card_sdk::pre::MINE, None, on_settle)).silent(),
         // （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
         // The remembered-tile scan is a derived read (docs/GUARDS.md §4.2).
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
-            None,
             Some(still_on_remembered),
-            at_turn_start_offer,
-        )),
+            at_turn_start_offer)),
     ],
-)
-.silent(&[0, 2, 3]);
+);
 
 /// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
 /// landing memory when the player has moved off it.

@@ -21,36 +21,29 @@ const POT: &str = "skill.uikaIdol.pot";
 pub const UIKA_IDOL: CardDef = CardDef::new(
     "skill:三角初华（Sumimi）:成为偶像",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         // （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 --
         // the offer exists only when such a tile exists. The colour-group
         // scan is residual (`is_color` / `tile_named`).
         On::Action(Action::TurnStartBefore(
             "actor == owner && charge(owner) >= 1",
-            None,
             Some(has_street_color_tile),
-            at_turn_start,
-        )),
+            at_turn_start)),
         // （2）「其他玩家经过该格且到达移动终点后向你支付X*30资金」 -- a pot on
         // the tile is the applicability (`count_marks` is not in the condition
         // vocabulary, so it is the residual guard). `actor != owner &&
         // move.remaining > 0` states the rest of the clause.
         On::Action(Action::PassTile(
             "actor != owner && move.remaining > 0",
-            None,
             Some(on_pass_tile_has_pot),
-            on_pass_tile,
-        )),
+            on_pass_tile)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始2，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

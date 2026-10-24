@@ -32,17 +32,15 @@ const BUMP_X: &str = "skill.mumei.bumpX";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
         // mutating, so they ride `ActionKind::Effect` (the payment declaration,
         // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
         On::Action(Action::Effect(
             "target == owner && actor != owner && slot('skillState') != 2",
             None,
-            None,
-            on_pay_declare,
-        )),
+            on_pay_declare)),
         // 状态1（1）「并使那次支付的金额提高X*100」 -- pure amount reshape.
         On::Filter(Filter::PaySplitAdd(
             "target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0",
@@ -54,15 +52,11 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         On::Action(Action::PayAfter(
             "actor == owner && slot('skill.mumei.bumpX') >= 0",
             None,
-            None,
-            clear_bump,
-        )),
+            clear_bump)).silent(),
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skillState') != 2",
-            None,
             Some(fire_at_cap),
-            at_turn_end,
-        )),
+            at_turn_end)),
         // 「你退出状态2后，被你翻面的卡自动翻回」 -- only while out of 状态2
         // with a non-empty flip list. Both are player-state reads (`skillState`
         // and the `skill.mumei.flipped` count), so the entry does not activate
@@ -70,12 +64,9 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0",
             None,
-            None,
-            at_turn_end_exit,
-        )),
+            at_turn_end_exit)),
     ],
 )
-.silent(&[0, 1, 4])
 // 「（初始0，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),
@@ -95,13 +86,13 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 fn on_pay_declare(player_id: i32) -> card_sdk::Asked {
     // 「你立即获得1火罐」 first, so X counts it.
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
-    let x = state::get(player_id, state_key::CHARGE);
+    let x = bandori_std::fire::get(player_id);
     // Latch the post-gain X. The latch is what the pure `PaySplitAdd` filter reads;
     // it also lets that filter fire for this very payment when the gain just
     // filled the pot and （2） entered 状态2 before `PaySplitAdd` is dispatched.
     state::set(player_id, BUMP_X, x);
     // （2）「任何时刻当你的火罐数到达上限时，你立即进入状态2」
-    if x >= state::max(player_id, state_key::CHARGE) {
+    if x >= bandori_std::fire::max(player_id) {
         enter_two(player_id);
     }
     Ok(())
@@ -130,7 +121,7 @@ fn clear_bump(player_id: i32) -> card_sdk::Asked {
 /// Residual guard for [`at_turn_end`]: the pot is at its cap. `state::max` is
 /// not in the CEL schema (docs/GUARDS.md §4.2), so the compare stays here.
 fn fire_at_cap(player_id: i32) -> bool {
-    state::get(player_id, state_key::CHARGE) >= state::max(player_id, state_key::CHARGE)
+    bandori_std::fire::get(player_id) >= bandori_std::fire::max(player_id)
 }
 
 /// The turn-end tick also catches a pot that filled outside a payment.

@@ -22,6 +22,7 @@
 use bandori_std::ctx;
 use bandori_std::state_key;
 use card_sdk::abi::{prop, ActionKind};
+use card_sdk::{CardText, it, it_sub, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -30,33 +31,43 @@ const ID: &str = "PP:练习生解密指南";
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
-        On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, None, before_build)),
-        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, None, after_build)),
-        On::Play("", None, None, trainee_guide),
+        On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, before_build)),
+        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, after_build)).silent(),
+        On::Play("", None, trainee_guide),
         // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- the tick only.
-        On::Action(Action::TurnEnd("", None, Some(turn_end_guard), turn_end)),
+        On::Action(Action::TurnEnd("", Some(turn_end_guard), turn_end)),
         // 规则书[持续]（3）: 「此卡拥有至少5个[奇迹水晶]时…随后进入弃卡区」 -- a
         // state clause on the crystal count: any write that lands on >= 5
         // leaves the field, including the [手] placement `set_crystals` and the
         // turn-end +1 (a write like any other, crimson_soul.rs:94-96).
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') >= 5", None, Some(cash_in_guard), cash_in)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') >= 5", Some(cash_in_guard), cash_in)),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
 // (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
 .props(&[(prop::HAND_LIMIT_DELTA, -1)])
-    .silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"练习生解密指南"#)
         .raw_name(r#"练习生解密指南"#)
         .tags(&[r#"手"#, r#"持续"#])
-        .text(r#"[手]：
-为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]并将此卡放置在[使用者]的[场地]，在此卡上放置“粉丝数量”÷3个[奇迹水晶]，然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记，如果[共鸣]则[消耗]500资金并添加任意2个标记。
-[持续]：
-（1）手卡上限数量减1。
-（2）回合结束时添加1个[奇迹水晶]。
-（3）此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作随后进入弃卡区：
-1. 每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；
-2. 每个双色效果为将自己的所有反面[P✽P粉丝]变正。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]并将此卡放置在[使用者]的[场地]，在此卡上放置“粉丝数量”÷3个[奇迹水晶]，然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记，如果[共鸣]则[消耗]500资金并添加任意2个标记。"#),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"手卡上限数量减1。"#),
+                    it(r#"回合结束时添加1个[奇迹水晶]。"#),
+                    it_sub(
+                        r#"此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作随后进入弃卡区："#,
+                        &[
+                        r#"每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；"#,
+                        r#"每个双色效果为将自己的所有反面[P✽P粉丝]变正。"#,
+                        ],
+                    ),
+                ]),
+            ]),
+        ]))
         // sheet cell D15
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
@@ -81,7 +92,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
     let mut seen: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
     for c in deck.iter() {
-        let band = c.split(':').next().unwrap_or("");
+        let band = c.as_str().split(':').next().unwrap_or("");
         if !band.is_empty() && !seen.contains(&band) {
             seen.push(band);
         }

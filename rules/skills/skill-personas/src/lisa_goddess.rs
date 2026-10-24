@@ -30,18 +30,15 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const LISA_GODDESS: CardDef = CardDef::new(
     "skill:今井莉莎:慈爱女神",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
     ],
 )
-.silent(&[1, 2])
 // 「（初始2，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),
@@ -65,7 +62,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("lisa_goddess_no_fire")));
     }
     None
@@ -104,7 +101,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「本次传送触发结算前，你可以额外消耗一个火罐或使与你在同一个格子上的另一个
     // 角色获得一个可超过上限的临时火罐，若你这样做，此次传送不触发任何结算」 --
     // offered here, before the move runs.
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Ok(());
     }
     let here: alloc::vec::Vec<i32> = (0..ctx::player_count())
@@ -129,17 +126,26 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // The temp pot is the kernel's second declared counter (`fire::temp`),
     // not a free key (MARKERS.md §7).
     let who = here[0];
-    bandori_std::fire::temp::grant(who, 1);
+    let got = bandori_std::fire::temp::grant(who, 1);
     // TODO(规则书)[judgement]: （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
     //   需要支付你600资金」 -- the clause under-specifies -- the spend path has to
     //   know a pot's *provenance* to charge the provider, and 「被冲榜类效果被动
     //   消耗无需支付」 carves out a class of spends the engine does not tag.
     //   (The counter is real and spendable via `fire::spend` temp-first; the
     //   600-cost and two-turn expiry stay open.)
-    ctx::log(
-        player_id,
-        &Msg::new(key!("lisa_goddess_temp")).player_id("who", who),
-    );
+    // 效果适用 narrates the outcome: a grant that landed on the floor must not
+    // read as one that took.
+    if got > 0 {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("lisa_goddess_temp")).player_id("who", who),
+        );
+    } else {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("lisa_goddess_temp_none")).player_id("who", who),
+        );
+    }
     Ok(())
 }
 

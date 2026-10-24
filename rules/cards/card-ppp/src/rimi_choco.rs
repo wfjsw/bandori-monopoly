@@ -9,16 +9,20 @@
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText, para, sec};
 
 pub const RIMI_CHOCO: CardDef = CardDef::new(
     "PPP:（里美）我的心就像巧克力螺",
-    &[On::Play("", None, Some(cant_play), play)],
+    &[On::Play("", Some(cant_play), play)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"我的心就像巧克力螺"#)
         .raw_name(r#"（里美）我的心就像巧克力螺"#)
         .tags(&[r#"手"#])
-        .text(r#"[手]：
-立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子绝对距离1到4格或以内的任何格子并[结算]，期间[不可阻挡]。"#)
+        .text(CardText::of(&[
+            sec(r#"[手]："#, &[
+                para(r#"立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子绝对距离1到4格或以内的任何格子并[结算]，期间[不可阻挡]。"#),
+            ]),
+        ]))
         // sheet cell B19
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"牛込里美"#)]));
 

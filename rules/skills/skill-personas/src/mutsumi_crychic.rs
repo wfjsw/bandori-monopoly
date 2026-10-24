@@ -28,19 +28,16 @@ const THEIRS: &str = "skill.mutsumiCrychic.theirs";
 pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, at_start)),
-        On::Action(Action::DeckAtGameStart("", None, None, at_start)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, at_start)),
+        On::Action(Action::DeckAtGameStart("", None, at_start)),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
-        On::Action(Action::DiceRollAfter("", None, Some(other), latch)),
+            on_pass)),
+        On::Action(Action::DiceRollAfter("", Some(other), latch)).silent(),
     ],
 )
-.silent(&[4])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
@@ -100,7 +97,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("mutsumi_crychic_no_fire")));
     }
     if state::get(player_id, THEIRS) < 0 {

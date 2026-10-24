@@ -44,18 +44,14 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart(
             "card.placed",
             None,
-            None,
-            declare_cap,
-        )),
+            declare_cap)).silent(),
         On::Action(Action::TurnStartBefore(
             "card.placed",
-            None,
             Some(cap_unset),
-            declare_cap,
-        )),
+            declare_cap)).silent(),
         // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
         // branch. The choice / spend / pay stay in the body.
-        On::Action(Action::Pass(PASS_PRE, None, None, on_pass)),
+        On::Action(Action::Pass(PASS_PRE, None, on_pass)),
         // 「你的资金消耗减半」 -- only the owner's own pays, and only while
         // the window is armed. `value > 0` is the amount floor.
         //
@@ -75,14 +71,13 @@ pub const MANA_DONUT: CardDef = CardDef::new(
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
     (bandori_std::fire::FIRE_CAP, 2),
-])
-.silent(&[0, 1]);
+]);
 
 /// The TurnStartBefore re-declare only does something when the cap is still
 /// unset (a mid-game placement of the skill). `state::max` is not in the CEL
 /// schema, so this is the residual.
 fn cap_unset(player_id: i32) -> bool {
-    state::max(player_id, state_key::CHARGE) == 0
+    bandori_std::fire::max(player_id) == 0
 }
 
 /// 「初始1，上限2」.

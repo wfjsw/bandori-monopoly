@@ -451,7 +451,7 @@ through the pre-split stage so those two 「分摊前」 clauses reach them; the
 own per-leg rounding is unchanged.
 
 * Tests: `money::pre_split_modifier_shapes_the_total_not_each_leg`.
-* Files: `rules/card-sdk/src/abi.rs`, `rules/card-sdk/src/ctx.rs`,
+* Files: `crates/card-sdk/src/abi.rs`, `crates/card-sdk/src/ctx.rs`,
   `crates/game-core/src/engine/play.rs`, `crates/game-rules/src/host.rs`,
   `rules/skills/skill-characters/src/aya_with.rs`,
   `rules/skills/skill-characters/src/chisato_frank.rs`,
@@ -544,7 +544,7 @@ would move things and is **not** done (E6 has no rulebook basis in our text).
 | `buyResolved` | **skipped** | `bought` + `buyAfter` already fire after the deal commits (`BuyAssign` -> `assign_deal` -> `bought` -> `buyAfter`). |
 | `eventResolved` | **skipped** | `eventAfter` already fires "the event is fully resolved and filed away". |
 
-* Files: `rules/card-sdk/src/abi.rs`, `crates/game-core/src/engine/play.rs`.
+* Files: `crates/card-sdk/src/abi.rs`, `crates/game-core/src/engine/play.rs`.
 
 ### Not decided (unchanged)
 
@@ -631,7 +631,7 @@ per-card `estCost` (parallel to `playable`), so `ai.rs`, `bot-core` and
 payments (the six formerly-gated ones plus the other flat `ctx::pay(N)`
 bodies); `0` otherwise.
 
-* Files: `rules/card-sdk/src/abi.rs`, `crates/game-core/src/state.rs`,
+* Files: `crates/card-sdk/src/abi.rs`, `crates/game-core/src/state.rs`,
   `crates/game-core/src/engine/{mod.rs,ai.rs}`, `crates/web-glue/src/lib.rs`,
   `crates/rules-worker/src/lib.rs`, `crates/bot-core/src/{view.rs,action.rs}`,
   `crates/bot-service/src/lib.rs`, `webui/src/core/types.ts`,

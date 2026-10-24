@@ -495,6 +495,7 @@ fn g32_eve_fan_flip_leaves_the_matcha_crepe() {
             name: "抹茶芭菲".into(),
             value: 1,
             instance: None,
+            max: 0,
         });
     t.set_state(0, "ppFansUp", 2);
     t.set_state(0, "ppFansDown", 0);

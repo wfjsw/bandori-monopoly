@@ -209,7 +209,7 @@ impl Cx<'_> {
             },
             None => vec![],
         };
-        self.w.hidden[i].draw = list;
+        self.w.hidden[i].deck = list;
         self.w.st.players[i].deck_ready = true;
         if !self.w.st.players[i].auto_setup() {
             self.w.log(

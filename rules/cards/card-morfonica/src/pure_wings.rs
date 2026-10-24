@@ -6,14 +6,15 @@
 //! ahead (no settle), then take the main move roll right away.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
 pub const PURE_WINGS: CardDef =
-    CardDef::new("Mor:纯真振翅", &[On::Play("", None, None, pure_wings)]).meta(
+    CardDef::new("Mor:纯真振翅", &[On::Play("", None, pure_wings)]).meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"纯真振翅"#)
             .raw_name(r#"纯真振翅"#)
             .tags(&[])
-            .text(r#"传送到移动方向20格后（不触发结算），立刻进行移动掷骰"#)
+            .text(CardText::para(r#"传送到移动方向20格后（不触发结算），立刻进行移动掷骰"#))
             // sheet cell G13
             .fields(&[("group", r#"Morfonica"#), ("owner", "")]),
     );

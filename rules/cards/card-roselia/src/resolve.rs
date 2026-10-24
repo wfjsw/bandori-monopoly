@@ -8,22 +8,20 @@
 //! the game.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{CardText};
 
-pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", None, None, resolve)])
+pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play("", None, resolve).quiet_when_empty()])
     .meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"觉悟"#)
             .raw_name(r#"[衍生] 觉悟"#)
             .derived(true)
             .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
-            .text(
-                r#"[特]：此卡[移除]时获得1000资金。
-[手]：[移除]此卡。"#,
-            )
+            .text(CardText::para(r#"[特]：此卡[移除]时获得1000资金。
+            [手]：[移除]此卡。"#))
             // sheet cell E17
             .fields(&[("group", r#"Roselia"#), ("owner", "")]),
-    )
-    .quiet_when_empty(&[0]);
+    );
 
 fn resolve(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);

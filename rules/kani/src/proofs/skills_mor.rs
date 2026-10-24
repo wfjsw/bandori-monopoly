@@ -23,8 +23,10 @@
 //! Host notes:
 //! * `Op::trig_value` reads `w.pay_amount` (not `w.trig_value`) — both are
 //!   written so the body and the guard IR agree.
-//! * Kani `Op::gain_charge` honours `charge_max` (`got = n.clamp(0, cap - fire)`),
-//!   so the at-cap leg matches the book (empty log, unchanged fire).
+//! * Engine `gain_marker` is an uncapped dumb add (matching production); the
+//!   at-cap leg is the rules-layer kernel's `fire::gain_clamped`
+//!   refuse-before-write, so the book no-op is still asserted (empty log,
+//!   unchanged fire).
 //! * Kani `Op::trig_set_cancelled` sets `w.trig_cancelled`, so the
 //!   「替换奖励」 leg of C-MOR-band-02 is observable.
 //!
@@ -74,7 +76,7 @@ fn fill_pass_circle(owner: i32) -> rules_cond_ir::ctx::IrCtx {
             while k < 8 {
                 let i = outer * 8 + k;
                 if i < 60 && crate::board::TILES[i].kind == 0 {
-                    c.set_insert(rules_cond_ir::ctx::SetId::Circle, i as i64);
+                    c.tile_kind_ids[i] = rules_cond_ir::ctx::id_of("circle");
                 }
                 k += 1;
             }
@@ -492,8 +494,9 @@ mod pass_fire {
     }
 
     /// Shared Pass-gain IFF for touko (cap 1) and nanami (cap 2) at a concrete
-    /// user seat. Below-cap the book and the Kani host agree (`GainFire{1}`);
-    /// at-cap the host now honours `charge_max`, so the book no-op is asserted.
+    /// user seat. Below-cap the book and the kernel agree (`GainFire{1}`);
+    /// at-cap the kernel refuses before the write, so the book no-op is
+    /// asserted.
     fn pass_gain_iff_at(
         user: i32,
         charge_max_pin: i32,

@@ -111,16 +111,26 @@ any new phrasing extends the table, never the model.
 
 ## 5. Storage and wire
 
-Storage stays the wire-visible named data (`MatchPlayer.state["charge"]`,
-`["ppFansUp"]/["ppFansDown"]`, `FieldCard` counters): the webui keys
-(`webui/src/core/names.ts`, `Players.tsx`, `autopilot.ts`) are frozen and are
-the projection. Ownership, lifetime and protocol are the semantics layered on
-top; physical re-homing of a key into an instance counter/units table is a
-non-semantic refactor and is not required by this design.
+**Superseded 2026-10-23.** The 2026-10-18 note -- "physical re-homing of a key
+into an instance counter/units table is a non-semantic refactor and is not
+required by this design" -- no longer describes 火罐. Fire is now **physically
+instance-owned**: the live count and cap sit in the seat's `MatchPlayer.tokens`
+rows (`name = "charge"` and lisa's `"tempFire"`, `instance = <persona-skill
+uid>`), and `destroy_instance_units` drops them when the skill instance leaves.
+`Counter.max` is the live 「上限」; a declared pool keeps its row at value 0, so
+**the row's existence is the already-declared latch**. Everything else
+(`["ppFansUp"]/["ppFansDown"]`, `FieldCard` counters) stays where it was.
 
-What matters: the engine treats these names as **opaque data**. Only the
-rules-layer kernel writes them; only the owner's policy decides what a write
-means.
+The **wire names are frozen**; only the container changed.
+`"charge"` / `"tempFire"` / `fireInitial` / `fireCap` are the same strings the
+webui and the cond-ir already speak (`webui/src/core/names.ts` falls back to
+`state["charge"]` for saves that predate the move). That is exactly the
+non-semantic refactor the old text allowed: §3's ownership model is unchanged,
+and the kernel's public API (`bandori_std::fire`) kept its signatures.
+
+What matters (unchanged): the engine treats these names as **opaque data**.
+Only the rules-layer kernel writes them; only the owner's policy decides what a
+write means.
 
 ## 6. Engine surface (what `crates/` may know)
 
@@ -133,7 +143,8 @@ Kept -- name-as-data mechanisms only:
 * the owner stamp (`World::marker_owner` -- "a marker is owned by the rule that
   creates it, wherever its copies sit", ruling 2026-10-07).
 
-Retired -- every game name (purge inventory; status as of 2026-10-19):
+Retired -- every game name (purge inventory; status as of 2026-10-19, with
+the 2026-10-23 fire re-home appended):
 
 | Site today | Target | Status |
 |---|---|---|
@@ -143,6 +154,7 @@ Retired -- every game name (purge inventory; status as of 2026-10-19):
 | `game-rules/wasm_rules.rs` `spend_charge`, `charge_spent_log`, the `markerSpent` raise | generic `MarkerSpent { name }` | **done** -- `charge_spent_log` → `marker_spent_log` with name; wire kind is engine `markerSpent` (73) since v90 (was `fireSpent` / `FireSpent`) |
 | `card-sdk/abi.rs` `state_key::CHARGE` ("Fire pots held"), `ChargePaying` | rules-layer names; the substitution window is the generic spend window | **done** -- `state_key::CHARGE` doc = wire key constant only; `ChargePaying` (78) documented as the generic marker spend-substitution window (name is payload). `ABI_VERSION` not bumped |
 | `rules/skills/skill-groups/src/fans.rs` free keys written by anyone | host protocol (§7) | **done** -- `mark:pp_fans` host in `rules/markers/src/pp_fans.rs`; `fans.rs` is the re-export facade |
+| fire storage `MatchPlayer.state["charge"]` / `["tempFire"]` | `tokens` rows of the persona-skill instance (§5) | **done 2026-10-23** -- `bandori_std::fire` writes `tokens` (`name = "charge"` / `"tempFire"`, `instance = persona-skill uid`); `Counter.max` is the live cap and the row's existence is the declare latch; `destroy_instance_units` drops the pots with the skill. Wire names unchanged. The uncapped `gain_charge` / `spend_charge` / `add_charge_max` sugar is deleted -- cards use `fire::{gain, spend, adjust_cap}`. cond-ir `charge(p)` sources the token |
 
 ## 7. Bindings
 
@@ -154,7 +166,9 @@ live on that face's own `CardDef` (`.fire_pots(N, M)` → props `fireInitial` /
 `fireCap`, keys in `bandori_std::fire`); `fire::declare_own` reads them back
 through `ctx::card_prop`. Cross-face reads (`Sumimi:Sumimi是二人一体的`,
 `skill:若叶睦:天生的演员`) take the named skill id and read that skill's
-`CardDef` the same way.
+`CardDef` the same way. The live pool is the persona-skill instance's
+`tokens` row (`name = "charge"`, §5); it dies with the skill
+(`destroy_instance_units`).
 
 Guests, all through the kernel: hand cards (`Sumimi:一人两个甜甜圈`,
 `Sumimi:儿时玩伴的鼓励`, `PPP:（沙绫）`, `PPP:（多惠）`, `AG:无论是何种颜色的
@@ -162,7 +176,8 @@ Guests, all through the kernel: hand cards (`Sumimi:一人两个甜甜圈`,
 (`skill:Ave Mujica:假面之下的真实`), `PPP:[衍生]拍卖撤下来了` (`adjust_cap`).
 
 lisa's 「可超过上限的临时火罐」 (`skill:今井莉莎:慈爱女神`) is a **second
-declared counter** of the same instance (`fire.temp`), not a free key.
+declared counter** of the same instance (`fire.temp` -- a second `tokens` row
+of that instance), not a free key.
 
 ### P✽P粉丝 -- kind-owned host
 
@@ -192,9 +207,13 @@ the second, clause （2） is per band instance.
 * 奇迹水晶 -- instance-owned (「为此卡添加」); multi-writer by card text via
   the kernel.
 * CP点 -- kind-owned (`mark:cp`, already the model).
-* 抹茶巴菲 -- instance-owned by `skill:要乐奈:投币式停车场的猫` (unique skill;
-  instance == kind here). Cross-writes (`card-mygo/src/rana_funny.rs`) route
-  through the kernel.
+* 抹茶巴菲 (wire `"抹茶芭菲"`) -- **not** a `mark:*` kind-owned host. It is a
+  counter of `skill:要乐奈:投币式停车场的猫` -- units held by players and
+  placed on a space (`rules/skills/skill-personas/src/rana_parking.rs`) --
+  and is collected when the holder is down. Cross-writes
+  (`card-mygo/src/rana_funny.rs`) route through the kernel. The skill being
+  unique does **not** promote it to a standing host; the `mark:*` family is
+  exactly `mark:cp` and `mark:pp_fans`.
 
 ## 8. Invariants
 

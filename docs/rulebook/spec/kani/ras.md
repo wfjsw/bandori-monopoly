@@ -267,8 +267,9 @@ OPEN-change-world-equal, OPEN-hey-kids-sum.
 * `tile_named`: confirmed the host arm only special-cases 「江户川乐器店」 and
   returns -1 otherwise (`rules/kani/src/host.rs`). Did **not** invent tile ids.
 * fire / PAREO caps: confirmed `gain_fire` / `add_held` do not take the max
-  the bodies pass; real engine clamps (`game-core/src/engine/ops.rs`). Did
-  **not** assume the cap away for the full clause — proved the sub-cap leaf.
+  the bodies pass; the rules-layer kernel clamps (`fire::gain_clamped`) and the
+  engine `gain_marker` is an uncapped dumb add. Did **not** assume the cap away
+  for the full clause — proved the sub-cap leaf.
 * move-plan / buy / build: left as PROTOCOL-LEVEL per KANI.md §6; the arms
   return 0 on purpose.
 

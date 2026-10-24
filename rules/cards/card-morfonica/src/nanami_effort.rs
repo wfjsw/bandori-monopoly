@@ -17,6 +17,8 @@
 
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
+use card_sdk::ctx::NameId;
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词 11) -- the default CiRCLE money reward. A
@@ -34,21 +36,27 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // first): the hand body (spend x 角色标记, pick one of (1)/(2)/(3)),
         // or the placed (3) press (spend 1 crystal to fire the owner's (2)
         // skill). The gate admits whenever either branch is available.
-        On::Play("", None, Some(cant_play), play),
-        On::Action(Action::AtEnd("", None, None, discard_down_to_five)),
+        On::Play("", Some(cant_play), play),
+        On::Schedule("discard_down_to_five", "", None, discard_down_to_five),
         // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- same CounterChanged
         // shape as AG:（摩卡）0.5倍速 / R:Fire bird.
-        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"稍微努力了一下"#)
         .raw_name(r#"（NNM）稍微努力了一下"#)
         .tags(&[])
-        .text(r#"弃置手中x枚角色标记，发动以下效果中的一个：
-（1）抽x张卡（可超过上限），回合结束后将手牌弃置到五张
-（2）获得x次经过CiRCLE时的资金奖励
-（3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制
-（4）当奇迹水晶耗尽时，将此卡置入弃牌堆"#)
+        .text(CardText::of(&[
+            sec("", &[
+                para(r#"弃置手中x枚角色标记，发动以下效果中的一个："#),
+                items(&[
+                    it(r#"抽x张卡（可超过上限），回合结束后将手牌弃置到五张"#),
+                    it(r#"获得x次经过CiRCLE时的资金奖励"#),
+                    it(r#"将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制"#),
+                    it(r#"当奇迹水晶耗尽时，将此卡置入弃牌堆"#),
+                ]),
+            ]),
+        ]))
         // sheet cell G7
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"广町七深"#)]));
 
@@ -57,7 +65,7 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
 fn cant_play(player_id: i32) -> Option<Msg> {
     if !ctx::is_placed() {
         let names = ctx::tok_names(player_id, TOKEN_PREFIX);
-        let total: i32 = names.iter().map(|n| ctx::tok(player_id, n)).sum();
+        let total: i32 = names.iter().map(|n| ctx::tok(player_id, n.as_str())).sum();
         if total > 0 {
             return None;
         }
@@ -84,7 +92,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // `角色标记:*` counters; x is chosen from what the player actually holds, then
     // they are spent and one effect is picked.
     let names = ctx::tok_names(player_id, TOKEN_PREFIX);
-    let total: i32 = names.iter().map(|n| ctx::tok(player_id, n)).sum();
+    let total: i32 = names.iter().map(|n| ctx::tok(player_id, n.as_str())).sum();
     if total <= 0 {
         ctx::log(
             player_id,
@@ -105,9 +113,9 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         if left <= 0 {
             break;
         }
-        let take = ctx::tok(player_id, name).min(left);
+        let take = ctx::tok(player_id, name.as_str()).min(left);
         if take > 0 {
-            ctx::add_tok(player_id, name, -take, i32::MAX)?;
+            ctx::add_tok(player_id, name.as_str(), -take, i32::MAX)?;
             left -= take;
         }
     }
@@ -192,7 +200,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// Effect (1) 「抽x张卡（可超过上限），回合结束后将手牌弃置到五张」 -- C# case 0 of
 /// the play's `H.AskPick` (`MatchHost.cs:4874-4878`). The discard-down half is
 /// C# `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))` =
-/// `ctx::before_turn_end` (C# `AtEnd`, pre-wear-off) queuing the `On::AtEnd`
+/// `ctx::before_turn_end` (C# `AtEnd`, pre-wear-off) queuing the `On::Schedule`
 /// body below. Unreachable until the token-list query lands (the play folds
 /// first); written now so the queued scheduling is already the right hook.
 #[allow(dead_code)]
@@ -210,13 +218,13 @@ fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
     ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, cap);
     // 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C#
     // `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))`.
-    ctx::before_turn_end(player_id);
+    ctx::before_turn_end(player_id, "discard_down_to_five");
     Ok(())
 }
 
 /// 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C# `H._turnCtx.AtEnd.Add(() =>
 /// H.DiscardDownTo(i, 5, CardName))`. Scheduled by the play's effect (1) via
-/// `ctx::before_turn_end(player_id)`.
+/// `ctx::before_turn_end(player_id, "discard_down_to_five")`.
 fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let mut extra = hand.len() as i32 - 5;
@@ -224,7 +232,7 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
         if extra <= 0 {
             break;
         }
-        if ctx::discard_from_hand(player_id, card) {
+        if ctx::discard_from_hand(player_id, card.as_str()) {
             extra -= 1;
         }
     }
@@ -239,10 +247,10 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （3）「移除一个奇迹水晶视为发动你的（2）技能」 -- the placed-press branch.
-fn owner_skill(player_id: i32) -> Option<alloc::string::String> {
+fn owner_skill(player_id: i32) -> Option<NameId> {
     ctx::placed_cards(player_id)
         .into_iter()
-        .find(|c| c.starts_with("skill:"))
+        .find(|c| c.as_str().starts_with("skill:"))
 }
 
 fn use_skill(player_id: i32) -> card_sdk::Asked {
@@ -257,9 +265,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // skill's own gate is what runs; nothing here counts a use.
     ctx::log(
         player_id,
-        &Msg::new(key!("nanami_effort_skill")).card("card", &id),
+        &Msg::new(key!("nanami_effort_skill")).card("card", id.as_str()),
     );
-    ctx::play_card(&id, player_id)?;
+    ctx::play_card(id.as_str(), player_id)?;
     Ok(())
 }
 

@@ -36,21 +36,18 @@ const RATE: &str = "skill.tsugushi.rate";
 pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     "skill:二叶筑紫:交给班长吧",
     &[
-        On::Play("", None, Some(can_cash), cash),
-        On::Action(Action::TurnStartBefore("", None, None, declare)),
+        On::Play("", Some(can_cash), cash),
+        On::Action(Action::TurnStartBefore("", None, declare)).silent(),
         // （1）/（2） interactive redirects. Rides `PaySplitChooseBefore` (v78),
         // restoring the rulebook PaySplitChoose position: the offers sit immediately
         // before the pure `PaySplitChoose` filter stage (per leg on a split).
-        On::Action(Action::PaySplitChooseBefore("", None, Some(mine), on_gain)),
+        On::Action(Action::PaySplitChooseBefore("", Some(mine), on_gain)),
         On::Action(Action::PaySplitChooseBefore(
             "",
-            None,
             Some(other),
-            on_theirs,
-        )),
+            on_theirs)),
     ],
-)
-.silent(&[1]);
+);
 
 /// Residual guard for [`on_gain`]: the payee is the owner and some other
 /// survivor exists to redirect to. 「可以改为指定场上除你以外的一个角色」.

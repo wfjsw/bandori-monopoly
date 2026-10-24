@@ -146,7 +146,7 @@ pub fn sky_03_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::Draw { player: p, n: 1 } if p == player)
 }
 
-/// Combined body (take_from_hand + branch + to_discard). The take and the
+/// Combined body (take_card + branch + to_discard). The take and the
 /// discard are pile moves; `take_card` logs `TakeFromPile` and `to_discard`
 /// does not log. Frame: the money/draw leg plus the take.
 pub fn sky_play_log_ok(
@@ -241,7 +241,7 @@ pub fn colors_05_fire_log_ok(effects: &[Effect], player: i32, need: i32) -> bool
 }
 
 /// C-AG-colors-06: roll = 5 ⇒ one discard card moves to the hand.
-/// `pick_from_discard` takes the card (TakeFromPile) then `add_to_hand`.
+/// `pick_from_discard` takes the card (TakeFromPile) then `add_to_dest`.
 pub fn colors_06_log_ok(effects: &[Effect], player: i32, picked: u8) -> bool {
     effects.len() == 2
         && matches!(
@@ -262,7 +262,7 @@ pub fn colors_06_log_ok(effects: &[Effect], player: i32, picked: u8) -> bool {
 }
 
 /// C-AG-colors-03: roll = 2 ⇒ one discard card moves to the draw-pile top.
-/// The take is logged; `add_to_deck_at` is a pile write (no log entry).
+/// The take is logged; `add_to_dest` is a pile write (no log entry).
 pub fn colors_03_log_ok(effects: &[Effect], player: i32, picked: u8) -> bool {
     effects.len() == 1
         && matches!(

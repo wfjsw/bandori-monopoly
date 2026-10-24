@@ -320,9 +320,9 @@ impl Cx<'_> {
         for i in 0..players {
             self.w.st.players[i].money = START_MONEY;
             self.w.st.players[i].pos = 0;
-            let mut draw = std::mem::take(&mut self.w.hidden[i].draw);
+            let mut draw = std::mem::take(&mut self.w.hidden[i].deck);
             self.w.rng.shuffle(&mut draw);
-            self.w.hidden[i].draw = draw;
+            self.w.hidden[i].deck = draw;
         }
         self.setup_event_deck();
         // Tile rule instances on the neutral board owner (`docs/TILES.md`) --
@@ -436,10 +436,10 @@ impl Cx<'_> {
     fn mulligan(&mut self, i: usize) -> Flow<()> {
         let h = &mut self.w.hidden[i];
         let hand = std::mem::take(&mut h.hand);
-        h.draw.extend(hand);
-        let mut draw = std::mem::take(&mut self.w.hidden[i].draw);
+        h.deck.extend(hand);
+        let mut draw = std::mem::take(&mut self.w.hidden[i].deck);
         self.w.rng.shuffle(&mut draw);
-        self.w.hidden[i].draw = draw;
+        self.w.hidden[i].deck = draw;
         self.w.st.players[i].mulligan = true;
         let n = self.start_hand(i);
         self.draw(i, n, false)?;
@@ -674,7 +674,7 @@ impl Cx<'_> {
             s.tick_state(Tick::TurnEnd);
         }
         // 「并在回合结束时额外进行一次[触发结算]」 is no longer an engine
-        // counter: it is a scheduled turn-end rule op (`On::AtEnd`, whose body
+        // counter: it is a scheduled turn-end rule op (`On::Schedule`, whose body
         // calls `ctx::settle`) -- `docs/TILES.md`.
         self.w.next_turn_pending = true;
         // `turnEnd` (Fx hook point) -- every placed card decays/acts here.
@@ -4382,7 +4382,7 @@ impl Cx<'_> {
         let mut got = 0;
         for _ in 0..n {
             self.refill_draw_pile(i, hooks)?;
-            let top = self.w.hidden[i].draw.last().cloned().unwrap_or_default();
+            let top = self.w.hidden[i].deck.last().cloned().unwrap_or_default();
             // `drewBefore` -- the per-card replacement point.
             let mut replacement: Option<String> = None;
             let mut skipped = false;
@@ -4403,7 +4403,7 @@ impl Cx<'_> {
             } else if skipped {
                 None
             } else {
-                let card = self.w.hidden[i].draw.pop();
+                let card = self.w.hidden[i].deck.pop();
                 if let Some(c) = &card {
                     self.w.hidden[i].hand.push(c.clone());
                 }
@@ -4481,7 +4481,7 @@ impl Cx<'_> {
         if let Some(k) = h.hand.iter().position(|c| c == card) {
             h.hand.remove(k);
         }
-        h.discard.push(card.to_string());
+        h.graveyard.push(card.to_string());
         let limit = i64::from(self.w.st.players[i].hand_limit().unwrap_or_default());
         self.w
             .log(
@@ -4580,6 +4580,15 @@ impl Cx<'_> {
         let Some(k) = self.w.hidden[i].hand.iter().position(|c| c == id) else {
             return Ok(());
         };
+        // Activation argument (docs/ACTIVATION.md §2) -- collected **before**
+        // `hand.remove`, the point of no return. A decline leaves the card in
+        // hand and the play never announces (LOY-SEEYOU-01's "do not commit
+        // the play until …").
+        let arg = match self.rules.declare_activation(self, i, id)? {
+            Some(a) => a,
+            None => return Ok(()),
+        };
+        self.w.turn.play_arg = arg;
         self.w.hidden[i].hand.remove(k);
         // `play_from_hand` -- this one came out of the hand. **Scoped to the
         // play**: raised for the duration of this resolution and restored when
@@ -4661,7 +4670,7 @@ impl Cx<'_> {
         match dest {
             Dest::Graveyard => {
                 if !self.out(i) {
-                    self.w.hidden[i].discard.push(id.to_string());
+                    self.w.hidden[i].graveyard.push(id.to_string());
                     self.refill_draw_pile(i, true)?;
                     // `discarded` -- before the `cardPlayed` announcement.
                     raise!(self, "discarded", i, card = Some(id.to_string()))?;

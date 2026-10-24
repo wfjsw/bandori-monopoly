@@ -19,16 +19,15 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const SATO_RED: CardDef = CardDef::new(
     "skill:佐藤益木:与燃烧的红色一起驰骋",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1）「每次[经过]"白雪学园"或"银河拉面馆"时」 -- the two named tiles
         // are the hook's applicability (`tile_named` is in the condition
         // vocabulary).
-        On::Action(Action::Pass("actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))", None, None, on_pass)),
+        On::Action(Action::Pass("actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))", None, on_pass)),
     ],
 )
-    .silent(&[1, 2])
     // 「（初始0，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 
@@ -50,7 +49,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("sato_red_no_fire")));
     }
     None
@@ -58,7 +57,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「本回合主要移动掷骰额外添加Xd10」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let have = state::get(player_id, state_key::CHARGE);
+    let have = bandori_std::fire::get(player_id);
     if have < 1 {
         return Ok(());
     }

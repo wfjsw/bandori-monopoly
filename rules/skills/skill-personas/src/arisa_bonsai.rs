@@ -22,16 +22,15 @@ fn station() -> i32 {
 pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", None, None, on_event)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", None, on_event)),
         // （2）: the turn's main move walked past 流星堂 and did not end there,
         // and the pass latch is armed. The named tile must exist (residual).
-        On::Action(Action::TurnEnd("actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0", None, Some(station_exists), at_turn_end)),
-        On::Action(Action::Pass("actor == owner && tile.id == tile_named('流星堂')", None, None, on_pass)),
+        On::Action(Action::TurnEnd("actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0", Some(station_exists), at_turn_end)),
+        On::Action(Action::Pass("actor == owner && tile.id == tile_named('流星堂')", None, on_pass)),
     ],
 )
-    .silent(&[0, 1])
     // 「（初始0，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 
@@ -72,7 +71,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     }
     // （3）「[经过]"流星堂"时可使用2个[火罐]为自己的团卡添加1个[奇迹水晶]」 --
     // offered here, since the moment is the pass itself.
-    if state::get(player_id, state_key::CHARGE) < 2 {
+    if bandori_std::fire::get(player_id) < 2 {
         return Ok(());
     }
     if !ctx::ask_yes(

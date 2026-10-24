@@ -25,24 +25,19 @@ const USED: &str = "skill.kiritani.used";
 pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     "skill:桐谷透子:天上天下，唯我独尊",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            None,
-            reset,
-        )),
+            reset)).silent(),
     ],
 )
-.silent(&[1, 2, 4])
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
@@ -74,7 +69,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if state::get(player_id, USED) != 0 {
         return Some(Msg::new(key!("kiritani_used")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("kiritani_no_fire")));
     }
     let mine = ctx::owned_tiles(player_id);

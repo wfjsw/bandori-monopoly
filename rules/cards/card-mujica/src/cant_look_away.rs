@@ -8,12 +8,13 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- the timing is
         // a counter used *against you*. The engine's counter link carries
         // `target` = the countered seat and `actor` = the counter's declarer
@@ -24,16 +25,15 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // selectors are declared.
         On::Counteract(
             &[ChainKind::Counteracted, ChainKind::Card, card_sdk::abi::ActionKind::CardUsed.as_trigger()],
-            "target == owner && actor != owner", Some(key!("cant_look_away_when")),
+            "target == owner && actor != owner",
             None,
-            counteract,
-        ),
+            counteract).counter_reason(key!("cant_look_away_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"无法将视线移开"#)
         .raw_name(r#"无法将视线移开"#)
         .tags(&[r#"反击"#])
-        .text(r#"使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动"#)
+        .text(CardText::para(r#"使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动"#))
         // sheet cell J7
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 

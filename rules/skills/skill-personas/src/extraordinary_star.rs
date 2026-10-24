@@ -10,7 +10,7 @@
 //!
 //! The parenthetical 「初始0，上限1」 is this skill's to state, and it is the
 //! whole reason the keyed state carries bounds: it writes `fire`'s `max` and
-//! every card reads it back with `state::max(player_id, state_key::CHARGE)`. The
+//! every card reads it back with `bandori_std::fire::max(player_id)`. The
 //! engine holds the number and enforces nothing -- see `game_core::state::StateVar`.
 //!
 //! The cap is restated at the top of every turn rather than bound once when the
@@ -36,18 +36,16 @@ fn hill() -> i32 {
 pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     "skill:户山香澄:非凡之星",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1） is 「其他玩家"星之鼓动山丘"上[结算]时」 -- who and where are the
         // hook's applicability (the residual guard), not its effect.
-        On::Action(Action::Settle("", None, Some(on_settle_applies), on_settle)),
+        // （1） gains a [火罐] -- owner-self-only, but the rulebook describes it
+        // happening and the player should see the clause fire. `Always` beats Auto.
+        On::Action(Action::Settle("", Some(on_settle_applies), on_settle)).flash(Flash::Always),
     ],
 )
-.silent(&[1, 2])
-// （1） gains a [火罐] -- owner-self-only, but the rulebook describes it
-// happening and the player should see the clause fire. `Always` beats Auto.
-.flash(&[(2, Flash::Always)])
 // 「（初始0，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),
@@ -82,7 +80,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("extraordinary_star.no_fire")));
     }
     None

@@ -40,30 +40,24 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // 状态1's offer: another player's turn start, not in 状态2, and the
         // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
         // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
         On::Action(Action::TurnStartBefore(
             "actor != owner && slot('skillState') != 2",
-            None,
             Some(offer_support_open),
-            offer_support,
-        )),
+            offer_support)),
         On::Action(Action::TurnStartBefore(
             "actor == owner && slot('skillState') != 2",
             None,
-            None,
-            at_turn_start,
-        )),
+            at_turn_start)),
         On::Action(Action::TurnEnd(
             card_sdk::pre::MINE,
             None,
-            None,
-            at_turn_end,
-        )),
-        On::Play("", None, Some(can_enter_two), enter_two),
+            at_turn_end)).silent(),
+        On::Play("", Some(can_enter_two), enter_two),
         // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
         // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
         // Effect Action pays the other half out. Effect (not PayAfter) so the
@@ -80,13 +74,10 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         )),
         On::Action(Action::Effect(
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
-            None,
             Some(split_rent_applies),
-            split_rent_gain,
-        )),
+            split_rent_gain)),
     ],
 )
-.silent(&[0, 1, 4])
 // 「（初始0，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),
@@ -231,7 +222,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         state::set(player_id, REST, 0);
         bandori_std::fire::gain(player_id, 1, &Msg::new(key!("kaede_support_gain_charge")))?;
     }
-    if state::get(player_id, state_key::CHARGE) < state::max(player_id, state_key::CHARGE) {
+    if bandori_std::fire::get(player_id) < bandori_std::fire::max(player_id) {
         return Ok(());
     }
     if ctx::ask_yes(
@@ -257,7 +248,7 @@ fn can_enter_two(player_id: i32) -> Option<Msg> {
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("kaede_support_not_two")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("kaede_support_no_fire")));
     }
     None
@@ -271,7 +262,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("kaede_support_title")),
         &Msg::new(key!("kaede_support_how_many")),
         1,
-        state::get(player_id, state_key::CHARGE),
+        bandori_std::fire::get(player_id),
     )?;
     if x <= 0 {
         return Ok(());

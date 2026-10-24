@@ -18,9 +18,12 @@ use std::path::{Path, PathBuf};
 fn kind_shapes() -> HashMap<String, BodyShape> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let rules = manifest.parent().expect("rules/");
+    let repo = rules.parent().expect("repo root");
     let mut sources = Vec::new();
-    for rel in ["card-sdk/src/kinds.rs", "bandori-std/src/kind.rs"] {
-        let p = rules.join(rel);
+    for p in [
+        repo.join("crates/card-sdk/src/kinds.rs"),
+        rules.join("bandori-std/src/kind.rs"),
+    ] {
         sources.push(fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}")));
     }
     kind_shapes_from(&sources)
@@ -30,6 +33,9 @@ fn kind_shapes() -> HashMap<String, BodyShape> {
 fn expected_sig(shape: BodyShape) -> &'static str {
     match shape {
         BodyShape::Action => "(player_id: i32) -> card_sdk::Asked",
+        // The activation arg is generic (`fn(i32, T) -> Asked`), so only the
+        // arity and the `player_id` slot can be pinned here.
+        BodyShape::ActionArg => "(player_id: i32, ",
         BodyShape::Value => "(player_id: i32, value: i32) -> i32",
         BodyShape::Flag => "(player_id: i32, value: i32) -> bool",
         BodyShape::Gate => "(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue",

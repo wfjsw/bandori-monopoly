@@ -11,22 +11,23 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const THAT_DAY_RAIN: CardDef = CardDef::new(
     "MyGO:那天的雨",
     &[
-        On::Play("", None, None, that_day_rain),
+        On::Play("", None, that_day_rain),
         // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-        On::Action(Action::TurnStart("", None, Some(hook_guard), hook)),
-        On::Action(Action::TurnEnd("", None, Some(hook_guard), hook)),
-        On::Action(Action::CounterChanged("", None, Some(crystals_changed_guard), on_crystals_changed)),
+        On::Action(Action::TurnStart("", Some(hook_guard), hook)),
+        On::Action(Action::TurnEnd("", Some(hook_guard), hook)),
+        On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"那天的雨"#)
         .raw_name(r#"那天的雨"#)
         .tags(&[])
-        .text(r#"将此卡放置于自己场上并为其放置5个奇迹水晶，打出此卡时及你的每回合开始时投掷1d10并按地产商格子顺序使（除“东京外”的）第n个地产商对应的颜色格子及这些格子相邻格子上的所有玩家获得一层[停留]，每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆（骰点大于10则固定为高级住宅区对应颜色的格子）"#)
+        .text(CardText::para(r#"将此卡放置于自己场上并为其放置5个奇迹水晶，打出此卡时及你的每回合开始时投掷1d10并按地产商格子顺序使（除“东京外”的）第n个地产商对应的颜色格子及这些格子相邻格子上的所有玩家获得一层[停留]，每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆（骰点大于10则固定为高级住宅区对应颜色的格子）"#))
         // sheet cell I12
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
@@ -122,7 +123,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
-            ctx::decay()?;
+            ctx::remove_crystal()?;
         }
         _ => {}
     }

@@ -659,7 +659,7 @@ into a replayable input log; `Match` itself is untouched.
 Two different heaps, two different lifetimes.
 
 **Card modules (short-lived, one run per instantiation)** keep a bump allocator
-(`rules/card-sdk/src/rt.rs`, `guest` feature): a run allocates a handful of small
+(`crates/card-sdk/src/rt.rs`, `guest` feature): a run allocates a handful of small
 strings and never frees them, so a pointer that only moves up is enough and far
 smaller than dlmalloc. The cursor starts at `__heap_base` and linear memory grows
 on demand with `memory.grow`; `realloc` grows (or shrinks) in place when the block

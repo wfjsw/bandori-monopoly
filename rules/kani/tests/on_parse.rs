@@ -15,9 +15,12 @@ use std::path::{Path, PathBuf};
 fn shapes() -> HashMap<String, BodyShape> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let rules = manifest.parent().expect("rules/");
+    let repo = rules.parent().expect("repo root");
     let mut sources = Vec::new();
-    for rel in ["card-sdk/src/kinds.rs", "bandori-std/src/kind.rs"] {
-        let p = rules.join(rel);
+    for p in [
+        repo.join("crates/card-sdk/src/kinds.rs"),
+        rules.join("bandori-std/src/kind.rs"),
+    ] {
         sources.push(std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}")));
     }
     kind_shapes_from(&sources)
@@ -35,7 +38,7 @@ const C: CardDef = CardDef::new("t", &[
     On::Filter(Filter::BuyAssign("", None, deal_body)),
     On::Filter(Filter::PaySplitAdd("", None, payadd_body)),
     On::Filter(Filter::Redirect("", None, redirect_body)),
-    On::Action(Action::TurnStart("", Some("turn"), None, on_turn_start)),
+    On::Action(Action::TurnStart("", None, on_turn_start).counter_reason("turn")),
     On::Filter(bandori_std::kind::Filters::MyRewrite("", None, my_rewrite)),
 ]);
 "#;
@@ -95,9 +98,7 @@ fn parse_on_bodies_trailing_comma_and_multiline() {
     ),
     On::Action(Action::Pass(
         "", None,
-        None,
-        on_pass,
-    )),
+        on_pass)),
 "#;
     let got = parse_on_bodies(src, &shapes);
     assert_eq!(got.len(), 2, "{got:?}");
@@ -291,8 +292,9 @@ fn every_registration_names_a_declared_kind() {
     // Declared kind names from the tables (and the live KINDS registry).
     let mut declared_filter: Vec<String> = shapes.keys().cloned().collect();
     declared_filter.sort();
+    let repo = root.parent().expect("repo root").to_path_buf();
     let mut declared_action: Vec<String> = parse_action_kind_names(
-        &std::fs::read_to_string(root.join("card-sdk/src/kinds.rs")).unwrap(),
+        &std::fs::read_to_string(repo.join("crates/card-sdk/src/kinds.rs")).unwrap(),
     );
     declared_action.extend(parse_action_kind_names(
         &std::fs::read_to_string(root.join("bandori-std/src/kind.rs")).unwrap(),
@@ -382,7 +384,7 @@ fn pre_string_reads_inner_ctor_arg() {
     let after = r#"Filter::DiceRollPlan(pre::MINE, None, on_plan)),"#;
     assert_eq!(on_pre_string(after).as_deref(), Some("actor == owner"));
 
-    let after = r#"Action::PassTile("card.placed && actor == owner", None, None, on_pass)),"#;
+    let after = r#"Action::PassTile("card.placed && actor == owner", None, on_pass)),"#;
     assert_eq!(
         on_pre_string(after).as_deref(),
         Some("card.placed && actor == owner")
@@ -393,6 +395,6 @@ fn pre_string_reads_inner_ctor_arg() {
     assert_eq!(on_pre_string(after).as_deref(), Some("false"));
 
     // Flat On::Play shape (text after `On::Play(`).
-    let after = r#""", "", None, play)"#;
+    let after = r#""", None, play, "")"#;
     assert_eq!(on_pre_string(after).as_deref(), Some(""));
 }

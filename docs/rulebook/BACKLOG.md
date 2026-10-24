@@ -20,9 +20,9 @@ Sources (re-counted 2026-10-20 against master `b8e26436`):
   report generator). `crates/game-rules/tests/` is clean. Unchanged since
   2026-10-17.
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
-- 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `rules/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
+- 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `crates/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
-**Current ABI: v96** (`rules/card-sdk/src/abi.rs` `ABI_VERSION`) — the v89
+**Current ABI: v96** (`crates/card-sdk/src/abi.rs` `ABI_VERSION`) — the v89
 figure in the 2026-10-20 header was already stale (v90..v95 landed between
 audits and were never recorded here). The doc body still quotes
 v53–v85-era names in places; where a kind has since been renamed
@@ -92,7 +92,7 @@ A tag with no item is a backlog bug — file it.
 | `rules/tiles` | 4 | TILE-03/06, LOW-02, GUARD-PERVISIT |
 | `rules/status` | 2 | STA-02, STA-03 |
 | `rules/markers` + `bandori-std` | 2 | MARKERS-LISA-01, ABI-MARKER-SPENT (new) |
-| `rules/card-sdk` | 2 | MONEY-04, TILE-03 |
+| `crates/card-sdk` | 2 | MONEY-04, TILE-03 |
 | `crates/game-core` | 12 | MONEY-01..05, MOVE-06, LINGER-10, GUARD-SETTLE-DEPTH, ABI-12, HOST-01 |
 | `crates/game-rules` | 3 | GUARD-PERVISIT, DRAW-OUT-01, FORCE-WRITE-01 |
 | `rules/tests` | 5 | HOST-01, MOVE-06, LOY-ANON-01, EVENT-03 |
@@ -102,7 +102,7 @@ A tag with no item is a backlog bug — file it.
 
 `rules/{events,tiles,markers}/src/lib.rs`, `rules/skills/{skill-personas,
 skill-groups}/src/lib.rs`, `crates/game-core/src/data.rs` (`event_rule_id` doc),
-`rules/card-sdk/src/ctx.rs:576` (cross-ref to the ruling-6 note). These name the
+`crates/card-sdk/src/ctx.rs:576` (cross-ref to the ruling-6 note). These name the
 `TODO(规则书)` policy: a gap in the text is tagged, never silently dropped.
 
 ## Orphans closed by this audit
@@ -620,7 +620,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **locations**
   - `rules/tests/tests/cross_chain.rs` `c13_riot_and_war_declaration` (un-ignored, green)
   - `rules/tests/tests/cross_long.rs` `l01_counter_war_five_links_deep` (un-ignored, green)
-  - `crates/game-rules/src/host.rs` `counteracts_to_play` / `counteract_entry`, `rules/card-sdk/src/ctx.rs` `effect::hits`
+  - `crates/game-rules/src/host.rs` `counteracts_to_play` / `counteract_entry`, `crates/card-sdk/src/ctx.rs` `effect::hits`
 - **rulebook**: R.I.O.T. / 宣战布告 — 500 payment and the war ring offers.
 - **was**: 500 missing; war never declared on the play's timing.
 
@@ -808,7 +808,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **status**: **partially fixed** (2026-10-17 audit) — of six sub-capabilities,
   only **(b) host clock write has landed**: `bangdream_chan.rs:42-45` writes
   `prop::BONUS_TIME_SET` (免费时间) and `prop::BASE_TIME_REFILL_SET` (恢复时间),
-  documented at `rules/card-sdk/src/abi.rs:1086-1108`. Still open: (a) `IEventDefer`,
+  documented at `crates/card-sdk/src/abi.rs:1086-1108`. Still open: (a) `IEventDefer`,
   (c) `CantPlayHand` gate, (d) auction primitive, (e) free-amount `ask_money`,
   (f) cosmetic ask.
 - **kind**: ABI defect
@@ -851,7 +851,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **suggested batch**: payment pipeline / crystal/marker accounting
 - **locations**
   - `crates/game-core/src/engine/play.rs:2377`
-  - `rules/card-sdk/src/abi.rs` property map (v30)
+  - `crates/card-sdk/src/abi.rs` property map (v30)
 - **capability**: tri-state tile prop (absent / clear / set) for mortgage-stays.
 
 ## ABI-13 — temporary tile-rule swap (「效果迁移至…」 / 「视为与…交换位置」)
@@ -936,7 +936,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 ## SKILL-03 — stun waiver 「此技能可以正常使用或在[晕眩]状态下使用」
 - **status**: **fixed** (closed in the 2026-10-17 audit) — the waiver is a
   declared static property `prop::PLAYABLE_STUNNED` (「可在眩晕时打出」,
-  `rules/card-sdk/src/abi.rs:993-996`), not a play-guard reorder.
+  `crates/card-sdk/src/abi.rs:993-996`), not a play-guard reorder.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: medium
@@ -1043,7 +1043,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/tests/tests/cross_tiles.rs` `t05_one_of_us_shares` (green)
   - `rules/tests/tests/cross_tiles.rs` `t21_riki_plus_anon_link` (green)
   - `rules/cards/card-ag/src/one_of_us.rs` (`ctx::lose_raw` / `gain_raw`)
-  - `rules/card-sdk/src/ctx.rs` (`adjust_money` — raw money move, no pipeline)
+  - `crates/card-sdk/src/ctx.rs` (`adjust_money` — raw money move, no pipeline)
 - **question**: C-Q13 (mortgaged partner tile's half 收费) — still open.
 
 ## TILE-02 — agent half-rent 「同色」 vs colour overrides
@@ -1070,7 +1070,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **suggested batch**: rent multipliers / tiles
 - **locations**
   - `rules/tiles/src/ring.rs:13` (dice-rent table + 「至少1个」 floor have no book clause)
-  - `crates/game-core/src/state.rs:455` / `rules/card-sdk/src/abi.rs:572` / `rules/card-sdk/src/ctx.rs:453` (`ring_multiplier` TODO)
+  - `crates/game-core/src/state.rs:455` / `crates/card-sdk/src/abi.rs:572` / `crates/card-sdk/src/ctx.rs:453` (`ring_multiplier` TODO)
   - `docs/TILES.md` TODOs; TEST-FINDINGS §6 items 9 & 11
   - no black-box test
 - **rulebook**: 「所有RiNG不可升级」 is the only RiNG clause; 游戏流程 5 「抵押拥有的地契」 with no exclusion (engine refuses RiNG mortgage).
@@ -1689,7 +1689,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `crates/game-rules/src/wasm_rules.rs` `apply_host_request` — `Buy` / `Acquire` / `AgentOffer` / `Build` / `OfferBuild` / `Mortgage` / `RaiseBought` now answer the real outcome
   - `crates/game-core/src/engine/play.rs` `card_buy` / `card_acquire` / `card_build` / `buy` / `build` / `mortgage` — `Flow<bool>`
   - consumers that trust the reply: `rules/cards/card-pp/src/dream_ahead.rs:193` (`if !ctx::card_buy(...) { return; }`), `rules/skills/skill-groups/src/afterglow.rs:34` (`if ctx::card_build(...) { log free house }`)
-- **ABI contract**: `rules/card-sdk/src/ctx.rs` `card_buy` / `buy` / `card_build` / `acquire` `-> bool` = the real outcome (ABI v53)
+- **ABI contract**: `crates/card-sdk/src/ctx.rs` `card_buy` / `buy` / `card_build` / `acquire` `-> bool` = the real outcome (ABI v53)
 - **was**: every purchase HostRequest resumed as `true` (`!= 0` on answer `1`)
 - **expected**: `0` when the engine no-op'd (BuyGate cancel, already owned, `buyBefore` cancel, payment unpaid, `why_not_build_on`, `buildBefore` cancel, max houses). **Confirmed.**
 - **impact was**: `dream_ahead` spent 3 crystals and logged "bought" after a refused buy; `afterglow` always logged a free house even when `card_build` refused; `tsugu_ycm` / `tomoe_savior` logged a buy on a refused commit
@@ -1733,7 +1733,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **severity**: medium (latent; no current caller in `card_all.wasm`)
 - **suggested batch**: host ABI: plan flags
 - **locations**
-  - guest wrappers `rules/card-sdk/src/ctx.rs` `plan::set_no_build` / `set_build_anywhere`; imports `rules/card-sdk/src/ctx/sys.rs`
+  - guest wrappers `crates/card-sdk/src/ctx.rs` `plan::set_no_build` / `set_build_anywhere`; imports `crates/card-sdk/src/ctx/sys.rs`
   - registered in `crates/game-rules/src/host.rs` linker (was a gap vs `set_no_buy` / `set_can_build`)
   - native `crates/game-rules/src/native_shims.rs` — host bodies (was a trap)
   - `World::set_no_build` / `set_build_anywhere` (`engine/ops.rs`); `MovePlan.build_anywhere` (`state.rs`); enforced `play.rs` `why_not_build`
@@ -1750,7 +1750,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **severity**: low
 - **suggested batch**: guest imports vs host registration
 - **locations** (removed)
-  - `rules/card-sdk/src/ctx/sys.rs` `set_bonus`
+  - `crates/card-sdk/src/ctx/sys.rs` `set_bonus`
   - `crates/game-rules/src/native_shims.rs` `op_set_bonus` / `ruleset_set_bonus`
 - **expected**: delete the import + native stub. **Confirmed.**
 
@@ -1784,7 +1784,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **suggested batch**: CEL vocab vs guest readers
 - **locations**
   - `rules/cond/src/vocab.rs` — `doc: "where a roll came from, 0 = none (roll_source::NONE)"` (was `-1 = none`)
-  - `rules/card-sdk/src/abi.rs` — `roll_source::NONE = 0` (the contract)
+  - `crates/card-sdk/src/abi.rs` — `roll_source::NONE = 0` (the contract)
   - host fills `0` for unattributed: `hostfns.rs`, `cond_pre.rs`
   - existing guard uses the guest code: `rules/cards/card-ras/src/layer_keep.rs` `"… && roll_source == 1"`
 - **was**: guards written as `roll_source == -1` never matched
@@ -2881,6 +2881,38 @@ engine capabilities rather than rule-side bandaids. Three landed here.
 
 ## Landed
 
+### FIRE-TOKENS — 火罐 re-homed onto the persona-skill token counter (2026-10-24)
+Branch `worktree-fire-tokens`. `MatchPlayer.state["charge"]`/`["tempFire"]` →
+`tokens` rows `name="charge"`/`"tempFire"`, `instance=<persona-skill uid>`,
+live cap on `Counter.max`. Wire names unchanged. `gain_marker` /
+`spend_marker` / `add_marker_max` fold the held-token store and stay dumb
+(uncapped add). The uncapped `gain_charge`/`spend_charge`/`add_charge_max`
+sugar is deleted. Skill press-gates and cond-ir `charge(p)` read the token.
+Kani `arm_gain_marker` was aligned to the production uncapped add in the
+same batch (it had modelled a `charge_max` clamp the engine does not have);
+`conf_hostops2` / `conf_model` unit tests are green. The CBMC proof suite
+itself was **not** run this batch.
+
+Open follow-ups from the code review of this batch (2026-10-24):
+
+- **FIRE-TOKENS-1 — legacy `state["charge"]` is never folded into the token
+  row.** The webui falls back to `state["charge"]` for display
+  (`webui/src/core/names.ts`), but nothing migrates the value into `tokens`,
+  so a match restored from a pre-re-home blob shows N pots while
+  `fire::get`/`max` read 0 -- skills gate wrong and gains declare against a
+  cap of 0. **Replays are unaffected** (records carry their engine bundle and
+  are replayed by the archived one). The live path is the server's room
+  persist/restore (`crates/server/src/room.rs` `persist` / `Room::restore_game`
+  / `MatchHandle`) across a crash or deploy. Fix is a one-shot fold on decode:
+  if `state["charge"]`/`["tempFire"]` exist and no matching `tokens` row does,
+  copy value + `StateVar.max` into a row bound to the persona-skill uid.
+  Needs a look at where the match blob is actually decoded first.
+- **FIRE-TOKENS-2 — debug `state` cheat cannot reach fire.**
+  `crates/game-core/src/engine/debug.rs` validates on
+  `state.contains_key("charge")` and writes `MatchPlayer.state`, both dead
+  after the re-home. Give it a token-store equivalent (or drop the charge
+  case).
+
 ### ENG-CARD-MESSAGE — `Target::Board` reaches tile rules; CiRCLE reward is messaged
 - `Target::Board(id)` / `Target::Uid(uid)` now resolve over **every** standing
   board-owned rule on `BOARD_OWNER` (tile rules, marks, events, status hosts),
@@ -2923,7 +2955,7 @@ regression.
   *original* face) rather than `trigger::move_roll()` (the running face after
   `set_move_roll` rewrites). With two DiceRollValue modifiers the second
   folded the original face and the last writer won: 7 → (−2) → 5, the ½ lost.
-  Fixed in `rules/card-sdk/src/payload.rs` to use the same
+  Fixed in `crates/card-sdk/src/payload.rs` to use the same
   `move_roll().unwrap_or(value())` idiom the roll skills already use.
   **Open ruling on the composition order** -- see `OPEN-ROLLRESHAPE-01` below;
   the fix makes the two reshapes *fold* (previously one clobbered the other),
@@ -3007,7 +3039,7 @@ generalize.
   - `rules/cards/card-ag/src/moca_half.rs` `roll_half` (`TODO(规则书)` on the
     composition)
   - `rules/cards/card-pp/src/no_expectation.rs` `roll_shave`
-  - `rules/card-sdk/src/payload.rs` `RollValue` (the fold that made stacking
+  - `crates/card-sdk/src/payload.rs` `RollValue` (the fold that made stacking
     possible at all -- `SUITE-TRIO`)
   - `rules/tests/tests/gap_money.rs:159` `g02_half_speed_plus_expectations_floor_on_a_rent`
 - **rulebook**
@@ -3135,6 +3167,45 @@ What the 2026-10-17 audit changed (kept for the record):
   `g29_maya_look_at_top_inside_the_draw_curve` → C-Q45.
 - **All path cites** moved to `skill-personas/` / `skill-groups/`; several kind
   names updated for the v85 `ActionKind`/`FilterKind` system.
+
+# Newly filed 2026-10-23 (ABI v98 `declare` + `can_fire`)
+
+## Not landed: DECLARE-TRAP-LOG — every "entry did not fire" trap should log
+
+`docs/ACTIVATION.md` §2 "Follow-up (tracked)". Severity is already correct and
+pinned (`trapping_declare_never_costs_the_card`, `declare_arg`): a trapping
+`OP_DECLARE` declines and does not cost the card. This is observability only.
+
+The split is backwards today -- loudest where the player needs it least:
+
+| site | logs `log.card_trap`? | the player… |
+|---|---|---|
+| residual guard (`entry_admitted`) | no ("historical dispatch leniency") | — |
+| `OP_DECLARE` on a hook (`declare_after`) | **no** | clicked nothing; a 「可选择」 silently did not apply |
+| `OP_DECLARE` on a play / [反击] | yes | just clicked something and would notice |
+| `OP_RUN` (body) | yes | — |
+
+The hook path is the automatic 「可选择」 case -- the whole reason `declare`
+exists for hooks -- and the reference is `AG:绯红之魂`'s `pay_offer`. If that
+collector traps the player is **never asked**, the −1000 silently does not
+apply, and nothing is logged: they are looking at a payment that did not get
+cut, not at a dialog that failed to appear. The residual guard has the same
+hole and it is older.
+
+- **kind**: ABI observability gap
+- **class**: B
+- **severity**: low (diagnostics; correctness is already held)
+- **suggested batch**: card-sdk / game-rules host
+- **locations**: `crates/game-rules/src/host.rs` `declare_after` (hook
+  `OP_DECLARE` trap arm) and `entry_admitted` (residual-guard trap arm);
+  `docs/ACTIVATION.md` §2 "Follow-up (tracked)"
+- **shape** (peer-reviewed): `on_trap: Option<&mut dyn FnMut(&mut W, i32)>` on
+  `entry_admitted`, mirroring `run_hook`'s existing `on_body`. **Do not** put
+  `trapped` on `Admitted::No` / `HookRun` -- a trapping declare yields
+  `Admitted::No`, which makes `run_hook` return `Ok(None)`, so the drive has no
+  channel left to learn that one of them trapped.
+- **land both arms together** (hook `OP_DECLARE` *and* the residual guard) or
+  the table gains a fifth row and it is a half-fix.
 
 ## Per class (open items only; D excluded)
 
@@ -3450,7 +3521,7 @@ the intermediate park / log shape?
 - **status**: **fixed** (2026-10-19, `bandori-std`) — `apply_abnormal` /
   `skip_main_move` / `clear_move_skip` / marker-only `gain_marker` /
   `spend_marker` / `add_marker_max`; named `give_*` / `charge*` / `*_of`
-  imports deleted from `crates/` and `rules/card-sdk`. `AbKind` is an opaque
+  imports deleted from `crates/` and `crates/card-sdk`. `AbKind` is an opaque
   newtype; `ActionKind::Exile` / `TriggerKind::Exile` named consts moved to
   `bandori_std::kind::Exile`. Shared stay/stun/exile verbs live in
   `bandori_std::status`. ABI_VERSION 87 -> 88. Still open: `fireSpent` ->

@@ -8,19 +8,20 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
-        On::Action(Action::Drawn("trigger_card == card.id", Some(key!("same_sky_when")), None, counteract)),
-        On::Action(Action::DeckAtGameStart("", None, None, return_at_opening)),
+        On::Action(Action::Drawn("trigger_card == card.id", None, counteract).counter_reason(key!("same_sky_when"))),
+        On::Action(Action::DeckAtGameStart("", None, return_at_opening)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"朝同一片天空迈进"#)
         .raw_name(r#"朝同一片天空迈进"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击]抽出此卡时立刻打出，如果你手牌数至少为3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）"#)
+        .text(CardText::para(r#"[反击]抽出此卡时立刻打出，如果你手牌数至少为3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）"#))
         // sheet cell C11
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
@@ -34,8 +35,8 @@ const ID: &str = "AG:朝同一片天空迈进";
 fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.
     let mut returned = 0;
-    while ctx::take_from_hand(player_id, ID) {
-        ctx::add_to_deck(player_id, ID, true);
+    while ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
+        ctx::add_to_dest(player_id, ID, ctx::Dest::DeckRandom);
         returned += 1;
     }
     if returned > 0 {
@@ -52,7 +53,7 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `trigger_card == card.id` owns "this card was drawn".
     // C# `Drawn` pulls the card out of hand first (`hand.Remove(Id)`).
-    if !ctx::take_from_hand(player_id, ID) {
+    if !ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
         return Ok(());
     }
     let n = ctx::hand_size(player_id);

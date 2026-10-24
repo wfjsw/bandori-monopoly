@@ -46,7 +46,7 @@ mod world;
 /// through.
 pub mod cond_pre;
 
-pub use card_sdk::abi::{AbKind, CardPile, MoveKind, PromptKind, TriggerKind, ABI_VERSION};
+pub use card_sdk::abi::{AbKind, CardPile, MoveKind, OnKind, PromptKind, TriggerKind, ABI_VERSION};
 pub use cond_pre::{
     admits, admits_gate, admits_pre, CompiledPre, PrecompiledCond, PrecompiledConds,
     PRECOMPILED_CONDS_VERSION,
@@ -56,8 +56,9 @@ pub use game_core::msg::Msg;
 /// fuel budget the nested-call plumbing shares.
 pub use host::{engine_msg, DEFAULT_FUEL};
 pub use host::{
-    Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,
-    HostState, KindMask, Outcome, Prompt, PromptOption, RuleError, RulesHandle, MAX_NESTING,
+    Call, CallOut, CardInfo, CardModules, DeclareOut, GuestMem, HookRun, HostCtx, HostErr,
+    HostRequest, HostState, KindMask, Outcome, Prompt, PromptOption, RuleError, RulesHandle,
+    MAX_NESTING,
 };
 /// Sandbox-only: the wasmi/wasmtime card-module host (`Ruleset` is the
 /// `CardModules` over loaded wasm; `RulesetBuilder` assembles one).

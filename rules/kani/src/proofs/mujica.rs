@@ -29,8 +29,8 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 crate::host_subset!(black_bday_dispatch {
     others_count => arm_others_count,
     others_at => arm_others_at,
-    slot => arm_slot,
-    set_slot => arm_set_slot,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
     money => arm_money,
     pay_to => arm_pay_to,
     player_count => arm_player_count,
@@ -56,8 +56,8 @@ crate::host_subset!(heart_rain_dispatch {
 /// [`dice_cast_dispatch`].
 crate::host_subset!(dice_cast_subset {
     set_dest => arm_set_dest,
-    slot => arm_slot,
-    set_slot => arm_set_slot,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -144,7 +144,7 @@ crate::host_subset!(umiri_dispatch {
     player_out => arm_player_out,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
-    set_slot => arm_set_slot,
+    state_set => arm_state_set,
     group_skills => arm_band_skills,
     add_group_skill => arm_add_band_skill,
     log | effect => arm_log,

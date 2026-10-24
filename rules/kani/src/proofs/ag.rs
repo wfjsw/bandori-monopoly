@@ -78,8 +78,7 @@ crate::host_subset!(ag_dispatch {
     pay_to => arm_pay_to,
     draw => arm_draw,
     // piles
-    add_to_hand => arm_add_to_hand,
-    add_to_deck | add_to_deck_at => arm_add_to_deck_at,
+    add_to_dest => arm_add_to_dest,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     cards_in => arm_cards_in,
@@ -112,7 +111,7 @@ crate::host_subset!(ag_dispatch {
     in_group => arm_in_band,
     target => arm_target,
     // marks / slots
-    set_slot => arm_set_slot,
+    state_set => arm_state_set,
     place_mark => arm_place_mark,
     count_marks_f => arm_count_marks_f,
     self_uid => arm_self_uid,
@@ -685,7 +684,7 @@ pub fn colors_06_pick_to_hand() {
                 if effects.len() == 2 {
                     crate::kassert!(
                         spec::ag::colors_06_log_ok(effects, player, *card),
-                        "C-AG-colors-06: take + add_to_hand"
+                        "C-AG-colors-06: take + add_to_dest(Hand)"
                     );
                 } else {
                     crate::kassert!(

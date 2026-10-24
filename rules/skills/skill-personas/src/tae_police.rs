@@ -27,22 +27,18 @@ const RABBIT: &str = "多惠兔子";
 pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Actions::PassRewardAffected(
             card_sdk::pre::MINE,
             None,
-            None,
-            on_circle,
-        )),
+            on_circle)),
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
         // applicability (residual guard; `pre::MINE` already states the actor).
         On::Action(Action::Pass(
             card_sdk::pre::MINE,
-            None,
             Some(on_pass_has_rabbits),
-            on_pass,
-        )),
+            on_pass)),
         // （2） 「在其他玩家使用角色/团技能的[主]效果或使用手牌的[手]效果时你可以使用4个
         // [火罐]将其抵消」 -- a [反击] from the bound skill (always in play), so it
         // must be offered from the field (`COUNTERACT_FROM_FIELD`, the same shape
@@ -53,10 +49,8 @@ pub const TAE_POLICE: CardDef = CardDef::new(
                 card_sdk::abi::ActionKind::CardUsed.as_trigger(),
             ],
             "",
-            None,
             Some(can_negate),
-            negate,
-        ),
+            negate),
     ],
 )
 // 「（初始2，上限4）」
@@ -68,8 +62,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     // group reservation the ring would re-offer it after the declaration
     // (the seat keeps the floor until it passes).
     (prop::COUNTERACT_GROUP, 1),
-])
-.silent(&[0, 1]);
+]);
 
 /// 「初始2，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -130,7 +123,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 fn can_negate(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() != player_id
-        && state::get(player_id, state_key::CHARGE) >= 4
+        && bandori_std::fire::get(player_id) >= 4
     // TODO(规则书)[judgement]: the clause names 「[主]效果」 and 「[手]效果」, not
     //   every activation. `skillUsed` is a skill press (the 主 half), but
     //   `card` admits any hand play -- a [反击] or [特] card included. There is

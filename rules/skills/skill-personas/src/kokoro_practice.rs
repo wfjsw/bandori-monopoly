@@ -35,33 +35,28 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
     &[
         // （1）'s starting square and deed: the before-match-start point decides
         // start positions.
-        On::Action(Action::DeckBeforeGame("", None, None, at_start)),
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, None, on_pass)),
+        On::Action(Action::DeckBeforeGame("", None, at_start)),
+        On::Action(Action::Pass(card_sdk::pre::MINE, None, on_pass)),
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
         On::Action(Action::PassTile(
             "actor != owner && tile.id == owner.pos && charge(owner) >= 1 && move.remaining > 0",
             None,
-            None,
-            on_passed,
-        )),
+            on_passed)),
         // （3）「移动终点为任意"RiNG"时，获得一个火罐」 -- 行动阶段 13
         // 「移动终点」 (`SETTLE-STAGES.md` §4 M1): after [重叠], before any
         // settle, for every completed move including a 「不触发结算」 one.
         On::Action(Action::MoveAfter(
             bandori_std::guards::OWN_DEED,
             None,
-            None,
-            on_move_end,
-        )),
+            on_move_end)),
         // （3）「获得一个火罐（上限1）」 -- the cap has to hold from match start,
         // or `gain_charge` (cap 0 = no pots) drops the grant on the floor.
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
     ],
 )
-.silent(&[4, 5])
 // 「（初始0，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),
@@ -127,7 +122,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     }
     // （3） 「任何时刻当你不位于RiNG时，失去所有的火罐」.
     if !is_deed(t) {
-        let have = state::get(player_id, state_key::CHARGE);
+        let have = bandori_std::fire::get(player_id);
         if have > 0 {
             bandori_std::fire::spend(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
         }

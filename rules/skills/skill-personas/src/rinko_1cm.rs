@@ -25,15 +25,13 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const RINKO_1CM: CardDef = CardDef::new(
     "skill:白金燐子:即使1cm也要前进",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
     ],
 )
 // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate
@@ -43,8 +41,7 @@ pub const RINKO_1CM: CardDef = CardDef::new(
     (bandori_std::fire::FIRE_INITIAL, 3),
     (bandori_std::fire::FIRE_CAP, 3),
     (bandori_std::prop::PLAYABLE_STUNNED, 1),
-])
-.silent(&[1, 2]);
+]);
 
 /// 「初始3，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -63,7 +60,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("rinko_1cm_no_fire")));
     }
     // 「可在[晕眩]状态下使用」 is `prop::PLAYABLE_STUNNED` on this CardDef;
@@ -73,7 +70,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「使这回合移动掷骰的结果固定为X*6。本次移动不受异常移动效果影响」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let have = state::get(player_id, state_key::CHARGE);
+    let have = bandori_std::fire::get(player_id);
     if have < 1 {
         return Ok(());
     }

@@ -9,24 +9,27 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText, it};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_IN_ONE: CardDef = CardDef::new(
     "Sumimi:Sumimi是二人一体的",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         On::Counteract(
             &[ChainKind::DiceRollResult],
-            "actor == owner && (persona_is(owner, \"三角初华（Sumimi）\") || persona_is(owner, \"纯田真奈\"))", Some(key!("two_in_one_when")),
+            "actor == owner && (persona_is(owner, \"三角初华（Sumimi）\") || persona_is(owner, \"纯田真奈\"))",
             None,
-            counteract,
-        ),
+            counteract).counter_reason(key!("two_in_one_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Sumimi是二人一体的"#)
         .raw_name(r#"Sumimi是二人一体的"#)
         .tags(&[r#"反击"#])
-        .text(r#"（1）打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数（2）此卡可在你的移动掷骰后作为[反击]使用。"#)
+        .text(CardText::items(&[
+            it(r#"打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数"#),
+            it(r#"此卡可在你的移动掷骰后作为[反击]使用。"#),
+        ]))
         // sheet cell L6
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 

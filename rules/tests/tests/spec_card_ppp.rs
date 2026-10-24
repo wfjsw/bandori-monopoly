@@ -124,6 +124,7 @@ fn set_sticker(t: &mut Table, who: usize, n: i32) {
             name: STICKER.into(),
             value: n,
             instance: None,
+            max: 0,
         });
     }
 }
@@ -399,8 +400,8 @@ pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
             .get(who)
             .map(|p| {
                 (
-                    p.state_get(bandori_std::state_key::CHARGE),
-                    p.state_max(bandori_std::state_key::CHARGE),
+                    p.token(bandori_std::fire::KEY),
+                    p.token_max(bandori_std::fire::KEY),
                 )
             })
             .unwrap_or((0, 0))
@@ -449,7 +450,8 @@ fn better_sound_contract() {
                 "draw:P0",
                 "discard:P0",
                 "pos:P0",
-                "state:P0:charge",
+                // Fire is a held token of the persona-skill instance.
+                "token:P0",
                 "turn.",
             ],
         )
@@ -1686,7 +1688,7 @@ fn auction_off_raises_fire_cap() {
         );
     }
     // [持续]「火罐上限加1」 over the vanilla baseline of 0.
-    let max1 = t.p(0).state_max(bandori_std::state_key::CHARGE);
+    let max1 = t.charge_max(0);
     if max1 != 1 {
         panic!("fire max {max1}, expected 1 (C-PPP-auction-off-c1: 上限加1 over baseline 0)");
     }
@@ -1828,12 +1830,12 @@ pub fn verify_popipa(
         .filter(|c| *c == POPIPA)
         .count()
         + post.hidden[who]
-            .draw
+            .deck
             .iter()
             .filter(|c| *c == POPIPA)
             .count()
         + post.hidden[who]
-            .discard
+            .graveyard
             .iter()
             .filter(|c| *c == POPIPA)
             .count();
@@ -1852,10 +1854,10 @@ pub fn verify_popipa(
     }
     // Pipopa entered the draw multiset (draw pile + hand + discard).
     let pipopa = post.hidden[who]
-        .draw
+        .deck
         .iter()
         .chain(post.hidden[who].hand.iter())
-        .chain(post.hidden[who].discard.iter())
+        .chain(post.hidden[who].graveyard.iter())
         .filter(|c| *c == PIPOPA)
         .count();
     if pipopa != 1 {
@@ -1934,7 +1936,7 @@ fn popipa_verifier_rejects_mutants() {
         &events,
         &verify_popipa_wrap,
         |w| {
-            w.hidden[0].discard.push(POPIPA.into());
+            w.hidden[0].graveyard.push(POPIPA.into());
         },
     );
     // MORE: a second Pipopa.
@@ -1945,7 +1947,7 @@ fn popipa_verifier_rejects_mutants() {
         &events,
         &verify_popipa_wrap,
         |w| {
-            w.hidden[0].draw.push(PIPOPA.into());
+            w.hidden[0].deck.push(PIPOPA.into());
         },
     );
 }
@@ -1977,8 +1979,8 @@ pub fn verify_pipopa(
     }
     for z in [
         &post.hidden[who].hand,
-        &post.hidden[who].draw,
-        &post.hidden[who].discard,
+        &post.hidden[who].deck,
+        &post.hidden[who].graveyard,
     ] {
         if z.iter().any(|c| c == PIPOPA) {
             return Err("Pipopa still in a private zone (must be [移除])".into());
@@ -2057,7 +2059,7 @@ fn pipopa_verifier_rejects_mutants() {
         &events,
         &verify_pipopa_wrap,
         |w| {
-            w.hidden[0].discard.push(PIPOPA.into());
+            w.hidden[0].graveyard.push(PIPOPA.into());
         },
     );
 }
@@ -2166,11 +2168,11 @@ pub fn verify_better_sound(
             post.st.players[who].pos
         ));
     }
-    let dfire = post.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64
-        - pre.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64;
+    let dfire = post.st.players[who].token(bandori_std::fire::KEY) as i64
+        - pre.st.players[who].token(bandori_std::fire::KEY) as i64;
     // Cap may block; when room existed the delta is exactly 1.
-    let room = pre.st.players[who].state_get(bandori_std::state_key::CHARGE)
-        < pre.st.players[who].state_max(bandori_std::state_key::CHARGE);
+    let room = pre.st.players[who].token(bandori_std::fire::KEY)
+        < pre.st.players[who].token_max(bandori_std::fire::KEY);
     if room && dfire != 1 {
         return Err(format!("fire delta {dfire}, expected +1"));
     }
@@ -2211,7 +2213,9 @@ fn better_sound_verifier_rejects_mutants() {
         &events,
         &verify_better_wrap,
         |w| {
-            w.st.players[0].state_set("charge", 0);
+            w.st.players[0]
+                .tokens
+                .retain(|t| t.name != bandori_std::fire::KEY);
         },
     );
     expect_reject(
@@ -2241,7 +2245,7 @@ fn better_sound_verifier_rejects_mutants() {
         &events,
         &verify_better_wrap,
         |w| {
-            w.st.players[0].state_set("charge", 2);
+            w.set_tok(0, "charge", 2, -1, 0);
         },
     );
 }

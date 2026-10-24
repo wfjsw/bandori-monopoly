@@ -7,11 +7,11 @@
 //! and resolve the matching effect; 6 runs 1 through 5 in order. Whatever the
 //! roll, a [停留] layer lands at turn end.
 
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::{CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 pub const NFO: CardDef = CardDef::new(
@@ -21,8 +21,8 @@ pub const NFO: CardDef = CardDef::new(
         // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
         // live in a Filter. Whole offer on `ActionKind::Effect` (payment
         // declaration; `t.value` folds there).
-        On::Action(Action::Effect("", None, Some(gain_guard), gain_bump)),
-        On::Play("", None, None, play),
+        On::Action(Action::Effect("", Some(gain_guard), gain_bump)),
+        On::Play("", None, play),
         // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
         // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
@@ -35,14 +35,14 @@ pub const NFO: CardDef = CardDef::new(
         //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
         //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
         On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_shave)),
-        On::Action(Action::PayAfter("actor == owner && card.placed", None, None, pay_unplace)),
-        On::Action(Action::AtEnd("", None, None, at_end)),
+        On::Action(Action::PayAfter("actor == owner && card.placed", None, pay_unplace)),
+        On::Schedule("at_end", "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)
         .raw_name(r#"NFO"#)
         .tags(&[])
-        .text(r#"投掷1d6并在回合结束后获得一层[停留]。若投掷结果为1，获得1500资金；若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]；若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆；若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出；若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300；若结果为6，依次获得结果1-5的全部效果。（若结果严格大于6，则从1开始重新计数）"#)
+        .text(CardText::para(r#"投掷1d6并在回合结束后获得一层[停留]。若投掷结果为1，获得1500资金；若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]；若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆；若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出；若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300；若结果为6，依次获得结果1-5的全部效果。（若结果严格大于6，则从1开始重新计数）"#))
         // sheet cell E7
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
@@ -78,7 +78,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let k = (roll - 1).rem_euclid(6) + 1;
     // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H._turnCtx.AfterEnd.Add(() =>
     // H.GiveStay(i, 1, i, "NFO"))`; the scheduled body is `at_end`.
-    ctx::at_turn_end(player_id);
+    ctx::at_turn_end(player_id, "at_end");
     if k == 6 {
         // 规则书: 「若结果为6，依次获得结果1-5的全部效果。」
         ctx::effect(player_id, &Msg::new(key!("nfo_effect_all")));
@@ -181,46 +181,36 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- C#
-/// `h.discard.Distinct()` + `H.CanReplay` + `H.AskCard` + `h.discard.Remove` +
-/// `H.PlayCard`, which then applies the card's own `Dest`.
+/// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- distinct discard
+/// titles filtered to the ones [`ctx::query_guard`] admits on
+/// [`ctx::entry::PRESS`], then [`ctx::pick_take_from`] (the card leaves the
+/// discard before it resolves). `H.PlayCard` then applies the card's own `Dest`.
 fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
-    let mut ok: Vec<String> = Vec::new();
-    for id in ctx::cards_in(player_id, ctx::CardPile::Discard) {
-        // C# `where id != Id && H.CanReplay(i, id)` (`Distinct()` drops duplicates).
-        if id == ID || ok.contains(&id) {
-            continue;
-        }
-        if ctx::card_replayable(player_id, &id) {
-            ok.push(id);
-        }
-    }
-    if ok.is_empty() {
-        // C# 「弃卡区没有能打出的卡（NFO）」.
-        ctx::log(player_id, &Msg::new(key!("nfo_no_replay")));
-        return Ok(());
-    }
-    let refs: Vec<&str> = ok.iter().map(|c| c.as_str()).collect();
-    let pick = ctx::ask_card(
+    // Not this card itself, and only cards the press entry admits.
+    let ok = ctx::distinct_cards_in(player_id, ctx::CardPile::Graveyard)
+        .into_iter()
+        .filter(|id| id != ID && ctx::query_guard(player_id, id.as_str(), ctx::entry::PRESS))
+        .collect::<Vec<_>>();
+    let Some(id) = ctx::pick_take_from(
         player_id,
+        ctx::CardPile::Graveyard,
         &Msg::new(key!("nfo_title")),
         &Msg::new(key!("nfo_replay_ask")),
-        &refs,
-    )?;
-    let id = ok.swap_remove(pick.min(ok.len() - 1));
-    // C# `h.discard.Remove(text)` -- the card leaves the discard before it resolves.
-    if !ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
+        Some(&Msg::new(key!("nfo_no_replay"))),
+        &ok,
+    )?
+    else {
         return Ok(());
-    }
+    };
     ctx::log(
         player_id,
         &Msg::new("log.play")
             .player_id("who", player_id)
-            .card("card", &id),
+            .card("card", id.as_str()),
     );
     // C# `H.PlayCard(...)` runs the effect and then applies that card's `Dest`.
-    let dest = ctx::play_card(&id, player_id)?;
-    apply_dest(player_id, &id, dest);
+    let dest = ctx::play_card(id.as_str(), player_id)?;
+    apply_dest(player_id, id.as_str(), dest);
     Ok(())
 }
 
@@ -230,11 +220,10 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
 fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
     match dest {
         ctx::Dest::Graveyard => ctx::to_discard(player_id, id),
-        ctx::Dest::Hand => ctx::add_to_hand(player_id, id),
         ctx::Dest::Field | ctx::Dest::Banished => {}
-        ctx::Dest::DeckTop => ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Top),
-        ctx::Dest::DeckBottom => ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Bottom),
-        ctx::Dest::DeckRandom => ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Random),
+        ctx::Dest::Hand | ctx::Dest::DeckTop | ctx::Dest::DeckBottom | ctx::Dest::DeckRandom => {
+            ctx::add_to_dest(player_id, id, dest)
+        }
     }
 }
 

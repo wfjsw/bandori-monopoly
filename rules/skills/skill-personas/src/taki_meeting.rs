@@ -23,19 +23,16 @@ const USED: &str = "skill.takiMeeting.used";
 pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
-        On::Action(Action::Abnormal("", None, None, on_abnormal)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        On::Action(Action::Abnormal("", None, on_abnormal)),
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            None,
-            reset,
-        )),
+            reset)).silent(),
     ],
 )
-.silent(&[1, 2, 4])
 // 「（初始0，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),
@@ -72,7 +69,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if state::get(player_id, USED) != 0 {
         return Some(Msg::new(key!("taki_meeting_used")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("taki_meeting_no_fire")));
     }
     let _ = player_id;
@@ -94,10 +91,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("taki_meeting_ask")),
         &field
             .iter()
-            .map(|(_, c)| Msg::new(key!("taki_meeting_option")).card("card", c))
+            .map(|(_, c)| Msg::new(key!("taki_meeting_option")).card("card", c.as_str()))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&(uid, ref card)) = field.get(pick) else {
+    let Some(&(uid, card)) = field.get(pick) else {
         return Ok(());
     };
     if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("taki_meeting_spend")))? {
@@ -107,7 +104,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     ctx::add_counter_at(uid, counter::CRYSTALS, 1, 0);
     ctx::log(
         player_id,
-        &Msg::new(key!("taki_meeting_added")).card("card", card),
+        &Msg::new(key!("taki_meeting_added")).card("card", card.as_str()),
     );
     Ok(())
 }

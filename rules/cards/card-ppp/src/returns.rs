@@ -29,6 +29,8 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, CardPile};
+use card_sdk::ctx::{intern, NameId};
+use card_sdk::{CardText, it, items, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:Returns";
@@ -46,30 +48,38 @@ pub const RETURNS: CardDef = CardDef::new(
         // states the actor; the residual guard names the 通用 card. The body
         // used to re-check the actor and the prefix and return early -- a flash
         // per non-通用 play by the owner.
-        On::Action(Action::CardPlayed(card_sdk::pre::MINE, None, Some(on_played_is_general), on_played)),
+        On::Action(Action::CardPlayed(card_sdk::pre::MINE, Some(on_played_is_general), on_played)),
         // [持续]（2）「每回合开始时选择一个其他存活玩家的团卡」 -- the offer
         // exists only while Returns is placed and some other survivor has a
         // band card to borrow. Derived scans (pool + `is_placed`), residual.
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, Some(choose_band_applies), choose_band)),
+        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, Some(choose_band_applies), choose_band)),
         // [特]（1）「如果此卡被加入初始卡组则卡组卡数添加8」 -- the +8 is
         // unconditional on the rulebook, but the pick prompt only exists when
         // the pool can feed eight draws. Empty pool = no offer, no flash.
-        On::Action(Action::DeckBeforeGame("", None, Some(deck_pool_ready), deck_before_game)),
-        On::Action(Action::DeckAtGameStart("trigger_card == card.id", None, None, deck_at_game_start)),
+        On::Action(Action::DeckBeforeGame("", Some(deck_pool_ready), deck_before_game)),
+        On::Action(Action::DeckAtGameStart("trigger_card == card.id", None, deck_at_game_start)),
     ],
 )
     .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Returns"#)
         .raw_name(r#"Returns"#)
         .tags(&[r#"持续"#, r#"特"#])
-        .text(r#"[特]：
-（1）如果此卡被加入初始卡组则卡组卡数添加8。
-（2）游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个其他存活玩家的团卡。
-[持续]：
-（1）无效[拥有者]Poppin' Party团卡的（4）效果。
-（2）[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]。
-（3）使用因此卡获得的团卡的主动效果时需要支付1星星贴纸。
-（4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。"#)
+        .text(CardText::of(&[
+            sec(r#"[特]："#, &[
+                items(&[
+                    it(r#"如果此卡被加入初始卡组则卡组卡数添加8。"#),
+                    it(r#"游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个其他存活玩家的团卡。"#),
+                ]),
+            ]),
+            sec(r#"[持续]："#, &[
+                items(&[
+                    it(r#"无效[拥有者]Poppin' Party团卡的（4）效果。"#),
+                    it(r#"[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]。"#),
+                    it(r#"使用因此卡获得的团卡的主动效果时需要支付1星星贴纸。"#),
+                    it(r#"[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。"#),
+                ]),
+            ]),
+        ]))
         // sheet cell B5
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
@@ -120,13 +130,13 @@ fn exclusive_of(player_id: i32) -> Option<&'static str> {
 }
 
 /// C# `DeckRules.Pool(c)` ids minus anything already in the draw pile or hand.
-fn pool_for(player_id: i32) -> Vec<String> {
-    let mut have: Vec<String> = ctx::cards_in(player_id, CardPile::Deck);
+fn pool_for(player_id: i32) -> Vec<NameId> {
+    let mut have: Vec<NameId> = ctx::cards_in(player_id, CardPile::Deck);
     have.extend(ctx::cards_in(player_id, CardPile::Hand));
-    let mut out: Vec<String> = Vec::new();
-    let push = |id: &'static str, out: &mut Vec<String>| {
-        if !have.iter().any(|h| h == id) && !out.iter().any(|o| o == id) {
-            out.push(String::from(id));
+    let mut out: Vec<NameId> = Vec::new();
+    let push = |id: &'static str, out: &mut Vec<NameId>| {
+        if !have.iter().any(|h| *h == id) && !out.iter().any(|o| *o == id) {
+            out.push(intern(id));
         }
     };
     if let Some(ex) = exclusive_of(player_id) {
@@ -174,7 +184,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
         let id = pool.remove(index);
         // C# `h.draw.Add(pool[index])` then `H.Shuffle(h.draw)` at the end; each
         // insert here shuffles, which leaves the same shuffled pile.
-        ctx::add_to_deck(player_id, &id, true);
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckRandom);
         added += 1;
     }
     ctx::log(
@@ -193,8 +203,8 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
 fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     // `trigger_card == card.id` owns "this card was opened".
     // C# `hidden.draw.Remove(Id) || hidden.hand.Remove(Id)` then `H.PlaceCard`.
-    if !ctx::take_card(player_id, CardPile::Deck, ID)
-        && !ctx::take_card(player_id, CardPile::Hand, ID)
+    if !ctx::take_card(player_id, ID, CardPile::Deck)
+        && !ctx::take_card(player_id, ID, CardPile::Hand)
     {
         return Ok(());
     }
@@ -206,7 +216,7 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PROP_FROM, -1);
     // [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果」 -- arm the token
     // `skill-groups::poppin` reads to skip its no-build-on-main-settle rule.
-    ctx::set_tok(player_id, "returns.noBuild4", 1);
+    ctx::set_tok(player_id, "returns.noBuild4", 1, 0, -1);
     ctx::log(
         player_id,
         &Msg::new(key!("returns_placed")).player_id("who", player_id),
@@ -241,7 +251,9 @@ fn on_played_is_general(_player_id: i32) -> bool {
     ctx::trigger::cards()
         .into_iter()
         .next()
-        .is_some_and(|id| id.starts_with("通用") || id.starts_with("G:"))
+        // `as_str().starts_with` is a memcmp — fine in production, a CBMC
+        // unwind cliff under Kani. Compare whole ids where the book allows.
+        .is_some_and(|id| id.as_str().starts_with("通用") || id.as_str().starts_with("G:"))
 }
 
 /// （4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.
@@ -414,7 +426,7 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     // `copy_sticker_gate` keys on this uid, not on "a borrow exists" -- the
     // owner's own band card sits beside the copy and its presses are free.
     // (`returns.copied` was the old "any borrow" flag; nothing reads it now.)
-    ctx::set_tok(player_id, "returns.borrow_uid", borrowed);
+    ctx::set_tok(player_id, "returns.borrow_uid", borrowed, 0, -1);
     ctx::log(
         player_id,
         &Msg::new(key!("returns_got_band")).card("card", want),

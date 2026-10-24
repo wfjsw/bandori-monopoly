@@ -5,6 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, text_slot, ActionKind, Message, Target};
+use card_sdk::{CardText};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -22,33 +23,36 @@ const CIRCLE_RULE: &str = "tile:circle";
 pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     "event:协助CiRCLE重建",
     &[
-        On::Play("", None, None, play),
+        On::Play("", None, play),
         // 「每次有人经过CiRCLE时」 / 「CiRCLE的[触发结算]」 -- the two tiles this
         // event re-homes are the hooks' applicability, not their effect. The
         // body-top tile check is the condition now (`is_start(tile.id)` and
         // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
         // bail stays a residual guard (not in the CEL schema).
-        On::Action(Action::PassTile("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, None, on_pass)),
-        On::Action(Action::SettleBody("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, Some(settle_applies), on_settle_body)),
+        // Deed-popup text (`docs/TILES.md` 「Tile text」): one hook covers both
+        // tiles, so the text hangs off the hook entries and names its tile.
+        // While the event is up these replace `tile:circle` / `tile:event`'s
+        // base texts -- CiRCLE's settle becomes the rebuild choice, its
+        // [经过] reward is suppressed (it is re-homed onto the cafe), and the
+        // cafe inherits CiRCLE's original texts. When the event expires its
+        // instance disappears and the base texts win again. PassTile speaks
+        // for the [经过] half.
+        On::Action(Action::PassTile("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", None, on_pass))
+            .texts(&[
+                (text_slot::PASS, "CiRCLE", ""),
+                (text_slot::PASS, CAFE, "deed.note.circlePass"),
+            ]),
+        // SettleBody speaks for the [结算] half.
+        On::Action(Action::SettleBody("tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')", Some(settle_applies), on_settle_body))
+            .texts(&[
+                (text_slot::SETTLE, "CiRCLE", "deed.note.rebuildSettle"),
+                (text_slot::SETTLE, CAFE, "deed.note.draw"),
+            ]),
     ],
 )
-// Deed-popup text (`docs/TILES.md` 「Tile text」): one hook covers both tiles,
-// so the text hangs off the hook entries and names its tile. While the event
-// is up these replace `tile:circle` / `tile:event`'s base texts -- CiRCLE's
-// settle becomes the rebuild choice, its [经过] reward is suppressed (it is
-// re-homed onto the cafe), and the cafe inherits CiRCLE's original texts.
-// When the event expires its instance disappears and the base texts win again.
-.texts(&[
-    // PassTile (entry 1) speaks for the [经过] half.
-    (1, text_slot::PASS, "CiRCLE", ""),
-    (1, text_slot::PASS, CAFE, "deed.note.circlePass"),
-    // SettleBody (entry 2) speaks for the [结算] half.
-    (2, text_slot::SETTLE, "CiRCLE", "deed.note.rebuildSettle"),
-    (2, text_slot::SETTLE, CAFE, "deed.note.draw"),
-])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"协助CiRCLE重建"#)
-            .text(r#"将此卡放置于场地中央，为其放置5个奇迹水晶，每次有人经过CiRCLE时移除一个，为0时放入事件弃牌，期间CiRCLE的[触发结算]改为选择获得2层[停留]或失去500资金（该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果），CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果"#)
+            .text(CardText::para(r#"将此卡放置于场地中央，为其放置5个奇迹水晶，每次有人经过CiRCLE时移除一个，为0时放入事件弃牌，期间CiRCLE的[触发结算]改为选择获得2层[停留]或失去500资金（该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果），CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果"#))
             // sheet cell A8
             .derived(false));
 
@@ -88,7 +92,7 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
     if ctx::is_start(at) {
         // 「移除一个」 -- `ctx::decay` burns one crystal of this instance.
-        let left = ctx::decay()?;
+        let left = ctx::remove_crystal()?;
         // 「为0时放入事件弃牌」
         if left <= 0 {
             expire(ID);

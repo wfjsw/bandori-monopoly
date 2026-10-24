@@ -5,9 +5,9 @@
 // ```ignore
 // On::Filter(Filter::DiceRollPlan(pre, guard, body)),
 // On::Filter(bandori_std::kind::Filters::MyRewrite(pre, guard, body)),
-// On::Action(Action::TurnStart(pre, counter_reason, guard, body)),
-// On::Action(Actions::Exile(pre, counter_reason, guard, body)),
-// On::Play(pre, reason, guard, body),   // and the other non-Filter variants
+// On::Action(Action::TurnStart(pre, guard, body).counter_reason(..)),
+// On::Action(Actions::Exile(pre, guard, body).counter_reason(..)),
+// On::Play(pre, why_not, body).counter_reason(..),   // and the other non-Filter variants
 // ```
 //
 // Included by `build.rs` (body trampolines) and `tests/on_parse.rs` (loud-miss
@@ -24,6 +24,10 @@ use std::collections::HashMap;
 pub enum BodyShape {
     /// `fn(i32) -> Asked` — Play / Counteract / Action / Settle / …
     Action,
+    /// `fn(i32, i32) -> Asked` — an entry carrying `On::declare_arg`'s
+    /// activation-argument body (docs/ACTIVATION.md §2). The trampoline passes
+    /// an unconstrained `kani::any()` as the arg.
+    ActionArg,
     /// `fn(i32, i32) -> i32`
     Value,
     /// `fn(i32, i32) -> bool`
@@ -90,6 +94,7 @@ const ACTIONISH: &[&str] = &[
     "Buy",
     "Build",
     "Message",
+    "Schedule",
 ];
 
 /// Retired `On` variants / types. A hit is a build error — never a silent skip.
@@ -393,6 +398,10 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             } else {
                 BodyShape::Action
             };
+            // A chained `.declare(...)` / `.declare_arg(pick, body)` is part of
+            // the same registration (docs/ACTIVATION.md §2). `.declare_arg`
+            // replaces the constructor body with an `fn(i32, i32) -> Asked`.
+            let (body, shape) = apply_declare(src, j, body, shape);
             bodies.push(OnBody {
                 variant: variant.clone(),
                 kind: Some(kind),
@@ -410,11 +419,12 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
                     "on_parse: `On::{variant}` last arg `{last}` is not a body ident (byte {start})"
                 );
             };
+            let (body, shape) = apply_declare(src, j, body, BodyShape::Action);
             bodies.push(OnBody {
                 variant,
                 kind: None,
                 body,
-                shape: BodyShape::Action,
+                shape,
             });
         } else {
             // Unknown On variant: skip (other arms of the enum may appear in
@@ -425,11 +435,49 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
     bodies
 }
 
+/// Fold a chained `On::declare` / `On::declare_arg` into one registration.
+/// `after` is the byte just past `On::X(...)`'s closing paren.
+///
+/// * `.declare(pick)` -- decline-only; the body stays `fn(i32) -> Asked`.
+/// * `.declare_arg(pick, body)` -- the body becomes `fn(i32, i32) -> Asked`
+///   and the trampoline must hand it an arg.
+fn apply_declare(
+    src: &str,
+    after: usize,
+    body: String,
+    shape: BodyShape,
+) -> (String, BodyShape) {
+    let tail = src[after..].trim_start();
+    if let Some(rest) = tail.strip_prefix(".declare_arg(") {
+        // `rest` starts *inside* the call; `paren_end` indexes the `(` itself,
+        // which sits immediately before `rest` within `tail`.
+        let open = tail.len() - rest.len() - 1;
+        // Second argument is the replacement body ident.
+        let Some(end) = paren_end(tail, open) else {
+            return (body, shape);
+        };
+        let args = split_args(&tail[open + 1..end - 1]);
+        if args.len() < 2 {
+            return (body, shape);
+        }
+        if let Some(ident) = body_ident(args[1].trim()) {
+            return (ident, BodyShape::ActionArg);
+        }
+        return (body, shape);
+    }
+    if tail.starts_with(".declare(") {
+        // Decline-only: body unchanged.
+        return (body, shape);
+    }
+    (body, shape)
+}
+
 /// Trampoline second-argument default for a filter body. `Action` has no
 /// second argument.
 pub fn default_expr(shape: BodyShape) -> &'static str {
     match shape {
         BodyShape::Action => "/* action: no second arg */",
+        BodyShape::ActionArg => "/* action-arg: second arg is the activation arg */",
         BodyShape::Value | BodyShape::Flag => "0",
         BodyShape::Gate => "card_sdk::GateValue::default()",
         BodyShape::Plan => "card_sdk::PlanValue::default()",
@@ -444,6 +492,7 @@ pub fn default_expr(shape: BodyShape) -> &'static str {
 ///
 /// - `On::Filter` / `On::Action`: `pre` is ctor arg 1 of the inner
 ///   `Ns::Kind(pre, …)` call.
+/// - `On::Schedule(id, pre, …)`: `pre` is the second top-level argument.
 /// - Everything else: the first top-level argument (string literal or
 ///   `pre::MINE` / guard const).
 pub fn on_pre_string(after_on: &str) -> Option<String> {
@@ -463,7 +512,9 @@ pub fn on_pre_string(after_on: &str) -> Option<String> {
         let first = args.iter().find(|p| !p.trim().is_empty())?;
         return pre_string(first.trim());
     }
-    // Flat args: first top-level arg is pre.
+    // Flat args: first top-level arg is pre (second for `On::Schedule(id, pre, …)`,
+    // whose leading id slug is not a condition -- callers that care pass the
+    // second arg via `pre_string` on the split list).
     // `after_on` starts *inside* the outer `(`, so depth 0 + `)` is the closer.
     let mut depth = 0usize;
     let mut j = 0;
@@ -483,6 +534,27 @@ pub fn on_pre_string(after_on: &str) -> Option<String> {
     pre_string(first.trim())
 }
 
+/// `On::Schedule`'s `pre` (second ctor arg) -- the leading id slug is skipped.
+pub fn on_schedule_pre_string(after_on: &str) -> Option<String> {
+    let b = after_on.as_bytes();
+    let mut depth = 0usize;
+    let mut j = 0;
+    while j < b.len() {
+        if b[j] == b'(' {
+            depth += 1;
+        } else if b[j] == b')' {
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        }
+        j += 1;
+    }
+    let args = split_args(&after_on[..j]);
+    let second = args.iter().filter(|p| !p.trim().is_empty()).nth(1)?;
+    pre_string(second.trim())
+}
+
 /// `pre` argument: a string literal, `pre::MINE`, or a known guard const.
 /// (Also used for the flat `On::Play(pre, …)` shape.)
 pub fn pre_string(s: &str) -> Option<String> {
@@ -490,19 +562,14 @@ pub fn pre_string(s: &str) -> Option<String> {
     if rest.starts_with("pre::MINE") {
         return Some("actor == owner".to_string());
     }
-    for (name, lit) in [
-        (
-            "bandori_std::guards::OWN_START",
-            "actor == owner && tile_is(tile.id, \"circle\")",
-        ),
-        (
-            "bandori_std::guards::OWN_DEED",
-            "actor == owner && tile_is(tile.id, \"ring\")",
-        ),
-    ] {
-        if rest.starts_with(name) {
-            return Some(lit.to_string());
-        }
+    // Known guard-const path references (`bandori_std::guards::OWN_START`, …)
+    // resolve through the installed extension.
+    let path_end = rest
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == ':' || c == '_'))
+        .unwrap_or(rest.len());
+    let path = &rest[..path_end];
+    if let Some(lit) = rules_cond::ext::vocab().guard_const(path) {
+        return Some(lit.to_string());
     }
     // First string literal (handles `\"` escapes).
     let bytes = rest.as_bytes();

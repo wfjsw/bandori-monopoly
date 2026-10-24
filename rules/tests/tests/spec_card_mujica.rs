@@ -1163,9 +1163,9 @@ fn sakiko_fire_cap_is_three() {
     let mut t = mujica_table(2, 0, "丰川祥子");
     t.place_raw(0, SKILL_SAKIKO);
     t.set_fire(0, 0, 3);
-    let v = t.state_var(0, "charge");
-    if v.max != 3 {
-        panic!("丰川祥子 fire cap {}, expected 3 (上限3)", v.max);
+    let v = t.charge_max(0);
+    if v != 3 {
+        panic!("丰川祥子 fire cap {}, expected 3 (上限3)", v);
     }
 }
 
@@ -1175,9 +1175,9 @@ fn umiri_fire_cap_is_four() {
     let mut t = mujica_table(2, 0, "八幡海铃");
     t.place_raw(0, SKILL_UMIRI);
     t.set_fire(0, 0, 4);
-    let v = t.state_var(0, "charge");
-    if v.max != 4 {
-        panic!("八幡海铃 fire cap {}, expected 4 (上限4)", v.max);
+    let v = t.charge_max(0);
+    if v != 4 {
+        panic!("八幡海铃 fire cap {}, expected 4 (上限4)", v);
     }
 }
 
@@ -1187,9 +1187,9 @@ fn nyamu_fire_cap_is_five() {
     let mut t = mujica_table(2, 0, "祐天寺若麦");
     t.place_raw(0, SKILL_NYAMU);
     t.set_fire(0, 0, 5);
-    let v = t.state_var(0, "charge");
-    if v.max != 5 {
-        panic!("祐天寺若麦 fire cap {}, expected 5 (上限5)", v.max);
+    let v = t.charge_max(0);
+    if v != 5 {
+        panic!("祐天寺若麦 fire cap {}, expected 5 (上限5)", v);
     }
 }
 
@@ -1199,9 +1199,9 @@ fn uika_fire_cap_is_three() {
     let mut t = mujica_table(2, 0, "三角初华");
     t.place_raw(0, SKILL_UIKA);
     t.set_fire(0, 0, 3);
-    let v = t.state_var(0, "charge");
-    if v.max != 3 {
-        panic!("三角初华 fire cap {}, expected 3 (火罐上限3)", v.max);
+    let v = t.charge_max(0);
+    if v != 3 {
+        panic!("三角初华 fire cap {}, expected 3 (火罐上限3)", v);
     }
 }
 

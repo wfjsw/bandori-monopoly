@@ -1045,6 +1045,9 @@ impl Match {
     }
 
     /// Events with id greater than `last_id` (`EventsSince`).
+    ///
+    /// Clones each event (several heap strings per row) -- take
+    /// [`Match::events_since_ref`] when the caller only reads them.
     pub fn events_since(&self, last_id: i32) -> Vec<MatchEvent> {
         self.world
             .recent
@@ -1052,6 +1055,15 @@ impl Match {
             .filter(|e| e.id > last_id)
             .cloned()
             .collect()
+    }
+
+    /// Events with id greater than `last_id`, borrowed -- no `MatchEvent`
+    /// clone. Same shape as [`Match::hand_len_first`]: the non-cloning
+    /// sibling of [`Match::events_since`] for callers that only scan, find,
+    /// or map keys. The owned form stays for JSON / SSE / snapshot boundaries
+    /// that need a `Vec<MatchEvent>`.
+    pub fn events_since_ref(&self, last_id: i32) -> impl Iterator<Item = &MatchEvent> + '_ {
+        self.world.recent.iter().filter(move |e| e.id > last_id)
     }
 
     fn player_index(&self, member: i32) -> Option<usize> {
@@ -1180,7 +1192,7 @@ impl Match {
     pub fn draw_of(&self, member: i32) -> Vec<String> {
         let mut v = self
             .player_index(member)
-            .map(|i| self.world.hidden[i].draw.clone())
+            .map(|i| self.world.hidden[i].deck.clone())
             .unwrap_or_default();
         v.sort();
         v
@@ -2264,6 +2276,7 @@ impl Match {
             }
         } else {
             let picks = matches!(l.kind(), "pick" | "mortgage");
+            let multi = l.kind() == "multi";
             let fallback = l.ask.view.fallback;
             let max = if l.kind() == "tile" {
                 l.ask.view.items.len() as i32
@@ -2280,6 +2293,18 @@ impl Match {
                         if picks {
                             l.picked = l.ask.ai_picked[k].clone();
                             l.answers[k] = 0;
+                        } else if multi {
+                            // A bitmask answer must not be clamped to an option
+                            // index (that would destroy e.g. `0b0111`). Take
+                            // the precomputed mask when it is already valid;
+                            // otherwise the prompt's valid fallback mask.
+                            let v = l.ask.ai[k];
+                            let n = l.ask.view.options.len().min(31) as i32;
+                            let ok = v >= 0
+                                && n > 0
+                                && (v >> n) == 0
+                                && v.count_ones() as i32 == l.ask.view.count;
+                            l.answers[k] = if ok { v } else { fallback };
                         } else {
                             l.answers[k] = l.ask.ai[k].clamp(0, max.max(0));
                         }
@@ -2568,6 +2593,19 @@ impl Match {
                     return Err(Msg::new("err.no_option"));
                 }
                 l.answers[k] = v;
+            }
+            "multi" => {
+                // Bitmask of exactly `count` distinct options. The popcount
+                // check is the "cannot select one effect twice" guarantee.
+                let n = l.ask.view.options.len() as i32;
+                let bits = m.value;
+                if n <= 0 || bits < 0 || (bits >> n) != 0 {
+                    return Err(Msg::new("err.no_option"));
+                }
+                if bits.count_ones() as i32 != l.ask.view.count {
+                    return Err(Msg::new("err.pick_count").i("n", l.ask.view.count));
+                }
+                l.answers[k] = bits;
             }
             _ => {
                 if m.value < 0 || m.value as usize >= l.ask.view.options.len() {

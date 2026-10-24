@@ -8,18 +8,17 @@
 //! > （3）若自己场上背面朝上放置的卡为[反击]卡，可在符合条件时将其直接打出。
 //!
 //! 「背面朝上放置在自己场上」 is a face-down field card, which is what
-//! `card_face_down` reads and `set_dest(Dest::Field)` + `place_card` writes.
+//! `card_face_down` reads and `set_dest(ctx::Dest::Field)` + `place_card` writes.
 //! (2) and (3) are both keyed on that flag.
 //!
 //! (1) 「若选择抽卡」 is the CiRCLE reward being the card, which is the
 //! `passRewardAffected` moment -- the reward has been chosen, and this skill
 //! rewrites the draw it implies.
 
-use alloc::string::String;
-
 use bandori_std::ctx;
 use bandori_std::kind::Actions;
 use card_sdk::abi::CardPile;
+use card_sdk::ctx::NameId;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AKAO_COOL: CardDef = CardDef::new(
@@ -27,14 +26,12 @@ pub const AKAO_COOL: CardDef = CardDef::new(
     &[On::Action(Actions::PassRewardAffected(
         card_sdk::pre::MINE,
         None,
-        None,
-        on_circle,
-    ))],
+        on_circle))],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 /// Face-down cards this player has on the field.
-fn face_down(player_id: i32) -> alloc::vec::Vec<(i32, String)> {
+fn face_down(player_id: i32) -> alloc::vec::Vec<(i32, NameId)> {
     ctx::field_instances(player_id)
         .into_iter()
         .filter(|(uid, _)| ctx::is_face_down_at(*uid))
@@ -50,10 +47,10 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     if !down.is_empty() {
         for (uid, c) in down {
             ctx::unplace_at(uid);
-            ctx::add_to_hand(player_id, &c);
+            ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Hand);
             ctx::log(
                 player_id,
-                &Msg::new(key!("akao_cool_taken")).card("card", &c),
+                &Msg::new(key!("akao_cool_taken")).card("card", c.as_str()),
             );
         }
         return Ok(());
@@ -65,44 +62,44 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let n = deck.len().min(2);
-    let look: alloc::vec::Vec<String> = deck[..n].to_vec();
+    let look: alloc::vec::Vec<NameId> = deck[..n].to_vec();
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("akao_cool_title")),
         &Msg::new(key!("akao_cool_ask")),
         &look
             .iter()
-            .map(|c| Msg::new(key!("akao_cool_option")).card("card", &c))
+            .map(|c| Msg::new(key!("akao_cool_option")).card("card", c.as_str()))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(keep) = look.get(pick).cloned() else {
+    let Some(&keep) = look.get(pick) else {
         return Ok(());
     };
-    if !ctx::take_card(player_id, CardPile::Deck, &keep) {
+    if !ctx::take_card(player_id, keep.as_str(), CardPile::Deck) {
         return Ok(());
     }
-    ctx::add_to_hand(player_id, &keep);
+    ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
     // 「剩余的卡放入弃牌堆或花费500资金将其背面朝上放置在自己场上」
     for c in look.iter().filter(|c| **c != keep) {
         let paid = ctx::ask_yes(
             player_id,
             &Msg::new(key!("akao_cool_place_title")),
-            &Msg::new(key!("akao_cool_place_ask")).card("card", c),
+            &Msg::new(key!("akao_cool_place_ask")).card("card", c.as_str()),
         )?;
         if paid && ctx::pay(player_id, 500, &Msg::new(key!("akao_cool_place_pay")))? > 0 {
             ctx::set_dest(ctx::Dest::Field);
             // Hold the uid `place_card` hands back: this is 「此卡」 -- the copy
             // just placed -- and re-resolving `c` by name would pick whichever
             // copy of that id is first on the field.
-            let uid = ctx::place_card(player_id, c, &Msg::new(key!("akao_cool_note")));
+            let uid = ctx::place_card(player_id, c.as_str(), &Msg::new(key!("akao_cool_note")));
             ctx::set_face_down_at(uid, true);
             ctx::log(
                 player_id,
-                &Msg::new(key!("akao_cool_placed")).card("card", &c),
+                &Msg::new(key!("akao_cool_placed")).card("card", c.as_str()),
             );
         } else {
-            ctx::take_card(player_id, CardPile::Deck, c);
-            ctx::to_discard(player_id, c);
+            ctx::take_card(player_id, c.as_str(), CardPile::Deck);
+            ctx::to_discard(player_id, c.as_str());
         }
     }
     Ok(())

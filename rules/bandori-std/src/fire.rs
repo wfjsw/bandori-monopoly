@@ -14,8 +14,11 @@
 //!
 //! ## Clause-by-clause
 //!
-//! * **「技能指示物」** -- 火罐 is a named counter on the player, capped by
-//!   the character skill's 「持有上限」.
+//! * **「技能指示物」** -- 火罐 is a named counter **of the persona-skill
+//!   instance**, held by the player, capped by that face's 「持有上限」.
+//!   Storage is the seat's `tokens` row (`name = "charge"`, `instance =
+//!   persona-skill uid`); the row dies with the skill instance
+//!   (`destroy_instance_units`).
 //! * **「在任意时刻，您持有的火罐数量不能超过持有上限」** -- I2. This kernel
 //!   polices the cap (the engine stores the advertised `max` for display but
 //!   does **not** clamp to it). Gain is partial (at most up to the cap); a cap
@@ -33,7 +36,7 @@
 //! 火罐 does not set any player gate -- it is a resource, not a status
 //! marker. The cap is the only bound.
 
-use crate::ctx::{self, state};
+use crate::ctx;
 use card_sdk::abi::TriggerKind;
 use card_sdk::{Msg, Prompt};
 
@@ -63,13 +66,49 @@ pub const FIRE_CAP: &str = "fireCap";
 
 // ------------------------------------------------------------- storage keys
 
-/// The state key this host owns (frozen webui wire).
+/// The held-token name this kernel owns (frozen webui wire).
 pub const KEY: &str = "charge";
 
 /// lisa's 「可超过上限的临时火罐」 -- a second declared counter of the same
-/// instance (MARKERS.md §7). Storage stays the named state key; writes go
-/// through [`temp`] so no card invents a free key.
+/// instance (MARKERS.md §7). Storage is a second `tokens` row of the persona
+/// skill; writes go through [`temp`] so no card invents a free key.
 pub const TEMP_KEY: &str = "tempFire";
+
+// ------------------------------------------------------------- ownership
+
+/// The persona-skill field instance that owns this seat's fire pools.
+/// Resolved through the existing guest lookup (`persona_skill` + `find_card`)
+/// -- no dedicated host import. -1 when the seat has no persona skill.
+fn skill_uid(player_id: i32) -> i32 {
+    let Some(skill) = ctx::persona_skill(player_id) else {
+        return -1;
+    };
+    ctx::find_card(player_id, &skill).unwrap_or(-1)
+}
+
+/// Does a live row already exist? A declared pool keeps its row even at
+/// `value == 0` (the `max > 0` latch); an undeclared name has neither.
+fn row_live(player_id: i32, name: &str) -> bool {
+    ctx::tok(player_id, name) > 0 || ctx::tok_max(player_id, name) > 0
+}
+
+/// Can this seat hold fire? A persona-skill instance owns the pool; a row
+/// that is already live (declared, or arranged by a test harness) is also
+/// writable so guests do not have to re-bind it. A seat with neither owns no
+/// pots -- every write is a no-op and every read is 0.
+fn writable(player_id: i32) -> bool {
+    skill_uid(player_id) >= 0 || row_live(player_id, KEY)
+}
+
+/// Write the named row of the persona-skill instance. `max` is the production
+/// tri-state: `>= 0` writes that ceiling (0 clears it and drops the row),
+/// `< 0` leaves any stored ceiling alone. Used by `adjust_cap` even before a
+/// pool exists (it advertises the ceiling); `gain` / `spend` go through
+/// [`writable`].
+fn set_row(player_id: i32, name: &str, value: i32, max: i32) {
+    let uid = skill_uid(player_id);
+    ctx::set_tok(player_id, name, value, max, uid);
+}
 
 // ------------------------------------------------------------- pure policy
 
@@ -94,12 +133,18 @@ pub fn pull_under_cap(have: i32, cap: i32) -> i32 {
 
 /// 火罐 held (the capped pool; does not include [`temp`]).
 pub fn get(player_id: i32) -> i32 {
-    crate::ctx::charge(player_id)
+    if !writable(player_id) {
+        return 0;
+    }
+    ctx::tok(player_id, KEY)
 }
 
 /// The declared cap (0 = none declared).
 pub fn max(player_id: i32) -> i32 {
-    crate::ctx::charge_max(player_id)
+    if !writable(player_id) {
+        return 0;
+    }
+    ctx::tok_max(player_id, KEY)
 }
 
 /// Total pots the seat can spend: the pool plus any live temp pots
@@ -121,36 +166,45 @@ fn face_bounds(skill: &str) -> (i32, i32) {
 
 /// Write the face's 「（初始N，上限M）」.
 ///
-/// The `state_set_bounds` write is the **advertisement** (the UI shows
-/// 「3/5」 from it); the engine stores it and does not police it. The cap is
-/// written **only when unset** (0), so a later [`adjust_cap`]
-/// (「火罐上限加1」) survives the per-turn re-hook. Initial is created at
-/// `DeckAtGameStart` only (where 「初始N」 belongs).
+/// The `Counter.max` write is the **advertisement** (the UI shows 「3/5」 from
+/// it); the engine stores it and does not police it. The cap is written
+/// **only when the token row does not yet exist**, so a later [`adjust_cap`]
+/// (「火罐上限加1」) survives the per-turn re-hook -- the live row *is* the
+/// "already declared" latch. Initial is created at `DeckAtGameStart` only
+/// (where 「初始N」 belongs).
 ///
 /// For a swap / overlay that must **replace** the previous face's numbers,
 /// use [`redeclare`].
 pub fn declare(player_id: i32, initial: i32, cap: i32) {
-    if state::max(player_id, KEY) == 0 {
-        state::set_bounds(player_id, KEY, 0, cap.max(0));
+    if !writable(player_id) {
+        return;
+    }
+    // Cap only on first declaration (row absent). A per-turn `TurnStartBefore`
+    // re-hook finds the live row and leaves the ceiling alone -- `adjust_cap`'s
+    // 「火罐上限加1」 must survive it.
+    if !row_live(player_id, KEY) {
+        set_row(player_id, KEY, 0, cap.max(0));
+    } else {
+        // Row already live (an `adjust_cap` ceiling, or a swap remnant): keep
+        // its ceiling and value, but re-stamp the owner so it still dies with
+        // the persona-skill instance.
+        set_row(player_id, KEY, get(player_id), -1);
     }
     if ctx::trigger::kind() == TriggerKind::DeckAtGameStart {
-        state::set(player_id, KEY, initial.clamp(0, cap.max(0)));
+        let live = max(player_id);
+        set_row(player_id, KEY, initial.clamp(0, live.max(0)), live);
     }
 }
 
 /// Force-write the face's numbers (swap 「替换为…及其初始火罐数」, mutsumi's
-/// 「获得其初始火罐」 overlay). Pulls the value under the new cap (I2).
+/// 「获得其初始火罐」 overlay). Pulls the value under the new cap (I2) and
+/// rebinds the row to the persona-skill instance.
 pub fn redeclare(player_id: i32, initial: i32, cap: i32) -> i32 {
     let cap = cap.max(0);
-    // Advertisement: the stored ceiling the UI reads back.
-    state::set_bounds(player_id, KEY, 0, cap);
-    let have = get(player_id);
     let want = pull_under_cap(initial, cap);
     // On a swap the face's 初始 is the new pool; on an overlay it is the
     // borrowed face's 初始. Either way the written value is the declaration.
-    if have != want {
-        state::set(player_id, KEY, want);
-    }
+    set_row(player_id, KEY, want, cap);
     want
 }
 
@@ -210,6 +264,9 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
     if n <= 0 {
         return Ok(0);
     }
+    if !writable(player_id) {
+        return Ok(0);
+    }
     // I2: clamp here, not in the engine. `max == 0` (no declaration) refuses
     // (an undeclared resource cannot be gained).
     let have = get(player_id);
@@ -228,10 +285,15 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
         );
         return Ok(0);
     }
+    // Ensure the row is bound to the persona-skill instance before the dumb
+    // add (a fresh row would otherwise stamp the guest's uid).
+    if !row_live(player_id, KEY) {
+        set_row(player_id, KEY, 0, cap);
+    }
     // Window payload is the actual `want` (the amount that will land);
     // a cancelled window writes nothing. The host verb is a dumb add and
     // logs `log.gain_charge` with the actual.
-    crate::ctx::gain_charge(player_id, want, why)
+    ctx::gain_marker(player_id, KEY, want, why)
 }
 
 /// Spend `n` pots. `ChargePaying` runs first (spend substitution 「以代替此次
@@ -249,6 +311,9 @@ pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
     }
+    if !writable(player_id) {
+        return Ok(false);
+    }
     let from_temp = temp::get(player_id).min(n);
     let from_pool = n - from_temp;
     // Temp first: the over-cap allowance is spent before the declared pool.
@@ -256,23 +321,38 @@ pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
         temp::spend(player_id, from_temp, why)?;
     }
     if from_pool > 0 {
-        // Opens ChargePaying + markerSpend for `from_pool`, then writes.
-        // A substitution cancels the write and counts as paid.
-        return crate::ctx::spend_charge(player_id, from_pool, why);
+        return spend_pool(player_id, from_pool, why);
     }
     Ok(true)
 }
 
-/// Move the cap by `n`; pulls the value down under the new ceiling (I2
-/// 「在任意时刻」). The host verb only moves the advertised ceiling -- the
-/// pull-under is this kernel's job. Returns the new cap.
-pub fn adjust_cap(player_id: i32, n: i32) -> i32 {
-    let cap = crate::ctx::add_charge_max(player_id, n);
-    let have = get(player_id);
-    let want = pull_under_cap(have, cap);
-    if have != want {
-        state::set(player_id, KEY, want);
+/// Pool-only spend (never temp): `ChargePaying` then `markerSpend`, then the
+/// write. The substitution window opens **even when the pool is empty**.
+fn spend_pool(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+    if n <= 0 {
+        return Ok(true);
     }
+    if !ctx::raise(player_id, crate::kind::ChargePaying, n)? {
+        return Ok(true);
+    }
+    Ok(ctx::spend_marker(player_id, KEY, n, why)? != 0)
+}
+
+/// Move the cap by `n`; pulls the value down under the new ceiling (I2
+/// 「在任意时刻」). Returns the new cap.
+///
+/// Allowed even when the seat has no fire skill (「此卡拥有者火罐上限加1」
+/// creates the ceiling over a baseline of 0); [`gain`] still refuses until
+/// there is a live pool.
+///
+/// One `set_row` does both jobs -- it binds the row to the persona-skill
+/// instance and advertises the ceiling. Going through `add_marker_max` instead
+/// would create an **unowned** row (it preserves an existing owner and stamps
+/// `-1` on a fresh one), which `destroy_instance_units` then never drops.
+pub fn adjust_cap(player_id: i32, n: i32) -> i32 {
+    let cap = max(player_id).saturating_add(n).max(0);
+    let want = pull_under_cap(get(player_id), cap);
+    set_row(player_id, KEY, want, cap);
     cap
 }
 
@@ -311,7 +391,7 @@ pub mod regime {
         if take <= 0 {
             return Ok(0);
         }
-        if !crate::ctx::spend_charge(player_id, take, why)? {
+        if !spend_pool(player_id, take, why)? {
             return Ok(0);
         }
         Ok(take)
@@ -341,13 +421,19 @@ pub mod temp {
 
     /// Temp pots held.
     pub fn get(player_id: i32) -> i32 {
-        state::get(player_id, TEMP_KEY)
+        if !writable(player_id) {
+            return 0;
+        }
+        ctx::tok(player_id, TEMP_KEY)
     }
 
     /// The temp ceiling. lisa's face allows exceeding the pool cap, so this
     /// is unbounded by default; the kernel still owns the key.
     pub fn max(player_id: i32) -> i32 {
-        state::max(player_id, TEMP_KEY)
+        if !writable(player_id) {
+            return 0;
+        }
+        ctx::tok_max(player_id, TEMP_KEY)
     }
 
     /// Grant `n` temp pots (「获得一个可超过上限的临时火罐」). These are the
@@ -355,19 +441,20 @@ pub mod temp {
     /// about the declared pool). Returns how many landed under the temp
     /// ceiling.
     pub fn grant(player_id: i32, n: i32) -> i32 {
-        if n <= 0 {
+        if n <= 0 || !writable(player_id) {
             return 0;
         }
         // First grant arms the over-cap allowance (unbounded by the pool cap).
-        if max(player_id) == 0 {
-            state::set_max(player_id, TEMP_KEY, i32::MAX);
+        if !row_live(player_id, TEMP_KEY) {
+            set_row(player_id, TEMP_KEY, 0, i32::MAX);
         }
         // The temp ceiling is its own bound (default i32::MAX); the pool cap
         // does not apply -- 「可超过上限」 is the whole point.
         let room = (max(player_id) - get(player_id)).max(0);
         let got = n.min(room);
         if got > 0 {
-            state::add(player_id, TEMP_KEY, got);
+            // `-1` = leave the stored temp ceiling alone (its own bound).
+            set_row(player_id, TEMP_KEY, get(player_id) + got, -1);
         }
         got
     }
@@ -377,17 +464,22 @@ pub mod temp {
         if n <= 0 {
             return Ok(true);
         }
+        if !writable(player_id) {
+            return Ok(false);
+        }
         if get(player_id) < n {
             return Ok(false);
         }
-        state::add(player_id, TEMP_KEY, -n);
+        let left = get(player_id) - n;
+        // `-1` = leave the stored temp ceiling alone.
+        set_row(player_id, TEMP_KEY, left, -1);
         ctx::log(
             player_id,
             &Msg::new("log.spend_charge")
                 .player_id("who", player_id)
                 .msg("why", why)
                 .i("n", n as i64)
-                .i("charge", get(player_id) as i64)
+                .i("charge", left as i64)
                 .i("max", max(player_id) as i64),
         );
         Ok(true)

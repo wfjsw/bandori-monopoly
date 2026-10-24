@@ -7,21 +7,21 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
-        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0", Some(key!("repaint_when")),
+        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0",
         None,
-        counteract,
-    )],
+        counteract).counter_reason(key!("repaint_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Repaint"#)
         .raw_name(r#"Repaint"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡，使目标玩家的此次移动数-X，X为对方原本预计路径上你拥有的格子数，对方此次结算的支付减半。"#)
+        .text(CardText::para(r#"[反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡，使目标玩家的此次移动数-X，X为对方原本预计路径上你拥有的格子数，对方此次结算的支付减半。"#))
         // sheet cell H11
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 

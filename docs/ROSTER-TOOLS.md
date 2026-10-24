@@ -57,9 +57,12 @@ are absent. Stdlib only; works under `python3 -I`.
 | --- | --- |
 | `tools/asset-pipe/check.py` | card / character / band inventory vs manifest art |
 | `tools/rulebook/extract.py` | card ids + names to match rulebook sheet cells |
+| `tools/rulebook/check-card-text.py` | card ids + `rawName` to pair each sheet cell with its `CardMeta` text |
 
 `tools/rulebook/{check,cite}.py` read `docs/rulebook/cards.json` (the rulebook
 sheet extract -- a **different** file) and do not need a dump.
+`check-card-text.py` reads that extract plus a `dump_display` JSON; the card
+text it enforces is the sheet text verbatim (see `docs/rulebook/TEST-FINDINGS.md`).
 
 `rules/kani/build.rs` and `tools/kani/gen_card_ids.py` scan `rules/**/*.rs`
 sources for ids; they do not read the dump.

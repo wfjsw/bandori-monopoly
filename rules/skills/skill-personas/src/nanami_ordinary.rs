@@ -21,6 +21,7 @@
 
 use bandori_std::ctx::{self, state};
 use card_sdk::abi::ActionKind;
+use card_sdk::ctx::NameId;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The 「角色标记」 namespace every consumer agrees on (NNM's `角色标记:*` too).
@@ -28,8 +29,9 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 const MARK_PREFIX: &str = "角色标记:";
 
 /// The skill id a mark stands for (`角色标记:<skill id>` -> `<skill id>`).
-fn mark_skill(name: &str) -> &str {
-    name.strip_prefix(MARK_PREFIX).unwrap_or(name)
+fn mark_skill(name: NameId) -> &'static str {
+    let s = name.as_str();
+    s.strip_prefix(MARK_PREFIX).unwrap_or(s)
 }
 
 /// The mark name for a skill id.
@@ -45,15 +47,13 @@ fn cd_key(id: &str) -> alloc::string::String {
 pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
-        On::Play("", None, Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Play("", Some(can_use), use_skill),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
@@ -61,15 +61,11 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
         On::Action(Action::CardUsed(
             "actor != owner && trigger_card != 0 && charge(owner) >= 1",
-            None,
             Some(on_skill_applies),
-            on_skill,
-        )),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, None, tick)),
+            on_skill)),
+        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, tick)).quiet_when_empty(),
     ],
 )
-.silent(&[1, 2])
-.quiet_when_empty(&[5])
 // 「（初始2，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),
@@ -84,18 +80,18 @@ fn on_skill_applies(player_id: i32) -> bool {
     let Some(id) = ctx::trigger::cards().into_iter().next() else {
         return false;
     };
-    if id.is_empty() {
+    if id == "" {
         return false;
     }
     // 「该技能对被动技能存在3回合CD」 -- a per-kind cooldown.
-    if state::get(player_id, &cd_key(&id)) > 0 {
+    if state::get(player_id, &cd_key(id.as_str())) > 0 {
         return false;
     }
     // 「当场上存活玩家数量大于等于3时：每种角色标记上限1」
     let alive = (0..ctx::player_count())
         .filter(|&p| !ctx::player_out(p))
         .count() as i32;
-    if alive >= 3 && ctx::tok(player_id, &mark_name(&id)) >= 1 {
+    if alive >= 3 && ctx::tok(player_id, &mark_name(id.as_str())) >= 1 {
         return false;
     }
     true
@@ -124,11 +120,11 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     };
-    if id.is_empty() {
+    if id == "" {
         debug_assert!(false, "on_skill_applies admitted but the skill id is empty");
         return Ok(());
     }
-    let cd = cd_key(&id);
+    let cd = cd_key(id.as_str());
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("nanami_ordinary_title")),
@@ -139,11 +135,11 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("nanami_ordinary_spend")))? {
         return Ok(());
     }
-    ctx::add_tok(player_id, &mark_name(&id), 1, i32::MAX)?;
+    ctx::add_tok(player_id, &mark_name(id.as_str()), 1, i32::MAX)?;
     state::set(player_id, &cd, 3);
     ctx::log(
         player_id,
-        &Msg::new(key!("nanami_ordinary_mark")).card("card", &id),
+        &Msg::new(key!("nanami_ordinary_mark")).card("card", id.as_str()),
     );
     Ok(())
 }
@@ -151,7 +147,7 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
 /// 「3回合CD」 counts down.
 fn tick(player_id: i32) -> card_sdk::Asked {
     for name in ctx::tok_names(player_id, MARK_PREFIX) {
-        let cd = cd_key(mark_skill(&name));
+        let cd = cd_key(mark_skill(name));
         let left = state::get(player_id, &cd);
         if left > 0 {
             state::set(player_id, &cd, left - 1);
@@ -187,14 +183,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("nanami_ordinary_which")),
         &marks
             .iter()
-            .map(|m| Msg::new(key!("nanami_ordinary_option")).card("card", mark_skill(m)))
+            .map(|m| Msg::new(key!("nanami_ordinary_option")).card("card", mark_skill(*m)))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(mark) = marks.get(pick).cloned() else {
+    let Some(&mark) = marks.get(pick) else {
         return Ok(());
     };
-    let id = mark_skill(&mark);
-    ctx::add_tok(player_id, &mark, -1, i32::MAX)?;
+    let id = mark_skill(mark);
+    ctx::add_tok(player_id, mark.as_str(), -1, i32::MAX)?;
     ctx::play_card(id, player_id)?;
     ctx::log(
         player_id,

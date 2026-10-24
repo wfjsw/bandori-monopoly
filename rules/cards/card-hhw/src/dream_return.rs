@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
+use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_RETURN: CardDef = CardDef::new(
@@ -24,15 +25,14 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         // `stunned()` counts `stun + stunStart`, and `stunStart` is not in the
         // CEL schema -- `owner.stun == 0` would wrongly admit a stunStart seat.
         // The rent-table `Targets` loop is engine logic.
-        "pay_is_rent && actor >= 0 && actor != owner && target != owner", Some(key!("dream_return_when")),
+        "pay_is_rent && actor >= 0 && actor != owner && target != owner",
         Some(can_counteract),
-        counteract,
-    )],
+        counteract).counter_reason(key!("dream_return_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"梦幻的回礼"#)
         .raw_name(r#"梦幻的回礼"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。"#)
+        .text(CardText::para(r#"[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。"#))
         // sheet cell F16
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 

@@ -21,14 +21,12 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Action(Action::TurnStartBefore("", None, None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
-            None,
-            on_pass,
-        )),
+            on_pass)),
         // （2）/（3）「主要移动结束时，[触发结算]前若在你的前后5格内」 -- the
         // move-main fact is the condition; the within-5 geometry is residual
         // (`dist` is not in the condition vocabulary).
@@ -36,21 +34,16 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         // CEL; split from (2) so the other-mover arm is not gated on it.
         On::Action(Action::SettleBefore(
             "actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1",
-            None,
             Some(within5),
-            before_settle_self,
-        )),
+            before_settle_self)),
         // （2） 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」
         // -- the other-mover offer (the mover is prompted to pay).
         On::Action(Action::SettleBefore(
             "actor != owner && move.main && tile.id >= 0",
-            None,
             Some(within5),
-            before_settle_other,
-        )),
+            before_settle_other)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始1，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

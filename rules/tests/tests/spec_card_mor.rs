@@ -2480,6 +2480,7 @@ fn nnm_hand_play_spends_marks_and_draws() {
                 name: "角色标记:skill:户山香澄:鼓动".into(),
                 value: 1,
                 instance: None,
+            max: 0,
             });
         t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
         t.give(0, &[NNM]);

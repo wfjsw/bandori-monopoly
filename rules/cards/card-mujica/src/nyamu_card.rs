@@ -12,6 +12,7 @@
 //! whose flip face-down may cost 2 fire, flip face-up draws 1.
 
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
+use card_sdk::{CardText, it, it_sub};
 
 const ID: &str = "Mujica:（喵梦）";
 /// `card_face_down` as of the last check, so a flip is a change.
@@ -20,13 +21,11 @@ const WAS_DOWN: &str = "nyamu.wasDown";
 pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
-        On::Play("", None, None, nyamu_card),
+        On::Play("", None, nyamu_card),
         On::Action(Action::TurnEnd(
             "actor == owner && card.placed",
             None,
-            None,
-            watch_flips,
-        )),
+            watch_flips)),
     ],
 )
 .meta(
@@ -34,12 +33,16 @@ pub const NYAMU_CARD: CardDef = CardDef::new(
         .name("")
         .raw_name(r#"（喵梦）"#)
         .tags(&[])
-        .text(
-            r#"（1）将此卡放置于场上
-（2）
-1. 每当此卡将从正面翻至背面时可选择失去2个火罐。
-2. 每当此卡将从背面翻至正面时此卡拥有者抽一张卡。"#,
-        )
+        .text(CardText::items(&[
+            it(r#"将此卡放置于场上"#),
+            it_sub(
+                r#""#,
+                &[
+                r#"每当此卡将从正面翻至背面时可选择失去2个火罐。"#,
+                r#"每当此卡将从背面翻至正面时此卡拥有者抽一张卡。"#,
+                ],
+            ),
+        ]))
         // sheet cell J15
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"祐天寺若麦"#)]),
 );

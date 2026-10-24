@@ -488,7 +488,8 @@ the same file set's contents when it is dirty):
 ```text
 crates/game-core, crates/game-rules, crates/web-glue, crates/rules-cond,
 third_party/cel-rust,                       (the whole trees)
-rules/**,                                   (card-sdk, cards, skills, tiles,
+crates/card-sdk,                            (the kernel ABI crate)
+rules/**,                                   (cards, skills, tiles,
                                              events, fixtures, both locks)
 Cargo.lock, rules/Cargo.lock,               (dependency resolution)
 Cargo.toml, rules/Cargo.toml,               (the build graph: members, the cel patch)

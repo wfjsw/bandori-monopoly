@@ -138,6 +138,7 @@
   "lisa_goddess_no_fire": "你需要 1 个[火罐]。",
   "lisa_goddess_spend": "慈爱女神",
   "lisa_goddess_temp": "给 {{who}} 一个可超过上限的临时火罐",
+  "lisa_goddess_temp_none": "给 {{who}} 的临时火罐没有放上（其火罐已达上限）",
   "mana_donut_ask": "消耗 1 个[火罐]，向 {{tile}} 支付 {{n}} 并获得半价直到下回合结束？",
   "mana_donut_gain": "甜甜圈爱好者：+1 [火罐]",
   "mana_donut_half": "资金消耗减半，直到你的下个回合结束",

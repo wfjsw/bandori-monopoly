@@ -33,8 +33,6 @@ crate::host_subset!(skills_ag_dispatch {
     ask => arm_ask,
     raise => arm_raise,
     gate => arm_gate,
-    slot => arm_slot,
-    set_slot => arm_set_slot,
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_inc_slot,
@@ -134,9 +132,9 @@ fn firepot_01_tick_iff_at(user: i32) {
             spec::skills_ag::firepot_01_grant_log_ok(effects, player),
             "C-AG-firepot-01: granting tick is exactly GainFire(1)"
         );
-        // Host `gain_charge` is saturating_add with no charge_max clamp (the cap
-        // is declared by `fire_pot` but not enforced under Kani). Pin the
-        // body's +1; the cap is recorded as a host gap in the unit table.
+        // Engine `gain_marker` is an uncapped dumb add (matching production);
+        // the cap is enforced by the rules-layer kernel (`fire::gain_clamped`).
+        // Pin the body's +1.
         crate::kassert!(
             post_fire == pre_fire + 1,
             "C-AG-firepot-01: fire rises by 1"
