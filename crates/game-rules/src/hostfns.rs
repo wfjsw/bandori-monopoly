@@ -1139,6 +1139,7 @@ pub fn state_get<C: HostCtx>(
             Some(game_core::state::Tick::TurnStart) => 1,
             Some(game_core::state::Tick::TurnEnd) => 2,
         },
+        4 => c.st().wr().state_var(player_id, &key).flags as i32,
         _ => c.st().wr().state_get(player_id, &key),
     })
 }
@@ -1172,6 +1173,10 @@ pub fn state_set<C: HostCtx>(
             c.st_mut().w().state_set_expires(player_id, &key, e);
             v
         }
+        4 => {
+            c.st_mut().w().state_set_flags(player_id, &key, v as u8);
+            v
+        }
         _ => c.st_mut().w().state_set(player_id, &key, v),
     })
 }
@@ -1185,34 +1190,6 @@ pub fn state_add<C: HostCtx>(
 ) -> Result<i32, HostErr> {
     let key = guest_str(c, p, n)?;
     Ok(c.st_mut().w().state_add(player_id, &key, delta))
-}
-
-pub fn slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-    let key = guest_str(c, p, n)?;
-    Ok(c.st().wr().slot(player_id, &key))
-}
-
-pub fn set_slot<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    p: i32,
-    n: i32,
-    v: i32,
-) -> Result<(), HostErr> {
-    let key = guest_str(c, p, n)?;
-    c.st_mut().w().set_slot(player_id, &key, v);
-    Ok(())
-}
-
-pub fn inc_slot<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    p: i32,
-    n: i32,
-    by: i32,
-) -> Result<i32, HostErr> {
-    let key = guest_str(c, p, n)?;
-    Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
 // `group_pool` / `add_group_pool` remain on the guest surface: a named pool on

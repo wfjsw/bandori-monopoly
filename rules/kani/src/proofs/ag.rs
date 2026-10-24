@@ -111,7 +111,7 @@ crate::host_subset!(ag_dispatch {
     in_group => arm_in_band,
     target => arm_target,
     // marks / slots
-    set_slot => arm_set_slot,
+    state_set => arm_state_set,
     place_mark => arm_place_mark,
     count_marks_f => arm_count_marks_f,
     self_uid => arm_self_uid,

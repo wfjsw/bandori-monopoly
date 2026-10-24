@@ -1569,6 +1569,8 @@ pub mod state {
     pub const MAX: i32 = 2;
     /// When it wears off: [`NEVER`] / [`TURN_START`] / [`TURN_END`].
     pub const EXPIRES: i32 = 3;
+    /// The free-form flag word (host `state_flag` bits).
+    pub const FLAGS: i32 = 4;
 
     /// Never wears off.
     pub const NEVER: i32 = 0;
@@ -1640,25 +1642,23 @@ pub mod state {
     /// outside this SDK; the host just stores the `u32`.
     pub fn set_flags(player_id: i32, key: &str, flags: u32) {
         crate::pure::refuse_if_filter("state::set_flags");
-        let (p, l) = s(key);
-        unsafe { sys::state_set_flags(player_id, p, l, flags as i32) }
+        set_field(player_id, key, FLAGS, flags as i32);
     }
 }
 
 // ------------------------------------------------------ per-player slots (V)
 
-/// A free-form counter. Sugar over [`state`].
+/// A free-form counter. Sugar over [`state`]: translated to state calls
+/// before crossing the ABI -- there is no dedicated slot export.
 #[cfg_attr(kani, inline(always))]
 pub fn slot(player_id: i32, key: &str) -> i32 {
-    let (p, l) = s(key);
-    unsafe { sys::slot(player_id, p, l) }
+    state::get(player_id, key)
 }
 
 #[cfg_attr(kani, inline(always))]
 pub fn set_slot(player_id: i32, key: &str, value: i32) {
     crate::pure::refuse_if_filter("ctx::set_slot");
-    let (p, l) = s(key);
-    unsafe { sys::set_slot(player_id, p, l, value) }
+    state::set(player_id, key, value);
 }
 
 /// Replace the player's persona **name** -- the spelling `persona_is`
@@ -1673,8 +1673,7 @@ pub fn set_persona(player_id: i32, name: &str) {
 #[cfg_attr(kani, inline(always))]
 pub fn inc_slot(player_id: i32, key: &str, by: i32) -> i32 {
     crate::pure::refuse_if_filter("ctx::inc_slot");
-    let (p, l) = s(key);
-    unsafe { sys::inc_slot(player_id, p, l, by) }
+    state::add(player_id, key, by)
 }
 
 // ----------------------------------------------------------- pots & status

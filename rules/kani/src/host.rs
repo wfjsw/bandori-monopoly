@@ -764,11 +764,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::set_held_name => arm_set_held_name(a),
         Op::tok_max => arm_tok_max(a),
         Op::state_get => arm_state_get(a),
-        Op::slot => arm_slot(a),
         Op::state_set => arm_state_set(a),
-        Op::set_slot => arm_set_slot(a),
-        Op::state_add | Op::inc_slot => arm_state_add(a),
-        Op::state_set_flags => arm_state_set_flags(a),
+        Op::state_add => arm_state_add(a),
         Op::raise_after => arm_raise_after(a),
         Op::tok_names => arm_tok_names(a),
 
@@ -2736,24 +2733,6 @@ pub fn arm_set_self_tile(a: Args) -> i64 {
     })
 }
 
-pub fn arm_set_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    {
-        // `set_slot(player, ptr, len, v)` — a3 is the value (sugar for
-        // `state_set` field 0).
-        let key = name_id(a1, a2);
-        world::with_world_mut(|w| {
-            w.key_set(a0, key, a3);
-            w.push(Effect::SetState {
-                player: a0,
-                key: key.0,
-                n: a3,
-            });
-        });
-        a3 as i64
-    }
-}
-
 pub fn arm_set_tile_prop(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     let _ = (a4, a5);
@@ -2813,14 +2792,6 @@ pub fn arm_shuffle_into_deck(a: Args) -> i64 {
     }
 }
 
-pub fn arm_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    {
-        let key = name_id(a1, a2);
-        world::with_world(|w| w.key_get(a0, key)) as i64
-    }
-}
-
 pub fn arm_spend_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
@@ -2849,16 +2820,6 @@ pub fn arm_state_add(a: Args) -> i64 {
     }
 }
 
-/// `state_set_flags(player, ptr, len, flags)` — declare [`state_flag`] bits
-/// for a key. `NEVER_NEGATIVE` (bit 0) floors later `state_set` / `state_add`
-/// writes at 0, matching the engine.
-pub fn arm_state_set_flags(a: Args) -> i64 {
-    let [a0, a1, a2, a3, ..] = a;
-    let key = name_id(a1, a2);
-    world::with_world_mut(|w| w.key_set_flags(a0, key, a3 as u8));
-    0
-}
-
 /// `raise_after(player, name_p, name_l, value)` — queue a post-commit raise.
 /// The body-only model does not run deferred listeners (same as
 /// `CardWorld::raise_after`'s default no-op); the call is accepted so guest
@@ -2871,14 +2832,16 @@ pub fn arm_raise_after(a: Args) -> i64 {
 pub fn arm_state_get(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
-        // hostfns `state_get(player, ptr, len, field)`: field 1/2/3 read
-        // the declared MAX / MIN / EXPIRES column; anything else is VALUE.
+        // hostfns `state_get(player, ptr, len, field)`: field 1/2/3/4 read
+        // the declared MAX / MIN / EXPIRES / FLAGS column; anything else is
+        // VALUE.
         let key = name_id(a1, a2);
         let field = a3;
         world::with_world(|w| match field {
             1 => w.key_max(a0, key),
             2 => w.key_min(a0, key),
             3 => w.key_expires(a0, key),
+            4 => w.key_flags(a0, key) as i32,
             _ => w.key_get(a0, key),
         }) as i64
     }
@@ -2888,7 +2851,8 @@ pub fn arm_state_set(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         // hostfns `state_set(player, ptr, len, field, v)`:
-        //   a3 = field (0 value / 1 max / 2 min / 3 expires), a4 = v.
+        //   a3 = field (0 value / 1 max / 2 min / 3 expires / 4 flags),
+        //   a4 = v.
         // The old model wrote a3 as the value and dropped a4.
         let key = name_id(a1, a2);
         let field = a3;
@@ -2905,6 +2869,10 @@ pub fn arm_state_set(a: Args) -> i64 {
                 }
                 3 => {
                     w.key_set_expires(a0, key, v);
+                    v
+                }
+                4 => {
+                    w.key_set_flags(a0, key, v as u8);
                     v
                 }
                 _ => {

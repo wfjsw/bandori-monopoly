@@ -33,8 +33,6 @@ crate::host_subset!(skills_ag_dispatch {
     ask => arm_ask,
     raise => arm_raise,
     gate => arm_gate,
-    slot => arm_slot,
-    set_slot => arm_set_slot,
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_inc_slot,

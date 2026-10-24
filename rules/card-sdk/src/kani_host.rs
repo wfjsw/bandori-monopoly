@@ -135,9 +135,7 @@ pub enum Op {
     state_get = 120,
     state_set = 121,
     state_add = 122,
-    slot = 123,
-    set_slot = 124,
-    inc_slot = 125,
+    // 123/124/125 retired (slot/set_slot/inc_slot sugar; use state_get/state_set/state_add).
     group_pool = 126,
     add_group_pool = 127,
     group_skill = 128,
@@ -356,7 +354,7 @@ pub enum Op {
     skip_main_move = 331,
     clear_move_skip = 332,
     // v89: state flag word + post-commit raise with opaque wire name.
-    state_set_flags = 333,
+    // 333 retired (state_set_flags; use state_set field FLAGS).
     raise_after = 334,
     // v97: multi-select choice -- how many of the pushed options the ask wants.
     opt_count = 335,
