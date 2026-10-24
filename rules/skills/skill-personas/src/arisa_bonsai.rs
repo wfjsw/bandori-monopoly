@@ -22,8 +22,8 @@ fn station() -> i32 {
 pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", None, on_event)),
         // （2）: the turn's main move walked past 流星堂 and did not end there,
         // and the pass latch is armed. The named tile must exist (residual).
@@ -31,7 +31,6 @@ pub const ARISA_BONSAI: CardDef = CardDef::new(
         On::Action(Action::Pass("actor == owner && tile.id == tile_named('流星堂')", None, on_pass)),
     ],
 )
-    .silent(&[0, 1])
     // 「（初始0，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 

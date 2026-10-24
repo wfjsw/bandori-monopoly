@@ -35,8 +35,8 @@ pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1） 「每次[经过]CiRCLE时获得一个[火罐]」
         On::Action(Action::Pass(card_sdk::pre::MINE, None, on_pass)).label("（1）"),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
@@ -69,7 +69,6 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         .label("（3）"),
     ],
 )
-.silent(&[1, 2])
 // 「（初始3，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 3),

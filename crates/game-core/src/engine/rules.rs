@@ -562,7 +562,7 @@ pub trait CardRules: Send + Sync {
         self.card_props(card).get(key).copied().unwrap_or(0)
     }
 
-    /// The card rule's declared **tile texts** (`CardDef::texts`): the
+    /// The card rule's declared **tile texts** (`On::texts`): the
     /// deed-popup description each entry speaks for, **in declaration order**
     /// (sorted by entry index, then declaration position -- that order is the
     /// third component of the view's text precedence key, `docs/ENGINE.md`

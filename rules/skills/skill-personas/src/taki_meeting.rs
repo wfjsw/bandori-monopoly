@@ -24,16 +24,15 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Abnormal("", None, on_abnormal)),
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            reset)),
+            reset)).silent(),
     ],
 )
-.silent(&[1, 2, 4])
 // 「（初始0，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

@@ -30,10 +30,10 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // the partner's share land. `PayAfter` just measures the rent income
         // the settle produced; the split is the terminal's job.
         On::Action(Action::PayAfter(
-            "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0", 
-            Some(measure_rent_guard), 
+            "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0",
+            Some(measure_rent_guard),
             measure_rent
-        )),
+        )).silent(),
         // The split only speaks when a designated deed produced income.
         // Runs before the silent consume below so it can read the measured rent.
         On::Action(Action::TileResolved(
@@ -47,12 +47,12 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // visible share above, and the per-drive silent check would see the
         // share's logs and accuse this bookkeeping of hiding a real effect.
         On::Action(Action::TileResolved(
-            "card.placed && slot('one_of_us_partner') > 0", 
-            None, 
+            "card.placed && slot('one_of_us_partner') > 0",
+            None,
             clear_measured_rent
-        )),
+        )).quiet_when_empty(),
     ],
-).props(&[(card_sdk::abi::prop::SONG, 1)]).silent(&[2]).quiet_when_empty(&[4]).meta(&card_sdk::meta::CardMeta::new()
+).props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"ONE OF US"#)
         .raw_name(r#"ONE OF US"#)
         .tags(&[])

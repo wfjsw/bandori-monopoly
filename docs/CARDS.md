@@ -391,26 +391,24 @@ The compiled lean form (`Cond::to_bytes(false)`) rides the ruleset so the
 browser glue evaluates with `rules-cond`'s `runtime-only` build and never ships
 the CEL parser.
 
-## Silent bookkeeping entries (`CardDef::silent`, ABI v53)
+## Silent bookkeeping entries (`On::silent`, ABI v53)
 
 Most entries flash the card and write a 「效果适用」 header when their body
 runs. Some entries are **bookkeeping**: a mechanical declaration or reset the
 player never sees as a clause firing. Those run their body but post no
-`"card"` event and no header -- mark them with `CardDef::silent(&[entry, …])`
-(indices into the `&[On]` table, 0-based):
+`"card"` event and no header -- mark them with `.silent()` on the entry:
 
 ```rust
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
+        On::Play("", Some(can_use), use_skill),                         // 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),     // 1: bookkeeping
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),     // 2: bookkeeping
-        On::Action(Action::TurnEnd("", Some(afterglow), tick)),         // 3: 「获得[火罐]」 -- flashes
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
+        On::Action(Action::TurnEnd("", Some(afterglow), tick)),         // 「获得[火罐]」 -- flashes
     ],
-)
-.silent(&[1, 2]);
+);
 ```
 
 **When to use it.** An effect the rulebook describes as happening (gain, pay,
@@ -432,11 +430,11 @@ entry that produces a visible result is a bug, and the host's debug guard
 (`game_rules::take_silent_visible` / `debug_assert!`) records it. Nested
 activations from a silent body still announce normally.
 
-Path: `CardDef::silent` → `ManifestOn::silent` (ABI v53) →
+Path: `On::silent` → `ManifestOn::presentation` (ABI v53) →
 `announce_drive` skips the `"card"` post and the 「效果适用」 header; the body
 runs the full category → pre → guard layering unchanged.
 
-## Flash policy (`CardDef::flash`, ABI v55)
+## Flash policy (`On::flash`, ABI v55)
 
 Beside the header mode (Visible / Silent / QuietWhenEmpty), each entry carries
 a **flash policy** -- whether the activation's centre flash (and field-slot
@@ -452,9 +450,9 @@ pulse) shows:
 
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
-    On::Play("", None, use_skill),                  // 0: Auto
-    On::Action(Action::TurnEnd("", None, tick)),    // 1: Always (self-only)
-]).flash(&[(1, Flash::Always)]);
+    On::Play("", None, use_skill),                                    // Auto
+    On::Action(Action::TurnEnd("", None, tick)).flash(Flash::Always), // Always (self-only)
+]);
 ```
 
 **Precedence** (highest first): `Flash::Never` > `ctx::no_flash()` >
@@ -480,12 +478,48 @@ stays shown. The identity lives in the drive's persistent state and survives
 halt; the client dedupes by event id so a re-delivered frame never replays a
 flash.
 
-**QuietWhenEmpty interaction**: a requested flash counts as visible -- if
-`ctx::flash()` ran, the header is kept.
+**QuietWhenEmpty interaction**: a **cue** counts as visible -- the header is
+kept. Both spellings of "cue me" count: the imperative `ctx::flash()` and the
+declarative `Flash::Always` (`On::flash`). Cue and flash-decision are two
+separate signals: `flash_cued` is the OR of those two across the drive's
+entries ("was the player cued"), while the `flash` flag stamped on the `"card"`
+event is the **folded** policy (`Never` can still suppress it). A drive that
+was cued keeps its header naming the clause even when `Never` wins the flash
+decision -- `Never`'s promise is "log entry remains, no flash", not "erase the
+clause".
 
-Path: `CardDef::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
+Path: `On::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
 `"card"` event's `flash` flag under the precedence above. Proactive `"flash"`
 events play through the client's cardFlash path.
+
+**Multi-entry drives.** `run_hook` announces once per matching entry, then
+`commit_after` takes **one** flash decision for one header. The sibling
+entries' policies therefore **fold** (`Never` if any says `Never`; else
+`Always` if any says `Always`; else `Auto`) -- a trailing `Auto` must not drop
+an earlier `Always`, and a trailing `Always` must not lift an earlier `Never`.
+`ctx::flash` / `ctx::no_flash` keep their runtime positions in the precedence.
+Header mode folds the same way but with the opposite polarity
+(`Visible` > `QuietWhenEmpty` > `Silent`): one entry demanding its clause be
+shown must not be silenced by a quiet or bookkeeping sibling, in either order.
+
+## Tile text (`On::texts`)
+
+Deed-popup text rides the entry that speaks it (`On::texts(&[(slot, tile,
+key)])`), not an entry-index side table -- so it cannot drift when entries are
+reordered. See [TILES.md 「Tile text」](TILES.md#tile-text) for the shape,
+precedence, and the `event:协助CiRCLE重建` worked example.
+
+```rust
+pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
+    On::Settle("", None, settle)
+        .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+    On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
+        .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+]);
+```
+
+Path: `On::texts` → `ManifestTileText` (v59, entry index synthesised from
+declaration order) → `CardRules::card_texts` → `compose_tile_texts`.
 
 ## Bot-only estimated execution cost
 

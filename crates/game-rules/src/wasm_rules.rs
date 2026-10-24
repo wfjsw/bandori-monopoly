@@ -32,7 +32,7 @@ use rules_cond::WindowScope;
 // ------------------------------------------------- silent-entry debug guard
 
 thread_local! {
-    /// Violations of the silent-entry contract: a `CardDef::silent` body that
+    /// Violations of the silent-entry contract: a `On::silent` body that
     /// produced a visible effect (see [`RulesBridge::check_silent_body`]).
     /// Tests read this via [`take_silent_visible`]; debug builds also
     /// `debug_assert!` for shipped (non-`TEST:`) card ids.
@@ -42,6 +42,50 @@ thread_local! {
 
 fn record_silent_visible(card_id: &str, what: &str) {
     SILENT_VISIBLE.with(|v| v.borrow_mut().push((card_id.to_string(), what.to_string())));
+}
+
+/// Fold two declarative flash policies across the sibling entries of one
+/// drive: `Never` if any entry says `Never`; else `Always` if any says
+/// `Always`; else `Auto`. A multi-entry drive (`run_hook` announces once per
+/// matching entry, then `commit_after` takes **one** flash decision for one
+/// header) must not let a trailing `Auto` drop an earlier `Always`, nor a
+/// later `Always` lift an earlier `Never`. Matches the declarative half of
+/// the precedence `commit_after` applies at the flash point
+/// (`Never > ctx::no_flash > ctx::flash / Always > Auto`).
+///
+/// Why `Never` wins here while [`fold_header`] lets `Visible` win: the flash
+/// is one shared animation, so the **strongest opinion** (`Never` = "do not
+/// cue") must silence the whole drive; the header is one shared clause name,
+/// so the **strongest demand** (`Visible` = "show my clause") must keep it.
+/// The asymmetry is deliberate -- do not "fix" one fold to match the other.
+const fn fold_flash(a: card_sdk::abi::Flash, b: card_sdk::abi::Flash) -> card_sdk::abi::Flash {
+    use card_sdk::abi::Flash::{Always, Auto, Never};
+    match (a, b) {
+        (Never, _) | (_, Never) => Never,
+        (Always, _) | (_, Always) => Always,
+        _ => Auto,
+    }
+}
+
+/// Fold two entry header modes across the sibling entries of one drive:
+/// `Visible` if any entry says `Visible`; else `QuietWhenEmpty` if any says
+/// `QuietWhenEmpty`; else `Silent`. Same one-header-per-drive constraint as
+/// [`fold_flash`] (`run_hook` announces once per matching entry, then
+/// `commit_after` takes **one** header), but the opposite polarity: a
+/// trailing `Silent` / `QuietWhenEmpty` sibling must not retract a leading
+/// `Visible` clause, and a trailing `Visible` must not cancel a leading
+/// `QuietWhenEmpty` -- in either order. See [`fold_flash`] for why the two
+/// folds disagree on which end wins.
+const fn fold_header(
+    a: card_sdk::abi::Presentation,
+    b: card_sdk::abi::Presentation,
+) -> card_sdk::abi::Presentation {
+    use card_sdk::abi::Presentation::{QuietWhenEmpty, Silent, Visible};
+    match (a, b) {
+        (Visible, _) | (_, Visible) => Visible,
+        (QuietWhenEmpty, _) | (_, QuietWhenEmpty) => QuietWhenEmpty,
+        _ => Silent,
+    }
 }
 
 /// Is this host request a **visible effect** a silent entry must not produce?
@@ -214,9 +258,6 @@ pub struct Run {
     /// instance's own `counter(name)`. One log for every named counter
     /// (ruleset counter keys and any card-declared name).
     counter_log: Vec<(i32, String, String, i32)>,
-    /// Players this run granted off-board layers to -- the engine raises the caller-supplied name
-    /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
-    abnormal_log: Vec<(i32, i32)>,
     named_raise_log: Vec<(i32, String, i32)>,
     /// Skill-state 1↔2 toggles this run made, `(who, from, to)` -- the engine
     /// raises `state` for each once the run commits (Mujica:欢迎来到ave
@@ -281,7 +322,7 @@ pub struct Run {
     /// 0 -- see [`RulesBridge::check_silent_body`]. Not taken by the
     /// multi-pass replace bookkeeping (unlike [`Self::posted`]).
     logged: u32,
-    /// This run's entry is silent (`CardDef::silent`): no activation flash and
+    /// This run's entry is silent (`On::silent`): no activation flash and
     /// no outcome lines for its state / plan writes either (the flag hides
     /// the whole presentation, and the body must be pure bookkeeping).
     silent_body: bool,
@@ -297,6 +338,12 @@ pub struct Run {
     /// The header this run flushed (Ruling 2a), or -1 if none was posted
     /// (silent / nothing visible). `commit_after` completes this one only.
     own_activation: i32,
+    /// Every 「效果适用」 header this run actually posted (`flush_header`'s
+    /// take-succeeded path), in post order. One drive, one flash decision,
+    /// every header it posted -- `commit_after` stamps them all. Sibling
+    /// entries each flush their own header; the `__hdr__` once-per-flash
+    /// identity only names the first.
+    header_ids: Vec<i32>,
     /// What the body produced (for the flash-scope classification).
     /// ...
     /// This run halted for a prompt (the header is already on the stream and
@@ -311,6 +358,14 @@ pub struct Run {
     /// `world.flash_*` so they survive a prompt's routine re-run the same way
     /// the event tail does.
     flash_policy: card_sdk::abi::Flash,
+    /// Did **any** sibling entry cue the player? OR of the imperative
+    /// `ctx::flash()` and every `Flash::Always` declaration on this drive.
+    /// Distinct from [`Self::flash_policy`] (the folded *decision*, `Never` >
+    /// `Always` > `Auto`): "was the player cued" and "should the drive flash"
+    /// are different questions, and a `Never` sibling may still lose the
+    /// flash while an `Always` sibling already flushed the header. ORs across
+    /// entries -- never folded, never reset per entry.
+    flash_cued: bool,
     /// Next flash ordinal **this pass** (resets each re-run so the same call
     /// site maps to the same identity). `SharedFlash.seen` holds the posted.
     flash_ordinal: u32,
@@ -375,10 +430,15 @@ impl Run {
         );
         self.parent = id;
         self.own_activation = id;
+        self.header_ids.push(id);
         if already {
-            // Re-run's duplicate header: keep the log line, suppress the
-            // second flash (the first pass already showed it before the
-            // prompt).
+            // Default the second-and-later headers' flash off. This is **not**
+            // the once-per-flash guarantee (that lives in the `"flash"` cue
+            // event's `flash_key("ord:N")` identity) and not the drive's flash
+            // decision either: sibling entries of the same drive also land
+            // here, and `commit_after` overrides this default with the folded
+            // decision for every id in `header_ids`. Kept as the safe default
+            // for any id the vec somehow misses.
             if let Some(live) = self.live {
                 let cx = unsafe { &mut *live };
                 cx.set_event_flash(id, false);
@@ -548,6 +608,8 @@ impl Run {
         // clause (2)'s 「所有本回合切换了状态的玩家」 never lit.
         let turn_key = self.world.st.round * 100 + self.world.st.turn + 1;
         self.world.state_set(who, "switchedRound", turn_key);
+        // Visible outcome: `commit_after` raises `state` on this row.
+        self.flush_header();
         self.state_log.push((who, was, now));
     }
 
@@ -577,23 +639,27 @@ impl Run {
     /// count still raises -- a card placed with no named counters has to hear
     /// about its own count. A write to an instance that is not on a field
     /// raises nothing.
+    ///
+    /// The header names the clause, so any visible outcome must flush it (the
+    /// same contract `post_log_value` already honours). A counter write is
+    /// visible: `commit_after` raises `counterChanged` on it and `body_empty`
+    /// counts it, so a pure counter body must still post its 「效果适用」.
     fn note_counter_changed(&mut self, uid: i32, was: i32, now: i32, name: &str) {
         let Some(f) = self.world.field_by_uid(uid) else {
             return;
         };
         // The holder hears its card's counter change, not the card's owner.
         let (owner, card) = (self.world.holder_of(uid), f.card.clone());
+        self.flush_header();
         self.counter_log
             .push((owner, card, name.to_string(), now - was));
     }
 
-    /// Record an **on-card** [tile marks] write against the instance at `uid` so the
-    /// commit point can raise `cpChanged` (the same shape as
-    /// [`Self::note_counter_changed`]). `was` and `now` bracket that instance's
-    /// on-card mark count, so a write that lands on the same count still raises
-    /// and a count emptied by *any* path -- this run's settle, another effect's
-    /// removal -- leaves the field the same way. A write with no live instance
-    /// raises nothing.
+    // On-card [CP点] writes ride `note_counter_changed` as `counter::CP` (v51).
+    // `CpChanged` is retired (user ruling 2026-10-07): the 「its on-card [CP点]
+    // is empty → graveyard」 rule lives on `Action::CounterChanged` with a
+    // `counter::CP` name check in the residual guard
+    // (`rules/cards/card-general/src/clear_cp.rs`), not a CP-only trigger.
 
     /// Move the running instance to `dest` **now** -- unplace-and-send, applied
     /// mid-effect rather than at the run's commit, for a card that must be gone
@@ -674,6 +740,10 @@ impl CardWorld for Run {
         // change. Logged as `(-1, player, n)` for money in and `(player, -1, n)`
         // for money out, so the Done handler can raise `payAfter` for both and
         // open the `paid` counteraction window only for the loss.
+        if got != 0 {
+            // Visible outcome: `commit_after` raises `payAfter` / `paid`.
+            self.flush_header();
+        }
         if got > 0 {
             self.paid_log.push((-1, player_id, got));
         } else if got < 0 {
@@ -946,12 +1016,22 @@ impl CardWorld for Run {
             .is_some_and(|h| !h.graveyard.is_empty() && n > 0 && h.deck.len() <= n as usize);
         let got = self.world.draw_cards(player_id, n, true);
         if will_refill && got > 0 {
+            // Visible outcome: `commit_after` raises `reshuffled`.
+            self.flush_header();
             self.reshuffle_log.push(player_id);
         }
         if got > 0 {
-            if let Some(h) = self.world.hidden.get(player_id.max(0) as usize) {
-                for id in &h.hand[before..] {
-                    self.draw_log.push((player_id, id.clone()));
+            let drawn: Vec<String> = self
+                .world
+                .hidden
+                .get(player_id.max(0) as usize)
+                .map(|h| h.hand[before..].to_vec())
+                .unwrap_or_default();
+            if !drawn.is_empty() {
+                // Visible outcome: `commit_after` raises `drawn` / `drew`.
+                self.flush_header();
+                for id in drawn {
+                    self.draw_log.push((player_id, id));
                 }
             }
         }
@@ -967,6 +1047,8 @@ impl CardWorld for Run {
                 // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
                 // bounce, a tutor) is not a draw and must not raise them.
                 if self.trigger.kind == TriggerKind::DrewBefore {
+                    // Visible outcome: `commit_after` raises `drawn` / `drew`.
+                    self.flush_header();
                     self.draw_log.push((player_id, card.to_string()));
                 }
             }
@@ -1009,6 +1091,8 @@ impl CardWorld for Run {
                 list.remove(k);
                 if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
                 {
+                    // Visible outcome: `commit_after` raises `reshuffled`.
+                    self.flush_header();
                     self.reshuffle_log.push(player_id);
                 }
                 true
@@ -1029,6 +1113,9 @@ impl CardWorld for Run {
         }
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {
+        // Visible outcome: `commit_after` raises `discarded` (and maybe
+        // `reshuffled`). The header names the clause that discarded.
+        self.flush_header();
         if self.world.to_discard(player_id, card) {
             self.reshuffle_log.push(player_id);
         }
@@ -1683,6 +1770,11 @@ impl CardWorld for Run {
         // the split form.
     }
     fn raise_after(&mut self, player_id: i32, name: &str, value: i32) {
+        // The header names the clause, so any visible outcome must flush it
+        // (the same contract `post_log_value` already honours). A named raise
+        // is visible: `commit_after` fires its hooks and `body_empty` counts
+        // the row, so a raise-only body must still post its 「效果适用」.
+        self.flush_header();
         self.named_raise_log
             .push((player_id, name.to_string(), value));
     }
@@ -1837,6 +1929,8 @@ impl CardWorld for Run {
                     .copied()
                     .unwrap_or(-1);
                 if owner >= 0 {
+                    // Visible outcome: `commit_after` raises `houseAdded`.
+                    self.flush_header();
                     self.house_log.push((owner, tile, now));
                 }
             }
@@ -1944,6 +2038,9 @@ impl CardWorld for Run {
         };
         h.hand.remove(p);
         h.graveyard.push(card.to_string());
+        // Visible outcome: `commit_after` raises `discarded` (and maybe
+        // `reshuffled`). The header names the clause that discarded.
+        self.flush_header();
         self.discard_log.push((player_id, card.to_string()));
         if self.world.refill_draw_pile(player_id.max(0) as usize) {
             self.reshuffle_log.push(player_id);
@@ -1968,6 +2065,8 @@ impl CardWorld for Run {
         let mut draw = std::mem::take(&mut self.world.hidden[idx].deck);
         self.world.rng.shuffle(&mut draw);
         self.world.hidden[idx].deck = draw;
+        // Visible outcome: `commit_after` raises `reshuffled`.
+        self.flush_header();
         self.reshuffle_log.push(player_id);
         n
     }
@@ -2706,7 +2805,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// does not flash -- a *card* placed on the square still does. `On::Message`
     /// never reaches here (internal plumbing, no `Call::Message`).
     ///
-    /// A **silent** entry (`ManifestOn::silent`, `CardDef::silent`) is
+    /// A **silent** entry (`ManifestOn::silent`, `On::silent`) is
     /// bookkeeping -- `declare_cap` / `set_bounds` / initial values / latch
     /// clears: a mechanical declaration the player never sees as a clause
     /// ficycle. It runs its body (the category → pre → guard layers are
@@ -2736,7 +2835,7 @@ impl<M: CardModules> RulesBridge<M> {
         if matches!(call, Call::Buy { .. } | Call::Build { .. }) && card_id.starts_with("tile:") {
             return -1;
         }
-        // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
+        // Silent entry (`On::silent`): bookkeeping. Body runs, no flash
         // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
         // the header is retracted at commit if the body produced nothing.
         if self.entry_presentation(card_id, entry).header == card_sdk::abi::Presentation::Silent {
@@ -2830,8 +2929,9 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// How `card_id`'s `entry` presents itself: the header mode plus the
-    /// flash policy (`CardDef::silent` / `quiet_when_empty` / `flash`). The
-    /// defaults (`Visible` + `Auto`) when the card or entry is unknown.
+    /// flash policy. Both ride the entry (`On::silent` / `On::quiet_when_empty`
+    /// / `On::flash`); the defaults (`Visible` + `Auto`) when the card or entry
+    /// is unknown.
     fn entry_presentation(&self, card_id: &str, entry: i32) -> card_sdk::abi::EntryPresentation {
         let Some(idx) = self.ruleset.card(card_id) else {
             return card_sdk::abi::EntryPresentation::default();
@@ -2974,21 +3074,35 @@ impl<M: CardModules> RulesBridge<M> {
         // is the parent for body lines and starts as the *outer* activation.
         // `-1` when the drive is silent or posts no header (tile settle).
         let mut own_activation = -1i32;
-        // Set at body entry when the entry is silent (`CardDef::silent`); the
-        // commit pass then checks the run produced no visible effect (the
-        // flag must not hide a real one). `Cell` so the `announce` closure can
-        // share it (same shape as the raw `cx_ptr` write-through).
+        // Header mode folded across sibling entries (see [`fold_header`]).
+        // `Silent` is the fold identity -- start there and fold each entry in.
+        // The bool cells below are derived from the fold so `commit_after`
+        // keeps its two-flag signature. `silent_body` is set at body entry
+        // when the (folded) mode is silent; the commit pass then checks the
+        // run produced no visible effect (the flag must not hide a real one).
+        // `Cell` so the `announce` closure can share it (same shape as the
+        // raw `cx_ptr` write-through).
+        let header_mode = std::cell::Cell::new(card_sdk::abi::Presentation::Silent);
         let silent_body = std::cell::Cell::new(false);
         let quiet_when_empty = std::cell::Cell::new(false);
         // Declarative flash policy (v55) rides across passes like silent_body:
         // the commit pass's announce is a no-op and must not lose it.
         let flash_policy_cell: std::cell::Cell<card_sdk::abi::Flash> =
             std::cell::Cell::new(card_sdk::abi::Flash::Auto);
+        // "Was the player cued?" -- OR of `ctx::flash()` and any
+        // `Flash::Always` sibling. Never folded, never reset per entry (see
+        // [`Run::flash_cued`]). Separate from `flash_policy_cell` because
+        // `Never` can win the flash decision while `Always` already cued.
+        let flash_cued_cell = std::cell::Cell::new(false);
         let mut prompted = false;
         // Ruling 2a: the lazy header survives across passes (learn + commit
         // run share one buffer; a pause must not drop it).
         let mut saved_header: Option<PendingHeader> = None;
         let mut flushed_header: i32 = -1;
+        // Every header the drive has posted across passes (learn + re-run).
+        // A re-run's fresh `Run` starts from this so `commit_after` can stamp
+        // the folded flash decision on headers the learn pass already posted.
+        let mut drive_header_ids: Vec<i32> = Vec::new();
         let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
@@ -3018,7 +3132,6 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
@@ -3032,9 +3145,11 @@ impl<M: CardModules> RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: drive_header_ids.clone(),
                 prompted: false,
                 parent: activation_id,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             run.world.skip_log = true;
@@ -3071,34 +3186,75 @@ impl<M: CardModules> RulesBridge<M> {
                     if flushed_header < 0 && w.pending_header.is_none() {
                         w.pending_header = saved_header.clone();
                     }
+                    // Restore the drive's already-folded flash policy (do
+                    // **not** fold this entry again) so the body's `Never`
+                    // check still sees the sibling's opinion on a re-run.
+                    w.flash_policy = flash_policy_cell.get();
+                    // Same for the header mode and the cue flag: a fresh `Run`
+                    // starts `silent_body = false`, and a silent entry's
+                    // bookkeeping body must not post an outcome line via
+                    // `outcome_plan` on the re-run just because the cell was
+                    // not copied across.
+                    let folded_hdr = header_mode.get();
+                    w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
+                    w.quiet_when_empty =
+                        folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                    w.flash_cued = flash_cued_cell.get();
                     return;
                 }
                 w.parent = activation_id;
                 w.live = Some(cx_ptr as *mut Cx<'static>);
                 let pres = self.entry_presentation(card_id, entry);
-                // Per-entry presentation: a multi-entry drive (every
-                // `TurnStartBefore` of one card, say) must not inherit the
-                // previous sibling's silent flag -- otherwise a silent
-                // declare-cap poisons the visible clause that follows it.
-                if pres.header == card_sdk::abi::Presentation::Silent {
-                    silent_body.set(true);
-                    w.silent_body = true;
-                } else {
-                    silent_body.set(false);
-                    w.silent_body = false;
-                }
-                if pres.header == card_sdk::abi::Presentation::QuietWhenEmpty {
-                    quiet_when_empty.set(true);
-                } else {
-                    quiet_when_empty.set(false);
-                }
+                // Header mode folds across siblings (see [`fold_header`]):
+                // one decision per drive, so `Visible` wins over
+                // `QuietWhenEmpty` wins over `Silent` -- a trailing silent
+                // sibling must not poison a leading visible one, and a
+                // trailing `QuietWhenEmpty` must not retract a leading
+                // `Visible`'s header on an empty body. Do not overwrite per
+                // entry. The `announced` early-return above fires before any
+                // fold, so a re-run does not fold the same entry twice.
+                let folded_hdr = fold_header(header_mode.get(), pres.header);
+                header_mode.set(folded_hdr);
+                let is_silent = folded_hdr == card_sdk::abi::Presentation::Silent;
+                let is_quiet = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                silent_body.set(is_silent);
+                w.silent_body = is_silent;
+                quiet_when_empty.set(is_quiet);
+                w.quiet_when_empty = is_quiet;
                 // Declarative flash policy (v55) rides on the Run so the
                 // commit's precedence check can see `Never` / `Always`.
-                w.flash_policy = pres.flash;
-                flash_policy_cell.set(pres.flash);
+                // One decision per drive, so the sibling entries **fold**
+                // (`Never` if any says `Never`; else `Always` if any says
+                // `Always`; else `Auto`) rather than overwrite -- a trailing
+                // `Auto` must not drop an earlier `Always`, and a trailing
+                // `Always` must not lift an earlier `Never`. Both stores
+                // carry the same folded value so they cannot diverge. The
+                // `announced` early-return above fires before any fold, so a
+                // re-run does not fold the same entry twice.
+                let folded = fold_flash(flash_policy_cell.get(), pres.flash);
+                flash_policy_cell.set(folded);
+                w.flash_policy = folded;
+                // "Was the player cued?" ORs across entries and is **not**
+                // the folded decision: an `Always` sibling cues (and flushes
+                // its header) even when a `Never` sibling wins the flash.
+                if pres.flash == card_sdk::abi::Flash::Always {
+                    flash_cued_cell.set(true);
+                }
+                w.flash_cued = flash_cued_cell.get();
                 let id = self.announce_drive(w, call.clone(), card_id, uid, target, tile, trigger, entry);
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
+                }
+                if pres.flash == card_sdk::abi::Flash::Always {
+                    // Declarative `Always` (`On::flash`) is the same promise
+                    // as the imperative `ctx::flash()`: cue the player. That
+                    // promise has to include the lazy 「效果适用」 header -- a
+                    // flash with no clause name is noise, and leaving the
+                    // header lazy means a no-op body (a capped gain, 「已满」)
+                    // never posts one at all, so `Always` would show nothing.
+                    // Same move `Run::flash` makes at the flash point; only
+                    // now the header exists (`announce_drive` buffered it).
+                    w.flush_header();
                 }
                 if id >= 0 {
                     // Body lines group under **this** drive's header.
@@ -3186,6 +3342,7 @@ impl<M: CardModules> RulesBridge<M> {
                         {
                             let mut after = after;
                             after.flash_policy = flash_policy_cell.get();
+                            after.flash_cued = flash_cued_cell.get();
                             if after.own_activation < 0 {
                                 after.own_activation = flushed_header;
                             }
@@ -3209,6 +3366,9 @@ impl<M: CardModules> RulesBridge<M> {
                     // Recover the learn pass's write-through log so the commit
                     // pass replaces those lines instead of appending duplicates.
                     posted_ids = std::mem::take(&mut after.posted);
+                    // And the headers it already posted, so the commit pass's
+                    // `commit_after` can still stamp every one of them.
+                    drive_header_ids = after.header_ids.clone();
                     let mut world = cx.share_world();
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
@@ -3238,8 +3398,7 @@ impl<M: CardModules> RulesBridge<M> {
                         marker_spent_log: vec![],
                         house_log: vec![],
                         counter_log: vec![],
-                        abnormal_log: vec![],
-                        named_raise_log: vec![],
+                                named_raise_log: vec![],
                         state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
@@ -3252,9 +3411,11 @@ impl<M: CardModules> RulesBridge<M> {
                         quiet_when_empty: false,
                         pending_header: None,
                         own_activation: -1,
+                        header_ids: drive_header_ids.clone(),
                         prompted: false,
                         parent: activation_id,
                         flash_policy: card_sdk::abi::Flash::Auto,
+                        flash_cued: false,
                         flash_ordinal: 0,
                     };
                     // Same as the learn pass: the guest copy must not allocate
@@ -3269,6 +3430,17 @@ impl<M: CardModules> RulesBridge<M> {
                         // outside), so no slot to consume here.
                         w.parent = activation_id;
                         w.live = Some(cx_ptr as *mut Cx<'static>);
+                        // Same restore as the multi-pass early-return: this
+                        // pass's fresh `Run` must see the drive's already-
+                        // folded header mode / flash policy / cue flag, or a
+                        // silent entry's bookkeeping body posts an outcome
+                        // line via `outcome_plan` that must stay invisible.
+                        let folded_hdr = header_mode.get();
+                        w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
+                        w.quiet_when_empty =
+                            folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                        w.flash_policy = flash_policy_cell.get();
+                        w.flash_cued = flash_cued_cell.get();
                     };
                     let outcome2 = if guarded {
                         match self
@@ -3293,6 +3465,7 @@ impl<M: CardModules> RulesBridge<M> {
                             {
                                 let mut after2 = after2;
                                 after2.flash_policy = flash_policy_cell.get();
+                                after2.flash_cued = flash_cued_cell.get();
                                 if after2.own_activation < 0 {
                                     after2.own_activation = flushed_header;
                                 }
@@ -3326,6 +3499,7 @@ impl<M: CardModules> RulesBridge<M> {
                             {
                                 let mut after = after;
                                 after.flash_policy = flash_policy_cell.get();
+                                after.flash_cued = flash_cued_cell.get();
                                 if after.own_activation < 0 {
                                     after.own_activation = flushed_header;
                                 }
@@ -3381,6 +3555,9 @@ impl<M: CardModules> RulesBridge<M> {
                         if run.own_activation >= 0 {
                             flushed_header = run.own_activation;
                         }
+                        if !run.header_ids.is_empty() {
+                            drive_header_ids = run.header_ids.clone();
+                        }
                     }
                     // A card prompt has one player: the module's i-th answer is that
                     // player's answer to its i-th prompt.
@@ -3403,6 +3580,9 @@ impl<M: CardModules> RulesBridge<M> {
                     posted_ids = std::mem::take(&mut run.posted);
                     if run.own_activation >= 0 {
                         flushed_header = run.own_activation;
+                    }
+                    if !run.header_ids.is_empty() {
+                        drive_header_ids = run.header_ids.clone();
                     }
                     // The host routine runs against the **live** world and is
                     // not replayed, so the turn-ctx policy the card just set up
@@ -3502,6 +3682,9 @@ impl<M: CardModules> RulesBridge<M> {
                     if run.own_activation >= 0 {
                         flushed_header = run.own_activation;
                     }
+                    if !run.header_ids.is_empty() {
+                        drive_header_ids = run.header_ids.clone();
+                    }
                     let live_before = cx.live_event_count();
                     let v = self.apply_host_request(cx, req, &run.linger_props, call.clone(), card_id)?;
                     if run.own_activation >= 0 {
@@ -3516,7 +3699,7 @@ impl<M: CardModules> RulesBridge<M> {
                             debug_assert!(
                                 card_id.starts_with("TEST:"),
                                 "silent entry on {card_id} produced a visible host effect ({what}); \
-                                 `CardDef::silent` must not hide a real effect"
+                                 `On::silent` must not hide a real effect"
                             );
                         }
                     }
@@ -4244,10 +4427,6 @@ impl<M: CardModules> RulesBridge<M> {
         if !after.house_log.is_empty() {
             return true;
         }
-        if !after.abnormal_log.is_empty() {
-            // A layer write is a player hit -- Other (it lands on a player).
-            return true;
-        }
         // Draw / discard: own = SelfOnly (proposed); another player's = Other.
         for (who, _id) in &after.draw_log {
             if *who != owner {
@@ -4338,7 +4517,7 @@ impl<M: CardModules> RulesBridge<M> {
         false
     }
 
-    /// Debug guard: a **silent** entry (`CardDef::silent`) is bookkeeping --
+    /// Debug guard: a **silent** entry (`On::silent`) is bookkeeping --
     /// declarations, resets, latch clears the player never sees as a clause
     /// ficycle. It must not produce a visible effect (money, cards, marks,
     /// houses, charge spend, narration lines); the flag exists to hide the
@@ -4358,8 +4537,6 @@ impl<M: CardModules> RulesBridge<M> {
             Some("reshuffle")
         } else if !after.house_log.is_empty() {
             Some("house")
-        } else if !after.abnormal_log.is_empty() {
-            Some("named-raise")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
         } else if after.logged > 0 {
@@ -4374,8 +4551,8 @@ impl<M: CardModules> RulesBridge<M> {
         debug_assert!(
             card_id.starts_with("TEST:"),
             "silent entry on {card_id} produced a visible effect ({what}); \
-             `CardDef::silent` must not hide a real effect -- drop it from the \
-             silent list or make the body pure bookkeeping"
+             `On::silent` must not hide a real effect -- drop the `.silent()` \
+             mark or make the body pure bookkeeping"
         );
     }
 
@@ -4388,7 +4565,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// adopts the live tail before the swap. Then it completes the activation
     /// entry with its outcome (「无事发生」 when the body changed nothing).
     ///
-    /// `silent` marks a bookkeeping body (`CardDef::silent`): it posted no
+    /// `silent` marks a bookkeeping body (`On::silent`): it posted no
     /// activation, and it must not have produced a visible effect either --
     /// see [`Self::check_silent_body`].
     fn commit_after(
@@ -4460,19 +4637,37 @@ impl<M: CardModules> RulesBridge<M> {
             // QuietWhenEmpty + nothing visible + no prompt: retract the
             // header entirely (no flash, no 「效果适用」, no
             // 「（无事发生）」). A prompt already showed it to the client.
-            // A **requested flash** (`ctx::flash`) counts as visible -- the
-            // player was cued, so the header that names the clause remains.
+            // A **cue** counts as visible -- the player was told something
+            // happened, so the header that names the clause remains. Both
+            // spellings of "cue me" count: the imperative `ctx::flash()` and
+            // the declarative [`card_sdk::abi::Flash::Always`] (`On::flash`),
+            // which is the same promise written on the entry instead of in the
+            // body. Dropping the header under `Always` would make the policy a
+            // lie ("always flashes") the moment the body is a no-op.
+            //
+            // `flash_cued` is "did any entry cue the player" -- the OR of
+            // `ctx::flash()` and any `Flash::Always` sibling -- **not** the
+            // folded `after.flash_policy` (which `Never` can win). A drive
+            // that was cued keeps its header naming the clause even when
+            // `Never` wins the flash decision below ("log entry remains").
             let flash_requested = after.world.flash.lock().requested;
+            let flash_cued = flash_requested || after.flash_cued;
+            // Body emptiness must see every log that the flush below turns
+            // into after-hooks the player can observe: a counter move raises
+            // `counterChanged`, a named raise fires its hooks. Missing those
+            // would retract the 「效果适用」 header and then fire the hooks on
+            // an invisible clause. (`state_log` is likewise a hook raiser.)
             let body_empty = after.logged == 0
                 && after.paid_log.is_empty()
                 && after.draw_log.is_empty()
                 && after.discard_log.is_empty()
                 && after.reshuffle_log.is_empty()
                 && after.house_log.is_empty()
-                && after.abnormal_log.is_empty()
                 && after.state_log.is_empty()
-                && after.marker_spent_log.is_empty();
-            if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
+                && after.marker_spent_log.is_empty()
+                && after.counter_log.is_empty()
+                && after.named_raise_log.is_empty();
+            if quiet_when_empty && body_empty && !after.prompted && !flash_cued {
                 cx.drop_events(&[header]);
                 after.world.recent = cx.world().recent.clone();
                 cx.activation.retain(|&id| id != header);
@@ -4502,6 +4697,26 @@ impl<M: CardModules> RulesBridge<M> {
                     self.drive_should_flash(cx, &after, owner, header)
                 };
                 cx.set_event_flash(header, flash);
+                // One drive, one flash decision, every header it posted.
+                // Sibling entries each flush their own 「效果适用」; `flush_header`
+                // defaults the second-and-later ones' flash off (its `already`
+                // branch), but that is a default, not the decision -- the fold
+                // is. Stamp the folded `flash` on every id `header_ids` recorded
+                // so a trailing `Auto` sibling's header still rides the leading
+                // `Always` (and a `Never` suppresses all of them).
+                for &hid in &after.header_ids {
+                    cx.set_event_flash(hid, flash);
+                }
+                // Belt-and-braces: the `__hdr__` once-per-flash identity names
+                // the first flush. If some id somehow missed the vec, still
+                // stamp that one so `Never` cannot leave a stray flash.
+                {
+                    let hkey = format!("{card_id}|__hdr__");
+                    let first = after.world.flash.lock().seen.get(&hkey).copied();
+                    if let Some(first) = first {
+                        cx.set_event_flash(first, flash);
+                    }
+                }
                 after.world.recent = cx.world().recent.clone();
                 cx.activation.retain(|&id| id != header);
             }
@@ -4593,12 +4808,12 @@ impl<M: CardModules> RulesBridge<M> {
                 t.by_card = by;
             })?;
         }
-        // `cpChanged` -- the mark-emptying card 「its on-card [tile marks] is empty →
-        // graveyard」 rule (user ruling 2026-10-07) lives here, for
-        // the same reason: a count emptied by *any* write (this
-        // run's `add_cp_at`, another effect's removal) leaves the
-        // field. The count watched is the on-card mark counter attached
-        // to the card -- not the tile marks.
+        // The mark-emptying card 「its on-card [CP点] is empty → graveyard」
+        // rule (user ruling 2026-10-07) does **not** raise here: `CpChanged`
+        // is retired. It lives on `Action::CounterChanged` with a
+        // `counter::CP` name check in the residual guard (`clear_cp.rs`) --
+        // one event handler on the count, not a check at each spend site.
+        // A count emptied by *any* write still leaves the field.
 
         // Post-commit named raise -- the wire event name is caller-supplied
         // data (the ruleset owns the vocabulary). 「任意玩家获得[除外]…时」
@@ -4611,9 +4826,9 @@ impl<M: CardModules> RulesBridge<M> {
                 t.by_card = by;
             })?;
         }
-        for (player_id, kind) in after.abnormal_log {
-            let _ = (player_id, kind);
-        }
+        // TODO(规则书): a layer write is a player hit -- Other (it lands on a
+        // player). Raise here once the off-board layer concept lands
+        // (「任意玩家获得[除外]…时」); nothing pushes a layer log yet.
         // `state` -- 「当有其他玩家切换状态时」 (Mujica:欢迎来到ave
         // mujica的世界 (2)). Raised once per real skill-state 1↔2 toggle
         // this run made, same post-commit shape as a named raise. The counter's
@@ -6308,7 +6523,6 @@ impl<M: CardModules> RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -6322,9 +6536,11 @@ impl<M: CardModules> RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         }
     }
@@ -6535,7 +6751,6 @@ impl<M: CardModules> RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
@@ -6549,9 +6764,11 @@ impl<M: CardModules> RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: vec![],
                 prompted: false,
                 parent: -1,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             let win_scope =
@@ -6911,7 +7128,6 @@ impl<M: CardModules> RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -6925,9 +7141,11 @@ impl<M: CardModules> RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         }
     }
@@ -8531,7 +8749,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.card_prop(card, key)
     }
 
-    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// The card rule's declared **tile texts** (`On::texts`), see
     /// [`game_core::engine::CardRules::card_texts`]. Sorted by entry index
     /// (stable, so declaration order within an entry is kept) -- that order is
     /// the third component of the view's text-precedence key.
@@ -8785,7 +9003,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -8799,9 +9016,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         };
         self.ruleset
@@ -8853,7 +9072,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 marker_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-                abnormal_log: vec![],
                 named_raise_log: vec![],
                 state_log: vec![],
                 doubled: -1,
@@ -8867,9 +9085,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: vec![],
                 prompted: false,
                 parent: -1,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             // The play path declares the card's `On::Play` entry -- the press
@@ -8973,7 +9193,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             marker_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
-            abnormal_log: vec![],
             named_raise_log: vec![],
             state_log: vec![],
             doubled: -1,
@@ -8987,9 +9206,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         };
         q.tiles

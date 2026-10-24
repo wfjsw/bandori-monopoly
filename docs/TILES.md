@@ -346,8 +346,9 @@ per slot.
 
 ### Declaration
 
-`CardDef::texts` is a per-entry side table `(entry index, slot, tile, key)`
-(`crates/card-sdk`, ABI v59):
+`On::texts` rides the entry itself (`crates/card-sdk`), as `(slot, tile, key)`
+rows -- the same shape the wire always carried, minus the entry-index column
+which is now synthesised from declaration order:
 
 | field | values | |
 |---|---|---|
@@ -359,13 +360,24 @@ per slot.
 | | `""` | suppresses the slot |
 
 The `slot` mirrors the body's own split (`On::Settle` / `ActionKind::PassTile`),
-so a rule that replaces one half only replaces that half's text.
+so a rule that replaces one half only replaces that half's text. A **slice**
+per entry (`const fn` cannot grow a `&'static` slice; slice-valued fields are
+already the house style on entries). Declaration order of the rows is
+preserved on the wire.
+
+```rust
+On::Settle("", None, settle)
+    .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+On::Action(Action::PassTile("", None, Some(pass_pays), on_pass))
+    .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+```
 
 ### Manifest
 
-`ManifestEntry::texts: Vec<ManifestTileText>` (v59) carries the side table
-through the wire. The host caches it on `CardInfo`; `CardRules::card_texts`
-exposes it to `game-core` as `TileTextDecl`s.
+`ManifestEntry::texts: Vec<ManifestTileText>` (v59) carries the rows through
+the wire (entry index synthesised from enumeration order). The host caches it
+on `CardInfo`; `CardRules::card_texts` exposes it to `game-core` as
+`TileTextDecl`s.
 
 ### View
 

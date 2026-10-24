@@ -32,10 +32,10 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
         // 经过 (行动阶段 12, a mid-route pass of my tile) or 重叠 (`passPlayer`,
         // the end-tile overlap)? The C# `GrabFx` used `PassPlayer`; the text
         // says 「经过」. Pending ruling -- left as `PassPlayer` (C#-carried).
-        On::Action(Action::PassPlayer("actor != owner && actor >= 0", None, on_pass)),
+        On::Action(Action::PassPlayer("actor != owner && actor >= 0", None, on_pass)).silent(),
         On::Action(Action::SettleBefore("", None, grab)),
     ],
-).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想要抓住..."#)
         .raw_name(r#"想要抓住..."#)
         .tags(&[])

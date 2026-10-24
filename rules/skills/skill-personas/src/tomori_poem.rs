@@ -39,8 +39,8 @@ const ACTED: &str = "skill.tomoriPoem.acted";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_DEED,
             None,
@@ -65,7 +65,6 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
         On::Action(Action::MoveResolved("", None, clear_acted)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始4，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 4),

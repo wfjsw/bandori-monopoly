@@ -21,8 +21,8 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Action(Action::TurnStartBefore("", None, declare_cap)),
-        On::Action(Action::DeckAtGameStart("", None, declare_cap)),
+        On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
+        On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(
             bandori_std::guards::OWN_START,
             None,
@@ -44,7 +44,6 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
             before_settle_other)),
     ],
 )
-.silent(&[0, 1])
 // 「（初始1，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),
