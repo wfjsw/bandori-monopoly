@@ -56,7 +56,7 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
         if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
             continue;
         }
-        if !ctx::card_text_mentions(&c, "奇迹水晶") {
+        if !ctx::card_text_mentions(c.as_str(), "奇迹水晶") {
             continue;
         }
         ctx::add_counter_at(uid, counter::CRYSTALS, n, 0);

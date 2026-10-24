@@ -42,7 +42,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         let hand = ctx::cards_in(p, CardPile::Hand);
         for id in &hand {
-            ctx::discard_from_hand(p, id);
+            ctx::discard_from_hand(p, id.as_str());
         }
         redraw.push((p, hand.len() as i32 + (p == player_id) as i32));
     }

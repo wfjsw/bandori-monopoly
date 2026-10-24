@@ -22,10 +22,10 @@
 
 use std::path::Path;
 
-/// `card-sdk`'s `mod sys` (`rules/card-sdk/src/ctx/sys.rs`): the file is the
+/// `card-sdk`'s `mod sys` (`crates/card-sdk/src/ctx/sys.rs`): the file is the
 /// one extern block, so all of it is scanned.
 fn sys_block() -> String {
-    let sys = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/card-sdk/src/ctx/sys.rs");
+    let sys = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/card-sdk/src/ctx/sys.rs");
     std::fs::read_to_string(&sys).unwrap_or_else(|e| panic!("read {}: {e}", sys.display()))
 }
 
@@ -41,14 +41,43 @@ fn every_sys_import_has_a_native_link_name() {
     let mut missing: Vec<String> = vec![];
     let mut wrong_cfg: Vec<String> = vec![];
     let mut prev_has_attr = false;
+    // `sys.rs` formats `cfg_attr` across lines (`#[cfg_attr(\n  …,\n  link_name = …\n)]`),
+    // so accumulate until the closing `)]` rather than matching one physical line.
+    let mut attr = String::new();
+    let mut in_attr = false;
     for line in block.lines() {
         let trimmed = line.trim_start();
-        if trimmed.starts_with("#[cfg_attr") && trimmed.contains("link_name") {
-            // Must cover both the native and the wasm32-linked configs.
-            if !trimmed.contains(LINKED_GUEST_CFG) {
-                wrong_cfg.push(trimmed.to_string());
+        if in_attr {
+            attr.push(' ');
+            attr.push_str(trimmed);
+            if trimmed.contains(")]") || trimmed.ends_with(']') {
+                in_attr = false;
+                if attr.contains("link_name") {
+                    // Must cover both the native and the wasm32-linked configs.
+                    if !attr.contains(LINKED_GUEST_CFG) {
+                        wrong_cfg.push(attr.clone());
+                    }
+                    prev_has_attr = true;
+                }
+                attr.clear();
             }
-            prev_has_attr = true;
+            continue;
+        }
+        if trimmed.starts_with("#[cfg_attr") {
+            attr.push_str(trimmed);
+            if trimmed.contains(")]") || (trimmed.ends_with(']') && !trimmed.ends_with(")]")) {
+                // Single-line `cfg_attr`.
+                in_attr = false;
+                if attr.contains("link_name") {
+                    if !attr.contains(LINKED_GUEST_CFG) {
+                        wrong_cfg.push(attr.clone());
+                    }
+                    prev_has_attr = true;
+                }
+                attr.clear();
+            } else {
+                in_attr = true;
+            }
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix("pub fn ") {
@@ -74,7 +103,7 @@ fn every_sys_import_has_a_native_link_name() {
 
     assert!(
         missing.is_empty(),
-        "rules/card-sdk/src/ctx/sys.rs imports missing \
+        "crates/card-sdk/src/ctx/sys.rs imports missing \
          `#[cfg_attr({LINKED_GUEST_CFG}, link_name = \"ruleset_<name>\")]`: \
          {missing:?}.\n\
          Without it the native build (rules-native, docs/BOT.md B1) and the \
@@ -85,7 +114,7 @@ fn every_sys_import_has_a_native_link_name() {
     );
     assert!(
         wrong_cfg.is_empty(),
-        "rules/card-sdk/src/ctx/sys.rs `link_name` attrs must gate on \
+        "crates/card-sdk/src/ctx/sys.rs `link_name` attrs must gate on \
          `{LINKED_GUEST_CFG}` (native + wasm32-linked), not the old \
          `not(target_arch = \"wasm32\")` alone: {wrong_cfg:?}"
     );
@@ -135,7 +164,7 @@ fn wasm32_linked_drops_the_ruleset_import_module() {
     let block = sys_block();
     assert!(
         block.contains(r#"all(target_arch = "wasm32", not(feature = "native-rules"))"#),
-        "rules/card-sdk/src/ctx/sys.rs must gate `link(wasm_import_module = \"ruleset\")` \
+        "crates/card-sdk/src/ctx/sys.rs must gate `link(wasm_import_module = \"ruleset\")` \
          on `all(target_arch = \"wasm32\", not(feature = \"native-rules\"))` so the \
          linked monolith has no `ruleset` import module (docs/BOT.md §3.6). \
          The block is:\n{block}"
@@ -144,7 +173,7 @@ fn wasm32_linked_drops_the_ruleset_import_module() {
         !block.contains(
             r#"#[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "ruleset"))]"#
         ),
-        "rules/card-sdk/src/ctx/sys.rs still uses the bare wasm32 import-module \
+        "crates/card-sdk/src/ctx/sys.rs still uses the bare wasm32 import-module \
          attr -- that makes every wasm32 build (including the monolith) import \
          from `ruleset`."
     );

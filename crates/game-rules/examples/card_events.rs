@@ -88,16 +88,16 @@ fn main() {
         let mut last_round = -1i32;
         while !m.ended() {
             m.tick(0.25);
-            for e in m.events_since(last_event) {
+            for e in m.events_since_ref(last_event) {
                 last_event = e.id;
-                count(&mut kinds, &e, &mut card_by_kind);
+                count(&mut kinds, e, &mut card_by_kind);
             }
             let st = m.state();
             if st.round > max_rounds {
                 m.finish();
-                for e in m.events_since(last_event) {
+                for e in m.events_since_ref(last_event) {
                     last_event = e.id;
-                    count(&mut kinds, &e, &mut card_by_kind);
+                    count(&mut kinds, e, &mut card_by_kind);
                 }
                 break;
             }

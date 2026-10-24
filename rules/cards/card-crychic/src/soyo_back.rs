@@ -82,7 +82,7 @@ fn branch_discard(player_id: i32) -> card_sdk::Asked {
     // (`ctx::cards_in`).
     let hand = ctx::cards_in(player_id, ctx::CardPile::Hand);
     for id in &hand {
-        ctx::discard_from_hand(player_id, id);
+        ctx::discard_from_hand(player_id, id.as_str());
     }
     // 规则书（1）1: 「获得弃牌数*500的资金」 -- C# `500 * list.Count` (the cards just
     // discarded, not the whole pile).

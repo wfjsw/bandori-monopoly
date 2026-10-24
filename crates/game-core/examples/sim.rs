@@ -77,7 +77,7 @@ fn main() {
         while !m.ended() {
             m.tick(0.25);
             // Count events as they happen: the engine only keeps the last 400.
-            for e in m.events_since(last_event) {
+            for e in m.events_since_ref(last_event) {
                 last_event = e.id;
                 *kinds.entry(e.r#type.clone()).or_default() += 1;
                 // Message keys, nested ones included (the debug form lists them all).

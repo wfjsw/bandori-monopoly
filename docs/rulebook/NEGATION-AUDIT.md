@@ -150,7 +150,7 @@ be left behind by a **later** link.
   already use -- Tritone's 「立刻获得此次失去的资金金额」 goes through the money
   pipeline (the `effect` [反击] window, the modifier stages, `pay` / `payAfter`).
   The C# `fixedAmount` bypass is gone. Files: `crates/game-rules/src/hostfns.rs`,
-  `rules/card-sdk/src/ctx.rs`, `rules/cards/card-morfonica/src/tritone.rs`.
+  `crates/card-sdk/src/ctx.rs`, `rules/cards/card-morfonica/src/tritone.rs`.
 
 ### V5 — the `pay` settlement window ignores `is_cancelled()` — **FIXED 2026-10-07**
 

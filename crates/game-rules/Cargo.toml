@@ -8,6 +8,7 @@ description = "Host for the WASM card ruleset. The browser runs wasmi (interpret
 game-core = { path = "../game-core" }
 game-kinds = { path = "../game-kinds" }
 card-sdk = { workspace = true }
+rules-cond-ir = { path = "../cond-ir" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 # Optional: only the sandboxed card-module host (wasmi / wasmtime) needs an
 # engine. `sandbox = ["dep:wasmi"]` keeps wasmi out of the bot monolith
@@ -16,18 +17,25 @@ wasmi = { workspace = true, optional = true }
 sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# CEL sugar tables (`cel::`): this ruleset's name rows, kind constants and
+# guard-const expansions. Needed on both targets -- the wasm32 build evaluates
+# precompiled conditions and must see the sugar functions. `bandori-std`
+# target-gates `card-sdk/guest` so it does not drag the guest panic handler
+# into this crate's std wasm32 build (web-glue / bot-glue). `cel-ext` is the
+# typed kernel `CondExt` (host installs it; the no_std guest cards do not).
+bandori-std = { path = "../../rules/bandori-std", features = ["cel-ext"] }
 
 # Guard prefilter conditions (docs/GUARDS.md G0/G2). Host builds compile from
 # source (the `cel` parser); the wasm32 (browser glue) build loads the lean
 # compiled form with `runtime-only` and never ships the parser (§8.3).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rules-cond = { path = "../../rules/cond" }
+rules-cond = { path = "../cond" }
 # wasmtime is the native sandbox backend. Optional so a `sandbox = false`
 # build (`rules-native` / the bot monolith) does not compile an unused engine.
 wasmtime = { version = "37", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-rules-cond = { path = "../../rules/cond", default-features = false, features = ["runtime-only"] }
+rules-cond = { path = "../cond", default-features = false, features = ["runtime-only"] }
 
 [features]
 default = ["sandbox"]
@@ -50,7 +58,3 @@ bot-cost = ["game-core/bot-cost"]
 # `card-sdk`'s `ctx/sys.rs` resolve inside the one module. Pure guest wasm
 # modules (sandbox cards) leave this off and keep `wasm_import_module`.
 native-rules = ["card-sdk/native-rules", "rules-cond/compile"]
-
-[dev-dependencies]
-# Ruleset-defined counter names and kind ids for tests that arrange fixtures.
-bandori-std = { path = "../../rules/bandori-std" }

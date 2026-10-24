@@ -6,12 +6,30 @@
 //! > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。
 //!
 //! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
+//! 
+//! Reviewed 10/24/2026
 
-use bandori_std::ctx::{self, trigger};
+use bandori_std::ctx;
 use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
 const ID: &str = "AG:（摩卡）0.5倍速";
+
+
+/// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」
+///
+/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
+/// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
+/// count emptied by *any* write leaves the field just the same.
+///
+/// Migrated to CEL: the former Rust residual guard (`trigger::card_is(ID) &&
+/// trigger::name() == card_sdk::abi::counter::CRYSTALS`) is folded into this
+/// pre as `trigger_card == card.id && counter_is('crystals')`. The cond
+/// vocabulary has no `card_is` function; `trigger_card` / `card.id` are the
+/// same `id_of` hashes and this entry only runs as this card, so the
+/// comparison is the exact `trigger::card_is(ID)` spelling.
+const CRYSTALS_CHANGED_PRE: &str =
+    "actor == owner && card.placed && trigger_card == card.id && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0";
 
 pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
@@ -25,15 +43,17 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         // 奇迹水晶为0时此卡放入弃牌堆。
         // TODO: Check, this effect should be silent
         On::Action(Action::CounterChanged(
-            "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", 
-            Some(crystals_changed_guard), 
-            on_crystals_changed)
-        ),
+            CRYSTALS_CHANGED_PRE,
+            None,
+            on_crystals_changed,
+        )),
 
         // > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）
+        // TODO: Check 最终结算
         On::Filter(Filter::DiceRollValue("actor == owner && move.main && card.placed", None, roll_half)),
 
         // 且你的所有资金支付与消耗减半。
+        // Note: Mul happens after Add
         On::Filter(Filter::PaySplitMul("actor == owner && card.placed && value > 0", None, pay_mul)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -48,10 +68,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书(1): 「将此卡放置在场上」
-    // TODO: Why we need 2 function to place a card on the field?
-    ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("moca_half_note")));
+    // 规则书(1): 「将此卡放置在场上」 -- the place-now + fate-later fold
+    // (`place_card` creates the instance, `Dest::Field` stops the commit from
+    // also spending the hand card); see `ctx::place_self_to_field`.
+    ctx::place_self_to_field(player_id, ID, &Msg::new(key!("moca_half_note")));
     // 规则书(1): 「并获得3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(
@@ -69,16 +89,6 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」
-///
-/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
-/// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
-/// count emptied by *any* write leaves the field just the same.
-/// Residual guard for [`on_crystals_changed`] -- `card_is` + the counter name
-/// (`counter_is('crystals')` is also in the pre).
-fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
-}
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
@@ -104,15 +114,20 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// round" is loose -- 5 → 2 is a *floor* half, and the card says 向上取整. Both
 /// readings are defensible and they disagree by one step, so the composition
 /// order needs a ruling. Filed as OPEN-ROLLRESHAPE-01.
-fn roll_half(player_id: i32, mut v: RollValue) -> RollValue {
+fn roll_half(player_id: i32, v: RollValue) -> RollValue {
+
     let roll = v.value.max(0);
-    let halved = (roll + 1) / 2;
+
+    // TODO: Replace to .div_ceil as soon as https://github.com/rust-lang/rust/issues/88581
+    let halved = roll / 2 + roll % 2;
+
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_roll"))
             .i("from", roll as i64)
             .i("to", halved as i64),
     );
+
     RollValue { value: halved, ..v }
 }
 
@@ -122,13 +137,17 @@ fn roll_half(player_id: i32, mut v: RollValue) -> RollValue {
 /// User ruling 2026-10-15 (OPEN-取整 family): a 减半 modifier transforms the
 /// running amount exactly and must NOT CeilTo in its own body; the engine
 /// rounds up to a multiple of 10 once after all add/mul modifiers. Integer
-/// fold rounds the .5 up (`(amount + 1) / 2`) so a sole modifier still settles
+/// fold rounds the .5 up (`value.div_ceil(2)`) so a sole modifier still settles
 /// at `round10(exact)` (25 → 12.5 → 20).
 fn pay_mul(player_id: i32, value: i32) -> i32 {
     if value <= 0 {
         return value;
     }
-    let half = ((value as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
+    // `value > 0`, so ceil-halving is `value / 2 + value % 2` (stable; avoids
+    // the unstable `int_roundings` feature behind `div_ceil`, and unlike
+    // `(value + 1) / 2` it cannot overflow at `i32::MAX`).
+    // TODO: Replace to .div_ceil as soon as https://github.com/rust-lang/rust/issues/88581
+    let half = value / 2 + value % 2;
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_pay"))

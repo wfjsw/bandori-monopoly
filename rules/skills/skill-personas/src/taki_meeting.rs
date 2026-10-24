@@ -91,10 +91,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("taki_meeting_ask")),
         &field
             .iter()
-            .map(|(_, c)| Msg::new(key!("taki_meeting_option")).card("card", c))
+            .map(|(_, c)| Msg::new(key!("taki_meeting_option")).card("card", c.as_str()))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&(uid, ref card)) = field.get(pick) else {
+    let Some(&(uid, card)) = field.get(pick) else {
         return Ok(());
     };
     if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("taki_meeting_spend")))? {
@@ -104,7 +104,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     ctx::add_counter_at(uid, counter::CRYSTALS, 1, 0);
     ctx::log(
         player_id,
-        &Msg::new(key!("taki_meeting_added")).card("card", card),
+        &Msg::new(key!("taki_meeting_added")).card("card", card.as_str()),
     );
     Ok(())
 }

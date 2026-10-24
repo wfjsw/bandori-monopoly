@@ -169,6 +169,7 @@ impl CardWorld for TestWorld {
         _fresh: bool,
     ) -> i32 {
         self.marks.push((tile, owner, note));
+        // Return a plausible mark uid (the mock does not track real rows).
         1
     }
     fn money(&self, player_id: i32) -> i32 {
@@ -277,13 +278,6 @@ impl CardWorld for TestWorld {
     }
     fn set_tok(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn add_tok(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
-        0
-    }
-    fn slot(&self, _: i32, _: &str) -> i32 {
-        0
-    }
-    fn set_slot(&mut self, _: i32, _: &str, _: i32) {}
-    fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
     fn group_pool(&self, _: i32, _: &str) -> i32 {

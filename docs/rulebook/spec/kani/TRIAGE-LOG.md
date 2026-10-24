@@ -484,7 +484,7 @@ Branch is **docs + crychic static kassert message only** (production
 Goal: remove the `String`/`Vec` unwinding cost that times out
 `prompt::aya_haruka_01_*`, `money_shave::aya_haruka_02_*`, and
 `events::front_or_back_*` / `moca_02_mutant` at 1800 s. Approach: `cfg(kani)`
-facades in `rules/card-sdk` (same pattern as intern/Msg: zero-loop, heap-free)
+facades in `crates/card-sdk` (same pattern as intern/Msg: zero-loop, heap-free)
 plus harness-side fixed arrays. Production wasm/native **byte-identical**
 (`dist` hashes match master).
 
@@ -1506,7 +1506,7 @@ Per-proof detail lives in `docs/rulebook/spec/kani/mor.md` § skills_mor triage.
 | `nanami_01_fire_iff` + `nanami_01_user1_fire_iff` | UNWINDING 156/118 s | same `pass_world` 60-trip | **A** | same |
 | `touko_01_mutant_is_detected` | UNWINDING 116 s | same `pass_world` | **A** | same |
 | `touko_01_noop_not_circle` | UNWINDING 39 s (`#[kani::unwind(8)]`) | `fill_pass_circle` `while i < 60` (fill `SetId::Circle`), `skills_mor.rs:69` iteration 8 | **A** | 8×8 chunk walk (true N 60 → 8) |
-| `tsukushi_01_redirect_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | BMC/symex only (never SAT). Profile: memchr_naive 2788 + memchr_aligned 894 + memcmp 864 + `PadAdapter::write_str` recursion 33 + `std::fmt::format`. Root: body `rec_key` = `alloc::format!("skill.tsugushi.rec:{p}")` → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. Symbolic `who = others.get(ask_pick)` made Display unroll all digit paths on a symbolic-length string. Msg facade already O(1) | **E** | (1) `ask_pick` returns a literal 0 when `options.len()<=1` (forced pick; `rules/card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump (`rules/card-sdk/src/kani_alloc.rs`) kills system-allocator OOM/`RawVec` CBMC paths. Body `format!` is production — cannot edit |
+| `tsukushi_01_redirect_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | BMC/symex only (never SAT). Profile: memchr_naive 2788 + memchr_aligned 894 + memcmp 864 + `PadAdapter::write_str` recursion 33 + `std::fmt::format`. Root: body `rec_key` = `alloc::format!("skill.tsugushi.rec:{p}")` → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. Symbolic `who = others.get(ask_pick)` made Display unroll all digit paths on a symbolic-length string. Msg facade already O(1) | **E** | (1) `ask_pick` returns a literal 0 when `options.len()<=1` (forced pick; `crates/card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump (`crates/card-sdk/src/kani_alloc.rs`) kills system-allocator OOM/`RawVec` CBMC paths. Body `format!` is production — cannot edit |
 
 ### CONFIRMED genuine discrepancies
 
@@ -1528,7 +1528,7 @@ running. All nine rows are **needs re-time**.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening; production bodies untouched. Allowed Kani-only surface used:
-`rules/kani/**` + `cfg(kani)` in `rules/card-sdk`.
+`rules/kani/**` + `cfg(kani)` in `crates/card-sdk`.
 
 ## triage3 batch 14 — ras / mygo / skills_mygo central non-success rows (kani-pass@fc3ff3e1)
 
@@ -1602,7 +1602,7 @@ kani-bump validated on `skills_mygo::band_04_ineffective_overcap_iff`
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening (band-02 book formula kept despite the D); production bodies
 untouched. Allowed Kani-only surface: `rules/kani/**` + `cfg(kani)` in
-`rules/card-sdk` (`cards_in` exact-length facade — the old padded 0\|4 shape
+`crates/card-sdk` (`cards_in` exact-length facade — the old padded 0\|4 shape
 was a host-model defect for every body that reads `len()`).
 
 ## triage3 batch 15 — mujica / skills_mujica / crychic central non-success rows (kani-pass@fc3ff3e1)
@@ -1715,7 +1715,7 @@ per harness is required.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening. Production bodies untouched. Allowed Kani-only surface:
-`rules/kani/**` + `cfg(kani)` wrappers in `rules/card-sdk/src/ctx.rs`
+`rules/kani/**` + `cfg(kani)` wrappers in `crates/card-sdk/src/ctx.rs`
 (`field_instances` / `find_card` facades, same pattern as `cards_in`).
 
 ## class-E deep dive — library stubs + global kani-bump (branch `kani-triage3`)

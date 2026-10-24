@@ -19,9 +19,10 @@
 //
 // Input set (behaviour-relevant only):
 //
-//   crates/game-core, crates/game-rules, crates/web-glue, rules/cond,
+//   crates/game-core, crates/game-rules, crates/web-glue, crates/cond,
 //   third_party/cel-rust,            (the whole trees)
-//   rules/**,                        (the guest workspace: card-sdk, cards,
+//   crates/card-sdk,                 (the kernel ABI crate)
+//   rules/**,                        (the guest workspace: cards,
 //                                     skills, tiles, events, fixtures, locks)
 //   Cargo.lock, rules/Cargo.lock,    (dependency resolution)
 //   Cargo.toml, rules/Cargo.toml,    (the build graph: members, the cel patch)
@@ -44,8 +45,10 @@ export const SOURCE_TREES = [
   "crates/game-core",
   "crates/game-rules",
   "crates/web-glue",
-  "rules/cond",
+  "crates/cond",
+  "crates/cond-ir",
   "third_party/cel-rust",
+  "crates/card-sdk",
   "rules",
 ];
 

@@ -142,73 +142,114 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264); `plan.fixed_roll` from `TurnCtx.fixed_roll` |
+| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `plan.fixed_roll` from `TurnCtx.fixed_roll` |
 | window | `turn_player`, `turn_key` | `Cx` / `TurnCtx` |
-| candidate | `owner` (= `player_id` arg), `owner.money/fire/crystals/hand/pos/out/stay/stun/exile/no_hand`, `owner.character`, `owner.band`, `owner.tiles` (count). `owner.crystals` is the owner's **band** crystals (the band-skill field instance's `crystals`), not an on-card counter | `World`/`Player` |
-| candidate | `card.id`, `card.placed`, `card.cp` (legacy -- reads **crystals**, see §4.2b), `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
+| candidate | `owner` (= `player_id` arg), `owner.money/hand/pos/out/stay/stun/exile/tiles` (count) | `World`/`Player` |
+| candidate | `card.id`, `card.placed`, `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
+
+Content sugar keys are **not** extra schema rows: they lower to `state(p, key)`
+(see §4.2b) and read the one keyed-int door.
 
 Not in the schema (residual, stays in the wasm guard): `price_tag` (rent-table
 lookup), `grade_of` (a 48-row character→grade table local to the card),
 `buildable_targets` (the engine's `WhyNotBuildOn`), `skill_blocked` semantics
-beyond a `blocked(band)` int mirror, and `cant_move` (a 3-valued engine status
+beyond a `cand_has` int mirror, and `cant_move` (a 3-valued engine status
 whose refusal message must stay specific). Geometry (`dist`, `next_dist`,
 `on_path`, `between`, `near`/`owned_within`, `within5`/`others_within`,
 `players_on`), the turn counters (`gains_this_turn`, `targeted_count`) and the
 pure int predicate `repeated_digits` **are** in the schema now.
 
-### 4.2b The condition vocabulary (one definition per name)
+### 4.2b The condition vocabulary (kernel vs CondExt)
 
-`rules-cond`'s `vocab.rs` is **the** definition of every condition name: one
-`VOCAB` entry per name, from which the schema/lint's name lists, the CEL type
-info, the binding and the evaluator registration are all derived. Adding a
-name = one entry + a `CondView` accessor (and that accessor's host
+`rules-cond`'s `vocab.rs` is the definition of every **kernel** condition name:
+one `VOCAB` entry per name, from which the schema/lint's name lists, the CEL
+type info, the binding and the evaluator registration are all derived. Adding
+a kernel name = one entry + a `CondView` accessor (and that accessor's host
 implementations). No edits to `schema.rs` / `eval.rs` tables.
 
-**Generic core vs game vocab (card-std-split).** The generic tile queries are
-`tile_is(tile, 'ring')` / `tile_attr(tile, 'group')` / `tile_in(owner, tile,
-'livehouse')` (host ABI v56). The older spellings `is_circle` / `is_ring` /
-`is_live_house` / `is_buyable` were removed (ABI v70) -- conditions use only
-the generic trio so
-existing condition strings keep the same results. `character_is` / `band_is` /
-`owner.fire` / `owner.crystals` remain game vocabulary registered in the same
-table (a separate game-vocab extension is not cheaper than this boundary note).
+**Kernel vs content (`CondExt`).** The kernel keeps a closed generic algebra
+(`money` / `hand` / `pos` / `tiles` / `out` / `stay` / `stun` / `exile` /
+`state(p, key)` / `tile_is` / `tile_attr` / `tile_in` / `cand_has` / …). Game
+spellings survive as **content-authored sugar `Name` rows** installed once via
+`rules_cond::install_ext(bandori_std::cel::ext())` (assembled in
+`bandori_std::cel`). Authoring strings do not change; the flat ids match the
+old kernel rows so precompiled blobs keep binding.
 
 | field | what it is |
 |---|---|
-| `cel` | the CEL spelling (`actor`, `move.main`, `tile_is`, `tile_in`) |
+| `cel` | the CEL spelling (`actor`, `move.main`, `tile_is`, `state`) |
 | `aliases` | other CEL spellings that flatten to the same `flat` (`chain.count` for `effect.count`, `trigger.kind` for `kind`) |
 | `flat` | the flat identifier after the `root.field` rewrite (`move_main`) |
 | `scope` | `Window` / `Candidate` / `Func { arity, cand }` |
 | `ty` | `Int` / `Bool` / `OptInt` (binds `null` when `-1`) / `Str` (only `kind`) |
 | `get` | scalar fetch: `fn(&dyn CondView) -> i64` |
-| `fx` | function shape (`Fx::SeatInt` / `StrInt` / `IntHas` / `Neighbor` / …), including the hidden table the eager evaluator bakes |
-| `doc` | one line, mirrored in this table |
+| `fx` | function shape (`Fx::SeatInt` / `StrInt` / `IntHas` / `PairHas` / `Neighbor` / …), including the hidden table the eager evaluator bakes |
+| `lower_as` | how the name lowers to the IR (`Direct` / `Call` / `CallEq` / `OwnerState`) |
+| `doc` | one line |
 
-**Named counters / messages (v50).** Three names ride the same table; their
+**`LowerAs` sugar mechanism.** A content name lowers to the same IR the
+canonical generic form produces:
+
+| shape | emission | example |
+|---|---|---|
+| `Direct` | kernel `FnId` from the flat id | `money(p)` |
+| `Call { fid, bake }` | `Call(fid, [user_args…, Const(id_of(bake))…])` (bake leads for `CandHas`) | `charge(p)` → `Call(State, [p, id_of("charge")])` |
+| `CallEq { fid, bake }` | `Eq(Call(fid, [user_args[..n-1]…, Const(id_of(bake))…]), user_args[n-1])` | `persona_is(p, '名')` → `Eq(Call(State, [p, id_of("persona")]), id_of("名"))` |
+| `OwnerState { fid, key }` | `Call(fid, [Var(Owner), Const(id_of(key))])` | `owner.charge` → `Call(State, [Var(Owner), id_of("charge")])` |
+
+**`state(p, key)` key table (this ruleset).** Hosts match-dispatch the keyed
+int reads. One shared list, `bandori_std::cel::STATE_KEYS`, is read by both the
+host fill and `ir_fill`:
+
+| key | host read |
+|---|---|
+| `"charge"` | `tok(seat, "charge")` |
+| `"crystals"` | `group_pool(seat, "crystals")` |
+| `"persona"` | `id_of(persona_name(seat))` |
+| `"group"` | `id_of(group_name(seat))` |
+| `"noHand"` | `MatchPlayer.state` / `state_get(seat,"noHand")` |
+| `"stay"`, `"stun"`, `"stunStart"`, `"exile"`, … | existing `MatchPlayer.state` keys |
+
+Missing = 0. `state_table()` emits the merged rows so the eager fill and
+`IrCtx.state` agree. Owner sugar is `state(owner, key)` — the candidate fill
+writes the overlay as a `state[owner]` row. One door.
+
+**Three `CondView` implementors** (all call the underlying store directly —
+never `self.<same method>`, which is trait-method recursion and a stack
+overflow):
+
+* `rules_cond::SnapshotView` (`view_impl.rs`) — the eager `WindowCtx` +
+  `CandidateCtx` reference the tests and the precompiled-conds runtime use.
+* `game-rules::cond_pre::SnapView<S: SnapSrc>` — any `SnapSrc` (a
+  `CardWorld`, or `rules-native`'s linked world) plus the candidate being
+  probed. This is the generic host accessor implementation.
+* `game-rules::wasm_rules::LiveSnap` — the live `World` + `GameData` +
+  `Trigger` (+ optional candidate), reading `self.world.*` / `self.data.*`.
+
+**Named counters / messages (v50).** Three names ride the kernel table; their
 `doc` text is the definition:
 
 | name | shape | doc |
 |---|---|---|
-| `card.counter('name')` (flat `card_counter`) | `Fx::StrInt`, candidate | `card.counter('name')` -> the candidate instance's named counter (`'cp'` / `'crystals'` / any); missing = 0. `counter::CP` reads `FieldCard::cp`, `counter::CRYSTALS` reads `FieldCard::crystals`, anything else `FieldCard::counters[name]` |
+| `card.counter('name')` (flat `card_counter`) | `Fx::StrInt`, candidate | the candidate instance's named counter; missing = 0. Host maps well-known wire names onto dedicated card fields, anything else is an instance counter |
 | `counter_name` (alias `trigger_name`) | window `Ty::Int` | the trigger's counter / message name hash (`Trigger.name`); `counter_is('…')` is the string spelling. Same encoding as `trigger_card` (`id_of`); `0` when empty |
-| `counter_is('name')` | `Fx::IntHas` | `counter_is('name')` -> this window's `Trigger.name` is that counter / message |
+| `counter_is('name')` | `Fx::IntHas` | this window's `Trigger.name` is that counter / message |
 
-`card.cp` (flat `card_cp`) is the **legacy** name and actually reads
-**crystals** on the candidate instance (`FieldCard::crystals`) -- not
-`FieldCard::cp`. Keep it; do not break it. Use `card.counter('cp')` for the
-real on-card [CP点] count. `owner.crystals` / `crystals(p)` are the seat's
-**band** crystals (the band-skill field instance's `crystals`, `World::
-band_crystals`), not an on-card counter.
+**`card.cp` is gone.** The name was removed in de2fd9a9 and is **not** in
+`VOCAB`. Do not restore it — the old `card.cp` read `FieldCard::crystals`, not
+`FieldCard::cp`. Use `card.counter('crystals')` for crystals and
+`card.counter('cp')` for real on-card [CP点]. Seat crystals (the band-skill
+field instance's pool) are `state(p, 'crystals')` / the `crystals(p)` sugar.
 
 **Reads hidden state?** No CEL vocabulary name reaches another seat's hand
 **contents**, any deck **order**, or the RNG. `hand(p)` / `owner.hand` are
 hand **sizes** (`CardWorld::hand_size` = `hidden[p].hand.len()`, kept in
 sync with the public `MatchPlayer.hand` count) -- not card ids. Everything
-else (`money` / `pos` / `out` / `stay` / `stun` / `exile` / `no_hand` /
-`character` / `band` / `tiles` / `fire` / `crystals` / `tile.*` / `slot` /
-`tok` / `card.counter` / `move.*` / `chain.*` / `is_*`) is public board /
-player state or trigger ambient. A play-gate window (`fill_window_ambient`)
-carries no `Trigger`, so the trigger names are defaults.
+else (`money` / `pos` / `out` / `stay` / `stun` / `exile` / `tiles` /
+`state(p, key)` / `tile.*` / `slot` / `tok` / `card.counter` / `move.*` /
+`chain.*`) is public board / player state or trigger ambient. A play-gate
+window (`fill_window_ambient`) carries no `Trigger`, so the trigger names are
+defaults.
 
 That is the seat-view equivalence contract (`docs/BOT.md` §1.1): a CEL
 `pre` alone can never make `playable` / `skills` diverge between the
@@ -222,18 +263,8 @@ Accessors go through [`crate::view::CondView`] (`rules-cond/src/view.rs`): a
 read-only query trait covering the trigger fields, the player/tile/card
 queries, `slot`/`tok` and the tile-kind predicates -- the same vocabulary the
 card SDK exposes to guests (`card-sdk` `ctx::*` reads). A condition and a
-guard therefore read the world through one surface.
-
-Host views (all call the underlying store directly -- never `self.<same
-method>`, which is trait-method recursion and a stack overflow):
-
-* `rules_cond::SnapshotView` (`view_impl.rs`) -- the eager `WindowCtx` +
-  `CandidateCtx` reference the tests and the precompiled-conds runtime use.
-* `game-rules::cond_pre::SnapView<S: SnapSrc>` -- any `SnapSrc` (a
-  `CardWorld`, or `rules-native`'s linked world) plus the candidate being
-  probed. This is the generic host accessor implementation.
-* `game-rules::wasm_rules::LiveSnap` -- the live `World` + `GameData` +
-  `Trigger` (+ optional candidate), reading `self.world.*` / `self.data.*`.
+guard therefore read the world through one surface. The three host views are
+listed in §4.2b.
 
 **Eager vs lazy.** The evaluator **eagerly copies** the used names and the
 function tables into the CEL context once per window (`bind_window`) and per
@@ -252,7 +283,7 @@ with the lint (both sides derive from VOCAB, so this is a regression guard
 for the projections and the CEL-stdlib list); `vocab_flats_are_unique`
 guards the flat namespace.
 
-**How to add a condition name**
+**How to add a kernel condition name**
 
 1. Add a `CondView` accessor in `rules-cond/src/view.rs` (if it reads
    something new).
@@ -268,10 +299,16 @@ guards the flat namespace.
 5. Run `cargo test -p rules-cond` -- `vocab_matches_schema_lists` fails if
    the lint and the table disagree.
 
-`schema.rs` and `eval.rs` are pure consumers of VOCAB: the lint lists, the
-`root.field` rewrite (via `vocab::by_cel`), the variable bindings (via
-`Name::get`) and the function registration (via `Name::fx`) all iterate the
-table. Adding a name never edits their bodies.
+**How to add a content sugar name** (game vocab): one `Sugar` row in
+`rules/bandori-std/src/cel.rs` (turned into a `Name` by `cel::ext()`), plus
+the host `state()` / `cand_set()` dispatch for its key. No kernel edit. Pin
+the key against `STATE_KEYS` in the `bandori-std::cel` unit tests.
+
+`schema.rs` and `eval.rs` are pure consumers of VOCAB + the installed
+`CondExt`: the lint lists, the `root.field` rewrite (via `vocab::by_cel`),
+the variable bindings (via `Name::get`) and the function registration (via
+`Name::fx`) all iterate the merged table. Adding a name never edits their
+bodies.
 
 ### 4.2c Window variables per entry kind (ABI v49)
 
@@ -535,7 +572,7 @@ G3 is the merge gate for G4.
 ## 8. G1 status (2026-10-07) — `crates/rules-cond`
 
 Isolated module: workspace member `crates/rules-cond`, **no** dependency on
-`game-core` / `card-sdk`, not referenced by host/ABI/`rules/card-sdk` (those
+`game-core` / `card-sdk`, not referenced by host/ABI/`crates/card-sdk` (those
 are being edited concurrently). The host fills the two pure-data snapshots in
 G2.
 
@@ -784,7 +821,7 @@ unaffected either way.
 
 ### 9.4 Files
 
-* `rules/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` `pre` before the guard,
+* `crates/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` `pre` before the guard,
   `pre::MINE`, `On::pre()` builder, `ManifestOn.pre`, `ABI_VERSION = 45`.
 * `crates/game-rules/src/cond_pre.rs` (new) — `CompiledPre`, `PrecompiledConds`
   (the shipped `conds-*.bin` envelope, §8.2), `admits` /
@@ -899,7 +936,7 @@ required set (buy 2899 / forcebuy 392 / auctions 255 / rent 19567 / bankrupt 96)
 
 ### 10.5 Files (G3/G4; legacy scaffolding removed 2026-10-14)
 
-* `rules/card-sdk/src/{lib.rs,abi.rs,rt.rs}` — `On::*` guard `Option<fn>`,
+* `crates/card-sdk/src/{lib.rs,abi.rs,rt.rs}` — `On::*` guard `Option<fn>`,
   `On::has_guard`/`no_guard`/`guard`, `ManifestOn::has_guard`. The G3 audit
   pieces (`CardDef::legacy`, `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`)
   shipped with G3 and were deleted at removal time (ABI **61**).

@@ -85,7 +85,7 @@ SHAPE = {
     "Redirect": _payload("RedirectValue"),
 }
 
-# Engine filter kinds → body shape (mirrors rules/card-sdk/src/kinds.rs).
+# Engine filter kinds → body shape (mirrors crates/card-sdk/src/kinds.rs).
 # Ruleset filter kinds are appended from bandori-std/src/kind.rs below.
 FILTER_KIND_SHAPE = {
     "PaySplitChoose": "Flag",
@@ -123,7 +123,7 @@ def _load_ruleset_filter_shapes() -> dict[str, str]:
     extra: dict[str, str] = {}
     for rel in (
         Path("rules/bandori-std/src/kind.rs"),
-        Path("rules/card-sdk/src/kinds.rs"),
+        Path("crates/card-sdk/src/kinds.rs"),
     ):
         if not rel.is_file():
             continue

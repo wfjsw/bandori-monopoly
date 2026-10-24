@@ -32,13 +32,13 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // the unmodified body reaches. An undeclared op → `outside_subset` loud FAIL.
 // ---------------------------------------------------------------------------
 
-/// `Mor:（Rui）正论恶魔` — others / pay_to / set_slot / player_out / log
+/// `Mor:（Rui）正论恶魔` — others / pay_to / state_set / player_out / log
 /// (player_count rides `player_out` under cfg(kani)).
 crate::host_subset!(rui_devil_dispatch {
     others_count => arm_others_count,
     others_at => arm_others_at,
     pay_to => arm_pay_to,
-    set_slot => arm_set_slot,
+    state_set => arm_state_set,
     player_out => arm_player_out,
     player_count => arm_player_count,
     log | effect => arm_log,
@@ -491,7 +491,7 @@ crate::host_subset!(garden_dispatch {
     card_move => arm_card_move,
     set_kind => arm_stub_zero,
     set_teleport_to => arm_stub_zero,
-    state_add | inc_slot => arm_state_add,
+    state_add => arm_state_add,
     state_set => arm_state_set,
 });
 
@@ -1536,8 +1536,8 @@ crate::host_subset!(tritone_dispatch {
     set_counter_self => arm_set_counter_self,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
-    set_slot => arm_set_slot,
-    slot => arm_slot,
+    state_set => arm_state_set,
+    state_get => arm_state_get,
     pay => arm_pay,
     log | effect => arm_log,
 });

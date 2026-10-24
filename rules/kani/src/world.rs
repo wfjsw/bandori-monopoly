@@ -1001,7 +1001,8 @@ impl World {
     }
 
     /// [`state_flag::NEVER_NEGATIVE`] (bit 0) on `key`, as declared by
-    /// `state_set_flags`. Matches the engine's floor in `MatchPlayer::state_set`.
+    /// `state_set` field `FLAGS`. Matches the engine's floor in
+    /// `MatchPlayer::state_set`.
     pub fn key_never_negative(&self, player: i32, key: NameId) -> bool {
         self.key_flags(player, key) & 1 != 0
     }
@@ -1016,7 +1017,7 @@ impl World {
         self.player_keys[player as usize].get(id) as u8
     }
 
-    /// Declare [`state_flag`] bits for `key` (hostfns `state_set_flags`).
+    /// Declare [`state_flag`] bits for `key` (`state_set` field `FLAGS`).
     pub fn key_set_flags(&mut self, player: i32, key: NameId, flags: u8) {
         if player < 0 || player as usize >= MAX_PLAYERS {
             return;

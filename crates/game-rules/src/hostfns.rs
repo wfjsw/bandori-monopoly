@@ -118,6 +118,8 @@ pub fn tile_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 /// Bind `count` units of the running instance's counter `kind` to `tile`.
+/// Returns the mark row's uid (the new row's, or the merged row's), or `-1`
+/// when `count <= 0`.
 pub fn place_mark<C: HostCtx>(
     c: &mut C,
     tile: i32,
@@ -228,6 +230,16 @@ pub fn mark_instance_at<C: HostCtx>(
 pub fn mark_partner<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
     let f = guest_filter(c, fp, fl)?;
     Ok(c.st().wr().mark_partner(tile, &f))
+}
+
+/// The marked tile of the row at `uid`, or -1 when no such row.
+pub fn mark_tile<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
+    Ok(c.st().wr().mark_tile_by_uid(uid))
+}
+
+/// Drop the exact mark row at `uid`. Returns 1 when that row was present.
+pub fn remove_mark<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().remove_mark_by_uid(uid) as i32)
 }
 
 pub fn counter_self<C: HostCtx>(c: &mut C, np: i32, nl: i32) -> Result<i32, HostErr> {
@@ -910,6 +922,10 @@ pub fn cards_in<C: HostCtx>(
     let pile = crate::CardPile::from_i32(pile)
         .ok_or_else(|| HostErr::trap(format!("bad card pile {pile}")))?;
     let list = c.st().wr().cards_in(player_id, pile);
+    // Wire format is `postcard::to_allocvec(&Vec<String>)` on purpose: the
+    // guest interns on decode (`ctx::decode_name_list`) so the `String` clone
+    // is already gone. Batch 3 may re-encode as raw `NameId`s and drop this
+    // host alloc too — keep the two sides in lockstep.
     let bytes =
         postcard::to_allocvec(&list).map_err(|e| HostErr::trap(format!("cards_in encode: {e}")))?;
     if bytes.len() as i32 <= cap {
@@ -1139,6 +1155,7 @@ pub fn state_get<C: HostCtx>(
             Some(game_core::state::Tick::TurnStart) => 1,
             Some(game_core::state::Tick::TurnEnd) => 2,
         },
+        4 => c.st().wr().state_var(player_id, &key).flags as i32,
         _ => c.st().wr().state_get(player_id, &key),
     })
 }
@@ -1172,6 +1189,10 @@ pub fn state_set<C: HostCtx>(
             c.st_mut().w().state_set_expires(player_id, &key, e);
             v
         }
+        4 => {
+            c.st_mut().w().state_set_flags(player_id, &key, v as u8);
+            v
+        }
         _ => c.st_mut().w().state_set(player_id, &key, v),
     })
 }
@@ -1185,34 +1206,6 @@ pub fn state_add<C: HostCtx>(
 ) -> Result<i32, HostErr> {
     let key = guest_str(c, p, n)?;
     Ok(c.st_mut().w().state_add(player_id, &key, delta))
-}
-
-pub fn slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-    let key = guest_str(c, p, n)?;
-    Ok(c.st().wr().slot(player_id, &key))
-}
-
-pub fn set_slot<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    p: i32,
-    n: i32,
-    v: i32,
-) -> Result<(), HostErr> {
-    let key = guest_str(c, p, n)?;
-    c.st_mut().w().set_slot(player_id, &key, v);
-    Ok(())
-}
-
-pub fn inc_slot<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    p: i32,
-    n: i32,
-    by: i32,
-) -> Result<i32, HostErr> {
-    let key = guest_str(c, p, n)?;
-    Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
 // `group_pool` / `add_group_pool` remain on the guest surface: a named pool on

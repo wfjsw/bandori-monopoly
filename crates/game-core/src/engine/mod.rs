@@ -1045,6 +1045,9 @@ impl Match {
     }
 
     /// Events with id greater than `last_id` (`EventsSince`).
+    ///
+    /// Clones each event (several heap strings per row) -- take
+    /// [`Match::events_since_ref`] when the caller only reads them.
     pub fn events_since(&self, last_id: i32) -> Vec<MatchEvent> {
         self.world
             .recent
@@ -1052,6 +1055,15 @@ impl Match {
             .filter(|e| e.id > last_id)
             .cloned()
             .collect()
+    }
+
+    /// Events with id greater than `last_id`, borrowed -- no `MatchEvent`
+    /// clone. Same shape as [`Match::hand_len_first`]: the non-cloning
+    /// sibling of [`Match::events_since`] for callers that only scan, find,
+    /// or map keys. The owned form stays for JSON / SSE / snapshot boundaries
+    /// that need a `Vec<MatchEvent>`.
+    pub fn events_since_ref(&self, last_id: i32) -> impl Iterator<Item = &MatchEvent> + '_ {
+        self.world.recent.iter().filter(move |e| e.id > last_id)
     }
 
     fn player_index(&self, member: i32) -> Option<usize> {

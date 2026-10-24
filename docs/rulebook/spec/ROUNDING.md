@@ -96,7 +96,7 @@ pin is the fold (`rainbow_01_fold` / `half_speed_04_fold`); the settled pin is
 
 ## ABI
 
-ABI 71 (`rules/card-sdk/src/abi.rs`): host semantics of `set_pay_amount`
+ABI 71 (`crates/card-sdk/src/abi.rs`): host semantics of `set_pay_amount`
 composition (one end-of-calc `ceil10`). No new import. SAVE_VERSION unchanged.
 Replays stay compatible via archived engine bundles (repo rule); this change
 does not deploy.

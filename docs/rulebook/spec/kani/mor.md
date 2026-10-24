@@ -157,7 +157,7 @@ that is counted. All nine rows are **needs re-time**.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening; production bodies untouched. Allowed Kani-only surface used:
-`rules/kani/**` + `cfg(kani)` in `rules/card-sdk` (ask_pick forced-pick fold,
+`rules/kani/**` + `cfg(kani)` in `crates/card-sdk` (ask_pick forced-pick fold,
 `kani_alloc` bump).
 
 ---

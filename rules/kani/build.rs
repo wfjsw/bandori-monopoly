@@ -115,9 +115,6 @@ const ARRAY_OPS: &[&str] = &[
     "state_get",
     "state_set",
     "state_add",
-    "slot",
-    "set_slot",
-    "inc_slot",
     "group_pool",
     "add_group_pool",
     "group_skill",
@@ -301,11 +298,13 @@ const ARRAY_OPS: &[&str] = &[
     "set_join_used",
     "adjust_money",
     "card_prop",
-    "state_set_flags",
     "raise_after",
 ];
 
 fn main() {
+    // `pre_string` (below) reads guard consts through the installed ext;
+    // `gen_cond_irs` uses the explicit `Vocab` so it cannot race a OnceLock.
+    let _ = rules_cond::install_ext(bandori_std::cel::ext());
     gen_cond_irs();
     gen_body_dispatch();
     let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("conf_sym_ops.rs");
@@ -329,6 +328,8 @@ fn main() {
     writeln!(s, "    fn op_mark_src_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_src_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_instance_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_mark_partner(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_partner, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_mark_tile(&mut self, uid: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_tile, [uid, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_remove_mark(&mut self, uid: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::remove_mark, [uid, 0, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::counter_self, [np, nl, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_add_counter_self(&mut self, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_counter_self, [np, nl, n, max, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_set_counter_self(&mut self, np: i32, nl: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::set_counter_self, [np, nl, n, 0, 0, 0])) }}").unwrap();
@@ -387,6 +388,8 @@ fn main() {
         "op_mark_src_at",
         "op_mark_instance_at",
         "op_mark_partner",
+        "op_mark_tile",
+        "op_remove_mark",
         "op_counter_self",
         "op_add_counter_self",
         "op_set_counter_self",
@@ -450,9 +453,12 @@ fn gen_cond_irs() {
     for d in ["cards", "skills", "tiles", "events", "fixtures"] {
         println!("cargo:rerun-if-changed={}", rules_dir.join(d).display());
     }
-    let (src, _n) = rules_cond::gen_ir::generate(&rules_dir);
+    // Explicit hermetic path (no OnceLock race in a build script).
+    let v = rules_cond::Vocab::with_ext(bandori_std::cel::ext());
+    let generated =
+        rules_cond::ext::generate_with(&rules_dir, &v).expect("cond IR generation");
     let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("cond_irs.rs");
-    fs::write(out, src).unwrap();
+    fs::write(out, generated.source).unwrap();
 }
 
 /// Per-card body trampolines + `call_body_idx` (Kani). Derived from
@@ -560,9 +566,10 @@ fn gen_body_dispatch() {
     // Kind name → body shape, from every `filter_kinds!` table. Unknown kinds
     // panic inside `parse_on_bodies` (loud miss).
     let kind_shapes = {
+        let repo = rules_dir.parent().expect("repo root").to_path_buf();
         let mut sources = Vec::new();
         for p in [
-            rules_dir.join("card-sdk/src/kinds.rs"),
+            repo.join("crates/card-sdk/src/kinds.rs"),
             rules_dir.join("bandori-std/src/kind.rs"),
         ] {
             sources.push(fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {:?}: {e}", p)));

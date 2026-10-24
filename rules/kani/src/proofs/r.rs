@@ -135,7 +135,7 @@ crate::host_subset!(council_dispatch {
     pay => arm_pay,
     set_dest => arm_set_dest,
     place_card_on => arm_place_card_on,
-    set_slot => arm_set_slot,
+    state_set => arm_state_set,
 });
 
 /// `R:（燐子）Ringing Bloom` play — place + (2) house-count override.

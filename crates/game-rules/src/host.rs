@@ -130,9 +130,29 @@ pub struct CardInfo {
 }
 
 impl CardInfo {
+    /// Entries of `kind` answering `trigger`, in declaration order, walked
+    /// lazily. The single home of the kind/trigger predicate: [`Self::entry`]
+    /// takes the first and [`Self::entries`] collects. Kept private so the
+    /// public surface stays `Option`/`Vec` and callers keep `len` / `is_empty` /
+    /// indexing without ceremony.
+    fn entry_iter(
+        &self,
+        kind: OnKind,
+        trigger: Option<crate::TriggerKind>,
+    ) -> impl Iterator<Item = i32> + '_ {
+        self.on
+            .iter()
+            .enumerate()
+            .filter(move |(_, o)| {
+                o.kind == kind as i32
+                    && trigger.is_none_or(|t| o.triggers.iter().any(|s| s == &t.spelling()))
+            })
+            .map(|(i, _)| i as i32)
+    }
+
     /// The first entry of `kind` (answering `trigger`, for trigger-keyed kinds).
     pub fn entry(&self, kind: OnKind, trigger: Option<crate::TriggerKind>) -> Option<i32> {
-        self.entries(kind, trigger).first().copied()
+        self.entry_iter(kind, trigger).next()
     }
 
     /// The entry named by a stable internal identifier (`ManifestOn::id`,
@@ -153,28 +173,20 @@ impl CardInfo {
     /// A card may carry several independent effects on one timing (「初始1，
     /// 上限2」 plus 「每回合开始时」); all of them run.
     pub fn entries(&self, kind: OnKind, trigger: Option<crate::TriggerKind>) -> Vec<i32> {
-        self.on
-            .iter()
-            .enumerate()
-            .filter(|(_, o)| {
-                o.kind == kind as i32
-                    && trigger.is_none_or(|t| o.triggers.iter().any(|s| s == &t.spelling()))
-            })
-            .map(|(i, _)| i as i32)
-            .collect()
+        self.entry_iter(kind, trigger).collect()
     }
 
-    /// Play-mode selection: a card may declare several `On::Play` entries as
-    /// alternative activations (each with its own gate -- 「可以…传送到…」 vs
-    /// 「将此卡放置到场上」). The mode that runs is the **first gated entry whose
-    /// gate admits**; failing that, the first ungated entry. `None` when the
-    /// card has no Play entry at all.
+    /// The card's first declared Play entry, or `None` when it has none.
+    ///
+    /// A card may declare several `On::Play` entries as alternative
+    /// activations (each with its own gate -- 「可以…传送到…」 vs 「将此卡放置到场上」).
+    /// Which mode actually runs is a *runtime* question -- the first gated
+    /// entry whose gate admits, failing that the first ungated -- and is
+    /// answered by the play-gate walk (`play_entry_for`), not by this lookup.
+    /// This answers the static question "which entry does `entry::PRESS`
+    /// name", i.e. the first declared one.
     pub fn play_entry_preferring_gated(&self) -> Option<i32> {
-        let entries = self.entries(OnKind::Play, None);
-        if entries.is_empty() {
-            return None;
-        }
-        Some(entries[0])
+        self.entry(OnKind::Play, None)
     }
 
     pub fn has_play(&self) -> bool {
@@ -199,14 +211,20 @@ impl CardInfo {
     /// **All** of them run, in declaration order -- each carries its own
     /// condition / guard and at most one body entry per entry per raise.
     pub fn hook_entries(&self, trigger: crate::TriggerKind) -> Vec<i32> {
-        let mut v = self.entries(OnKind::Action, Some(trigger));
-        v.extend(self.entries(OnKind::Filter, Some(trigger)));
+        // Action entries first, then Filter -- the order callers have always
+        // seen. Do not "fix" this to global declaration order without a
+        // rulebook check: the doc above says 「按声明顺序」 and this is not it
+        // when a card declares a Filter before an Action.
+        let mut v: Vec<i32> = self.entry_iter(OnKind::Action, Some(trigger)).collect();
+        v.extend(self.entry_iter(OnKind::Filter, Some(trigger)));
         v
     }
 
-    /// The first field-card entry answering `trigger` (see [`Self::hook_entries`]).
+    /// The first field-card entry answering `trigger` (see [`Self::hook_entries`]):
+    /// the first `On::Action` entry if there is one, else the first `On::Filter`.
     pub fn hook_entry(&self, trigger: crate::TriggerKind) -> Option<i32> {
-        self.hook_entries(trigger).first().copied()
+        self.entry(OnKind::Action, Some(trigger))
+            .or_else(|| self.entry(OnKind::Filter, Some(trigger)))
     }
 
     /// Scheduled turn-end callback (`ctx::at_turn_end`): an `On::Action` at
@@ -980,6 +998,7 @@ impl RulesetBuilder {
     }
 
     pub fn build(self) -> Result<Ruleset, RuleError> {
+        crate::cond_pre::install_vocab();
         let mut by_id = HashMap::new();
         for (i, c) in self.cards.iter().enumerate() {
             if by_id.insert(c.id.clone(), i as i32).is_some() {
@@ -2089,12 +2108,17 @@ impl Ruleset {
     /// [`export::OP_GUARD`] -- the effect body does not run here.
     ///
     /// Goes through [`crate::cond_pre::admits_gate`] (docs/GUARDS.md §4.4 item
-    /// 3): a rejecting condition **is** a block (`err.play_pre`) and the gate
+    /// 3): a rejecting condition **is** a block (`err.play_pre`).
+    ///
     /// Play-mode selection (a card may declare several `On::Play` entries as
     /// alternative activations, each with its own gate): the first **gated**
     /// entry whose gate admits; failing that, the first ungated entry. `None`
-    /// when the card has no Play entry. Both [`Self::cant_play`] and
-    /// [`Self::run`] (Play) pick through here, so they agree.
+    /// when the card has no Play entry. [`Self::run`] (Play) picks through
+    /// here. [`Self::cant_play`] does **not** -- it evaluates only the first
+    /// declared Play entry (see the note there: play-mode merges are a
+    /// per-card problem, not a dispatch one), so on a card whose first Play
+    /// gate is closed and whose second would admit, the two disagree until
+    /// those merges land.
     fn play_entry_for<W: CardWorld>(
         &self,
         world: &W,
@@ -2102,12 +2126,10 @@ impl Ruleset {
         player_id: i32,
     ) -> Result<Option<i32>, RuleError> {
         let info = &self.inner.cards[card as usize];
-        let entries = info.entries(OnKind::Play, None);
-        if entries.is_empty() {
-            return Ok(None);
-        }
+        let mut first_play = None;
         let mut first_ungated = None;
-        for &entry in &entries {
+        for entry in info.entry_iter(OnKind::Play, None) {
+            first_play.get_or_insert(entry);
             if self.guard_is_none(card, entry) && self.pre_at(card, entry).is_none() {
                 // Ungated entry: the fallback mode.
                 first_ungated.get_or_insert(entry);
@@ -2154,7 +2176,7 @@ impl Ruleset {
                 return Ok(Some(entry));
             }
         }
-        Ok(first_ungated.or(entries.first().copied()))
+        Ok(first_ungated.or(first_play))
     }
 
     /// is skipped. The play-gate window has no `Trigger` (`kind` absent).
@@ -3545,6 +3567,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::mark_partner(&mut c, tile, fp, fl).map_err(HostErr::into_err)
         },
     )?;
+    l.func_wrap(m, "mark_tile", |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+        hostfns::mark_tile(&mut c, uid).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "remove_mark",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::remove_mark(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "counter_self",
@@ -4373,27 +4405,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "slot",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::slot(&mut c, player_id, p, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "set_slot",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
-            hostfns::set_slot(&mut c, player_id, p, n, v).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "inc_slot",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32| -> Result<i32, Error> {
-            hostfns::inc_slot(&mut c, player_id, p, n, by).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "group_pool",
         |mut c: C<W>, player_id: i32, np: i32, nl: i32| -> Result<i32, Error> {
             hostfns::group_pool(&mut c, player_id, np, nl).map_err(HostErr::into_err)
@@ -4499,15 +4510,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "apply_abnormal",
         |mut c: C<W>, player_id: i32, kind: i32, n: i32, to: i32| -> Result<(), Error> {
             hostfns::apply_abnormal(&mut c, player_id, kind, n, to).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "state_set_flags",
-        |mut c: C<W>, player_id: i32, kp: i32, kn: i32, flags: i32| -> Result<(), Error> {
-            let key = hostfns::guest_str(&mut c, kp, kn).map_err(HostErr::into_err)?;
-            hostfns::state_set_flags(&mut c, player_id, &key, flags as u8)
-                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5741,7 +5743,7 @@ impl CardWorld for NullWorld {
         _: crate::Msg,
         _: bool,
     ) -> i32 {
-        0
+        -1
     }
     fn count_marks(&self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
         0
@@ -5770,13 +5772,6 @@ impl CardWorld for NullWorld {
     }
     fn self_uid(&self) -> i32 {
         -1
-    }
-    fn slot(&self, _: i32, _: &str) -> i32 {
-        0
-    }
-    fn set_slot(&mut self, _: i32, _: &str, _: i32) {}
-    fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
-        0
     }
     fn group_pool(&self, _: i32, _: &str) -> i32 {
         0

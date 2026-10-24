@@ -91,7 +91,7 @@ Wire ids 9 / 10 (master's v73) and 12 / 13 (v80).
 
 `On::Action` / `On::Filter` are **one kind per entry** (every multi-kind list
 was split). Constructors come from the `action_kinds!` / `filter_kinds!` macros
-in `rules/card-sdk/src/kinds.rs`; the body shape is pinned by the constructor
+in `crates/card-sdk/src/kinds.rs`; the body shape is pinned by the constructor
 (`FilterShape`), so a filter body can never be registered on the wrong kind
 and there is no `check_kind_variant`. `On::Counteract` still takes a list of
 `ChainKind` (a [反击] may answer several chain links).
@@ -145,7 +145,7 @@ Folding would make the tile body just another `Action(SettleBody)` and lose the
 
 ### Filter payload types (the minimal clean set)
 
-Per-kind payloads live in `rules/card-sdk/src/payload.rs`. `None` = leave the
+Per-kind payloads live in `crates/card-sdk/src/payload.rs`. `None` = leave the
 host's answer alone; there is no `UNCHANGED` sentinel and no `i32::MIN`
 encoding. One `FilterPayload` impl each, flattened to `i32` only at the
 `hostfns.rs` wasm-import edge.
@@ -189,7 +189,7 @@ takes.
 per kind plus `Filter::KINDS` / `Action::KINDS` (`&'static [KindInfo]`) for pin
 tests and tooling. The constructor type pins the side -- there is no
 `check_kind_variant`. The engine table (ids, spellings, `is_filter`) lives in
-`crates/game-kinds`; the DSL constructors live in `rules/card-sdk/src/kinds.rs`.
+`crates/game-kinds`; the DSL constructors live in `crates/card-sdk/src/kinds.rs`.
 
 **Dual-role ids** (one wire id, two typed views) are ids used both as a
 [反击] chain link and as an Action-listened event. They have an `ActionKind`
@@ -236,9 +236,9 @@ long gone and those questions are `On::Filter(Filter::ActGate(...))` entries.
 
 Filter bodies may not prompt and may not call mutating `ctx` effects.
 `card_sdk::pure::refuse_if_filter` debug-asserts (and tests enforce) every
-mutating call: `gain` / `draw` / `place_card` / `set_dest` / `set_slot` /
-`inc_slot` / `roll` / `set_prop` / `state::set` / `plan::set_tag` /
-`add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
+mutating call: `gain` / `draw` / `place_card` / `place_self_to_field` /
+`set_dest` / `set_slot` / `inc_slot` / `roll` / `set_prop` / `state::set` /
+`plan::set_tag` / `add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
 log-why rule). A fused hook (value rewrite + gain/place/…) is split into a
 Filter half and an `On::Action` half on the appropriate event (e.g. `PayAfter`).
 
@@ -269,7 +269,7 @@ immediately before the pure filter stage:
 
 The engine kind table in `crates/game-kinds` (`ENGINE_KINDS`) is the **single
 declaration source of truth** for ids, spellings, and `is_filter`. The typed
-mirror is `Filter::KINDS` / `Action::KINDS` in `rules/card-sdk/src/kinds.rs`.
+mirror is `Filter::KINDS` / `Action::KINDS` in `crates/card-sdk/src/kinds.rs`.
 Today (27 filter kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
@@ -737,8 +737,8 @@ are `tile_in` classes.
 | players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `turn_player`, `round_no`, `turn_key`, `gains_this_turn` (「当前回合内你每获得过一次资金」 -- the engine's per-turn money-in counter, reset at each turn start). Game: `character_is`, `in_band` |
 | targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
 | hand & deck | `draw`, `add_to_dest(player_id, card, Dest::…)`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, card, CardPile)` (remove without discarding) |
-| marks & tokens | `place_mark`, `place_mark_new`, `count_marks`, `bump_mark`, `remove_marks`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
-| tile designations | `designate_tile`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance (see 「Tile designations」) |
+| marks & tokens | `place_mark` (returns a `MarkRef`), `count_marks`, `bump_mark`, `remove_marks`, `mark_tile`, `remove_mark`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
+| tile designations | `designate_tile`, `undesignate`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance; `designate_tile` returns a `MarkRef` to store in card state (see 「Tile designations」) |
 | named counters (ABI v50) | `counter` / `add_counter` / `set_counter` (this instance), `counter_at` / `add_counter_at` (by uid), `card_counter` / `add_card_counter` (a placed card by id). Wire names `cp` / `crystals` map to `FieldCard::cp` / `FieldCard::crystals`; anything else lives in `FieldCard::counters`. The old CP helpers (`place_cp` / `count_cp` / `clear_cp` / `add_cp` / `cp_attached`) are **gone** -- use the mark / counter API, and see 「Cross-card messages」 for the 该清CP了 ↔ `mark:cp` shape |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
 | pots & status (generic) | `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
@@ -748,7 +748,7 @@ are `tile_in` classes.
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_tiles` (labels + prices + AI hint), `ask_player`, `ask_card`, `ask_number` |
 | nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | purchase (ABI v40/41) | `buy_quotes(player, kind, &[tile])` (batched quote), `buy(player, tile, kind)` (replaces `card_buy`), `acquire(player, from, tile, price)` (「收购」: pipeline pay, then assign → `bought` → `buyAfter`), `agent_offer`, `linger(player, expires)` (bind the running def as a turn-scoped instance in `TurnCtx.lingering` -- the hand-card home for 「本回合」 effects; a `set_prop` before it lands on the instance's props), `buy_price(t)` (the deed's base value). `trigger::{buy_kind, seller, price, set_price, deal_owner, set_deal_owner, deal_houses, set_deal_houses, deal_mortgaged, set_deal_mortgaged, set_reason}` carry the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` / `BuyAssign` payload (`docs/PURCHASE.md`). |
-| field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
+| field cards | `place_card`, `place_card_at`, `place_self_to_field` (「将此卡放置在场上」: `set_dest(Dest::Field)` + `place_card`, for a play body that stays in play; else `place_card` / `place_card_at` and name the card's own `Dest`), `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
 | cross-card messages (ABI v51) | `send(Target, name, &Message)`, `On::Message(names, pre, guard, body)`, `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text, reply}` -- see 「Cross-card messages」 |
 | tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `prop_at`, `set_prop_at`, `draw`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `buy`, `buy_quotes`, `card_build`, `ask_tiles`, `ai_agent_choice`, `is_color`, `raise`, `gain_typed`, `exile_of`, `stun_of`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 | event rules | `event_expire`, `event_is_active`, `event_deck_push`, `event_banish` (the active-list / deck handles; `docs/EVENTS.md`) |
@@ -831,22 +831,39 @@ the instance), which is what the board label and tooltip show.
 Lifetime matches 「指定」 lasting while the card is in play: the mark is a unit
 of the designating instance's counter, so `destroy_instance_units` clears it
 when that instance leaves the field. A designation that ends **earlier** (a
-state exit, a turn boundary) calls `ctx::undesignate_tile` at that point.
+state exit, a turn boundary) calls `ctx::undesignate` / `ctx::undesignate_tile`
+at that point.
+
+`designate_tile` returns a [`MarkRef`] -- a durable handle to that mark row.
+The mark is the displayed record; the stored ref is the retrievable handle.
+Keep it in card state and resolve the pick later:
 
 ```rust
-ctx::designate_tile(tile, player_id, &Msg::new(key!("note")))?;
-// later, if the designation ends before the card does:
+let r = ctx::designate_tile(tile, player_id, &Msg::new(key!("note")));
+ctx::set_slot(player_id, "my.deed", r.into());
+// later:
+let r = MarkRef::from(ctx::slot(player_id, "my.deed"));
+if r.is_live() { let t = r.tile(); /* ... */ }
+// designation ends early, card still in play:
+ctx::undesignate(r);
+// batch / every designation of this instance on one tile:
 ctx::undesignate_tile(tile);
 // the pick as the source of truth:
 if ctx::designates(tile) { .. }
 for t in ctx::designated_tiles() { .. }
 ```
 
+Handles are unique for the lifetime of a match and are never recycled, so a
+stored ref either resolves to exactly the row it was issued for or reports
+dead (`r.tile() < 0`) once that row is gone. It never aliases onto a later mark.
+
 `designate_tile` is sugar over `place_mark` with the designation category and
 `Stack::Fresh` (one label per pick). Prefer it over ad-hoc slots / state keys
 when the mark can be the source of truth; where the rule needs a value the
 mark does not carry (a counterpart player, an engine-owned return tile), keep
-that storage and add the mark as the displayed record.
+that storage and add the mark as the displayed record. The `MarkRef` is the
+handle back to the mark -- store it when you need to resolve / drop that one
+pick later (as `AG:ONE OF US` does with `one_of_us_mine` / `one_of_us_theirs`).
 
 ## Activation arguments (`declare`, ABI v98) + cross-card applicability
 

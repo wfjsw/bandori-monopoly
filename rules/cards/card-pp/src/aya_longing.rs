@@ -19,6 +19,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
+use card_sdk::ctx::NameId;
 use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 use skill_groups::fans;
@@ -95,7 +96,7 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「并将弃卡区中的一张卡加入手卡」
     // C# `H._hidden[i].discard.Distinct()` + `H.AskCard` + `H._hidden[i].discard.Remove`
     // + `H.AddToHand`.
-    let mut ids: Vec<alloc::string::String> = Vec::new();
+    let mut ids: Vec<NameId> = Vec::new();
     for c in ctx::cards_in(player_id, ctx::CardPile::Graveyard) {
         if !ids.contains(&c) {
             ids.push(c);
@@ -112,13 +113,13 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
         &refs,
     )?;
     let id = ids.swap_remove(pick.min(ids.len() - 1));
-    if ctx::take_card(player_id, &id, ctx::CardPile::Graveyard) {
-        ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
+    if ctx::take_card(player_id, id.as_str(), ctx::CardPile::Graveyard) {
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand);
         ctx::log(
             player_id,
             &Msg::new(key!("aya_longing_back"))
                 .player_id("who", player_id)
-                .card("card", &id),
+                .card("card", id.as_str()),
         );
     }
     Ok(())

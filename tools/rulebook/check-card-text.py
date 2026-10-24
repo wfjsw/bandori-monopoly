@@ -9,7 +9,7 @@ the live `新卡组卡` tab) is the spec. `tools/rulebook/extract.py` turns it i
 `CardMeta::text` the ruleset exports (`docs/DISPLAY.md`, via
 `cargo run -q -p rules-native --example dump_display`).
 
-Accepted encoding differences (the `CardText` invariants, `rules/card-sdk/src/text.rs`):
+Accepted encoding differences (the `CardText` invariants, `crates/card-sdk/src/text.rs`):
   * whitespace runs
   * list markers: `（N）` / `(N)` / a bare `N.` are positional in `CardText`,
     so the flat form may re-space or re-style them

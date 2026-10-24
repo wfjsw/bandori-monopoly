@@ -8,11 +8,11 @@
 //! The whole state map is copied in; the CEL names live in `rules/cond`.
 //!
 //! [`ExclusiveUse`] additionally carries the questioned exclusive: the card id
-//! hash in `trigger_card`, the card's `owner` persona name in `name`
+//! hash in `trigger_card`, the card's owner name in `name`
 //! (`counter_is('名')`), `value = 1` when that owner is the actor's base
-//! persona, and `step = 1` when it is the actor's own persona. Player
-//! snaps also carry `persona` / `group` hashes so `group_is` / `persona_is`
-//! can name the asked seat's identity (CRYCHIC's denial).
+//! identity, and `step = 1` when it is the actor's own identity. Player
+//! snaps also carry the identity-hash `state` rows so sugar guards can name
+//! the asked seat's identity.
 
 use rules_cond::{id_of, PlayerSnap, WindowCtx};
 
@@ -104,9 +104,9 @@ pub fn window_of_card_world<W: CardWorld>(w: &W, actor: i32) -> WindowCtx {
 }
 
 /// The [`Gate::Exclusive`] window: keyed state **plus** the questioned
-/// exclusive and each seat's `persona` / `group` identity hashes (so
-/// `group_is(actor, 'CRYCHIC')` reads the persona row's group -- the stable
-/// spelling, not the currently attached group-skill id).
+/// exclusive and each seat's identity hashes (so a `state(p,'group')` sugar
+/// guard reads the persona row's group -- the stable spelling, not the
+/// currently attached group-skill id).
 pub fn window_of_exclusive(
     w: &World,
     data: &GameData,
@@ -125,12 +125,18 @@ pub fn window_of_exclusive(
                 .get(i)
                 .map(|s| s.persona.clone())
                 .unwrap_or_default();
-        p.persona = id_of(&ch);
-        p.group = id_of(
-            &data
-                .persona(&ch)
-                .map(|c| c.group.clone())
-                .unwrap_or_default(),
+        p.state.insert(
+            bandori_std::cel::KEY_PERSONA.to_string(),
+            id_of(&ch),
+        );
+        p.state.insert(
+            bandori_std::cel::KEY_GROUP.to_string(),
+            id_of(
+                &data
+                    .persona(&ch)
+                    .map(|c| c.group.clone())
+                    .unwrap_or_default(),
+            ),
         );
     }
     win

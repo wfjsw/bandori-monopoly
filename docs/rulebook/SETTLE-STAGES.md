@@ -470,7 +470,7 @@ about which tile is being settled.
 | --- | --- |
 | the settle pipeline | `crates/game-core/src/engine/play.rs` `after_walk` (Q7 loop) / `settle` / `settle_at` |
 | the walk / teleport | `play.rs` `walk` / `teleport_as` / `move_after` / `move_resolved`; `move_ctx.rs` (`MoveCtx::resolve`) |
-| kind lists | `rules/card-sdk/src/abi.rs` `TriggerKind` / `ChainKind` / `HookKind` / `OnKind::Settle` |
+| kind lists | `crates/card-sdk/src/abi.rs` `TriggerKind` / `ChainKind` / `HookKind` / `OnKind::Settle` |
 | tile bodies | `rules/tiles/src/*`, `docs/TILES.md` |
 | tile-mark rules (`mark:*`) | `rules/markers/src/*`, `docs/TILES.md` → 「Board marks」 |
 | prior audit (Q6/Q7 origin) | `docs/rulebook/PIPELINE-AUDIT.md` §4, §5.4 |

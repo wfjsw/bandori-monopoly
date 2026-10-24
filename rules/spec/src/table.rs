@@ -1036,10 +1036,12 @@ impl Table {
         self.m.events_since(mark)
     }
 
+    /// Message keys of the events after `mark` (see [`spec_kit::event_key`]).
+    /// Walks the tail by reference -- no `MatchEvent` clone.
     pub fn keys_since(&self, mark: i32) -> Vec<String> {
-        self.events_since(mark)
-            .into_iter()
-            .map(|e| spec_kit::event_key(&e))
+        self.m
+            .events_since_ref(mark)
+            .map(|e| spec_kit::event_key(e))
             .collect()
     }
 

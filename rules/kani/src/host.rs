@@ -764,11 +764,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::set_held_name => arm_set_held_name(a),
         Op::tok_max => arm_tok_max(a),
         Op::state_get => arm_state_get(a),
-        Op::slot => arm_slot(a),
         Op::state_set => arm_state_set(a),
-        Op::set_slot => arm_set_slot(a),
-        Op::state_add | Op::inc_slot => arm_state_add(a),
-        Op::state_set_flags => arm_state_set_flags(a),
+        Op::state_add => arm_state_add(a),
         Op::raise_after => arm_raise_after(a),
         Op::tok_names => arm_tok_names(a),
 
@@ -795,8 +792,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::bump_mark_f => 0,
         Op::remove_marks_f => 0,
         // `mark_partner` is BLOCKED-HOST (no partner field on the kani world
-        // `Mark`) -- same stub shape as `mark_src_at`.
-        Op::mark_src_at | Op::mark_instance_at | Op::mark_partner => -1,
+        // `Mark`) -- same stub shape as `mark_src_at`. `mark_tile` / `remove_mark`
+        // are likewise stubbed (no uid on the kani world `Mark`).
+        Op::mark_src_at | Op::mark_instance_at | Op::mark_partner | Op::mark_tile => -1,
+        Op::remove_mark => 0,
 
         // ---- status ----
         Op::gain_marker => arm_gain_marker(a),
@@ -1916,16 +1915,10 @@ pub fn arm_in_band(a: Args) -> i64 {
     world::with_world(|w| (w.group_id[player_idx(a0)] == want.0) as i64)
 }
 
+/// `state_add` -- also the model for its former `inc_slot` sugar (one host
+/// op, so one arm; `key_add` already mirrors fan keys via `sync_fan_key`).
 pub fn arm_inc_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a3, a4, a5);
-    let key = name_id(a1, a2);
-    let by = a3;
-    world::with_world_mut(|w| {
-        let v = w.key_add(a0, key, by);
-        w.sync_views_player(a0);
-        v as i64
-    })
+    arm_state_add(a)
 }
 
 pub fn arm_invoke_skill(a: Args) -> i64 {
@@ -2268,28 +2261,28 @@ pub fn arm_place_card_on(a: Args) -> i64 {
 }
 
 pub fn arm_place_mark(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    {
-        // ABI is filter-based; record a mark on tile a0.
-        world::with_world_mut(|w| {
-            let i = w.marks_n as usize;
-            if i < world::MAX_MARKS {
-                w.marks[i] = world::Mark {
-                    tile: a0,
-                    key: NameId::INVALID,
-                    src_card: u16::MAX,
-                    instance: 0,
-                    n: 1,
-                };
-                w.marks_n += 1;
-            }
-            w.push(Effect::PlaceMark {
+    let [a0, ..] = a;
+    // ABI is filter-based; record a mark on tile a0.
+    world::with_world_mut(|w| {
+        let i = w.marks_n as usize;
+        if i < world::MAX_MARKS {
+            w.marks[i] = world::Mark {
                 tile: a0,
                 key: NameId::INVALID,
-            });
+                src_card: u16::MAX,
+                instance: 0,
+                n: 1,
+            };
+            w.marks_n += 1;
+        }
+        w.push(Effect::PlaceMark {
+            tile: a0,
+            key: NameId::INVALID,
         });
-        0
-    }
+        // Return a plausible never-zero mark uid (the real allocator is
+        // monotonic from 1; the kani world has no uid field).
+        (w.marks_n.max(1)) as i64
+    })
 }
 
 pub fn arm_placed_cards(a: Args) -> i64 {
@@ -2736,24 +2729,6 @@ pub fn arm_set_self_tile(a: Args) -> i64 {
     })
 }
 
-pub fn arm_set_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    {
-        // `set_slot(player, ptr, len, v)` — a3 is the value (sugar for
-        // `state_set` field 0).
-        let key = name_id(a1, a2);
-        world::with_world_mut(|w| {
-            w.key_set(a0, key, a3);
-            w.push(Effect::SetState {
-                player: a0,
-                key: key.0,
-                n: a3,
-            });
-        });
-        a3 as i64
-    }
-}
-
 pub fn arm_set_tile_prop(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     let _ = (a4, a5);
@@ -2813,14 +2788,6 @@ pub fn arm_shuffle_into_deck(a: Args) -> i64 {
     }
 }
 
-pub fn arm_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    {
-        let key = name_id(a1, a2);
-        world::with_world(|w| w.key_get(a0, key)) as i64
-    }
-}
-
 pub fn arm_spend_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
@@ -2849,16 +2816,6 @@ pub fn arm_state_add(a: Args) -> i64 {
     }
 }
 
-/// `state_set_flags(player, ptr, len, flags)` — declare [`state_flag`] bits
-/// for a key. `NEVER_NEGATIVE` (bit 0) floors later `state_set` / `state_add`
-/// writes at 0, matching the engine.
-pub fn arm_state_set_flags(a: Args) -> i64 {
-    let [a0, a1, a2, a3, ..] = a;
-    let key = name_id(a1, a2);
-    world::with_world_mut(|w| w.key_set_flags(a0, key, a3 as u8));
-    0
-}
-
 /// `raise_after(player, name_p, name_l, value)` — queue a post-commit raise.
 /// The body-only model does not run deferred listeners (same as
 /// `CardWorld::raise_after`'s default no-op); the call is accepted so guest
@@ -2871,14 +2828,16 @@ pub fn arm_raise_after(a: Args) -> i64 {
 pub fn arm_state_get(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
-        // hostfns `state_get(player, ptr, len, field)`: field 1/2/3 read
-        // the declared MAX / MIN / EXPIRES column; anything else is VALUE.
+        // hostfns `state_get(player, ptr, len, field)`: field 1/2/3/4 read
+        // the declared MIN / MAX / EXPIRES / FLAGS column; anything else is
+        // VALUE. Column ids are the SDK's `state::{MIN,MAX,EXPIRES,FLAGS}`.
         let key = name_id(a1, a2);
         let field = a3;
         world::with_world(|w| match field {
-            1 => w.key_max(a0, key),
-            2 => w.key_min(a0, key),
+            1 => w.key_min(a0, key),
+            2 => w.key_max(a0, key),
             3 => w.key_expires(a0, key),
+            4 => w.key_flags(a0, key) as i32,
             _ => w.key_get(a0, key),
         }) as i64
     }
@@ -2888,7 +2847,8 @@ pub fn arm_state_set(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         // hostfns `state_set(player, ptr, len, field, v)`:
-        //   a3 = field (0 value / 1 max / 2 min / 3 expires), a4 = v.
+        //   a3 = field (0 value / 1 min / 2 max / 3 expires / 4 flags),
+        //   a4 = v. Column ids are the SDK's `state::{VALUE,MIN,MAX,EXPIRES,FLAGS}`.
         // The old model wrote a3 as the value and dropped a4.
         let key = name_id(a1, a2);
         let field = a3;
@@ -2896,15 +2856,19 @@ pub fn arm_state_set(a: Args) -> i64 {
         world::with_world_mut(|w| {
             let out = match field {
                 1 => {
-                    w.key_set_max(a0, key, v);
+                    w.key_set_min(a0, key, v);
                     v
                 }
                 2 => {
-                    w.key_set_min(a0, key, v);
+                    w.key_set_max(a0, key, v);
                     v
                 }
                 3 => {
                     w.key_set_expires(a0, key, v);
+                    v
+                }
+                4 => {
+                    w.key_set_flags(a0, key, v as u8);
                     v
                 }
                 _ => {

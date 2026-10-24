@@ -239,12 +239,12 @@ fn lister(player_id: i32) -> card_sdk::Asked {
     );
     // Round-trip a real id: take the first card out of the hand and put it on
     // the discard pile, then confirm the discard listing shows it.
-    if let Some(first) = hand.first() {
-        if ctx::take_card(player_id, first, CardPile::Hand) {
-            ctx::to_discard(player_id, first);
+    if let Some(&first) = hand.first() {
+        if ctx::take_card(player_id, first.as_str(), CardPile::Hand) {
+            ctx::to_discard(player_id, first.as_str());
             let found = ctx::cards_in(player_id, CardPile::Graveyard)
                 .iter()
-                .any(|c| c == first);
+                .any(|c| *c == first);
             ctx::log(
                 player_id,
                 &Msg::new(key!("lister_moved")).i("found", found as i64),

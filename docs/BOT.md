@@ -108,7 +108,7 @@ the CEL `pre`. Every live `On::Play` gate was scanned (`rules/cards/**`,
 | `CRYCHIC` skill `can_transform` -- `ctx::deck_count` / `ctx::discard_size` | **public counts** | always equal | grey-out wrong |
 | every other `cant_play` / `can_use` / `can_*` gate in the pool | **public** (`others`, `money_of`, `owned_tiles`, `can_build_on`, `build_cost`, `cant_move`, `state::get`, `tok`, `skill_blocked` / marks, `crystals`, `turn_key`, `player_pos`) | always equal | grey-out wrong |
 
-**What the card-SDK can see in a guard** (`rules/card-sdk/src/ctx.rs`): the
+**What the card-SDK can see in a guard** (`crates/card-sdk/src/ctx.rs`): the
 guest is *capable* of `hand_count` / `cards_in(Hand|Deck|Discard|Field)`,
 `hand_size`, `deck_count`, `discard_count`, `roll` / `roll_ask`, `draw`,
 `shuffle_into_deck`. Of those, a **gate** that reaches

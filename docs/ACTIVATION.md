@@ -612,13 +612,13 @@ moves into its `declare`).
 
 | layer | change |
 |---|---|
-| `rules/card-sdk/src/lib.rs` | `ActivationArg`, `Activation<T>`, `Declared<T>`, `BodyShape`; entry structs gain `id: &'static str` + `declare` (erased) + `declare_drive` + body `drive`; `On::id` / `On::declare_arg` builders. **`FilterEntry` gains no `declare`.** `Guard` is `Option<fn(i32) -> bool>`. |
-| `rules/card-sdk/src/payload.rs` or `declare.rs` | `drive_declare::<T>` / `drive_declared_arg::<T>` — the **only** place the erased fns are cast back |
-| `rules/card-sdk/src/kinds.rs` | same for `ActionEntry`; `filter_*` unchanged |
-| `rules/card-sdk/src/rt.rs` | `OP_DECLARE` arm returning packed `(ptr<<32)|len` of postcard, or `EXIT_DECLINED` / `EXIT_NEED_INPUT`; `OP_RUN` drives `BodyShape` (the drive pulls the arg) |
-| `rules/card-sdk/src/abi.rs` | `ABI_VERSION = 98`; `export::ON` **stays 4 params**; `OP_DECLARE`; `EXIT_DECLINED`; `export::DECLARED_ARG`; `ManifestOn::{has_declare, id}`; v98 changelog |
-| `rules/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `declared_arg::<T>()`, `query_guard`, `entry::PRESS`; **delete `card_replayable`** |
-| `rules/card-sdk/src/kani_host.rs` | `Op::declared_arg`, `Op::entry_admits`; Kani passes an unconstrained `T` so a proof sees every pick |
+| `crates/card-sdk/src/lib.rs` | `ActivationArg`, `Activation<T>`, `Declared<T>`, `BodyShape`; entry structs gain `id: &'static str` + `declare` (erased) + `declare_drive` + body `drive`; `On::id` / `On::declare_arg` builders. **`FilterEntry` gains no `declare`.** `Guard` is `Option<fn(i32) -> bool>`. |
+| `crates/card-sdk/src/payload.rs` or `declare.rs` | `drive_declare::<T>` / `drive_declared_arg::<T>` — the **only** place the erased fns are cast back |
+| `crates/card-sdk/src/kinds.rs` | same for `ActionEntry`; `filter_*` unchanged |
+| `crates/card-sdk/src/rt.rs` | `OP_DECLARE` arm returning packed `(ptr<<32)|len` of postcard, or `EXIT_DECLINED` / `EXIT_NEED_INPUT`; `OP_RUN` drives `BodyShape` (the drive pulls the arg) |
+| `crates/card-sdk/src/abi.rs` | `ABI_VERSION = 98`; `export::ON` **stays 4 params**; `OP_DECLARE`; `EXIT_DECLINED`; `export::DECLARED_ARG`; `ManifestOn::{has_declare, id}`; v98 changelog |
+| `crates/card-sdk/src/ctx.rs` + `ctx/sys.rs` + `sys_kani.rs` | `declared_arg::<T>()`, `query_guard`, `entry::PRESS`; **delete `card_replayable`** |
+| `crates/card-sdk/src/kani_host.rs` | `Op::declared_arg`, `Op::entry_admits`; Kani passes an unconstrained `T` so a proof sees every pick |
 | `tools/build-ruleset.mjs` | reject `declare` on `On::Filter`; reject a duplicate `id` within a card; **reject a non-slug `id`** (`[A-Za-z0-9_][A-Za-z0-9_.:-]*`) so identity cannot be dressed up as display text |
 | `crates/game-rules/src/hostfns.rs` | `query_guard` host (named-entry lookup + `admits_gate`); `declared_arg` host (serve the stored bytes) |
 | `crates/game-rules/src/host.rs` | `Call::{Play,Counteract}` carry `arg: Vec<u8>`; `entry_admitted` returns `Admitted` with the `next_answer` cursor *after* `admits` + `OP_DECLARE`; `on_trap` follow-up unchanged |

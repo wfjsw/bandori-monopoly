@@ -4,13 +4,14 @@ members = [
     "crates/bot-core",
     "crates/bot-glue",
     "crates/bot-service",
+    "crates/card-sdk",
     "crates/game-core",
     "crates/game-kinds",
     "crates/game-rules",
     "crates/player-meta",
     "crates/spec-kit",
-    "rules/cond",
-    "rules/cond-ir",
+    "crates/cond",
+    "crates/cond-ir",
     "rules/spec",
     "rules/tests",
     "crates/rules-native",
@@ -20,8 +21,8 @@ members = [
     "rules/kani",
 ]
 # The guest side (cards compiled to wasm32) is a separate workspace: rules/
-# It shares only the ABI crate (`rules/card-sdk`, constants + types, no imports
-# on native).
+# It depends on the kernel ABI crate (`crates/card-sdk`, constants + types, no
+# imports on native) by path.
 
 [workspace.package]
 version = "0.1.0"
@@ -39,8 +40,35 @@ serde_json = "1"
 # release wasm. Everything else is exactly wasmi's default feature set.
 wasmi = { version = "2", default-features = false, features = ["stable", "std", "validate", "memory64", "auto-dispatch"] }
 sha2 = "0.10"
-card-sdk = { path = "rules/card-sdk" }
+card-sdk = { path = "crates/card-sdk" }
+game-kinds = { path = "crates/game-kinds" }
+postcard = { version = "1", default-features = false }
 bitflags = { version = "2", default-features = false }
+# Nested `rules/` workspace members use `workspace = true` (commit d4d63a2a).
+# When the root workspace path-depends on them (rules-native / rules-worker /
+# rules/tests / rules/kani), cargo resolves that inheritance against THIS
+# manifest, so mirror the rules/ table here.
+const_format = { version = "0.2.37", features = ["fmt"] }
+bandori-std = { path = "rules/bandori-std" }
+card-ag = { path = "rules/cards/card-ag" }
+card-crychic = { path = "rules/cards/card-crychic" }
+card-general = { path = "rules/cards/card-general" }
+card-hhw = { path = "rules/cards/card-hhw" }
+card-morfonica = { path = "rules/cards/card-morfonica" }
+card-mujica = { path = "rules/cards/card-mujica" }
+card-mygo = { path = "rules/cards/card-mygo" }
+card-pp = { path = "rules/cards/card-pp" }
+card-ppp = { path = "rules/cards/card-ppp" }
+card-ras = { path = "rules/cards/card-ras" }
+card-roselia = { path = "rules/cards/card-roselia" }
+card-sumimi = { path = "rules/cards/card-sumimi" }
+personas = { path = "rules/personas" }
+rules-events = { path = "rules/events" }
+rules-markers = { path = "rules/markers" }
+rules-status = { path = "rules/status" }
+rules-tiles = { path = "rules/tiles" }
+skill-groups = { path = "rules/skills/skill-groups" }
+skill-personas = { path = "rules/skills/skill-personas" }
 
 [profile.release]
 opt-level = 3

@@ -63,7 +63,7 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 ### Rule text: `text` + `body`
 
 Card and event rule text is authored as a `CardText` -- sections and
-bulletpoints as data (`rules/card-sdk/src/text.rs`). Two views land here:
+bulletpoints as data (`crates/card-sdk/src/text.rs`). Two views land here:
 
 * `text` -- the rulebook string form (`CardText::flat()`). Prose consumers and
   the rule queries (`card_text_mentions`, 「效果包含…」) substring-search this.

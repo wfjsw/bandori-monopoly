@@ -160,7 +160,7 @@ try {
     "crates/bot-core", "crates/bot-glue", "crates/game-core", "crates/game-rules",
     "crates/rules-native", "rules/cards", "rules/skills", "rules/tiles",
     "rules/markers", "rules/status", "rules/events", "rules/personas",
-    "rules/card-sdk",
+    "crates/card-sdk",
     "tools/build-bot-glue.mjs",
   );
   dirty = st.split("\n").filter(Boolean).length > 0;

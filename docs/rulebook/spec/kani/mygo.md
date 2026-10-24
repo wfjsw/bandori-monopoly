@@ -252,4 +252,4 @@ Hitoshizuku is **not** D: body and book agree on per-player kinds.
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening (band-02 book formula kept despite the D); production bodies
 untouched. Allowed Kani-only surface: `rules/kani/**` + `cfg(kani)` in
-`rules/card-sdk` (`cards_in` exact-length facade).
+`crates/card-sdk` (`cards_in` exact-length facade).

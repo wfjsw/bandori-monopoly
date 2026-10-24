@@ -537,19 +537,14 @@ pub fn pre_string(s: &str) -> Option<String> {
     if rest.starts_with("pre::MINE") {
         return Some("actor == owner".to_string());
     }
-    for (name, lit) in [
-        (
-            "bandori_std::guards::OWN_START",
-            "actor == owner && tile_is(tile.id, \"circle\")",
-        ),
-        (
-            "bandori_std::guards::OWN_DEED",
-            "actor == owner && tile_is(tile.id, \"ring\")",
-        ),
-    ] {
-        if rest.starts_with(name) {
-            return Some(lit.to_string());
-        }
+    // Known guard-const path references (`bandori_std::guards::OWN_START`, …)
+    // resolve through the installed extension.
+    let path_end = rest
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == ':' || c == '_'))
+        .unwrap_or(rest.len());
+    let path = &rest[..path_end];
+    if let Some(lit) = rules_cond::ext::vocab().guard_const(path) {
+        return Some(lit.to_string());
     }
     // First string literal (handles `\"` escapes).
     let bytes = rest.as_bytes();

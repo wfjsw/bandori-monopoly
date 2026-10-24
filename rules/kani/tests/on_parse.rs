@@ -15,9 +15,12 @@ use std::path::{Path, PathBuf};
 fn shapes() -> HashMap<String, BodyShape> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let rules = manifest.parent().expect("rules/");
+    let repo = rules.parent().expect("repo root");
     let mut sources = Vec::new();
-    for rel in ["card-sdk/src/kinds.rs", "bandori-std/src/kind.rs"] {
-        let p = rules.join(rel);
+    for p in [
+        repo.join("crates/card-sdk/src/kinds.rs"),
+        rules.join("bandori-std/src/kind.rs"),
+    ] {
         sources.push(std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}")));
     }
     kind_shapes_from(&sources)
@@ -289,8 +292,9 @@ fn every_registration_names_a_declared_kind() {
     // Declared kind names from the tables (and the live KINDS registry).
     let mut declared_filter: Vec<String> = shapes.keys().cloned().collect();
     declared_filter.sort();
+    let repo = root.parent().expect("repo root").to_path_buf();
     let mut declared_action: Vec<String> = parse_action_kind_names(
-        &std::fs::read_to_string(root.join("card-sdk/src/kinds.rs")).unwrap(),
+        &std::fs::read_to_string(repo.join("crates/card-sdk/src/kinds.rs")).unwrap(),
     );
     declared_action.extend(parse_action_kind_names(
         &std::fs::read_to_string(root.join("bandori-std/src/kind.rs")).unwrap(),
