@@ -838,7 +838,18 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 101;
+pub const ABI_VERSION: i32 = 102;
+/// v102: **named scheduled callbacks**. `On::Action(Action::AtEnd(pre, guard,
+///    body))` becomes `On::Schedule(id, pre, guard, body)` -- a required
+///    stable ASCII slug names the entry, and the scheduling family
+///    (`ctx::at_turn_end` / `ctx::before_turn_end` / `ctx::at_next_turn_end`)
+///    gains that `id` so a schedule call names which entry it wants.
+///    `OnKind::Schedule = 14` (4/5/6 stay retired forever). Host import
+///    `schedule_turn_end` gains `(id_ptr, id_len)`; `Scheduled` gains
+///    `entry` (the named slug, `""` on a save from before this field --
+///    resolve to the card's first Schedule entry). `TriggerKind::AtEnd = 103`
+///    stays as the evaluation window (`turnEndBefore` / `turnEndAfter`).
+///    SAVE_VERSION unchanged (the new save field is `#[serde(default)]`).
 /// v101: **mark refs**. `place_mark` returns the mark row's stable uid (a
 ///      [`MarkRef`], packed as one `i32`; `-1` = none) instead of the row
 ///      count, so a card can store the handle and retrieve the pick later.
@@ -2057,12 +2068,6 @@ impl ActionKind {
     /// A counteraction may cancel the gain.
     pub const MarkerGain: Self = Self(TriggerKind::MarkerGain);
 
-    /// Action. Scheduled turn-end callback. Raised only for the card a schedule
-    /// entry names, at that turn's end (one-shot), inside the TurnEndBefore /
-    /// TurnEndAfter windows. Payload is that window's trigger. A listener may
-    /// emit effects.
-    pub const AtEnd: Self = Self(TriggerKind::AtEnd);
-
     /// Action. Interactive pre-stage immediately before the pure PaySplitChoose
     /// filter, per settled payment leg. Payload: player_id = payer, target =
     /// payee, value = the running figure, the pay flag, tile, by_card.
@@ -2949,6 +2954,13 @@ pub enum OnKind {
     /// runs when a house is built on the deed this rule instance governs.
     /// Same split as [`Self::Buy`].
     Build = 13,
+    /// v102: a **named scheduled callback** (`On::Schedule(id, pre, guard,
+    /// body)`) -- what runs when a `ctx::at_turn_end` / `ctx::before_turn_end` /
+    /// `ctx::at_next_turn_end` call names this entry's `id` slug. The
+    /// evaluation window is still [`TriggerKind::AtEnd`] (`turnEndBefore` /
+    /// `turnEndAfter`); the entry is no longer an anonymous
+    /// `On::Action(Action::AtEnd(…))`. Id 14 (4/5/6 stay retired forever).
+    Schedule = 14,
 }
 
 /// Filter payloads live in [`crate::payload`] -- one typed struct per kind
@@ -2969,6 +2981,7 @@ impl OnKind {
             11 => Self::Filter,
             12 => Self::Buy,
             13 => Self::Build,
+            14 => Self::Schedule,
             _ => return None,
         })
     }

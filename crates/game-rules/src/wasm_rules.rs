@@ -2178,7 +2178,7 @@ impl CardWorld for Run {
     }
 
     // turn plan & scheduling -------------------------------------------------
-    fn schedule_turn_end(&mut self, player_id: i32, next_of_player: bool, early: bool) {
+    fn schedule_turn_end(&mut self, player_id: i32, next_of_player: bool, early: bool, entry: &str) {
         let now = self.world.turn.player_id;
         let (target, skip) = if next_of_player {
             let s = player_id.max(0) as usize;
@@ -2196,8 +2196,9 @@ impl CardWorld for Run {
             // The instance asking for the callback, captured now. The
             // identity belongs to the entry rather than being resolved from the
             // field at trigger time (which copy would it be?). `-1` when the card
-            // is not in play: `On::AtEnd` may run for a card in a hand or pile.
+            // is not in play: `On::Schedule` may run for a card in a hand or pile.
             uid: self.current_uid,
+            entry: String::from(entry),
         });
     }
     fn set_no_money_loss(&mut self, player_id: i32) {
@@ -4961,21 +4962,29 @@ impl<M: CardModules> RulesBridge<M> {
                             s.skip = false;
                             return true;
                         }
-                        due.push((s.card.clone(), s.owner, s.uid));
+                        due.push((s.card.clone(), s.owner, s.uid, s.entry.clone()));
                         false
                     });
                     cx.swap_world(w);
-                    for (id, owner, uid) in due {
-                        if let Some(idx) = self
-                            .ruleset
-                            .card(&id)
-                            .filter(|&i| self.ruleset.cards()[i as usize].has_at_end())
-                        {
+                    for (id, owner, uid, entry) in due {
+                        let resolved = self.ruleset.card(&id).and_then(|idx| {
+                            let info = &self.ruleset.cards()[idx as usize];
+                            let e = if entry.is_empty() {
+                                // Legacy save: resolve to the card's first
+                                // Schedule entry (the old AtEnd behaviour).
+                                info.entry(card_sdk::abi::OnKind::Schedule, None)
+                            } else {
+                                info.entry_by_id(&entry)
+                            };
+                            e.map(|e| (idx, e))
+                        });
+                        if let Some((idx, entry_idx)) = resolved {
                             self.drive(
                                 cx,
                                 Call::AtEnd {
                                     card: idx,
                                     player_id: owner,
+                                    entry: entry_idx,
                                 },
                                 &id,
                                 uid,
@@ -9297,21 +9306,29 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         s.skip = false;
                         return true;
                     }
-                    due.push((s.card.clone(), s.owner, s.uid));
+                    due.push((s.card.clone(), s.owner, s.uid, s.entry.clone()));
                     false
                 });
                 cx.swap_world(w);
-                for (id, owner, uid) in due {
-                    if let Some(idx) = self
-                        .ruleset
-                        .card(&id)
-                        .filter(|&i| self.ruleset.cards()[i as usize].has_at_end())
-                    {
+                for (id, owner, uid, entry) in due {
+                    let resolved = self.ruleset.card(&id).and_then(|idx| {
+                        let info = &self.ruleset.cards()[idx as usize];
+                        let e = if entry.is_empty() {
+                            // Legacy save: resolve to the card's first
+                            // Schedule entry (the old AtEnd behaviour).
+                            info.entry(card_sdk::abi::OnKind::Schedule, None)
+                        } else {
+                            info.entry_by_id(&entry)
+                        };
+                        e.map(|e| (idx, e))
+                    });
+                    if let Some((idx, entry_idx)) = resolved {
                         match self.drive(
                             cx,
                             Call::AtEnd {
                                 card: idx,
                                 player_id: owner,
+                                entry: entry_idx,
                             },
                             &id,
                             uid,

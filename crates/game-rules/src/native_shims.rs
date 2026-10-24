@@ -1513,7 +1513,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(0)
     }
     fn op_schedule_turn_end(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::schedule_turn_end(self, a[0], a[1])?;
+        crate::hostfns::schedule_turn_end(self, a[0], a[1], a[2], a[3])?;
         Ok(0)
     }
     fn op_set_no_money_loss(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -3950,9 +3950,14 @@ pub unsafe extern "C-unwind" fn ruleset_set_play_doubled(n: i32) {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_schedule_turn_end(player_id: i32, mode: i32) {
+pub unsafe extern "C-unwind" fn ruleset_schedule_turn_end(
+    player_id: i32,
+    mode: i32,
+    id_ptr: i32,
+    id_len: i32,
+) {
     with_host(
-        |h| match h.op_schedule_turn_end([player_id, mode, 0, 0, 0, 0]) {
+        |h| match h.op_schedule_turn_end([player_id, mode, id_ptr, id_len, 0, 0]) {
             Ok(_) => {}
             Err(e) => abort_host(e),
         },

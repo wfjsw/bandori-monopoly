@@ -562,7 +562,7 @@ fn entry_of(info: &CardInfo, call: &Call, trigger_kind: TriggerKind) -> Option<i
         // (Play mode selection happens in `NativeModules::play_entry_for`.)
         Call::Counteract { .. } => info.entry(OnKind::Counteract, Some(trigger_kind)),
         Call::Hook { kind, .. } => info.hook_entry(*kind),
-        Call::AtEnd { .. } => info.hook_entry(card_sdk::abi::TriggerKind::AtEnd),
+        Call::AtEnd { entry, .. } => Some(*entry),
         Call::DiceRollPlan { .. } => info.hook_entry(card_sdk::abi::TriggerKind::DiceRollPlan),
         Call::Settle { .. } => info.entry(OnKind::Settle, None),
         Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),

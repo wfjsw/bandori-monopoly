@@ -19,7 +19,7 @@ pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
         On::Play("", None, play),
-        On::Action(Action::AtEnd("", None, expire_at_end)),
+        On::Schedule("expire_at_end", "", None, expire_at_end),
     ],
 )
         .meta(&card_sdk::meta::CardMeta::new()
@@ -41,7 +41,7 @@ pub const A_A_O: CardDef = CardDef::new(
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
-    ctx::at_next_turn_end(player_id);
+    ctx::at_next_turn_end(player_id, "expire_at_end");
     ctx::log(
         player_id,
         &Msg::new("log.event.a_a_o_on").player_id("who", player_id),

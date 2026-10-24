@@ -2880,10 +2880,17 @@ fn query_guard_entry<C: HostCtx>(
     Ok(asked.unwrap_or(false))
 }
 
-pub fn schedule_turn_end<C: HostCtx>(c: &mut C, player_id: i32, mode: i32) -> Result<(), HostErr> {
+pub fn schedule_turn_end<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    mode: i32,
+    ip: i32,
+    il: i32,
+) -> Result<(), HostErr> {
+    let entry = guest_str(c, ip, il)?;
     c.st_mut()
         .w()
-        .schedule_turn_end(player_id, mode & 1 != 0, mode & 2 != 0);
+        .schedule_turn_end(player_id, mode & 1 != 0, mode & 2 != 0, &entry);
     Ok(())
 }
 

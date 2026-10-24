@@ -37,7 +37,7 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         // The body-top applicability checks are the condition / residual guard
         // now: a seat still in the game (`owner.out == 0`) that actually took
         // an abnormal effect this turn (`at_end_something_to_undo`).
-        On::Action(Action::AtEnd("owner.out == 0", Some(at_end_something_to_undo), at_end)),
+        On::Schedule("at_end", "owner.out == 0", Some(at_end_something_to_undo), at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"像往常一样"#)
@@ -71,8 +71,8 @@ fn arm(player_id: i32) {
         &Msg::new(key!("ran_as_usual_armed")).player_id("who", player_id),
     );
     // C# `H._turnCtx.AtEnd.Add(() => Undo(i))` -- the turn-end queue hook
-    // (`ctx::before_turn_end` + `On::AtEnd`). The card need not be in play.
-    ctx::before_turn_end(player_id);
+    // (`ctx::before_turn_end` + `On::Schedule`). The card need not be in play.
+    ctx::before_turn_end(player_id, "at_end");
 }
 
 /// C# `CardRanAsUsual.Undo`, queued on `H._turnCtx.AtEnd`. The scheduling half

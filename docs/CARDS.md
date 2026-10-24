@@ -11,7 +11,7 @@ The same authoring shape covers the other rule categories: board tiles
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
 the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
-what runs while it is active, `On::Action(Action::AtEnd(...))` for expiry.
+what runs while it is active, `On::Schedule(id, …)` for expiry.
 
 ## How a card runs
 
@@ -35,7 +35,7 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
     // On::Counteract(&[ChainKind::Pay], "", guard, counteract).counter_reason(r#"你将要失去或支付资金"#),  // [反击]: kinds + condition + guard + effect + reason
     // On::Action(Action::TurnEnd("", guard, decay)),          // field hooks, auto-run in play
-    // On::Action(Action::AtEnd("", None, at_end)),        // scheduled turn-end body
+    // On::Schedule("at_end", "", None, at_end),           // scheduled turn-end body
     // On::Filter(Filter::DiceRollPlan("", None, roll_plan)), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
@@ -121,7 +121,7 @@ as `None` are not written back.
 
 | id | was | folded into | ABI |
 |---|---|---|---|
-| 4 | `OnKind::AtEnd` | `On::Action(Action::AtEnd(...))` | v76 |
+| 4 | `OnKind::AtEnd` | `On::Action(Action::AtEnd(...))` → v102 `On::Schedule(id, …)` | v76 → v102 |
 | 5 | `OnKind::RollPlan` | `On::Filter(Filter::DiceRollPlan(...))` | v76 |
 | 6 | `OnKind::Gate` | `On::Filter(Filter::ActGate(...))` / `On::Filter(Filter::DiceRollPlan(...))` at the gate kinds | v77 |
 
@@ -343,6 +343,12 @@ body))`: the one-shot-ness lives in the existing `schedule_turn_end`
 list (`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire
 ids `OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never
 be reused.
+
+**v102** renames the scheduled-callback entry to `On::Schedule(id, pre, guard,
+body)` -- a required stable ASCII slug names it, and the scheduling family
+(`ctx::at_turn_end` / `ctx::before_turn_end` / `ctx::at_next_turn_end`) takes
+that `id`. `OnKind::Schedule = 14`. The evaluation window is still
+`TriggerKind::AtEnd` (`turnEndBefore` / `turnEndAfter`).
 
 **ChargePaying stays Action.** Its 「可」 opt-in prompts and Filter bodies
 cannot. Everything else that used to be a gate is a Filter.

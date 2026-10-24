@@ -37,7 +37,7 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // or the placed (3) press (spend 1 crystal to fire the owner's (2)
         // skill). The gate admits whenever either branch is available.
         On::Play("", Some(cant_play), play),
-        On::Action(Action::AtEnd("", None, discard_down_to_five)),
+        On::Schedule("discard_down_to_five", "", None, discard_down_to_five),
         // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- same CounterChanged
         // shape as AG:（摩卡）0.5倍速 / R:Fire bird.
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
@@ -200,7 +200,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// Effect (1) 「抽x张卡（可超过上限），回合结束后将手牌弃置到五张」 -- C# case 0 of
 /// the play's `H.AskPick` (`MatchHost.cs:4874-4878`). The discard-down half is
 /// C# `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))` =
-/// `ctx::before_turn_end` (C# `AtEnd`, pre-wear-off) queuing the `On::AtEnd`
+/// `ctx::before_turn_end` (C# `AtEnd`, pre-wear-off) queuing the `On::Schedule`
 /// body below. Unreachable until the token-list query lands (the play folds
 /// first); written now so the queued scheduling is already the right hook.
 #[allow(dead_code)]
@@ -218,13 +218,13 @@ fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
     ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, cap);
     // 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C#
     // `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))`.
-    ctx::before_turn_end(player_id);
+    ctx::before_turn_end(player_id, "discard_down_to_five");
     Ok(())
 }
 
 /// 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C# `H._turnCtx.AtEnd.Add(() =>
 /// H.DiscardDownTo(i, 5, CardName))`. Scheduled by the play's effect (1) via
-/// `ctx::before_turn_end(player_id)`.
+/// `ctx::before_turn_end(player_id, "discard_down_to_five")`.
 fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let mut extra = hand.len() as i32 - 5;

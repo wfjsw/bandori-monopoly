@@ -30,7 +30,7 @@ pub const GUERRILLA: CardDef = CardDef::new(
         // clause of that 「如果」 holds. Derived scans, residual. The arm-latch
         // clear is the same entry's bookkeeping (the engine dispatches one
         // `AtEnd` body per entry), so the gate lives in the body.
-        On::Action(Action::AtEnd("", None, at_end)),
+        On::Schedule("at_end", "", None, at_end),
     ],
 )
 .silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
@@ -146,7 +146,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // lands in the discard after this counteraction resolves).
     if ctx::turn_player() == player_id && ctx::slot(player_id, SLOT_ARMED) == 0 {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
-        ctx::before_turn_end(player_id);
+        ctx::before_turn_end(player_id, "at_end");
     }
     Ok(())
 }
@@ -156,7 +156,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
     if ctx::turn_player() == player_id && ctx::slot(player_id, SLOT_ARMED) == 0 {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
-        ctx::before_turn_end(player_id);
+        ctx::before_turn_end(player_id, "at_end");
     }
     Ok(())
 }

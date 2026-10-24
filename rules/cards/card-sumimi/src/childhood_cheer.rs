@@ -34,7 +34,7 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         // The body-top `!is_placed` early-out is the condition now: a card the
         // move already landed (or that otherwise left the field) has nothing
         // left to discard, so the callback must not run (or flash) for it.
-        On::Action(Action::AtEnd("card.placed", None, at_end)),
+        On::Schedule("at_end", "card.placed", None, at_end),
     ],
 )
 .meta(
@@ -76,7 +76,7 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(player_id, ID, &Msg::new(key!("childhood_cheer_note")));
     // C# `AfterMoveFireFx.TurnEndAfter` drops the attachment at the owner's
     // turn end if the move never landed it.
-    ctx::at_turn_end(player_id);
+    ctx::at_turn_end(player_id, "at_end");
     Ok(())
 }
 

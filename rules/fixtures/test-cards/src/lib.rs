@@ -676,7 +676,7 @@ fn pre_hook_body(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     PayAddValue { value: v.value, ..v }
 }
 
-// v49 (docs/GUARDS.md §4.2c): `On::Gate` / `On::AtEnd` / `On::RollPlan` /
+// v49 (docs/GUARDS.md §4.2c): `On::Gate` / `On::Schedule` / `On::RollPlan` /
 // `On::Settle` carry the same `pre` + residual-guard pair. Each fixture below
 // declares `pre: "false"` on one of those kinds, so the entry must run no body
 // (and so emit no `card` flash) whenever the kind is asked.
@@ -728,21 +728,21 @@ fn pre_rollplan_body(player_id: i32, v: PlanValue) -> PlanValue {
     }
 }
 
-/// `On::AtEnd` with a rejecting condition: the scheduled turn-end callback
+/// `On::Schedule` with a rejecting condition: the scheduled turn-end callback
 /// must not run.
 const PRE_ATEMD: CardDef = CardDef::new(
     "TEST:preAtEnd",
     &[
         On::Play("", None, pre_at_end_place),
-        On::Action(Action::AtEnd("false", None, pre_at_end_body)),
+        On::Schedule("pre_at_end_body", "false", None, pre_at_end_body),
     ],
 );
 
 fn pre_at_end_place(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:preAtEnd", &Msg::new(key!("pre_at_end_note")));
-    // Schedule `On::AtEnd` at this player's turn end (C# `TurnCtx.AtEnd`).
-    ctx::at_turn_end(player_id);
+    // Schedule `On::Schedule` at this player's turn end (C# `TurnCtx.AtEnd`).
+    ctx::at_turn_end(player_id, "pre_at_end_body");
     Ok(())
 }
 

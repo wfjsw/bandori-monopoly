@@ -230,7 +230,7 @@ pub fn rinpuu_01_mutant_two_layers() {
 
 // ===========================================================================
 // C-MYGO-rinpuu-02 is PROTOCOL-LEVEL: 「并在回合结束时额外进行一次[触发结算]」
-// is engine scheduling (`On::AtEnd` + `card_settle_at`, a protocol stub).
+// is engine scheduling (`On::Schedule` + `card_settle_at`, a protocol stub).
 // Documented here so the unit table can cite a harness name.
 // ===========================================================================
 

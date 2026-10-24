@@ -88,7 +88,9 @@ fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
 fn on_plan_after(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, OWED, 0);
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
-    ctx::at_turn_end(player_id);
+    // TODO(规则书): the historical `ctx::at_turn_end` here was a silent no-op
+    // (this card declares no `On::Schedule` entry). Deleted rather than given
+    // an entry -- behaviour is identical. The real disarm is `tick`.
     ctx::log(player_id, &Msg::new(key!("tsugumi_plain_owed")));
     Ok(())
 }

@@ -903,6 +903,13 @@ pub enum On {
     /// a reply value via `ctx::message::reply`. Handling a message does not
     /// flash the card (internal plumbing). Built by [`On::Message`].
     MessageBody(MessageEntry),
+    /// A **named scheduled callback** at a turn end (ABI v102). The entry's
+    /// `id` slug names it; `ctx::at_turn_end` / `ctx::before_turn_end` /
+    /// `ctx::at_next_turn_end` schedule *that* entry by id. The evaluation
+    /// window is still [`abi::TriggerKind::AtEnd`] (`turnEndBefore` /
+    /// `turnEndAfter`). Same shape as [`On::Settle`]. Built by
+    /// [`On::Schedule`].
+    ScheduleBody(RuleEntry),
 }
 
 /// Condition-authoring sugar (docs/GUARDS.md §4.3). The strings are CEL; the
@@ -1088,6 +1095,31 @@ impl On {
         })
     }
 
+    /// A **named scheduled callback** at a turn end. `id` is the stable ASCII
+    /// slug a `ctx::at_turn_end` / `ctx::before_turn_end` /
+    /// `ctx::at_next_turn_end` call names; it is required (non-empty, unique
+    /// per card) and is identity, not display text. Unknown / unmatching ids
+    /// at schedule time are a no-op.
+    #[allow(non_snake_case)]
+    pub const fn Schedule(
+        id: &'static str,
+        pre: &'static str,
+        guard: Option<fn(player_id: i32) -> bool>,
+        body: fn(player_id: i32) -> Asked,
+    ) -> Self {
+        Self::ScheduleBody(RuleEntry {
+            id,
+            pre,
+            guard,
+            body: body as *const (),
+            drive: drive_body_plain,
+            shape: BodyShape::Plain,
+            declare: None,
+            declare_drive: None,
+            label: "",
+        })
+    }
+
     /// Replace the entry's condition string (docs/GUARDS.md §4.3). A const
     /// builder so a declaration can remain a one-liner:
     ///
@@ -1135,6 +1167,10 @@ impl On {
             On::MessageBody(mut e) => {
                 e.pre = pre;
                 On::MessageBody(e)
+            }
+            On::ScheduleBody(mut e) => {
+                e.pre = pre;
+                On::ScheduleBody(e)
             }
         }
     }
@@ -1208,6 +1244,11 @@ impl On {
                 e.declare_drive = Some(drive_declare::<T>);
                 On::MessageBody(e)
             }
+            On::ScheduleBody(mut e) => {
+                e.declare = Some(pick as *const ());
+                e.declare_drive = Some(drive_declare::<T>);
+                On::ScheduleBody(e)
+            }
             // Fail closed at compile time: a filter is a pure value fold and
             // cannot pause for a player (docs/ACTIVATION.md §2).
             On::Filter(_) => {
@@ -1275,6 +1316,10 @@ impl On {
             On::MessageBody(mut e) => {
                 e.id = id;
                 On::MessageBody(e)
+            }
+            On::ScheduleBody(mut e) => {
+                e.id = id;
+                On::ScheduleBody(e)
             }
         }
     }
@@ -1351,6 +1396,12 @@ impl On {
                 e.shape = BodyShape::WithArg;
                 On::MessageBody(e)
             }
+            On::ScheduleBody(mut e) => {
+                e.body = body as *const ();
+                e.drive = drive_body_arg::<T>;
+                e.shape = BodyShape::WithArg;
+                On::ScheduleBody(e)
+            }
             On::Filter(_) => {
                 panic!("On::Filter cannot declare -- use an On::Action pre-stage instead")
             }
@@ -1371,6 +1422,7 @@ impl On {
             On::BuyBody(e) => e.declare.is_some(),
             On::BuildBody(e) => e.declare.is_some(),
             On::MessageBody(e) => e.declare.is_some(),
+            On::ScheduleBody(e) => e.declare.is_some(),
         }
     }
 
@@ -1426,6 +1478,10 @@ impl On {
                 e.label = label;
                 On::MessageBody(e)
             }
+            On::ScheduleBody(mut e) => {
+                e.label = label;
+                On::ScheduleBody(e)
+            }
         }
     }
 
@@ -1442,6 +1498,7 @@ impl On {
             On::BuyBody(e) => e.label,
             On::BuildBody(e) => e.label,
             On::MessageBody(e) => e.label,
+            On::ScheduleBody(e) => e.label,
         }
     }
 
@@ -1459,6 +1516,7 @@ impl On {
             On::BuyBody(e) => e.id,
             On::BuildBody(e) => e.id,
             On::MessageBody(e) => e.id,
+            On::ScheduleBody(e) => e.id,
         }
     }
 
@@ -1529,6 +1587,10 @@ impl On {
                 e.guard = None;
                 On::MessageBody(e)
             }
+            On::ScheduleBody(mut e) => {
+                e.guard = None;
+                On::ScheduleBody(e)
+            }
             other => other,
         }
     }
@@ -1547,6 +1609,7 @@ impl On {
             On::MessageBody(e) => e.guard,
             On::Action(e) => e.guard,
             On::Filter(e) => e.guard,
+            On::ScheduleBody(e) => e.guard,
             _ => None,
         }
     }
@@ -1565,6 +1628,7 @@ impl On {
             On::MessageBody(e) => e.guard.is_some(),
             On::Action(e) => e.guard.is_some(),
             On::Filter(e) => e.guard.is_some(),
+            On::ScheduleBody(e) => e.guard.is_some(),
         }
     }
 
@@ -1582,6 +1646,7 @@ impl On {
             On::MessageBody(e) => e.pre,
             On::Action(e) => e.pre,
             On::Filter(e) => e.pre,
+            On::ScheduleBody(e) => e.pre,
         }
     }
 
@@ -1610,6 +1675,7 @@ impl On {
             On::BuyBody(..) => abi::OnKind::Buy,
             On::BuildBody(..) => abi::OnKind::Build,
             On::MessageBody(..) => abi::OnKind::Message,
+            On::ScheduleBody(..) => abi::OnKind::Schedule,
         }
     }
 
@@ -1749,12 +1815,14 @@ mod tests {
         assert_eq!(abi::OnKind::Redeem as i32, 10);
         assert_eq!(abi::OnKind::Buy as i32, 12);
         assert_eq!(abi::OnKind::Build as i32, 13);
+        assert_eq!(abi::OnKind::Schedule as i32, 14);
         assert_eq!(abi::OnKind::from_i32(3), Some(abi::OnKind::Action));
         assert_eq!(abi::OnKind::from_i32(9), Some(abi::OnKind::Mortgage));
         assert_eq!(abi::OnKind::from_i32(10), Some(abi::OnKind::Redeem));
         assert_eq!(abi::OnKind::from_i32(11), Some(abi::OnKind::Filter));
         assert_eq!(abi::OnKind::from_i32(12), Some(abi::OnKind::Buy));
         assert_eq!(abi::OnKind::from_i32(13), Some(abi::OnKind::Build));
+        assert_eq!(abi::OnKind::from_i32(14), Some(abi::OnKind::Schedule));
         assert_eq!(abi::OnKind::from_i32(1), None);
         // Retired AtEnd = 4 / DiceRollPlan = 5 / Gate = 6 -- never reuse.
         assert_eq!(abi::OnKind::from_i32(4), None);

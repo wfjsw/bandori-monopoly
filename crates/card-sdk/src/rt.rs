@@ -197,6 +197,7 @@ pub fn on(
             | On::RedeemBody(RuleEntry { guard, .. })
             | On::BuyBody(RuleEntry { guard, .. })
             | On::BuildBody(RuleEntry { guard, .. })
+            | On::ScheduleBody(RuleEntry { guard, .. })
             | On::MessageBody(MessageEntry { guard, .. }),
             export::OP_GUARD,
         ) => match guard {
@@ -261,6 +262,9 @@ pub fn on(
             | On::BuildBody(RuleEntry {
                 body, drive, shape, ..
             })
+            | On::ScheduleBody(RuleEntry {
+                body, drive, shape, ..
+            })
             | On::MessageBody(MessageEntry {
                 body, drive, shape, ..
             }),
@@ -295,6 +299,7 @@ fn declare_of(o: &On) -> Option<(crate::DeclareDrive, *const ())> {
         On::RedeemBody(e) => e.declare_drive.zip(e.declare),
         On::BuyBody(e) => e.declare_drive.zip(e.declare),
         On::BuildBody(e) => e.declare_drive.zip(e.declare),
+        On::ScheduleBody(e) => e.declare_drive.zip(e.declare),
         On::MessageBody(e) => e.declare_drive.zip(e.declare),
     }
 }

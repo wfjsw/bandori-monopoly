@@ -483,7 +483,7 @@ fn rollplan_whose_cel_pre_rejects_remains_silent() {
     );
 }
 
-/// `TEST:preAtEnd`'s `On::AtEnd` declares `pre: "false"`; its play schedules
+/// `TEST:preAtEnd`'s `On::Schedule` declares `pre: "false"`; its play schedules
 /// the callback at the owner's turn end. The scheduled callback must run no
 /// body and emit no flash.
 #[test]
@@ -496,7 +496,7 @@ fn atend_whose_cel_pre_rejects_remains_silent() {
     assert!(t.on_field(0, "TEST:preAtEnd"), "{}", t.dump_prompt());
 
     let mark = t.mark();
-    // End P0's turn: the scheduled `On::AtEnd` is asked here.
+    // End P0's turn: the scheduled `On::Schedule` is asked here.
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);

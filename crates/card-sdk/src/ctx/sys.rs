@@ -1454,7 +1454,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_schedule_turn_end"
         )]
-        pub fn schedule_turn_end(player_id: i32, mode: i32);
+        pub fn schedule_turn_end(player_id: i32, mode: i32, id_ptr: i32, id_len: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_no_money_loss"

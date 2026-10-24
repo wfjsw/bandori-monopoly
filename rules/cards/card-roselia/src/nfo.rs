@@ -36,7 +36,7 @@ pub const NFO: CardDef = CardDef::new(
         //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
         On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_shave)),
         On::Action(Action::PayAfter("actor == owner && card.placed", None, pay_unplace)),
-        On::Action(Action::AtEnd("", None, at_end)),
+        On::Schedule("at_end", "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)
@@ -78,7 +78,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let k = (roll - 1).rem_euclid(6) + 1;
     // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H._turnCtx.AfterEnd.Add(() =>
     // H.GiveStay(i, 1, i, "NFO"))`; the scheduled body is `at_end`.
-    ctx::at_turn_end(player_id);
+    ctx::at_turn_end(player_id, "at_end");
     if k == 6 {
         // 规则书: 「若结果为6，依次获得结果1-5的全部效果。」
         ctx::effect(player_id, &Msg::new(key!("nfo_effect_all")));

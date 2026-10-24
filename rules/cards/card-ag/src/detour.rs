@@ -295,7 +295,9 @@ fn arm_no_reward(player_id: i32) {
         return;
     }
     ctx::set_tile_prop(circle, prop::NO_REWARD, 1);
-    ctx::at_turn_end(player_id);
+    // TODO(规则书): the historical `ctx::at_turn_end` here was a silent no-op
+    // (this card declares no `On::Schedule` entry). Deleted rather than given
+    // an entry -- behaviour is identical.
 }
 
 // TODO: Remove

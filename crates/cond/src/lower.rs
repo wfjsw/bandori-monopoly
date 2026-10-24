@@ -472,12 +472,15 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
             "Buy",
             "Build",
             "Message",
+            "Schedule",
         ] {
             let pat = format!("On::{kind}(");
             let mut rest = text.as_str();
             while let Some(i) = rest.find(&pat) {
                 rest = &rest[i + pat.len()..];
-                if let Some(s) = on_pre_string(rest, kind == "Filter" || kind == "Action") {
+                if let Some(s) =
+                    on_pre_string(rest, kind == "Filter" || kind == "Action", kind == "Schedule")
+                {
                     if !s.is_empty() {
                         out.push(s);
                     }
@@ -493,17 +496,69 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
 /// (`Ns::Name(pre, …)` / `Ns::Name(pre, guard, body)`); `pre` is ctor
 /// arg 1 inside the inner parentheses. The namespace is whatever the ruleset
 /// named it (`Filter`/`Action` engine, `Filters`/`Actions`/… downstream).
-/// Everything else keeps the flat first-arg shape (no `&[kinds]` slice since
-/// the multi-kind lists are gone).
-fn on_pre_string(after: &str, nested: bool) -> Option<String> {
+/// `On::Schedule(id, pre, …)` takes a leading id slug; `pre` is the second
+/// top-level argument. Everything else keeps the flat first-arg shape (no
+/// `&[kinds]` slice since the multi-kind lists are gone).
+fn on_pre_string(after: &str, nested: bool, skip_id: bool) -> Option<String> {
     if nested {
         let (open, _end) = find_ctor_call(after)?;
         let inner = extract_parens(after, open)?;
         let first = first_top_arg(inner)?;
         return pre_string(first);
     }
+    if skip_id {
+        // `On::Schedule(id, pre, …)` -- skip the leading id slug.
+        return nth_top_arg(after, 1).and_then(|s| pre_string(s.as_str()));
+    }
     // Flat: skip an optional `&[...]` leftover, then first string / `pre::MINE`.
     pre_string(after)
+}
+
+/// The `n`th top-level comma-separated argument (0-based), or `None` if there
+/// are fewer than `n+1` args. `after` starts *inside* the outer `(`.
+fn nth_top_arg(after: &str, n: usize) -> Option<String> {
+    let b = after.as_bytes();
+    let mut depth = 0usize;
+    let mut j = 0;
+    while j < b.len() {
+        if b[j] == b'(' {
+            depth += 1;
+        } else if b[j] == b')' {
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        }
+        j += 1;
+    }
+    let mut args = Vec::new();
+    let mut depth = 0i32;
+    let mut cur = String::new();
+    for c in after[..j].chars() {
+        match c {
+            '(' | '[' | '{' => {
+                depth += 1;
+                cur.push(c);
+            }
+            ')' | ']' | '}' => {
+                depth -= 1;
+                cur.push(c);
+            }
+            ',' if depth == 0 => {
+                let t = cur.trim().to_string();
+                if !t.is_empty() {
+                    args.push(t);
+                }
+                cur.clear();
+            }
+            _ => cur.push(c),
+        }
+    }
+    let t = cur.trim().to_string();
+    if !t.is_empty() {
+        args.push(t);
+    }
+    args.get(n).cloned()
 }
 
 /// `Path::Ident(` at the head of `s`. Returns the index of `(`.

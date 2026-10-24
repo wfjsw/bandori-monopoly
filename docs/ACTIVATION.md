@@ -357,6 +357,7 @@ apart, and `id` must land on the identity side of that line:
 | field | what it is | example | shown to players? |
 |---|---|---|---|
 | `id` (**new**) | stable internal slug, ASCII, per-card unique | `"decay"`, `"tick"` | **never** |
+| `On::Schedule(id, …)` | same slug grammar as `id` -- names which Schedule entry a `ctx::*_turn_end` call runs | `"at_end"`, `"settle_now"` | **never** |
 | `label` (existing, `ManifestOn::label`) | opaque display text for the 「效果适用」 line | `"（2）"` | yes |
 | `counter_reason` (existing) | a `MsgKey` -- a locale **key**, resolved per player | `key!("himari_plus_one_when")` | resolved text |
 | `On::Message(names)` | same family as `id` -- internal slugs | `"clear_cp"` | never |

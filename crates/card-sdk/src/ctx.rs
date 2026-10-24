@@ -2864,25 +2864,30 @@ pub fn n(k: i32, value: i32) -> i32 {
 
 // ------------------------------------------------- turn plan & scheduling
 
-/// Run this card's `On::AtEnd` (for `player_id`) when the
+/// Run this card's `On::Schedule(id)` entry (for `player_id`) when the
 /// current turn ends, *after* the end-of-turn status wear-off (so a [停留] it
 /// grants lasts through the next turn). The card need not be in play.
-/// Scheduling twice runs it twice.
-pub fn at_turn_end(player_id: i32) {
-    unsafe { sys::schedule_turn_end(player_id, 0) }
+/// Scheduling twice runs it twice. An unknown / unmatching `id` is a no-op.
+pub fn at_turn_end(player_id: i32, id: &str) {
+    let (p, l) = s(id);
+    unsafe { sys::schedule_turn_end(player_id, 0, p, l) }
 }
 
-/// Run this card's `On::AtEnd` (for `player_id`) when the
+/// Run this card's `On::Schedule(id)` entry (for `player_id`) when the
 /// current turn ends, *before* the status wear-off (「回合结束时」 money losses,
-/// discarding down to a hand size).
-pub fn before_turn_end(player_id: i32) {
-    unsafe { sys::schedule_turn_end(player_id, 2) }
+/// discarding down to a hand size). An unknown / unmatching `id` is a no-op.
+pub fn before_turn_end(player_id: i32, id: &str) {
+    let (p, l) = s(id);
+    unsafe { sys::schedule_turn_end(player_id, 2, p, l) }
 }
 
-/// 「你的下回合结束时」 -- run this card's `On::AtEnd` (for `player_id`) at the end of
-/// `player_id`'s next turn (not the current one, if it is `player_id`'s), after its wear-off.
-pub fn at_next_turn_end(player_id: i32) {
-    unsafe { sys::schedule_turn_end(player_id, 1) }
+/// 「你的下回合结束时」 -- run this card's `On::Schedule(id)` entry (for
+/// `player_id`) at the end of `player_id`'s next turn (not the current one, if
+/// it is `player_id`'s), after its wear-off. An unknown / unmatching `id` is a
+/// no-op.
+pub fn at_next_turn_end(player_id: i32, id: &str) {
+    let (p, l) = s(id);
+    unsafe { sys::schedule_turn_end(player_id, 1, p, l) }
 }
 
 /// `player_id`'s money cannot drop for the rest of this

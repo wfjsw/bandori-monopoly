@@ -1139,8 +1139,8 @@ pub fn set_play_doubled(n: i32) {
     kani_host::call_unit(Op::set_play_doubled, [n, 0, 0, 0, 0, 0]);
 }
 
-pub fn schedule_turn_end(player_id: i32, mode: i32) {
-    kani_host::call_unit(Op::schedule_turn_end, [player_id, mode, 0, 0, 0, 0]);
+pub fn schedule_turn_end(player_id: i32, mode: i32, id_ptr: i32, id_len: i32) {
+    kani_host::call_unit(Op::schedule_turn_end, [player_id, mode, id_ptr, id_len, 0, 0]);
 }
 
 pub fn set_no_money_loss(player_id: i32) {

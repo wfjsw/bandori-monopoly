@@ -324,7 +324,7 @@ reading its default / sentinel):
 |---|---|---|---|
 | `Gate` | the gate's own raise (`ImmuneAll` / `Untargetable` / `Redirect` / `BuyGate` / `AbnormalGuard`, …) | `kind`, `actor` (the protected seat / buyer / named target), `target` (`Redirect`'s current name), `tile` (`BuyGate`'s tile), `value`, `by` (the causing card's seat, `null` when not card-caused), `trigger_card`, `turn_player`, `turn_key` | a gate is asked per raise; `card.placed` is true by construction (only placed instances are asked) |
 | `DiceRollPlan` | `diceRollPlan` (the move being planned) | `actor` = the mover (`turn_player`), `turn_player`, `turn_key`, `move.*` (kind / main / remaining; `move.roll` is still `null` -- the dice are not cast yet), `card.*` | `pos(seat)` reads a seat's tile, so 「与自己同格」 is `pos(turn_player) == owner.pos` |
-| `AtEnd` | `turnEndBefore` / `turnEndAfter` (the ended turn) | `owner.*` (the scheduled player), `turn_player`, `turn_key`, `actor` (the turn player whose turn ended) | `slot(name)` / `tok('name')` read `owner`'s counters -- the scheduling card's own state |
+| `AtEnd` (`On::Schedule`) | `turnEndBefore` / `turnEndAfter` (the ended turn) | `owner.*` (the scheduled player), `turn_player`, `turn_key`, `actor` (the turn player whose turn ended) | `slot(name)` / `tok('name')` read `owner`'s counters -- the scheduling card's own state |
 | `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.main` | `actor`, `target`, `tile.*`, `move.main`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
 | `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
 | `Buy` / `Build` | a synthetic trigger (`kind = None`) on the perform: `actor` = the buyer / builder, `target` = the tile's owner, `tile` = the deed, `value` = the reason (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction); `buy.kind` is the [`BuyKind`] | `actor`, `target`, `tile.*`, `buy.kind`, `owner.*`, `turn_player`, `turn_key` | the body owns eligibility, the quote and the order of steps; `ctx::raise` / `ctx::pay_buy` / `ctx::pay_build` / `ctx::assign_deed` / `ctx::log` are the mechanism. Tile bodies do not flash |
@@ -373,7 +373,7 @@ residual wasm guard -- exactly the G3 split.
 2. `run_hook` (host.rs) / `drive_inner` guard step: before
    `self.store(...)`; window context per trigger, owner = card's player.
    Since v49 this covers `On::Filter(FilterEntry)` entries too (they share `hook_entries`).
-3. `run` (host.rs) for `On::Action(Action::AtEnd(…))` / `On::Filter(Filter::DiceRollPlan(…))` /
+3. `run` (host.rs) for `On::Schedule(id, …)` / `On::Filter(Filter::DiceRollPlan(…))` /
    `On::Settle` / `On::Mortgage` / `On::Redeem` (v49):
    the same category → condition → guard → body, before `on_body` / `OP_RUN`,
    so a rejecting entry never flashes.

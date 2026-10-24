@@ -25,7 +25,7 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
         On::Play("", Some(cant_play), overlapping_voices),
-        On::Action(Action::AtEnd("", None, at_end)),
+        On::Schedule("at_end", "", None, at_end),
         // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的
         // [场地]上的"初次演出事故"（如果有）」 -- the own-card `Discarded`
         // dispatch (guerrilla / mygo): the hook fires when *this* card is the
@@ -88,7 +88,7 @@ fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
     banish_accident(player_id);
     // 规则书[手]3: 「回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”
     // 加入手卡」 -- C# `H._turnCtx.AfterEnd.Add(() => After(i))` (before the move).
-    ctx::at_turn_end(player_id);
+    ctx::at_turn_end(player_id, "at_end");
     // 规则书[手]2: 「进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”
     // 且不[结算]」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo =
     // H.TileNamed("Bandori车站"), Resolve = false })`: a teleport to the tile

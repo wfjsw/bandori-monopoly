@@ -678,7 +678,6 @@ action_kinds! {
     MoveAfter;
     MarkerSpend;
     MarkerGain;
-    AtEnd;
     PaySplitChooseBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;
