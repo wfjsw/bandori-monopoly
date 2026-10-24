@@ -13,6 +13,7 @@
 
 import type { Command, MatchView } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";
+import { reportCrash } from "../core/crash.ts";
 import { describeWorkerError } from "./workerError.ts";
 import type { EngineBoot, SaveSnap, SoloOpen, SoloPush, SoloRestore, SoloWorkerLike } from "./soloProtocol.ts";
 
@@ -42,6 +43,9 @@ export class SoloEngine {
     this.w.onmessage = (e: { data: unknown }) => this.onMessage(e.data);
     this.w.onerror = (e: unknown) => {
       const err = new Error(`solo engine worker: ${describeWorkerError(e, "soloWorker.ts")}`);
+      // Worker death is fatal for the match: surface the crash panel too (the
+      // rejected RPCs alone only wake whoever happens to be awaiting).
+      reportCrash({ kind: "worker", message: err.message, stack: err.stack });
       for (const p of this.pending.values()) p.err(err);
       this.pending.clear();
     };
