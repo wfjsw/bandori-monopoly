@@ -674,9 +674,9 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(K_TILE_SLOT, -1);
-            // Start-time resources: the value, not the cap.
-            p.state_set(K_CHARGE, 0);
-            p.tokens.retain(|t| !t.name.starts_with("P✽P粉丝"));
+            // Start-time resources: fire is a held token of the persona-skill
+            // instance (MARKERS.md §7), not a state key.
+            p.tokens.retain(|t| t.name != K_CHARGE && !t.name.starts_with("P✽P粉丝"));
         }
         for f in w.st.board_field.iter_mut() {
             f.props.remove(prop::NO_REWARD);
@@ -751,12 +751,11 @@ impl Table {
             .insert(key.into(), v);
     }
 
-    /// Charge pots: `value` held, `max` cap.
+    /// Charge pots: `value` held, `max` cap. Arranges the held-token row.
     pub fn set_charge(&mut self, who: usize, value: i32, max: i32) {
-        let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(K_CHARGE, value);
-        let min = p.state_min(K_CHARGE);
-        p.state_set_bounds(K_CHARGE, min, max);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, K_CHARGE, value, -1, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -991,7 +990,8 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, K_CHARGE)
+        // Fire is a held token of the persona-skill instance.
+        self.token(who, K_CHARGE)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

@@ -69,7 +69,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ctx::player_pos(player_id) == shop() {
         return Some(Msg::new(key!("tomoe_ramen_at_shop")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("tomoe_ramen_no_fire")));
     }
     None

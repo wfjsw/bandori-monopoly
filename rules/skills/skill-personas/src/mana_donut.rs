@@ -82,7 +82,7 @@ pub const MANA_DONUT: CardDef = CardDef::new(
 /// unset (a mid-game placement of the skill). `state::max` is not in the CEL
 /// schema, so this is the residual.
 fn cap_unset(player_id: i32) -> bool {
-    state::max(player_id, state_key::CHARGE) == 0
+    bandori_std::fire::max(player_id) == 0
 }
 
 /// 「初始1，上限2」.

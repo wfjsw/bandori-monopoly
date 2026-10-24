@@ -400,8 +400,8 @@ pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
             .get(who)
             .map(|p| {
                 (
-                    p.state_get(bandori_std::state_key::CHARGE),
-                    p.state_max(bandori_std::state_key::CHARGE),
+                    p.token(bandori_std::fire::KEY),
+                    p.token_max(bandori_std::fire::KEY),
                 )
             })
             .unwrap_or((0, 0))
@@ -1687,7 +1687,7 @@ fn auction_off_raises_fire_cap() {
         );
     }
     // [持续]「火罐上限加1」 over the vanilla baseline of 0.
-    let max1 = t.p(0).state_max(bandori_std::state_key::CHARGE);
+    let max1 = t.charge_max(0);
     if max1 != 1 {
         panic!("fire max {max1}, expected 1 (C-PPP-auction-off-c1: 上限加1 over baseline 0)");
     }
@@ -2167,11 +2167,11 @@ pub fn verify_better_sound(
             post.st.players[who].pos
         ));
     }
-    let dfire = post.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64
-        - pre.st.players[who].state_get(bandori_std::state_key::CHARGE) as i64;
+    let dfire = post.st.players[who].token(bandori_std::fire::KEY) as i64
+        - pre.st.players[who].token(bandori_std::fire::KEY) as i64;
     // Cap may block; when room existed the delta is exactly 1.
-    let room = pre.st.players[who].state_get(bandori_std::state_key::CHARGE)
-        < pre.st.players[who].state_max(bandori_std::state_key::CHARGE);
+    let room = pre.st.players[who].token(bandori_std::fire::KEY)
+        < pre.st.players[who].token_max(bandori_std::fire::KEY);
     if room && dfire != 1 {
         return Err(format!("fire delta {dfire}, expected +1"));
     }
@@ -2212,7 +2212,9 @@ fn better_sound_verifier_rejects_mutants() {
         &events,
         &verify_better_wrap,
         |w| {
-            w.st.players[0].state_set("charge", 0);
+            w.st.players[0]
+                .tokens
+                .retain(|t| t.name != bandori_std::fire::KEY);
         },
     );
     expect_reject(
@@ -2242,7 +2244,7 @@ fn better_sound_verifier_rejects_mutants() {
         &events,
         &verify_better_wrap,
         |w| {
-            w.st.players[0].state_set("charge", 2);
+            w.set_tok(0, "charge", 2, -1, 0);
         },
     );
 }

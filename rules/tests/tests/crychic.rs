@@ -783,7 +783,7 @@ fn tomori_skill_fire_on_circle() {
     // 规则书: 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」
     t.set_fire(0, 1, 1);
     assert_eq!(t.charge(0), 1);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 1);
+    assert_eq!(t.charge_max(0), 1);
 }
 
 #[test]
@@ -824,7 +824,7 @@ fn saki_crychic_skill_fire_cap() {
     // 规则书: 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限2）」
     t.set_fire(0, 1, 2);
     assert_eq!(t.charge(0), 1);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 2);
+    assert_eq!(t.charge_max(0), 2);
 }
 
 #[test]
@@ -837,7 +837,7 @@ fn mutsumi_crychic_skill_fire_cap() {
     }
     // 规则书: 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」
     t.set_fire(0, 1, 1);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 1);
+    assert_eq!(t.charge_max(0), 1);
 }
 
 // -- skill:长崎素世（CRYCHIC）:雨中祈晴 --------------------------------

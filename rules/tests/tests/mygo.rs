@@ -1124,7 +1124,7 @@ fn miracle_ineffective_if_discarded_with_crystals() {
 fn tomori_fire_cap_is_four() {
     // 规则书: 「（初始4，上限4）」 -- the cap is 4.
     let t = Table::new(&["高松灯", "千早爱音"]);
-    assert_eq!(t.p(0).state_max("charge"), 4, "cap 4");
+    assert_eq!(t.charge_max(0), 4, "cap 4");
 }
 
 #[test]
@@ -1262,7 +1262,7 @@ fn tomori_self_teleport_settles_at_the_destination() {
 fn anon_char_fire_cap_is_three() {
     // 规则书: 「（初始2，上限3）」
     let t = Table::new(&["千早爱音", "高松灯"]);
-    assert_eq!(t.p(0).state_max("charge"), 3, "cap 3");
+    assert_eq!(t.charge_max(0), 3, "cap 3");
 }
 
 #[test]
@@ -1294,7 +1294,7 @@ fn anon_char_fire_on_passing_circle() {
 fn soyo_char_fire_cap_is_one() {
     // 规则书: 「（初始1，上限1）」
     let t = Table::new(&["长崎素世", "高松灯"]);
-    assert_eq!(t.p(0).state_max("charge"), 1, "cap 1");
+    assert_eq!(t.charge_max(0), 1, "cap 1");
 }
 
 #[test]
@@ -1355,7 +1355,7 @@ fn soyo_recolour_expires_at_next_turn_start() {
 fn taki_fire_cap_is_five_and_initial_zero() {
     // 规则书: 「（初始0，上限5）」
     let t = Table::new(&["椎名立希", "高松灯"]);
-    assert_eq!(t.p(0).state_max("charge"), 5, "cap 5");
+    assert_eq!(t.charge_max(0), 5, "cap 5");
     assert_eq!(t.charge(0), 0, "starts with 0 fire");
 }
 
@@ -1405,7 +1405,7 @@ fn taki_skill_adds_crystal_once_per_turn() {
 fn rana_cat_fire_cap_is_three() {
     // 规则书: 「（初始3，上限3）」
     let t = Table::new(&["要乐奈", "高松灯"]);
-    assert_eq!(t.p(0).state_max("charge"), 3, "cap 3");
+    assert_eq!(t.charge_max(0), 3, "cap 3");
 }
 
 #[test]

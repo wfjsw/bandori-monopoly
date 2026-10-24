@@ -838,6 +838,14 @@ impl MatchPlayer {
             .find(|c| c.name == name)
             .map_or(0, |c| c.value)
     }
+
+    /// Live ceiling on the held row (`Counter::max`; 0 = uncapped / undeclared).
+    pub fn token_max(&self, name: &str) -> i32 {
+        self.tokens
+            .iter()
+            .find(|c| c.name == name)
+            .map_or(0, |c| c.max)
+    }
 }
 
 /// A prompt asking players to choose.

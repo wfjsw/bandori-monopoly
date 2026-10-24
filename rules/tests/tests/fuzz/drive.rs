@@ -511,21 +511,11 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
     for (i, p) in t.m.world().st.players.iter().enumerate() {
         for (k, v) in &p.state {
             let is_status = k == "stay" || k == "stun" || k == "exile";
-            // The wire key is `charge` (`bandori_std::fire::KEY`), not `fire`.
-            let is_fire = k == "charge";
             if is_status && v.value < 0 {
                 return Err(format!(
                     "negative state {k}={} on P{i} flags={:#x} expires={:?} min={} max={} raw={:?}",
                     v.value, v.flags, v.expires, v.min, v.max, v
                 ));
-            }
-            if is_fire {
-                if v.value < 0 {
-                    return Err(format!("fire {} < 0 on P{i}", v.value));
-                }
-                if v.max > 0 && v.value > v.max {
-                    return Err(format!("fire {} > cap {} on P{i}", v.value, v.max));
-                }
             }
         }
         for f in &p.field {
@@ -540,6 +530,15 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
         for c in &p.tokens {
             if c.value < 0 {
                 return Err(format!("negative token {}={} on P{i}", c.name, c.value));
+            }
+            // Fire is a held token (MARKERS.md §7). The wire key is
+            // `charge` (`bandori_std::fire::KEY`), not `fire`. The live cap
+            // rides `Counter.max`; I2 says value <= max whenever max > 0.
+            if c.name == "charge" && c.max > 0 && c.value > c.max {
+                return Err(format!(
+                    "fire {} > cap {} on P{i}",
+                    c.value, c.max
+                ));
             }
         }
     }

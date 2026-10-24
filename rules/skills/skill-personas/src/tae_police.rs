@@ -130,7 +130,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 fn can_negate(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() != player_id
-        && state::get(player_id, state_key::CHARGE) >= 4
+        && bandori_std::fire::get(player_id) >= 4
     // TODO(规则书)[judgement]: the clause names 「[主]效果」 and 「[手]效果」, not
     //   every activation. `skillUsed` is a skill press (the 主 half), but
     //   `card` admits any hand play -- a [反击] or [特] card included. There is

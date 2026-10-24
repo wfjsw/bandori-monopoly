@@ -114,7 +114,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 7 {
+    if bandori_std::fire::get(player_id) < 7 {
         return Some(Msg::new(key!("kaoru_prince_no_fire")));
     }
     None

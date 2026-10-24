@@ -657,11 +657,13 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(bandori_std::state_key::EXILE_TO, -1);
-            // Start-time resources: the value, not the cap. Fans live in the
+            // Start-time resources: fire is a held token of the persona-skill
+            // instance (MARKERS.md §7), not a state key. Fans live in the
             // state dict now (`ppFansUp` / `ppFansDown`), owned by the
             // `mark:pp_fans` host. Clear the once-flag too so a later
             // `at_start` in the same table can re-deal (MARKERS.md §4.5).
-            p.state_set(bandori_std::state_key::CHARGE, 0);
+            p.tokens
+                .retain(|t| t.name != bandori_std::fire::KEY);
             p.state_set("ppFansUp", 0);
             p.state_set("ppFansDown", 0);
             p.state_set("mark.pp_fans.initial", 0);

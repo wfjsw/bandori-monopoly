@@ -72,7 +72,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     }
     // （3）「[经过]"流星堂"时可使用2个[火罐]为自己的团卡添加1个[奇迹水晶]」 --
     // offered here, since the moment is the pass itself.
-    if state::get(player_id, state_key::CHARGE) < 2 {
+    if bandori_std::fire::get(player_id) < 2 {
         return Ok(());
     }
     if !ctx::ask_yes(

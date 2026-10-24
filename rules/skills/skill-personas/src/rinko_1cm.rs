@@ -63,7 +63,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("rinko_1cm_no_fire")));
     }
     // 「可在[晕眩]状态下使用」 is `prop::PLAYABLE_STUNNED` on this CardDef;
@@ -73,7 +73,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「使这回合移动掷骰的结果固定为X*6。本次移动不受异常移动效果影响」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let have = state::get(player_id, state_key::CHARGE);
+    let have = bandori_std::fire::get(player_id);
     if have < 1 {
         return Ok(());
     }

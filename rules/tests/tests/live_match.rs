@@ -208,12 +208,12 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         "character skill stays bound: {ids:?}"
     );
     // 「初始0，上限1」 -- the skill card is what assigns fire.max.
-    let fire = st.players[1]
-        .state
-        .get("charge")
-        .copied()
-        .unwrap_or_default();
-    assert_eq!(fire.max, 1, "the skill assigned the cap: {fire:?}");
+    // Fire is a held token of the persona-skill instance (MARKERS.md §7).
+    assert_eq!(
+        st.players[1].token_max("charge"),
+        1,
+        "the skill assigned the cap"
+    );
 }
 
 #[test]

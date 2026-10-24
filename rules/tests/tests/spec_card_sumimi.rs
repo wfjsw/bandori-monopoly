@@ -334,7 +334,7 @@ pub fn c_sumimi_twoinone_fire(step: &Step<'_>) -> Result<(), String> {
         .st
         .players
         .get(who)
-        .map(|p| p.state_get("charge"))
+        .map(|p| p.token("charge"))
         .unwrap_or(-1);
     if post_fire != expect_fire {
         return Err(format!(

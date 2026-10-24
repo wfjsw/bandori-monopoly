@@ -650,7 +650,8 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(bandori_std::state_key::EXILE_TO, -1);
-            p.state_set(bandori_std::state_key::CHARGE, 0);
+            // Fire is a held token of the persona-skill instance (MARKERS.md §7).
+            p.tokens.retain(|t| t.name != bandori_std::fire::KEY);
             // Fans live in the state dict (`ppFansUp` / `ppFansDown`), owned
             // by the `mark:pp_fans` host. Clear the once-flag too.
             p.state_set("ppFansUp", 0);
@@ -763,12 +764,11 @@ impl Table {
             .insert(key.into(), v);
     }
 
-    /// Fire pots: `value` held, `max` cap.
+    /// Fire pots: `value` held, `max` cap. Arranges the held-token row.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
-        let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(bandori_std::state_key::CHARGE, value);
-        let min = p.state_min(bandori_std::state_key::CHARGE);
-        p.state_set_bounds(bandori_std::state_key::CHARGE, min, max);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, bandori_std::fire::KEY, value, -1, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -996,7 +996,15 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, bandori_std::state_key::CHARGE)
+        // Fire is a held token of the persona-skill instance.
+        self.token(who, bandori_std::fire::KEY)
+    }
+
+    /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
+    pub fn charge_max(&self, who: usize) -> i32 {
+        self.m
+            .world()
+            .tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {
