@@ -832,7 +832,7 @@ fn saki_skill_bound_with_fire_cap() {
     assert!(t.skills(0).iter().any(|s| s.contains("丰川祥子")));
     t.set_fire(0, 2, 3);
     assert_eq!(t.charge(0), 2);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 3);
+    assert_eq!(t.charge_max(0), 3);
 }
 
 // -- skill:祐天寺若麦:大主播喵梦亲 ------------------------------------
@@ -847,7 +847,7 @@ fn nyamu_skill_fire_cap() {
     }
     // 规则书: 「你立即获得1火罐（初始0，上限5）」
     t.set_fire(0, 0, 5);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 5);
+    assert_eq!(t.charge_max(0), 5);
 }
 
 // -- skill:八幡海铃:熟练的支援贝斯手 ----------------------------------
@@ -862,7 +862,7 @@ fn umirin_skill_fire_cap() {
     }
     // 规则书: 「获得1火罐（初始0，上限4）」
     t.set_fire(0, 0, 4);
-    assert_eq!(t.p(0).state_max(bandori_std::state_key::CHARGE), 4);
+    assert_eq!(t.charge_max(0), 4);
 }
 
 // =====================================================================

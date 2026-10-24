@@ -704,7 +704,11 @@ pub trait HostOps {
         nl: i32,
         player_id: i32,
         v: i32,
+        max: i32,
+        instance: i32,
     ) -> Result<i64, HostErr>;
+    /// `ruleset_tok_max`
+    fn op_tok_max(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr>;
     /// `ruleset_move_units`
     fn op_move_units(
         &mut self,
@@ -1832,9 +1836,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
         nl: i32,
         player_id: i32,
         v: i32,
+        max: i32,
+        instance: i32,
     ) -> Result<i64, HostErr> {
-        crate::hostfns::set_held_name(self, np, nl, player_id, v)?;
+        crate::hostfns::set_held_name(self, np, nl, player_id, v, max, instance)?;
         Ok(0)
+    }
+    fn op_tok_max(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::tok_max(self, np, nl, player_id)? as i64)
     }
     fn op_move_units(
         &mut self,
@@ -4787,9 +4796,23 @@ pub unsafe extern "C-unwind" fn ruleset_count_held_name(np: i32, nl: i32, player
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_held_name(np: i32, nl: i32, player_id: i32, v: i32) {
-    with_host(|h| match h.op_set_held_name(np, nl, player_id, v) {
+pub unsafe extern "C-unwind" fn ruleset_set_held_name(
+    np: i32,
+    nl: i32,
+    player_id: i32,
+    v: i32,
+    max: i32,
+    instance: i32,
+) {
+    with_host(|h| match h.op_set_held_name(np, nl, player_id, v, max, instance) {
         Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_tok_max(np: i32, nl: i32, player_id: i32) -> i32 {
+    with_host(|h| match h.op_tok_max(np, nl, player_id) {
+        Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }

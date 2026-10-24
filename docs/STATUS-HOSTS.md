@@ -90,13 +90,16 @@ A **generic move gate**, not a marker of its own. Stay / stun / exile all
   Unlike 停留/晕眩/除外/不可阻挡 it has no 「处于该状态时…」 clauses: no
   gates, no tick. The generic engine name is `charge` (value + `max` =
   cap) + the generic `HostRequest::Marker` spend window.
-* counter + cap (`StateVar.max` today, written by the character skill);
+* counter + cap (`Counter.max` on the seat's `"charge"` token row, written by
+  the character skill's kernel -- fire is a held token of the persona-skill
+  instance since 2026-10-23, not a `MatchPlayer.state` key; see
+  `docs/MARKERS.md` §5);
 * gain is partial («at most up to the cap») and logged
   (`log.gain_charge`, 效果适用-style: which effect, why, outcome);
 * spend opens the `markerSpend` [反击] window **before** the pots move
   (user ruling 2026-10-07); a cancelled window spends nothing;
 * a cap change pulls the value down under the new ceiling
-  (`add_charge_max`).
+  (`fire::adjust_cap`).
 
 ### [不可阻挡] (`data/rules.txt` 51)
 
@@ -149,9 +152,12 @@ Memory rulings enforced here:
   `log.gain_fire` shape stays; every host write that is an effect logs the
   same way.
 * **Wire contract** -- `MatchPlayer.state` keys `stay`, `stun`, `stunStart`,
-  `exile`, `exileTo`, `fire`, `handLimit` are frozen
+  `exile`, `exileTo`, `handLimit` are frozen
   (`webui/src/core/names.ts` `stateOf`, `Popups.tsx`, `Players.tsx`,
-  `autopilot.ts`). The view keeps presenting them.
+  `autopilot.ts`). The view keeps presenting them. 火罐 is not in this list:
+  it is a 指示物 whose wire **names** (`"charge"` / `"tempFire"`) are frozen
+  while the container is the persona-skill `tokens` row (2026-10-23); the
+  view reads the token (falling back to `state["charge"]` on old saves).
 
 ---
 
@@ -182,6 +188,11 @@ the grant/clear verbs. Cards go through `rules/status`, never raw
 `state_set`. If a later batch wants literal `tokens` rows, the host API is
 the seam; the wire projection is a view concern.
 
+(火罐 is the recorded exception and is **not** a status: its pool re-homed
+into the persona-skill instance's `tokens` rows on 2026-10-23, because it is
+「技能指示物」 -- instance-owned, and dies with the skill. The status keys
+above are unaffected; `docs/MARKERS.md` §5 has the fire storage story.)
+
 | host | state keys owned | extra slots |
 |---|---|---|
 | `status:stay` | `stay` | -- |
@@ -189,7 +200,7 @@ the seam; the wire projection is a view concern.
 | `status:exile` | `exile`, `exileTo` | `exileMain` |
 | `status:unstoppable` | `unstoppable` | -- |
 | `status:no_hand` | `noHand` | -- |
-| *(not a status)* `bandori_std::fire` | `charge` (value + `max` = cap) | `tempFire` |
+| *(not a status)* `bandori_std::fire` | -- (held `tokens`, not `state`) | `tokens` rows `"charge"` / `"tempFire"` of the persona-skill instance |
 
 ### 3.2 New crate `rules/status`
 
@@ -384,8 +395,9 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
     latch**, closeout-2 ruling). Wired `ctx` -> `sys` -> `hostfns` -> `World`
     like `end_turn_now`.
   - marker-only charge: `gain_marker` / `spend_marker` / `add_marker_max`
-    (name is data); readers are `state_get` / `state_max`. The 火罐 sugar
-    (`charge` / `gain_charge` / …) lives in `bandori-std` over those.
+    (name is data) fold the held-token store; readers are `tok` / `tok_max`.
+    The 火罐 policy kernel is `bandori_std::fire` over those; the uncapped
+    `gain_charge` / `spend_charge` / `add_charge_max` sugar is **deleted**.
   - `AbKind` is an opaque newtype (wire codec); the game names live in
     `bandori_std::kind::abnormal`. `ActionKind` / `TriggerKind` lose the
     `Exile` named consts (wire id 21 is `bandori_std::kind::Exile`).
@@ -525,8 +537,8 @@ One commit per batch.
 | 3 | [无法移动] 「移动终点视为当前所在格子且不[结算]」 vs "cannot roll" | `skip_move` closes the main move entirely | Matches the observed engine; the book's wording is about the endpoint being "here". Keep current behaviour; quote both. |
 | 4 | 「无手牌」 glossary text | `noHand` 2->1->0 dance | Not in `rules.txt` 「标志物解释」; source is card text. Host keeps the dance. |
 | 5 | cond CEL `exile` field vs generic counter vocab | bespoke accessors | Sugar over `state_get` is fine; only a real vocab merge needs a TODO. |
-| 6 | `is_status_key` floor-at-0 | engine-wide for stay/stun/stunStart/exile/fire | Keep as the generic `state_set` floor (it is already "the status rule, not the engine enforcing bounds" per the comment). Hosts additionally clamp in their verbs. |
-| 7 | fire cap source | `StateVar.max`, written by the character skill | Book says 「持有上限」 is mandated by the skill text. Unchanged. |
+| 6 | `is_status_key` floor-at-0 | engine-wide for stay/stun/stunStart/exile | Keep as the generic `state_set` floor (it is already "the status rule, not the engine enforcing bounds" per the comment). Hosts additionally clamp in their verbs. (Fire left this list with the 2026-10-23 token re-home.) |
+| 7 | fire cap source | `Counter.max` on the persona-skill's `"charge"` token row, written by the character skill | Book says 「持有上限」 is mandated by the skill text. Unchanged; only the container moved (`StateVar.max` → `Counter.max`, 2026-10-23). |
 
 ---
 

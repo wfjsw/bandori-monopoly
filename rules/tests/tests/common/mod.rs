@@ -657,11 +657,18 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(bandori_std::state_key::EXILE_TO, -1);
-            // Start-time resources: the value, not the cap. Fans live in the
-            // state dict now (`ppFansUp` / `ppFansDown`), owned by the
-            // `mark:pp_fans` host. Clear the once-flag too so a later
-            // `at_start` in the same table can re-deal (MARKERS.md §4.5).
-            p.state_set(bandori_std::state_key::CHARGE, 0);
+            // Start-time resources: fire is a held token of the persona-skill
+            // instance (MARKERS.md §7). Clear the **value** only -- the declared
+            // cap (`Counter.max`) is the already-declared latch and must survive
+            // so a per-turn re-hook leaves it alone. Fans live in the state dict
+            // (`ppFansUp` / `ppFansDown`), owned by the `mark:pp_fans` host.
+            // Clear the once-flag too so a later `at_start` in the same table
+            // can re-deal (MARKERS.md §4.5).
+            for tok in p.tokens.iter_mut() {
+                if tok.name == bandori_std::fire::KEY {
+                    tok.value = 0;
+                }
+            }
             p.state_set("ppFansUp", 0);
             p.state_set("ppFansDown", 0);
             p.state_set("mark.pp_fans.initial", 0);
@@ -770,12 +777,14 @@ impl Table {
             .insert(key.into(), v);
     }
 
-    /// Fire pots: `value` held, `max` cap.
+    /// Fire pots: `value` held, `max` cap. Arranges the held-token row
+    /// (`name = "charge"`, the persona-skill counter) directly, bound to the
+    /// seat's persona-skill instance when one is on the field.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
-        let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(bandori_std::state_key::CHARGE, value);
-        let min = p.state_min(bandori_std::state_key::CHARGE);
-        p.state_set_bounds(bandori_std::state_key::CHARGE, min, max);
+        let uid = self.m.world().persona_skill_uid(who as i32);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, bandori_std::fire::KEY, value, uid, max);
     }
 
     /// Drive the fire kernel's gain policy (`bandori_std::fire::gain_clamped`,
@@ -783,12 +792,11 @@ impl Table {
     /// a dumb add -- the card implementation polices 「不能超过持有上限」.
     /// Returns how many landed.
     pub fn gain_fire(&mut self, who: usize, n: i32) -> i32 {
-        let p = &mut self.m.world_mut().st.players[who];
-        let have = p.state_get(bandori_std::state_key::CHARGE);
-        let cap = p.state_max(bandori_std::state_key::CHARGE);
+        let have = self.m.world().tok(who as i32, bandori_std::fire::KEY);
+        let cap = self.m.world().tok_max(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::gain_clamped(have, cap, n);
         if want > 0 {
-            p.state_add(bandori_std::state_key::CHARGE, want);
+            self.m.world_mut().gain_marker(who as i32, bandori_std::fire::KEY, want);
         }
         want
     }
@@ -796,17 +804,23 @@ impl Table {
     /// Drive the fire kernel's cap-change policy (`pull_under_cap`, what
     /// `fire::adjust_cap` calls after the host verb moves the ceiling).
     /// Returns the new cap.
+    /// Drive the fire kernel's `adjust_cap` (「火罐上限加1」): one write binds the
+    /// row to the persona-skill instance and advertises the ceiling. Going
+    /// through `add_marker_max` would create an unowned row -- that is the bug
+    /// this helper deliberately does not reproduce.
     pub fn adjust_fire_cap(&mut self, who: usize, n: i32) -> i32 {
         let cap = self
             .m
-            .world_mut()
-            .add_marker_max(who as i32, bandori_std::state_key::CHARGE, n);
-        let p = &mut self.m.world_mut().st.players[who];
-        let have = p.state_get(bandori_std::state_key::CHARGE);
+            .world()
+            .tok_max(who as i32, bandori_std::fire::KEY)
+            .saturating_add(n)
+            .max(0);
+        let have = self.m.world().tok(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::pull_under_cap(have, cap);
-        if have != want {
-            p.state_set(bandori_std::state_key::CHARGE, want);
-        }
+        let uid = self.m.world().persona_skill_uid(who as i32);
+        self.m
+            .world_mut()
+            .set_tok(who as i32, bandori_std::fire::KEY, want, uid, cap);
         cap
     }
 
@@ -1049,7 +1063,15 @@ impl Table {
     }
 
     pub fn charge(&self, who: usize) -> i32 {
-        self.state(who, bandori_std::state_key::CHARGE)
+        // Fire is a held token of the persona-skill instance (MARKERS.md §7).
+        self.token(who, bandori_std::fire::KEY)
+    }
+
+    /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
+    pub fn charge_max(&self, who: usize) -> i32 {
+        self.m
+            .world()
+            .tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     /// A standing tile prop (`World::tile_prop`). Used to read per-player

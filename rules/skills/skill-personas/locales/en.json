@@ -138,6 +138,7 @@
   "lisa_goddess_no_fire": "You need a fire pot.",
   "lisa_goddess_spend": "Loving Goddess",
   "lisa_goddess_temp": "Gave {{who}} an over-cap temporary fire pot",
+  "lisa_goddess_temp_none": "The temporary fire pot for {{who}} did not land (at their cap)",
   "mana_donut_ask": "Spend 1 fire pot to pay {{n}} to {{tile}} and halve your spending until your next turn end?",
   "mana_donut_gain": "Donut Lover: +1 fire pot",
   "mana_donut_half": "Spending halved until your next turn end",

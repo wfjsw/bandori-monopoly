@@ -348,10 +348,20 @@ pub fn set_held_name<C: HostCtx>(
     nl: i32,
     player_id: i32,
     v: i32,
+    max: i32,
+    instance: i32,
 ) -> Result<(), HostErr> {
     let name = guest_str(c, np, nl)?;
-    c.st_mut().w().set_held_name(&name, player_id, v);
+    c.st_mut()
+        .w()
+        .set_held_name(&name, player_id, v, max, instance);
     Ok(())
+}
+
+/// Live ceiling stored on the held row (`0` = uncapped / undeclared).
+pub fn tok_max<C: HostCtx>(c: &mut C, np: i32, nl: i32, player_id: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().tok_max(player_id, &name))
 }
 
 pub fn move_units<C: HostCtx>(

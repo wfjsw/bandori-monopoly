@@ -785,8 +785,16 @@ pub trait CardWorld: Clone + 'static {
     fn count_held_name(&self, name: &str, player_id: i32) -> i32 {
         self.count_held(name, player_id)
     }
-    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
-        let _ = (name, player_id, v);
+    /// Name-keyed held write. `max` is the live ceiling (`0` = uncapped /
+    /// leave any stored ceiling alone). `instance` stamps or rebinds the
+    /// owning card instance (`< 0` keeps an existing row's owner).
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, max: i32, instance: i32) {
+        let _ = (name, player_id, v, max, instance);
+    }
+    /// Live ceiling on the held row (`0` = uncapped / undeclared).
+    fn tok_max(&self, player_id: i32, name: &str) -> i32 {
+        let _ = (player_id, name);
+        0
     }
     fn move_units(
         &mut self,
@@ -817,8 +825,8 @@ pub trait CardWorld: Clone + 'static {
     fn tok(&self, player_id: i32, name: &str) -> i32 {
         self.count_held_name(name, player_id)
     }
-    fn set_tok(&mut self, player_id: i32, name: &str, value: i32) {
-        self.set_held_name(name, player_id, value);
+    fn set_tok(&mut self, player_id: i32, name: &str, value: i32, max: i32) {
+        self.set_held_name(name, player_id, value, max, -1);
     }
     fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
         self.add_held(name, player_id, n, max)
@@ -877,6 +885,12 @@ pub trait CardWorld: Clone + 'static {
     /// <skill>`, `FieldCard::group_skill`), or -1 when the player has none. This
     /// is the the group-skill counter holder -- see [`Self::group_pool`].
     fn group_skill_uid(&self, _player_id: i32) -> i32 {
+        -1
+    }
+    /// The uid of `player_id`'s **persona-skill field instance**
+    /// (`skill:<persona>:<skill>`, not `group_skill`), or -1 when the player has
+    /// none. This is the owner of that seat's skill counters (火罐).
+    fn persona_skill_uid(&self, _player_id: i32) -> i32 {
         -1
     }
     /// A named pool on the player's group-skill field instance

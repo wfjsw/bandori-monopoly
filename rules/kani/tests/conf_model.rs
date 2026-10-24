@@ -691,7 +691,7 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("add_held {player_id} {name} {n}"));
         *e
     }
-    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, _max: i32, _instance: i32) {
         self.held.insert((player_id, name.to_string()), v);
         self.events.push(format!("set_held {player_id} {name} {v}"));
     }
@@ -1583,7 +1583,7 @@ fn op_count_held_set_held_name_match() {
         "set_held_name+count_held_name",
         &[],
         |c| {
-            game_rules::hostfns::set_held_name(c, np, nl, 2, 5).unwrap();
+            game_rules::hostfns::set_held_name(c, np, nl, 2, 5, 0, -1).unwrap();
             game_rules::hostfns::count_held_name(c, np, nl, 2).unwrap() as i64
         },
         || {

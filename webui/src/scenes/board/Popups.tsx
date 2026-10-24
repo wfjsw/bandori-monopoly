@@ -22,7 +22,7 @@ import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
 import { stateLabel } from "../../i18n/stateLabel";
-import { namesOf, stateOf, stateMax } from "../../core/names";
+import { fireMaxOf, fireOf, namesOf, stateOf } from "../../core/names";
 
 function useModel(sess: GameSession): Model | null {
   const { view } = useMatchView(sess);
@@ -190,7 +190,7 @@ export function showPlayerInfo(m: Model, i: number): void {
   const band = c ? D.group(c.group) : undefined;
   const deeds = D.tiles.map((_, k) => k).filter((k) => S.owners[k] === i);
   const lines = [
-    tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: stateOf(x, "charge"), fireMax: stateMax(x, "charge") }),
+    tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: fireOf(x), fireMax: fireMaxOf(x) }),
     tr("player.zones", { draw: x.draw, discard: x.discard.length }),
     stateOf(x, "stay") ? tr("player.stayN", { n: stateOf(x, "stay") }) : "", stateOf(x, "stun") + stateOf(x, "stunStart") ? tr("player.stunned") : "", stateOf(x, "exile") ? tr("player.exileN", { n: stateOf(x, "exile") }) : "",
     (() => { const bb = borrowedBand(x); return bb ? tr("player.borrowed", { skill: cardTitle(bb.skill), who: m.charOf(bb.from)?.display ?? "" }) : ""; })(),

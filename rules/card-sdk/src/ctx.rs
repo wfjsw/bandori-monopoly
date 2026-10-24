@@ -1539,11 +1539,20 @@ pub fn tok(player_id: i32, name: &str) -> i32 {
 }
 
 /// Set the held count of `name` on `player_id`. Prefer [`add_held`] /
-/// [`move_units`].
+/// [`move_units`]. `max` is the live ceiling (`0` = uncapped). `instance`
+/// stamps or rebinds the owning card instance (`< 0` keeps an existing row's
+/// owner and falls back to the running card on a fresh row).
 #[cfg_attr(kani, inline(always))]
-pub fn set_tok(player_id: i32, name: &str, value: i32) {
+pub fn set_tok(player_id: i32, name: &str, value: i32, max: i32, instance: i32) {
     let (p, l) = s(name);
-    unsafe { sys::set_held_name(p, l, player_id, value) }
+    unsafe { sys::set_held_name(p, l, player_id, value, max, instance) }
+}
+
+/// Live ceiling stored on the held row (`0` = uncapped / undeclared).
+#[cfg_attr(kani, inline(always))]
+pub fn tok_max(player_id: i32, name: &str) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::tok_max(p, l, player_id) }
 }
 
 /// Bind `by` more units of `name` to `player_id`. Returns how

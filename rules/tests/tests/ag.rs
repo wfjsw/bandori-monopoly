@@ -651,7 +651,7 @@ fn one_of_us_places_on_field() {
 fn ran_skill_starts_with_one_fire() {
     let mut t = Table::new(&["美竹兰", "户山香澄"]);
     assert_eq!(t.charge(0), 1, "初始1");
-    assert_eq!(t.state_var(0, "charge").max, 1, "上限1");
+    assert_eq!(t.charge_max(0), 1, "上限1");
 }
 
 // 规则书: 美竹兰「（2）投掷移动步数前可使用一个[火罐]选择本次移动向后」

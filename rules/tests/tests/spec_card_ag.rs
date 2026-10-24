@@ -1448,7 +1448,7 @@ fn firepot_starts_at_one_with_cap_one() {
         for name in ["美竹兰", "青叶摩卡", "上原绯玛丽", "宇田川巴", "羽泽鸫"] {
             let t = Table::new(&[name, "户山香澄"]);
             let fire = t.charge(0);
-            let cap = t.state_var(0, "charge").max;
+            let cap = t.charge_max(0);
             if fire != 1 {
                 return Err(format!("C-AG-firepot-01: {name} 初始1, fire {fire}"));
             }

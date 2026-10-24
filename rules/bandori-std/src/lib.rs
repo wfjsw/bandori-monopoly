@@ -122,13 +122,12 @@ pub mod ctx {
     pub use card_sdk::ctx::*;
 
     pub use crate::{
-        add_card_crystals, add_charge_max, add_crystals, add_crystals_at, add_group_crystals,
-        add_group_skill, add_rent_unit_bonus, add_ring_bonus, card_crystals, charge, charge_max,
-        crystals, crystals_at, remove_crystal, gain_charge, group_crystals, group_skill, group_skills,
-        in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed, is_live_house_for,
-        is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy, pay_rent, persona_is,
-        persona_skill, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked, spend_charge,
-        turn_snap,
+        add_card_crystals, add_crystals, add_crystals_at, add_group_crystals, add_group_skill,
+        add_rent_unit_bonus, add_ring_bonus, card_crystals, crystals, crystals_at, remove_crystal,
+        group_crystals, group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable,
+        is_color, is_deed, is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy,
+        offer_force_buy, pay_rent, persona_is, persona_skill, rent_unit_mult, ring_multiplier,
+        set_crystals, skill_blocked, turn_snap,
     };
 }
 
@@ -230,46 +229,9 @@ pub fn remove_crystal() -> Result<i32, Prompt> {
     add_crystals(-1, 0)
 }
 
-// ------------------------------------------------------------- 火罐
-// Readable sugar over the generic `marker_*` / `state_*` family. The wire
-// key is `state_key::CHARGE`; the policy kernel is [`crate::fire`].
-
-pub fn charge(player_id: i32) -> i32 {
-    card_sdk::ctx::state::get(player_id, state_key::CHARGE)
-}
-
-pub fn charge_max(player_id: i32) -> i32 {
-    card_sdk::ctx::state::max(player_id, state_key::CHARGE)
-}
-
-/// Gain fire pots, capped by the player's own cap.
-pub fn gain_charge(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
-    card_sdk::ctx::gain_marker(player_id, state_key::CHARGE, n, why)
-}
-
-/// Spend `n` [火罐]; false when the player has fewer. Logs the spend.
-///
-/// Marker window (user ruling 2026-10-07): `markerSpend` opens **before** the
-/// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
-/// counteraction cancelled the link).
-///
-/// 「以代替此次技能的火罐消耗」 -- `ChargePaying` runs before the pots move.
-/// A hook that substitutes the cost cancels the link and performs its own
-/// payment; the spend is then treated as satisfied.
-pub fn spend_charge(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
-    if n <= 0 {
-        return Ok(true);
-    }
-    if !card_sdk::ctx::raise(player_id, crate::kind::ChargePaying, n)? {
-        return Ok(true);
-    }
-    card_sdk::ctx::spend_marker(player_id, state_key::CHARGE, n, why).map(|v| v != 0)
-}
-
-/// Raise (or lower) `player_id`'s [火罐] cap; returns the new cap.
-pub fn add_charge_max(player_id: i32, n: i32) -> i32 {
-    card_sdk::ctx::add_marker_max(player_id, state_key::CHARGE, n)
-}
+// 火罐: the policy kernel is [`crate::fire`] (held tokens of the persona-skill
+// instance). The uncapped `gain_charge` / `spend_charge` / `add_charge_max`
+// sugar is gone -- it was a bypass footgun. Use `fire::{gain, spend, adjust_cap}`.
 
 // ------------------------------------------------------------- band / character
 

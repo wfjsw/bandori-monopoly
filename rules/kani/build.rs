@@ -339,7 +339,8 @@ fn main() {
     writeln!(s, "    fn op_count_held(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::count_held, [np, nl, player_id, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_add_held(&mut self, np: i32, nl: i32, player_id: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_held, [np, nl, player_id, n, max, 0])) }}").unwrap();
     writeln!(s, "    fn op_count_held_name(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::count_held_name, [np, nl, player_id, 0, 0, 0])) }}").unwrap();
-    writeln!(s, "    fn op_set_held_name(&mut self, np: i32, nl: i32, player_id: i32, v: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::set_held_name, [np, nl, player_id, v, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_set_held_name(&mut self, np: i32, nl: i32, player_id: i32, v: i32, max: i32, instance: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::set_held_name, [np, nl, player_id, v, max, instance])) }}").unwrap();
+    writeln!(s, "    fn op_tok_max(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::tok_max, [np, nl, player_id, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_move_units(&mut self, np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::move_units, [np, nl, from_tile, from_player, to_tile, to_player])) }}").unwrap();
     writeln!(s, "    fn op_self_uid(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::self_uid, [0, 0, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "    fn op_send(&mut self, tp: i32, tl: i32, np: i32, nl: i32, pp: i32, pl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::send, [tp, tl, np, nl, pp, pl])) }}").unwrap();
@@ -397,6 +398,7 @@ fn main() {
         "op_add_held",
         "op_count_held_name",
         "op_set_held_name",
+        "op_tok_max",
         "op_move_units",
         "op_self_uid",
         "op_send",

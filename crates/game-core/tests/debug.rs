@@ -85,7 +85,9 @@ fn cheats_update_views_and_survive_save_restore() {
     let mut m = ready_game(MatchMode::Solo);
     let human = m.state().player_of(1) as usize;
     let bot = m.state().player_of(2) as usize;
-    m.world_mut().st.players[human].state_set_bounds("charge", 0, 5);
+    // Arrange a held-token row (fire is a skill counter, not a state key).
+    m.world_mut()
+        .set_tok(human as i32, "charge", 0, -1, 5);
     m.act(1, &cheat("money", 50_000, -1)).unwrap();
     m.act(1, &cheat("tp", 10, bot as i32)).unwrap();
     let card = data().cards[0].id.clone();
@@ -99,17 +101,20 @@ fn cheats_update_views_and_survive_save_restore() {
         vec![&card, &card]
     );
     let mut state = cheat("state", 1_000, human as i32);
-    state.persona = "charge".into();
+    state.persona = "handLimit".into();
     m.act(1, &state).unwrap();
     let st = m.state();
     assert!(st.debug_open);
     assert_eq!(st.players[human].money, 50_000);
     assert_eq!(st.players[bot].pos, 10);
-    let cap = st.players[human].state_max("charge");
     // Dumb storage: the engine stores the advertised cap for display and
-    // does not police it. A cheat is a raw write.
-    assert_eq!(st.players[human].state_get("charge"), 1_000);
-    assert_eq!(cap, 5);
+    // does not police it. A raw token write is not clamped.
+    m.world_mut()
+        .set_tok(human as i32, "charge", 1_000, -1, 5);
+    let st = m.state();
+    assert_eq!(st.players[human].token("charge"), 1_000);
+    assert_eq!(st.players[human].token_max("charge"), 5);
+    assert_eq!(st.players[human].state_get("handLimit"), 1_000);
     assert!(m.take_changed());
     let restored = Match::restore(data(), Arc::new(StubRules), &m.save()).unwrap();
     assert_eq!(restored.save(), m.save());

@@ -275,7 +275,7 @@ impl CardWorld for TestWorld {
     fn tok(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn set_tok(&mut self, _: i32, _: &str, _: i32) {}
+    fn set_tok(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn add_tok(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }

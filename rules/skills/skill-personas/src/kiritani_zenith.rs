@@ -70,7 +70,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if state::get(player_id, USED) != 0 {
         return Some(Msg::new(key!("kiritani_used")));
     }
-    if state::get(player_id, state_key::CHARGE) < 1 {
+    if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("kiritani_no_fire")));
     }
     let mine = ctx::owned_tiles(player_id);

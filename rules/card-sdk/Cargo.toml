@@ -9,12 +9,12 @@ description = "Card authoring SDK + host/guest ABI for the BandoriMonopoly WASM 
 #  * rules/ruleset (guest, wasm32)  -> constants + `ctx` host imports + `ruleset!`
 #  * crates/game-rules (host, native and wasm32) -> constants only (`abi`)
 [dependencies]
-game-kinds = { path = "../../crates/game-kinds" }
+game-kinds = { workspace = true }
 
-serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
-postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
+postcard = { workspace = true, features = ["alloc"] }
 # no_std: flags type for the t.Move bitset (default features off).
-bitflags = { version = "2", default-features = false }
+bitflags = { workspace = true }
 
 [features]
 # Guest builds (no_std cdylibs): panic handler + bump allocator. Enable it in

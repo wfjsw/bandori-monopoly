@@ -228,7 +228,8 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     }
     fn owner_charge(&self) -> i64 {
         if self.owner_seat >= 0 {
-            self.src.state_get(self.owner_seat, "charge") as i64
+            // Source is the held token (fire is a skill counter, not a state key).
+            self.src.tok(self.owner_seat, "charge") as i64
         } else {
             0
         }
@@ -321,7 +322,8 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.src.money(seat as i32) as i64
     }
     fn charge(&self, seat: i64) -> i64 {
-        self.src.state_get(seat as i32, "charge") as i64
+        // Source is the held token (fire is a skill counter, not a state key).
+        self.src.tok(seat as i32, "charge") as i64
     }
     fn group_pool(&self, seat: i64, name: &str) -> i64 {
         self.src.group_pool(seat as i32, name) as i64
@@ -1232,7 +1234,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         .map(|p| {
             let mut snap = PlayerSnap {
                 money: world.money(p) as i64,
-                charge: world.state_get(p, "charge") as i64,
+                charge: world.tok(p, "charge") as i64,
                 group_pool: world.group_pool_total(p) as i64,
                 hand: world.hand_size(p) as i64,
                 pos: world.player_pos(p) as i64,
@@ -1374,7 +1376,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         .map(|p| {
             let mut snap = PlayerSnap {
                 money: world.money(p) as i64,
-                charge: world.state_get(p, "charge") as i64,
+                charge: world.tok(p, "charge") as i64,
                 group_pool: world.group_pool_total(p) as i64,
                 hand: world.hand_size(p) as i64,
                 pos: world.player_pos(p) as i64,
@@ -1517,7 +1519,7 @@ pub fn fill_candidate<S: SnapSrc>(world: &S, owner: i32, card: &str, placed: boo
     let mut cand = CandidateCtx {
         owner: owner as i64,
         owner_money: world.money(p) as i64,
-        owner_charge: world.state_get(p, "charge") as i64,
+        owner_charge: world.tok(p, "charge") as i64,
         // The ruleset's named-counter key for the group pool.
         owner_group_pool: world.group_pool(p, "crystals") as i64,
         owner_hand: world.hand_size(p) as i64,
@@ -1593,7 +1595,8 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.tsugumiPlain.owed",
     // Standard player-state keys used by skill body-top checks.
     "skillState",
-    "charge",
+    // "charge" is not a state key -- it is a held token of the persona-skill
+    // instance. The cond-ir `charge(p)` reader sources it from the token store.
     "skill.aveMujica.inTwo",
     "skill.ras.taken",
     "skill.roselia.first",

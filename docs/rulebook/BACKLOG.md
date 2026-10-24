@@ -2881,6 +2881,38 @@ engine capabilities rather than rule-side bandaids. Three landed here.
 
 ## Landed
 
+### FIRE-TOKENS — 火罐 re-homed onto the persona-skill token counter (2026-10-24)
+Branch `worktree-fire-tokens`. `MatchPlayer.state["charge"]`/`["tempFire"]` →
+`tokens` rows `name="charge"`/`"tempFire"`, `instance=<persona-skill uid>`,
+live cap on `Counter.max`. Wire names unchanged. `gain_marker` /
+`spend_marker` / `add_marker_max` fold the held-token store and stay dumb
+(uncapped add). The uncapped `gain_charge`/`spend_charge`/`add_charge_max`
+sugar is deleted. Skill press-gates and cond-ir `charge(p)` read the token.
+Kani `arm_gain_marker` was aligned to the production uncapped add in the
+same batch (it had modelled a `charge_max` clamp the engine does not have);
+`conf_hostops2` / `conf_model` unit tests are green. The CBMC proof suite
+itself was **not** run this batch.
+
+Open follow-ups from the code review of this batch (2026-10-24):
+
+- **FIRE-TOKENS-1 — legacy `state["charge"]` is never folded into the token
+  row.** The webui falls back to `state["charge"]` for display
+  (`webui/src/core/names.ts`), but nothing migrates the value into `tokens`,
+  so a match restored from a pre-re-home blob shows N pots while
+  `fire::get`/`max` read 0 -- skills gate wrong and gains declare against a
+  cap of 0. **Replays are unaffected** (records carry their engine bundle and
+  are replayed by the archived one). The live path is the server's room
+  persist/restore (`crates/server/src/room.rs` `persist` / `Room::restore_game`
+  / `MatchHandle`) across a crash or deploy. Fix is a one-shot fold on decode:
+  if `state["charge"]`/`["tempFire"]` exist and no matching `tokens` row does,
+  copy value + `StateVar.max` into a row bound to the persona-skill uid.
+  Needs a look at where the match blob is actually decoded first.
+- **FIRE-TOKENS-2 — debug `state` cheat cannot reach fire.**
+  `crates/game-core/src/engine/debug.rs` validates on
+  `state.contains_key("charge")` and writes `MatchPlayer.state`, both dead
+  after the re-home. Give it a token-store equivalent (or drop the charge
+  case).
+
 ### ENG-CARD-MESSAGE — `Target::Board` reaches tile rules; CiRCLE reward is messaged
 - `Target::Board(id)` / `Target::Uid(uid)` now resolve over **every** standing
   board-owned rule on `BOARD_OWNER` (tile rules, marks, events, status hosts),

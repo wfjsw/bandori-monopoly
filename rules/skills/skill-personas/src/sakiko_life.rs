@@ -77,7 +77,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// pot is at cap (the 状态2 offer). `state::max` is the declared fire cap.
 fn state2_or_fire_capped(player_id: i32) -> bool {
     state::get(player_id, state_key::SKILL_STATE) == 2
-        || state::get(player_id, state_key::CHARGE) >= state::max(player_id, state_key::CHARGE)
+        || bandori_std::fire::get(player_id) >= bandori_std::fire::max(player_id)
 }
 
 /// 状态1's pass clause, and 状态2's entry offer.

@@ -363,6 +363,9 @@ pub enum Op {
     // v98: named-entry applicability + the activation arg buffer.
     query_guard = 336,
     declared_arg = 337,
+    // v99: live ceiling on a held-token row (`Counter.max`), `max < 0` leaves
+    // the stored one alone. Fire's 「上限M」 reads back through this.
+    tok_max = 338,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

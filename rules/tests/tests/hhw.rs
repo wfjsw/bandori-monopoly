@@ -478,6 +478,7 @@ fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
             name: name.into(),
             value,
             instance: None,
+            max: 0,
         });
 }
 

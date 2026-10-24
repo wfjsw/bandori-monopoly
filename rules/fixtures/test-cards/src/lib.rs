@@ -155,9 +155,9 @@ fn crystal_play(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:named-counter", &Msg::new(key!("crystal_note")));
     ctx::set_crystals(1);
-    // The decay tick: a write that takes the count to zero. `decay` no longer
-    // discards at 0 -- only the handler below is the 「no crystals -> discard」
-    // check.
+    // The decay tick: a write that takes the count to zero. `remove_crystal`
+    // (was `decay`) no longer discards at 0 -- only the handler below is the
+    // 「no crystals -> discard」 check.
     ctx::remove_crystal()?;
     Ok(())
 }

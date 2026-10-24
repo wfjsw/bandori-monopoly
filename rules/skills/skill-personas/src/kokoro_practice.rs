@@ -123,7 +123,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     }
     // （3） 「任何时刻当你不位于RiNG时，失去所有的火罐」.
     if !is_deed(t) {
-        let have = state::get(player_id, state_key::CHARGE);
+        let have = bandori_std::fire::get(player_id);
         if have > 0 {
             bandori_std::fire::spend(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
         }
