@@ -7,6 +7,7 @@ use alloc::{borrow::Cow, boxed::Box, format, string::String, string::ToString, v
 #[cfg(not(target_arch = "wasm32"))]
 use std::borrow::Cow;
 
+/// ```text
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
@@ -836,6 +837,7 @@ use std::borrow::Cow;
 ///      commit and the window opens after it) -- the mode is part of declaring
 ///      the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///      declaration. SAVE_VERSION / RECORD_VERSION unchanged.
+/// ```
 pub const ABI_VERSION: i32 = 100;
 /// v100: **slot sugar translates to the state field channel**. `ctx::slot` /
 ///      `set_slot` / `inc_slot` desugar to `state_get` / `state_set` /

@@ -1913,16 +1913,10 @@ pub fn arm_in_band(a: Args) -> i64 {
     world::with_world(|w| (w.group_id[player_idx(a0)] == want.0) as i64)
 }
 
+/// `state_add` -- also the model for its former `inc_slot` sugar (one host
+/// op, so one arm; `key_add` already mirrors fan keys via `sync_fan_key`).
 pub fn arm_inc_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a3, a4, a5);
-    let key = name_id(a1, a2);
-    let by = a3;
-    world::with_world_mut(|w| {
-        let v = w.key_add(a0, key, by);
-        w.sync_views_player(a0);
-        v as i64
-    })
+    arm_state_add(a)
 }
 
 pub fn arm_invoke_skill(a: Args) -> i64 {
@@ -2833,13 +2827,13 @@ pub fn arm_state_get(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         // hostfns `state_get(player, ptr, len, field)`: field 1/2/3/4 read
-        // the declared MAX / MIN / EXPIRES / FLAGS column; anything else is
-        // VALUE.
+        // the declared MIN / MAX / EXPIRES / FLAGS column; anything else is
+        // VALUE. Column ids are the SDK's `state::{MIN,MAX,EXPIRES,FLAGS}`.
         let key = name_id(a1, a2);
         let field = a3;
         world::with_world(|w| match field {
-            1 => w.key_max(a0, key),
-            2 => w.key_min(a0, key),
+            1 => w.key_min(a0, key),
+            2 => w.key_max(a0, key),
             3 => w.key_expires(a0, key),
             4 => w.key_flags(a0, key) as i32,
             _ => w.key_get(a0, key),
@@ -2851,8 +2845,8 @@ pub fn arm_state_set(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         // hostfns `state_set(player, ptr, len, field, v)`:
-        //   a3 = field (0 value / 1 max / 2 min / 3 expires / 4 flags),
-        //   a4 = v.
+        //   a3 = field (0 value / 1 min / 2 max / 3 expires / 4 flags),
+        //   a4 = v. Column ids are the SDK's `state::{VALUE,MIN,MAX,EXPIRES,FLAGS}`.
         // The old model wrote a3 as the value and dropped a4.
         let key = name_id(a1, a2);
         let field = a3;
@@ -2860,11 +2854,11 @@ pub fn arm_state_set(a: Args) -> i64 {
         world::with_world_mut(|w| {
             let out = match field {
                 1 => {
-                    w.key_set_max(a0, key, v);
+                    w.key_set_min(a0, key, v);
                     v
                 }
                 2 => {
-                    w.key_set_min(a0, key, v);
+                    w.key_set_max(a0, key, v);
                     v
                 }
                 3 => {
