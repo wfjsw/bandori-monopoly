@@ -116,7 +116,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     )?;
     // 规则书: 「并移除1个奇迹水晶」 -- C# `AddCrystals(-1, "回合结束")`. The
     // 「奇迹水晶耗尽时将此卡放入弃牌堆」 half is [`on_crystals_changed`].
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 

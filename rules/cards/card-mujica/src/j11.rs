@@ -83,7 +83,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             }
             // C# `AddCrystals(-1, ...)`; the `if (Crystals <= 0) Unplace(discard)`
             // half is [`on_crystals_changed`] (`Empty` is a no-op for `CardJ11`).
-            ctx::decay()?;
+            ctx::remove_crystal()?;
         }
         // C# `CardJ11.Targeted` (MatchHost.cs:5903-5910): another player's card
         // targets the owner -> may discard. `t.Target != Seat || t.ByCard ==

@@ -209,7 +209,7 @@ fn check(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::take_card(player_id, ID, ctx::CardPile::Discard) {
+    if !ctx::take_card(player_id, ID, ctx::CardPile::Graveyard) {
         return Ok(());
     }
     // C# picks the most expensive owned deed (`Mem["tile"] = num + 1`).

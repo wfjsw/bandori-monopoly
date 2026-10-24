@@ -86,7 +86,7 @@ fn swap(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
-    let disc = ctx::cards_in(player_id, ctx::CardPile::Discard);
+    let disc = ctx::cards_in(player_id, ctx::CardPile::Graveyard);
     for c in &deck {
         ctx::to_discard(player_id, c);
     }

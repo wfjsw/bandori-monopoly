@@ -287,7 +287,7 @@ fn determinize_own_draw_order_varies() {
     for k in 0..32 {
         let mut rng = DeterminizerRng::new(9000 + k);
         let (fork, _) = determinize(&view, &data, &rules, &mut rng).unwrap();
-        let raw = fork.world().hidden[view.player_id as usize].draw.clone();
+        let raw = fork.world().hidden[view.player_id as usize].deck.clone();
         orders.insert(raw);
         // ... but the composition always matches.
         let mut sorted = fork.draw_of(1);

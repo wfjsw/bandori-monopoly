@@ -135,7 +135,7 @@ fn pass_marked(player_id: i32) -> card_sdk::Asked {
 /// the owner's turn) -> `AddCrystals(-1)`. `actor == owner && card.placed` is
 /// the pre.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 

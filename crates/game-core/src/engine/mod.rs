@@ -1180,7 +1180,7 @@ impl Match {
     pub fn draw_of(&self, member: i32) -> Vec<String> {
         let mut v = self
             .player_index(member)
-            .map(|i| self.world.hidden[i].draw.clone())
+            .map(|i| self.world.hidden[i].deck.clone())
             .unwrap_or_default();
         v.sort();
         v

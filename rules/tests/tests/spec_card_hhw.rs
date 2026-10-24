@@ -849,7 +849,7 @@ pub fn wacha_place(step: &Step<'_>) -> Result<(), String> {
         .post
         .hidden
         .get(who)
-        .map(|h| h.discard.iter().any(|c| c == WACHA))
+        .map(|h| h.graveyard.iter().any(|c| c == WACHA))
         .unwrap_or(false);
     if !on && !in_discard {
         return Err(

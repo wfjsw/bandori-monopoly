@@ -31,8 +31,8 @@ pub const STATE_EVENTS: usize = 80;
 pub struct Hidden {
     pub hand: Vec<String>,
     /// Top of the pile is the **end** of the vec.
-    pub draw: Vec<String>,
-    pub discard: Vec<String>,
+    pub deck: Vec<String>,
+    pub graveyard: Vec<String>,
     /// The player's next main move walks exactly this many steps instead of
     /// the roll; consumed by that move.
     #[serde(default)]
@@ -979,8 +979,8 @@ impl World {
         let mut st = self.st.clone();
         for (player_id, h) in st.players.iter_mut().zip(&self.hidden) {
             player_id.hand = h.hand.len() as i32;
-            player_id.draw = h.draw.len() as i32;
-            player_id.discard = h.discard.clone();
+            player_id.draw = h.deck.len() as i32;
+            player_id.discard = h.graveyard.clone();
         }
         // The recent-event window: shared via `Arc`, rebuilt in `EventTail`
         // only when something was logged since the last read.

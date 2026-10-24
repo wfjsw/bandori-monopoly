@@ -943,7 +943,7 @@ impl CardWorld for Run {
             .world
             .hidden
             .get(player_id.max(0) as usize)
-            .is_some_and(|h| !h.discard.is_empty() && n > 0 && h.draw.len() <= n as usize);
+            .is_some_and(|h| !h.graveyard.is_empty() && n > 0 && h.deck.len() <= n as usize);
         let got = self.world.draw_cards(player_id, n, true);
         if will_refill && got > 0 {
             self.reshuffle_log.push(player_id);
@@ -978,14 +978,14 @@ impl CardWorld for Run {
                     return;
                 }
                 match dest {
-                    5 => self.world.hidden[idx].draw.insert(0, card.to_string()),
+                    5 => self.world.hidden[idx].deck.insert(0, card.to_string()),
                     6 => {
-                        self.world.hidden[idx].draw.push(card.to_string());
-                        let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
+                        self.world.hidden[idx].deck.push(card.to_string());
+                        let mut draw = std::mem::take(&mut self.world.hidden[idx].deck);
                         self.world.rng.shuffle(&mut draw);
-                        self.world.hidden[idx].draw = draw;
+                        self.world.hidden[idx].deck = draw;
                     }
-                    _ => self.world.hidden[idx].draw.push(card.to_string()),
+                    _ => self.world.hidden[idx].deck.push(card.to_string()),
                 }
             }
             // Field / Banished are not piles: `place_card` / "gone" is the
@@ -1000,8 +1000,8 @@ impl CardWorld for Run {
         };
         let list = match src {
             CardPile::Hand => &mut h.hand,
-            CardPile::Discard => &mut h.discard,
-            CardPile::Deck => &mut h.draw,
+            CardPile::Graveyard => &mut h.graveyard,
+            CardPile::Deck => &mut h.deck,
             CardPile::Field => return self.world.unplace_card(player_id, card).is_some(),
         };
         match list.iter().position(|c| c == card) {
@@ -1022,9 +1022,9 @@ impl CardWorld for Run {
         };
         match pile {
             CardPile::Hand => h.hand.clone(),
-            CardPile::Discard => h.discard.clone(),
+            CardPile::Graveyard => h.graveyard.clone(),
             // The end of the vec is the top of the pile; list top first.
-            CardPile::Deck => h.draw.iter().rev().cloned().collect(),
+            CardPile::Deck => h.deck.iter().rev().cloned().collect(),
             CardPile::Field => self.world.placed_cards(player_id),
         }
     }
@@ -1898,21 +1898,21 @@ impl CardWorld for Run {
         self.world
             .hidden
             .get(player_id.max(0) as usize)
-            .map(|h| h.discard.iter().filter(|c| c.as_str() == card).count() as i32)
+            .map(|h| h.graveyard.iter().filter(|c| c.as_str() == card).count() as i32)
             .unwrap_or(0)
     }
     fn deck_count(&self, player_id: i32) -> i32 {
         self.world
             .hidden
             .get(player_id.max(0) as usize)
-            .map(|h| h.draw.len() as i32)
+            .map(|h| h.deck.len() as i32)
             .unwrap_or(0)
     }
     fn discard_size(&self, player_id: i32) -> i32 {
         self.world
             .hidden
             .get(player_id.max(0) as usize)
-            .map(|h| h.discard.len() as i32)
+            .map(|h| h.graveyard.len() as i32)
             .unwrap_or(0)
     }
     fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32 {
@@ -1924,7 +1924,7 @@ impl CardWorld for Run {
             return 0;
         };
         h.hand.remove(p);
-        h.discard.push(card.to_string());
+        h.graveyard.push(card.to_string());
         self.discard_log.push((player_id, card.to_string()));
         if self.world.refill_draw_pile(player_id.max(0) as usize) {
             self.reshuffle_log.push(player_id);
@@ -1942,13 +1942,13 @@ impl CardWorld for Run {
             moved.append(&mut self.world.hidden[idx].hand);
         }
         if discard {
-            moved.append(&mut self.world.hidden[idx].discard);
+            moved.append(&mut self.world.hidden[idx].graveyard);
         }
         let n = moved.len() as i32;
-        self.world.hidden[idx].draw.append(&mut moved);
-        let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
+        self.world.hidden[idx].deck.append(&mut moved);
+        let mut draw = std::mem::take(&mut self.world.hidden[idx].deck);
         self.world.rng.shuffle(&mut draw);
-        self.world.hidden[idx].draw = draw;
+        self.world.hidden[idx].deck = draw;
         self.reshuffle_log.push(player_id);
         n
     }
@@ -5185,7 +5185,7 @@ impl<M: CardModules> RulesBridge<M> {
             }
             // Card ids in the piles (and, after the mulligan, the hand).
             let mut ids: Vec<String> = Vec::new();
-            for id in &world.hidden[p].draw {
+            for id in &world.hidden[p].deck {
                 if !ids.contains(id) {
                     ids.push(id.clone());
                 }
@@ -6073,7 +6073,7 @@ impl<M: CardModules> RulesBridge<M> {
         match dest_from(dest) {
             Dest::Graveyard => {
                 if !w.out(seat) {
-                    w.hidden[seat].discard.push(id.clone());
+                    w.hidden[seat].graveyard.push(id.clone());
                     refilled = w.refill_draw_pile(seat);
                 }
             }
@@ -6228,7 +6228,7 @@ impl<M: CardModules> RulesBridge<M> {
                 match dest_from(dest) {
                     Dest::Graveyard => {
                         if !w.out(seat) {
-                            w.hidden[seat].discard.push(id.clone());
+                            w.hidden[seat].graveyard.push(id.clone());
                             refilled = w.refill_draw_pile(seat);
                         }
                     }

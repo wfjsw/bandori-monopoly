@@ -1508,7 +1508,7 @@ impl AbKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CardPile {
     Hand = 0,
-    Discard = 1,
+    Graveyard = 1,
     /// The draw pile, **top card first**.
     Deck = 2,
     /// Cards placed on the player's field, in placement order.
@@ -1519,7 +1519,7 @@ impl CardPile {
     pub fn from_i32(v: i32) -> Option<Self> {
         Some(match v {
             0 => Self::Hand,
-            1 => Self::Discard,
+            1 => Self::Graveyard,
             2 => Self::Deck,
             3 => Self::Field,
             _ => return None,

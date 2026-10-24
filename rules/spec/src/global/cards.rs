@@ -50,7 +50,7 @@ pub fn pile_multiset(w: &World, i: usize) -> BTreeMap<String, usize> {
     let Some(h) = w.hidden.get(i) else {
         return m;
     };
-    for c in h.hand.iter().chain(&h.draw).chain(&h.discard) {
+    for c in h.hand.iter().chain(&h.deck).chain(&h.graveyard) {
         *m.entry(c.clone()).or_insert(0) += 1;
     }
     m
@@ -99,7 +99,7 @@ fn counts(w: &World, i: usize, id: &str) -> (usize, usize, usize) {
     let hand = h.hand.iter().filter(|c| *c == id).count();
     let is_event = id.starts_with("event:");
     let short = id.strip_prefix("event:").unwrap_or(id);
-    let player_discard = h.discard.iter().filter(|c| *c == id).count();
+    let player_discard = h.graveyard.iter().filter(|c| *c == id).count();
     let discard = if is_event {
         player_discard
             + w.st
@@ -434,12 +434,12 @@ pub fn g_cards_04(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     for who in reshuffled {
-        let pre_draw = step.pre.hidden.get(who).map(|h| h.draw.len()).unwrap_or(0);
+        let pre_draw = step.pre.hidden.get(who).map(|h| h.deck.len()).unwrap_or(0);
         let pre_discard = step
             .pre
             .hidden
             .get(who)
-            .map(|h| h.discard.len())
+            .map(|h| h.graveyard.len())
             .unwrap_or(0);
         // How many cards did this window take out of the pile (or fail to)?
         let drew: usize = step

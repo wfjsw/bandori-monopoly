@@ -96,7 +96,7 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
     // C# `H._hidden[i].discard.Distinct()` + `H.AskCard` + `H._hidden[i].discard.Remove`
     // + `H.AddToHand`.
     let mut ids: Vec<alloc::string::String> = Vec::new();
-    for c in ctx::cards_in(player_id, ctx::CardPile::Discard) {
+    for c in ctx::cards_in(player_id, ctx::CardPile::Graveyard) {
         if !ids.contains(&c) {
             ids.push(c);
         }
@@ -112,7 +112,7 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
         &refs,
     )?;
     let id = ids.swap_remove(pick.min(ids.len() - 1));
-    if ctx::take_card(player_id, &id, ctx::CardPile::Discard) {
+    if ctx::take_card(player_id, &id, ctx::CardPile::Graveyard) {
         ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
         ctx::log(
             player_id,

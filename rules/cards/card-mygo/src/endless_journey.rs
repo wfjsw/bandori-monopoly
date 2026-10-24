@@ -61,7 +61,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     if ctx::turn_main_steps() <= 6 {
         return Ok(());
     }
-    ctx::decay()?;
+    ctx::remove_crystal()?;
     Ok(())
 }
 

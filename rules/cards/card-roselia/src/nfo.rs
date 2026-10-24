@@ -188,13 +188,13 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
 /// discard before it resolves). `H.PlayCard` then applies the card's own `Dest`.
 fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
     // Not this card itself, and only cards the press entry admits.
-    let ok: Vec<String> = ctx::distinct_cards_in(player_id, ctx::CardPile::Discard)
+    let ok: Vec<String> = ctx::distinct_cards_in(player_id, ctx::CardPile::Graveyard)
         .into_iter()
         .filter(|id| id != ID && ctx::query_guard(player_id, id, ctx::entry::PRESS))
         .collect();
     let Some(id) = ctx::pick_take_from(
         player_id,
-        ctx::CardPile::Discard,
+        ctx::CardPile::Graveyard,
         &Msg::new(key!("nfo_title")),
         &Msg::new(key!("nfo_replay_ask")),
         Some(&Msg::new(key!("nfo_no_replay"))),

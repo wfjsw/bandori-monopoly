@@ -41,9 +41,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // h.discard); h.discard.Clear(); }` -- when the draw pile is too thin, the
     // discard comes back underneath it (the C# log calls this 洗回).
     if ctx::deck_count(player_id) < 2 && ctx::discard_size(player_id) > 0 {
-        let discard = ctx::cards_in(player_id, CardPile::Discard);
+        let discard = ctx::cards_in(player_id, CardPile::Graveyard);
         for id in &discard {
-            ctx::take_card(player_id, id, CardPile::Discard);
+            ctx::take_card(player_id, id, CardPile::Graveyard);
             ctx::add_to_dest(player_id, id, ctx::Dest::DeckBottom);
         }
         ctx::log(

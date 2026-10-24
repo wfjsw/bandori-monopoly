@@ -941,14 +941,14 @@ impl World {
     /// Returns whether a shuffle happened so the caller can raise its hook.
     pub fn refill_draw_pile(&mut self, i: usize) -> bool {
         if self.st.players.get(i).is_none_or(|s| s.out())
-            || !self.hidden[i].draw.is_empty()
-            || self.hidden[i].discard.is_empty()
+            || !self.hidden[i].deck.is_empty()
+            || self.hidden[i].graveyard.is_empty()
         {
             return false;
         }
-        let mut pile = std::mem::take(&mut self.hidden[i].discard);
+        let mut pile = std::mem::take(&mut self.hidden[i].graveyard);
         self.rng.shuffle(&mut pile);
-        self.hidden[i].draw = pile;
+        self.hidden[i].deck = pile;
         self.log(
             "text",
             i as i32,
@@ -969,7 +969,7 @@ impl World {
         let mut got = 0;
         for _ in 0..n.max(0) {
             self.refill_draw_pile(i);
-            let Some(card) = self.hidden[i].draw.pop() else {
+            let Some(card) = self.hidden[i].deck.pop() else {
                 break;
             };
             self.hidden[i].hand.push(card);
@@ -1009,9 +1009,9 @@ impl World {
     pub fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool) {
         if let Ok(i) = usize::try_from(player_id) {
             if let Some(h) = self.hidden.get_mut(i) {
-                h.draw.push(card.to_string());
+                h.deck.push(card.to_string());
                 if shuffle {
-                    self.rng.shuffle(&mut h.draw);
+                    self.rng.shuffle(&mut h.deck);
                 }
             }
         }
@@ -1023,7 +1023,7 @@ impl World {
                 if let Some(k) = h.hand.iter().position(|c| c == card) {
                     h.hand.remove(k);
                 }
-                h.discard.push(card.to_string());
+                h.graveyard.push(card.to_string());
                 return self.refill_draw_pile(i);
             }
         }

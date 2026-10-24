@@ -179,7 +179,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             ctx::take_card(player_id, &c, CardPile::Hand);
         }
     }
-    for pile in [CardPile::Deck, CardPile::Discard] {
+    for pile in [CardPile::Deck, CardPile::Graveyard] {
         for c in ctx::cards_in(player_id, pile) {
             if shout_at(player_id, &c) {
                 if pile != CardPile::Deck {

@@ -583,7 +583,7 @@ pub fn check_cards(t: &Table, known: &[String]) -> Result<(), String> {
         c.starts_with("skill:") || c.starts_with("TEST:") || known.iter().any(|k| k == c)
     };
     for (i, h) in w.hidden.iter().enumerate() {
-        for zone in [&h.hand, &h.draw, &h.discard] {
+        for zone in [&h.hand, &h.deck, &h.graveyard] {
             for c in zone {
                 if c.is_empty() {
                     return Err(format!("empty card id in P{i} zone"));
