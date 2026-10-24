@@ -11,6 +11,8 @@
   "echo_counteract": "echo counteract",
   "echo_play": "echo play",
   "fire_roll_note": "fire roll probe",
+  "flash_header_ids_line": "header-ids sibling logged",
+  "flash_header_ids_note": "header-ids test card in play",
   "gain_1000_why": "probe gain 1000",
   "guard_blocked": "guard blocked an abnormal effect",
   "guard_note": "guards against abnormal effects",

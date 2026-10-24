@@ -11,6 +11,8 @@
   "echo_counteract": "回声：反应",
   "echo_play": "回声：打出",
   "fire_roll_note": "火罐掷骰试探",
+  "flash_header_ids_line": "header-ids sibling logged",
+  "flash_header_ids_note": "header-ids test card in play",
   "gain_1000_why": "试探获得 1000",
   "guard_blocked": "守卫挡下了异常效果",
   "guard_note": "防御异常效果",

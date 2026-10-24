@@ -217,6 +217,42 @@ fn never_suppresses_the_drive_despite_a_trailing_always_sibling() {
     );
 }
 
+/// One drive, one flash decision, **every** header it posted. Three settle
+/// siblings each flush their own 「效果适用」 (each body is a `ctx::log`);
+/// entry 0 is `Flash::Always`, the other two default `Auto`, so the fold is
+/// `Always` and all three must flash. Under the old last-flush + `__hdr__`
+/// stamping only the first and last did -- the middle kept `flush_header`'s
+/// `already` default-off.
+#[test]
+fn every_sibling_header_rides_the_folded_flash_decision() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:flashHeaderIds");
+    let headers: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:flashHeaderIds")
+        .collect();
+    assert_eq!(
+        headers.len(),
+        3,
+        "three sibling entries, three headers: {}",
+        t.recent_keys(40).join(", ")
+    );
+    for h in &headers {
+        assert!(
+            h.flash,
+            "the folded Always must flash every header: {h:?} / {}",
+            t.recent_keys(40).join(", ")
+        );
+    }
+    assert_eq!(
+        card_flashes_since(&t, mark).len(),
+        3,
+        "and all three count as card-flashes: {}",
+        t.recent_keys(40).join(", ")
+    );
+}
+
 /// `ctx::no_flash` wins over a cross-player Auto flash.
 #[test]
 fn no_flash_suppresses_an_auto_flash() {

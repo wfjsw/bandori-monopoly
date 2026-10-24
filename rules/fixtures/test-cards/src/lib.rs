@@ -1234,12 +1234,11 @@ fn quiet_log(player_id: i32) -> card_sdk::Asked {
 /// commit flush turns into after-hooks -- no `ctx::log` / pay / draw.
 /// `body_empty` must count those too or the 「效果适用」 header is retracted
 /// and then `counterChanged` / the named-raise hooks fire on an invisible
-/// clause.
-/// * `TEST:quietCounter` -- setup target (flushes the lazy header per Ruling
-///   2a) then only a counter write (`ctx::add_counter_at`, the path that does
-///   **not** auto-narrate `log.outcome.counter`).
-/// * `TEST:quietRaise` -- setup target then only a named raise
-///   (`ctx::raise_after`).
+/// clause. The header must also **flush** on those rows: the write/raise is
+/// the first visible outcome, so Ruling 2a posts the clause name above it.
+/// * `TEST:quietCounter` -- only a counter write (`ctx::add_counter_at`, the
+///   path that does **not** auto-narrate `log.outcome.counter`).
+/// * `TEST:quietRaise` -- only a named raise (`ctx::raise_after`).
 const QUIET_COUNTER: CardDef = CardDef::new(
     "TEST:quietCounter",
     &[
@@ -1264,16 +1263,11 @@ fn quiet_counter_place(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Setup target first: a host request flushes the lazy 「效果适用」 header
-/// (Ruling 2a) even though targeting itself is setup, not a visible effect.
-/// The only body log left is the counter write -- `ctx::add_counter` /
-/// `set_counter` auto-narrate `log.outcome.counter` (so `logged` would see
-/// them); `add_counter_at` is the silent write, and its `counter_log` row is
-/// what raises `counterChanged` after commit.
-fn quiet_counter_body(player_id: i32) -> card_sdk::Asked {
-    if let Some(&other) = ctx::others(player_id).first() {
-        ctx::target(other);
-    }
+/// Only the counter write. `ctx::add_counter` / `set_counter` auto-narrate
+/// `log.outcome.counter` (so `logged` would see them); `add_counter_at` is the
+/// silent write, and its `counter_log` row is what raises `counterChanged`
+/// after commit -- and what flushes the lazy header.
+fn quiet_counter_body(_player_id: i32) -> card_sdk::Asked {
     ctx::add_counter_at(ctx::self_uid(), "quietTick", 1, 0);
     Ok(())
 }
@@ -1284,11 +1278,9 @@ fn quiet_raise_place(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Setup target then only a post-commit named raise -- no log line of its own.
+/// Only a post-commit named raise -- no log line of its own. The raise row
+/// flushes the lazy header.
 fn quiet_raise_body(player_id: i32) -> card_sdk::Asked {
-    if let Some(&other) = ctx::others(player_id).first() {
-        ctx::target(other);
-    }
     ctx::raise_after(player_id, "TEST.quietRaise.tick", 1);
     Ok(())
 }
@@ -1401,6 +1393,36 @@ fn flash_fold_always_place(player_id: i32) -> card_sdk::Asked {
 fn flash_fold_never_place(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:flashFoldNever", &Msg::new(key!("flash_fold_note")));
+    Ok(())
+}
+
+/// Three settle hooks on one drive, each body a `ctx::log` so each flushes its
+/// own 「效果适用」 header. Entry 0 is `Flash::Always` (the fold's winning
+/// opinion); the other two are default `Auto`. One drive, one flash decision,
+/// **every** header it posted -- all three must carry the folded `true`. A
+/// trailing sibling's header must not keep the `flush_header` `already`
+/// default-off.
+const FLASH_HEADER_IDS: CardDef = CardDef::new(
+    "TEST:flashHeaderIds",
+    &[
+        On::Play("", None, flash_header_ids_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_header_ids_log))
+            .flash(Flash::Always),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_header_ids_log)),
+        On::Action(Action::Settle("", Some(silent_hook_yes), flash_header_ids_log)),
+    ],
+);
+
+fn flash_header_ids_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:flashHeaderIds", &Msg::new(key!("flash_header_ids_note")));
+    Ok(())
+}
+
+/// A single log line: the first visible outcome for this entry, so the lazy
+/// header flushes here (and only here -- no extra host request to piggyback on).
+fn flash_header_ids_log(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("flash_header_ids_line")));
     Ok(())
 }
 
@@ -1888,6 +1910,7 @@ card_sdk::ruleset!(&[
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     QUIET_COUNTER, QUIET_RAISE,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,
+    FLASH_HEADER_IDS,
     FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
     CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE,

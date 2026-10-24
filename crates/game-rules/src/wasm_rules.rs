@@ -341,6 +341,12 @@ pub struct Run {
     /// The header this run flushed (Ruling 2a), or -1 if none was posted
     /// (silent / nothing visible). `commit_after` completes this one only.
     own_activation: i32,
+    /// Every 「效果适用」 header this run actually posted (`flush_header`'s
+    /// take-succeeded path), in post order. One drive, one flash decision,
+    /// every header it posted -- `commit_after` stamps them all. Sibling
+    /// entries each flush their own header; the `__hdr__` once-per-flash
+    /// identity only names the first.
+    header_ids: Vec<i32>,
     /// What the body produced (for the flash-scope classification).
     /// ...
     /// This run halted for a prompt (the header is already on the stream and
@@ -427,10 +433,15 @@ impl Run {
         );
         self.parent = id;
         self.own_activation = id;
+        self.header_ids.push(id);
         if already {
-            // Re-run's duplicate header: keep the log line, suppress the
-            // second flash (the first pass already showed it before the
-            // prompt).
+            // Default the second-and-later headers' flash off. This is **not**
+            // the once-per-flash guarantee (that lives in the `"flash"` cue
+            // event's `flash_key("ord:N")` identity) and not the drive's flash
+            // decision either: sibling entries of the same drive also land
+            // here, and `commit_after` overrides this default with the folded
+            // decision for every id in `header_ids`. Kept as the safe default
+            // for any id the vec somehow misses.
             if let Some(live) = self.live {
                 let cx = unsafe { &mut *live };
                 cx.set_event_flash(id, false);
@@ -600,6 +611,8 @@ impl Run {
         // clause (2)'s 「所有本回合切换了状态的玩家」 never lit.
         let turn_key = self.world.st.round * 100 + self.world.st.turn + 1;
         self.world.state_set(who, "switchedRound", turn_key);
+        // Visible outcome: `commit_after` raises `state` on this row.
+        self.flush_header();
         self.state_log.push((who, was, now));
     }
 
@@ -629,12 +642,18 @@ impl Run {
     /// count still raises -- a card placed with no named counters has to hear
     /// about its own count. A write to an instance that is not on a field
     /// raises nothing.
+    ///
+    /// The header names the clause, so any visible outcome must flush it (the
+    /// same contract `post_log_value` already honours). A counter write is
+    /// visible: `commit_after` raises `counterChanged` on it and `body_empty`
+    /// counts it, so a pure counter body must still post its 「效果适用」.
     fn note_counter_changed(&mut self, uid: i32, was: i32, now: i32, name: &str) {
         let Some(f) = self.world.field_by_uid(uid) else {
             return;
         };
         // The holder hears its card's counter change, not the card's owner.
         let (owner, card) = (self.world.holder_of(uid), f.card.clone());
+        self.flush_header();
         self.counter_log
             .push((owner, card, name.to_string(), now - was));
     }
@@ -726,6 +745,10 @@ impl CardWorld for Run {
         // change. Logged as `(-1, player, n)` for money in and `(player, -1, n)`
         // for money out, so the Done handler can raise `payAfter` for both and
         // open the `paid` counteraction window only for the loss.
+        if got != 0 {
+            // Visible outcome: `commit_after` raises `payAfter` / `paid`.
+            self.flush_header();
+        }
         if got > 0 {
             self.paid_log.push((-1, player_id, got));
         } else if got < 0 {
@@ -998,12 +1021,22 @@ impl CardWorld for Run {
             .is_some_and(|h| !h.graveyard.is_empty() && n > 0 && h.deck.len() <= n as usize);
         let got = self.world.draw_cards(player_id, n, true);
         if will_refill && got > 0 {
+            // Visible outcome: `commit_after` raises `reshuffled`.
+            self.flush_header();
             self.reshuffle_log.push(player_id);
         }
         if got > 0 {
-            if let Some(h) = self.world.hidden.get(player_id.max(0) as usize) {
-                for id in &h.hand[before..] {
-                    self.draw_log.push((player_id, id.clone()));
+            let drawn: Vec<String> = self
+                .world
+                .hidden
+                .get(player_id.max(0) as usize)
+                .map(|h| h.hand[before..].to_vec())
+                .unwrap_or_default();
+            if !drawn.is_empty() {
+                // Visible outcome: `commit_after` raises `drawn` / `drew`.
+                self.flush_header();
+                for id in drawn {
+                    self.draw_log.push((player_id, id));
                 }
             }
         }
@@ -1019,6 +1052,8 @@ impl CardWorld for Run {
                 // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
                 // bounce, a tutor) is not a draw and must not raise them.
                 if self.trigger.kind == TriggerKind::DrewBefore {
+                    // Visible outcome: `commit_after` raises `drawn` / `drew`.
+                    self.flush_header();
                     self.draw_log.push((player_id, card.to_string()));
                 }
             }
@@ -1061,6 +1096,8 @@ impl CardWorld for Run {
                 list.remove(k);
                 if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
                 {
+                    // Visible outcome: `commit_after` raises `reshuffled`.
+                    self.flush_header();
                     self.reshuffle_log.push(player_id);
                 }
                 true
@@ -1081,6 +1118,9 @@ impl CardWorld for Run {
         }
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {
+        // Visible outcome: `commit_after` raises `discarded` (and maybe
+        // `reshuffled`). The header names the clause that discarded.
+        self.flush_header();
         if self.world.to_discard(player_id, card) {
             self.reshuffle_log.push(player_id);
         }
@@ -1716,6 +1756,11 @@ impl CardWorld for Run {
         // the split form.
     }
     fn raise_after(&mut self, player_id: i32, name: &str, value: i32) {
+        // The header names the clause, so any visible outcome must flush it
+        // (the same contract `post_log_value` already honours). A named raise
+        // is visible: `commit_after` fires its hooks and `body_empty` counts
+        // the row, so a raise-only body must still post its 「效果适用」.
+        self.flush_header();
         self.named_raise_log
             .push((player_id, name.to_string(), value));
     }
@@ -1870,6 +1915,8 @@ impl CardWorld for Run {
                     .copied()
                     .unwrap_or(-1);
                 if owner >= 0 {
+                    // Visible outcome: `commit_after` raises `houseAdded`.
+                    self.flush_header();
                     self.house_log.push((owner, tile, now));
                 }
             }
@@ -1977,6 +2024,9 @@ impl CardWorld for Run {
         };
         h.hand.remove(p);
         h.graveyard.push(card.to_string());
+        // Visible outcome: `commit_after` raises `discarded` (and maybe
+        // `reshuffled`). The header names the clause that discarded.
+        self.flush_header();
         self.discard_log.push((player_id, card.to_string()));
         if self.world.refill_draw_pile(player_id.max(0) as usize) {
             self.reshuffle_log.push(player_id);
@@ -2001,6 +2051,8 @@ impl CardWorld for Run {
         let mut draw = std::mem::take(&mut self.world.hidden[idx].deck);
         self.world.rng.shuffle(&mut draw);
         self.world.hidden[idx].deck = draw;
+        // Visible outcome: `commit_after` raises `reshuffled`.
+        self.flush_header();
         self.reshuffle_log.push(player_id);
         n
     }
@@ -3033,6 +3085,10 @@ impl<M: CardModules> RulesBridge<M> {
         // run share one buffer; a pause must not drop it).
         let mut saved_header: Option<PendingHeader> = None;
         let mut flushed_header: i32 = -1;
+        // Every header the drive has posted across passes (learn + re-run).
+        // A re-run's fresh `Run` starts from this so `commit_after` can stamp
+        // the folded flash decision on headers the learn pass already posted.
+        let mut drive_header_ids: Vec<i32> = Vec::new();
         let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
@@ -3076,6 +3132,7 @@ impl<M: CardModules> RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: drive_header_ids.clone(),
                 prompted: false,
                 parent: activation_id,
                 flash_policy: card_sdk::abi::Flash::Auto,
@@ -3296,6 +3353,9 @@ impl<M: CardModules> RulesBridge<M> {
                     // Recover the learn pass's write-through log so the commit
                     // pass replaces those lines instead of appending duplicates.
                     posted_ids = std::mem::take(&mut after.posted);
+                    // And the headers it already posted, so the commit pass's
+                    // `commit_after` can still stamp every one of them.
+                    drive_header_ids = after.header_ids.clone();
                     let mut world = cx.share_world();
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
@@ -3339,6 +3399,7 @@ impl<M: CardModules> RulesBridge<M> {
                         quiet_when_empty: false,
                         pending_header: None,
                         own_activation: -1,
+                        header_ids: drive_header_ids.clone(),
                         prompted: false,
                         parent: activation_id,
                         flash_policy: card_sdk::abi::Flash::Auto,
@@ -3482,6 +3543,9 @@ impl<M: CardModules> RulesBridge<M> {
                         if run.own_activation >= 0 {
                             flushed_header = run.own_activation;
                         }
+                        if !run.header_ids.is_empty() {
+                            drive_header_ids = run.header_ids.clone();
+                        }
                     }
                     // A card prompt has one player: the module's i-th answer is that
                     // player's answer to its i-th prompt.
@@ -3504,6 +3568,9 @@ impl<M: CardModules> RulesBridge<M> {
                     posted_ids = std::mem::take(&mut run.posted);
                     if run.own_activation >= 0 {
                         flushed_header = run.own_activation;
+                    }
+                    if !run.header_ids.is_empty() {
+                        drive_header_ids = run.header_ids.clone();
                     }
                     // The host routine runs against the **live** world and is
                     // not replayed, so the turn-ctx policy the card just set up
@@ -3602,6 +3669,9 @@ impl<M: CardModules> RulesBridge<M> {
                     run.flush_header();
                     if run.own_activation >= 0 {
                         flushed_header = run.own_activation;
+                    }
+                    if !run.header_ids.is_empty() {
+                        drive_header_ids = run.header_ids.clone();
                     }
                     let live_before = cx.live_event_count();
                     let v = self.apply_host_request(cx, req, &run.linger_props, call.clone(), card_id)?;
@@ -4622,20 +4692,24 @@ impl<M: CardModules> RulesBridge<M> {
                     self.drive_should_flash(cx, &after, owner, header)
                 };
                 cx.set_event_flash(header, flash);
-                // The drive's canonical header (first flush, the `__hdr__`
-                // once-per-flash identity) is a separate id from `header`
-                // when a multi-entry drive posted later per-entry headers
-                // (`flush_header` treats those as re-run dups and defaults
-                // them off). Stamp the decision on the canonical one too so
-                // `Never` suppresses the whole drive, not just the last
-                // header.
+                // One drive, one flash decision, every header it posted.
+                // Sibling entries each flush their own 「效果适用」; `flush_header`
+                // defaults the second-and-later ones' flash off (its `already`
+                // branch), but that is a default, not the decision -- the fold
+                // is. Stamp the folded `flash` on every id `header_ids` recorded
+                // so a trailing `Auto` sibling's header still rides the leading
+                // `Always` (and a `Never` suppresses all of them).
+                for &hid in &after.header_ids {
+                    cx.set_event_flash(hid, flash);
+                }
+                // Belt-and-braces: the `__hdr__` once-per-flash identity names
+                // the first flush. If some id somehow missed the vec, still
+                // stamp that one so `Never` cannot leave a stray flash.
                 {
                     let hkey = format!("{card_id}|__hdr__");
                     let first = after.world.flash.lock().seen.get(&hkey).copied();
                     if let Some(first) = first {
-                        if first != header {
-                            cx.set_event_flash(first, flash);
-                        }
+                        cx.set_event_flash(first, flash);
                     }
                 }
                 after.world.recent = cx.world().recent.clone();
@@ -6458,6 +6532,7 @@ impl<M: CardModules> RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
@@ -6686,6 +6761,7 @@ impl<M: CardModules> RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: vec![],
                 prompted: false,
                 parent: -1,
                 flash_policy: card_sdk::abi::Flash::Auto,
@@ -7063,6 +7139,7 @@ impl<M: CardModules> RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
@@ -8983,6 +9060,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
@@ -9052,6 +9130,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 quiet_when_empty: false,
                 pending_header: None,
                 own_activation: -1,
+                header_ids: vec![],
                 prompted: false,
                 parent: -1,
                 flash_policy: card_sdk::abi::Flash::Auto,
@@ -9173,6 +9252,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             quiet_when_empty: false,
             pending_header: None,
             own_activation: -1,
+            header_ids: vec![],
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
