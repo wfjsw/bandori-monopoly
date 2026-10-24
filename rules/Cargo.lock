@@ -8,6 +8,8 @@ version = "0.1.0"
 dependencies = [
  "card-sdk",
  "postcard",
+ "rules-cond",
+ "rules-cond-ir",
 ]
 
 [[package]]
@@ -164,6 +166,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cel"
+version = "0.15.0"
+dependencies = [
+ "pastey",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "cobs"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -202,6 +213,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "pastey"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
+
+[[package]]
 name = "personas"
 version = "0.1.0"
 dependencies = [
@@ -238,6 +255,20 @@ checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "rules-cond"
+version = "0.1.0"
+dependencies = [
+ "cel",
+ "postcard",
+ "rules-cond-ir",
+ "serde",
+]
+
+[[package]]
+name = "rules-cond-ir"
+version = "0.1.0"
 
 [[package]]
 name = "rules-events"

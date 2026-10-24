@@ -306,6 +306,9 @@ const ARRAY_OPS: &[&str] = &[
 ];
 
 fn main() {
+    // `pre_string` (below) reads guard consts through the installed ext;
+    // `gen_cond_irs` uses the explicit `Vocab` so it cannot race a OnceLock.
+    let _ = rules_cond::install_ext(bandori_std::cel::ext());
     gen_cond_irs();
     gen_body_dispatch();
     let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("conf_sym_ops.rs");
@@ -450,9 +453,12 @@ fn gen_cond_irs() {
     for d in ["cards", "skills", "tiles", "events", "fixtures"] {
         println!("cargo:rerun-if-changed={}", rules_dir.join(d).display());
     }
-    let (src, _n) = rules_cond::gen_ir::generate(&rules_dir);
+    // Explicit hermetic path (no OnceLock race in a build script).
+    let v = rules_cond::Vocab::with_ext(bandori_std::cel::ext());
+    let generated =
+        rules_cond::ext::generate_with(&rules_dir, &v).expect("cond IR generation");
     let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("cond_irs.rs");
-    fs::write(out, src).unwrap();
+    fs::write(out, generated.source).unwrap();
 }
 
 /// Per-card body trampolines + `call_body_idx` (Kani). Derived from

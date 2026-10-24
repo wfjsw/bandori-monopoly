@@ -76,7 +76,7 @@ fn fill_pass_circle(owner: i32) -> rules_cond_ir::ctx::IrCtx {
             while k < 8 {
                 let i = outer * 8 + k;
                 if i < 60 && crate::board::TILES[i].kind == 0 {
-                    c.set_insert(rules_cond_ir::ctx::SetId::Circle, i as i64);
+                    c.tile_kind_ids[i] = rules_cond_ir::ctx::id_of("circle");
                 }
                 k += 1;
             }

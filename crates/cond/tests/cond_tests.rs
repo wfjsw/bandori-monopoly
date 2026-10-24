@@ -1,12 +1,37 @@
 //! G1 unit tests: parse errors, unknown vars, float rejection, kind rejection,
 //! truth tables for the sample conditions, function-backed vars.
 
+mod common;
+
 use rules_cond::{
     compile, CandidateCtx, ChainLink, Cond, CondError, MoveSnap, PlayerSnap, TileSnap, WindowCtx,
     WindowScope,
 };
 
 fn win() -> WindowCtx {
+    common::install_test_ext();
+    let mut p0 = PlayerSnap {
+        money: 1200,
+        ..PlayerSnap::default()
+    };
+    p0.state = common::state_map(&[
+        ("persona", 3),
+        ("group", 1),
+        ("charge", 2),
+        ("crystals", 1),
+        ("noHand", 0),
+    ]);
+    let mut p1 = PlayerSnap {
+        money: 400,
+        ..PlayerSnap::default()
+    };
+    p1.state = common::state_map(&[
+        ("persona", 4),
+        ("group", 2),
+        ("charge", 2),
+        ("crystals", 1),
+        ("noHand", 0),
+    ]);
     WindowCtx {
         kind: String::new(),
         actor: 1,
@@ -50,18 +75,8 @@ fn win() -> WindowCtx {
         trigger_card: 0,
         name: String::new(),
         players: vec![
-            PlayerSnap {
-                money: 1200,
-                persona: 3,
-                group: 1,
-                ..PlayerSnap::default()
-            },
-            PlayerSnap {
-                money: 400,
-                persona: 4,
-                group: 2,
-                ..PlayerSnap::default()
-            },
+            p0,
+            p1,
             PlayerSnap::default(),
             PlayerSnap::default(),
         ],
@@ -76,16 +91,12 @@ fn win() -> WindowCtx {
 }
 
 fn cand(owner: i64) -> CandidateCtx {
+    common::install_test_ext();
     CandidateCtx {
         owner,
         owner_money: if owner == 0 { 1200 } else { 400 },
-        owner_charge: 2,
-        owner_group_pool: 1,
         owner_hand: 3,
         owner_pos: 7,
-        owner_no_hand: 0,
-        owner_persona: if owner == 0 { 3 } else { 4 },
-        owner_group: if owner == 0 { 1 } else { 2 },
         owner_tiles: 1,
         card_id: 42,
         card_placed: false,
@@ -530,24 +541,23 @@ fn card_counter_lookup() {
 #[test]
 fn band_is_name_form() {
     // The name form hashes through `id_of` and compares to the view's
-    // `band(seat)` -- the same name `ctx::in_group` matches.
+    // `state(p, 'group')` -- the same name `ctx::in_group` matches.
     let name = "Pastel✽Palettes";
     let mut w = win();
-    w.players[0].group = rules_cond::id_of(name);
-    w.players[1].group = rules_cond::id_of("Afterglow");
-    let mut c = cand(0);
-    c.owner_group = rules_cond::id_of(name);
+    w.players[0]
+        .state
+        .insert("group".to_string(), rules_cond::id_of(name));
+    w.players[1]
+        .state
+        .insert("group".to_string(), rules_cond::id_of("Afterglow"));
 
     let cond = compile("group_is(owner, 'Pastel✽Palettes')").unwrap();
-    assert!(cond.eval(&w, &c));
-
-    let mut c1 = cand(1);
-    c1.owner_group = rules_cond::id_of("Afterglow");
-    assert!(!cond.eval(&w, &c1));
+    assert!(cond.eval(&w, &cand(0)));
+    assert!(!cond.eval(&w, &cand(1)));
 
     // The int form still compares against the raw id.
     let mut w2 = win();
-    w2.players[0].group = 7;
+    w2.players[0].state.insert("group".to_string(), 7);
     assert!(compile("group_is(0, 7)").unwrap().eval(&w2, &cand(0)));
 }
 
@@ -555,15 +565,15 @@ fn band_is_name_form() {
 fn character_is_name_form() {
     let name = "三角初华（Sumimi）";
     let mut w = win();
-    w.players[0].persona = rules_cond::id_of(name);
-    let mut c = cand(0);
-    c.owner_persona = rules_cond::id_of(name);
+    w.players[0]
+        .state
+        .insert("persona".to_string(), rules_cond::id_of(name));
 
     let cond = compile("persona_is(owner, '三角初华（Sumimi）')").unwrap();
-    assert!(cond.eval(&w, &c));
+    assert!(cond.eval(&w, &cand(0)));
     assert!(!compile("persona_is(owner, '纯田真奈')")
         .unwrap()
-        .eval(&w, &c));
+        .eval(&w, &cand(0)));
 }
 
 #[test]
@@ -578,7 +588,8 @@ fn card_fields() {
 
 #[test]
 fn owner_overlay_fields() {
-    // Every `owner.*` dotted name binds through the candidate overlay.
+    // Every `owner.*` dotted name binds through the candidate overlay;
+    // content sugar lowers to `state(owner, key)` and reads the window rows.
     let cond = compile("owner.money >= 500 && owner.charge == 2 && owner.hand == 3").unwrap();
     assert!(cond.eval(&win(), &cand(0)));
     assert!(!cond.eval(&win(), &cand(1)));

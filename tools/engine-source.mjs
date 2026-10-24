@@ -19,7 +19,7 @@
 //
 // Input set (behaviour-relevant only):
 //
-//   crates/game-core, crates/game-rules, crates/web-glue, rules/cond,
+//   crates/game-core, crates/game-rules, crates/web-glue, crates/cond,
 //   third_party/cel-rust,            (the whole trees)
 //   crates/card-sdk,                 (the kernel ABI crate)
 //   rules/**,                        (the guest workspace: cards,
@@ -45,7 +45,8 @@ export const SOURCE_TREES = [
   "crates/game-core",
   "crates/game-rules",
   "crates/web-glue",
-  "rules/cond",
+  "crates/cond",
+  "crates/cond-ir",
   "third_party/cel-rust",
   "crates/card-sdk",
   "rules",

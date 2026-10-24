@@ -15,10 +15,46 @@ use std::path::Path;
 use crate::lower::{lower_src, OwnedProgram};
 use rules_cond_ir::nodes::{Kind, Node};
 
+/// Generated guard-IR source.
+pub struct Generated {
+    /// The Rust module body for `rules_kani::generated::cond_irs`.
+    pub source: String,
+    /// Number of lowered guards.
+    pub count: usize,
+    /// Guards that failed to lower, as `(src, error)`. A non-empty list means
+    /// the vocabulary the caller passed cannot see part of the inventory —
+    /// `cond_ir_consistency` asserts this is empty.
+    pub skipped: Vec<(String, String)>,
+}
+
 /// Generate the table from the guard inventory under `rules_dir` (the `rules/`
 /// directory: `cards`, `skills`, `tiles`, `events`, `fixtures`).
 /// Returns the Rust source and the number of lowered guards.
+///
+/// Unlowerable guards are printed (reason + final count) and omitted from the
+/// table — see [`Generated::skipped`].
 pub fn generate(rules_dir: &Path) -> (String, usize) {
+    match generate_with(rules_dir, &crate::ext::vocab()) {
+        Ok(g) => {
+            if !g.skipped.is_empty() {
+                eprintln!(
+                    "gen_cond_ir: skipped {}/{} unlowerable (is CondExt installed?)",
+                    g.skipped.len(),
+                    g.count + g.skipped.len()
+                );
+            }
+            (g.source, g.count)
+        }
+        Err(e) => panic!("gen_cond_ir: {e}"),
+    }
+}
+
+/// Hermetic generator against an explicit [`crate::ext::Vocab`] (no global
+/// install; safe in a build script).
+pub fn generate_with(
+    rules_dir: &Path,
+    v: &crate::ext::Vocab,
+) -> Result<Generated, crate::CondError> {
     let root = rules_dir;
     let mut guards = crate::lower::inventory_guards(&root.join("cards"));
     for d in ["skills", "tiles", "events", "fixtures"] {
@@ -32,13 +68,23 @@ pub fn generate(rules_dir: &Path) -> (String, usize) {
     // First pass: which indices lower? Ids are the LOWERED subset's indices so
     // `BY_ID[id]` is total over `0..GUARD_COUNT`.
     let mut lowered: Vec<(usize, &String, OwnedProgram)> = Vec::new();
+    let mut skipped: Vec<(String, String)> = Vec::new();
     for (i, src) in guards.iter().enumerate() {
-        match lower_src(src) {
+        match crate::lower::lower_with_src(src, v) {
             Ok(p) => lowered.push((i, src, p)),
             Err(e) => {
                 eprintln!("skip (unlowerable): {src:?}: {e}");
+                skipped.push((src.clone(), e.to_string()));
             }
         }
+    }
+    if !skipped.is_empty() {
+        eprintln!(
+            "gen_cond_ir: {}/{} guards unlowerable (lowered {})",
+            skipped.len(),
+            guards.len(),
+            lowered.len()
+        );
     }
 
     let mut out = String::new();
@@ -122,7 +168,11 @@ pub fn generate(rules_dir: &Path) -> (String, usize) {
 
     out.push_str("/// Evaluate the guard at `id`, returning the raw [`Val`].\n");
     out.push_str("pub fn eval_id_val(id: usize, ctx: &IrCtx) -> rules_cond_ir::Val {\n    BY_ID[id].program.eval(ctx)\n}\n");
-    (out, lowered.len())
+    Ok(Generated {
+        source: out,
+        count: lowered.len(),
+        skipped,
+    })
 }
 
 fn guard_ident(i: usize, src: &str) -> String {

@@ -7742,23 +7742,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn owner_charge(&self) -> i64 {
-        let o = self.owner();
-        if o >= 0 {
-            // Source is the held token (fire is a skill counter, not a state key).
-            self.world.tok(o as i32, "charge") as i64
-        } else {
-            0
-        }
-    }
-    fn owner_group_pool(&self, name: &str) -> i64 {
-        let o = self.owner();
-        if o >= 0 {
-            self.world.group_pool(o as i32, name) as i64
-        } else {
-            0
-        }
-    }
     fn owner_hand(&self) -> i64 {
         let o = self.owner();
         if o >= 0 {
@@ -7786,43 +7769,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         } else {
             0
         }
-    }
-    fn owner_persona(&self) -> i64 {
-        let o = self.owner();
-        if o < 0 {
-            return 0;
-        }
-        // The persona **name** (`ctx::persona_is` spelling), not the
-        // skill id -- `persona_is(p, "名")` hashes the name.
-        let name = self
-            .world
-            .st
-            .players
-            .get(o.max(0) as usize)
-            .map(|s| s.persona.clone())
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&name)
-    }
-    fn owner_group(&self) -> i64 {
-        let o = self.owner();
-        if o < 0 {
-            return 0;
-        }
-        // The group **name** (`ctx::in_group` spelling).
-        let group_str = self
-            .world
-            .st
-            .players
-            .get(o.max(0) as usize)
-            .and_then(|s| {
-                self.data
-                    .personas
-                    .iter()
-                    .find(|c| c.name == s.persona)
-                    .map(|c| c.group.clone())
-            })
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&group_str)
     }
     fn owner_tiles(&self) -> i64 {
         let o = self.owner();
@@ -7863,18 +7809,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn blocked(&self, _group: i64) -> bool {
-        false
+    fn cand_set(&self, key: &str) -> Vec<i64> {
+        // Host fills the blocked list from the skill dispatch, not the raw world.
+        let _ = key;
+        Vec::new()
     }
     fn money(&self, seat: i64) -> i64 {
         self.world.player_money(seat as i32) as i64
-    }
-    fn charge(&self, seat: i64) -> i64 {
-        // Source is the held token (fire is a skill counter, not a state key).
-        self.world.tok(seat as i32, "charge") as i64
-    }
-    fn group_pool(&self, seat: i64, name: &str) -> i64 {
-        self.world.group_pool(seat as i32, name) as i64
     }
     fn hand(&self, seat: i64) -> i64 {
         self.world
@@ -7890,42 +7831,58 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.world.player_out(seat as i32) as i64
     }
     fn state(&self, seat: i64, key: &str) -> i64 {
-        self.world.state_get(seat as i32, key) as i64
+        // Sugar keys published through the one `state` door (CondView contract).
+        match key {
+            bandori_std::cel::KEY_CHARGE => {
+                self.world.tok(seat as i32, bandori_std::cel::KEY_CHARGE) as i64
+            }
+            bandori_std::cel::KEY_CRYSTALS => {
+                self.world.group_pool(seat as i32, bandori_std::cel::KEY_CRYSTALS) as i64
+            }
+            bandori_std::cel::KEY_PERSONA => {
+                let name = self
+                    .world
+                    .st
+                    .players
+                    .get(seat.max(0) as usize)
+                    .map(|s| s.persona.clone())
+                    .unwrap_or_default();
+                crate::cond_pre::id_of(&name)
+            }
+            bandori_std::cel::KEY_GROUP => {
+                let group_str = self
+                    .world
+                    .st
+                    .players
+                    .get(seat.max(0) as usize)
+                    .and_then(|s| {
+                        self.data
+                            .personas
+                            .iter()
+                            .find(|c| c.name == s.persona)
+                            .map(|c| c.group.clone())
+                    })
+                    .unwrap_or_default();
+                crate::cond_pre::id_of(&group_str)
+            }
+            _ => self.world.state_get(seat as i32, key) as i64,
+        }
     }
     fn state_table(&self) -> Vec<(i64, String, i64)> {
         let mut rows = Vec::new();
-        for (s, p) in self.world.st.players.iter().enumerate() {
-            for (k, v) in &p.state {
-                rows.push((s as i64, k.clone(), v.value as i64));
+        for (s, _p) in self.world.st.players.iter().enumerate() {
+            // Sugar keys first so the eager fill and `IrCtx.state` agree.
+            let s = s as i64;
+            for k in bandori_std::cel::STATE_KEYS {
+                rows.push((s, (*k).to_string(), self.state(s, k)));
+            }
+            for (k, v) in &self.world.st.players[s as usize].state {
+                if !bandori_std::cel::STATE_KEYS.contains(&k.as_str()) {
+                    rows.push((s, k.clone(), v.value as i64));
+                }
             }
         }
         rows
-    }
-    fn persona(&self, seat: i64) -> i64 {
-        let name = self
-            .world
-            .st
-            .players
-            .get(seat.max(0) as usize)
-            .map(|s| s.persona.clone())
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&name)
-    }
-    fn group(&self, seat: i64) -> i64 {
-        let group_str = self
-            .world
-            .st
-            .players
-            .get(seat.max(0) as usize)
-            .and_then(|s| {
-                self.data
-                    .personas
-                    .iter()
-                    .find(|c| c.name == s.persona)
-                    .map(|c| c.group.clone())
-            })
-            .unwrap_or_default();
-        crate::cond_pre::id_of(&group_str)
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.world.owned_tiles(seat as i32).len() as i64
@@ -7950,6 +7907,10 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             |k| self.world.tile_prop(tile as i32, k),
         )
     }
+    fn tile_class_names(&self) -> Vec<String> {
+        // Ruleset class vocabulary (no engine class table).
+        crate::cond_pre::class_names()
+    }
     fn slot_table(&self) -> Vec<(String, i64)> {
         crate::cond_pre::SLOT_NAMES
             .iter()
@@ -7971,24 +7932,18 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .collect()
     }
     fn card_counter_table(&self) -> Vec<(String, i64)> {
-        // On-card ruleset counter keys plus any
-        // card-declared named counter on the candidate instance.
+        // Instance keys (the two on-card wire names live content-side in
+        // `card-sdk::abi::counter`; `card_counter` reads them by name).
         let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {
             return Vec::new();
         };
-        let mut out = Vec::new();
-        let points_val = self.world.card_counter(o, c, "points") as i64;
-        if points_val != 0 {
-            out.push(("points".to_string(), points_val));
-        }
-        let bonus_val = self.world.card_counter(o, c, "bonus") as i64;
-        if bonus_val != 0 {
-            out.push(("bonus".to_string(), bonus_val));
-        }
-        out
-    }
-    fn blocked_groups(&self) -> Vec<i64> {
-        Vec::new()
+        crate::cond_pre::SnapSrc::card_counter_names(self, o, c)
+            .into_iter()
+            .map(|n| {
+                let v = self.world.card_counter(o, c, &n) as i64;
+                (n, v)
+            })
+            .collect()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
         crate::cond_pre::collect_tile_ids(self)

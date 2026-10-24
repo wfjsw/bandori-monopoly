@@ -28,14 +28,12 @@ pub struct ChainLink {
 }
 
 /// Snapshot of one seat's stats, indexed by seat id. Used by the `money(p)` /
-/// `charge(p)` / `persona_is(p, …)` family so a condition can talk about a
-/// seat that is not the candidate's owner.
+/// `state(p, key)` family so a condition can talk about a seat that is not the
+/// candidate's owner.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PlayerSnap {
     pub money: i64,
-    pub charge: i64,
-    pub group_pool: i64,
     pub hand: i64,
     pub pos: i64,
     /// 1 = out of the game.
@@ -43,13 +41,9 @@ pub struct PlayerSnap {
     pub stay: i64,
     pub stun: i64,
     pub exile: i64,
-    /// 1 = 「不可持有手牌」.
-    pub no_hand: i64,
-    /// `state(p, 'key')` backing map (`MatchPlayer.state`): every keyed
-    /// player-state value on this seat. Missing key = 0.
+    /// `state(p, 'key')` backing map: every keyed player-state value on this
+    /// seat, including content sugar keys. Missing key = 0.
     pub state: std::collections::BTreeMap<String, i64>,
-    pub persona: i64,
-    pub group: i64,
     /// Count of tiles the seat owns.
     pub tiles: i64,
     /// Money-ins this turn (`gains_this_turn(p)`).
@@ -59,14 +53,13 @@ pub struct PlayerSnap {
 }
 
 /// Fill the named layer fields from [`PlayerSnap::state`]. The CEL names
-/// (`stay(seat)`, `stun(seat)`, …) are this crate's vocabulary; the host only
-/// copies the opaque state map in.
+/// (`stay(seat)`, `stun(seat)`, `exile(seat)`) are this crate's vocabulary; the
+/// host only copies the opaque state map in.
 pub fn fill_named_layers(p: &mut PlayerSnap) {
     let g = |k: &str| p.state.get(k).copied().unwrap_or(0);
     p.stay = g("stay");
     p.stun = g("stun");
     p.exile = g("exile");
-    p.no_hand = g("noHand");
 }
 
 /// The tile the trigger is about. Field access is `tile.owner`, `tile.houses`, …
@@ -200,27 +193,22 @@ pub struct CandidateCtx {
     pub owner: i64,
     /// Owner overlay. Same numbers as `window.players[owner]`, duplicated so
     /// `owner.money` binds without a lookup. The host fills both from one
-    /// source; they must agree.
+    /// source; they must agree. Content sugar keys are `state[owner]` rows on
+    /// the window (one door), not extra fields here.
     pub owner_money: i64,
-    pub owner_charge: i64,
-    pub owner_group_pool: i64,
     pub owner_hand: i64,
     pub owner_pos: i64,
     pub owner_out: i64,
     pub owner_stay: i64,
     pub owner_stun: i64,
     pub owner_exile: i64,
-    pub owner_no_hand: i64,
-    pub owner_persona: i64,
-    pub owner_group: i64,
     pub owner_tiles: i64,
     /// `card.*`
     pub card_id: i64,
     pub card_placed: bool,
     /// `card.counter('name')` lookup -- the candidate instance's named
-    /// counters (`"cp"` / `"crystals"` map to `FieldCard::cp` /
-    /// `FieldCard::crystals`, anything else to `FieldCard::counters`).
-    /// Missing name = `0`.
+    /// counters (host maps well-known wire names onto dedicated card fields;
+    /// anything else is an instance counter). Missing name = `0`.
     pub card_counters: BTreeMap<String, i64>,
     /// Where the candidate instance sits (`card.tile`). `None` = not placed
     /// (binds `-2`, matching the raw `ctx::self_tile()` host value); `Some(-1)`
@@ -232,7 +220,8 @@ pub struct CandidateCtx {
     /// `tok('name')` lookup -- the owner's named token counters, the same
     /// data `ctx::tok(player_id, name)` reads. Missing name = `0`.
     pub tok_names: BTreeMap<String, i64>,
-    /// Bands whose skill is blocked for this candidate (`blocked(band)`).
+    /// Set keys the host publishes behind `cand_has(key, member)`
+    /// (`CondView::cand_set`).
     pub blocked_groups: Vec<i64>,
 }
 

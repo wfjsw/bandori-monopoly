@@ -30,6 +30,7 @@
 mod compile;
 mod ctx;
 pub mod eval;
+pub mod ext;
 mod kinds;
 pub mod view;
 mod view_impl;
@@ -47,17 +48,22 @@ pub mod schema;
 
 #[cfg(feature = "compile")]
 pub use compile::compile;
+#[cfg(feature = "compile")]
+pub use compile::compile_with;
 pub use compile::Cond;
+pub use ext::{
+    ext, install_ext, vocab, AlreadyInstalled, CondExt, LowerAs, Vocab, EMPTY_EXT,
+};
 pub use ctx::{
     fill_named_layers, CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx,
 };
 pub use eval::{EvalError, WindowScope};
 pub use kinds::{ident_known, int_constants, mv, str_constants, trig};
 
-/// Stable int id for a string identity (character name / band name / card id).
-/// Not the data-table index -- a name-stable hash so a condition's
-/// `persona_is(p, "…")` / `group_is(p, "…")` / `trigger_card` literal survives
-/// a data reshuffle. Collisions are astronomically unlikely at 64 bits and the
+/// Stable int id for a string identity (card id, content name, wire kind).
+/// Not the data-table index -- a name-stable hash so a condition's string
+/// literal (compared via `Eq` against a `state` / `kind` hash) survives a
+/// data reshuffle. Collisions are astronomically unlikely at 64 bits and the
 /// schema is int-only. FNV-1a 64.
 pub fn id_of(name: &str) -> i64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -96,8 +102,20 @@ impl std::fmt::Display for CondError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CondError::Parse(s) => write!(f, "parse error: {s}"),
-            CondError::UnknownVar(s) => write!(f, "unknown variable: {s}"),
-            CondError::UnknownFn(s) => write!(f, "unknown function: {s}"),
+            CondError::UnknownVar(s) => {
+                write!(f, "unknown variable: {s}")?;
+                if ext::ext().names.is_empty() {
+                    write!(f, " (CondExt not installed)")?;
+                }
+                Ok(())
+            }
+            CondError::UnknownFn(s) => {
+                write!(f, "unknown function: {s}")?;
+                if ext::ext().names.is_empty() {
+                    write!(f, " (CondExt not installed)")?;
+                }
+                Ok(())
+            }
             CondError::FloatLiteral(s) => write!(f, "float literal (int-only): {s}"),
             CondError::FloatOp(s) => write!(f, "float operation (int-only): {s}"),
             CondError::WireVersion { found, expected } => write!(

@@ -54,6 +54,9 @@ pub mod counter {
 /// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
 /// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
 pub mod fire;
+/// CEL sugar tables / kind constants / guard-const expansions for this
+/// ruleset. Plain data; the typed `CondExt` is assembled in `game-rules`.
+pub mod cel;
 /// Shared CEL guards.
 pub mod guards;
 /// Ruleset-declared raise-point kind ids and tile kind/class strings.

@@ -8,6 +8,29 @@ description = "BanG Dream Monopoly / this ruleset's vocabulary and sugar over ca
 [lib]
 crate-type = ["rlib"]
 
+[features]
+# Typed kernel `CondExt` rows (`cel::ext`). Host-side only: the no_std guest
+# card build must not pull `rules-cond` (its `wire` feature needs serde/std),
+# so this stays off unless a host crate enables it (`game-rules`, `rules-kani`).
+cel-ext = ["dep:rules-cond", "dep:rules-cond-ir"]
+
 [dependencies]
-card-sdk = { path = "../../crates/card-sdk", features = ["guest"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
+# The typed `CondExt` (kernel `Name` rows for this ruleset's CEL sugar) lives
+# in `cel::ext`. `runtime-only` keeps the cel parser out of the guest wasm
+# build; the parser stays on the host side via game-rules' default-features dep.
+rules-cond = { path = "../../crates/cond", default-features = false, features = ["runtime-only"], optional = true }
+# `LowerAs::{Call,CallEq}.fid` is a `rules-cond-ir::FnId`.
+rules-cond-ir = { path = "../../crates/cond-ir", optional = true }
+
+# `guest` exposes `card_sdk::ctx` on native (host tests) and installs the guest
+# panic handler + bump allocator. On wasm32 `ctx` is available without `guest`
+# (`cfg(any(target_arch = "wasm32", feature = "guest"))` in card-sdk), and a std
+# wasm32 crate -- game-rules under web-glue / bot-glue -- must NOT pull the
+# handler in. So the feature is native-only. Card crates enable `card-sdk/guest`
+# themselves, which unifies back on for the guest workspace build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+card-sdk = { path = "../../crates/card-sdk", features = ["guest"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+card-sdk = { path = "../../crates/card-sdk" }

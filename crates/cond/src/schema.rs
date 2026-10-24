@@ -16,7 +16,8 @@
 
 use cel::common::ast::{Expr, IdedExpr, LiteralValue};
 
-use crate::vocab::{self, Scope, VOCAB};
+use crate::ext::{self, Vocab};
+use crate::vocab::{self, Scope};
 use crate::CondError;
 
 /// CEL stdlib the lint keeps (int-only: `double` and friends are denied).
@@ -51,8 +52,8 @@ pub fn struct_roots() -> Vec<(&'static str, Vec<&'static str>)> {
 
 /// Bare window-level identifiers (not dotted). Derived from VOCAB.
 pub fn window_vars() -> Vec<&'static str> {
-    VOCAB
-        .iter()
+    ext::vocab()
+        .names()
         .filter(|n| n.scope == Scope::Window && !n.cel.contains('.'))
         .map(|n| n.flat)
         .collect()
@@ -60,8 +61,8 @@ pub fn window_vars() -> Vec<&'static str> {
 
 /// Bare candidate-level identifiers. Derived from VOCAB.
 pub fn candidate_vars() -> Vec<&'static str> {
-    VOCAB
-        .iter()
+    ext::vocab()
+        .names()
         .filter(|n| n.scope == Scope::Candidate && !n.cel.contains('.'))
         .map(|n| n.flat)
         .collect()
@@ -100,20 +101,31 @@ fn is_macro(name: &str) -> bool {
 /// True when `name` is a known constant, a VOCAB flat identifier (including
 /// the flattened `root_field` forms), or a CEL stdlib name used as an ident.
 pub fn ident_known(name: &str) -> bool {
-    if crate::kinds::ident_known(name) {
+    ident_known_with(name, &ext::vocab())
+}
+
+/// Hermetic unknown-var check against an explicit [`Vocab`].
+pub fn ident_known_with(name: &str, v: &Vocab) -> bool {
+    if v.str_constants().any(|(n, _)| n == name)
+        || crate::kinds::int_constants().iter().any(|(n, _)| *n == name)
+    {
         return true;
     }
-    if VOCAB
-        .iter()
+    if v.names()
         .any(|n| n.flat == name && !matches!(n.scope, Scope::Func { .. }))
     {
         return true;
     }
     // flattened forms written literally: owner_money, tile_owner, …
-    for (root, fields) in vocab::struct_roots() {
-        for f in fields {
-            if name == format!("{root}_{f}") {
-                return true;
+    for n in v.names() {
+        if matches!(n.scope, Scope::Func { .. }) {
+            continue;
+        }
+        for dotted in std::iter::once(n.cel).chain(n.aliases.iter().copied()) {
+            if let Some((root, field)) = dotted.split_once('.') {
+                if name == format!("{root}_{field}") {
+                    return true;
+                }
             }
         }
     }
@@ -123,10 +135,15 @@ pub fn ident_known(name: &str) -> bool {
 /// Walk `expr`, enforcing the lint rules and rewriting dotted roots to flat
 /// identifiers. Returns the rewritten tree.
 pub fn lint_and_rewrite(expr: &IdedExpr) -> Result<IdedExpr, CondError> {
-    rewrite(expr)
+    lint_and_rewrite_with(expr, &ext::vocab())
 }
 
-fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
+/// Hermetic lint/rewrite against an explicit [`Vocab`].
+pub fn lint_and_rewrite_with(expr: &IdedExpr, v: &Vocab) -> Result<IdedExpr, CondError> {
+    rewrite(expr, v)
+}
+
+fn rewrite(e: &IdedExpr, v: &Vocab) -> Result<IdedExpr, CondError> {
     Ok(IdedExpr {
         id: e.id,
         expr: match &e.expr {
@@ -146,7 +163,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                 Expr::Literal(lit.clone())
             }
             Expr::Ident(name) => {
-                check_ident(name)?;
+                check_ident(name, v)?;
                 Expr::Ident(name.clone())
             }
             Expr::Select(sel) => {
@@ -155,7 +172,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                     // VOCAB lookup covers `trigger.kind` (alias of `kind`),
                     // `chain.count` (alias of `effect.count`), and the plain
                     // `root.field` spellings -- rewrite to the table's flat id.
-                    if let Some(n) = vocab::by_cel(&dotted) {
+                    if let Some(n) = v.by_cel(&dotted) {
                         if matches!(n.scope, Scope::Func { .. }) {
                             return Err(CondError::UnknownVar(dotted));
                         }
@@ -194,7 +211,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                 // Select on a non-ident operand (e.g. `money(owner).x`) --
                 // recurse and keep.
                 Expr::Select(cel::common::ast::SelectExpr {
-                    operand: Box::new(rewrite(&sel.operand)?),
+                    operand: Box::new(rewrite(&sel.operand, v)?),
                     field: sel.field.clone(),
                     test: sel.test,
                 })
@@ -219,7 +236,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                                     "effect.{name} takes exactly 1 argument"
                                 )));
                             }
-                            let arg = rewrite(&call.args[0])?;
+                            let arg = rewrite(&call.args[0], v)?;
                             return Ok(IdedExpr {
                                 id: e.id,
                                 expr: Expr::Call(cel::common::ast::CallExpr {
@@ -232,7 +249,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                         // General dotted function: `move.tag(x)`,
                         // `card.counter(x)` and friends.
                         let dotted = format!("{root}.{name}");
-                        if let Some(n) = vocab::by_cel(&dotted) {
+                        if let Some(n) = v.by_cel(&dotted) {
                             if let Scope::Func { arity, .. } = n.scope {
                                 if call.args.len() != arity {
                                     return Err(CondError::UnknownVar(format!(
@@ -241,7 +258,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                                 }
                                 let mut args = Vec::with_capacity(call.args.len());
                                 for a in &call.args {
-                                    args.push(rewrite(a)?);
+                                    args.push(rewrite(a, v)?);
                                 }
                                 return Ok(IdedExpr {
                                     id: e.id,
@@ -261,12 +278,12 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                     return Err(CondError::UnknownFn(name.to_string()));
                 }
                 let target = match &call.target {
-                    Some(t) => Some(Box::new(rewrite(t)?)),
+                    Some(t) => Some(Box::new(rewrite(t, v)?)),
                     None => None,
                 };
                 let mut args = Vec::with_capacity(call.args.len());
                 for a in &call.args {
-                    args.push(rewrite(a)?);
+                    args.push(rewrite(a, v)?);
                 }
                 Expr::Call(cel::common::ast::CallExpr {
                     func_name: call.func_name.clone(),
@@ -277,7 +294,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
             Expr::List(list) => {
                 let mut elements = Vec::with_capacity(list.elements.len());
                 for el in &list.elements {
-                    elements.push(rewrite(el)?);
+                    elements.push(rewrite(el, v)?);
                 }
                 Expr::List(cel::common::ast::ListExpr {
                     elements,
@@ -293,8 +310,8 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                             cel::common::ast::EntryExpr::MapEntry(me) => {
                                 cel::common::ast::EntryExpr::MapEntry(
                                     cel::common::ast::MapEntryExpr {
-                                        key: rewrite(&me.key)?,
-                                        value: rewrite(&me.value)?,
+                                        key: rewrite(&me.key, v)?,
+                                        value: rewrite(&me.value, v)?,
                                         optional: me.optional,
                                     },
                                 )
@@ -303,7 +320,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                                 cel::common::ast::EntryExpr::StructField(
                                     cel::common::ast::StructFieldExpr {
                                         field: sf.field.clone(),
-                                        value: rewrite(&sf.value)?,
+                                        value: rewrite(&sf.value, v)?,
                                         optional: sf.optional,
                                     },
                                 )
@@ -333,8 +350,8 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
     })
 }
 
-fn check_ident(name: &str) -> Result<(), CondError> {
-    if ident_known(name) {
+fn check_ident(name: &str, v: &Vocab) -> Result<(), CondError> {
+    if ident_known_with(name, v) {
         return Ok(());
     }
     Err(CondError::UnknownVar(name.to_string()))

@@ -17,6 +17,9 @@ pub enum VarTy {
 }
 
 /// Variable index. The discriminant is the `IrCtx` slot.
+///
+/// Five owner scalars that were content sugar died with the vocabulary split:
+/// they lower to `Call(State, [Var(Owner), key])` and live in `IrCtx::state`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum VarId {
@@ -49,24 +52,19 @@ pub enum VarId {
     Owner,
     OwnerId,
     OwnerMoney,
-    OwnerFire,
-    OwnerCrystals,
     OwnerHand,
     OwnerPos,
     OwnerOut,
     OwnerStay,
     OwnerStun,
     OwnerExile,
-    OwnerNoHand,
-    OwnerCharacter,
-    OwnerBand,
     OwnerTiles,
     CardId,
     CardPlaced,
     CardTile,
 }
 
-pub const SCALAR_COUNT: usize = 44;
+pub const SCALAR_COUNT: usize = 39;
 
 /// Flat identifier + type, in `VarId` order. Mirrors `vocab::VOCAB` scalars
 /// (Window + Candidate, non-Func).
@@ -100,17 +98,12 @@ pub const VARS: &[(VarId, &str, VarTy)] = &[
     (VarId::Owner, "owner", VarTy::Int),
     (VarId::OwnerId, "owner_id", VarTy::Int),
     (VarId::OwnerMoney, "owner_money", VarTy::Int),
-    (VarId::OwnerFire, "owner_charge", VarTy::Int),
-    (VarId::OwnerCrystals, "owner_group_pool", VarTy::Int),
     (VarId::OwnerHand, "owner_hand", VarTy::Int),
     (VarId::OwnerPos, "owner_pos", VarTy::Int),
     (VarId::OwnerOut, "owner_out", VarTy::Int),
     (VarId::OwnerStay, "owner_stay", VarTy::Int),
     (VarId::OwnerStun, "owner_stun", VarTy::Int),
     (VarId::OwnerExile, "owner_exile", VarTy::Int),
-    (VarId::OwnerNoHand, "owner_no_hand", VarTy::Int),
-    (VarId::OwnerCharacter, "owner_persona", VarTy::Int),
-    (VarId::OwnerBand, "owner_group", VarTy::Int),
     (VarId::OwnerTiles, "owner_tiles", VarTy::Int),
     (VarId::CardId, "card_id", VarTy::Int),
     (VarId::CardPlaced, "card_placed", VarTy::Bool),

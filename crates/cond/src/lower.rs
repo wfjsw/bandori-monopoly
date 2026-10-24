@@ -18,6 +18,7 @@ use rules_cond_ir::nodes::{Kind, Node};
 use rules_cond_ir::vars::by_flat;
 use rules_cond_ir::{ctx::id_of, ctx::FnId};
 
+use crate::ext::{self, LowerAs};
 use crate::kinds;
 use crate::vocab::{self, Scope};
 use crate::CondError;
@@ -25,8 +26,17 @@ use crate::CondError;
 /// Lower a rewritten AST to a [`Program`]. `nodes` is post-order; the root is
 /// the last node.
 pub fn lower(expr: &IdedExpr) -> Result<OwnedProgram, CondError> {
+    lower_with_expr(expr, &ext::vocab())
+}
+
+/// Hermetic lower against an explicit [`ext::Vocab`].
+pub fn lower_with(cond: &crate::Cond, v: &ext::Vocab) -> Result<OwnedProgram, CondError> {
+    lower_with_expr(cond.expr(), v)
+}
+
+fn lower_with_expr(expr: &IdedExpr, v: &ext::Vocab) -> Result<OwnedProgram, CondError> {
     let mut nodes: Vec<Node> = Vec::new();
-    let root = lower_expr(expr, &mut nodes)?;
+    let root = lower_expr(expr, &mut nodes, v)?;
     Ok(OwnedProgram { nodes, root })
 }
 
@@ -55,19 +65,19 @@ fn push(nodes: &mut Vec<Node>, n: Node) -> Result<u16, CondError> {
     Ok((nodes.len() - 1) as u16)
 }
 
-fn lower_expr(e: &IdedExpr, nodes: &mut Vec<Node>) -> Result<u16, CondError> {
+fn lower_expr(e: &IdedExpr, nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
     match &e.expr {
         Expr::Unspecified => Err(CondError::Parse("unspecified expression".into())),
         Expr::Literal(lit) => lower_lit(lit, nodes),
-        Expr::Ident(name) => lower_ident(name, nodes),
-        Expr::Call(call) => lower_call(&call.func_name, &call.args, nodes),
+        Expr::Ident(name) => lower_ident(name, nodes, v),
+        Expr::Call(call) => lower_call(&call.func_name, &call.args, nodes, v),
         Expr::List(list) => {
             if list.elements.len() > 8 {
                 return Err(CondError::Parse("list literal longer than 8".into()));
             }
             let first = nodes.len() as u16;
             for el in &list.elements {
-                lower_expr(el, nodes)?;
+                lower_expr(el, nodes, v)?;
             }
             push(
                 nodes,
@@ -103,93 +113,164 @@ fn lower_lit(lit: &LiteralValue, nodes: &mut Vec<Node>) -> Result<u16, CondError
     }
 }
 
-fn lower_ident(name: &str, nodes: &mut Vec<Node>) -> Result<u16, CondError> {
+fn lower_ident(name: &str, nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
+    // OwnerState scalar sugar: `owner.f` → `Call(State, [Var(Owner),
+    // Const(id_of(key))])` -- the same node shape `state(owner, 'key')`
+    // produces.
+    if let Some(n) = v.by_flat(name) {
+        if let LowerAs::OwnerState { fid, key } = n.lower_as {
+            let owner_idx = by_flat("owner").map(|(idx, _)| idx).unwrap_or(0);
+            let first = nodes.len() as u16;
+            push(nodes, Node::leaf_var(owner_idx))?;
+            push(nodes, Node::leaf_const_int(id_of(key)))?;
+            return push(nodes, Node::new(Kind::Call, fid as i64, first, 2, 0));
+        }
+    }
     if let Some((idx, _)) = by_flat(name) {
         return push(nodes, Node::leaf_var(idx));
     }
     // Kind spellings bake to `id_of(spelling)` -- the same hash a `VarTy::Str`
     // scalar holds and the same hash a string literal bakes to. Eq compares
     // hashes; no string pool.
-    if let Some((_, s)) = kinds::str_constants().iter().find(|(n, _)| *n == name) {
+    if let Some((_, s)) = v.str_constants().find(|(n, _)| *n == name) {
         return push(nodes, Node::leaf_const_int(id_of(s)));
     }
     // Move-kind ints stay raw i64.
-    if let Some((_, v)) = kinds::int_constants().iter().find(|(n, _)| *n == name) {
-        return push(nodes, Node::leaf_const_int(*v));
+    if let Some((_, val)) = kinds::int_constants().iter().find(|(n, _)| *n == name) {
+        return push(nodes, Node::leaf_const_int(*val));
     }
     Err(CondError::UnknownVar(name.to_string()))
 }
 
-fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>) -> Result<u16, CondError> {
+fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
     // Operator names (post-parse).
     match name {
-        operators::ADD => return bin(Kind::Add, args, nodes),
-        operators::SUBSTRACT => return bin(Kind::Sub, args, nodes),
-        operators::MULTIPLY => return bin(Kind::Mul, args, nodes),
-        operators::DIVIDE => return bin(Kind::Div, args, nodes),
-        operators::MODULO => return bin(Kind::Rem, args, nodes),
-        operators::EQUALS => return bin(Kind::Eq, args, nodes),
-        operators::NOT_EQUALS => return bin(Kind::Ne, args, nodes),
-        operators::LESS => return bin(Kind::Lt, args, nodes),
-        operators::LESS_EQUALS => return bin(Kind::Le, args, nodes),
-        operators::GREATER => return bin(Kind::Gt, args, nodes),
-        operators::GREATER_EQUALS => return bin(Kind::Ge, args, nodes),
-        operators::LOGICAL_AND => return bin(Kind::And, args, nodes),
-        operators::LOGICAL_OR => return bin(Kind::Or, args, nodes),
+        operators::ADD => return bin(Kind::Add, args, nodes, v),
+        operators::SUBSTRACT => return bin(Kind::Sub, args, nodes, v),
+        operators::MULTIPLY => return bin(Kind::Mul, args, nodes, v),
+        operators::DIVIDE => return bin(Kind::Div, args, nodes, v),
+        operators::MODULO => return bin(Kind::Rem, args, nodes, v),
+        operators::EQUALS => return bin(Kind::Eq, args, nodes, v),
+        operators::NOT_EQUALS => return bin(Kind::Ne, args, nodes, v),
+        operators::LESS => return bin(Kind::Lt, args, nodes, v),
+        operators::LESS_EQUALS => return bin(Kind::Le, args, nodes, v),
+        operators::GREATER => return bin(Kind::Gt, args, nodes, v),
+        operators::GREATER_EQUALS => return bin(Kind::Ge, args, nodes, v),
+        operators::LOGICAL_AND => return bin(Kind::And, args, nodes, v),
+        operators::LOGICAL_OR => return bin(Kind::Or, args, nodes, v),
         operators::NEGATE => {
             require_arity(name, args, 1)?;
-            let a = lower_expr(&args[0], nodes)?;
+            let a = lower_expr(&args[0], nodes, v)?;
             return push(nodes, Node::unary(Kind::Neg, a));
         }
         operators::LOGICAL_NOT => {
             require_arity(name, args, 1)?;
-            let a = lower_expr(&args[0], nodes)?;
+            let a = lower_expr(&args[0], nodes, v)?;
             return push(nodes, Node::unary(Kind::Not, a));
         }
         operators::CONDITIONAL => {
             require_arity(name, args, 3)?;
-            let a = lower_expr(&args[0], nodes)?;
-            let b = lower_expr(&args[1], nodes)?;
-            let c = lower_expr(&args[2], nodes)?;
+            let a = lower_expr(&args[0], nodes, v)?;
+            let b = lower_expr(&args[1], nodes, v)?;
+            let c = lower_expr(&args[2], nodes, v)?;
             return push(nodes, Node::ternary(a, b, c));
         }
-        operators::IN => return bin(Kind::In, args, nodes),
+        operators::IN => return bin(Kind::In, args, nodes, v),
         // `@not_strictly_false(x)` is the parser's booleanization wrapper; it
         // is the identity on our bool-only lattice.
         "@not_strictly_false" => {
             require_arity(name, args, 1)?;
-            return lower_expr(&args[0], nodes);
+            return lower_expr(&args[0], nodes, v);
         }
         "size" => {
             require_arity(name, args, 1)?;
-            let a = lower_expr(&args[0], nodes)?;
+            let a = lower_expr(&args[0], nodes, v)?;
             return push(nodes, Node::unary(Kind::Size, a));
         }
         _ => {}
     }
 
     // Vocabulary functions (flat names after rewrite; dotted already lowered).
-    let fid = fn_id_of(name).ok_or_else(|| CondError::UnknownFn(name.to_string()))?;
-    let arity = fn_arity(fid);
-    if args.len() != arity {
+    let n = v
+        .by_cel(name)
+        .or_else(|| v.by_flat(name))
+        .filter(|n| matches!(n.scope, Scope::Func { .. }))
+        .ok_or_else(|| CondError::UnknownFn(name.to_string()))?;
+    let user_arity = match n.scope {
+        Scope::Func { arity, .. } => arity,
+        _ => unreachable!(),
+    };
+    if args.len() != user_arity {
         return Err(CondError::UnknownVar(format!(
-            "{name} takes exactly {arity} argument(s)"
+            "{name} takes exactly {user_arity} argument(s)"
         )));
     }
-    let first = nodes.len() as u16;
-    for a in args {
-        lower_expr(a, nodes)?;
+    match n.lower_as {
+        LowerAs::Direct => {
+            let fid = direct_fn_id(n.flat)
+                .ok_or_else(|| CondError::UnknownFn(name.to_string()))?;
+            let first = nodes.len() as u16;
+            for a in args {
+                lower_expr(a, nodes, v)?;
+            }
+            push(
+                nodes,
+                Node::new(Kind::Call, fid as i64, first, user_arity as u16, 0),
+            )
+        }
+        LowerAs::Call { fid, bake } => {
+            // `Call(fid, [user_args…, Const(id_of(bake))…])` — bake consts
+            // occupy the trailing key slots of the target (`state(p, key)`).
+            // `cand_has(key, member)` has the key in slot 0, so its bake
+            // leads: `Call(CandHas, [id_of(key), member…])`.
+            let first = nodes.len() as u16;
+            if fid == FnId::CandHas {
+                for b in bake {
+                    push(nodes, Node::leaf_const_int(id_of(b)))?;
+                }
+                for a in args {
+                    lower_expr(a, nodes, v)?;
+                }
+            } else {
+                for a in args {
+                    lower_expr(a, nodes, v)?;
+                }
+                for b in bake {
+                    push(nodes, Node::leaf_const_int(id_of(b)))?;
+                }
+            }
+            let arity = user_arity + bake.len();
+            push(nodes, Node::new(Kind::Call, fid as i64, first, arity as u16, 0))
+        }
+        LowerAs::CallEq { fid, bake } => {
+            // `Eq(Call(fid, [user_args[..n-1]…, Const(id_of(bake))…]),
+            //    user_args[n-1])`.
+            let (last, head) = args
+                .split_last()
+                .ok_or_else(|| CondError::UnknownVar(format!("{name} takes arguments")))?;
+            let call_first = nodes.len() as u16;
+            for a in head {
+                lower_expr(a, nodes, v)?;
+            }
+            for b in bake {
+                push(nodes, Node::leaf_const_int(id_of(b)))?;
+            }
+            let call_arity = head.len() + bake.len();
+            let call = push(
+                nodes,
+                Node::new(Kind::Call, fid as i64, call_first, call_arity as u16, 0),
+            )?;
+            let rhs = lower_expr(last, nodes, v)?;
+            push(nodes, Node::binary(Kind::Eq, call, rhs))
+        }
+        LowerAs::OwnerState { .. } => Err(CondError::UnknownFn(name.to_string())),
     }
-    push(
-        nodes,
-        Node::new(Kind::Call, fid as i64, first, arity as u16, 0),
-    )
 }
 
-fn bin(kind: Kind, args: &[IdedExpr], nodes: &mut Vec<Node>) -> Result<u16, CondError> {
+fn bin(kind: Kind, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
     require_arity("binop", args, 2)?;
-    let a = lower_expr(&args[0], nodes)?;
-    let b = lower_expr(&args[1], nodes)?;
+    let a = lower_expr(&args[0], nodes, v)?;
+    let b = lower_expr(&args[1], nodes, v)?;
     push(nodes, Node::binary(kind, a, b))
 }
 
@@ -202,9 +283,8 @@ fn require_arity(name: &str, args: &[IdedExpr], n: usize) -> Result<(), CondErro
     Ok(())
 }
 
-fn fn_id_of(name: &str) -> Option<FnId> {
-    // Accept both the CEL spelling and the flat id (post-rewrite).
-    let flat = vocab::by_cel(name).map(|n| n.flat).unwrap_or(name);
+/// Kernel `Direct` function ids. Sugar names resolve through `LowerAs`'s `fid`.
+fn direct_fn_id(flat: &str) -> Option<FnId> {
     Some(match flat {
         "slot" => FnId::Slot,
         "tok" => FnId::Tok,
@@ -216,16 +296,9 @@ fn fn_id_of(name: &str) -> Option<FnId> {
         "tile_attr" => FnId::TileAttr,
         "tile_in" => FnId::TileIn,
         "money" => FnId::Money,
-        "charge" => FnId::Fire,
-        "crystals" => FnId::Crystals,
         "hand" => FnId::Hand,
         "pos" => FnId::Pos,
-        "persona" => FnId::Character,
-        "group" => FnId::Band,
         "tiles" => FnId::Tiles,
-        "persona_is" => FnId::CharacterIs,
-        "group_is" => FnId::BandIs,
-        "blocked" => FnId::Blocked,
         "neighbor" => FnId::Neighbor,
         "chain_has" => FnId::ChainHas,
         "chain_hits" => FnId::ChainHits,
@@ -240,26 +313,20 @@ fn fn_id_of(name: &str) -> Option<FnId> {
         "on_path" => FnId::OnPath,
         "between" => FnId::Between,
         "state" => FnId::State,
+        "cand_has" => FnId::CandHas,
         _ => return None,
     })
 }
 
-fn fn_arity(fid: FnId) -> usize {
-    use FnId::*;
-    match fid {
-        Slot | Tok | MoveTag | CardCounter | CounterIs | TileNamed | Money | Fire | Crystals
-        | Hand | Pos | Character | Band | Tiles | Blocked | ChainHas | ChainHits
-        | GainsThisTurn | TargetedCount | RepeatedDigits | Between => 1,
-        CharacterIs | BandIs | Neighbor | Dist | PlayersOn | NextDist | OthersWithin
-        | OwnedWithin | OnPath | TileIs | TileAttr | State => 2,
-        TileIn => 3,
-    }
-}
-
 /// Compile a source string all the way to an IR program (host-only convenience).
 pub fn lower_src(src: &str) -> Result<OwnedProgram, CondError> {
-    let cond = crate::compile(src)?;
-    lower(cond.expr())
+    lower_with_src(src, &ext::vocab())
+}
+
+/// Hermetic source → IR against an explicit [`ext::Vocab`].
+pub fn lower_with_src(src: &str, v: &ext::Vocab) -> Result<OwnedProgram, CondError> {
+    let cond = crate::compile::compile_with(src, v)?;
+    lower_with(&cond, v)
 }
 
 /// Collect every `On::*` condition string under `root` (a `rules/` subdirectory).
@@ -272,6 +339,102 @@ pub fn inventory_guards(root: &std::path::Path) -> Vec<String> {
     out.sort();
     out.dedup();
     out
+}
+
+/// Blank out `//` line comments and `/* */` block comments outside of string
+/// literals. Comment bytes become spaces; every other byte is kept verbatim
+/// (so UTF-8 spellings like `Pastel✽Palettes` survive).
+fn strip_rust_comments(src: &str) -> String {
+    let b = src.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'"' => {
+                // Keep string literals (and their escapes) verbatim.
+                out.push(b'"');
+                i += 1;
+                while i < b.len() {
+                    out.push(b[i]);
+                    if b[i] == b'\\' && i + 1 < b.len() {
+                        out.push(b[i + 1]);
+                        i += 2;
+                        continue;
+                    }
+                    if b[i] == b'"' {
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'r' if i + 1 < b.len() && (b[i + 1] == b'"' || b[i + 1] == b'#') => {
+                // Raw string: r"..." / r#"..."#.
+                let mut h = 0;
+                let mut j = i + 1;
+                while j < b.len() && b[j] == b'#' {
+                    h += 1;
+                    j += 1;
+                }
+                if j < b.len() && b[j] == b'"' {
+                    out.extend_from_slice(&b[i..=j]);
+                    let mut k = j + 1;
+                    while k < b.len() {
+                        out.push(b[k]);
+                        if b[k] == b'"' {
+                            let mut ok = true;
+                            for w in 1..=h {
+                                if k + w >= b.len() || b[k + w] != b'#' {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                            if ok {
+                                for _ in 0..h {
+                                    out.push(b'#');
+                                }
+                                k += h + 1;
+                                break;
+                            }
+                        }
+                        k += 1;
+                    }
+                    i = k;
+                    continue;
+                }
+                out.push(b'r');
+                i += 1;
+            }
+            b'/' if i + 1 < b.len() && b[i + 1] == b'/' => {
+                while i < b.len() && b[i] != b'\n' {
+                    out.push(b' ');
+                    i += 1;
+                }
+            }
+            b'/' if i + 1 < b.len() && b[i + 1] == b'*' => {
+                out.push(b' ');
+                out.push(b' ');
+                i += 2;
+                while i < b.len() {
+                    if b[i] == b'*' && i + 1 < b.len() && b[i + 1] == b'/' {
+                        out.push(b' ');
+                        out.push(b' ');
+                        i += 2;
+                        break;
+                    }
+                    out.push(if b[i] == b'\n' { b'\n' } else { b' ' });
+                    i += 1;
+                }
+            }
+            c => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    // Safe: every non-comment byte is copied verbatim from a UTF-8 source, and
+    // comments are replaced by ASCII spaces (also valid UTF-8).
+    String::from_utf8(out).expect("strip_rust_comments keeps UTF-8")
 }
 
 fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
@@ -290,6 +453,9 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
         let Ok(text) = std::fs::read_to_string(&p) else {
             continue;
         };
+        // Comments are not registrations. A `// ... On::Message("place")` note
+        // otherwise lands its quoted word in the inventory as a fake guard.
+        let text = strip_rust_comments(&text);
         // Phase 3 typed DSL: `On::Filter(Filter::Name(pre, …))` /
         // `On::Action(Action::Name(pre, …))` (and ruleset `Filters::` /
         // `Actions::` namespaces). Retired `On::FilterFlag` / `On::FilterValue`
@@ -423,6 +589,8 @@ fn first_top_arg(inner: &str) -> Option<&str> {
 }
 
 /// The `pre` argument: a string literal, `pre::MINE`, or a known guard const.
+/// Only the first argument is read — a later `key!("…")` / `name` is not a
+/// guard.
 fn pre_string(s: &str) -> Option<String> {
     let b = s.as_bytes();
     let mut i = 0;
@@ -451,60 +619,85 @@ fn pre_string(s: &str) -> Option<String> {
             }
         }
     }
-    // `pre::MINE` sugar.
     let rest = &s[i..];
     let rest = rest
         .trim_start()
         .strip_prefix(',')
         .map(|r| r.trim_start())
         .unwrap_or(rest.trim_start());
-    if rest.starts_with("pre::MINE") {
+    // `pre::MINE` sugar (any path prefix: `pre::MINE`, `card_sdk::pre::MINE`).
+    // Known guard-const path references (content `guards::OWN_START` paths)
+    // — resolve through the installed extension.
+    let path_end = rest
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == ':' || c == '_'))
+        .unwrap_or(rest.len());
+    let path = &rest[..path_end];
+    if path == "pre::MINE" || path.ends_with("::pre::MINE") {
         return Some("actor == owner".to_string());
     }
-    // `bandori_std::guards::*` constant references — resolve to the literal.
-    for (name, lit) in [
-        (
-            "bandori_std::guards::OWN_START",
-            "actor == owner && tile_is(tile.id, \"circle\")",
-        ),
-        (
-            "bandori_std::guards::OWN_DEED",
-            "actor == owner && tile_is(tile.id, \"ring\")",
-        ),
-    ] {
-        if rest.starts_with(name) {
-            return Some(lit.to_string());
-        }
+    if let Some(lit) = ext::ext().guard_consts.iter().find(|(p, _)| *p == path).map(|(_, lit)| *lit)
+    {
+        return Some(lit.to_string());
     }
-    // First string literal (handles `\"` escapes).
-    let bytes = rest.as_bytes();
-    let mut j = 0;
-    while j < bytes.len() && bytes[j] != b'"' {
-        if bytes[j] == b';' {
-            return None;
-        }
-        j += 1;
-    }
-    if j >= bytes.len() {
+    // A string literal in first-argument position. Stop at a top-level `,`
+    // so a later `key!("…")` / message name is never mistaken for the guard.
+    if !rest.starts_with('"') {
         return None;
     }
-    j += 1;
-    let start = j;
+    let bytes = rest.as_bytes();
+    let mut j = 1;
     while j < bytes.len() && bytes[j] != b'"' {
         if bytes[j] == b'\\' {
             j += 1;
         }
         j += 1;
     }
-    if j > bytes.len() {
+    if j >= bytes.len() {
         return None;
     }
-    // Unescape `\"` and `\\` for the source text we compile.
-    let raw = &rest[start..j];
-    Some(raw.replace("\\\"", "\"").replace("\\\\", "\\"))
+    let raw = &rest[1..j];
+    Some(unescape_cel_src(raw))
 }
 
-/// Every FnId, for the vocab-sync test.
+/// Rust string-literal body → the CEL source the parser sees. Handles `\"`,
+/// `\\`, and `\` + newline line-continuations (which Rust eats along with the
+/// next line's leading whitespace). Non-ASCII bytes pass through verbatim.
+fn unescape_cel_src(raw: &str) -> String {
+    let b = raw.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'\\' && i + 1 < b.len() {
+            match b[i + 1] {
+                b'\n' => {
+                    i += 2;
+                    while i < b.len() && (b[i] == b' ' || b[i] == b'\t') {
+                        i += 1;
+                    }
+                }
+                b'"' => {
+                    out.push(b'"');
+                    i += 2;
+                }
+                b'\\' => {
+                    out.push(b'\\');
+                    i += 2;
+                }
+                _ => {
+                    out.push(b'\\');
+                    i += 1;
+                }
+            }
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).expect("unescape_cel_src keeps UTF-8")
+}
+
+/// Every kernel `Direct` FnId, for the vocab-sync test. Sugar names carry
+/// their target in `LowerAs::fid` instead.
 pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
     use FnId::*;
     &[
@@ -518,16 +711,9 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("tile_attr", TileAttr),
         ("tile_in", TileIn),
         ("money", Money),
-        ("charge", Fire),
-        ("crystals", Crystals),
         ("hand", Hand),
         ("pos", Pos),
-        ("persona", Character),
-        ("group", Band),
         ("tiles", Tiles),
-        ("persona_is", CharacterIs),
-        ("group_is", BandIs),
-        ("blocked", Blocked),
         ("neighbor", Neighbor),
         ("chain_has", ChainHas),
         ("chain_hits", ChainHits),
@@ -542,13 +728,14 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("on_path", OnPath),
         ("between", Between),
         ("state", State),
+        ("cand_has", CandHas),
     ]
 }
 
 /// Re-export for the vocab-sync test.
 pub fn vocab_scalars() -> impl Iterator<Item = (&'static str, Scope)> {
-    vocab::VOCAB
-        .iter()
+    ext::vocab()
+        .names()
         .filter(|n| !matches!(n.scope, Scope::Func { .. }))
         .map(|n| (n.flat, n.scope))
 }

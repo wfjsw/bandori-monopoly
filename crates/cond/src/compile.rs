@@ -71,11 +71,18 @@ impl Cond {
 /// * [`CondError::FloatLiteral`] / [`CondError::FloatOp`] -- int-only mandate.
 #[cfg(feature = "compile")]
 pub fn compile(src: &str) -> Result<Cond, CondError> {
+    compile_with(src, &crate::ext::vocab())
+}
+
+/// Hermetic compile against an explicit [`crate::ext::Vocab`] (no global
+/// install required). For build scripts.
+#[cfg(feature = "compile")]
+pub fn compile_with(src: &str, v: &crate::ext::Vocab) -> Result<Cond, CondError> {
     let env = shared_env();
     let program = env
         .compile(src)
         .map_err(|e| CondError::Parse(e.to_string()))?;
-    let rewritten = schema::lint_and_rewrite(program.expression())?;
+    let rewritten = schema::lint_and_rewrite_with(program.expression(), v)?;
     Ok(Cond::from_expr(rewritten, src.to_string()))
 }
 

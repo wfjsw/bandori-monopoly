@@ -232,8 +232,8 @@ pub fn values_eq(a: Val, b: Val) -> bool {
     match (a, b) {
         (Val::Int(x), Val::Int(y)) => x == y,
         // Str is `id_of(spelling)`; string-literal nodes bake to `ConstInt` of
-        // the same hash, so `Str(h) == Int(h)` is how `kind == Exile` /
-        // `kind == "r:bandori:21"` agree.
+        // the same hash, so `Str(h) == Int(h)` is how a bare ident and a
+        // string-literal kind spelling agree.
         (Val::Str(x), Val::Str(y)) | (Val::Str(x), Val::Int(y)) | (Val::Int(x), Val::Str(y)) => {
             x == y
         }
@@ -267,16 +267,16 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Val {
         4 => FnId::CounterIs,
         5 => FnId::TileNamed,
         6 => FnId::Money,
-        7 => FnId::Fire,
-        8 => FnId::Crystals,
+        // 7  Fire        DEAD -- never reuse
+        // 8  Crystals    DEAD -- never reuse
         9 => FnId::Hand,
         10 => FnId::Pos,
-        11 => FnId::Character,
-        12 => FnId::Band,
+        // 11 Character   DEAD -- never reuse
+        // 12 Band        DEAD -- never reuse
         13 => FnId::Tiles,
-        14 => FnId::CharacterIs,
-        15 => FnId::BandIs,
-        16 => FnId::Blocked,
+        // 14 CharacterIs DEAD -- never reuse
+        // 15 BandIs      DEAD -- never reuse
+        // 16 Blocked     DEAD -- never reuse
         17 => FnId::Neighbor,
         18 => FnId::ChainHas,
         19 => FnId::ChainHits,
@@ -294,6 +294,7 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Val {
         31 => FnId::TileAttr,
         32 => FnId::TileIn,
         33 => FnId::State,
+        34 => FnId::CandHas,
         _ => return Val::Err,
     };
     let nargs = n.b as usize;
@@ -340,9 +341,6 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
             Val::Bool(ctx.scalar_val(vars_counter_name_idx()) == Val::Int(want))
         }
         // ABI v56 generic tile queries. String args lower to `id_of` hashes.
-        // Membership is modelled through the existing sets + named table
-        // (keep the IR integer-only; fills that need more should bake
-        // `named` rows -- see `fill_board_sets`).
         FnId::TileIs => {
             let tile = match int(0) {
                 Ok(v) => v,
@@ -352,19 +350,10 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
                 Ok(v) => v,
                 Err(()) => return Val::Err,
             };
-            // Known wire kinds reuse the membership sets; the rest read
-            // `named[tile]` as a bitset of the 8 `TileKind::as_str` indices.
-            if kind_id == ctx::id_of("circle") {
-                return set_has(ctx, SetId::Circle, Ok(tile));
+            if tile < 0 || tile as usize >= crate::ctx::MAX_TILES {
+                return Val::Bool(false);
             }
-            if kind_id == ctx::id_of("ring") {
-                return set_has(ctx, SetId::Ring, Ok(tile));
-            }
-            let bits = ctx.named_get(tile).unwrap_or(0);
-            match wire_kind_bit(kind_id) {
-                Some(b) => Val::Bool(bits & (1i64 << b) != 0),
-                None => Val::Bool(false),
-            }
+            Val::Bool(ctx.tile_kind_ids[tile as usize] == kind_id)
         }
         FnId::TileAttr => {
             let tile = match int(0) {
@@ -400,30 +389,14 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
                 Ok(v) => v,
                 Err(()) => return Val::Err,
             };
-            // Sugar classes reuse the sets; `color:<g>` / generic `class*`
-            // need a filled `named` row (key = packed player/tile, value =
-            // class id). Missing -> false.
-            if class_id == ctx::id_of("buyable") {
-                return set_has(ctx, SetId::Buyable, Ok(tile));
-            }
-            if class_id == ctx::id_of("livehouse") {
-                return set_has(ctx, SetId::LiveHouse, Ok(tile));
-            }
-            if class_id == ctx::id_of("shop") {
-                // shop = buyable && group 10; not a set today -> named row.
-                let key = ((player + 2) << 32) ^ tile;
-                return Val::Bool(ctx.named_get(key) == Some(class_id));
-            }
+            // Generic named row: key = packed player/tile, value = class id.
+            // Missing -> false.
             let key = ((player + 2) << 32) ^ tile;
             Val::Bool(ctx.named_get(key) == Some(class_id))
         }
         FnId::Money => seat_i64(ctx, args, SeatField::Money),
-        FnId::Fire => seat_i64(ctx, args, SeatField::Fire),
-        FnId::Crystals => seat_i64(ctx, args, SeatField::Crystals),
         FnId::Hand => seat_i64(ctx, args, SeatField::Hand),
         FnId::Pos => seat_i64(ctx, args, SeatField::Pos),
-        FnId::Character => seat_i64(ctx, args, SeatField::Character),
-        FnId::Band => seat_i64(ctx, args, SeatField::Band),
         FnId::Tiles => seat_i64(ctx, args, SeatField::Tiles),
         FnId::GainsThisTurn => seat_i64(ctx, args, SeatField::Gains),
         FnId::TargetedCount => seat_i64(ctx, args, SeatField::Targeted),
@@ -440,28 +413,18 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
             };
             Val::Int(ctx.state_get(p, key_id))
         }
-        FnId::CharacterIs | FnId::BandIs => {
-            let p = match int(0) {
+        FnId::CandHas => {
+            // `cand_has(key, member)`. The sugar `blocked(b)` lowers to
+            // `Call(CandHas, [id_of(key), b])` (bake key leads).
+            let key_id = match int(0) {
                 Ok(v) => v,
                 Err(()) => return Val::Err,
             };
-            let want = match int(1) {
+            let member = match int(1) {
                 Ok(v) => v,
                 Err(()) => return Val::Err,
             };
-            let f = if fid == FnId::CharacterIs {
-                SeatField::Character
-            } else {
-                SeatField::Band
-            };
-            Val::Bool(ctx.seat_field(p, f) == want)
-        }
-        FnId::Blocked => {
-            let band = match int(0) {
-                Ok(v) => v,
-                Err(()) => return Val::Err,
-            };
-            Val::Bool(ctx.set_contains(SetId::BlockedBands, band))
+            Val::Bool(ctx.cand_has(key_id, member))
         }
         FnId::Neighbor => {
             let p = match int(0) {
@@ -534,27 +497,8 @@ fn vars_counter_name_idx() -> u16 {
     crate::vars::VarId::CounterName as u16
 }
 
-fn set_has(ctx: &IrCtx, set: SetId, r: Result<i64, ()>) -> Val {
-    match r {
-        Ok(id) => Val::Bool(ctx.set_contains(set, id)),
-        Err(()) => Val::Err,
-    }
-}
-
-/// `TileKind::as_str` wire spelling -> bit index in `named[tile]`'s kind bitset
-/// (circle=0 … event=7). `None` for anything else.
-fn wire_kind_bit(kind_id: i64) -> Option<u32> {
-    const KINDS: [&str; 8] = [
-        "circle", "cafe", "edogawa", "ryuseido", "property", "ring", "agent", "event",
-    ];
-    KINDS
-        .iter()
-        .position(|k| kind_id == ctx::id_of(k))
-        .map(|i| i as u32)
-}
-
 /// `tile_attr` field name -> slot in the `named` packing (`tile * 16 + slot`).
-/// `-1` for unknown attrs.
+/// `-1` for unknown attrs. Engine monopoly attrs.
 fn wire_attr_index(attr_id: i64) -> i64 {
     const ATTRS: [&str; 7] = ["group", "tier", "price", "house", "area", "rent", "index"];
     ATTRS

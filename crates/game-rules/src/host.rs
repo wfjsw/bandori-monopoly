@@ -980,6 +980,7 @@ impl RulesetBuilder {
     }
 
     pub fn build(self) -> Result<Ruleset, RuleError> {
+        crate::cond_pre::install_vocab();
         let mut by_id = HashMap::new();
         for (i, c) in self.cards.iter().enumerate() {
             if by_id.insert(c.id.clone(), i as i32).is_some() {

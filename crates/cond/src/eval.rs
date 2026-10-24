@@ -19,7 +19,7 @@ use crate::compile::{shared_env, Cond};
 use crate::ctx::{CandidateCtx, WindowCtx};
 use crate::kinds;
 use crate::view::CondView;
-use crate::vocab::{self, Fx, Name, Scope, Table, VOCAB};
+use crate::vocab::{self, Fx, Name, Scope, Table};
 
 /// Shared empty [`CandidateCtx`] for the window-half binds. A `default()` on
 /// the caller's frame is ~240 B per probe; STACK-01's 512 KiB thread adds
@@ -184,6 +184,7 @@ fn table_value(t: &Table) -> Value {
         Table::IntMap(r) => r.len(),
         Table::StrMap(r) => r.len(),
         Table::IntList(r) => r.len(),
+        Table::PairList(r) => r.len(),
         Table::Seats(_) => 0,
         Table::BinMap(r) => r.len(),
         Table::StrIntList(r) => r.len() * 8,
@@ -234,6 +235,18 @@ fn build_table_value(t: &Table) -> Value {
         }
         Table::IntList(items) => {
             Value::List(Arc::new(items.iter().map(|i| Value::Int(*i)).collect()))
+        }
+        Table::PairList(rows) => {
+            // `cand_has(key, member)`: key -> member list.
+            let mut outer: HashMap<i64, Vec<Value>> = HashMap::new();
+            for (k, m) in rows {
+                outer.entry(*k).or_default().push(Value::Int(*m));
+            }
+            let mut map = HashMap::new();
+            for (k, list) in outer {
+                map.insert(Key::Int(k), Value::List(Arc::new(list)));
+            }
+            Value::Map(Map { map: Arc::new(map) })
         }
         Table::Seats(n) => Value::Int(*n),
         Table::BinMap(rows) => {
@@ -286,17 +299,18 @@ fn build_table_value(t: &Table) -> Value {
 /// Window half: kind constants, every VOCAB window scalar, and the window-side
 /// function tables. Built once per window (the amortised G1 saving).
 fn bind_window(ctx: &mut Context<'static, 'static>, view: &dyn CondView) {
-    // Kind-spelling constants bind as CEL strings (`kind == Exile`).
+    // Kind-spelling constants bind as CEL strings (`kind == SomeKind`). Kernel
+    // engine rows ++ the installed extension's `kind_consts`.
     for (name, spelling) in kinds::str_constants() {
-        ctx.add_variable_from_value(*name, Value::String(Arc::new((*spelling).to_string())));
+        ctx.add_variable_from_value(name, Value::String(Arc::new(spelling.to_string())));
     }
     // Move-kind ints stay ints (`move.kind == Walk`).
     for (name, val) in kinds::int_constants() {
         ctx.add_variable_from_value(*name, Value::Int(*val));
     }
 
-    // Window scalars: every VOCAB Window name, fetched through the view.
-    for n in VOCAB {
+    // Window scalars: every Window name, fetched through the view.
+    for n in crate::ext::vocab().names() {
         if n.scope != Scope::Window {
             continue;
         }
@@ -349,7 +363,7 @@ fn install_functions(ctx: &mut Context<'static, 'static>) {
     // Each closure reads the hidden table `vocab::fn_table` baked from the
     // view. Inference picks the `WithFunctionContext` impls (first arg is
     // `&FunctionContext`).
-    for n in VOCAB {
+    for n in crate::ext::vocab().names() {
         install_one(ctx, n);
     }
 }
@@ -363,9 +377,8 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
         Fx::SeatIntIs { var, .. } => {
             let var = var.to_string();
             // Second arg is either an int id or a string name (the guest's
-            // `persona_is(p, "名")` / `group_is(p, "Band")` spelling). A
-            // string hashes through `id_of` -- the same name-stable id the
-            // view's `character` / `band` accessors return.
+            // `*_is(p, "name")` spelling). A string hashes through `id_of` --
+            // the same name-stable id the view's state row returns.
             ctx.add_function(
                 fname,
                 move |ftx: &FunctionContext, p: i64, id: Value| -> Result<bool, ExecutionError> {
@@ -419,9 +432,9 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
         Fx::IntHas { var, .. } => {
             let var = var.to_string();
             // The arg is an int id or a string name: a string hashes through
-            // `id_of` -- the same name-stable id `counter_is('cp')` /
-            // `persona_is(p, "名")` compare against. Int callers
-            // (`chain_has(roll)`, `is_start(t)`, `blocked(band)`) pass the
+            // `id_of` -- the same name-stable id `counter_is('cp')` and the
+            // CallEq sugar compare against. Int callers
+            // (`chain_has(roll)`, `is_start(t)`, set membership) pass the
             // wire value directly and are unaffected.
             ctx.add_function(
                 fname,
@@ -437,6 +450,34 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
                         }
                     };
                     Ok(list_contains(ftx, &var, want))
+                },
+            )
+            .expect(fname);
+        }
+        Fx::PairHas { var, .. } => {
+            let var = var.to_string();
+            // `cand_has(key, member)`: key is an id or a string name (hashed
+            // through `id_of`), member is an id. Table is key -> member list.
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, key: Value, member: i64| -> Result<bool, ExecutionError> {
+                    let want = match &key {
+                        Value::Int(i) => *i,
+                        Value::String(s) => crate::id_of(s.as_str()),
+                        other => {
+                            return Err(ExecutionError::FunctionError {
+                                function: fname.into(),
+                                message: format!("expected int or string id, got {other:?}"),
+                            })
+                        }
+                    };
+                    let m = map_var(ftx, &var)?;
+                    Ok(match m.get(&Key::Int(want)) {
+                        Some(Value::List(items)) => items
+                            .iter()
+                            .any(|i| matches!(i, Value::Int(x) if *x == member)),
+                        _ => false,
+                    })
                 },
             )
             .expect(fname);

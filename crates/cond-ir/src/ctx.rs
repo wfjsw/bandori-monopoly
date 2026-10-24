@@ -9,6 +9,10 @@ use crate::Val;
 
 /// Vocabulary functions (after `effect.has` → `chain_has` rewrite).
 /// Order is stable; the discriminant is the IR `Call` payload.
+///
+/// Dead discriminants are reserved holes (`// DEAD -- never reuse`) so a stale
+/// generated table fails the vocab-sync test instead of silently evaluating
+/// the wrong arm. Append-only for new generics.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i64)]
 pub enum FnId {
@@ -19,17 +23,17 @@ pub enum FnId {
     CounterIs,
     TileNamed,
     Money,
-    Fire,
-    Crystals,
-    Hand,
-    Pos,
-    Character,
-    Band,
-    Tiles,
-    CharacterIs,
-    BandIs,
-    Blocked,
-    Neighbor,
+    // 7  Fire        DEAD  (now State) -- never reuse
+    // 8  Crystals    DEAD  (now State) -- never reuse
+    Hand = 9,
+    Pos = 10,
+    // 11 Character   DEAD  (now State) -- never reuse
+    // 12 Band        DEAD  (now State) -- never reuse
+    Tiles = 13,
+    // 14 CharacterIs DEAD  (now State+Eq) -- never reuse
+    // 15 BandIs      DEAD  (now State+Eq) -- never reuse
+    // 16 Blocked     DEAD  (now CandHas) -- never reuse
+    Neighbor = 17,
     ChainHas,
     ChainHits,
     GainsThisTurn,
@@ -49,7 +53,10 @@ pub enum FnId {
     /// `state(p, 'key')` -- the seat's player-state value for an arbitrary
     /// string key (`MatchPlayer.state` / `state_get`). Missing = 0. The key
     /// argument is an `id_of` hash baked at lower time.
-    State,
+    State = 33,
+    /// `cand_has(key, member)` -- membership in a named candidate set
+    /// (`cand_pairs`). The key is an `id_of` hash baked at lower time.
+    CandHas = 34,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).
@@ -57,55 +64,36 @@ pub enum FnId {
 #[repr(u16)]
 pub enum SeatField {
     Money = 0,
-    Fire,
-    Crystals,
     Hand,
     Pos,
     Out,
     Stay,
     Stun,
     Exile,
-    NoHand,
-    Character,
-    Band,
     Tiles,
     Gains,
     Targeted,
     Between,
 }
 
-pub const SEAT_FIELD_COUNT: usize = 16;
+pub const SEAT_FIELD_COUNT: usize = 11;
 pub const MAX_PLAYERS: usize = 4;
+/// Board tile count cap (the Monopoly ring is 60; leave headroom).
+pub const MAX_TILES: usize = 64;
 
-/// Membership sets backing `is_*` / `chain_has` / `chain_hits` / `blocked`.
+/// Membership sets backing `chain_has` / `chain_hits`. Game sets
+/// (Circle/Ring/LiveHouse/Buyable/BlockedBands) died with the vocabulary
+/// split; tile kinds live in [`IrCtx::tile_kind_ids`] and candidate sets in
+/// [`IrCtx::cand_pairs`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u16)]
 pub enum SetId {
-    Circle = 0,
-    Ring,
-    LiveHouse,
-    Buyable,
-    ChainKinds,
-    ChainHits,
-    BlockedBands,
+    ChainKinds = 0,
+    ChainHits = 1,
+    // Circle, Ring, LiveHouse, Buyable, BlockedBands -- DEAD, never reuse
 }
 
-impl SetId {
-    /// Opaque tile-kind / class spelling this set filters on (game data).
-    /// Host code asks `tile_is` / `tile_in` with this string and never names
-    /// the kinds itself.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            SetId::Circle => "circle",
-            SetId::Ring => "ring",
-            SetId::LiveHouse => "livehouse",
-            SetId::Buyable => "buyable",
-            SetId::ChainKinds | SetId::ChainHits | SetId::BlockedBands => "",
-        }
-    }
-}
-
-pub const SET_COUNT: usize = 7;
+pub const SET_COUNT: usize = 2;
 /// Bits per set; tile/kind ids used in practice are well under this.
 /// `SetId::ChainKinds` is **not** a bitset -- kind keys are `id_of(spelling)`
 /// FNV hashes (64-bit, nowhere near `0..128`) and live in [`IrCtx::chain_kinds`].
@@ -130,8 +118,10 @@ pub const BIN_CAP: usize = 64;
 
 /// Player-state rows for `state(p, 'key')`: `(seat, key_id, value)`. `key_id`
 /// is `id_of(key)`, the same hash the lowerer bakes for the string argument.
-/// Sized for 4 seats x 16 keys. Missing `(seat, key)` answers 0.
-pub const STATE_CAP: usize = 64;
+/// Sized for 4 seats x up to ~20 keys (engine + content sugar).
+pub const STATE_CAP: usize = 80;
+/// `cand_has(key, member)` pair table: `(id_of(set_name), member)`.
+pub const CAND_CAP: usize = 16;
 
 #[derive(Copy, Clone, Debug)]
 pub struct IrCtx {
@@ -156,6 +146,11 @@ pub struct IrCtx {
     pub chain_kind_n: u8,
     /// Board tile count — backs `dist` / ring wraps.
     pub tile_count: i64,
+    /// `id_of(kind)` per tile. `TileIs` is `tile_kind_ids[t] == kind_id`.
+    pub tile_kind_ids: [i64; MAX_TILES],
+    /// `(id_of(set_name), member)` pairs backing `cand_has`.
+    pub cand_pairs: [(i64, i64); CAND_CAP],
+    pub cand_pair_n: u8,
     /// Packed `(a,b) -> v` geometry.
     pub bin: [(i64, i64); BIN_CAP],
     pub bin_n: u8,
@@ -175,6 +170,9 @@ impl Default for IrCtx {
             chain_kinds: [0; CHAIN_KIND_CAP],
             chain_kind_n: 0,
             tile_count: 0,
+            tile_kind_ids: [0; MAX_TILES],
+            cand_pairs: [(0, 0); CAND_CAP],
+            cand_pair_n: 0,
             bin: [(0, 0); BIN_CAP],
             bin_n: 0,
         }
@@ -520,12 +518,12 @@ impl IrCtx {
         }
     }
 
-    /// `state(p, 'key')` lookup. 8×8 chunk walk over `STATE_CAP = 64`
-    /// (unwind bound 8). Missing `(seat, key)` answers 0.
+    /// `state(p, 'key')` lookup. 10×8 chunk walk over `STATE_CAP = 80`
+    /// (unwind bound 10). Missing `(seat, key)` answers 0.
     pub fn state_get(&self, seat: i64, key_id: i64) -> i64 {
         let n = self.state_n as usize;
         let mut outer = 0usize;
-        while outer < 8 {
+        while outer < 10 {
             let mut k = 0usize;
             while k < 8 {
                 let i = outer * 8 + k;
@@ -539,12 +537,12 @@ impl IrCtx {
         0
     }
 
-    /// Insert or overwrite a `state(p, 'key')` row. 8×8 chunk walk (unwind
-    /// bound 8).
+    /// Insert or overwrite a `state(p, 'key')` row. 10×8 chunk walk (unwind
+    /// bound 10).
     pub fn state_set(&mut self, seat: i64, key_id: i64, v: i64) {
         let n = self.state_n as usize;
         let mut outer = 0usize;
-        while outer < 8 {
+        while outer < 10 {
             let mut k = 0usize;
             while k < 8 {
                 let i = outer * 8 + k;
@@ -559,6 +557,36 @@ impl IrCtx {
         if n < STATE_CAP {
             self.state[n] = (seat, key_id, v);
             self.state_n = (n + 1) as u8;
+        }
+    }
+
+    /// `cand_has(key, member)` membership. Linear scan over [`Self::cand_pairs`].
+    pub fn cand_has(&self, key_id: i64, member: i64) -> bool {
+        let n = self.cand_pair_n as usize;
+        let mut i = 0usize;
+        while i < n && i < CAND_CAP {
+            if self.cand_pairs[i].0 == key_id && self.cand_pairs[i].1 == member {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Insert a `(key_id, member)` pair (deduped). Silently drops past
+    /// [`CAND_CAP`].
+    pub fn cand_insert(&mut self, key_id: i64, member: i64) {
+        let n = self.cand_pair_n as usize;
+        let mut i = 0usize;
+        while i < n && i < CAND_CAP {
+            if self.cand_pairs[i].0 == key_id && self.cand_pairs[i].1 == member {
+                return;
+            }
+            i += 1;
+        }
+        if n < CAND_CAP {
+            self.cand_pairs[n] = (key_id, member);
+            self.cand_pair_n = (n + 1) as u8;
         }
     }
 

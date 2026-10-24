@@ -6,10 +6,12 @@
 //! ```
 
 fn main() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap();
-    let (src, n) = rules_cond::gen_ir::generate(root);
+    // Match `rules/kani/build.rs`: the real ruleset vocabulary, so sugar
+    // guards lower. `generate` reports any remaining skips (reason + count).
+    let _ = rules_cond::install_ext(bandori_std::cel::ext());
+    // `crates/cond` → `rules/`.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules");
+    let (src, n) = rules_cond::gen_ir::generate(&root);
     match std::env::args().nth(1) {
         Some(p) => {
             std::fs::write(&p, src).unwrap();

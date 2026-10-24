@@ -136,16 +136,16 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
                 4 => FnId::CounterIs,
                 5 => FnId::TileNamed,
                 6 => FnId::Money,
-                7 => FnId::Fire,
-                8 => FnId::Crystals,
+                // 7  Fire        DEAD -- never reuse
+                // 8  Crystals    DEAD -- never reuse
                 9 => FnId::Hand,
                 10 => FnId::Pos,
-                11 => FnId::Character,
-                12 => FnId::Band,
+                // 11 Character   DEAD -- never reuse
+                // 12 Band        DEAD -- never reuse
                 13 => FnId::Tiles,
-                14 => FnId::CharacterIs,
-                15 => FnId::BandIs,
-                16 => FnId::Blocked,
+                // 14 CharacterIs DEAD -- never reuse
+                // 15 BandIs      DEAD -- never reuse
+                // 16 Blocked     DEAD -- never reuse
                 17 => FnId::Neighbor,
                 18 => FnId::ChainHas,
                 19 => FnId::ChainHits,
@@ -163,6 +163,7 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
                 31 => FnId::TileAttr,
                 32 => FnId::TileIn,
                 33 => FnId::State,
+                34 => FnId::CandHas,
                 _ => return Val::Err,
             };
             let nargs = n.b as usize;

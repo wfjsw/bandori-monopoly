@@ -2,21 +2,21 @@
 //!
 //! **Ownership rule.** This crate authors **neither** kind table. Engine
 //! kinds live in `crates/game-kinds` (owned by `crates/`); ruleset kinds live
-//! in `bandori-std::kind`. Neither side inspects the other's ids. The
-//! constants here **mirror** those owning tables as the canonical wire
+//! in the content crate's kind module. Neither side inspects the other's ids.
+//! The constants here **mirror** those owning tables as the canonical wire
 //! **spellings** (`TriggerKind::spelling`) -- they are strings, never ids.
 //!
 //! CEL `kind` is `VarTy::Str`: a bare ident binds the spelling, and a string
 //! literal is the same spelling. Constants below are `&str` spellings
-//! (`"turnStart"`, `"r:bandori:21"`). There is no int encoding of kinds at
-//! all.
+//! (`"turnStart"`, plus the content `kind_consts` namespace rows). There is
+//! no int encoding of kinds at all.
 //!
 //! The IR bakes every spelling to `id_of(spelling)` (see `VarTy::Str`), so the
 //! CEL string and the IR hash are the same identity. `move.kind` stays an
 //! `int` -- [`mv`] is a closed engine enum with no namespace problem.
 //!
-//! CEL spells kinds as bare identifiers: `kind == Exile`,
-//! `effect.has(Pay)`. String literals also work: `kind == "r:bandori:21"` /
+//! CEL spells kinds as bare identifiers: `kind == SomeKind`,
+//! `effect.has(Pay)`. String literals also work: `kind == "wire:spelling"` /
 //! `kind == "turnStart"`. They are bound as string constants at compile time
 //! (unknown-var check) and at eval time (the window scope).
 //!
@@ -44,13 +44,11 @@ pub mod trig {
     pub const Target: &str = "target";
     // 16 / 17 / 19 / 20 / 22 retired in ABI v84 (Stop / Teleport / Stun /
     // Stay / Forced); 18 (SkillTeleport) retired in ABI v85 -- never reuse.
-    /// Ruleset namespace (bandori-std::kind::Exile).
-    pub const Exile: &str = "r:bandori:21";
+    /// Ruleset namespace constants live in the content `CondExt::kind_consts`,
+    /// not here.
     pub const State: &str = "state";
     pub const Counteracted: &str = "counteracted";
     pub const DrawOut: &str = "drawOut";
-    /// Ruleset namespace (bandori-std::kind::PassRewardAffected).
-    pub const PassRewardAffected: &str = "r:bandori:26";
     pub const TwoCards: &str = "twoCards";
     pub const TurnStartBefore: &str = "turnStartBefore";
     pub const PassBefore: &str = "passBefore";
@@ -85,9 +83,6 @@ pub mod trig {
     /// v43: the move head / move-tail pair (`SETTLE-STAGES.md` §7).
     pub const MoveBefore: &str = "moveBefore";
     pub const MoveAfter: &str = "moveAfter";
-    /// 「将X个反面[P㏄P粉丝]变正」 (bandori-std::kind::FansFlip).
-    /// Ruleset namespace.
-    pub const FansFlip: &str = "r:bandori:107";
 }
 
 /// MoveKind values. `Walk` / `Teleport` are what `move.kind ==` compares.
@@ -100,13 +95,10 @@ pub mod mv {
 
 // TELEPORT_TRIGGER (TriggerKind 17) retired in ABI v84 -- never reuse.
 
-/// (CEL name, spelling) for every **string** constant a condition may
-/// reference -- the trigger / chain / hook kinds.
-///
-/// This is half the unknown-var allow-list for bare identifiers that are not
-/// context variables, and half the table the eval scope binds (as CEL
-/// strings). See [`int_constants`] for the move-kind ints.
-pub fn str_constants() -> &'static [(&'static str, &'static str)] {
+/// (CEL name, spelling) for every **engine** string constant a condition may
+/// reference -- the trigger / chain / hook kinds. Content kinds arrive via
+/// [`crate::ext::CondExt::kind_consts`] and are merged by [`str_constants`].
+pub fn engine_str_constants() -> &'static [(&'static str, &'static str)] {
     &[
         ("DiceRollBefore", trig::DiceRollBefore),
         ("DiceRollResult", trig::DiceRollResult),
@@ -124,13 +116,9 @@ pub fn str_constants() -> &'static [(&'static str, &'static str)] {
         ("Event", trig::Event),
         ("Abnormal", trig::Abnormal),
         ("Target", trig::Target),
-        ("Exile", trig::Exile),
         ("State", trig::State),
         ("Counteracted", trig::Counteracted),
         ("DrawOut", trig::DrawOut),
-        ("PassRewardAffected", trig::PassRewardAffected),
-        // ABI v69 alias for already-shipped condition strings.
-        ("CircleAffected", trig::PassRewardAffected),
         ("TwoCards", trig::TwoCards),
         ("TurnStartBefore", trig::TurnStartBefore),
         ("PassBefore", trig::PassBefore),
@@ -156,8 +144,16 @@ pub fn str_constants() -> &'static [(&'static str, &'static str)] {
         ("HouseAdded", trig::HouseAdded),
         ("MoveBefore", trig::MoveBefore),
         ("MoveAfter", trig::MoveAfter),
-        ("FansFlip", trig::FansFlip),
     ]
+}
+
+/// Engine kinds ++ the installed extension's `kind_consts`.
+pub fn str_constants() -> Vec<(&'static str, &'static str)> {
+    engine_str_constants()
+        .iter()
+        .copied()
+        .chain(crate::ext::ext().kind_consts.iter().copied())
+        .collect()
 }
 
 /// (CEL name, value) for every **int** constant a condition may reference.

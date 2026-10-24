@@ -85,8 +85,6 @@ pub trait CondView {
     /// Owner overlay (`owner.money` etc.). Same numbers as `money(owner())`
     /// in a well-filled snapshot; the overlay is the per-probe answer.
     fn owner_money(&self) -> i64;
-    fn owner_charge(&self) -> i64;
-    fn owner_group_pool(&self, name: &str) -> i64;
     fn owner_hand(&self) -> i64;
     fn owner_pos(&self) -> i64;
     fn owner_out(&self) -> i64;
@@ -99,34 +97,25 @@ pub trait CondView {
     fn owner_exile(&self) -> i64 {
         self.state(self.owner(), "exile")
     }
-    fn owner_no_hand(&self) -> i64 {
-        self.state(self.owner(), "noHand")
-    }
-    fn owner_persona(&self) -> i64;
-    fn owner_group(&self) -> i64;
     fn owner_tiles(&self) -> i64;
     /// The candidate card's id hash (`card.id`).
     fn card_id(&self) -> i64;
     /// Is the candidate's running instance in play (`card.placed`)?
     fn card_placed(&self) -> bool;
     /// Named counter `name` on the candidate instance (`card.counter('name')`).
-    /// `"cp"` → `FieldCard::cp`, `"crystals"` → `FieldCard::crystals`, else
-    /// `FieldCard::counters[name]`. Missing = 0. (The wire names of
-    /// `card-sdk`'s `counter` module; kept as a plain `&str` here so
-    /// `rules-cond` stays free of the SDK.)
+    /// The host maps wire names onto its counter fields; missing = 0.
     fn card_counter(&self, name: &str) -> i64;
     /// Per-card latch (`slot(name)`); missing = 0.
     fn slot(&self, name: &str) -> i64;
     /// Per-card token counter (`tok('name')`, the guest's `ctx::tok(owner,
     /// name)`); missing = 0.
     fn tok_named(&self, name: &str) -> i64;
-    /// Is `band` blocked for this candidate (`blocked(band)`)?
-    fn blocked(&self, group: i64) -> bool;
+    /// Membership list behind `cand_has(key, x)`. Missing key = empty list.
+    /// The key is the host's set name (the bake string content installs).
+    fn cand_set(&self, key: &str) -> Vec<i64>;
 
     // -- player table (any seat) -------------------------------------------
     fn money(&self, seat: i64) -> i64;
-    fn charge(&self, seat: i64) -> i64;
-    fn group_pool(&self, seat: i64, name: &str) -> i64;
     fn hand(&self, seat: i64) -> i64;
     fn pos(&self, seat: i64) -> i64;
     fn out(&self, seat: i64) -> i64;
@@ -139,25 +128,23 @@ pub trait CondView {
     fn exile(&self, seat: i64) -> i64 {
         self.state(seat, "exile")
     }
-    fn no_hand(&self, seat: i64) -> i64 {
-        self.state(seat, "noHand")
-    }
     /// In the game and standing on a board square (`!out && !exiled`).
     fn present(&self, seat: i64) -> bool {
         self.out(seat) == 0 && self.exile(seat) == 0
     }
     /// The seat's player-state value for `key` (`state(p, 'key')` /
     /// `MatchPlayer.state`). Missing = 0.
+    ///
+    /// Hosts match-dispatch the keyed int reads. Engine keys (`"stay"`,
+    /// `"stun"`, `"stunStart"`, `"exile"`, …) come from `MatchPlayer.state`;
+    /// content sugar keys are whatever the ruleset's `CondExt` bakes (see
+    /// docs/GUARDS.md §4.2b for this ruleset's table). One door: sugar lowers
+    /// to `state(p, key)`.
     fn state(&self, seat: i64, key: &str) -> i64;
     /// Every `(seat, key, value)` row for the baked `state` table. The eager
-    /// evaluator copies this into `_state`; missing pairs answer 0.
+    /// evaluator copies this into `_state`; missing pairs answer 0. Must agree
+    /// with [`CondView::state`].
     fn state_table(&self) -> Vec<(i64, String, i64)>;
-    /// Character **name** hash (`persona_is(p, "名")` compares this to
-    /// `id_of("名")` -- the same name `ctx::persona_is` matches).
-    fn persona(&self, seat: i64) -> i64;
-    /// Band **name** hash (`group_is(p, "Band")` compares this to
-    /// `id_of("Band")` -- the same name `ctx::in_group` matches).
-    fn group(&self, seat: i64) -> i64;
     /// Owned-tile count.
     fn tiles(&self, seat: i64) -> i64;
     /// Seat count (for `neighbor`).
@@ -175,19 +162,14 @@ pub trait CondView {
     /// (`buyable` / `shop` / `livehouse` / `color:<g>`).
     fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool;
     /// Every `(player, tile, class)` for which [`Self::tile_in`] is true, over
-    /// `player = -1, 0..seat_count`, every tile and the ruleset class
-    /// vocabulary. The default probes `tile_in` one by one; a view that holds
-    /// the true triples already overrides this with a direct read.
+    /// `player = -1, 0..seat_count`, every tile and
+    /// [`CondView::tile_class_names`]. The default probes `tile_in` one by
+    /// one; a view that holds the true triples already overrides this with a
+    /// direct read.
     fn tile_in_rows(&self) -> Vec<(i64, i64, String)> {
         let n = self.tile_count();
         let seats = self.seat_count();
-        let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        for g in -2..=32 {
-            classes.push(format!("color:{}", g));
-        }
+        let classes = self.tile_class_names();
         let mut rows = Vec::new();
         for t in 0..n {
             for p in std::iter::once(-1).chain(0..seats) {
@@ -200,6 +182,9 @@ pub trait CondView {
         }
         rows
     }
+    /// The ruleset's tile-class vocabulary (the strings [`CondView::tile_in`]
+    /// accepts). Hosts answer from their class table.
+    fn tile_class_names(&self) -> Vec<String>;
 
     // -- eager function tables (docs/GUARDS.md §4.2b: why eager) ------------
     /// Every `slot(name)` latch the host knows. Baked into `_<var>` for the
@@ -208,11 +193,8 @@ pub trait CondView {
     /// Every `tok('name')` counter (non-zero ones; missing = 0).
     fn tok_named_table(&self) -> Vec<(String, i64)>;
     /// Every `card.counter('name')` counter on the candidate instance
-    /// (non-zero ones; missing = 0). The two on-card wire names (`"cp"` /
-    /// `"crystals"`) are always present when non-zero.
+    /// (non-zero ones; missing = 0).
     fn card_counter_table(&self) -> Vec<(String, i64)>;
-    /// Bands blocked for this candidate.
-    fn blocked_groups(&self) -> Vec<i64>;
     /// Every `tile_named` spelling the host registers.
     fn tile_id_table(&self) -> Vec<(String, i64)>;
     /// Tile ids whose data kind equals `kind` (backing list for `tile_is`).

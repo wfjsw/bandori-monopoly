@@ -1,14 +1,35 @@
 //! Per-guard consistency: every inventory condition string lowers to exactly
 //! the embedded IR in `rules-kani`'s generated table. No guard may exist whose
 //! Rust side was authored separately.
+//!
+//! Installs the real [`bandori_std::cel`] extension before lowering — the
+//! production inventory is full of sugar (`charge` / `group_is` / …) that
+//! fails to lower against an empty `CondExt`. A guard that will not lower
+//! fails the test; the only skips are the named [`UNLOWERABLE_ALLOWLIST`].
 
-use rules_cond::lower::{lower_src, OwnedProgram};
+use rules_cond::lower::{lower_with_src, OwnedProgram};
+use rules_cond::Vocab;
 use rules_cond_ir::nodes::Node;
 
+/// Guards that legitimately have no lowering. Each entry needs a reason.
+/// Empty today — do not add a blanket `else { continue }`.
+const UNLOWERABLE_ALLOWLIST: &[&str] = &[];
+
+/// `crates/cond` → `rules/` (the inventory lives under the guest tree).
+fn rules_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules")
+}
+
+fn install_ext() {
+    let _ = rules_cond::install_ext(bandori_std::cel::ext());
+}
+
+fn vocab() -> Vocab<'static> {
+    Vocab::with_ext(bandori_std::cel::ext())
+}
+
 fn collect_guards() -> Vec<String> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap();
+    let root = rules_dir();
     let mut out = Vec::new();
     for d in ["cards", "skills", "tiles", "events", "fixtures"] {
         for g in rules_cond::lower::inventory_guards(&root.join(d)) {
@@ -23,10 +44,8 @@ fn collect_guards() -> Vec<String> {
 /// The table exactly as `rules/kani/build.rs` generates it (it is built, not
 /// committed).
 fn generated_text() -> String {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap();
-    rules_cond::gen_ir::generate(root).0
+    install_ext();
+    rules_cond::gen_ir::generate(&rules_dir()).0
 }
 
 /// Parse the generated file's `src` strings and node arrays back into
@@ -143,21 +162,36 @@ fn parse_node(line: &str) -> Node {
 
 #[test]
 fn every_guard_lowers_to_its_embedded_ir() {
+    install_ext();
     let guards = collect_guards();
     let embedded = parse_generated();
     assert!(
         !embedded.is_empty(),
         "generated table is empty — the generator output is broken"
     );
+    let v = vocab();
     let mut checked = 0;
+    let mut allowlisted = 0;
     for src in &guards {
-        let Ok(prog) = lower_src(src) else {
-            continue;
+        let prog = match lower_with_src(src, &v) {
+            Ok(p) => p,
+            Err(e) => {
+                if UNLOWERABLE_ALLOWLIST.contains(&src.as_str()) {
+                    allowlisted += 1;
+                    continue;
+                }
+                panic!(
+                    "guard {src:?} failed to lower: {e}\n\
+                     (install the real CondExt, or add it to UNLOWERABLE_ALLOWLIST \
+                     with a reason — blanket skips are not allowed)"
+                );
+            }
         };
         let hit = embedded.iter().find(|(s, _)| s == src);
         let Some((_, emb)) = hit else {
             panic!(
-                "guard {src:?} is in the inventory but not in the generated IR — re-the generator output is broken"
+                "guard {src:?} is in the inventory but not in the generated IR — \
+                 re-run the generator output is broken"
             );
         };
         assert_eq!(
@@ -168,8 +202,49 @@ fn every_guard_lowers_to_its_embedded_ir() {
         assert_eq!(prog.root, emb.root, "IR root diverged for {src:?}");
         checked += 1;
     }
-    assert!(checked >= 50, "too few guards checked: {checked}");
-    println!("every_guard_lowers_to_its_embedded_ir: {checked} guards match");
+    assert!(
+        checked >= 50,
+        "too few guards checked: {checked} (allowlisted {allowlisted})"
+    );
+    // Sugar guards must be part of the matched set, not silently skipped.
+    for sugar in ["charge(", "group_is(", "persona_is("] {
+        assert!(
+            guards.iter().any(|g| g.contains(sugar)),
+            "inventory no longer contains a `{sugar}` guard — the gate lost its target"
+        );
+    }
+    println!(
+        "every_guard_lowers_to_its_embedded_ir: {checked} guards match, \
+         {allowlisted} allowlisted, {} in inventory",
+        guards.len()
+    );
+}
+
+/// `generate()` must not quietly drop unlowerable guards: its skip list has
+/// to be exactly the allow-list.
+#[test]
+fn generate_skips_are_only_the_allowlist() {
+    install_ext();
+    let generated = rules_cond::gen_ir::generate_with(&rules_dir(), &vocab())
+        .expect("gen_ir generate_with");
+    for (src, err) in &generated.skipped {
+        assert!(
+            UNLOWERABLE_ALLOWLIST.contains(&src.as_str()),
+            "generate() skipped {src:?}: {err}\n\
+             not on UNLOWERABLE_ALLOWLIST — the inventory guard must lower"
+        );
+    }
+    for allowed in UNLOWERABLE_ALLOWLIST {
+        assert!(
+            generated.skipped.iter().any(|(s, _)| s == allowed),
+            "UNLOWERABLE_ALLOWLIST entry {allowed:?} actually lowered — remove it"
+        );
+    }
+    println!(
+        "generate_skips_are_only_the_allowlist: {} lowered, {} skipped",
+        generated.count,
+        generated.skipped.len()
+    );
 }
 
 #[test]

@@ -4,6 +4,19 @@
 resolver = "2"
 members = ["bandori-std", "cards/*", "skills/*", "personas", "tiles", "markers", "status", "events", "fixtures/*"]
 
+# Match the root workspace values. `crates/cond` / `crates/cond-ir` are root
+# members; this workspace loads them as a path dep of `bandori-std`, so their
+# `*.workspace = true` inherits from here.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# Same vendored cel fork as the root workspace: `rules-cond`'s `wire` feature
+# needs `cel/serde-ast`, which upstream crates.io `cel` does not have.
+[patch.crates-io]
+cel = { path = "../third_party/cel-rust" }
+
 [profile.release]
 opt-level = "z"
 lto = true

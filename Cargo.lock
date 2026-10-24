@@ -149,6 +149,8 @@ version = "0.1.0"
 dependencies = [
  "card-sdk",
  "postcard",
+ "rules-cond",
+ "rules-cond-ir",
 ]
 
 [[package]]
@@ -935,6 +937,7 @@ dependencies = [
  "game-kinds",
  "postcard",
  "rules-cond",
+ "rules-cond-ir",
  "serde",
  "serde_json",
  "sha2",
@@ -1733,6 +1736,7 @@ dependencies = [
 name = "rules-cond"
 version = "0.1.0"
 dependencies = [
+ "bandori-std",
  "cel",
  "postcard",
  "rules-cond-ir",

@@ -80,6 +80,13 @@ pub enum Fx {
         var: &'static str,
         fill: fn(&dyn CondView) -> Vec<i64>,
     },
+    /// `f(key: id, member: id) -> bool` = `(key, member)` membership in the
+    /// pair list baked as `_<var>` (`cand_has` is the only user). Keys are
+    /// `id_of` hashes.
+    PairHas {
+        var: &'static str,
+        fill: fn(&dyn CondView) -> Vec<(i64, i64)>,
+    },
     /// `f(p: int, delta: int) -> int` = wrap-around neighbour of `p`.
     Neighbor,
     /// `f(a: int, b: int) -> int` computed from a hidden int (`_<var>`, the
@@ -143,6 +150,8 @@ pub struct Name {
     pub get_str: StrGetter,
     /// Function shape (`Scope::Func`); `Fx::Neighbor` unused otherwise.
     pub fx: Fx,
+    /// How this name lowers to the IR. Kernel rows are [`LowerAs::Direct`].
+    pub lower_as: crate::ext::LowerAs,
     /// One-line doc (kept in `docs/GUARDS.md`'s vocabulary table).
     pub doc: &'static str,
 }
@@ -163,6 +172,7 @@ pub const VOCAB: &[Name] = &[
         get: NO_GET,
         get_str: |v| v.kind(),
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "trigger kind wire spelling (`trigger.kind` is an alias)",
     },
     Name {
@@ -174,6 +184,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.actor(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "trigger actor seat, -1 = none",
     },
     Name {
@@ -185,6 +196,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.target(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "trigger target seat, -1 = none",
     },
     Name {
@@ -196,6 +208,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.value(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the amount involved",
     },
     Name {
@@ -207,6 +220,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.step(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "turn stage (0 = no turn)",
     },
     Name {
@@ -218,6 +232,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.by(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "`by_card` owner seat, -1 = none",
     },
     Name {
@@ -229,6 +244,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.pay_is_rent() as i64,
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "is this pay rent",
     },
     Name {
@@ -240,6 +256,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.roll_source(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "where a roll came from, 0 = none (roll_source::NONE)",
     },
     Name {
@@ -251,6 +268,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.abnormal() as i64,
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the AbnormalGate window",
     },
     Name {
@@ -262,6 +280,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.turn_player(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "whose turn it is",
     },
     Name {
@@ -273,6 +292,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.turn_key(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "once-per-turn key; compared against `slot(…)`",
     },
     Name {
@@ -284,6 +304,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.plan_fixed_roll(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "this turn's fixed main-move roll; `null` when unset",
     },
     Name {
@@ -295,6 +316,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.trigger_card(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the trigger's card id hash; comparable to `card.id`",
     },
     Name {
@@ -306,6 +328,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.counter_name(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the trigger's counter / message name hash (`Trigger.name`); `counter_is('…')` is the string spelling",
     },
     Name {
@@ -317,6 +340,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.tile_id(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the trigger's tile, -1 = none",
     },
     Name {
@@ -328,6 +352,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.tile_owner(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "owning seat, -1 = unowned",
     },
     Name {
@@ -339,6 +364,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.tile_houses(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "house count",
     },
     Name {
@@ -350,6 +376,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.tile_mortgaged(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "1 = mortgaged",
     },
     Name {
@@ -361,6 +388,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.tile_price(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "price",
     },
     Name {
@@ -372,6 +400,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.move_roll(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "face shown; `null` when none",
     },
     Name {
@@ -383,6 +412,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.move_kind(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "move kind; `null` when no move",
     },
     Name {
@@ -394,6 +424,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.move_remaining(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "steps left",
     },
     Name {
@@ -405,6 +436,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.move_main() as i64,
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "was this the turn's main move",
     },
     Name {
@@ -416,6 +448,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.move_by_skill() as i64,
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the move was shaped or started by a skill",
     },
     Name {
@@ -427,6 +460,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.move_dir(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "1 forward, -1 backward; 1 when no move",
     },
     Name {
@@ -438,6 +472,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.chain_count(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "effect-chain length (`chain.count` is an alias)",
     },
     // -- candidate ----------------------------------------------------------
@@ -450,6 +485,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the candidate's owner seat",
     },
     Name {
@@ -461,6 +497,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "same as `owner`",
     },
     Name {
@@ -472,29 +509,8 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_money(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's money",
-    },
-    Name {
-        cel: "owner.charge",
-        aliases: &[],
-        flat: "owner_charge",
-        scope: Scope::Candidate,
-        ty: Ty::Int,
-        get: |v| v.owner_charge(),
-        get_str: NO_GET_STR,
-        fx: NO_FX,
-        doc: "the owner's fire pot",
-    },
-    Name {
-        cel: "owner.crystals",
-        aliases: &[],
-        flat: "owner_group_pool",
-        scope: Scope::Candidate,
-        ty: Ty::Int,
-        get: |v| v.owner_group_pool("crystals"),
-        get_str: NO_GET_STR,
-        fx: NO_FX,
-        doc: "the owner's band crystals (the band-skill pool, not on-card)",
     },
     Name {
         cel: "owner.hand",
@@ -505,6 +521,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_hand(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's hand size",
     },
     Name {
@@ -516,6 +533,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_pos(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's board position",
     },
     Name {
@@ -527,6 +545,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_out(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "1 = the owner is out of the game",
     },
     Name {
@@ -538,6 +557,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_stay(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's stay count",
     },
     Name {
@@ -549,6 +569,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_stun(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's stun count",
     },
     Name {
@@ -560,40 +581,8 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_exile(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's exile flag",
-    },
-    Name {
-        cel: "owner.no_hand",
-        aliases: &[],
-        flat: "owner_no_hand",
-        scope: Scope::Candidate,
-        ty: Ty::Int,
-        get: |v| v.owner_no_hand(),
-        get_str: NO_GET_STR,
-        fx: NO_FX,
-        doc: "1 = 「不可持有手牌」",
-    },
-    Name {
-        cel: "owner.persona",
-        aliases: &[],
-        flat: "owner_persona",
-        scope: Scope::Candidate,
-        ty: Ty::Int,
-        get: |v| v.owner_persona(),
-        get_str: NO_GET_STR,
-        fx: NO_FX,
-        doc: "the owner's character id hash",
-    },
-    Name {
-        cel: "owner.group",
-        aliases: &[],
-        flat: "owner_group",
-        scope: Scope::Candidate,
-        ty: Ty::Int,
-        get: |v| v.owner_group(),
-        get_str: NO_GET_STR,
-        fx: NO_FX,
-        doc: "the owner's band id hash",
     },
     Name {
         cel: "owner.tiles",
@@ -604,6 +593,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.owner_tiles(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's owned-tile count",
     },
     Name {
@@ -615,6 +605,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.card_id(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "candidate card id hash",
     },
     Name {
@@ -626,6 +617,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.card_placed() as i64,
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "is the running instance in play",
     },
     Name {
@@ -637,6 +629,7 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.card_tile(),
         get_str: NO_GET_STR,
         fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "the instance's tile; -1 = with its owner, -2 = not placed",
     },
     // -- functions ----------------------------------------------------------
@@ -653,6 +646,7 @@ pub const VOCAB: &[Name] = &[
             missing: 0,
             fill: |v| v.slot_table(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "slot(name) -> the candidate's latch; missing = 0",
     },
     Name {
@@ -668,6 +662,7 @@ pub const VOCAB: &[Name] = &[
             missing: 0,
             fill: |v| v.tok_named_table(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "tok('name') -> the owner's token counter; missing = 0",
     },
     Name {
@@ -683,6 +678,7 @@ pub const VOCAB: &[Name] = &[
             missing: 0,
             fill: |v| v.move_tag_table(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "move.tag('name') -> the move's tag counter; missing = 0",
     },
     Name {
@@ -698,7 +694,8 @@ pub const VOCAB: &[Name] = &[
             missing: 0,
             fill: |v| v.card_counter_table(),
         },
-        doc: "card.counter('name') -> the candidate instance's named counter ('cp' / 'crystals' / any); missing = 0",
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "card.counter('name') -> the candidate instance's named counter (host-mapped wire names + instance keys); missing = 0",
     },
     Name {
         cel: "counter_is",
@@ -719,6 +716,7 @@ pub const VOCAB: &[Name] = &[
                 }
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "counter_is('name') -> this window's `Trigger.name` is that counter / message",
     },
     Name {
@@ -734,6 +732,7 @@ pub const VOCAB: &[Name] = &[
             missing: -1,
             fill: |v| v.tile_id_table(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "tile_named(name) -> board id; -1 when unknown",
     },
     // -- ABI v56 generic tile queries ---------------------------------------
@@ -762,6 +761,7 @@ pub const VOCAB: &[Name] = &[
                     .collect()
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "tile_is(t, kind) -> data TileKind equals the wire spelling",
     },
     Name {
@@ -786,6 +786,7 @@ pub const VOCAB: &[Name] = &[
                 rows
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "tile_attr(t, attr) -> i32 field (group/tier/price/house/area/rent/index)",
     },
     Name {
@@ -800,6 +801,7 @@ pub const VOCAB: &[Name] = &[
             var: "_tile_in",
             fill: |v| v.tile_in_rows(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "tile_in(p, t, class) -> ruleset class membership (buyable/shop/livehouse/color:<g>)",
     },
     Name {
@@ -814,35 +816,8 @@ pub const VOCAB: &[Name] = &[
             var: "_money",
             field: |v, s| v.money(s),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "money(p) -> seat's money",
-    },
-    Name {
-        cel: "charge",
-        aliases: &[],
-        flat: "charge",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
-        get: NO_GET,
-        get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
-            var: "_fire",
-            field: |v, s| v.charge(s),
-        },
-        doc: "charge(p) -> seat's fire pot",
-    },
-    Name {
-        cel: "crystals",
-        aliases: &[],
-        flat: "crystals",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
-        get: NO_GET,
-        get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
-            var: "_crystals",
-            field: |v, s| v.group_pool(s, "crystals"),
-        },
-        doc: "crystals(p) -> seat's band crystals (the band-skill pool)",
     },
     Name {
         cel: "hand",
@@ -856,6 +831,7 @@ pub const VOCAB: &[Name] = &[
             var: "_hand",
             field: |v, s| v.hand(s),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "hand(p) -> seat's hand size",
     },
     Name {
@@ -870,35 +846,8 @@ pub const VOCAB: &[Name] = &[
             var: "_pos",
             field: |v, s| v.pos(s),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "pos(p) -> seat's board position",
-    },
-    Name {
-        cel: "persona",
-        aliases: &[],
-        flat: "persona",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
-        get: NO_GET,
-        get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
-            var: "_persona",
-            field: |v, s| v.persona(s),
-        },
-        doc: "persona(p) -> seat's persona id hash",
-    },
-    Name {
-        cel: "group",
-        aliases: &["band"],
-        flat: "group",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
-        get: NO_GET,
-        get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
-            var: "_group",
-            field: |v, s| v.group(s),
-        },
-        doc: "group(p) -> seat's group id hash",
     },
     Name {
         cel: "tiles",
@@ -912,49 +861,23 @@ pub const VOCAB: &[Name] = &[
             var: "_tiles",
             field: |v, s| v.tiles(s),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "tiles(p) -> seat's owned-tile count",
     },
     Name {
-        cel: "persona_is",
+        cel: "cand_has",
         aliases: &[],
-        flat: "persona_is",
-        scope: Scope::Func { arity: 2, cand: false },
+        flat: "cand_has",
+        scope: Scope::Func { arity: 2, cand: true },
         ty: Ty::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatIntIs {
-            var: "_character",
-            field: |v, s| v.persona(s),
+        fx: Fx::PairHas {
+            var: "_cand_pairs",
+            fill: fill_cand_pairs,
         },
-        doc: "persona_is(p, '名') / persona_is(p, id) -> seat plays that character",
-    },
-    Name {
-        cel: "group_is",
-        aliases: &[],
-        flat: "group_is",
-        scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        get_str: NO_GET_STR,
-        fx: Fx::SeatIntIs {
-            var: "_band",
-            field: |v, s| v.group(s),
-        },
-        doc: "group_is(p, 'Band') / group_is(p, id) -> seat is in that band",
-    },
-    Name {
-        cel: "blocked",
-        aliases: &[],
-        flat: "blocked",
-        scope: Scope::Func { arity: 1, cand: true },
-        ty: Ty::Bool,
-        get: NO_GET,
-        get_str: NO_GET_STR,
-        fx: Fx::IntHas {
-            var: "_blocked",
-            fill: |v| v.blocked_groups(),
-        },
-        doc: "blocked(band) -> skill blocked for this candidate",
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "cand_has(key, member) -> membership in the host's named candidate set",
     },
     Name {
         cel: "neighbor",
@@ -965,6 +888,7 @@ pub const VOCAB: &[Name] = &[
         get: NO_GET,
         get_str: NO_GET_STR,
         fx: Fx::Neighbor,
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "neighbor(p, delta) -> seat id, wrapping",
     },
     Name {
@@ -980,6 +904,7 @@ pub const VOCAB: &[Name] = &[
             // Spellings -> `id_of` hashes (the IR `SetId::ChainKinds` keys).
             fill: |v| v.chain_kinds().iter().map(|s| crate::id_of(s)).collect(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "effect.has(kind) / chain.has(kind)",
     },
     Name {
@@ -994,6 +919,7 @@ pub const VOCAB: &[Name] = &[
             var: "_hit_seats",
             fill: |v| v.chain_hits(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "effect.hits(seat) / chain.hits(seat)",
     },
     // -- turn counters ------------------------------------------------------
@@ -1009,6 +935,7 @@ pub const VOCAB: &[Name] = &[
             var: "_gains",
             field: |v, s| v.gains_this_turn(s),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "gains_this_turn(p) -> money-ins for p this turn",
     },
     Name {
@@ -1023,6 +950,7 @@ pub const VOCAB: &[Name] = &[
             var: "_targeted",
             field: |v, s| v.targeted_count(s),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "targeted_count(p) -> hostile targetings of p this turn",
     },
     // -- player-state lookup -------------------------------------------------
@@ -1038,6 +966,7 @@ pub const VOCAB: &[Name] = &[
             var: "_state",
             fill: |v| v.state_table(),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "state(p, 'key') -> the seat's player-state value for that key ('stay' / 'stun' / 'stunStart' / 'exile' / 'unstoppable' / …); missing = 0",
     },
     // -- pure int predicate -------------------------------------------------
@@ -1067,6 +996,7 @@ pub const VOCAB: &[Name] = &[
                 false
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "repeated_digits(n) -> |n|'s decimal form repeats a digit",
     },
     // -- board geometry -----------------------------------------------------
@@ -1088,6 +1018,7 @@ pub const VOCAB: &[Name] = &[
                 d.min(n - d)
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "dist(a, b) -> undirected ring distance",
     },
     Name {
@@ -1110,6 +1041,7 @@ pub const VOCAB: &[Name] = &[
                 out
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "players_on(tile, except) -> present players standing there",
     },
     Name {
@@ -1132,6 +1064,7 @@ pub const VOCAB: &[Name] = &[
                 out
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "next_dist(p, dir) -> steps to the nearest rival ahead; -1 = none",
     },
     Name {
@@ -1154,6 +1087,7 @@ pub const VOCAB: &[Name] = &[
                 out
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "others_within(p, r) -> rivals still in within r tiles of p",
     },
     Name {
@@ -1176,6 +1110,7 @@ pub const VOCAB: &[Name] = &[
                 out
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "owned_within(p, r) -> p's deeds within r tiles of p",
     },
     Name {
@@ -1198,6 +1133,7 @@ pub const VOCAB: &[Name] = &[
                 out
             },
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "on_path(me, them) -> my deeds on their move.roll path",
     },
     Name {
@@ -1212,26 +1148,56 @@ pub const VOCAB: &[Name] = &[
             var: "_between",
             field: |v, s| v.between(s),
         },
+        lower_as: crate::ext::LowerAs::Direct,
         doc: "between(p) -> rivals standing in p's move span",
     },
 ];
 
+/// Kernel ++ installed-extension names.
+fn all_names() -> impl Iterator<Item = &'static Name> {
+    VOCAB
+        .iter()
+        .chain(crate::ext::ext().names.iter())
+}
+
+/// Eager `cand_has` table: every `(id_of(key), member)` pair the host
+/// publishes, for each set key the extension declares via
+/// `LowerAs::Call { fid: CandHas, bake }`.
+fn fill_cand_pairs(view: &dyn CondView) -> Vec<(i64, i64)> {
+    use rules_cond_ir::ctx::FnId;
+
+    use crate::ext::LowerAs;
+
+    let mut out = Vec::new();
+    for n in crate::ext::ext().names {
+        if let LowerAs::Call {
+            fid: FnId::CandHas,
+            bake,
+        } = n.lower_as
+        {
+            for key in bake {
+                for member in view.cand_set(key) {
+                    out.push((crate::id_of(key), member));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Look a name up by flat identifier (the post-rewrite spelling).
 pub fn by_flat(flat: &str) -> Option<&'static Name> {
-    VOCAB.iter().find(|n| n.flat == flat)
+    all_names().find(|n| n.flat == flat)
 }
 
 /// Look a name up by CEL spelling or any of its aliases.
 pub fn by_cel(cel: &str) -> Option<&'static Name> {
-    VOCAB
-        .iter()
-        .find(|n| n.cel == cel || n.aliases.contains(&cel))
+    all_names().find(|n| n.cel == cel || n.aliases.contains(&cel))
 }
 
 /// Flat identifiers the lint accepts (window + candidate scalars).
 pub fn flat_idents() -> Vec<&'static str> {
-    VOCAB
-        .iter()
+    all_names()
         .filter(|n| !matches!(n.scope, Scope::Func { .. }))
         .map(|n| n.flat)
         .collect()
@@ -1239,8 +1205,7 @@ pub fn flat_idents() -> Vec<&'static str> {
 
 /// CEL function names the lint accepts (plus CEL operators/stdlib).
 pub fn func_names() -> Vec<&'static str> {
-    VOCAB
-        .iter()
+    all_names()
         .filter(|n| matches!(n.scope, Scope::Func { .. }))
         .flat_map(|n| {
             // Both the CEL spelling (`move.tag`) and the flat id (`move_tag`)
@@ -1272,7 +1237,7 @@ pub fn struct_roots() -> Vec<(&'static str, Vec<&'static str>)> {
             }
         }
     }
-    for n in VOCAB {
+    for n in all_names() {
         if matches!(n.scope, Scope::Func { .. }) {
             continue;
         }
@@ -1304,6 +1269,8 @@ pub enum Table {
     StrMap(Vec<(String, i64)>),
     /// membership list (`is_circle`, `blocked`, `chain_has`, …).
     IntList(Vec<i64>),
+    /// `(key, member)` membership pairs (`cand_has`).
+    PairList(Vec<(i64, i64)>),
     /// a single int (`neighbor`'s seat count, `dist`'s ring size).
     Seats(i64),
     /// `(a, b) -> v` (`players_on` / `next_dist` / … two-key lookups).
@@ -1380,6 +1347,7 @@ pub fn fn_table(n: &Name, view: &dyn CondView) -> Option<(&'static str, Table)> 
         Fx::StrInt { var, fill, .. } => Some((var, Table::StrMap(fill(view)))),
         Fx::IntInt { var, fill } => Some((var, Table::IntMap(fill(view)))),
         Fx::IntHas { var, fill } => Some((var, Table::IntList(fill(view)))),
+        Fx::PairHas { var, fill } => Some((var, Table::PairList(fill(view)))),
         Fx::Neighbor => Some(("_seats", Table::Seats(view.seat_count()))),
         Fx::IntIntConst { var, .. } => Some((var, Table::Seats(view.tile_count()))),
         Fx::BinInt { var, fill } => Some((var, Table::BinMap(fill(view)))),

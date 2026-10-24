@@ -15,6 +15,8 @@ use rules_cond_ir::nodes::{Kind, Node};
 use rules_cond_ir::vars::{VarId, VarTy, VARS};
 use rules_cond_ir::{spec, Val};
 
+mod common;
+
 // ---------------------------------------------------------------------------
 // context plumbing: fill both the cel snapshot and the IR ctx from one source
 // ---------------------------------------------------------------------------
@@ -51,6 +53,7 @@ fn str_boundary() -> [FillVal; 6] {
 }
 
 fn fixture_empty() -> Fixture {
+    common::install_test_ext();
     let mut f = Fixture {
         win: WindowCtx::default(),
         cand: CandidateCtx::default(),
@@ -134,17 +137,12 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: FillVal) {
         VarId::Owner => f.cand.owner = raw,
         VarId::OwnerId => f.cand.owner = raw,
         VarId::OwnerMoney => f.cand.owner_money = raw,
-        VarId::OwnerFire => f.cand.owner_charge = raw,
-        VarId::OwnerCrystals => f.cand.owner_group_pool = raw,
         VarId::OwnerHand => f.cand.owner_hand = raw,
         VarId::OwnerPos => f.cand.owner_pos = raw,
         VarId::OwnerOut => f.cand.owner_out = raw,
         VarId::OwnerStay => f.cand.owner_stay = raw,
         VarId::OwnerStun => f.cand.owner_stun = raw,
         VarId::OwnerExile => f.cand.owner_exile = raw,
-        VarId::OwnerNoHand => f.cand.owner_no_hand = raw,
-        VarId::OwnerCharacter => f.cand.owner_persona = raw,
-        VarId::OwnerBand => f.cand.owner_group = raw,
         VarId::OwnerTiles => f.cand.owner_tiles = raw,
         VarId::CardId => f.cand.card_id = raw,
         VarId::CardPlaced => f.cand.card_placed = raw != 0,
@@ -437,14 +435,86 @@ fn diff_state_function() {
 }
 
 // ---------------------------------------------------------------------------
+// (2c) sugar LowerAs shapes: Call / CallEq / OwnerState
+// ---------------------------------------------------------------------------
+
+/// One differential case per `LowerAs` shape. Sugar lowers to the same IR
+/// the canonical `state(p, key)` form produces; both evaluators must agree.
+#[test]
+fn diff_sugar_lower_as_shapes() {
+    use rules_cond_ir::ctx::id_of;
+    let mut f = fixture_empty();
+    common::set_sugar_state(&mut f.win.players, &mut f.ir, 0, 7, 3, 42, 9, 1);
+    common::set_sugar_state(&mut f.win.players, &mut f.ir, 1, 0, 0, 0, 0, 0);
+    f.cand.owner = 0;
+    f.ir.set_scalar(VarId::Owner, 0);
+
+    // Call: `charge(p)` == `state(p, 'charge')`.
+    assert_agree("charge(0) == 7", &f);
+    assert_agree("charge(owner) == 7", &f);
+    assert_agree("charge(1) == 0", &f);
+    assert_agree("state(0, 'charge') == charge(0)", &f);
+
+    // CallEq: `persona_is(p, x)` == `state(p, 'persona') == id_of(x)`.
+    assert_agree("persona_is(0, 42)", &f);
+    assert_agree("persona_is(owner, 42)", &f);
+    assert_agree("persona_is(0, '名')", &f);
+    assert_agree("state(0, 'persona') == 42", &f);
+
+    // OwnerState: `owner.charge` == `state(owner, 'charge')`.
+    assert_agree("owner.charge == 7", &f);
+    assert_agree("owner.charge == state(owner, 'charge')", &f);
+    assert_agree("owner.persona == 42", &f);
+    assert_agree("owner.no_hand == 1", &f);
+
+    // Call(CandHas): `blocked(b)` == `cand_has('blocked', b)`.
+    f.ir.cand_insert(id_of("blocked"), 9);
+    f.cand.blocked_groups = vec![9];
+    assert_agree("blocked(9)", &f);
+    assert_agree("cand_has('blocked', 9)", &f);
+    assert_agree("blocked(1)", &f);
+}
+
+// ---------------------------------------------------------------------------
+// (2d) persona/group hash spellings (brief 9.2)
+// ---------------------------------------------------------------------------
+
+/// One differential case per distinct production name spelling. The host
+/// publishes `id_of(persona_name())` / `id_of(group_name())`; the sugar
+/// `CallEq` bakes `id_of` of the same literal at lower. A skill-id leak would
+/// silently fail these.
+#[test]
+fn diff_persona_group_name_spellings() {
+    let names = [
+        "三角初华（Sumimi）",
+        "纯田真奈",
+        "Pastel✽Palettes",
+        "CRYCHIC",
+    ];
+    for name in names {
+        let mut f = fixture_empty();
+        let h = common::h(name);
+        // Persona identity on seat 0; group identity on seat 1.
+        common::set_sugar_state(&mut f.win.players, &mut f.ir, 0, 0, 0, h, 0, 0);
+        common::set_sugar_state(&mut f.win.players, &mut f.ir, 1, 0, 0, 0, h, 0);
+        f.cand.owner = 0;
+        f.ir.set_scalar(VarId::Owner, 0);
+        assert_agree(&format!("persona_is(0, '{name}')"), &f);
+        assert_agree(&format!("persona_is(owner, '{name}')"), &f);
+        assert_agree(&format!("group_is(1, '{name}')"), &f);
+        // The other seat does not carry this identity.
+        assert_agree(&format!("persona_is(1, '{name}')"), &f);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // (3) real guards from the repo
 // ---------------------------------------------------------------------------
 
 /// The inventory of `On::*` condition strings (shared extractor).
 fn collect_guards() -> Vec<String> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap();
+    // `crates/cond` → `rules/`.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules");
     let mut out = Vec::new();
     for d in ["cards", "skills", "tiles", "events", "fixtures"] {
         for g in rules_cond::lower::inventory_guards(&root.join(d)) {
@@ -500,13 +570,19 @@ fn diff_all_inventory_guards() {
         set_scalar(&mut f, VarId::OwnerOut, VarTy::Int, FillVal::Int(0));
         set_scalar(&mut f, VarId::OwnerMoney, VarTy::Int, FillVal::Int(500));
         set_scalar(&mut f, VarId::OwnerHand, VarTy::Int, FillVal::Int(2));
-        set_scalar(&mut f, VarId::OwnerFire, VarTy::Int, FillVal::Int(1));
         set_scalar(&mut f, VarId::PlanFixedRoll, VarTy::OptInt, FillVal::Null);
-        f.ir.set_insert(SetId::Circle, 1);
+        // Sugar `state(p, key)` rows (shared list in the content tables).
+        common::set_sugar_state(&mut f.win.players, &mut f.ir, 0, 1, 0, 0, 0, 0);
+        common::set_sugar_state(&mut f.win.players, &mut f.ir, 1, 1, 0, 0, 0, 0);
+        f.ir.tile_kind_ids[1] = rules_cond_ir::ctx::id_of("circle");
         f.ir.set_insert(SetId::ChainKinds, rules_cond_ir::ctx::id_of("pay"));
         // Mirror the function tables into the cel snapshot.
         f.win.tile_kinds = vec![String::new(), "circle".to_string()];
         f.win.tile_count = 2;
+        // Seat money must agree: IR `Money` and `PlayerSnap.money`.
+        f.ir.seat[0][SeatField::Money as usize] = 500;
+        f.win.players[0].money = 500;
+        f.ir.n_players = 2;
         f.win.chain = vec![rules_cond::ChainLink {
             kind: "pay".to_string(),
             from: 0,
@@ -516,19 +592,6 @@ fn diff_all_inventory_guards() {
         f.ir.named_set(rules_cond_ir::ctx::id_of("PAREO标记"), 1);
         f.cand.slots.insert("skillState".into(), 2);
         f.cand.tok_names.insert("PAREO标记".into(), 1);
-        f.ir.seat[0][SeatField::Money as usize] = 500;
-        f.ir.n_players = 2;
-        // Mirror seat money into the CEL snapshot (`money(p)` reads
-        // `win.players[p].money`; IR reads `seat[p][Money]`).
-        if f.win.players.is_empty() {
-            f.win.players = vec![
-                rules_cond::PlayerSnap {
-                    money: 500,
-                    ..rules_cond::PlayerSnap::default()
-                },
-                rules_cond::PlayerSnap::default(),
-            ];
-        }
         assert_agree(src, &f);
         agree += 1;
 
