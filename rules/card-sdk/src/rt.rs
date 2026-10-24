@@ -19,7 +19,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .on
                 .iter()
                 .enumerate()
-                .map(|(ei, o)| ManifestOn {
+                .map(|(_, o)| ManifestOn {
                     kind: o.kind() as i32,
                     triggers: o.triggers(),
                     pre: {
@@ -54,8 +54,11 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                             Some(String::from(l))
                         }
                     },
-                    presentation: c.presentation(ei as i32).header,
-                    flash: c.presentation(ei as i32).flash,
+                    // The entry's own accessors -- no index walk (the
+                    // `CardDef::presentation` scan exists only for
+                    // lookup-by-index callers).
+                    presentation: o.header_of(),
+                    flash: o.flash_of(),
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of

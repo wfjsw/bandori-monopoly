@@ -478,8 +478,15 @@ stays shown. The identity lives in the drive's persistent state and survives
 halt; the client dedupes by event id so a re-delivered frame never replays a
 flash.
 
-**QuietWhenEmpty interaction**: a requested flash counts as visible -- if
-`ctx::flash()` ran, the header is kept.
+**QuietWhenEmpty interaction**: a **cue** counts as visible -- the header is
+kept. Both spellings of "cue me" count: the imperative `ctx::flash()` and the
+declarative `Flash::Always` (`On::flash`). Cue and flash-decision are two
+separate signals: `flash_cued` is the OR of those two across the drive's
+entries ("was the player cued"), while the `flash` flag stamped on the `"card"`
+event is the **folded** policy (`Never` can still suppress it). A drive that
+was cued keeps its header naming the clause even when `Never` wins the flash
+decision -- `Never`'s promise is "log entry remains, no flash", not "erase the
+clause".
 
 Path: `On::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
 `"card"` event's `flash` flag under the precedence above. Proactive `"flash"`
@@ -491,6 +498,9 @@ entries' policies therefore **fold** (`Never` if any says `Never`; else
 `Always` if any says `Always`; else `Auto`) -- a trailing `Auto` must not drop
 an earlier `Always`, and a trailing `Always` must not lift an earlier `Never`.
 `ctx::flash` / `ctx::no_flash` keep their runtime positions in the precedence.
+Header mode folds the same way but with the opposite polarity
+(`Visible` > `QuietWhenEmpty` > `Silent`): one entry demanding its clause be
+shown must not be silenced by a quiet or bookkeeping sibling, in either order.
 
 ## Tile text (`On::texts`)
 

@@ -99,7 +99,7 @@ impl NativeRulesHandle {
                     .on
                     .iter()
                     .enumerate()
-                    .map(|(ei, o)| ManifestOn {
+                    .map(|(_, o)| ManifestOn {
                         kind: o.kind() as i32,
                         triggers: o.triggers(),
                         pre: {
@@ -135,8 +135,9 @@ impl NativeRulesHandle {
                                 Some(String::from(l))
                             }
                         },
-                        presentation: card.presentation(ei as i32).header,
-                        flash: card.presentation(ei as i32).flash,
+                        // The entry's own accessors -- no index walk.
+                        presentation: o.header_of(),
+                        flash: o.flash_of(),
                     })
                     .collect();
                 // Same bitset the sandbox builds (): trigger

@@ -32,7 +32,7 @@ use rules_cond::WindowScope;
 // ------------------------------------------------- silent-entry debug guard
 
 thread_local! {
-    /// Violations of the silent-entry contract: a `CardDef::silent` body that
+    /// Violations of the silent-entry contract: a `On::silent` body that
     /// produced a visible effect (see [`RulesBridge::check_silent_body`]).
     /// Tests read this via [`take_silent_visible`]; debug builds also
     /// `debug_assert!` for shipped (non-`TEST:`) card ids.
@@ -52,12 +52,39 @@ fn record_silent_visible(card_id: &str, what: &str) {
 /// later `Always` lift an earlier `Never`. Matches the declarative half of
 /// the precedence `commit_after` applies at the flash point
 /// (`Never > ctx::no_flash > ctx::flash / Always > Auto`).
+///
+/// Why `Never` wins here while [`fold_header`] lets `Visible` win: the flash
+/// is one shared animation, so the **strongest opinion** (`Never` = "do not
+/// cue") must silence the whole drive; the header is one shared clause name,
+/// so the **strongest demand** (`Visible` = "show my clause") must keep it.
+/// The asymmetry is deliberate -- do not "fix" one fold to match the other.
 const fn fold_flash(a: card_sdk::abi::Flash, b: card_sdk::abi::Flash) -> card_sdk::abi::Flash {
     use card_sdk::abi::Flash::{Always, Auto, Never};
     match (a, b) {
         (Never, _) | (_, Never) => Never,
         (Always, _) | (_, Always) => Always,
         _ => Auto,
+    }
+}
+
+/// Fold two entry header modes across the sibling entries of one drive:
+/// `Visible` if any entry says `Visible`; else `QuietWhenEmpty` if any says
+/// `QuietWhenEmpty`; else `Silent`. Same one-header-per-drive constraint as
+/// [`fold_flash`] (`run_hook` announces once per matching entry, then
+/// `commit_after` takes **one** header), but the opposite polarity: a
+/// trailing `Silent` / `QuietWhenEmpty` sibling must not retract a leading
+/// `Visible` clause, and a trailing `Visible` must not cancel a leading
+/// `QuietWhenEmpty` -- in either order. See [`fold_flash`] for why the two
+/// folds disagree on which end wins.
+const fn fold_header(
+    a: card_sdk::abi::Presentation,
+    b: card_sdk::abi::Presentation,
+) -> card_sdk::abi::Presentation {
+    use card_sdk::abi::Presentation::{QuietWhenEmpty, Silent, Visible};
+    match (a, b) {
+        (Visible, _) | (_, Visible) => Visible,
+        (QuietWhenEmpty, _) | (_, QuietWhenEmpty) => QuietWhenEmpty,
+        _ => Silent,
     }
 }
 
@@ -298,7 +325,7 @@ pub struct Run {
     /// 0 -- see [`RulesBridge::check_silent_body`]. Not taken by the
     /// multi-pass replace bookkeeping (unlike [`Self::posted`]).
     logged: u32,
-    /// This run's entry is silent (`CardDef::silent`): no activation flash and
+    /// This run's entry is silent (`On::silent`): no activation flash and
     /// no outcome lines for its state / plan writes either (the flag hides
     /// the whole presentation, and the body must be pure bookkeeping).
     silent_body: bool,
@@ -328,6 +355,14 @@ pub struct Run {
     /// `world.flash_*` so they survive a prompt's routine re-run the same way
     /// the event tail does.
     flash_policy: card_sdk::abi::Flash,
+    /// Did **any** sibling entry cue the player? OR of the imperative
+    /// `ctx::flash()` and every `Flash::Always` declaration on this drive.
+    /// Distinct from [`Self::flash_policy`] (the folded *decision*, `Never` >
+    /// `Always` > `Auto`): "was the player cued" and "should the drive flash"
+    /// are different questions, and a `Never` sibling may still lose the
+    /// flash while an `Always` sibling already flushed the header. ORs across
+    /// entries -- never folded, never reset per entry.
+    flash_cued: bool,
     /// Next flash ordinal **this pass** (resets each re-run so the same call
     /// site maps to the same identity). `SharedFlash.seen` holds the posted.
     flash_ordinal: u32,
@@ -2704,7 +2739,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// does not flash -- a *card* placed on the square still does. `On::Message`
     /// never reaches here (internal plumbing, no `Call::Message`).
     ///
-    /// A **silent** entry (`ManifestOn::silent`, `CardDef::silent`) is
+    /// A **silent** entry (`ManifestOn::silent`, `On::silent`) is
     /// bookkeeping -- `declare_cap` / `set_bounds` / initial values / latch
     /// clears: a mechanical declaration the player never sees as a clause
     /// ficycle. It runs its body (the category → pre → guard layers are
@@ -2734,7 +2769,7 @@ impl<M: CardModules> RulesBridge<M> {
         if matches!(call, Call::Buy { .. } | Call::Build { .. }) && card_id.starts_with("tile:") {
             return -1;
         }
-        // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
+        // Silent entry (`On::silent`): bookkeeping. Body runs, no flash
         // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
         // the header is retracted at commit if the body produced nothing.
         if self.entry_presentation(card_id, entry).header == card_sdk::abi::Presentation::Silent {
@@ -2973,16 +3008,26 @@ impl<M: CardModules> RulesBridge<M> {
         // is the parent for body lines and starts as the *outer* activation.
         // `-1` when the drive is silent or posts no header (tile settle).
         let mut own_activation = -1i32;
-        // Set at body entry when the entry is silent (`CardDef::silent`); the
-        // commit pass then checks the run produced no visible effect (the
-        // flag must not hide a real one). `Cell` so the `announce` closure can
-        // share it (same shape as the raw `cx_ptr` write-through).
+        // Header mode folded across sibling entries (see [`fold_header`]).
+        // `Silent` is the fold identity -- start there and fold each entry in.
+        // The bool cells below are derived from the fold so `commit_after`
+        // keeps its two-flag signature. `silent_body` is set at body entry
+        // when the (folded) mode is silent; the commit pass then checks the
+        // run produced no visible effect (the flag must not hide a real one).
+        // `Cell` so the `announce` closure can share it (same shape as the
+        // raw `cx_ptr` write-through).
+        let header_mode = std::cell::Cell::new(card_sdk::abi::Presentation::Silent);
         let silent_body = std::cell::Cell::new(false);
         let quiet_when_empty = std::cell::Cell::new(false);
         // Declarative flash policy (v55) rides across passes like silent_body:
         // the commit pass's announce is a no-op and must not lose it.
         let flash_policy_cell: std::cell::Cell<card_sdk::abi::Flash> =
             std::cell::Cell::new(card_sdk::abi::Flash::Auto);
+        // "Was the player cued?" -- OR of `ctx::flash()` and any
+        // `Flash::Always` sibling. Never folded, never reset per entry (see
+        // [`Run::flash_cued`]). Separate from `flash_policy_cell` because
+        // `Never` can win the flash decision while `Always` already cued.
+        let flash_cued_cell = std::cell::Cell::new(false);
         let mut prompted = false;
         // Ruling 2a: the lazy header survives across passes (learn + commit
         // run share one buffer; a pause must not drop it).
@@ -3034,6 +3079,7 @@ impl<M: CardModules> RulesBridge<M> {
                 prompted: false,
                 parent: activation_id,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             run.world.skip_log = true;
@@ -3074,27 +3120,37 @@ impl<M: CardModules> RulesBridge<M> {
                     // **not** fold this entry again) so the body's `Never`
                     // check still sees the sibling's opinion on a re-run.
                     w.flash_policy = flash_policy_cell.get();
+                    // Same for the header mode and the cue flag: a fresh `Run`
+                    // starts `silent_body = false`, and a silent entry's
+                    // bookkeeping body must not post an outcome line via
+                    // `outcome_plan` on the re-run just because the cell was
+                    // not copied across.
+                    let folded_hdr = header_mode.get();
+                    w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
+                    w.quiet_when_empty =
+                        folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                    w.flash_cued = flash_cued_cell.get();
                     return;
                 }
                 w.parent = activation_id;
                 w.live = Some(cx_ptr as *mut Cx<'static>);
                 let pres = self.entry_presentation(card_id, entry);
-                // Per-entry presentation: a multi-entry drive (every
-                // `TurnStartBefore` of one card, say) must not inherit the
-                // previous sibling's silent flag -- otherwise a silent
-                // declare-cap poisons the visible clause that follows it.
-                if pres.header == card_sdk::abi::Presentation::Silent {
-                    silent_body.set(true);
-                    w.silent_body = true;
-                } else {
-                    silent_body.set(false);
-                    w.silent_body = false;
-                }
-                if pres.header == card_sdk::abi::Presentation::QuietWhenEmpty {
-                    quiet_when_empty.set(true);
-                } else {
-                    quiet_when_empty.set(false);
-                }
+                // Header mode folds across siblings (see [`fold_header`]):
+                // one decision per drive, so `Visible` wins over
+                // `QuietWhenEmpty` wins over `Silent` -- a trailing silent
+                // sibling must not poison a leading visible one, and a
+                // trailing `QuietWhenEmpty` must not retract a leading
+                // `Visible`'s header on an empty body. Do not overwrite per
+                // entry. The `announced` early-return above fires before any
+                // fold, so a re-run does not fold the same entry twice.
+                let folded_hdr = fold_header(header_mode.get(), pres.header);
+                header_mode.set(folded_hdr);
+                let is_silent = folded_hdr == card_sdk::abi::Presentation::Silent;
+                let is_quiet = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                silent_body.set(is_silent);
+                w.silent_body = is_silent;
+                quiet_when_empty.set(is_quiet);
+                w.quiet_when_empty = is_quiet;
                 // Declarative flash policy (v55) rides on the Run so the
                 // commit's precedence check can see `Never` / `Always`.
                 // One decision per drive, so the sibling entries **fold**
@@ -3108,6 +3164,13 @@ impl<M: CardModules> RulesBridge<M> {
                 let folded = fold_flash(flash_policy_cell.get(), pres.flash);
                 flash_policy_cell.set(folded);
                 w.flash_policy = folded;
+                // "Was the player cued?" ORs across entries and is **not**
+                // the folded decision: an `Always` sibling cues (and flushes
+                // its header) even when a `Never` sibling wins the flash.
+                if pres.flash == card_sdk::abi::Flash::Always {
+                    flash_cued_cell.set(true);
+                }
+                w.flash_cued = flash_cued_cell.get();
                 let id = self.announce_drive(w, call.clone(), card_id, uid, target, tile, trigger, entry);
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
@@ -3209,6 +3272,7 @@ impl<M: CardModules> RulesBridge<M> {
                         {
                             let mut after = after;
                             after.flash_policy = flash_policy_cell.get();
+                            after.flash_cued = flash_cued_cell.get();
                             if after.own_activation < 0 {
                                 after.own_activation = flushed_header;
                             }
@@ -3278,6 +3342,7 @@ impl<M: CardModules> RulesBridge<M> {
                         prompted: false,
                         parent: activation_id,
                         flash_policy: card_sdk::abi::Flash::Auto,
+                        flash_cued: false,
                         flash_ordinal: 0,
                     };
                     // Same as the learn pass: the guest copy must not allocate
@@ -3292,6 +3357,17 @@ impl<M: CardModules> RulesBridge<M> {
                         // outside), so no slot to consume here.
                         w.parent = activation_id;
                         w.live = Some(cx_ptr as *mut Cx<'static>);
+                        // Same restore as the multi-pass early-return: this
+                        // pass's fresh `Run` must see the drive's already-
+                        // folded header mode / flash policy / cue flag, or a
+                        // silent entry's bookkeeping body posts an outcome
+                        // line via `outcome_plan` that must stay invisible.
+                        let folded_hdr = header_mode.get();
+                        w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
+                        w.quiet_when_empty =
+                            folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                        w.flash_policy = flash_policy_cell.get();
+                        w.flash_cued = flash_cued_cell.get();
                     };
                     let outcome2 = if guarded {
                         match self
@@ -3316,6 +3392,7 @@ impl<M: CardModules> RulesBridge<M> {
                             {
                                 let mut after2 = after2;
                                 after2.flash_policy = flash_policy_cell.get();
+                                after2.flash_cued = flash_cued_cell.get();
                                 if after2.own_activation < 0 {
                                     after2.own_activation = flushed_header;
                                 }
@@ -3349,6 +3426,7 @@ impl<M: CardModules> RulesBridge<M> {
                             {
                                 let mut after = after;
                                 after.flash_policy = flash_policy_cell.get();
+                                after.flash_cued = flash_cued_cell.get();
                                 if after.own_activation < 0 {
                                     after.own_activation = flushed_header;
                                 }
@@ -3539,7 +3617,7 @@ impl<M: CardModules> RulesBridge<M> {
                             debug_assert!(
                                 card_id.starts_with("TEST:"),
                                 "silent entry on {card_id} produced a visible host effect ({what}); \
-                                 `CardDef::silent` must not hide a real effect"
+                                 `On::silent` must not hide a real effect"
                             );
                         }
                     }
@@ -4361,7 +4439,7 @@ impl<M: CardModules> RulesBridge<M> {
         false
     }
 
-    /// Debug guard: a **silent** entry (`CardDef::silent`) is bookkeeping --
+    /// Debug guard: a **silent** entry (`On::silent`) is bookkeeping --
     /// declarations, resets, latch clears the player never sees as a clause
     /// ficycle. It must not produce a visible effect (money, cards, marks,
     /// houses, charge spend, narration lines); the flag exists to hide the
@@ -4397,8 +4475,8 @@ impl<M: CardModules> RulesBridge<M> {
         debug_assert!(
             card_id.starts_with("TEST:"),
             "silent entry on {card_id} produced a visible effect ({what}); \
-             `CardDef::silent` must not hide a real effect -- drop it from the \
-             silent list or make the body pure bookkeeping"
+             `On::silent` must not hide a real effect -- drop the `.silent()` \
+             mark or make the body pure bookkeeping"
         );
     }
 
@@ -4411,7 +4489,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// adopts the live tail before the swap. Then it completes the activation
     /// entry with its outcome (「无事发生」 when the body changed nothing).
     ///
-    /// `silent` marks a bookkeeping body (`CardDef::silent`): it posted no
+    /// `silent` marks a bookkeeping body (`On::silent`): it posted no
     /// activation, and it must not have produced a visible effect either --
     /// see [`Self::check_silent_body`].
     fn commit_after(
@@ -4490,9 +4568,19 @@ impl<M: CardModules> RulesBridge<M> {
             // which is the same promise written on the entry instead of in the
             // body. Dropping the header under `Always` would make the policy a
             // lie ("always flashes") the moment the body is a no-op.
+            //
+            // `flash_cued` is "did any entry cue the player" -- the OR of
+            // `ctx::flash()` and any `Flash::Always` sibling -- **not** the
+            // folded `after.flash_policy` (which `Never` can win). A drive
+            // that was cued keeps its header naming the clause even when
+            // `Never` wins the flash decision below ("log entry remains").
             let flash_requested = after.world.flash.lock().requested;
-            let flash_cued = flash_requested
-                || after.flash_policy == card_sdk::abi::Flash::Always;
+            let flash_cued = flash_requested || after.flash_cued;
+            // Body emptiness must see every log that the flush below turns
+            // into after-hooks the player can observe: a counter move raises
+            // `counterChanged`, a named raise fires its hooks. Missing those
+            // would retract the 「效果适用」 header and then fire the hooks on
+            // an invisible clause. (`state_log` is likewise a hook raiser.)
             let body_empty = after.logged == 0
                 && after.paid_log.is_empty()
                 && after.draw_log.is_empty()
@@ -4501,7 +4589,9 @@ impl<M: CardModules> RulesBridge<M> {
                 && after.house_log.is_empty()
                 && after.abnormal_log.is_empty()
                 && after.state_log.is_empty()
-                && after.marker_spent_log.is_empty();
+                && after.marker_spent_log.is_empty()
+                && after.counter_log.is_empty()
+                && after.named_raise_log.is_empty();
             if quiet_when_empty && body_empty && !after.prompted && !flash_cued {
                 cx.drop_events(&[header]);
                 after.world.recent = cx.world().recent.clone();
@@ -6371,6 +6461,7 @@ impl<M: CardModules> RulesBridge<M> {
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         }
     }
@@ -6598,6 +6689,7 @@ impl<M: CardModules> RulesBridge<M> {
                 prompted: false,
                 parent: -1,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             let win_scope =
@@ -6974,6 +7066,7 @@ impl<M: CardModules> RulesBridge<M> {
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         }
     }
@@ -8893,6 +8986,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         };
         self.ruleset
@@ -8961,6 +9055,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 prompted: false,
                 parent: -1,
                 flash_policy: card_sdk::abi::Flash::Auto,
+                flash_cued: false,
                 flash_ordinal: 0,
             };
             // The play path declares the card's `On::Play` entry -- the press
@@ -9081,6 +9176,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             prompted: false,
             parent: -1,
             flash_policy: card_sdk::abi::Flash::Auto,
+            flash_cued: false,
             flash_ordinal: 0,
         };
         q.tiles

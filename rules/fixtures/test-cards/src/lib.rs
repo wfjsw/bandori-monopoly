@@ -1230,6 +1230,69 @@ fn quiet_log(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// QuietWhenEmpty bodies whose only **visible** effect is a log vec the
+/// commit flush turns into after-hooks -- no `ctx::log` / pay / draw.
+/// `body_empty` must count those too or the 「效果适用」 header is retracted
+/// and then `counterChanged` / the named-raise hooks fire on an invisible
+/// clause.
+/// * `TEST:quietCounter` -- setup target (flushes the lazy header per Ruling
+///   2a) then only a counter write (`ctx::add_counter_at`, the path that does
+///   **not** auto-narrate `log.outcome.counter`).
+/// * `TEST:quietRaise` -- setup target then only a named raise
+///   (`ctx::raise_after`).
+const QUIET_COUNTER: CardDef = CardDef::new(
+    "TEST:quietCounter",
+    &[
+        On::Play("", None, quiet_counter_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_counter_body))
+            .quiet_when_empty(),
+    ],
+);
+
+const QUIET_RAISE: CardDef = CardDef::new(
+    "TEST:quietRaise",
+    &[
+        On::Play("", None, quiet_raise_place),
+        On::Action(Action::Settle("", Some(silent_hook_yes), quiet_raise_body))
+            .quiet_when_empty(),
+    ],
+);
+
+fn quiet_counter_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:quietCounter", &Msg::new(key!("quiet_counter_note")));
+    Ok(())
+}
+
+/// Setup target first: a host request flushes the lazy 「效果适用」 header
+/// (Ruling 2a) even though targeting itself is setup, not a visible effect.
+/// The only body log left is the counter write -- `ctx::add_counter` /
+/// `set_counter` auto-narrate `log.outcome.counter` (so `logged` would see
+/// them); `add_counter_at` is the silent write, and its `counter_log` row is
+/// what raises `counterChanged` after commit.
+fn quiet_counter_body(player_id: i32) -> card_sdk::Asked {
+    if let Some(&other) = ctx::others(player_id).first() {
+        ctx::target(other);
+    }
+    ctx::add_counter_at(ctx::self_uid(), "quietTick", 1, 0);
+    Ok(())
+}
+
+fn quiet_raise_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:quietRaise", &Msg::new(key!("quiet_raise_note")));
+    Ok(())
+}
+
+/// Setup target then only a post-commit named raise -- no log line of its own.
+fn quiet_raise_body(player_id: i32) -> card_sdk::Asked {
+    if let Some(&other) = ctx::others(player_id).first() {
+        ctx::target(other);
+    }
+    ctx::raise_after(player_id, "TEST.quietRaise.tick", 1);
+    Ok(())
+}
+
 /// Ruling 2a: an optional prompt that is declined leaves no header, no flash,
 /// no log. The lazy header only posts when a visible outcome follows.
 const SILENT_ASK: CardDef = CardDef::new(
@@ -1823,6 +1886,7 @@ card_sdk::ruleset!(&[
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
+    QUIET_COUNTER, QUIET_RAISE,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,
     FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,

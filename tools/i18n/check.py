@@ -59,7 +59,7 @@ def main() -> int:
     game_all = set(load(LANGS[0], "game")) | set(load(LANGS[1], "game"))
     ui_all = set(load(LANGS[0], "ui")) | set(load(LANGS[1], "ui"))
     # Roots that live only in `ui.json` are client copy even when a `.rs` string
-    # names them (`CardDef::texts` / `deed.note.*` ride the manifest as i18n
+    # names them (`On::texts` / `deed.note.*` ride the manifest as i18n
     # keys). Everything else a `.rs` file emits is a protocol / engine key.
     ui_only_roots = {k.split(".")[0] for k in ui_all} - {k.split(".")[0] for k in game_all}
     # The key shape is taken from the locales themselves, so a new namespace in a

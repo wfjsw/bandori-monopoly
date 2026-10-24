@@ -80,7 +80,6 @@ pub const DETOUR: CardDef = CardDef::new(
 
     ],
 )
-// TODO: Move this .silent to the actual onlist
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回家的路上绕个道"#)
         .raw_name(r#"回家的路上绕个道"#)
