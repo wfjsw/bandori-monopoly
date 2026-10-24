@@ -436,7 +436,7 @@ Path: `CardDef::silent` → `ManifestOn::silent` (ABI v53) →
 `announce_drive` skips the `"card"` post and the 「效果适用」 header; the body
 runs the full category → pre → guard layering unchanged.
 
-## Flash policy (`CardDef::flash`, ABI v55)
+## Flash policy (`On::flash`, ABI v55)
 
 Beside the header mode (Visible / Silent / QuietWhenEmpty), each entry carries
 a **flash policy** -- whether the activation's centre flash (and field-slot
@@ -452,9 +452,9 @@ pulse) shows:
 
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
-    On::Play("", None, use_skill),                  // 0: Auto
-    On::Action(Action::TurnEnd("", None, tick)),    // 1: Always (self-only)
-]).flash(&[(1, Flash::Always)]);
+    On::Play("", None, use_skill),                                    // Auto
+    On::Action(Action::TurnEnd("", None, tick)).flash(Flash::Always), // Always (self-only)
+]);
 ```
 
 **Precedence** (highest first): `Flash::Never` > `ctx::no_flash()` >
@@ -483,7 +483,7 @@ flash.
 **QuietWhenEmpty interaction**: a requested flash counts as visible -- if
 `ctx::flash()` ran, the header is kept.
 
-Path: `CardDef::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
+Path: `On::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
 `"card"` event's `flash` flag under the precedence above. Proactive `"flash"`
 events play through the client's cardFlash path.
 

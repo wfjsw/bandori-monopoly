@@ -354,7 +354,7 @@ use std::borrow::Cow;
 ///      the header mode: `Auto` (host classifies by scope, owner-self-only =>
 ///      no flash), `Always` (the rule says this entry always flashes, e.g. a
 ///      self-only effect the player must notice), `Never` (log entry remains,
-///      no flash/pulse). Authored via `CardDef::flash`. The header modes of
+///      no flash/pulse). Authored via `On::flash`. The header modes of
 ///      v54 are unchanged; `CardDef::presentation` is the one lookup that
 ///      folds header + flash into [`EntryPresentation`].
 ///      Imperative flash from the body (like `ctx::log`): new host imports
@@ -912,8 +912,9 @@ impl Default for Flash {
 }
 
 /// One entry's log presentation: the header mode plus the flash policy.
-/// Returned by `CardDef::presentation` -- the one lookup that folds
-/// `silent` / `quiet_when_empty` / `flash`. v55.
+/// Returned by `CardDef::presentation` -- the one lookup that folds the
+/// `silent` / `quiet_when_empty` header side tables with the entry's
+/// [`On::flash`] policy. v55.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EntryPresentation {
     pub header: Presentation,
@@ -2793,7 +2794,7 @@ pub struct ManifestOn {
     /// `CardDef::quiet_when_empty`). See [`Presentation`]. v54.
     #[serde(default)]
     pub presentation: Presentation,
-    /// Whether the activation flashes (`CardDef::flash`). See [`Flash`]. v55.
+    /// Whether the activation flashes (`On::flash`). See [`Flash`]. v55.
     #[serde(default)]
     pub flash: Flash,
 }

@@ -96,6 +96,10 @@ pub struct FilterEntry {
     pub shape: FilterShape,
     /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
     pub label: &'static str,
+    /// See [`crate::PlayEntry::flash`]. `Auto` (the default) = host classifies
+    /// by scope (owner-self-only ⇒ no flash); `Always` / `Never` are the
+    /// rule's own opinion and win over that classification.
+    pub flash: crate::abi::Flash,
 }
 
 // Safety: `body` always points at a `fn` item in static code (constructed by
@@ -129,6 +133,10 @@ pub struct ActionEntry {
     pub declare_drive: Option<crate::DeclareDrive>,
     /// See [`crate::PlayEntry::label`] -- opaque 「效果适用」 display text.
     pub label: &'static str,
+    /// See [`crate::PlayEntry::flash`]. `Auto` (the default) = host classifies
+    /// by scope (owner-self-only ⇒ no flash); `Always` / `Never` are the
+    /// rule's own opinion and win over that classification.
+    pub flash: crate::abi::Flash,
 }
 
 impl ActionEntry {
@@ -161,6 +169,7 @@ pub const fn filter_value(
         body: body as *const (),
         shape: FilterShape::Value,
         label: "",
+        flash: crate::abi::Flash::Auto,
     }
 }
 
@@ -181,6 +190,7 @@ pub const fn filter_flag(
         body: body as *const (),
         shape: FilterShape::Flag,
         label: "",
+        flash: crate::abi::Flash::Auto,
     }
 }
 
@@ -203,6 +213,7 @@ pub const fn filter_payload<P: FilterPayload>(
         body: body as *const (),
         shape,
         label: "",
+        flash: crate::abi::Flash::Auto,
     }
 }
 
@@ -227,6 +238,7 @@ pub const fn action(
         declare: None,
         declare_drive: None,
         label: "",
+        flash: crate::abi::Flash::Auto,
     }
 }
 

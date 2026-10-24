@@ -1266,8 +1266,10 @@ use card_sdk::abi::Flash;
 
 /// `Flash::Always` on an owner-self-only effect (gain to self): the player
 /// should still see the flash.
-const FLASH_ALWAYS: CardDef = CardDef::new("TEST:flashAlways", &[On::Play("", None, flash_always)])
-    .flash(&[(0, Flash::Always)]);
+const FLASH_ALWAYS: CardDef = CardDef::new(
+    "TEST:flashAlways",
+    &[On::Play("", None, flash_always).flash(Flash::Always)],
+);
 
 fn flash_always(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1, &Msg::new(key!("flash_always_gain")))?;
@@ -1276,8 +1278,10 @@ fn flash_always(player_id: i32) -> card_sdk::Asked {
 
 /// `Flash::Never` on a cross-player effect (a pay leg to another seat): the
 /// log entry stays, no flash / pulse.
-const FLASH_NEVER: CardDef = CardDef::new("TEST:flashNever", &[On::Play("", None, flash_never)])
-    .flash(&[(0, Flash::Never)]);
+const FLASH_NEVER: CardDef = CardDef::new(
+    "TEST:flashNever",
+    &[On::Play("", None, flash_never).flash(Flash::Never)],
+);
 
 fn flash_never(player_id: i32) -> card_sdk::Asked {
     let other = ctx::others(player_id).first().copied().unwrap_or(-1);

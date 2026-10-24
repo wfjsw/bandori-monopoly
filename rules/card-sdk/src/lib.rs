@@ -279,11 +279,6 @@ pub struct CardDef {
     /// and change nothing (capped gain, 「已满」) -- the player does not need
     /// a flash for a no-op. A body that logs / pays / moves still flashes.
     pub quiet_when_empty: &'static [i32],
-    /// Per-entry flash policy overrides -- `(entry index, Flash)`. An entry
-    /// with no override is [`abi::Flash::Auto`] (host classifies by scope).
-    /// [`abi::Flash::Always`] / [`abi::Flash::Never`] are the rule's own
-    /// opinion and win over the Auto classification. `CardDef::flash`.
-    pub flash: &'static [(i32, crate::abi::Flash)],
     /// Per-entry **tile text** -- the deed-popup description this entry speaks
     /// for, as `(entry index, slot, tile, key)`.
     /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
@@ -339,7 +334,6 @@ impl CardDef {
             props: &[],
             silent: &[],
             quiet_when_empty: &[],
-            flash: &[],
             texts: &[],
             meta: None,
             board_role: "",
@@ -359,7 +353,6 @@ impl CardDef {
             props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -393,7 +386,6 @@ impl CardDef {
             props: self.props,
             silent: entries,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -417,38 +409,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: entries,
-            flash: self.flash,
-            texts: self.texts,
-            meta: self.meta,
-            board_role: self.board_role,
-            governs: self.governs,
-            gate_msgs: self.gate_msgs,
-            gate_skip_msgs: self.gate_skip_msgs,
-            exemption_prop: self.exemption_prop,
-        }
-    }
-
-    /// Override the flash policy of these entries -- `(entry index, Flash)`.
-    /// [`abi::Flash::Always`] flashes even an owner-self-only effect the
-    /// player should notice; [`abi::Flash::Never`] keeps the log entry but
-    /// suppresses the flash / pulse even for a cross-player one. Entries with
-    /// no override remain [`abi::Flash::Auto`] (host classifies by scope).
-    /// Replaces any earlier `flash` call.
-    ///
-    /// ```ignore
-    /// pub const T: CardDef = CardDef::new("skill:…", &[
-    ///     On::Play("", None, use_skill),                 // 0: Auto
-    ///     On::Action(Action::TurnEnd("", None, tick)), // 1: Always (self-only)
-    /// ]).flash(&[(1, Flash::Always)]);
-    /// ```
-    pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
-        Self {
-            id: self.id,
-            on: self.on,
-            props: self.props,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
-            flash: entries,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -460,8 +420,10 @@ impl CardDef {
     }
 
     /// How entry `index` presents itself in the log: the header mode plus the
-    /// flash policy, folded from the `silent` / `quiet_when_empty` / `flash`
-    /// side tables. The one lookup.
+    /// flash policy. The header folds from the `silent` / `quiet_when_empty`
+    /// side tables; the flash rides the entry itself ([`On::flash`]), so it
+    /// cannot drift when entries are reordered. An unknown index is
+    /// [`abi::Flash::Auto`]. The one lookup.
     pub const fn presentation(&self, index: i32) -> crate::abi::EntryPresentation {
         let mut header = crate::abi::Presentation::Visible;
         let mut i = 0;
@@ -480,9 +442,9 @@ impl CardDef {
         }
         let mut flash = crate::abi::Flash::Auto;
         let mut i = 0;
-        while i < self.flash.len() {
-            if self.flash[i].0 == index {
-                flash = self.flash[i].1;
+        while i < self.on.len() {
+            if i as i32 == index {
+                flash = self.on[i].flash_of();
             }
             i += 1;
         }
@@ -513,7 +475,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -545,7 +506,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: Some(meta),
             board_role: self.board_role,
@@ -570,7 +530,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: self.meta,
             board_role: role,
@@ -597,7 +556,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -618,7 +576,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -639,7 +596,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -659,7 +615,6 @@ impl CardDef {
             props: self.props,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
             texts: self.texts,
             meta: self.meta,
             board_role: self.board_role,
@@ -718,6 +673,14 @@ pub struct PlayEntry {
     /// into the card text -- nothing resolves this against [`crate::text::CardText`].
     /// If the line needs prose, put a copy of it here.
     pub label: &'static str,
+    /// Per-entry flash policy ([`On::flash`]). Whether the activation's centre
+    /// flash (and field-slot pulse) shows: [`abi::Flash::Auto`] (the default)
+    /// lets the host classify by scope (owner-self-only ⇒ no flash);
+    /// [`abi::Flash::Always`] / [`abi::Flash::Never`] are the rule's own
+    /// opinion and win over that classification. Body code can still override
+    /// at runtime via `ctx::flash` / `ctx::no_flash` under the precedence
+    /// documented on [`abi::Flash`].
+    pub flash: crate::abi::Flash,
 }
 
 /// [反击] entry ([`On::Counteract`]).
@@ -747,6 +710,8 @@ pub struct CounteractEntry {
     pub declare_drive: Option<DeclareDrive>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
+    /// See [`PlayEntry::flash`].
+    pub flash: crate::abi::Flash,
 }
 
 /// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
@@ -771,6 +736,8 @@ pub struct RuleEntry {
     pub declare_drive: Option<DeclareDrive>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
+    /// See [`PlayEntry::flash`].
+    pub flash: crate::abi::Flash,
 }
 
 /// Cross-card message entry ([`On::Message`]).
@@ -796,6 +763,8 @@ pub struct MessageEntry {
     pub declare_drive: Option<DeclareDrive>,
     /// See [`PlayEntry::label`].
     pub label: &'static str,
+    /// See [`PlayEntry::flash`].
+    pub flash: crate::abi::Flash,
 }
 
 // The `body` pointer is code, not data: immutable and never freed (the same
@@ -938,6 +907,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -963,6 +933,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -983,6 +954,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -1003,6 +975,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -1023,6 +996,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -1043,6 +1017,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -1063,6 +1038,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -1085,6 +1061,7 @@ impl On {
             declare: None,
             declare_drive: None,
             label: "",
+            flash: crate::abi::Flash::Auto,
         })
     }
 
@@ -1429,6 +1406,69 @@ impl On {
         }
     }
 
+    /// Override this entry's **flash policy**. Attaches to the entry, so it
+    /// rides along when entries are reordered -- no index to drift.
+    ///
+    /// [`abi::Flash::Auto`] (the default) lets the host classify by scope
+    /// (owner-self-only ⇒ no flash). [`abi::Flash::Always`] /
+    /// [`abi::Flash::Never`] are the rule's own opinion and win over that
+    /// classification: `Always` flashes even an owner-self-only effect the
+    /// player should notice; `Never` keeps the log entry but suppresses the
+    /// flash / pulse even for a cross-player one. Body code can still override
+    /// at runtime via `ctx::flash` / `ctx::no_flash` under the precedence
+    /// documented on [`abi::Flash`].
+    ///
+    /// ```ignore
+    /// pub const T: CardDef = CardDef::new("skill:…", &[
+    ///     On::Play("", None, use_skill),                                    // Auto
+    ///     On::Action(Action::TurnEnd("", None, tick)).flash(Flash::Always), // Always (self-only)
+    /// ]);
+    /// ```
+    pub const fn flash(self, policy: crate::abi::Flash) -> Self {
+        match self {
+            On::PlayBody(mut e) => {
+                e.flash = policy;
+                On::PlayBody(e)
+            }
+            On::CounteractBody(mut e) => {
+                e.flash = policy;
+                On::CounteractBody(e)
+            }
+            On::Action(mut e) => {
+                e.flash = policy;
+                On::Action(e)
+            }
+            On::Filter(mut e) => {
+                e.flash = policy;
+                On::Filter(e)
+            }
+            On::SettleBody(mut e) => {
+                e.flash = policy;
+                On::SettleBody(e)
+            }
+            On::MortgageBody(mut e) => {
+                e.flash = policy;
+                On::MortgageBody(e)
+            }
+            On::RedeemBody(mut e) => {
+                e.flash = policy;
+                On::RedeemBody(e)
+            }
+            On::BuyBody(mut e) => {
+                e.flash = policy;
+                On::BuyBody(e)
+            }
+            On::BuildBody(mut e) => {
+                e.flash = policy;
+                On::BuildBody(e)
+            }
+            On::MessageBody(mut e) => {
+                e.flash = policy;
+                On::MessageBody(e)
+            }
+        }
+    }
+
     /// This entry's 「效果适用」 display text (see [`Self::label`]); `""` = none.
     pub const fn label_of(&self) -> &'static str {
         match self {
@@ -1442,6 +1482,23 @@ impl On {
             On::BuyBody(e) => e.label,
             On::BuildBody(e) => e.label,
             On::MessageBody(e) => e.label,
+        }
+    }
+
+    /// This entry's flash policy (see [`Self::flash`]); [`abi::Flash::Auto`] =
+    /// host classifies by scope.
+    pub const fn flash_of(&self) -> crate::abi::Flash {
+        match self {
+            On::PlayBody(e) => e.flash,
+            On::CounteractBody(e) => e.flash,
+            On::Action(e) => e.flash,
+            On::Filter(e) => e.flash,
+            On::SettleBody(e) => e.flash,
+            On::MortgageBody(e) => e.flash,
+            On::RedeemBody(e) => e.flash,
+            On::BuyBody(e) => e.flash,
+            On::BuildBody(e) => e.flash,
+            On::MessageBody(e) => e.flash,
         }
     }
 
