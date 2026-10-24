@@ -288,26 +288,32 @@ pub fn tile_steps_ahead(player_id: i32, steps: i32) -> i32 {
     unsafe { sys::tile_steps_ahead(player_id, steps) }
 }
 
+/// Rent charged when landing on `tile` at its current build level.
 pub fn rent_of(tile: i32) -> i32 {
     unsafe { sys::rent_of(tile) }
 }
 
+/// Price to purchase unowned `tile`.
 pub fn buy_price(tile: i32) -> i32 {
     unsafe { sys::buy_price(tile) }
 }
 
+/// Cost to build the next house/hotel on `tile`.
 pub fn build_cost(tile: i32) -> i32 {
     unsafe { sys::build_cost(tile) }
 }
 
+/// Cash received for mortgaging `tile`.
 pub fn mortgage_value(tile: i32) -> i32 {
     unsafe { sys::mortgage_value(tile) }
 }
 
+/// Number of deeds held by `player_id`.
 pub fn owned_count(player_id: i32) -> i32 {
     unsafe { sys::owned_count(player_id) }
 }
 
+/// The `index`-th deed of `player_id` as a tile index (see [`owned_tiles`]).
 pub fn owned_at(player_id: i32, index: i32) -> i32 {
     unsafe { sys::owned_at(player_id, index) }
 }

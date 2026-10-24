@@ -663,7 +663,7 @@ action_kinds! {
     Reshuffled;
     Bought;
     SettleBody;
-    BeforeOut;
+    BeforeBankrupt;
     Teleported;
     MarkerSpent;
     CardUsed;
