@@ -10,16 +10,36 @@
 //! ## Loop bounds (CBMC unwinding assertions)
 //!
 //! Unwinding assertions require a **static** trip count: `while i < runtime_n`
-//! still needs `unwind >= max(runtime_n)` even with early exit. Every loop
-//! here is therefore a fixed 8-iteration chunk walk (8×8 = 64 bytes) or a
-//! fixed 8-probe open-addressed lookup. A harness with `#[kani::unwind(9)]`
-//! covers the whole table. Exceeding the probe limit is a **loud** `INVALID`
-//! (the caller's `intern_or_fail` panics under Kani) — never a silent cut.
+//! still needs `unwind >= max(runtime_n)` even with early exit. Under
+//! `cfg(kani)` every loop here is a fixed 8-iteration chunk walk (8×8 = 64
+//! bytes) or a fixed 8-probe open-addressed lookup. A harness with
+//! `#[kani::unwind(9)]` covers the whole table. Exceeding the probe limit is a
+//! **loud** `INVALID` (the caller's `intern_or_fail` panics under Kani) —
+//! never a silent cut. Production walks are unbounded on purpose (see
+//! [`MAX_NAME`]).
+//!
+//! ## Name bytes live outside the table
+//!
+//! A slot holds a `&'static [u8]` produced by [`leak_name`] (write-once
+//! `Box::leak`), not an inline buffer. [`resolve`] hands that slice out as a
+//! genuine `'static`, so it cannot alias the `&mut Table` that [`intern`] /
+//! [`reset`] take. The old inline `[u8; MAX_NAME]` made `resolve` lifetime-
+//! extend table memory (UB across `intern`, dangling after `reset`) and
+//! silently turned longer names into [`NameId::INVALID`] — the nanami mark
+//! namespace `角色标记:<skill id>` is 65..78 bytes.
 //!
 //! Game-specific meaning of a name (which id is 「P✽P粉丝」) lives in
 //! `rules-kani`, not here.
 
 #![allow(dead_code)]
+
+// `Box::leak` for write-once name bytes (see [`leak_name`]). Guest builds are
+// `no_std` + `alloc`; native tests / the bot monolith have `std` (Box in the
+// prelude).
+#[cfg(any(target_arch = "wasm32", feature = "guest"))]
+use alloc::{boxed::Box, vec::Vec};
+#[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
+use std::boxed::Box;
 
 /// Maximum interned names. The open-addressed table has
 /// `SLOTS = 2 * MAX_INTERN` buckets and answers a lookup in ≤ [`MAX_PROBES`]
@@ -42,7 +62,7 @@ pub const MAX_PROBES: usize = 8;
 /// Production capacity. Card ids alone are hundreds; tokens / counters /
 /// skill ids push the working set past the Kani model of 32. 2048 leaves
 /// headroom without making the table a wasm size problem
-/// (`SLOTS * (8 + 1 + 64)` ≈ 300 KiB of zeros).
+/// (`SLOTS * (8 + 16)` ≈ 96 KiB of zeros; name bytes are separate leaks).
 #[cfg(not(kani))]
 pub const MAX_INTERN: usize = 2048;
 
@@ -57,10 +77,15 @@ pub const SLOTS: usize = 4096;
 #[cfg(not(kani))]
 pub const MAX_PROBES: usize = 64;
 
-/// Longest name we store. Longer names are rejected (`INVALID`) — a loud
-/// cut, never a silent truncate. Guest/host traffic is card / token / tile /
-/// key ids; the longest card id is 52 bytes (`PPP:（沙绫）…`) and token keys
-/// are ≤ 16. The byte walk is chunked 8×8 so the unwind bound is 8, not 56.
+/// Kani unwind bound on name length (the zero-loop byte walks are 8×8 = 64
+/// steps). Enforced only under `cfg(kani)` — that is the model the proofs pin
+/// (`docs/rulebook/spec/kani/TUNING.md`), not a production requirement.
+///
+/// Production has **no** length cap: each first insert leaks its bytes
+/// ([`leak_name`]), so a composite mark name (`角色标记:<skill id>`, 65..78
+/// bytes) interns and round-trips. The old inline `[u8; MAX_NAME]` turned
+/// those into [`NameId::INVALID`] and the list APIs (`tok_names`,
+/// `cards_in`, …) handed back the empty name.
 pub const MAX_NAME: usize = 64;
 
 /// An interned name. `Copy`, so a pile listing is `Vec<NameId>` (no `String`
@@ -102,14 +127,21 @@ impl NameId {
 impl PartialEq<&str> for NameId {
     #[inline]
     fn eq(&self, other: &&str) -> bool {
-        *self == intern(other)
+        // A failed intern is [`NameId::INVALID`], and `INVALID` matches
+        // *nothing* -- otherwise two too-long names would compare equal, and
+        // a too-long literal would match every other failed intern. The real
+        // fix is that a name must never fail to intern in production; this is
+        // the guard for the cases that still can.
+        let want = intern(other);
+        self.is_valid() && want.is_valid() && *self == want
     }
 }
 
 impl PartialEq<str> for NameId {
     #[inline]
     fn eq(&self, other: &str) -> bool {
-        *self == intern(other)
+        let want = intern(other);
+        self.is_valid() && want.is_valid() && *self == want
     }
 }
 
@@ -146,18 +178,119 @@ pub fn decode_handle(handle: i32) -> Option<NameId> {
 
 /// One open-addressed bucket. `hash == 0` marks empty (FNV of a non-empty
 /// name is never 0; empty string hashes to the offset basis, not 0).
+///
+/// `name` is a write-once leak from [`leak_name`], never table memory:
+/// [`resolve`] returns it directly, so an outstanding `&'static [u8]` cannot
+/// alias the `&mut Table` that insert / [`reset`] take.
+#[derive(Clone, Copy)]
 struct Slot {
     hash: u64,
-    len: u8,
-    bytes: [u8; MAX_NAME],
+    name: &'static [u8],
 }
 
 impl Slot {
     const EMPTY: Slot = Slot {
         hash: 0,
-        len: 0,
-        bytes: [0; MAX_NAME],
+        name: &[],
     };
+}
+
+/// Write-once interned name bytes.
+///
+/// The allocation is never mutated or freed. That is the whole point: a
+/// `&'static [u8]` into it is a real `'static`, and no later `&mut Table` can
+/// alias it. [`reset`] drops the table's *reachability* of the bytes (the
+/// `NameId` stops resolving) without touching them, so a slice already handed
+/// out stays readable.
+///
+/// Under `cfg(kani)` the copy is the same zero-loop 64-step walk the old
+/// inline slot used — `copy_from_slice` lowers to memcpy plus a
+/// `len_mismatch_fail` panic path CBMC still explores. `s.len() <= MAX_NAME`
+/// here (the caller rejects longer).
+#[cfg(kani)]
+fn leak_name(s: &[u8]) -> &'static [u8] {
+    let n = s.len().min(MAX_NAME);
+    let buf: &'static mut [u8] = Box::leak(Box::new([0u8; MAX_NAME]));
+    macro_rules! cpy {
+        ($i:expr) => {
+            // `.get`, not `[i]`: no slice_index_fail panic path.
+            if let Some(&b) = s.get($i) {
+                buf[$i] = b;
+            }
+        };
+    }
+    cpy!(0);
+    cpy!(1);
+    cpy!(2);
+    cpy!(3);
+    cpy!(4);
+    cpy!(5);
+    cpy!(6);
+    cpy!(7);
+    cpy!(8);
+    cpy!(9);
+    cpy!(10);
+    cpy!(11);
+    cpy!(12);
+    cpy!(13);
+    cpy!(14);
+    cpy!(15);
+    cpy!(16);
+    cpy!(17);
+    cpy!(18);
+    cpy!(19);
+    cpy!(20);
+    cpy!(21);
+    cpy!(22);
+    cpy!(23);
+    cpy!(24);
+    cpy!(25);
+    cpy!(26);
+    cpy!(27);
+    cpy!(28);
+    cpy!(29);
+    cpy!(30);
+    cpy!(31);
+    cpy!(32);
+    cpy!(33);
+    cpy!(34);
+    cpy!(35);
+    cpy!(36);
+    cpy!(37);
+    cpy!(38);
+    cpy!(39);
+    cpy!(40);
+    cpy!(41);
+    cpy!(42);
+    cpy!(43);
+    cpy!(44);
+    cpy!(45);
+    cpy!(46);
+    cpy!(47);
+    cpy!(48);
+    cpy!(49);
+    cpy!(50);
+    cpy!(51);
+    cpy!(52);
+    cpy!(53);
+    cpy!(54);
+    cpy!(55);
+    cpy!(56);
+    cpy!(57);
+    cpy!(58);
+    cpy!(59);
+    cpy!(60);
+    cpy!(61);
+    cpy!(62);
+    cpy!(63);
+    &buf[..n]
+}
+
+/// Production twin of [`leak_name`] — ordinary copy, no length cap. See the
+/// write-once note on the `cfg(kani)` twin for why the bytes are leaked.
+#[cfg(not(kani))]
+fn leak_name(s: &[u8]) -> &'static [u8] {
+    Box::leak(Vec::from(s).into_boxed_slice())
 }
 
 struct Table {
@@ -189,10 +322,9 @@ impl Table {
 //   bot threads, and the intern unit tests run in parallel; a process-global
 //   `static mut` races (the flaky `intern_*` tests were the first symptom).
 //   A card-body call is single-threaded, so a `NameId` is only compared on
-//   the thread that interned it — per-thread tables are correct. The
-//   `resolve` `'static` slice outlives the `RefCell` borrow (same lifetime
-//   extension as the `static mut` path) and is valid until that thread
-//   exits; consume it inside the call, do not stash it in a global.
+//   the thread that interned it — per-thread tables are correct. Name *bytes*
+//   are process-wide write-once leaks (`leak_name`), so `resolve`'s
+//   `&'static [u8]` is valid across threads and after this table drops.
 
 #[cfg(any(kani, all(target_arch = "wasm32", not(feature = "native-rules"))))]
 static mut TABLE: Table = Table::new();
@@ -324,24 +456,15 @@ fn fnv1a(s: &[u8]) -> u64 {
     h
 }
 
-/// Production twin of `fnv1a` — the original 8×8 chunk walk, byte-for-byte
-/// the master code so wasm/native codegen is unchanged (`cfg(not(kani))`).
+/// Production twin of `fnv1a`. Walks the **whole** name — the old 8×8 chunk
+/// walk hashed only the first 64 bytes, which is a collision hazard once
+/// names are unbounded (`cfg(not(kani))` has no [`MAX_NAME`] cap).
 #[cfg(not(kani))]
 fn fnv1a(s: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    let mut outer = 0usize;
-    while outer < 8 {
-        let base = outer * 8;
-        let mut k = 0usize;
-        while k < 8 {
-            let i = base + k;
-            if i < s.len() {
-                h ^= s[i] as u64;
-                h = h.wrapping_mul(0x0000_0100_0000_01b3);
-            }
-            k += 1;
-        }
-        outer += 1;
+    for &b in s {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
     h
 }
@@ -453,44 +576,11 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     ok
 }
 
-/// Production twin of `bytes_eq` — original 8 outer × 8 unrolled bytes.
+/// Production twin of `bytes_eq` — full slice compare, no length cap (see
+/// [`fnv1a`]; `cfg(not(kani))` names are unbounded).
 #[cfg(not(kani))]
 fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() || a.len() > MAX_NAME {
-        return false;
-    }
-    let n = a.len();
-    let mut outer = 0usize;
-    let mut ok = true;
-    while outer < 8 {
-        let base = outer * 8;
-        if base + 0 < n && a[base + 0] != b[base + 0] {
-            ok = false;
-        }
-        if base + 1 < n && a[base + 1] != b[base + 1] {
-            ok = false;
-        }
-        if base + 2 < n && a[base + 2] != b[base + 2] {
-            ok = false;
-        }
-        if base + 3 < n && a[base + 3] != b[base + 3] {
-            ok = false;
-        }
-        if base + 4 < n && a[base + 4] != b[base + 4] {
-            ok = false;
-        }
-        if base + 5 < n && a[base + 5] != b[base + 5] {
-            ok = false;
-        }
-        if base + 6 < n && a[base + 6] != b[base + 6] {
-            ok = false;
-        }
-        if base + 7 < n && a[base + 7] != b[base + 7] {
-            ok = false;
-        }
-        outer += 1;
-    }
-    ok
+    a == b
 }
 
 /// Bucket start index for `hash`.
@@ -501,8 +591,9 @@ fn bucket(hash: u64) -> usize {
 /// Intern raw bytes (no UTF-8 validation — that is a CBMC unwinding cliff).
 ///
 /// Returns [`NameId::INVALID`] when the table is full, the name is longer
-/// than [`MAX_NAME`], or [`MAX_PROBES`] is exhausted (loud — callers that
-/// cannot tolerate `INVALID` go through `intern_or_fail`).
+/// than [`MAX_NAME`] (the Kani unwind bound — production has no cap), or
+/// [`MAX_PROBES`] is exhausted (loud — callers that cannot tolerate `INVALID`
+/// go through `intern_or_fail`).
 #[cfg(kani)]
 #[inline(always)]
 pub fn intern_bytes(s: &[u8]) -> NameId {
@@ -516,13 +607,13 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
 /// Table lookup/insert for a **precomputed** FNV-1a hash. Split from
 /// [`intern_bytes`] so an inlined call site can constant-fold `fnv1a`
 /// (the hash of a string literal is a compile-time `u64`) and this routine
-/// only does integer probes + a zero-loop byte compare.
+/// only does integer probes + a zero-loop length compare.
 #[cfg(kani)]
 pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
     if s.len() > MAX_NAME {
         return NameId::INVALID;
     }
-    let n = s.len() as u8;
+    let n = s.len();
     // FNV of any byte string is never 0 (offset basis is nonzero and the
     // multiplier is odd). Still guard: a zero hash would alias EMPTY.
     if h == 0 {
@@ -535,7 +626,7 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
     // 8 probes, **zero loops** (same reason as `fnv1a`: an 8-trip `while`
     // still shows up as `Unwinding loop … iteration 8` and, with
     // `inline(always)`, once per call site). Each probe is an integer
-    // compare + a zero-loop `bytes_eq` on a hit.
+    // compare on a hit.
     macro_rules! probe_once {
         () => {{
             let idx = (start + probe) & (SLOTS - 1);
@@ -544,14 +635,14 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
                 if first_empty == usize::MAX {
                     first_empty = idx;
                 }
-            } else if slot.hash == h && slot.len == n {
+            } else if slot.hash == h && slot.name.len() == n {
                 // Hash+len identity. `bytes_eq` (64 steps × 8 probes) was the
                 // money_shave setup cliff (`known_init` interns 10 names).
                 // Collisions (same FNV+len, different bytes) are a loud
                 // INVALID below — never a silent alias. The pilot set is
                 // pinned unique in `model_bounds`.
                 return NameId(idx as u16);
-            } else if slot.hash == h && slot.len != n {
+            } else if slot.hash == h && slot.name.len() != n {
                 // Same FNV, different length: collision. Loud, not an alias.
                 return NameId::INVALID;
             }
@@ -571,85 +662,11 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
     }
     let slot = &mut t.slots[first_empty];
     slot.hash = h;
-    slot.len = n;
-    // Zero-loop byte copy. NOT `copy_from_slice`: that lowers to memcpy plus
-    // a `len_mismatch_fail` panic path CBMC still explores when the source
-    // length is even slightly symbolic (measured in the shave profile).
-    let nbytes = s.len().min(MAX_NAME);
-    macro_rules! cpy {
-        ($i:expr) => {
-            // `.get`, not `[i]`: no slice_index_fail panic path.
-            if let Some(&b) = s.get($i) {
-                slot.bytes[$i] = b;
-            }
-        };
-    }
-    cpy!(0);
-    cpy!(1);
-    cpy!(2);
-    cpy!(3);
-    cpy!(4);
-    cpy!(5);
-    cpy!(6);
-    cpy!(7);
-    cpy!(8);
-    cpy!(9);
-    cpy!(10);
-    cpy!(11);
-    cpy!(12);
-    cpy!(13);
-    cpy!(14);
-    cpy!(15);
-    cpy!(16);
-    cpy!(17);
-    cpy!(18);
-    cpy!(19);
-    cpy!(20);
-    cpy!(21);
-    cpy!(22);
-    cpy!(23);
-    cpy!(24);
-    cpy!(25);
-    cpy!(26);
-    cpy!(27);
-    cpy!(28);
-    cpy!(29);
-    cpy!(30);
-    cpy!(31);
-    cpy!(32);
-    cpy!(33);
-    cpy!(34);
-    cpy!(35);
-    cpy!(36);
-    cpy!(37);
-    cpy!(38);
-    cpy!(39);
-    cpy!(40);
-    cpy!(41);
-    cpy!(42);
-    cpy!(43);
-    cpy!(44);
-    cpy!(45);
-    cpy!(46);
-    cpy!(47);
-    cpy!(48);
-    cpy!(49);
-    cpy!(50);
-    cpy!(51);
-    cpy!(52);
-    cpy!(53);
-    cpy!(54);
-    cpy!(55);
-    cpy!(56);
-    cpy!(57);
-    cpy!(58);
-    cpy!(59);
-    cpy!(60);
-    cpy!(61);
-    cpy!(62);
-    cpy!(63);
-        t.n += 1;
-        NameId(first_empty as u16)
+    // Write-once leak, not table memory — `resolve` can hand out a real
+    // `&'static` (see [`leak_name`]). The zero-loop copy lives there.
+    slot.name = leak_name(s);
+    t.n += 1;
+    NameId(first_empty as u16)
     })
 }
 
@@ -659,15 +676,11 @@ pub fn intern(s: &str) -> NameId {
     intern_bytes(s.as_bytes())
 }
 
-/// Production `intern_bytes` — the 8-probe loop + `copy_from_slice` insert,
-/// unchanged codegen for wasm/native (the capacity / storage cfgs above are
-/// the only production deltas vs the Kani model).
+/// Production `intern_bytes` — the 8-probe loop + write-once [`leak_name`]
+/// insert. No length cap: see [`MAX_NAME`]. The capacity / probe cfgs above
+/// are the only production deltas vs the Kani model.
 #[cfg(not(kani))]
 pub fn intern_bytes(s: &[u8]) -> NameId {
-    if s.len() > MAX_NAME {
-        return NameId::INVALID;
-    }
-    let n = s.len() as u8;
     let h = fnv1a(s);
     let h = if h == 0 { 1 } else { h };
     with_table(|t| {
@@ -681,7 +694,7 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
                 if first_empty == usize::MAX {
                     first_empty = idx;
                 }
-            } else if slot.hash == h && slot.len == n && bytes_eq(&slot.bytes[..n as usize], s) {
+            } else if slot.hash == h && bytes_eq(slot.name, s) {
                 return NameId(idx as u16);
             }
             probe += 1;
@@ -691,9 +704,10 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
         }
         let slot = &mut t.slots[first_empty];
         slot.hash = h;
-        slot.len = n;
-        let nbytes = s.len().min(MAX_NAME);
-        slot.bytes[..nbytes].copy_from_slice(&s[..nbytes]);
+        // Write-once leak — `resolve` hands out a real `&'static` (see
+        // [`leak_name`]). `bytes_eq` above already distinguishes same-hash
+        // names, so the slot does not need a separate `len` column.
+        slot.name = leak_name(s);
         t.n += 1;
         NameId(first_empty as u16)
     })
@@ -702,9 +716,10 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
 /// The bytes previously interned as `id`. Empty when `id` is stale.
 /// (The slot index **is** the id under the open-addressed table.)
 ///
-/// The returned slice is lifetime-extended to `'static` off the (never
-/// resized) table — see the storage note above. Consume it on the interning
-/// thread; do not stash it in a longer-lived global.
+/// The returned slice is the [`leak_name`] allocation, not table memory —
+/// a genuine `&'static` that `intern`'s `&mut Table` cannot alias. After
+/// [`reset`] a previously-valid `id` resolves to `&[]`; any slice already
+/// handed out stays readable (the leak is write-once).
 pub fn resolve(id: NameId) -> &'static [u8] {
     if !id.is_valid() {
         return &[];
@@ -714,13 +729,7 @@ pub fn resolve(id: NameId) -> &'static [u8] {
         if idx >= SLOTS || t.slots[idx].hash == 0 {
             return &[] as &[u8];
         }
-        // SAFETY: table entries are never removed; we hand out a slice of the
-        // table slot. Cast through raw pointer to extend the lifetime to
-        // `'static` (the table is never resized or cleared during a proof /
-        // a card-body call).
-        let p = t.slots[idx].bytes.as_ptr();
-        let n = t.slots[idx].len as usize;
-        unsafe { core::slice::from_raw_parts(p, n) }
+        t.slots[idx].name
     })
 }
 
@@ -747,6 +756,11 @@ pub fn len() -> u16 {
 /// Clear the table (native conformance / unit tests only; proofs start fresh
 /// per harness via process isolation). Under `thread_local` storage this is
 /// per-thread — which is what the parallel unit tests want.
+///
+/// After `reset()`, every previously-valid [`NameId`] stops resolving (`hash`
+/// is cleared, so [`resolve`] returns `&[]`). The leaked name bytes are
+/// **not** rewritten: a `&'static [u8]` already handed out by [`resolve`]
+/// stays readable. That is what makes the `'static` return sound.
 pub fn reset() {
     with_table(|t| {
         t.n = 0;
@@ -789,13 +803,16 @@ mod tests {
     #[test]
     fn intern_fixed_loop_bounds() {
         reset();
-        // Longest card id (52 bytes) must intern; 65-byte name is rejected.
+        // Longest card id (52 bytes) must intern; production has no length
+        // cap (`MAX_NAME` is the Kani unwind bound only).
         let long = "x".repeat(52);
         assert!(intern(&long).is_valid());
-        let too_long = "y".repeat(MAX_NAME + 1);
-        assert!(!intern(&too_long).is_valid());
-        // Capacity is a fresh table: the length checks above already occupy a
-        // slot, and `MAX_INTERN` is the whole-table cap, not "remaining".
+        let longer = "y".repeat(MAX_NAME + 1);
+        let longer_id = intern(&longer);
+        assert!(longer_id.is_valid());
+        assert_eq!(resolve_str(longer_id), longer);
+        // Capacity is a fresh table: the inserts above already occupy slots,
+        // and `MAX_INTERN` is the whole-table cap, not "remaining".
         reset();
         // Distinct short names fill the table; overflow is INVALID (loud).
         let mut ids = [NameId::INVALID; MAX_INTERN];
@@ -807,6 +824,58 @@ mod tests {
         for i in 0..MAX_INTERN {
             assert_eq!(resolve_str(ids[i]), format!("k{i}"));
         }
+    }
+
+    /// `角色标记:` (13 bytes) + a 52-byte skill id = **65** bytes — one past
+    /// the old inline `MAX_NAME`. This is the nanami mark namespace
+    /// (`nanami_ordinary`): when the composite became `NameId::INVALID`,
+    /// `mark_skill` returned `""` and the CD key collapsed to
+    /// `skill.nanamiOrdinary.cd:`. Production must round-trip it intact.
+    #[test]
+    fn intern_roundtrip_65_byte_composite_mark_name() {
+        reset();
+        // 角色标记:skill:上原绯玛丽:大家一起迈出新的一步
+        let name = "角色标记:skill:上原绯玛丽:大家一起迈出新的一步";
+        assert_eq!(name.len(), 65, "pin the composite length");
+        let id = intern(name);
+        assert!(id.is_valid(), "65-byte mark name must intern");
+        assert_eq!(resolve_str(id), name);
+        assert_eq!(id.as_str(), name);
+        assert!(id == name);
+        // Same prefix, different skill id — must not alias.
+        // 角色标记:skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？ (78 bytes)
+        let longer = "角色标记:skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？";
+        assert_eq!(longer.len(), 78);
+        let id2 = intern(longer);
+        assert!(id2.is_valid());
+        assert_eq!(resolve_str(id2), longer);
+        assert_ne!(id, id2);
+    }
+
+    /// `resolve` hands out a write-once leak, not table memory. Two pins:
+    /// 1. holding the slice across `intern` (which takes `&mut Table`) is
+    ///    fine and the bytes do not move;
+    /// 2. after `reset()` the `NameId` stops resolving, but a slice already
+    ///    handed out stays readable.
+    #[test]
+    fn resolve_slice_outlives_intern_and_reset() {
+        reset();
+        let id = intern("role-mark:holder");
+        let held = resolve(id);
+        let held_str = resolve_str(id);
+        // More inserts take `&mut Table` while `held` is live.
+        for i in 0..8 {
+            intern(&format!("role-mark:filler-{i}"));
+        }
+        assert_eq!(held, b"role-mark:holder", "leaked bytes are not clobbered");
+        assert_eq!(held_str, "role-mark:holder");
+        assert_eq!(resolve_str(id), "role-mark:holder");
+        // reset() clears reachability, not the leak.
+        reset();
+        assert_eq!(resolve_str(id), "", "stale NameId must not resolve");
+        assert!(resolve(id).is_empty());
+        assert_eq!(held, b"role-mark:holder", "outstanding slice stays valid");
+        assert_eq!(held_str, "role-mark:holder");
     }
 
     #[test]
