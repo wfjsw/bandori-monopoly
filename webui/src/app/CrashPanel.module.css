@@ -1,0 +1,188 @@
+/* Crash panel chrome. Outside `Stage` on purpose: the boundary can be the only
+   thing still mounted, so the panel is window-scaled and never reads stage
+   geometry. Colours / radius / shadow are the shared tokens (Modal.module.css
+   is the look this is going for -- pink title bar, white rounded window). */
+
+.back {
+  position: fixed;
+  inset: 0;
+  /* Over toast (80) and under nothing else the user needs: a dead tree must not
+     leave a toast or a half-rendered board competing with this. */
+  z-index: 9000;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: crashFade 0.15s;
+  /* The debug block selects; keep the rest of the chrome quiet. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+@keyframes crashFade {
+  from {
+    opacity: 0;
+  }
+}
+
+.panel {
+  width: min(560px, 100%);
+  max-height: min(840px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--pop-shadow);
+  animation: crashPop 0.18s ease-out;
+  overflow: hidden;
+}
+@keyframes crashPop {
+  from {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+}
+.panel:focus {
+  outline: none;
+}
+
+.head {
+  flex: none;
+  min-height: 54px;
+  padding: 12px 20px;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: linear-gradient(var(--pink-light), var(--pink));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.head h2 {
+  color: #fff;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.body {
+  overflow: auto;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  font-size: var(--fs-lg);
+  line-height: 1.6;
+}
+
+.lead {
+  white-space: pre-wrap;
+}
+
+.row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.hint {
+  color: var(--sub);
+  font-size: var(--fs-sm);
+  text-align: center;
+  margin: 0;
+}
+
+.details {
+  border: 2px solid var(--pink-pale);
+  border-radius: var(--r-lg);
+  padding: 8px 12px 12px;
+  background: #fffafc;
+}
+
+.summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--pink);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 2px;
+}
+.summary::-webkit-details-marker {
+  display: none;
+}
+.summary::before {
+  content: "▸ ";
+}
+.details[open] .summary::before {
+  content: "▾ ";
+}
+
+/* The one line worth reading without expanding: the error message itself. */
+.summaryMsg {
+  font-weight: 500;
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.debugBox {
+  margin-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.debugLabel {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: 0.3px;
+}
+.debug {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--white);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* body sets user-select: none globally; a bug report must be copyable. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Clipboard fallback: the same blob in a box the user can Ctrl+A / Ctrl+C. */
+.fallback {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  margin-top: var(--sp-3);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--white);
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back,
+  .panel {
+    animation: none;
+  }
+}

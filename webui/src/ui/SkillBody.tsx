@@ -13,7 +13,7 @@
 
 import { memo, type ReactNode } from "react";
 import { cx } from "../core/cx";
-import { splitTypeTag, type Block } from "../core/body";
+import { itemSubs, splitTypeTag, type Block } from "../core/body";
 import { parse } from "./bodyText";
 import s from "./SkillBody.module.css";
 
@@ -106,20 +106,25 @@ export const SkillBody = memo(function SkillBody({
           <div key={i}>
             {before}
             <ol className={s.list}>
-              {b.items.map((it, j) => (
-                <li key={j}>
-                  <TypeTagged text={it.text} />
-                  {it.sub.length > 0 && (
-                    <ol className={s.sub}>
-                      {it.sub.map((x, k) => (
-                        <li key={k}>
-                          <TypeTagged text={x} />
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </li>
-              ))}
+              {b.items.map((it, j) => {
+                // The display export omits `sub` on effects that have none
+                // (`core/body.ts` `itemSubs`) -- never read `.length` off it.
+                const sub = itemSubs(it);
+                return (
+                  <li key={j}>
+                    <TypeTagged text={it.text} />
+                    {sub.length > 0 && (
+                      <ol className={s.sub}>
+                        {sub.map((x, k) => (
+                          <li key={k}>
+                            <TypeTagged text={x} />
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </li>
+                );
+              })}
             </ol>
           </div>
         );
