@@ -804,10 +804,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::gain_marker => arm_gain_marker(a),
         Op::spend_marker => arm_spend_marker(a),
         Op::add_marker_max => {
+            // Storage-only cap move (`Counter.max`); returns the new ceiling.
+            // The pull-under is the rules-layer kernel's job.
             world::with_world_mut(|w| {
-                w.charge_max[player_idx(a0)] = w.charge_max[player_idx(a0)].saturating_add(a3);
-            });
-            0
+                let p = player_idx(a0);
+                w.charge_max[p] = w.charge_max[p].saturating_add(a3).max(0);
+                w.charge_max[p] as i64
+            })
         }
         // `ctx::n(k, v)` doubles when `play_doubled() == k`. Default is
         // **no doubling** (`-1` / `None` in the engine) — the old stub returned
@@ -1794,8 +1797,10 @@ pub fn arm_gain(a: Args) -> i64 {
 pub fn arm_gain_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
-        // engine `gain_marker`: `got = n.clamp(0, (cap - have).max(0))`;
-        // 0 when out / n<=0 / cap<=0. Returns the amount gained.
+        // engine `gain_marker`: uncapped dumb add on the held-token row.
+        // Cap / partial-gain policy lives in the rules-layer kernel
+        // (`bandori_std::fire::gain_clamped`); the engine does **not** clamp.
+        // 0 when out / n<=0. Returns the amount gained.
         // Wire: (player, name_p, name_l, n, why_p, why_l).
         world::with_world_mut(|w| {
             let p = player_idx(a0);
@@ -1803,15 +1808,9 @@ pub fn arm_gain_marker(a: Args) -> i64 {
             if n <= 0 || w.out[p] {
                 return 0;
             }
-            let cap = w.charge_max[p];
-            if cap <= 0 {
-                return 0;
-            }
-            let got = n.clamp(0, (cap - w.charge[p]).max(0));
-            if got <= 0 {
-                return 0;
-            }
-            w.charge[p] += got;
+            // Uncapped dumb add (production `World::gain_marker`).
+            let got = n;
+            w.charge[p] = w.charge[p].saturating_add(got);
             w.push(Effect::GainFire { player: a0, n: got });
             got as i64
         })
@@ -2793,13 +2792,15 @@ pub fn arm_slot(a: Args) -> i64 {
 pub fn arm_spend_marker(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
+        // All-or-nothing; returns 1 when the player had enough. No cap
+        // consultation -- spending is not the capped direction.
         let p = player_idx(a0);
         let n = a3;
         world::with_world_mut(|w| {
-            if w.charge[p] >= n && n > 0 {
-                w.charge[p] -= n;
+            if n <= 0 {
                 1
-            } else if n == 0 {
+            } else if w.charge[p] >= n {
+                w.charge[p] -= n;
                 1
             } else {
                 0

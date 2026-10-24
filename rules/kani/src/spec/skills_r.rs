@@ -27,7 +27,7 @@ pub fn sayo_passed_gain() -> i32 {
     1
 }
 
-/// Cap the sheet pins (host `charge_max`; Kani `gain_charge` does not clamp).
+/// Cap the sheet pins (live ceiling on the token; the kernel clamps).
 pub fn sayo_fire_cap() -> i32 {
     10
 }

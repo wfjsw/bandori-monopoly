@@ -76,7 +76,9 @@ fn fire_numbers_are_on_the_skill_def() {
 
 /// two_in_one's swap writes the other face's 「初始火罐数」 from that face's
 /// `CardDef` (hina 2/2 ↔ mana 1/2). Each play is one copy; give one per
-/// direction.
+/// direction. After each swap **no row is owned by the old instance**
+/// (MARKERS.md §4.6: unplace/place the skill; the new face's declaration is
+/// the new 初始/上限).
 #[test]
 fn two_in_one_matches_the_pair_defs() {
     let mut t = Table::vanilla(2);
@@ -86,10 +88,120 @@ fn two_in_one_matches_the_pair_defs() {
     t.play(0, "Sumimi:Sumimi是二人一体的").expect("swap");
     assert_eq!(t.charge(0), 1, "mana 初始1");
     assert_eq!(t.charge_max(0), 2, "mana 上限2");
+    let uid_after = t.m.world().persona_skill_uid(0);
+    assert!(uid_after >= 0, "persona skill is on the field");
+    let row = t
+        .m
+        .world()
+        .st
+        .players[0]
+        .tokens
+        .iter()
+        .find(|c| c.name == bandori_std::fire::KEY)
+        .expect("fire row");
+    assert_eq!(row.instance, Some(uid_after), "fire is owned by the new skill");
     t.give(0, &["Sumimi:Sumimi是二人一体的"]);
     t.play(0, "Sumimi:Sumimi是二人一体的").expect("swap back");
     assert_eq!(t.charge(0), 2, "hina 初始2");
     assert_eq!(t.charge_max(0), 2, "hina 上限2");
+    let uid_back = t.m.world().persona_skill_uid(0);
+    assert!(uid_back >= 0);
+    assert_ne!(uid_back, uid_after, "swap replaced the skill instance");
+    let rows: Vec<_> = t
+        .m
+        .world()
+        .st
+        .players[0]
+        .tokens
+        .iter()
+        .filter(|c| c.name == bandori_std::fire::KEY)
+        .collect();
+    assert_eq!(rows.len(), 1, "exactly one fire row");
+    assert_eq!(
+        rows[0].instance,
+        Some(uid_back),
+        "no row is owned by the old instance"
+    );
+}
+
+/// Fire is a `Counter` of the persona-skill field instance (user ruling
+/// 2026-10-10: every mark/token is a counter of its creating card, bound to
+/// card/tile/player, and dies with the instance).
+#[test]
+fn fire_is_a_counter_of_the_persona_skill() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    let skill = t.place_raw(0, "skill:千早爱音:重新开始");
+    t.set_fire(0, 2, 3);
+    let row = t
+        .m
+        .world()
+        .st
+        .players[0]
+        .tokens
+        .iter()
+        .find(|c| c.name == bandori_std::fire::KEY)
+        .expect("fire row");
+    assert_eq!(row.instance, Some(skill), "instance is the persona-skill uid");
+    assert_eq!(row.value, 2);
+    assert_eq!(row.max, 3, "live cap rides Counter.max");
+}
+
+/// `destroy_instance_units` / skill unplace drops the pots with the instance.
+#[test]
+fn skill_unplace_drops_the_pots() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    let skill = t.place_raw(0, "skill:千早爱音:重新开始");
+    t.set_fire(0, 2, 3);
+    t.m.world_mut().unplace_at(skill);
+    assert_eq!(
+        t.m
+            .world()
+            .st
+            .players[0]
+            .tokens
+            .iter()
+            .filter(|c| c.name == bandori_std::fire::KEY)
+            .count(),
+        0,
+        "pots die with the skill instance"
+    );
+}
+
+/// `tempFire` is a **second declared counter of the same instance**
+/// (lisa's 「可超过上限的临时火罐」, MARKERS.md §7).
+#[test]
+fn temp_fire_is_a_second_row_of_the_same_instance() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "今井莉莎");
+    let skill = t.place_raw(0, "skill:今井莉莎:慈爱女神");
+    t.set_fire(0, 1, 2);
+    // Grant through the kernel (arranges the row with the same owner).
+    t.m
+        .world_mut()
+        .set_tok(0, bandori_std::fire::TEMP_KEY, 1, skill, i32::MAX);
+    let pool = t
+        .m
+        .world()
+        .st
+        .players[0]
+        .tokens
+        .iter()
+        .find(|c| c.name == bandori_std::fire::KEY)
+        .expect("pool row");
+    let temp = t
+        .m
+        .world()
+        .st
+        .players[0]
+        .tokens
+        .iter()
+        .find(|c| c.name == bandori_std::fire::TEMP_KEY)
+        .expect("temp row");
+    assert_eq!(pool.instance, Some(skill));
+    assert_eq!(temp.instance, Some(skill), "same instance as the pool");
+    assert_eq!(temp.value, 1);
 }
 
 // =====================================================================

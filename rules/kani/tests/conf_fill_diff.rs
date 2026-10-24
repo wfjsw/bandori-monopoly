@@ -417,7 +417,7 @@ impl SnapSrc for Fixture {
             return 0;
         };
         match key {
-            // Production `cond_pre` reads fire via `state_get(p, "charge")`
+            // Production `cond_pre` reads fire via `tok(p, "charge")`
             // (the ABI-88 named-marker spelling), not a dedicated `charge()`.
             "charge" => s.charge,
             "stay" => s.stay,

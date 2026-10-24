@@ -223,22 +223,23 @@ fn add_counter_clamps_to_max() {
     assert_eq!(got, 0, "floor at 0");
 }
 
-/// `gain_marker` (ABI 88's `gain_charge`) clamps at `charge_max` and returns
-/// the amount gained. Wire: (player, name_p, name_l, n, why_p, why_l).
+/// `gain_marker` is an uncapped dumb add (the rules-layer kernel clamps).
+/// Wire: (player, name_p, name_l, n, why_p, why_l).
 #[test]
-fn gain_marker_clamps_at_cap() {
+fn gain_marker_is_uncapped_dumb_add() {
     let _g = model_lock();
     let mut w = base();
     w.charge[0] = 2;
     w.charge_max[0] = 3;
     install(w);
     let (np, nl) = card_sdk::native::intern(b"charge");
+    // Production `World::gain_marker` does not police `Counter.max`.
     let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 5, 0, 0]);
-    assert_eq!(got, 1, "only (cap-was) is gained");
-    assert_eq!(kworld::with_world(|w| w.charge[0]), 3);
-    // at cap → 0
-    let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 5, 0, 0]);
-    assert_eq!(got, 0, "at cap gains nothing");
+    assert_eq!(got, 5, "uncapped dumb add");
+    assert_eq!(kworld::with_world(|w| w.charge[0]), 7);
+    // n <= 0 → 0
+    let got = rules_kani::host::dispatch(Op::gain_marker, [0, np, nl, 0, 0, 0]);
+    assert_eq!(got, 0);
 }
 
 /// `tile_in(_, _, "shop")` = buyable && group == 10 (商店街), not `kind == 5`.

@@ -122,9 +122,9 @@ pub fn band_02_amount_mutant(taken: i32) -> i32 {
 // Effect: one fire pot is gained, at most up to the cap of 1.
 // Frame: the fire counter.
 // Classification: **PROVEN candidate** for the request (`GainFire{player,1}`).
-// The 「上限1」 cap is host-side (`game_core::gain_charge` honours `charge_max`);
-// the Kani host's `Op::gain_charge` does not — the at-cap leg is
-// **BLOCKED-HOST** (host-model gap), not a body-vs-book finding.
+// The 「上限1」 cap is enforced by the **rules-layer kernel**
+// (`fire::gain_clamped`); the engine `gain_marker` is an uncapped dumb add.
+// The at-cap leg is the kernel's refuse-before-write.
 // ===========================================================================
 
 /// Fire-pot cap from the quote (「上限1」).

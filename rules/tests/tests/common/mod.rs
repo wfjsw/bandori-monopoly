@@ -773,11 +773,13 @@ impl Table {
     }
 
     /// Fire pots: `value` held, `max` cap. Arranges the held-token row
-    /// (`name = "charge"`, the persona-skill counter) directly.
+    /// (`name = "charge"`, the persona-skill counter) directly, bound to the
+    /// seat's persona-skill instance when one is on the field.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
+        let uid = self.m.world().persona_skill_uid(who as i32);
         self.m
             .world_mut()
-            .set_tok(who as i32, bandori_std::fire::KEY, value, -1, max);
+            .set_tok(who as i32, bandori_std::fire::KEY, value, uid, max);
     }
 
     /// Drive the fire kernel's gain policy (`bandori_std::fire::gain_clamped`,
