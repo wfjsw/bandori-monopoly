@@ -81,6 +81,10 @@ pub mod native;
 pub mod kinds;
 
 pub use kinds::{Action, ActionEntry, Filter, FilterEntry, FilterShape, KindInfo};
+/// Re-exported so a card can `use card_sdk::serde;` and derive
+/// [`ActivationArg`](crate::ActivationArg)'s bounds on its own activation
+/// struct without adding a direct `serde` dependency.
+pub use serde;
 pub use msg::Msg;
 pub use text::{
     it, it_sub, items, para, sec, steps, CardText, TextBlock, TextItem, TextPiece, TextSection,

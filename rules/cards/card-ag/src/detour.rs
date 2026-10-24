@@ -12,6 +12,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ChainKind, Dice};
+use card_sdk::serde;
 use card_sdk::{Activation, CardText, it};
 use card_sdk::{key, Action, CardDef, Declared, Filter, Msg, On, PlanValue};
 
@@ -107,12 +108,23 @@ fn some_plan_fires(player_id: i32) -> bool {
         .any(|id| ctx::query_guard(player_id, id, ctx::entry::PRESS))
 }
 
+/// The card's own activation argument -- private to this file
+/// (docs/ACTIVATION.md §2). Not shared with any other card: only `postcard`
+/// crosses, so the shape is ours to choose.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
+struct DetourPick {
+    /// Index into [`PLANS`].
+    plan: i32,
+    /// The tile the plan aims at, or -1.
+    tile: i32,
+    /// The seat it aims at, or -1.
+    seat: i32,
+}
+
 /// Activation-argument collector (docs/ACTIVATION.md §2): which 「(2)」 to arm.
 /// Options are exactly the candidates whose press entry admits -- the pick is
 /// made before the activation commits, so a decline is still real.
-///
-/// Returns the **index into [`PLANS`]** as the arg.
-fn pick_plan(player_id: i32) -> Declared {
+fn pick_plan(player_id: i32) -> Declared<DetourPick> {
     // The label set is fixed and matches `PLANS` order; a candidate whose (2)
     // is not activatable is simply not offered. If none is, decline rather
     // than offering a pick that cannot work.
@@ -146,7 +158,11 @@ fn pick_plan(player_id: i32) -> Declared {
         &Msg::new(key!("detour_ask")),
         &opts,
     )?;
-    Ok(Activation::Arg(map[k.min(map.len() - 1)] as i32))
+    Ok(Activation::Arg(DetourPick {
+        plan: map[k.min(map.len() - 1)] as i32,
+        tile: -1,
+        seat: -1,
+    }))
 }
 
 /// Constructor placeholder: `.declare_arg` replaces the body (docs/ACTIVATION.md §2).
@@ -154,9 +170,9 @@ const fn unused_body(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn play_with_plan(player_id: i32, pick: i32) -> card_sdk::Asked {
+fn play_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     // 规则书(2): 「进行一次 "afterglow"式的移动（视为使用一次初始Afterglow角色的（2）效果）」
-    // The pick was made at declaration time (`pick_plan`); `pick` is a
+    // The pick was made at declaration time (`pick_plan`); `pick.plan` is a
     // [`PLANS`] index.
     // TODO(规则书)[judgement] OPEN-afterglow式移动: the four plans below are
     //   the C# reading, not the text's.
@@ -179,8 +195,8 @@ fn play_with_plan(player_id: i32, pick: i32) -> card_sdk::Asked {
 
 /// The four plans mutate the turn's `MoveCtx` (C# `H._turnCtx.Plan`).
 /// `pick` is a [`PLANS`] index.
-fn apply_plan(player_id: i32, pick: i32) {
-    match pick {
+fn apply_plan(player_id: i32, pick: DetourPick) {
+    match pick.plan {
         0 => {
             // Ran: `plan.Reverse = !plan.Reverse; plan.NoCircleReward = true`.
             ctx::plan::set_reverse(ctx::plan::dir() >= 0);
@@ -212,7 +228,7 @@ fn apply_plan(player_id: i32, pick: i32) {
     }
 }
 
-fn counteract_with_plan(player_id: i32, pick: i32) -> card_sdk::Asked {
+fn counteract_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     let Some(_before) = trigger::move_roll() else {
         return Ok(());
     };
@@ -304,19 +320,19 @@ fn clear_no_reward(player_id: i32) -> card_sdk::Asked {
 // drives the real shape (docs/ACTIVATION.md §2; rules/kani BodyShape::ActionArg).
 #[cfg(kani)]
 #[inline(always)]
-pub fn play_with_plan_kani(player_id: i32, pick: i32) -> card_sdk::Asked {
+pub fn play_with_plan_kani(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     play_with_plan(player_id, pick)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn counteract_with_plan_kani(player_id: i32, pick: i32) -> card_sdk::Asked {
+pub fn counteract_with_plan_kani(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     counteract_with_plan(player_id, pick)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pick_plan_kani(player_id: i32) -> card_sdk::Declared {
+pub fn pick_plan_kani(player_id: i32) -> card_sdk::Declared<DetourPick> {
     pick_plan(player_id)
 }
 

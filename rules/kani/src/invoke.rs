@@ -167,25 +167,18 @@ struct BodyRef {
 }
 
 impl BodyRef {
-    fn call(&self, player_id: i32, arg: i32) -> Asked {
-        (self.drive)(player_id, arg, self.body)
+    fn call(&self, player_id: i32) -> Asked {
+        (self.drive)(player_id, self.body)
     }
 
+    /// Drive the body with whatever the host holds. Under Kani the host
+    /// cannot synthesise an arbitrary `T` over the buffer ABI, so
+    /// `ctx::declared_arg` answers `T::default()`; a proof that needs a
+    /// particular pick should call the body through its `*_kani` export
+    /// (the direct-call pattern the cards already carry).
     fn call_any_arg(&self, player_id: i32) -> Asked {
-        let arg = match self.shape {
-            card_sdk::BodyShape::Plain => 0,
-            card_sdk::BodyShape::WithArg => {
-                #[cfg(kani)]
-                {
-                    kani::any()
-                }
-                #[cfg(not(kani))]
-                {
-                    0
-                }
-            }
-        };
-        self.call(player_id, arg)
+        let _ = self.shape;
+        self.call(player_id)
     }
 }
 
