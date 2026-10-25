@@ -58,12 +58,17 @@
 /* One card's slot: equal heights across the row (the face stretches to the
    tallest), the owner's colour on the frame, and a hover that drops the card
    further into view and over its neighbours. `--row-slot` (rowSpread) is the
-   step between card centres and tightens with the count. */
+   step between card centres and tightens with the count. Unselectable: a
+   press-and-hold lights the card's tiles, and iOS would mark the name up
+   (Copy / Lookup) under a held finger if the ban from `body` were not repeated. */
 .slot {
   position: relative;
   display: flex;
   flex: none;
   pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease;
 }
 .slot + .slot {
@@ -216,6 +221,15 @@
 /* Players-panel hover: the hovered seat's field cards light up; the rest fade. */
 .slot.hot { filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own)); transform: translateY(6px); }
 .slot.dim { opacity: 0.35; filter: grayscale(0.7); }
+/* A coarse-pointer tap picks the card: it is presented out of the row (a touch
+   has no hover to leave it there) and the face ring highlights it. Last, so it
+   outranks the seat-hover transform / fade above. */
+.slot.picked {
+  transform: translateY(14px) scale(1.06);
+  z-index: 3;
+  opacity: 1;
+  filter: var(--peek-lift);
+}
 
 /* The field's owner, ringed in their character colour, on the card's bottom
    right corner. Clicks fall through to the card. */
