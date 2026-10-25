@@ -185,7 +185,8 @@ function toLocal(el: HTMLElement, clientX: number, clientY: number): Point {
   return localPoint(el, clientX, clientY);
 }
 
-interface Gesture {
+/** Multi-touch / drag bookkeeping. Pure: the hook owns the DOM around it. */
+export interface Gesture {
   /** Active pointers by id, in client pixels. */
   pointers: Map<number, Point>;
   last: Point;
@@ -193,7 +194,95 @@ interface Gesture {
   dragging: boolean;
   /** Set once a drag / pinch started: swallows the click it would fire. */
   dragged: boolean;
-  pinch: { v0: Viewport; mid0: Point; d0: number } | null;
+  /** Pinch baseline: the pair it is computed on and the view when that pair
+   *  formed. Rebased (never left stale) when a finger is swapped in. */
+  pinch: { ids: [number, number]; v0: Viewport; mid0: Point; d0: number } | null;
+}
+
+export function emptyGesture(): Gesture {
+  return {
+    pointers: new Map(), last: { x: 0, y: 0 }, moved: 0,
+    dragging: false, dragged: false, pinch: null,
+  };
+}
+
+/**
+ * Keep `g.pinch` on the pair it was started on while both are still down, and
+ * rebase it the moment that pair breaks (a third finger taking over, say) so
+ * the next move is measured from the view the fingers are actually on -- a
+ * stale baseline makes the map jump to a view the gesture never asked for.
+ * Below two pointers the pinch is dropped entirely.
+ */
+export function ensurePinch(g: Gesture, v: Viewport, local: (p: Point) => Point): void {
+  if (g.pointers.size < 2) {
+    g.pinch = null;
+    return;
+  }
+  const ids = [...g.pointers.keys()];
+  const keep: [number, number] =
+    g.pinch && g.pointers.has(g.pinch.ids[0]) && g.pointers.has(g.pinch.ids[1])
+      ? g.pinch.ids
+      : [ids[0], ids[1]];
+  if (g.pinch && g.pinch.ids[0] === keep[0] && g.pinch.ids[1] === keep[1]) return;
+  const a = g.pointers.get(keep[0])!;
+  const b = g.pointers.get(keep[1])!;
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  g.pinch = {
+    ids: keep,
+    v0: v,
+    mid0: local(mid),
+    d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+  };
+}
+
+/** The pair a pinch is computed on, or `null` when there is no live pair. */
+export function pinchPair(g: Gesture): { a: Point; b: Point; v0: Viewport; mid0: Point; d0: number } | null {
+  if (!g.pinch) return null;
+  const a = g.pointers.get(g.pinch.ids[0]);
+  const b = g.pointers.get(g.pinch.ids[1]);
+  if (!a || !b) return null;
+  return { a, b, v0: g.pinch.v0, mid0: g.pinch.mid0, d0: g.pinch.d0 };
+}
+
+/**
+ * Drop `id` from the gesture. `false` means it was not tracked -- the caller
+ * (or a second delivery of the same up: wrap handler then window safety net)
+ * must leave the gesture alone. One finger left keeps dragging without a jump;
+ * none left ends the gesture. A pinch whose pair broke is cleared here and
+ * rebased by `ensurePinch` on the next move if two fingers are still down.
+ */
+export function endPointer(g: Gesture, id: number): boolean {
+  if (!g.pointers.delete(id)) return false;
+  if (g.pinch && (!g.pointers.has(g.pinch.ids[0]) || !g.pointers.has(g.pinch.ids[1]))) {
+    g.pinch = null;
+  }
+  if (g.pointers.size === 1) {
+    const [p] = [...g.pointers.values()];
+    g.last = { ...p };
+    g.moved = DRAG_THRESHOLD;
+    g.dragging = true;
+    g.pinch = null;
+  }
+  if (g.pointers.size === 0) {
+    g.dragging = false;
+    g.pinch = null;
+    g.moved = 0;
+  }
+  return true;
+}
+
+/**
+ * Abandon every tracked pointer. The escape hatch for a pointer whose up never
+ * arrives: the page is hidden or loses focus mid-pinch, iOS drops a `pointerup`
+ * after the multi-touch `preventDefault`, or the browser simply cancels the
+ * sequence without telling us. Without this a ghost finger stays in the map
+ * and every later one-finger pan is read as a pinch around it.
+ */
+export function resetGesture(g: Gesture): void {
+  g.pointers.clear();
+  g.pinch = null;
+  g.dragging = false;
+  g.moved = 0;
 }
 
 export interface ViewportApi {
@@ -228,10 +317,7 @@ export function useBoardViewport(): ViewportApi {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const vRef = useRef(v);
   vRef.current = v;
-  const gesture = useRef<Gesture>({
-    pointers: new Map(), last: { x: 0, y: 0 }, moved: 0,
-    dragging: false, dragged: false, pinch: null,
-  });
+  const gesture = useRef<Gesture>(emptyGesture());
   // The window is the map slot (`mapBox`); the board inside it keeps
   // MIN_RATIO..MAX_RATIO and is centred at fit. Measured in JS --
   // `container-type: size` was unreliable here -- and window pixels are those
@@ -287,13 +373,74 @@ export function useBoardViewport(): ViewportApi {
     setV((cur) => wheelZoom(cur, p.x, p.y, dy, mapRef.current));
   }, { passive: false });
 
+  /** Local px for a client point on the wrap. */
+  const toLocalOf = useCallback((p: Point) => {
+    const el = wrapRef.current;
+    return el ? toLocal(el, p.x, p.y) : p;
+  }, []);
+
+  /** Hold `id` on the wrap so its up / cancel is delivered even when the finger
+   *  slides off the board or the tile under it unmounts mid-gesture. */
+  const capture = useCallback((id: number) => {
+    try {
+      wrapRef.current?.setPointerCapture(id);
+    } catch {
+      /* pointer already gone */
+    }
+  }, []);
+
+  /**
+   * A tracked pointer ended (up, cancel, lost capture, or the window-level
+   * safety net). Idempotent: the wrap's handler and the window listener both
+   * call this for the same up, and the second is a no-op.
+   */
+  const finishPointer = useCallback((id: number) => {
+    const g = gesture.current;
+    if (!endPointer(g, id)) return;
+    try {
+      wrapRef.current?.releasePointerCapture(id);
+    } catch {
+      /* not captured */
+    }
+    // One finger left after a pinch: keep panning with it, now under capture
+    // (its up must reach us even outside the wrap).
+    if (g.pointers.size === 1) {
+      const [left] = [...g.pointers.keys()];
+      capture(left);
+    }
+    if (g.pointers.size === 0 && g.dragged) {
+      // The click that follows a drag must not reach a tile; a later click
+      // (or a keyboard-activated button) must.
+      window.setTimeout(() => {
+        g.dragged = false;
+      }, 0);
+    }
+  }, [capture]);
+
+  /** Abandon the whole gesture -- no further up is coming for these pointers. */
+  const abandonGesture = useCallback(() => {
+    const g = gesture.current;
+    if (g.pointers.size === 0 && !g.pinch) return;
+    for (const id of [...g.pointers.keys()]) {
+      try {
+        wrapRef.current?.releasePointerCapture(id);
+      } catch {
+        /* not captured */
+      }
+    }
+    resetGesture(g);
+    g.dragged = false;
+  }, []);
+
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     const g = gesture.current;
-    // A fresh press always clears the drag flag first: the click of a press on
-    // the zoom buttons (which is not a drag) must not be swallowed by the one
-    // before it.
-    g.dragged = false;
+    // A press that starts a fresh gesture clears the drag flag first: the click
+    // of a press on the zoom buttons (which is not a drag) must not be swallowed
+    // by the one before it. A *second* finger joining a drag must not clear it
+    // -- that drag's own click is still on its way.
+    if (g.pointers.size === 0) g.dragged = false;
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
     // The zoom buttons are not a drag handle.
     const t = e.target as Element | null;
     if (t && typeof t.closest === "function" && t.closest("[data-vp-ctl]")) return;
@@ -305,38 +452,40 @@ export function useBoardViewport(): ViewportApi {
       g.moved = 0;
       g.dragging = false;
       g.pinch = null;
-    } else if (g.pointers.size === 2) {
-      const [a, b] = [...g.pointers.values()];
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      g.pinch = {
-        v0: vRef.current,
-        mid0: toLocal(el, mid.x, mid.y),
-        d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
-      };
-      g.dragging = true;
-      g.dragged = true;
+      return;
     }
-  }, []);
+    // Two or more fingers: this is a pinch (or a third finger joining one).
+    // Capture every tracked pointer -- the click is already swallowed, and a
+    // lost up here is exactly what leaves a ghost finger in the map.
+    g.dragging = true;
+    g.dragged = true;
+    ensurePinch(g, vRef.current, toLocalOf);
+    for (const id of g.pointers.keys()) capture(id);
+  }, [capture, toLocalOf]);
 
   const onPointerMove = useCallback((e: ReactPointerEvent) => {
     const g = gesture.current;
     if (!g.pointers.has(e.pointerId)) return;
+    if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
     g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = wrapRef.current;
     if (!el) return;
     const b = mapRef.current;
-    if (g.pointers.size >= 2 && g.pinch) {
-      const [a, c] = [...g.pointers.values()];
-      const mid = { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 };
-      const d = Math.hypot(a.x - c.x, a.y - c.y) || 1;
-      // Read everything now: the updater runs later, during render, by which
-      // time a finger-up may have cleared `g.pinch` (a throw there blanks the page).
-      const { v0, mid0, d0 } = g.pinch;
-      const next = pinchAround(v0, mid0, toLocal(el, mid.x, mid.y), d / d0, b);
-      setV(next);
-      g.dragging = true;
-      g.dragged = true;
-      return;
+    if (g.pointers.size >= 2) {
+      ensurePinch(g, vRef.current, toLocalOf);
+      const pp = pinchPair(g);
+      if (pp) {
+        const mid = { x: (pp.a.x + pp.b.x) / 2, y: (pp.a.y + pp.b.y) / 2 };
+        const d = Math.hypot(pp.a.x - pp.b.x, pp.a.y - pp.b.y) || 1;
+        // Read everything now: the updater runs later, during render, by which
+        // time a finger-up may have cleared `g.pinch` (a throw there blanks the page).
+        const { v0, mid0, d0 } = pp;
+        const next = pinchAround(v0, mid0, toLocal(el, mid.x, mid.y), d / d0, b);
+        setV(next);
+        g.dragging = true;
+        g.dragged = true;
+        return;
+      }
     }
     const cur = { x: e.clientX, y: e.clientY };
     const dx = cur.x - g.last.x;
@@ -348,45 +497,46 @@ export function useBoardViewport(): ViewportApi {
       g.dragged = true;
       // Capture only once this is a real drag: a tap / click keeps its own
       // target, so tile and card clicks still land on the tile and card.
-      try {
-        el.setPointerCapture(e.pointerId);
-      } catch {
-        /* pointer already gone */
-      }
+      capture(e.pointerId);
     }
     if (g.dragging) {
       const d = localDelta(el, dx, dy);
       setV((curV) => panBy(curV, d.x, d.y, b));
     }
-  }, []);
+  }, [capture, toLocalOf]);
 
   const onPointerUp = useCallback((e: ReactPointerEvent) => {
-    const g = gesture.current;
-    if (!g.pointers.delete(e.pointerId)) return;
-    if (g.pointers.size < 2) g.pinch = null;
-    if (g.pointers.size === 1) {
-      // One finger left after a pinch: keep panning with it, without a jump.
-      const [p] = [...g.pointers.values()];
-      g.last = { ...p };
-      g.moved = DRAG_THRESHOLD;
-      g.dragging = true;
-    }
-    if (g.pointers.size === 0) {
-      g.dragging = false;
-      // The click that follows a drag must not reach a tile; a later click
-      // (or a keyboard-activated button) must.
-      if (g.dragged) {
-        window.setTimeout(() => {
-          g.dragged = false;
-        }, 0);
-      }
-    }
-    try {
-      wrapRef.current?.releasePointerCapture(e.pointerId);
-    } catch {
-      /* not captured */
-    }
-  }, []);
+    finishPointer(e.pointerId);
+  }, [finishPointer]);
+
+  // Safety net: a pointer whose up / cancel never reaches the wrap -- captured
+  // by the browser after a multi-touch `preventDefault`, lifted outside the
+  // board without capture, or cancelled by a system gesture -- would otherwise
+  // stay in the map forever and turn every later one-finger pan into a pinch
+  // around a ghost. These fire for every pointer; `finishPointer` ignores ids
+  // the wrap already closed out.
+  useEventListener(typeof window === "undefined" ? null : window, "pointerup", (e) => {
+    finishPointer((e as PointerEvent).pointerId);
+  });
+  useEventListener(typeof window === "undefined" ? null : window, "pointercancel", (e) => {
+    finishPointer((e as PointerEvent).pointerId);
+  });
+  useEventListener(typeof window === "undefined" ? null : window, "lostpointercapture", (e) => {
+    finishPointer((e as PointerEvent).pointerId);
+  });
+  // iOS may deliver the touch series but drop the matching pointer events.
+  useEventListener(typeof window === "undefined" ? null : window, "touchend", (e) => {
+    if ((e as TouchEvent).touches.length === 0) abandonGesture();
+  });
+  useEventListener(typeof window === "undefined" ? null : window, "touchcancel", () => {
+    abandonGesture();
+  });
+  // A notification / app switch mid-pinch: no up will ever come.
+  useEventListener(typeof window === "undefined" ? null : window, "blur", () => abandonGesture());
+  useEventListener(typeof window === "undefined" ? null : window, "pagehide", () => abandonGesture());
+  useEventListener(typeof document === "undefined" ? null : document, "visibilitychange", () => {
+    if (document.visibilityState === "hidden") abandonGesture();
+  });
 
   const onClickCapture = useCallback((e: ReactMouseEvent) => {
     const g = gesture.current;

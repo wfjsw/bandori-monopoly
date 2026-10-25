@@ -9,7 +9,8 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
   FIT_ZOOM, MAX_RATIO, MAX_ZOOM, MIN_RATIO, MIN_ZOOM, DEFAULT_ZOOM, OVERPAN, boardRect, mapBox,
-  centeredViewport, clampPan, clampZoom, fitViewport, panBy, pinchAround, stepZoom, wheelZoom, zoomAround,
+  centeredViewport, clampPan, clampZoom, emptyGesture, endPointer, ensurePinch, fitViewport, panBy,
+  pinchAround, pinchPair, resetGesture, stepZoom, wheelZoom, zoomAround,
   type MapBox, type Viewport,
 } from "./viewport.ts";
 
@@ -283,4 +284,113 @@ test("mapBox fills the slot as the window and clamps only the board", () => {
     assert.ok(b.boardW <= b.winW && b.boardH <= b.winH);
   }
   assert.deepEqual(mapBox(2000, 800), { winW: 2000, winH: 800, boardW: 1280, boardH: 800 });
+});
+// --- Gesture bookkeeping -------------------------------------------------
+// The pan/zoom math above is only as good as the pointer map feeding it. A
+// pointer whose up never arrives (page hidden mid-pinch, iOS dropping a
+// pointerup after the multi-touch preventDefault, a system cancel) used to
+// stay in the map forever: every later one-finger pan was then read as a
+// pinch around a ghost finger and the map stopped following the hand.
+
+const I = (p: { x: number; y: number }) => p; // identity "to local"
+
+test("endPointer drops a tracked id and is a no-op for a second delivery", () => {
+  const g = emptyGesture();
+  g.pointers.set(1, { x: 10, y: 10 });
+  assert.equal(endPointer(g, 1), true);
+  assert.equal(g.pointers.size, 0);
+  assert.equal(g.dragging, false);
+  // The wrap's handler and the window safety net both see the same up.
+  assert.equal(endPointer(g, 1), false);
+  assert.equal(g.pointers.size, 0);
+});
+
+test("endPointer keeps one leftover finger panning without a jump", () => {
+  const g = emptyGesture();
+  g.pointers.set(1, { x: 10, y: 10 });
+  g.pointers.set(2, { x: 80, y: 40 });
+  g.dragging = true;
+  g.dragged = true;
+  g.moved = 0;
+  ensurePinch(g, { z: 1, tx: 0, ty: 0 }, I);
+  assert.ok(g.pinch);
+  assert.equal(endPointer(g, 1), true);
+  // The leftover is ready to pan from its own last position -- not from
+  // wherever `last` happened to sit when the pair was active.
+  assert.equal(g.pointers.size, 1);
+  assert.deepEqual(g.last, { x: 80, y: 40 });
+  assert.equal(g.dragging, true);
+  assert.equal(g.moved, 6); // DRAG_THRESHOLD
+  assert.equal(g.pinch, null, "no pinch with one finger left");
+});
+
+test("endPointer rebases a three-finger pinch instead of keeping a stale baseline", () => {
+  const g = emptyGesture();
+  const v0: Viewport = { z: 1, tx: 0, ty: 0 };
+  g.pointers.set(1, { x: 0, y: 0 });
+  g.pointers.set(2, { x: 100, y: 0 });
+  ensurePinch(g, v0, I);
+  const started = g.pinch!;
+  assert.deepEqual(started.ids, [1, 2]);
+  assert.equal(started.d0, 100);
+  // A third finger joins, then the original pair's first finger lifts.
+  g.pointers.set(3, { x: 40, y: 40 });
+  ensurePinch(g, v0, I);
+  assert.deepEqual(g.pinch!.ids, [1, 2], "the original pair stays the baseline while both are down");
+  assert.equal(endPointer(g, 1), true);
+  ensurePinch(g, { z: 1, tx: 5, ty: 5 }, I);
+  // The pair is now 2 and 3, measured from the *current* view -- not from the
+  // view and span the dead finger 1 left behind (which made the map jump).
+  assert.deepEqual(g.pinch!.ids, [2, 3]);
+  assert.deepEqual(g.pinch!.v0, { z: 1, tx: 5, ty: 5 });
+  assert.equal(g.pinch!.d0, Math.hypot(100 - 40, 0 - 40));
+  assert.deepEqual(g.pinch!.mid0, { x: 70, y: 20 });
+});
+
+test("ensurePinch is a no-op while its pair is intact", () => {
+  const g = emptyGesture();
+  g.pointers.set(1, { x: 0, y: 0 });
+  g.pointers.set(2, { x: 50, y: 0 });
+  ensurePinch(g, { z: 1, tx: 0, ty: 0 }, I);
+  const before = g.pinch!;
+  g.pointers.set(1, { x: 5, y: 5 }); // move, no set change
+  ensurePinch(g, { z: 9, tx: 9, ty: 9 }, I);
+  assert.equal(g.pinch, before, "same pair keeps the original baseline");
+  assert.deepEqual(pinchPair(g)!.a, { x: 5, y: 5 }, "but reads the pair's live positions");
+});
+
+test("resetGesture clears a ghost finger so the next one-finger drag pans", () => {
+  // The stuck report: after a two-finger zoom the map no longer follows a
+  // single finger -- it behaves as if one finger stayed down.
+  const g = emptyGesture();
+  g.pointers.set(1, { x: 10, y: 10 });
+  g.pointers.set(2, { x: 200, y: 10 });
+  g.dragging = true;
+  g.dragged = true;
+  ensurePinch(g, { z: 1, tx: 0, ty: 0 }, I);
+  assert.ok(pinchPair(g), "pinch active");
+  // Finger 1's up never arrived (hidden tab / dropped pointerup). Finger 2
+  // is lifted too; without a reset the map still sees two pointers.
+  resetGesture(g);
+  assert.equal(g.pointers.size, 0);
+  assert.equal(g.pinch, null);
+  assert.equal(g.dragging, false);
+  // A fresh one-finger press is a plain pan, not a pinch around a ghost.
+  g.pointers.set(7, { x: 50, y: 50 });
+  ensurePinch(g, { z: 1, tx: 0, ty: 0 }, I);
+  assert.equal(g.pinch, null);
+  assert.equal(pinchPair(g), null);
+  assert.equal(g.pointers.size, 1);
+});
+
+test("a pinch only engages at two live pointers", () => {
+  const g = emptyGesture();
+  g.pointers.set(1, { x: 0, y: 0 });
+  ensurePinch(g, { z: 1, tx: 0, ty: 0 }, I);
+  assert.equal(pinchPair(g), null);
+  g.pointers.set(2, { x: 10, y: 0 });
+  ensurePinch(g, { z: 1, tx: 0, ty: 0 }, I);
+  assert.ok(pinchPair(g));
+  endPointer(g, 2);
+  assert.equal(pinchPair(g), null);
 });
