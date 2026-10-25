@@ -28,6 +28,7 @@ import { BOARD_MID, COMPACT_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from 
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
+import { counterLabel, stateLabel } from "../../i18n/stateLabel";
 import { namesOf } from "../../core/names";
 
 export function Side({ sess }: { sess: GameSession }) {
@@ -81,19 +82,28 @@ type SkillSlot = {
  * The live markers a skill card carries, for its top-right corner: the field
  * instance's crystals, on-card CP and named counters, plus the player's
  * counter units bound to that instance (fire pots and the like when a skill
- * keeps them as its own counter). Zero counts are dropped.
+ * keeps them as its own counter). Zero counts are dropped. A name with no
+ * display phrase is dropped too -- never printed as its wire key.
  */
 export function skillMarks(p: Model["S"]["players"][number] | undefined, id: string): { key: string; label: string; title: string }[] {
   const fc = p?.field?.find((c) => c.card === id);
   if (!p || !fc) return [];
   const out: { key: string; label: string; title: string }[] = [];
-  if (fc.counters["crystals"] ?? 0 > 0) out.push({ key: "crystals", label: `◆${fc.counters["crystals"] ?? 0}`, title: tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) });
-  if (fc.counters["cp"] ?? 0 > 0) out.push({ key: "cp", label: `CP${fc.counters["cp"] ?? 0}`, title: tr("board.cp", { n: fc.counters["cp"] ?? 0 }) });
+  const crystals = fc.counters["crystals"] ?? 0;
+  const cp = fc.counters["cp"] ?? 0;
+  if (crystals > 0) out.push({ key: "crystals", label: `◆${crystals}`, title: tr("board.crystals", { n: crystals }) });
+  if (cp > 0) out.push({ key: "cp", label: `CP${cp}`, title: tr("board.cp", { n: cp }) });
+  // Crystals and CP already have their own chips above; the walk is for the
+  // instance's *other* named counters, so the two are not listed twice.
   for (const [name, n] of Object.entries(fc.counters ?? {})) {
-    if (n > 0) out.push({ key: `c:${name}`, label: `${name}×${n}`, title: `${name} ×${n}` });
+    if (n <= 0 || name === "crystals" || name === "cp") continue;
+    const label = counterLabel(name);
+    if (label) out.push({ key: `c:${name}`, label: `${label}×${n}`, title: `${label} ×${n}` });
   }
   for (const tok of p.tokens ?? []) {
-    if (tok.instance === fc.uid && tok.value > 0) out.push({ key: `t:${tok.name}`, label: `${tok.name}×${tok.value}`, title: `${tok.name} ×${tok.value}` });
+    if (tok.instance !== fc.uid || tok.value <= 0) continue;
+    const label = stateLabel(tok.name);
+    if (label) out.push({ key: `t:${tok.name}`, label: `${label}×${tok.value}`, title: `${label} ×${tok.value}` });
   }
   return out;
 }
