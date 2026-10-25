@@ -486,7 +486,7 @@
 }
 /* Phone canvas: the hand strip's controls are the thing pressed all game -- bigger. */
 :global(:root[data-compact]) .handHint { font-size: 11px; }
-:global(:root[data-compact]) .act { height: 68px; min-height: 68px; }
+:global(:root[data-compact]) .act { font-size: --var(--fs-l); }
 :global(:root[data-compact]) .dice { height: 68px; }
 
 :global(:root[data-compact]) .preview { width: 240px; }
