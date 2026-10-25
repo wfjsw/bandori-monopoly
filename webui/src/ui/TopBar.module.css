@@ -424,16 +424,15 @@
    height: 24px;
    width: 170px;
    font-size: 13px;
-   padding: 3px 14px 0;
-   border-radius: 12px 12px 12px 3px;
+   padding: 0 12px;
 }
 
 :global(:root[data-compact]) .compact .title {
    height: 34px;
-   margin-top: -3px;
-   border-radius: 17px;
-   font-size: 17px;
-   padding: 0 14px;
+   margin-top: -2px;
+   font-size: 14px;
+   line-height: 14px;
+   padding: 0 12px;
 }
 
 :global(:root[data-compact]) .compact .back {
@@ -450,7 +449,7 @@
 :global(:root[data-compact]) .compact .crumb {
    left: calc(max(14px, var(--safe-left, 0px)) + 54px);
    top: max(6px, var(--safe-top, 0px));
-   width: 170px;
+   width: 180px;
 }
 
 :global(:root[data-compact]) .compact .section {
@@ -470,8 +469,4 @@
    height: 22px;
    padding: 3px 12px 0;
    line-height: 1.2;
-}
-
-:global(:root[data-compact]) .compact .title {
-   margin-top: -2px;
 }
