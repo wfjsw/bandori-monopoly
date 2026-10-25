@@ -235,10 +235,6 @@ export function showEffect(body: string, ms: number): void {
   window.setTimeout(close, ms);
 }
 
-export function showEvent(id: string, note: string): void {
-  openModal(tr("events.label", { id }), <div className={s.info}><p className={s.pre}>{D.event(id)?.text ?? ""}</p>{note && <p className={s.pink}>{note}</p>}</div>, { size: "mid" });
-}
-
 export function showEventPile(S: MatchState): void {
   openModal(tr("board.eventDeck"), (
     <div className={s.info}>

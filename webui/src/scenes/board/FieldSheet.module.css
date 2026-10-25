@@ -1,12 +1,13 @@
-/* The cards-in-play row, docked at the top edge of the centre column: the
-   mirror of the hand's bottom fan. Straight (no arc), overlapping, retracted
-   upward behind the top edge so each face's bottom zone -- name + live markers
-   -- peeks below it; hover / focus lowers the row. Sits under the FX layer
-   (Board `.fx`) so banners and the card flash still read over it, and only
-   the card boxes take the pointer -- the board stays clickable in the gaps.
-   The row hangs off the top of the board body, which a top-docked replay
-   transport already lowers (`--replay-bar-top` on Board `.body`) -- no extra
-   offset here, so the peek lands under the bar, not behind it. */
+/* The cards-in-play stack -- field cards and events in effect as one row --
+   docked at the top edge of the centre column: the mirror of the hand's bottom
+   fan. Straight (no arc), overlapping, retracted upward behind the top edge so
+   each face's bottom zone -- name + live markers -- peeks below it; hover /
+   focus lowers the row. Sits under the FX layer (Board `.fx`) so banners and
+   the card flash still read over it, and only the card boxes take the pointer
+   -- the board stays clickable in the gaps. The row hangs off the top of the
+   board body, which a top-docked replay transport already lowers
+   (`--replay-bar-top` on Board `.body`) -- no extra offset here, so the peek
+   lands under the bar, not behind it. */
 
 /* `--field-fill` (Card `.field::before` / `::after`): 1 = the face's name sits
    in the bottom zone above the markers, 0 = it follows the tags. Not animated. */
@@ -23,9 +24,9 @@
      behind the bottom one). */
   overflow: hidden;
 }
-/* Too many cards for the width even at the tightest overlap (a phone): the
-   sheet scrolls sideways; vertical stays clipped. The row keeps its natural
-   width, centred when it fits (auto margins), left-aligned when it doesn't. */
+/* Grown past the sheet the stack overlaps tighter and still fills the width
+   (rowSpread), so this only bites if the spread is somehow wider than the
+   sheet: vertical stays clipped, horizontal may scroll. */
 .sheet {
   overflow-x: auto;
   overflow-y: hidden;
@@ -58,11 +59,14 @@
 /* One card's slot: equal heights across the row (the face stretches to the
    tallest), the owner's colour on the frame, and a hover that drops the card
    further into view and over its neighbours. `--row-slot` (rowSpread) is the
-   step between card centres and tightens with the count. Unselectable: a
-   press-and-hold lights the card's tiles, and iOS would mark the name up
-   (Copy / Lookup) under a held finger if the ban from `body` were not repeated. */
+   step between card centres and tightens with the count. Each slot is its own
+   stacking context, like the skill stack's, so the face, its markers and the
+   holder avatar stack as one card. Unselectable: a press-and-hold lights the
+   card's tiles, and iOS would mark the name up (Copy / Lookup) under a held
+   finger if the ban from `body` were not repeated. */
 .slot {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex: none;
   pointer-events: auto;
@@ -73,9 +77,6 @@
 }
 .slot + .slot {
   margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px));
-}
-.slot + .sep {
-  margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px) + 14px);
 }
 .slot:hover,
 .slot:focus-within {
@@ -126,7 +127,7 @@
 }
 
 /* Live markers in the face's bottom zone -- the part that must read while the
-   row is retracted: crystals and on-card CP. */
+   row is retracted: crystals, on-card CP, and an event's counters. */
 .crystal,
 .cp,
 .count {
@@ -159,53 +160,6 @@
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-/* Events in effect: the same face shape at the row's end -- art, name and
-   counters in a bottom zone that matches the cards' peek. */
-.event {
-  width: var(--card-w, 120px);
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  box-shadow: 0 0 0 2.5px var(--own, var(--purple)), var(--card-shadow);
-  cursor: pointer;
-  text-align: left;
-}
-.event.picked { box-shadow: 0 0 0 4px var(--pink), var(--card-shadow); }
-.eventArt {
-  flex: 1;
-  min-height: 0;
-  border-radius: 3px;
-  overflow: hidden;
-  background: #eee;
-}
-.eventArt img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  filter: hue-rotate(250deg) saturate(0.8);
-}
-.eventName {
-  height: 38px;
-  padding: 3px 2px 1px;
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.marks {
-  height: 18px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
