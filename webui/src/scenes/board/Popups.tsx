@@ -23,6 +23,7 @@ import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
 import { stateLabel } from "../../i18n/stateLabel";
 import { fireMaxOf, fireOf, namesOf, stateOf } from "../../core/names";
+import { NO_HAND_LIMIT } from "../../core/hand";
 
 function useModel(sess: GameSession): Model | null {
   const { view } = useMatchView(sess);
@@ -195,10 +196,18 @@ export function showPlayerInfo(m: Model, i: number): void {
     stateOf(x, "stay") ? tr("player.stayN", { n: stateOf(x, "stay") }) : "", stateOf(x, "stun") + stateOf(x, "stunStart") ? tr("player.stunned") : "", stateOf(x, "exile") ? tr("player.exileN", { n: stateOf(x, "exile") }) : "",
     (() => { const bb = borrowedBand(x); return bb ? tr("player.borrowed", { skill: cardTitle(bb.skill), who: m.charOf(bb.from)?.display ?? "" }) : ""; })(),
     x.skillNote?.k ? tr("player.skillNote", { note: fmtMsg(x.skillNote, namesOf(S)) }) : "",
-    ...(x.tokens ?? []).map((tok) => `${tok.name} ×${tok.value}`),
+    ...(x.tokens ?? []).flatMap((tok) => {
+      if (tok.value <= 0) return [];
+      const label = stateLabel(tok.name);
+      return label ? [`${label} ×${tok.value}`] : [];
+    }),
     ...Object.entries(x.state ?? {}).flatMap(([key, v]) => {
       const n = typeof v === "number" ? v : (v?.value ?? 0);
-      return n > 0 ? [`${stateLabel(key)} ×${n}`] : [];
+      if (n <= 0) return [];
+      const label = stateLabel(key);
+      if (!label) return [];
+      // `handLimit`'s i32-max sentinel is 「手牌数没有上限」, not a count.
+      return [key === "handLimit" && n === NO_HAND_LIMIT ? `${label} ∞` : `${label} ×${n}`];
     }),
   ].filter(Boolean);
   openModal(`${namesOf(S).playerId(i)}${i === m.playerId ? tr("common.youSuffix") : ""}`, (
