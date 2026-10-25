@@ -258,7 +258,10 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-/* Your draw pile: the same card-back-and-count chip as each player's graveyard. */
+/* Your draw pile: the same card-back-and-count chip as each player's graveyard.
+   Long-press peeks and never selects: the count is a bare number, and iOS would
+   happily mark it up (Copy / Lookup) under a held finger if the ban from `body`
+   were not repeated here. */
 .deck {
   flex: none;
   display: flex;
@@ -268,6 +271,9 @@
   border-radius: 9px;
   background: var(--panel);
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .deck img {
   width: 18px;
