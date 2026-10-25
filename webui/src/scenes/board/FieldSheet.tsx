@@ -61,7 +61,8 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   // a desktop one, so the row spread follows it (and overlaps tighter when still too long).
   const sheetRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(480 + CARD_W);
-  const any = S.players.some((x) => (x.field ?? []).length) || (S.eventActive ?? []).length > 0;
+  // The sheet stays mounted even when the row is empty, so the observer is
+  // armed once -- not toggled with the stack's occupancy.
   useEffect(() => {
     const el = sheetRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -69,7 +70,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
     ro.observe(el);
     setWidth(designBox(el).width);
     return () => ro.disconnect();
-  }, [any]);
+  }, []);
   // Touch screens: a short tap presents the card out, highlights it and feeds
   // the standing preview (like the hand's first click). A second tap on the
   // same card opens its detail popup. A tap never lights tiles. Clicking
@@ -102,7 +103,11 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   };
   const coarse = () => window.matchMedia("(pointer: coarse)").matches;
   const total = stack.length;
-  if (!total) return null;
+  // Keep the sheet mounted through a transient empty row (the mirror of
+  // SkillStack's cliff): an empty `.row` is zero-height and draws no phantom
+  // bar, but unmounting the whole sheet mid-match would drop every face's
+  // <img> and flash the field art the next time a card lands.
+  //
   // A picked card keeps the row out from under the top edge until it is unpicked.
   return (
     <div ref={sheetRef} className={cx(s.sheet, (dock.raised || picked) && s.up)} {...dock.hover}>

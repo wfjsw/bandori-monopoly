@@ -5,8 +5,8 @@ import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
 import { fireMaxOf, fireOf, stateOf } from "../../core/names";
 import { NO_HAND_LIMIT } from "../../core/hand";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { cardArt, sceneImg } from "../../core/assets";
-import { cardTitle } from "../../core/data";
+import { sceneImg } from "../../core/assets";
+import { cardTitle, cardArtUrl } from "../../core/data";
 import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
 import { useScrollFollow } from "../../hooks/measure";
@@ -231,7 +231,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
           <>
             <div className={s.peekHead}>{tr("board.graveyardPile")}<b>×{peekCards.length}</b></div>
             {peekCards.length
-              ? peekCards.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArt(id)} alt="" /><span>{cardTitle(id)}</span></div>)
+              ? peekCards.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArtUrl(id)} alt="" /><span>{cardTitle(id)}</span></div>)
               : <div className={s.peekEmpty}>{tr("graveyard.empty")}</div>}
           </>
         )}

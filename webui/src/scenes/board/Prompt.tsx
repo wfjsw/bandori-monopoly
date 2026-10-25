@@ -6,9 +6,8 @@
 // the centre column, retractable to its title strip.
 
 import { useRef, useState } from "react";
-import { cardArt } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D, cardTitle, cardText, cardBody, cardColor, cardCounterReason } from "../../core/data";
+import { D, cardTitle, cardText, cardBody, cardColor, cardArtUrl, cardCounterReason } from "../../core/data";
 import { n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
 import { useCloseWhen, useMountEffect } from "../../hooks/mount";
@@ -142,7 +141,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
                 tabIndex={0}
               >
                 <div className={s.dArt} style={{ borderColor: cardColor(cid) }}>
-                  <img src={cardArt(cid)} alt="" />
+                  <img src={cardArtUrl(cid)} alt="" />
                 </div>
                 <div className={s.dTitle}>{cardTitle(cid)}</div>
                 {!!c?.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
@@ -562,7 +561,7 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
       <div className={s.detail} onDoubleClick={() => focus !== null && onConfirm?.(focus)}>
         {id && c ? (
           <>
-            <div className={s.dArt} style={{ borderColor: bandColor(c.group) }}><img src={cardArt(id)} alt="" /></div>
+            <div className={s.dArt} style={{ borderColor: bandColor(c.group) }}><img src={cardArtUrl(id)} alt="" /></div>
             <div className={s.dTitle}>{cardTitle(id)}</div>
             {!!c.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
             <div className={s.dText}><SkillBody blocks={c.body} text={c.text} /></div>

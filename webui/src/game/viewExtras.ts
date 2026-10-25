@@ -44,15 +44,23 @@ export function mergeExtras(v: MatchView, e: ViewExtras): MatchView {
  * Online extras cache. Keyed by [`extrasKey`]; computed in the bot worker so
  * the main thread never blocks on the determinize pass.
  *
+ * Each key caches its own exact extras, and the most recent successful set is
+ * kept as a *stale-but-present* stand-in for a key that has not landed yet --
+ * `playable` / `estCost` / `skills` / `aiAnswer` never drop out mid-match and
+ * unmount the skill row (or grey the hand) on every new state seq.
+ *
  * Failure is not fatal: a refused / timed-out `extras` leaves the frame
- * without the fields (consumers already tolerate that -- `view.playable &&
- * !view.playable[i]`, `view.skills ?? []`, `view.aiAnswer ?? null`) and the
- * key is marked failed so the same decision is not retried.
+ * carrying whatever stand-in is already there (consumers already tolerate a
+ * missing field -- `view.playable && !view.playable[i]`, `view.skills ?? []`,
+ * `view.aiAnswer ?? null`) and the key is marked failed so the same decision
+ * is not retried.
  */
 export class OnlineExtras {
   private cache = new Map<string, ViewExtras>();
   private inflight = new Map<string, Promise<void>>();
   private failed = new Set<string>();
+  /** Most recent successful extras: the stand-in for a key still in flight. */
+  private latest: ViewExtras | null = null;
   private pool: BotPool | null;
   /** Room id folded into the seed (`"solo"` never reaches here). */
   private room: string;
@@ -70,10 +78,12 @@ export class OnlineExtras {
     this.pool = pool ?? null;
   }
 
-  /** Merge already-cached extras into `v`. Returns `v` itself when the key is
-   *  not cached (or the frame already carries those exact fields). */
+  /** Merge already-cached extras into `v`. An exact-key hit wins; otherwise
+   *  the most recent set stands in (stale-but-present) so the four fields stay
+   *  on the frame. Returns `v` itself when nothing has landed yet (or the
+   *  frame already carries those exact fields). */
   mergeCached(v: MatchView): MatchView {
-    const e = this.cache.get(extrasKey(v));
+    const e = this.cache.get(extrasKey(v)) ?? this.latest;
     if (!e) return v;
     if (v.playable === e.playable && v.estCost === e.estCost && v.skills === e.skills && v.aiAnswer === e.aiAnswer) {
       return v;
@@ -99,6 +109,7 @@ export class OnlineExtras {
       .then((pool) => pool.extras(v, seed))
       .then((e) => {
         this.cache.set(key, e);
+        this.latest = e;
         onDone(e);
       })
       .catch((err) => {
@@ -127,13 +138,17 @@ export class OnlineExtras {
 
 /**
  * The online emit cycle (`OnlineSession.emitView`'s body): merge cached
- * extras, emit, and kick off the seat-view computation when they are not in
- * yet. `emit` notifies the session's subscribers; `current` returns the live
- * frame so a late extras reply only re-emits for the same decision.
+ * extras (exact, else the most recent set as a stale-but-present stand-in),
+ * emit, and always kick off the seat-view computation for this key when it is
+ * not already cached. `emit` notifies the session's subscribers; `current`
+ * returns the live frame so a late extras reply only re-emits for the same
+ * decision.
  *
- * Until the extras arrive the fields stay absent (consumers already tolerate
- * that); a failed / slow `extras` never blocks the frame -- greying may be
- * coarse and 托管 falls back to its policy table.
+ * Until *any* extras have landed the fields stay absent (consumers already
+ * tolerate that); after that they never drop out -- the stand-in is replaced
+ * by the exact set as soon as it arrives. A failed / slow `extras` never
+ * blocks the frame -- greying may be coarse and 托管 falls back to its policy
+ * table.
  */
 export function emitOnlineView(
   extras: OnlineExtras,
@@ -141,9 +156,11 @@ export function emitOnlineView(
   emit: (merged: MatchView) => void,
   current: () => MatchView | null,
 ): Promise<void> {
-  const merged = extras.mergeCached(v);
-  emit(merged);
-  if (merged !== v) return Promise.resolve(); // already had them
+  // Emit the stand-in (or the exact extras) first. The request below must run
+  // even when that stand-in made `merged !== v` -- otherwise a cache miss for
+  // this key would never compute the real ones. `request` is a no-op when the
+  // key is already cached / failed / in flight.
+  emit(extras.mergeCached(v));
   return extras.request(v, (e) => {
     // Only re-emit when this is still the live decision (same seq +
     // prompt); a newer frame starts its own request.

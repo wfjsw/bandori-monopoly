@@ -5,9 +5,8 @@
 // click-to-inspect behaviour every prompt and card collection shares.
 
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
-import { D, cardTitle, cardText, cardBody, cardColor, skillCard, GENERAL_GROUP } from "../core/data";
+import { D, cardTitle, cardText, cardBody, cardColor, cardArtUrl, skillCard, GENERAL_GROUP } from "../core/data";
 import type { CardData } from "../core/types";
 import { Btn } from "./Button";
 import s from "./Card.module.css";
@@ -90,7 +89,7 @@ export const CardFace = memo(function CardFace({ id, size = "mini", width, on, p
       onBlur={onBlur}
       title={title}
     >
-      <div className={s.art}><img src={cardArt(id)} alt="" loading="lazy" decoding="async" draggable={false} /></div>
+      <div className={s.art}><img src={cardArtUrl(id)} alt="" decoding="async" draggable={false} /></div>
       <div className={s.line} style={{ background: cardColor(id) }} />
       <div className={s.title}>{cardTitle(id)}</div>
       {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
@@ -115,7 +114,7 @@ function CardDetail({ id, actions, note, close }: { id: string; actions: CardAct
   const c = D.card(id);
   return (
     <div className={s.detail}>
-      <div className={s.bigArt} style={{ borderColor: cardColor(id) }}><img src={cardArt(id)} alt="" /></div>
+      <div className={s.bigArt} style={{ borderColor: cardColor(id) }}><img src={cardArtUrl(id)} alt="" /></div>
       <div className={s.info}>
         <div className={s.kindRow}>
           {c && <KindChip kind={cardKind(c)} />}

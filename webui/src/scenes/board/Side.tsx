@@ -2,9 +2,9 @@
 
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { handLimit } from "../../core/hand";
-import { cardArt, sceneImg } from "../../core/assets";
+import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D, cardTitle, cardText } from "../../core/data";
+import { D, cardTitle, cardText, cardArtUrl } from "../../core/data";
 import { useAutoplay } from "../../core/hooks";
 import { useEventListener, useHotkeys } from "../../hooks/dom";
 import { useDockRaise } from "../../hooks/dock";
@@ -152,7 +152,10 @@ function SkillStack({ m, sess, peek, unpeek }: {
   const [picked, setPicked] = useState<string | null>(null);
   const unpick = useCallback(() => setPicked(null), []);
   usePickDeselect(picked, unpick);
-  if (!slots.length) return null;
+  // Always keep the row mounted, even through a transient empty (`skills`
+  // briefly absent online before the extras land): tearing the container and
+  // its CardFace <img>s down is what flashes the skill art. An empty row
+  // collapses to zero size and leaves no gap.
   const fire = async (id: string) => {
     if (using) return;
     setUsing(true);
@@ -417,7 +420,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
         <div className={cx(s.preview, hover && !stand && s.previewOn)}>
           {hover && !stand && (
             <>
-              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.group) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
+              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.group) : "#ED4E76" }}><img src={cardArtUrl(hover.id)} alt="" /></div>
               <div className={s.pTitle}>{cardTitle(hover.id)}</div>
               {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
               <div className={s.pText} ref={textRef}><SkillBody blocks={hover.text ? undefined : hc?.body} text={hover.text ?? hc?.text ?? ""} /></div>
@@ -430,7 +433,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
       <div className={cx(s.peek, peek && s.peekOn)}>
         <div className={s.peekHead}>{tr("board.drawPile")}<b>×{m.me.draw}</b></div>
         {deck.length
-          ? deck.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArt(id)} alt="" /><span>{cardTitle(id)}</span></div>)
+          ? deck.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArtUrl(id)} alt="" /><span>{cardTitle(id)}</span></div>)
           : <div className={s.peekEmpty}>{tr("board.drawPileEmpty")}</div>}
       </div>
     </>

@@ -7,9 +7,8 @@
 
 import { useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
 import { useMountEffect } from "../hooks/mount";
-import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
-import { cardBody, cardColor, cardText, cardTitle, D } from "../core/data";
+import { cardBody, cardColor, cardText, cardTitle, cardArtUrl, D } from "../core/data";
 import { t as tr } from "../i18n/t";
 import type { PersonaData } from "../core/types";
 import { Avatar } from "./Character";
@@ -62,7 +61,7 @@ export function CardPreview({ id, note, pills, place = "auto", className, style,
       aria-label={cardTitle(id)}
     >
       <div className={s.art} style={{ borderColor: cardColor(id) }}>
-        <img src={cardArt(id)} alt="" draggable={false} />
+        <img src={cardArtUrl(id)} alt="" draggable={false} />
       </div>
       <div className={s.title}>{cardTitle(id)}</div>
       {!!pills?.length && (

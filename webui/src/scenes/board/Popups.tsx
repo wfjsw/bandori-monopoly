@@ -2,13 +2,11 @@
 // info, event / discard piles, settle and leave. Popups that act on the
 // match read the live state themselves, so they stay correct while open.
 
-import { useState } from "react";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle, skillText } from "../../core/data";
 import { isLight, n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView } from "../../core/hooks";
-import { useCloseWhen } from "../../hooks/mount";
 import type { MatchPlayer, MatchState } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
@@ -47,10 +45,9 @@ function deedAction(m: Model, i: number): { label: string; cmd: { act: string; v
 function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => void }) {
   const m = useModel(sess);
   const auto = useAutoplay(sess); // 托管: the mortgage/redeem button is locked
-  // A new turn (or the end of the match) closes the deed card.
-  const turnKey = m ? `${m.S.phase}:${m.S.round}:${m.S.turn}` : "";
-  const [openedAt] = useState(turnKey);
-  useCloseWhen(turnKey !== openedAt, close);
+  // Stays open across turns: this popup reads live state (above) so the deed
+  // stays correct while open, and `deedAction` drops its button the moment the
+  // act is no longer legal (including `S.phase !== "play"` at match end).
   if (!m) return null;
   const S = m.S;
   const t = D.tiles[i];
