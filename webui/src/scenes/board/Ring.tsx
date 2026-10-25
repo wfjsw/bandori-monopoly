@@ -7,7 +7,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
-import { isLight, plain, prefersDarkInk } from "../../core/format";
+import { isLight, n0, plain, prefersDarkInk } from "../../core/format";
 import type { TileData, TileQuote } from "../../core/types";
 import type { Animator } from "./anim";
 import type { Model } from "./model";
@@ -202,9 +202,10 @@ function fitName(name: string, u: number, avail: number, special: boolean): { ti
 }
 
 /** Caption text for a quote: `−` / `+` as a redundant flow cue, `min–max` for
- *  a RiNG dice range. Colour (`.flowMustPay` / …) is the primary channel. */
+ *  a RiNG dice range. Colour (`.flowMustPay` / …) is the primary channel.
+ *  `n0` keeps the digits identical to the tooltip and the deed popup. */
 function quoteCaption(q: TileQuote): string {
-  const n = q.max != null ? `${q.value}–${q.max}` : String(q.value);
+  const n = q.max != null ? `${n0(q.value)}–${n0(q.max)}` : n0(q.value);
   if (q.flow === "mustPay") return q.max != null ? n : `−${n}`;
   if (q.flow === "receive") return q.max != null ? n : `+${n}`;
   return n;
@@ -215,8 +216,8 @@ function quoteTip(q: TileQuote): string {
   const label = tr(`tileQuote.${q.kind}`);
   const n =
     q.max != null
-      ? tr("tileQuote.range", { min: q.value, max: q.max })
-      : String(q.value);
+      ? tr("tileQuote.range", { min: n0(q.value), max: n0(q.max) })
+      : n0(q.value);
   return tr("tileQuote.line", { label, n });
 }
 
