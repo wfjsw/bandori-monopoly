@@ -274,7 +274,7 @@ const TileFace = memo(function TileFace({
         aria-hidden="true"
       >#{tile.index}</span>
       <span className={s.tileBody} aria-hidden="true">
-        <span className={cx(s.tileName, special && s.specialName, boost && s.nameBoost, tier)}>
+        <span className={cx(s.tileName, false && special && s.specialName, false && boost && s.nameBoost, tier)}>
           <span className={s.nameText}>
             {lines.map((l, i) => <span key={i} className={s.nameLine}>{l}</span>)}
           </span>
