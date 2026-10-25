@@ -5,7 +5,7 @@
 // behaviour: `previewFrom` / `previewHide` from `InspectCard` (or a detail
 // block) and `InspectPreviewHost` draws the panel inside the stage.
 
-import { useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
+import { memo, useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
 import { useMountEffect } from "../hooks/mount";
 import { cx } from "../core/cx";
 import { cardBody, cardColor, cardText, cardTitle, cardArtUrl, D } from "../core/data";
@@ -20,10 +20,10 @@ import { designBox } from "../app/stageScale";
 const TAG_SHORT: Record<string, string> = { "手牌": "card.tag.hand", "手": "card.tag.hand", "反击": "card.tag.counter", "持续": "card.tag.cont" };
 
 /** The tag chip, restyled locally so this module never imports Card (cycle). */
-function PreviewTag({ tag }: { tag: string }) {
+const PreviewTag = memo(function PreviewTag({ tag }: { tag: string }) {
   const key = TAG_SHORT[tag];
   return <span className={cx(s.tagChip, (tag === "手" || tag === "反击") && s.tagRed)}>{key ? tr(key) : tag}</span>;
-}
+});
 
 /** A coloured pill under the preview's title (a field card's owner / designee). */
 export interface CardPill { label: string; color: string; /** The player's character, drawn as a small avatar in the pill. */ char?: PersonaData }
@@ -50,7 +50,7 @@ export interface CardPreviewProps {
  * and clipped by nothing -- the prompt window keeps `overflow: visible` so the
  * panel can sit outside the card row without being cut.
  */
-export function CardPreview({ id, note, pills, place = "auto", className, style, scrollable }: CardPreviewProps) {
+export const CardPreview = memo(function CardPreview({ id, note, pills, place = "auto", className, style, scrollable }: CardPreviewProps) {
   if (!id) return null;
   const c = D.card(id);
   return (
@@ -74,7 +74,7 @@ export function CardPreview({ id, note, pills, place = "auto", className, style,
       {!!note && <div className={s.note}>{note}</div>}
     </div>
   );
-}
+});
 
 // ---- The one shared hover-preview store -------------------------------------
 
@@ -98,10 +98,29 @@ function emit(): void {
   listeners.forEach((cb) => cb());
 }
 
+/** Do two pill lists describe the same pills? `pills` is rebuilt per render at
+ *  every call site, so identity compare would re-allocate the stick snapshot
+ *  (and re-render the standing panel) on every hover of the same card. */
+function samePills(a: CardPill[] | undefined, b: CardPill[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((p, i) => {
+    const q = b[i]!;
+    return p.label === q.label && p.color === q.color && p.char === q.char;
+  });
+}
+
+/** Keep the stick snapshot when `(id, note, pills)` have not actually changed,
+ *  so `useStickyCard`'s identity holds and `memo(CardPreview)` can skip. */
+function setStick(id: string, note?: string, pills?: CardPill[]): void {
+  if (stick && stick.id === id && stick.note === note && samePills(stick.pills, pills)) return;
+  stick = { id, note, pills };
+}
+
 /** Float the shared preview beside `el` (hover / keyboard focus). */
 export function previewFrom(el: HTMLElement, id: string, note?: string, pills?: CardPill[]): void {
   anchor = { el, id, note, pills };
-  stick = { id, note, pills };
+  setStick(id, note, pills);
   emit();
 }
 
@@ -115,8 +134,9 @@ export function previewHide(): void {
 
 /** Pin the standing card panel: a click, a card flash, a log reference. */
 export function stickCard(id: string, note = "", pills?: CardPill[]): void {
-  stick = { id, note, pills };
-  emit();
+  const before = stick;
+  setStick(id, note, pills);
+  if (stick !== before) emit();
 }
 
 /** Non-zero tick bumped when the user *picks* a card (the field row's coarse
@@ -126,7 +146,7 @@ let pickTick = 0;
 
 /** Pin the standing panel *because the user picked this card* (see {@link useCardPick}). */
 export function pickCard(id: string, note = "", pills?: CardPill[]): void {
-  stick = { id, note, pills };
+  setStick(id, note, pills);
   pickTick += 1;
   emit();
 }
@@ -175,7 +195,7 @@ export const cardStandClass: string = s.stand;
  * match screen turns it off: its standing panel (board `CardStand`) is the one
  * card detail there.
  */
-export function InspectPreviewHost(): ReactElement | null {
+export const InspectPreviewHost = memo(function InspectPreviewHost(): ReactElement | null {
   const cur = useSyncExternalStore(subscribe, () => (standing ? null : anchor));
   if (!cur) return null;
   const host = cur.el.closest("[data-stage]") as HTMLElement | null;
@@ -189,7 +209,7 @@ export function InspectPreviewHost(): ReactElement | null {
       style={{ left: place.left, top: place.top }}
     />
   );
-}
+});
 
 /**
  * Where to put the preview beside `el`, in the stage's design pixels, flipping

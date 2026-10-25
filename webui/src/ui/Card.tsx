@@ -4,10 +4,11 @@
 // regardless of stylesheet order. `InspectCard` is the one hover-preview /
 // click-to-inspect behaviour every prompt and card collection shares.
 
-import { memo, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, type CSSProperties, type ReactNode } from "react";
 import { cx } from "../core/cx";
 import { D, cardTitle, cardText, cardBody, cardColor, cardArtUrl, skillCard, GENERAL_GROUP } from "../core/data";
 import type { CardData } from "../core/types";
+import { useLatestRef } from "../hooks/latest";
 import { Btn } from "./Button";
 import s from "./Card.module.css";
 import { openModal } from "./Modal";
@@ -75,6 +76,14 @@ export const CardFace = memo(function CardFace({ id, size = "mini", width, on, p
   const c = D.card(id);
   const faceStyle = width != null ? { ...style, ["--card-w" as string]: `${width}px` } : style;
   const clickable = !!onClick;
+  // Stable with `onClick`, so a re-render that keeps the same click handler
+  // does not hand a fresh `onKeyDown` down the face.
+  const onKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.();
+    }
+  }, [onClick]);
   return (
     <div
       className={cx(s.face, s[size], on && s.on, playable && s.playable, field && s.field, className)}
@@ -82,7 +91,7 @@ export const CardFace = memo(function CardFace({ id, size = "mini", width, on, p
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      onKeyDown={clickable ? onKeyDown : undefined}
       onMouseEnter={(e) => onMouseEnter?.(e.currentTarget)}
       onMouseLeave={onMouseLeave}
       onFocus={(e) => onFocus?.(e.currentTarget)}
@@ -99,9 +108,9 @@ export const CardFace = memo(function CardFace({ id, size = "mini", width, on, p
 });
 
 /** An empty deck slot (pink with a star). */
-export function EmptySlot({ size = "strip", star, width, className }: { size?: CardFaceProps["size"]; star: string; width?: number; className?: string }) {
+export const EmptySlot = memo(function EmptySlot({ size = "strip", star, width, className }: { size?: CardFaceProps["size"]; star: string; width?: number; className?: string }) {
   return <div className={cx(s.face, s[size], s.empty, className)} style={width != null ? { ["--card-w" as string]: `${width}px` } : undefined}><img src={star} alt="" /></div>;
-}
+});
 
 export interface CardAction {
   label: string;
@@ -160,26 +169,44 @@ export interface InspectCardProps extends CardFaceProps {
  * The shared card interaction: hover / focus floats the preview, click opens
  * the detail sheet. Every card shown in a prompt or a card-collection popup
  * goes through this one component -- no per-call-site wiring.
+ *
+ * The four face handlers are ref-indirected so their identity is stable: a
+ * note / pills / actions update then re-renders `InspectCard` without dragging
+ * `memo(CardFace)` (and its `<img>`) along with it.
  */
 export const InspectCard = memo(function InspectCard({ id, actions, note, pills, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
-  const enter = (el: HTMLElement) => {
-    if (preview) previewFrom(el, id, note, pills);
-    onHover?.(id);
-    onMouseEnter?.(el);
-  };
-  const leave = (after?: () => void) => {
-    if (preview) previewHide();
-    onHover?.(null);
-    after?.();
-  };
+  const latest = useLatestRef({ id, actions, note, pills, onHover, preview, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur });
+  const enter = useCallback((el: HTMLElement) => {
+    const v = latest.current;
+    if (v.preview) previewFrom(el, v.id, v.note, v.pills);
+    v.onHover?.(v.id);
+    v.onMouseEnter?.(el);
+  }, [latest]);
+  const leave = useCallback(() => {
+    const v = latest.current;
+    if (v.preview) previewHide();
+    v.onHover?.(null);
+    v.onMouseLeave?.();
+  }, [latest]);
+  const blur = useCallback(() => {
+    const v = latest.current;
+    if (v.preview) previewHide();
+    v.onHover?.(null);
+    v.onBlur?.();
+  }, [latest]);
+  const click = useCallback(() => {
+    const v = latest.current;
+    if (v.onClick) v.onClick();
+    else void showCard(v.id, v.actions, v.note, v.pills);
+  }, [latest]);
   return (
     <CardFace
       id={id}
-      onClick={onClick ?? (() => void showCard(id, actions, note, pills))}
+      onClick={click}
       onMouseEnter={enter}
       onFocus={enter}
-      onMouseLeave={() => leave(onMouseLeave)}
-      onBlur={() => leave(onBlur)}
+      onMouseLeave={leave}
+      onBlur={blur}
       {...face}
     />
   );

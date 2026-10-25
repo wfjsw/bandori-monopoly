@@ -15,17 +15,18 @@
 // actually binds tiles (「指定」) lights those and fades the rest, and lifting
 // the finger is not a tap. A card with no tile binding has no hold effect.
 
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useDockRaise } from "../../hooks/dock";
 import { holdPeek } from "../../hooks/hold";
 import { PICK_ATTR, usePickDeselect } from "../../hooks/pick";
+import { useLatestRef } from "../../hooks/latest";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D } from "../../core/data";
 import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
-import { InspectCard, showCard } from "../../ui/Card";
+import { InspectCard, showCard, type CardAction } from "../../ui/Card";
 import { pickCard, type CardPill } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
 import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
@@ -37,6 +38,11 @@ import s from "./FieldSheet.module.css";
 /** Card face width (px) and the widest step of the overlapped row. */
 const CARD_W = 120;
 const SLOT_MAX = 112;
+
+/** Inspect-only field / event faces take no detail-sheet actions. */
+const NO_ACTIONS: CardAction[] = [];
+
+const coarse = () => window.matchMedia("(pointer: coarse)").matches;
 
 /**
  * The straight row spread (`--row-slot`: the px step between card centres),
@@ -51,6 +57,67 @@ export function rowSpread(n: number, width = 480 + CARD_W): Record<string, strin
   const slot = n > 1 ? Math.min(SLOT_MAX, Math.max(0, fit)) : 0;
   return { "--row-slot": `${slot.toFixed(1)}px` };
 }
+
+/**
+ * One field / event face: its own memo boundary, so a seat-hover dim, a pick
+ * flip on a neighbour, or the sheet's width measure leaves the other faces
+ * (and their `<img>`s) alone. Pills and the live note are derived here from
+ * the stable instance, so the parent never hands a fresh array down.
+ */
+const FieldFace = memo(function FieldFace({ slotKey, card, title, note, counter, counter2, crystals, cp, owner, designee, m, on, present, dismiss }: {
+  /** The row's pick identity (`e…` / `c…`), shared with the wrapper div. */
+  slotKey: string;
+  /** The card / event id whose art this face shows. */
+  card: string;
+  title: string | undefined;
+  note: string;
+  counter: number;
+  counter2: number;
+  crystals: number;
+  cp: number;
+  owner: number;
+  /** Seat this instance is parked on for someone else, or -1. */
+  designee: number;
+  m: Model;
+  on: boolean;
+  present: (key: string, id: string, note: string, pills?: CardPill[]) => void;
+  dismiss: () => void;
+}) {
+  const pills = useMemo((): CardPill[] => {
+    const out: CardPill[] = [];
+    if (owner >= 0) out.push({ label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) });
+    if (designee >= 0) out.push({ label: tr("board.pillDesignee", { who: m.nameOf(designee) }), color: m.colorOf(designee), char: m.charOf(designee) });
+    return out;
+  }, [m, owner, designee]);
+  const latest = useLatestRef({ slotKey, card, note, pills, on, present, dismiss });
+  const onClick = useCallback(() => {
+    const v = latest.current;
+    // The coarse-pointer first tap: present, highlight, preview. A second tap
+    // on the same card opens its detail popup. A tap never lights tiles.
+    if (coarse() && !v.on) return void v.present(v.slotKey, v.card, v.note, v.pills);
+    v.dismiss();
+    void showCard(v.card, NO_ACTIONS, v.note, v.pills);
+  }, [latest]);
+  return (
+    <InspectCard
+      id={card}
+      size="mini"
+      field
+      className={s.card}
+      title={title}
+      note={note}
+      pills={pills}
+      actions={NO_ACTIONS}
+      on={on}
+      onClick={onClick}
+    >
+      {counter > 0 && <span className={s.count}>×{counter}</span>}
+      {counter2 > 0 && <span className={s.count}>×{counter2}</span>}
+      {crystals > 0 && <span className={s.crystal}>◆{crystals}</span>}
+      {cp > 0 && <span className={s.cp} title={tr("board.cp", { n: cp })}>CP{cp}</span>}
+    </InspectCard>
+  );
+});
 
 export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: number; ms: number } | null }) {
   const S = m.S;
@@ -78,6 +145,13 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const [picked, setPicked] = useState<string | null>(null);
   const unpick = useCallback(() => setPicked(null), []);
   usePickDeselect(picked, unpick);
+  // Stable identities for the faces below: a pick flip then only repaints the
+  // two faces whose `on` actually moved.
+  const present = useCallback((key: string, id: string, note: string, pills?: CardPill[]) => {
+    setPicked(key);
+    pickCard(id, note, pills);
+  }, []);
+  const dismiss = useCallback(() => setPicked(null), []);
   // One stack, cards in play and events in effect alike. Skill rules (`skill:`)
   // are engine plumbing on the field, not cards in play.
   const stack = [
@@ -96,12 +170,6 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           () => setHoverCardTiles(null),
         )
       : {};
-  /** The coarse-pointer first tap: present, highlight, preview. */
-  const present = (key: string, id: string, note: string, pills?: CardPill[]) => {
-    setPicked(key);
-    pickCard(id, note, pills);
-  };
-  const coarse = () => window.matchMedia("(pointer: coarse)").matches;
   const total = stack.length;
   // Keep the sheet mounted through a transient empty row (the mirror of
   // SkillStack's cliff): an empty `.row` is zero-height and draws no phantom
@@ -121,33 +189,27 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             // An event's frame is its player's colour; a face with no player
             // (a neutral one) falls back to the event purple.
             const owner = e.playerId >= 0 ? e.playerId : -1;
-            const pills = owner >= 0
-              ? [{ label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) }]
-              : [];
             return (
               <div key={key} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, hoverSeat >= 0 && s[e.playerId === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: owner >= 0 ? m.colorOf(owner) : "var(--purple)" }}>
                 {e.faceDown ? (
                   <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
                 ) : (
-                  <InspectCard
-                    id={e.id}
-                    size="mini"
-                    field
-                    className={s.card}
+                  <FieldFace
+                    slotKey={key}
+                    card={e.id}
                     title={D.event(e.id)?.name ?? e.id}
                     note={note}
-                    pills={pills}
-                    actions={[]}
+                    counter={e.counter}
+                    counter2={e.counter2}
+                    crystals={0}
+                    cp={0}
+                    owner={owner}
+                    designee={-1}
+                    m={m}
                     on={picked === key}
-                    onClick={() => {
-                      if (coarse() && picked !== key) return void present(key, e.id, note, pills);
-                      setPicked(null);
-                      void showCard(e.id, [], note, pills);
-                    }}
-                  >
-                    {e.counter > 0 && <span className={s.count}>×{e.counter}</span>}
-                    {e.counter2 > 0 && <span className={s.count}>×{e.counter2}</span>}
-                  </InspectCard>
+                    present={present}
+                    dismiss={dismiss}
+                  />
                 )}
               </div>
             );
@@ -165,10 +227,6 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           // A card on its owner's own field designates no one else: only a card
           // parked on another player's field has a designee.
           const designee = seat !== owner ? seat : -1;
-          const pills = [
-            { label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) },
-            ...(designee >= 0 ? [{ label: tr("board.pillDesignee", { who: m.nameOf(designee) }), color: m.colorOf(designee), char: m.charOf(designee) }] : []),
-          ];
           // Hold-to-highlight only when this instance actually designates tiles.
           const tiles = designatedTiles(S.marks, fieldCardTiles(fc.uid));
           const key = `c${fc.uid}`;
@@ -177,25 +235,22 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(seat)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
-                <InspectCard
-                  id={fc.card}
-                  size="mini"
-                  field
-                  className={s.card}
+                <FieldFace
+                  slotKey={key}
+                  card={fc.card}
                   title={D.card(fc.card)?.name}
                   note={live}
-                  pills={pills}
-                  actions={[]}
+                  counter={0}
+                  counter2={0}
+                  crystals={fc.counters["crystals"] ?? 0}
+                  cp={fc.counters["cp"] ?? 0}
+                  owner={owner}
+                  designee={designee}
+                  m={m}
                   on={picked === key}
-                  onClick={() => {
-                    if (coarse() && picked !== key) return void present(key, fc.card, live, pills);
-                    setPicked(null);
-                    void showCard(fc.card, [], live, pills);
-                  }}
-                >
-                  {(fc.counters["crystals"] ?? 0) > 0 && <span className={s.crystal}>◆{fc.counters["crystals"] ?? 0}</span>}
-                  {(fc.counters["cp"] ?? 0) > 0 && <span className={s.cp} title={tr("board.cp", { n: fc.counters["cp"] ?? 0 })}>CP{fc.counters["cp"] ?? 0}</span>}
-                </InspectCard>
+                  present={present}
+                  dismiss={dismiss}
+                />
               )}
               {designee >= 0 && <Avatar c={m.charOf(designee)} size={28} className={s.holder} />}
             </div>
