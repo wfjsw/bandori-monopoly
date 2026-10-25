@@ -1,9 +1,10 @@
 // 托管 / 混沌 / 进阶 mode selector: hands this seat to a browser-side
 // autopilot. Stays clickable in every state, so the player can always take the
-// controls back. It sits in the TopBar title, beside the speed toggle, as a
-// topbar title button. The banner strip is rendered by the match screens. 进阶
-// is the worker-pool search (`docs/BOT.md` B6), lazy-loaded; it falls back to
-// 托管 on any failure.
+// controls back. It docks in the TopBar title beside the speed toggle; when
+// the title has no room for it (the compact canvas) it moves to the hand bar
+// beside the draw pile, wearing that bar's chrome. The banner strip is
+// rendered by the match screens. 进阶 is the worker-pool search
+// (`docs/BOT.md` B6), lazy-loaded; it falls back to 托管 on any failure.
 
 import { useState } from "react";
 import { useAutoMode, useThinking } from "../core/hooks";
@@ -23,15 +24,20 @@ const LABEL = (m: AutoMode) =>
 /**
  * The mode pill itself. Click cycles
  * off → 托管 → 混沌 → 进阶 → off; the label and colour name the current mode.
+ *
+ * `skin` says which chrome to wear: `"title"` (default) is the TopBar title
+ * chip; `"host"` leaves the chrome to the caller's `className`, so a host can
+ * dress the pill as one of its own controls (the hand bar does, beside the
+ * draw pile) and it stays coherent with its neighbours.
  */
-export function AutoToggle({ sess, className }: { sess: GameSession; className?: string }) {
+export function AutoToggle({ sess, className, skin = "title" }: { sess: GameSession; className?: string; skin?: "title" | "host" }) {
   const mode = useAutoMode(sess);
   // A replay is read-only: there is no seat to hand to the autopilot.
   if (sess.readOnly) return null;
   return (
     <button
       type="button"
-      className={cx(s.toggle, mode !== "off" && s.on, mode === "chaos" && s.chaos, mode === "advanced" && s.advanced, className)}
+      className={cx(skin === "title" && s.toggle, mode !== "off" && s.on, mode === "chaos" && s.chaos, mode === "advanced" && s.advanced, className)}
       onClick={() => sess.setAutoMode(NEXT[mode])}
       title={tr("board.autoplayHint")}
       aria-label={tr("board.autoplayHint")}

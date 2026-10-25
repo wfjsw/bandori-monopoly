@@ -203,7 +203,7 @@ export function Board({ sess }: { sess: GameSession }) {
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
         onBack={leave}
-        titleRight={<><AutoToggle sess={sess} /><AnimationSpeed sess={sess} /></>}
+        titleRight={<>{!compact && <AutoToggle sess={sess} />}<AnimationSpeed sess={sess} /></>}
         right={<></>}
       />
       <AutoBanner sess={sess} />

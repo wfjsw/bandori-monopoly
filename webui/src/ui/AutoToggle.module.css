@@ -1,8 +1,9 @@
 /* 托管 / 混沌 -- the mode pill and the on-air banner strip. */
 
-/* The pill is a TopBar title button (`topbarBtn`), docked beside the speed
-   toggle. Stays clickable in every state, so the player can always take the
-   controls back. */
+/* The pill docks in the TopBar title (`toggle`: a `topbarBtn` beside the speed
+   toggle) and, on the compact canvas where that title has no room for it, in
+   the hand bar beside the draw pile (`skin="host"`, dressed by Side as one of
+   that bar's controls). Stays clickable in every state. */
 
 .toggle {
   composes: topbarBtn from "./primitives.module.css";
@@ -19,26 +20,27 @@
   height: 14px;
 }
 
-/* Engaged fills. The compound with `.toggle` outranks the primitive's
-   `:hover` tint while a mode is on. */
-.toggle.on,
-.toggle.on:hover {
+/* Engaged fills. `button` is a specificity anchor only: it outranks whichever
+   skin the pill is wearing (the title chip's `:hover` tint, the hand bar's
+   panel fill) without coupling this module to either host's class names. */
+button.on,
+button.on:hover {
   background: var(--pink);
   border-color: var(--pink);
   color: #fff;
 }
 
 /* 混沌: a hotter accent so the two auto modes read apart at a glance. */
-.toggle.on.chaos,
-.toggle.on.chaos:hover {
+button.on.chaos,
+button.on.chaos:hover {
   background: #ff7a1a;
   border-color: #ff7a1a;
   color: #fff;
 }
 
 /* 进阶: a cooler accent (the worker-pool search, docs/BOT.md B6). */
-.toggle.on.advanced,
-.toggle.on.advanced:hover {
+button.on.advanced,
+button.on.advanced:hover {
   background: #4a7dff;
   border-color: #4a7dff;
   color: #fff;
