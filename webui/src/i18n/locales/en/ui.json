@@ -213,7 +213,7 @@
   "board.ringHint": "Move clockwise · passing the start square: +2000 or draw 1 card",
   "board.roll": "Rolled {{n}}",
   "board.rolledFor": "Roll for {{who}}",
-  "board.round": "Round {{n}}",
+  "board.round": "{{n}} Round",
   "board.tabCard": "Card",
   "board.settleOk": "Settle",
   "board.settling": "Settling…",

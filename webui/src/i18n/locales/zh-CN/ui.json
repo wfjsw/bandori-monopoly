@@ -213,7 +213,7 @@
   "board.ringHint": "顺时针前进 · 经过起点：+2000 或抽 1 张卡",
   "board.roll": "掷出 {{n}}",
   "board.rolledFor": "替 {{who}} 掷骰",
-  "board.round": "第 {{n}} 轮",
+  "board.round": "{{n}} 轮",
   "board.tabCard": "卡牌",
   "board.settleOk": "结算",
   "board.settling": "结算中…",
