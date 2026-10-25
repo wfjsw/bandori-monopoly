@@ -208,28 +208,43 @@ pub fn place_mark_pair<C: HostCtx>(
         .place_mark_pair(a, b, &kind, &category, owner, src, count, note, fresh) as i32)
 }
 
-fn guest_filter<C: HostCtx>(
+/// Decode a guest mark filter's postcard bytes. The result owns its
+/// `kind` / `category` strings; borrow them out with [`filter_of`].
+fn read_filter<C: HostCtx>(
     c: &mut C,
     fp: i32,
     fl: i32,
-) -> Result<game_core::state::MarkFilter<'static>, HostErr> {
+) -> Result<card_sdk::abi::MarkFilter, HostErr> {
     let bytes = c.read_guest(fp, fl)?;
-    let f: card_sdk::abi::MarkFilter = postcard::from_bytes(&bytes)
-        .map_err(|_| HostErr::trap("guest mark filter is not MarkFilter postcard"))?;
+    postcard::from_bytes(&bytes)
+        .map_err(|_| HostErr::trap("guest mark filter is not MarkFilter postcard"))
+}
+
+/// Borrow a decoded guest filter as the engine's [`game_core::state::MarkFilter`].
+///
+/// **No leak here, and there must not be one.** This is host-side code in a
+/// long-lived server process, not a wasm guest whose allocator dies with the
+/// module: `Box::leak`ing `kind` / `category` on every mark query grew the host
+/// heap without bound. The filter is only needed for the duration of the one
+/// engine call it is handed to, so it borrows the decoded postcard strings
+/// instead -- `MarkFilter<'a>` already carries that lifetime. Contrast
+/// [`card_sdk::rt::leak`], which *does* leak: there the guest is handing the
+/// host a buffer the host reads after the call returns.
+fn filter_of(f: &card_sdk::abi::MarkFilter) -> game_core::state::MarkFilter<'_> {
     // The guest filter's `-2` means "any"; the host filter uses `None`.
     let any = |v: i32| if v == -2 { None } else { Some(v) };
-    Ok(game_core::state::MarkFilter {
-        kind: Box::leak(f.kind.into_boxed_str()),
-        category: Box::leak(f.category.into_boxed_str()),
+    game_core::state::MarkFilter {
+        kind: &f.kind,
+        category: &f.category,
         owner: any(f.owner),
         src: any(f.src),
         instance: any(f.instance),
-    })
+    }
 }
 
 pub fn count_marks_f<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
-    let f = guest_filter(c, fp, fl)?;
-    Ok(c.st().wr().count_marks(tile, &f))
+    let raw = read_filter(c, fp, fl)?;
+    Ok(c.st().wr().count_marks(tile, &filter_of(&raw)))
 }
 
 pub fn bump_mark_f<C: HostCtx>(
@@ -239,18 +254,18 @@ pub fn bump_mark_f<C: HostCtx>(
     fl: i32,
     delta: i32,
 ) -> Result<i32, HostErr> {
-    let f = guest_filter(c, fp, fl)?;
-    Ok(c.st_mut().w().bump_mark(tile, &f, delta))
+    let raw = read_filter(c, fp, fl)?;
+    Ok(c.st_mut().w().bump_mark(tile, &filter_of(&raw), delta))
 }
 
 pub fn remove_marks_f<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
-    let f = guest_filter(c, fp, fl)?;
-    Ok(c.st_mut().w().remove_marks(tile, &f))
+    let raw = read_filter(c, fp, fl)?;
+    Ok(c.st_mut().w().remove_marks(tile, &filter_of(&raw)))
 }
 
 pub fn mark_src_at<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
-    let f = guest_filter(c, fp, fl)?;
-    Ok(c.st().wr().mark_src_at(tile, &f))
+    let raw = read_filter(c, fp, fl)?;
+    Ok(c.st().wr().mark_src_at(tile, &filter_of(&raw)))
 }
 
 pub fn mark_instance_at<C: HostCtx>(
@@ -259,14 +274,14 @@ pub fn mark_instance_at<C: HostCtx>(
     fp: i32,
     fl: i32,
 ) -> Result<i32, HostErr> {
-    let f = guest_filter(c, fp, fl)?;
-    Ok(c.st().wr().mark_instance_at(tile, &f))
+    let raw = read_filter(c, fp, fl)?;
+    Ok(c.st().wr().mark_instance_at(tile, &filter_of(&raw)))
 }
 
 /// Partner tile of the first matching mark on `tile`, or -1.
 pub fn mark_partner<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
-    let f = guest_filter(c, fp, fl)?;
-    Ok(c.st().wr().mark_partner(tile, &f))
+    let raw = read_filter(c, fp, fl)?;
+    Ok(c.st().wr().mark_partner(tile, &filter_of(&raw)))
 }
 
 /// The marked tile of the row at `uid`, or -1 when no such row.

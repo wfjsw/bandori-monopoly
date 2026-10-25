@@ -451,10 +451,15 @@ pub fn always(_player_id: i32) -> bool {
 /// Tile-class table packed for the host (ABI v70).
 pub fn encode_class_defs() -> i64 {
     let defs = kind::class_defs();
-    let bytes = postcard::to_allocvec(&defs).unwrap_or_default();
-    let len = bytes.len() as u64;
-    let ptr = alloc::boxed::Box::leak(bytes.into_boxed_slice()).as_mut_ptr() as u64;
-    ((ptr << 32) | len) as i64
+    // Why this goes through `rt::leak` and not a local `Box::leak` +
+    // `(ptr << 32) | len`: the host reads the bytes after this call returns,
+    // so they must outlive our frame -- that part *is* a leak on the pure
+    // wasm32 guest path, and `rt::leak` documents and bounds it. But on native
+    // (and the `native-rules` monolith) a raw heap pointer truncated to 32
+    // bits is a garbage handle; `rt::leak` interns into the per-run arena
+    // there instead. Hand-rolling the pack here silently produced that garbage
+    // handle. One shared hand-off path, one set of rules.
+    card_sdk::rt::leak(postcard::to_allocvec(&defs).unwrap_or_default())
 }
 
 /// Guest export: the engine's `tile_in` class table.
@@ -467,10 +472,10 @@ pub extern "C" fn ruleset_class_defs() -> i64 {
 /// Ruleset-kind hook-only flags packed for the host (see [`kind::kind_hook_only`]).
 pub fn encode_kind_flags() -> i64 {
     let flags = kind::kind_hook_only();
-    let bytes = postcard::to_allocvec(&flags).unwrap_or_default();
-    let len = bytes.len() as u64;
-    let ptr = alloc::boxed::Box::leak(bytes.into_boxed_slice()).as_mut_ptr() as u64;
-    ((ptr << 32) | len) as i64
+    // Same hand-off as [`encode_class_defs`] -- see the note there. The leak
+    // (wasm32 guest) or arena slot (native) is justified inside
+    // [`card_sdk::rt::leak`]; do not re-implement the packing locally.
+    card_sdk::rt::leak(postcard::to_allocvec(&flags).unwrap_or_default())
 }
 
 /// Guest export: which ruleset kinds are hook-only (no counteraction window).

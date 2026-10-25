@@ -17,6 +17,7 @@ import { Avatar } from "../../ui/Character";
 import { openModal } from "../../ui/Modal";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model, model, mortgageValue, RING_MULTIPLIER, redeemCost } from "./model";
+import { deedStandingCost } from "./deedCost";
 import { winningTileText } from "./tileText";
 import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
@@ -99,11 +100,31 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
     }
     return x.kind === "card"
       ? `${who}${tr("common.quotes", { x: cardTitle(x.card) })}${note ? tr("common.noteColon", { x: note }) : ""}`
-      : `${who}${fmtMsg({ k: x.kind }, names)}${x.count > 1 ? ` ×${x.count}` : ""}${note ? tr("common.paren", { x: note }) : ""}`;
+      // A non-card mark (a [CP点], a `skillBlock`, …) still names the creating
+      // card when it has one -- the tile tooltip's 「来自」 already does, and
+      // this line is the deed popup's only place to show it.
+      : `${who}${fmtMsg({ k: x.kind }, names)}${x.card ? tr("common.quotes", { x: cardTitle(x.card) }) : ""}${x.count > 1 ? ` ×${x.count}` : ""}${note ? tr("common.paren", { x: note }) : ""}`;
   });
   const art = sceneImg(`area_${t.area}`);
   const a = deedAction(m, i);
   const head = deedKind || t.kind === "agent" ? t.color : "#ED4E76";
+  // The mortgage row prints the same standing cost the tile face caption and
+  // the tile tooltip quote (`MatchView.tileQuotes` / `deedCost`), so the three
+  // surfaces cannot disagree about the mortgage force-buy price.
+  const standing = deedStandingCost(m.v.tileQuotes?.[i], {
+    owner,
+    playerId: m.playerId,
+    price: t.price,
+    house: t.house,
+    houses,
+  });
+  const mortgageRow = mortgaged
+    ? standing.kind === "forceBuy"
+      ? tr("deed.mortgagedForceLine", { n: n0(standing.value) })
+      : tr("deed.mortgagedLine", { n: n0(standing.value) })
+    : t.price && t.kind !== "ring"
+      ? tr("deed.mortgageLine", { mortgage: n0(mortgageValue(i)), redeem: n0(redeemCost(i)) })
+      : tr("deed.noMortgage");
   return (
     <div className={s.deed}>
       <div className={s.deedHead} style={{ background: head, color: isLight(head) ? "var(--text)" : "#fff" }}>
@@ -115,7 +136,7 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
         <div className={s.deedGrid}>
           <div><small>{tr("deed.price")}</small><b>{t.price ? n0(t.price) : "—"}</b></div>
           <div><small>{tr("deed.house")}</small><b>{t.kind === "ring" ? tr("deed.noBuild") : t.house ? tr("deed.perHouse", { n: n0(t.house) }) : "—"}</b></div>
-          <div className={s.wide}><small>{tr("prompt.mortgage")}</small><b>{mortgaged ? tr("deed.mortgagedLine", { n: n0(redeemCost(i)) }) : t.price && t.kind !== "ring" ? tr("deed.mortgageLine", { mortgage: n0(t.price / 2), redeem: n0(redeemCost(i)) }) : tr("deed.noMortgage")}</b></div>
+          <div className={s.wide}><small>{tr("prompt.mortgage")}</small><b>{mortgageRow}</b></div>
           <div className={s.wide}><small>{tr("deed.owner")}</small><b>{owner >= 0 ? tr("deed.ownerLine", { who: names.playerId(owner), mort: mortgaged ? tr("common.mortgagedTag") : "" }) : tr("deed.unowned")}</b></div>
         </div>
       )}

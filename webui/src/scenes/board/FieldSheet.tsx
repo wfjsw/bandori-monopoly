@@ -34,20 +34,26 @@ import { t as tr } from "../../i18n/t";
 import { designBox } from "../../app/stageScale";
 import s from "./FieldSheet.module.css";
 
-/** Card face width (px) and the widest step of the overlapped row. */
+/** Card face width (px), the widest step, and the row's horizontal breathing
+ *  room. `PAD_X` keeps in sync with FieldSheet `.row`'s `padding-inline`: the
+ *  owner ring (2.5px) and the holder avatar (`right: -6px`) hang past a face,
+ *  and a picked / pulsed card scales up -- without the pad the last face's end
+ *  is clipped at the sheet edge on a phone. */
 const CARD_W = 120;
 const SLOT_MAX = 112;
+const PAD_X = 14;
 
 /**
  * The straight row spread (`--row-slot`: the px step between card centres),
- * tightening with the count so the stack fits the sheet's `width`. Grown past
- * the width the faces overlap tighter -- the skill stack's dense overlap -- and
- * the stack still fills the sheet edge to edge (maximum space, never a sideways
- * scroll). `SLOT_MAX` keeps a near-full step while they still fit. The field
- * row has no arc -- unlike the hand's `fanArc`.
+ * tightening with the count so the stack fits the sheet's `width` less `PAD_X`
+ * on each side. Grown past that the faces overlap tighter -- the skill stack's
+ * dense overlap -- and the stack still fills the usable width edge to edge
+ * (maximum space, never a sideways scroll). `SLOT_MAX` keeps a near-full step
+ * while they still fit. The field row has no arc -- unlike the hand's `fanArc`.
  */
 export function rowSpread(n: number, width = 480 + CARD_W): Record<string, string> {
-  const fit = n > 1 ? (width - CARD_W) / (n - 1) : 0;
+  const inner = width - 2 * PAD_X;
+  const fit = n > 1 ? (inner - CARD_W) / (n - 1) : 0;
   const slot = n > 1 ? Math.min(SLOT_MAX, Math.max(0, fit)) : 0;
   return { "--row-slot": `${slot.toFixed(1)}px` };
 }

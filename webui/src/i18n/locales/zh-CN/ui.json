@@ -372,6 +372,7 @@
   "deed.mortgage": "抵押  +{{n}}",
   "deed.mortgageLine": "抵押 {{mortgage}}   赎回 {{redeem}}",
   "deed.mortgagedLine": "抵押中：不收地租、不能盖房   赎回 {{n}}",
+  "deed.mortgagedForceLine": "抵押中：不收地租、不能盖房   强制购买 {{n}}",
   "deed.mortgagedTag": " · 抵押中",
   "deed.noBuild": "不能盖房",
   "deed.noMortgage": "不可抵押",

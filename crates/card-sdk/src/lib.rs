@@ -186,6 +186,10 @@ pub fn drive_declare<T: ActivationArg>(player_id: i32, decl: *const ()) -> i64 {
             #[cfg(any(target_arch = "wasm32", feature = "guest"))]
             {
                 let bytes = postcard::to_allocvec(&v).unwrap_or_default();
+                // Leak justified by [`crate::rt::leak`]: this is the packed
+                // `(ptr << 32) | len` we hand the host, and the host stores the
+                // bytes and serves them back via `ctx::declared_arg` after this
+                // collector has returned -- so they cannot live on our frame.
                 crate::rt::leak(bytes)
             }
             #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]

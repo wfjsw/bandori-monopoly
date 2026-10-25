@@ -88,6 +88,10 @@ fn sugar(
 }
 
 fn bake(s: &'static str) -> &'static [&'static str] {
+    // Leak justified: `LowerAs::Call.bake` wants a `&'static [&'static str]`
+    // and a one-element array cannot be const-promoted from a runtime binding.
+    // One 8-byte box per sugar row, built once by [`test_ext`] -- test process,
+    // exits with the binary.
     Box::leak(Box::new([s]))
 }
 
@@ -282,6 +286,11 @@ fn sugar_rows() -> Vec<Name> {
 pub fn test_ext() -> &'static CondExt {
     static EXT: OnceLock<CondExt> = OnceLock::new();
     EXT.get_or_init(|| CondExt {
+        // Leak justified: `CondExt::names` is `&'static [Name]` and the rows
+        // are built at runtime (the `bake` slots above cannot be `const`).
+        // `OnceLock` holds the table for the process; the slice is leaked to
+        // satisfy that `'static`. Test process, one table, exits with the
+        // binary.
         names: Box::leak(sugar_rows().into_boxed_slice()),
         // Synthetic ids, not this ruleset's `r:bandori:*` namespace -- kernel
         // tests must not name the game. The production gate
