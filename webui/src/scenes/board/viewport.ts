@@ -185,14 +185,21 @@ function toLocal(el: HTMLElement, clientX: number, clientY: number): Point {
   return localPoint(el, clientX, clientY);
 }
 
+/** One tracked pointer: its last client position and the input that owns it. */
+export interface Tracked extends Point {
+  type: "mouse" | "pen" | "touch";
+}
+
 /** Multi-touch / drag bookkeeping. Pure: the hook owns the DOM around it. */
 export interface Gesture {
   /** Active pointers by id, in client pixels. */
-  pointers: Map<number, Point>;
+  pointers: Map<number, Tracked>;
   last: Point;
   moved: number;
   dragging: boolean;
-  /** Set once a drag / pinch started: swallows the click it would fire. */
+  /** Set once a drag / pinch started: swallows the click it would fire. Left
+   *  alone by the bookkeeping -- the click is dispatched after the current
+   *  task, so the hook clears the flag on a `setTimeout(0)`, never inline. */
   dragged: boolean;
   /** Pinch baseline: the pair it is computed on and the view when that pair
    *  formed. Rebased (never left stale) when a finger is swapped in. */
@@ -258,7 +265,7 @@ export function endPointer(g: Gesture, id: number): boolean {
   }
   if (g.pointers.size === 1) {
     const [p] = [...g.pointers.values()];
-    g.last = { ...p };
+    g.last = { x: p.x, y: p.y };
     g.moved = DRAG_THRESHOLD;
     g.dragging = true;
     g.pinch = null;
@@ -272,11 +279,23 @@ export function endPointer(g: Gesture, id: number): boolean {
 }
 
 /**
- * Abandon every tracked pointer. The escape hatch for a pointer whose up never
- * arrives: the page is hidden or loses focus mid-pinch, iOS drops a `pointerup`
- * after the multi-touch `preventDefault`, or the browser simply cancels the
- * sequence without telling us. Without this a ghost finger stays in the map
- * and every later one-finger pan is read as a pinch around it.
+ * Drop every tracked *touch*. For a `touchend` / `touchcancel` that reports no
+ * touches left: any touch id still in the map is a ghost whose `pointerup` was
+ * never delivered. Mouse and pen pointers stay -- a touch series ending on a
+ * touchscreen laptop must not kill a concurrent mouse drag.
+ */
+export function endTouches(g: Gesture): void {
+  for (const [id, p] of [...g.pointers]) {
+    if (p.type === "touch") endPointer(g, id);
+  }
+}
+
+/**
+ * Abandon every tracked pointer, whatever its type. The escape hatch for a
+ * gesture no up will ever finish: the page is going away mid-pinch. Without it
+ * a ghost finger stays in the map and every later one-finger pan is read as a
+ * pinch around it. Does *not* touch `dragged` -- the hook defers that clear so
+ * the click in flight is still swallowed.
  */
 export function resetGesture(g: Gesture): void {
   g.pointers.clear();
@@ -390,9 +409,21 @@ export function useBoardViewport(): ViewportApi {
   }, []);
 
   /**
-   * A tracked pointer ended (up, cancel, lost capture, or the window-level
-   * safety net). Idempotent: the wrap's handler and the window listener both
-   * call this for the same up, and the second is a no-op.
+   * Clear the drag flag on the next task. The click that follows a drag is
+   * dispatched after the current one, so clearing inline would let it through;
+   * `onClickCapture` also clears it when it swallows that click first.
+   */
+  const dropDragged = useCallback((g: { dragged: boolean }) => {
+    if (!g.dragged) return;
+    window.setTimeout(() => {
+      g.dragged = false;
+    }, 0);
+  }, []);
+
+  /**
+   * A tracked pointer ended (up or cancel, on the wrap or via the window-level
+   * safety net). Idempotent: both paths call this for the same up and the
+   * second is a no-op.
    */
   const finishPointer = useCallback((id: number) => {
     const g = gesture.current;
@@ -408,14 +439,8 @@ export function useBoardViewport(): ViewportApi {
       const [left] = [...g.pointers.keys()];
       capture(left);
     }
-    if (g.pointers.size === 0 && g.dragged) {
-      // The click that follows a drag must not reach a tile; a later click
-      // (or a keyboard-activated button) must.
-      window.setTimeout(() => {
-        g.dragged = false;
-      }, 0);
-    }
-  }, [capture]);
+    if (g.pointers.size === 0) dropDragged(g);
+  }, [capture, dropDragged]);
 
   /** Abandon the whole gesture -- no further up is coming for these pointers. */
   const abandonGesture = useCallback(() => {
@@ -429,8 +454,19 @@ export function useBoardViewport(): ViewportApi {
       }
     }
     resetGesture(g);
-    g.dragged = false;
-  }, []);
+    // Same deferral as a normal up: a click may still be in flight.
+    dropDragged(g);
+  }, [dropDragged]);
+
+  /** The touch series is over (no touches left). Whatever touch ids remain in
+   *  the map are ghosts; a concurrent mouse / pen drag is untouched. */
+  const endTouchSeries = useCallback(() => {
+    const g = gesture.current;
+    const before = g.pointers.size;
+    endTouches(g);
+    if (g.pointers.size === before) return;
+    if (g.pointers.size === 0) dropDragged(g);
+  }, [dropDragged]);
 
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     const g = gesture.current;
@@ -446,7 +482,8 @@ export function useBoardViewport(): ViewportApi {
     if (t && typeof t.closest === "function" && t.closest("[data-vp-ctl]")) return;
     const el = wrapRef.current;
     if (!el) return;
-    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const type = e.pointerType === "touch" || e.pointerType === "pen" ? e.pointerType : "mouse";
+    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type });
     if (g.pointers.size === 1) {
       g.last = { x: e.clientX, y: e.clientY };
       g.moved = 0;
@@ -465,9 +502,10 @@ export function useBoardViewport(): ViewportApi {
 
   const onPointerMove = useCallback((e: ReactPointerEvent) => {
     const g = gesture.current;
-    if (!g.pointers.has(e.pointerId)) return;
+    const prev = g.pointers.get(e.pointerId);
+    if (!prev) return;
     if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
-    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: prev.type });
     const el = wrapRef.current;
     if (!el) return;
     const b = mapRef.current;
@@ -509,30 +547,34 @@ export function useBoardViewport(): ViewportApi {
     finishPointer(e.pointerId);
   }, [finishPointer]);
 
-  // Safety net: a pointer whose up / cancel never reaches the wrap -- captured
-  // by the browser after a multi-touch `preventDefault`, lifted outside the
-  // board without capture, or cancelled by a system gesture -- would otherwise
-  // stay in the map forever and turn every later one-finger pan into a pinch
-  // around a ghost. These fire for every pointer; `finishPointer` ignores ids
-  // the wrap already closed out.
+  // Safety net: a pointer whose up / cancel never reaches the wrap -- lifted
+  // outside the board without capture, or swallowed by iOS after the
+  // multi-touch `preventDefault` -- would otherwise stay in the map forever and
+  // turn every later one-finger pan into a pinch around a ghost. These fire for
+  // every pointer; `finishPointer` ignores ids the wrap already closed out.
+  //
+  // Deliberately *not* `lostpointercapture`: it also fires when capture moves
+  // (tile's implicit capture -> the wrap on the first drag step, or wrap ->
+  // wrap when a second finger joins a pinch), and treating that as "the pointer
+  // ended" kills a live drag at its first move after capture.
   useEventListener(typeof window === "undefined" ? null : window, "pointerup", (e) => {
     finishPointer((e as PointerEvent).pointerId);
   });
   useEventListener(typeof window === "undefined" ? null : window, "pointercancel", (e) => {
     finishPointer((e as PointerEvent).pointerId);
   });
-  useEventListener(typeof window === "undefined" ? null : window, "lostpointercapture", (e) => {
-    finishPointer((e as PointerEvent).pointerId);
-  });
-  // iOS may deliver the touch series but drop the matching pointer events.
+  // iOS may deliver the touch series but drop the matching pointer events. Only
+  // when *no* touches are left: a partial `touchcancel` (call interrupting one
+  // finger) must not take the fingers that are still down with it, and a touch
+  // series ending must not kill a concurrent mouse drag.
   useEventListener(typeof window === "undefined" ? null : window, "touchend", (e) => {
-    if ((e as TouchEvent).touches.length === 0) abandonGesture();
+    if ((e as TouchEvent).touches.length === 0) endTouchSeries();
   });
-  useEventListener(typeof window === "undefined" ? null : window, "touchcancel", () => {
-    abandonGesture();
+  useEventListener(typeof window === "undefined" ? null : window, "touchcancel", (e) => {
+    if ((e as TouchEvent).touches.length === 0) endTouchSeries();
   });
-  // A notification / app switch mid-pinch: no up will ever come.
-  useEventListener(typeof window === "undefined" ? null : window, "blur", () => abandonGesture());
+  // The page is going away mid-pinch: no up will ever come. (Not `blur` --
+  // that fires for DevTools and iframes while the finger is still down.)
   useEventListener(typeof window === "undefined" ? null : window, "pagehide", () => abandonGesture());
   useEventListener(typeof document === "undefined" ? null : document, "visibilitychange", () => {
     if (document.visibilityState === "hidden") abandonGesture();
