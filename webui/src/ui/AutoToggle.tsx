@@ -1,8 +1,8 @@
 // 托管 / 混沌 / 进阶 mode selector: hands this seat to a browser-side
 // autopilot. Stays clickable in every state, so the player can always take the
-// controls back. On the board it sits in the TopBar title (`compact`), beside
-// the speed toggle. The banner strip is rendered by the match screens. 进阶 is
-// the worker-pool search (`docs/BOT.md` B6), lazy-loaded; it falls back to
+// controls back. It sits in the TopBar title, beside the speed toggle, as a
+// topbar title button. The banner strip is rendered by the match screens. 进阶
+// is the worker-pool search (`docs/BOT.md` B6), lazy-loaded; it falls back to
 // 托管 on any failure.
 
 import { useState } from "react";
@@ -22,16 +22,16 @@ const LABEL = (m: AutoMode) =>
 
 /**
  * The mode pill itself. Click cycles
- * off → 托管 → 混沌 → off; the label and colour name the current mode.
+ * off → 托管 → 混沌 → 进阶 → off; the label and colour name the current mode.
  */
-export function AutoToggle({ sess, className, compact }: { sess: GameSession; className?: string; compact?: boolean }) {
+export function AutoToggle({ sess, className }: { sess: GameSession; className?: string }) {
   const mode = useAutoMode(sess);
   // A replay is read-only: there is no seat to hand to the autopilot.
   if (sess.readOnly) return null;
   return (
     <button
       type="button"
-      className={cx(s.toggle, compact && s.compact, mode !== "off" && s.on, mode === "chaos" && s.chaos, mode === "advanced" && s.advanced, className)}
+      className={cx(s.toggle, mode !== "off" && s.on, mode === "chaos" && s.chaos, mode === "advanced" && s.advanced, className)}
       onClick={() => sess.setAutoMode(NEXT[mode])}
       title={tr("board.autoplayHint")}
       aria-label={tr("board.autoplayHint")}
