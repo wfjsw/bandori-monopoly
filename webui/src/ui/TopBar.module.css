@@ -4,39 +4,141 @@
    stage edges -- insetting the whole row pushed every scene down and left the
    cutout band bare -- and only the tappable pieces pad by `--safe-*` (the
    notch / island, the home indicator). */
-.bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: var(--z-topbar); pointer-events: none; }
-.bar > * { pointer-events: auto; }
+.bar {
+   position: absolute;
+   left: 0;
+   right: 0;
+   top: 0;
+   height: 110px;
+   z-index: var(--z-topbar);
+   pointer-events: none;
+}
+
+.bar>* {
+   pointer-events: auto;
+}
+
 /* The breadcrumb is a label: it lets clicks through to anything under it (only
    its buttons -- help, the speed toggle -- take the pointer). */
-.bar > .crumb { pointer-events: none; }
-.crumb button { pointer-events: auto; }
-.squareBtn { display: flex; align-items: center; justify-content: center; border-radius: var(--r-md); color: var(--pink); background: linear-gradient(var(--white), #f2f2f5); box-shadow: var(--lift); }
-.squareBtn:active { transform: translateY(3px); box-shadow: var(--lift-down); }
-.back { composes: squareBtn; position: absolute; left: max(38px, var(--safe-left, 0px)); top: max(18px, var(--safe-top, 0px)); width: 82px; height: 80px; }
-.menu { composes: squareBtn; position: absolute; right: max(38px, var(--safe-right, 0px)); top: max(17px, var(--safe-top, 0px)); width: 82px; height: 82px; }
-.back i, .menu i { width: 40px; height: 40px; }
+.bar>.crumb {
+   pointer-events: none;
+}
+
+.crumb button {
+   pointer-events: auto;
+}
+
+.squareBtn {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   border-radius: var(--r-md);
+   color: var(--pink);
+   background: linear-gradient(var(--white), #f2f2f5);
+   box-shadow: var(--lift);
+}
+
+.squareBtn:active {
+   transform: translateY(3px);
+   box-shadow: var(--lift-down);
+}
+
+.back {
+   composes: squareBtn;
+   position: absolute;
+   left: max(38px, var(--safe-left, 0px));
+   top: max(18px, var(--safe-top, 0px));
+   width: 82px;
+   height: 80px;
+}
+
+.menu {
+   composes: squareBtn;
+   position: absolute;
+   right: max(38px, var(--safe-right, 0px));
+   top: max(17px, var(--safe-top, 0px));
+   width: 82px;
+   height: 82px;
+}
+
+.back i,
+.menu i {
+   width: 40px;
+   height: 40px;
+}
+
 /* Neighbours keep their spacing from the control beside them (`max(edge,
    inset) + gap`), so the row moves in as one when the cutout reaches past the
    edge margin -- a bare `max(145px, ...)` would let the back button slide
    under the breadcrumb. */
-.crumb { position: absolute; left: calc(max(38px, var(--safe-left, 0px)) + 107px); top: max(16px, var(--safe-top, 0px)); width: 386px; }
-.section { height: 38px; width: 352px; border-radius: 19px 19px 19px 4px; background: var(--pink); color: #fff; font-size: 18px; font-weight: 700; padding: 6px 24px 0; white-space: nowrap; overflow: hidden; }
-.title { margin-top: -4px; height: 52px; border-radius: 26px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 20px; font-size: 24px; }
-.title > span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.help { width: 28px; height: 28px; border-radius: 50%; background: var(--pink); color: #fff; font-weight: 700; font-size: 17px; flex: none; }
+.crumb {
+   position: absolute;
+   left: calc(max(38px, var(--safe-left, 0px)) + 107px);
+   top: max(16px, var(--safe-top, 0px));
+   width: 386px;
+}
+
+.section {
+   height: 25px;
+   width: 352px;
+   border-radius: 18px;
+   background: var(--pink);
+   color: #fff;
+   font-size: 14px;
+   font-weight: 500;
+   padding: 0 16px;
+   white-space: nowrap;
+   overflow: hidden;
+   position: relative;
+   display: flex;
+   align-items: center;
+}
+
+.title {
+   margin-top: -4px;
+   height: 52px;
+   border-radius: 26px;
+   background: var(--surface);
+   box-shadow: var(--shadow);
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   padding: 0 16px;
+   font-size: 24px;
+}
+
+.title>span {
+   flex: 1;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+}
+
+.help {
+   width: 28px;
+   height: 28px;
+   border-radius: 50%;
+   background: var(--pink);
+   color: #fff;
+   font-weight: 700;
+   font-size: 17px;
+   flex: none;
+}
+
 /* Animation speed, one looping button at the right of the title (was a
    1×/2×/4× group in the hand header). The title pill is the surface, so the
    button reads as an inset chip (`topbarBtn`, shared with the 托管 toggle);
    pink once the speed is off 1×. The compound with `.speed` outranks the
    primitive's `:hover` tint while engaged. */
 .speed {
-  composes: topbarBtn from "./primitives.module.css";
+   composes: topbarBtn from "./primitives.module.css";
 }
+
 .speed.speedOn,
 .speed.speedOn:hover {
-  background: var(--pink);
-  border-color: var(--pink);
-  color: #fff;
+   background: var(--pink);
+   border-color: var(--pink);
+   color: #fff;
 }
 
 /* The title's two toggles (TitleToggles). While both are there they are two
@@ -46,68 +148,330 @@
    is the "are they all there" test, so the rule never has to know *why* the
    other pill is missing (compact canvas parks it on the hand bar; a replay
    hides both): a lone pill falls through to `topbarBtn`'s full round. */
-.duo { display: flex; gap: 2px; }
+.duo {
+   display: flex;
+   gap: 2px;
+}
+
 /* Nothing docked (a replay hides both): drop the wrapper too, so the title
    row does not grow an empty 8px gap for it. */
-.duo:empty { display: none; }
-.duo > button:not(:only-child):first-child {
-  border-radius: var(--r-pill) 0 0 var(--r-pill);
-  padding-right: 5px;
-}
-.duo > button:not(:only-child):last-child {
-  border-radius: 0 var(--r-pill) var(--r-pill) 0;
-  padding-left: 5px;
+.duo:empty {
+   display: none;
 }
 
-.compact .back { width: 72px; height: 70px; }
-.compact .back i { width: 34px; height: 34px; }
-.compact .crumb { left: 125px; width: 263px; }
-.compact .section { width: 208px; }
+.duo>button:not(:only-child):first-child {
+   border-radius: var(--r-pill) 0 0 var(--r-pill);
+   padding-right: 5px;
+}
 
-.status { position: absolute; right: calc(max(38px, var(--safe-right, 0px)) + 102px); top: max(17px, var(--safe-top, 0px)); width: 547px; height: 84px; border-radius: 42px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 12px 0 34px; gap: 14px; }
-.level { width: 68px; text-align: center; font-size: 16px; }
-.level b { display: block; font-size: 30px; line-height: 1.1; }
-.mid { width: 150px; display: flex; flex-direction: column; gap: 8px; }
-.exp { display: flex; align-items: center; gap: 5px; font-size: 12px; }
-.exp b { font-size: 20px; }
-.expBar { width: 52px; height: 26px; background: #bfbeba; transform: skewX(-14deg); overflow: hidden; margin-right: 4px; }
-.expBar div { height: 100%; background: var(--exp); }
-.right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.row { display: flex; align-items: center; gap: 6px; }
-.row img, .fire img { width: 34px; height: 34px; object-fit: contain; flex: none; position: relative; z-index: 1; }
-.val { flex: 1; height: 28px; border-radius: var(--r-xl); background: var(--light-pill); margin-left: -18px; padding: 0 12px; text-align: right; font-size: 18px; line-height: 28px; }
-.plus { width: 28px; height: 28px; border-radius: 50%; background: var(--pink); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.plus i { width: 20px; height: 20px; }
-.fire { display: flex; align-items: center; gap: 4px; height: 34px; border-radius: 17px; background: var(--dark-pill); color: #fff; padding-right: 3px; }
-.fire img { margin-left: -4px; }
-.fire b { font-size: 21px; }
-.fire small { font-size: 13px; }
-.timer { flex: 1; text-align: right; font-size: 16px; padding-right: 6px; }
-.info { text-align: center; white-space: pre-wrap; }
-.rules { font-size: 16px; line-height: 1.85; }
+.duo>button:not(:only-child):last-child {
+   border-radius: 0 var(--r-pill) var(--r-pill) 0;
+   padding-left: 5px;
+}
 
-.popup { display: flex; flex-direction: column; gap: 12px; text-align: center; align-items: stretch; }
-.who b { display: block; font-size: 26px; }
-.who small { color: var(--sub); font-size: 14px; }
-.lv { font-size: 20px; color: var(--pink); font-weight: 700; display: flex; gap: 16px; justify-content: center; align-items: baseline; }
-.lv small { font-size: 15px; color: var(--sub); }
-.stats { color: var(--sub); font-size: 15px; }
-.navs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 6px; }
-.nav { flex-direction: column; min-height: 86px; gap: 4px; font-size: 16px; }
-.nav i { width: 30px; height: 30px; }
+.compact .back {
+   width: 72px;
+   height: 70px;
+}
+
+.compact .back i {
+   width: 34px;
+   height: 34px;
+}
+
+.compact .crumb {
+   left: 125px;
+   width: 263px;
+}
+
+.compact .section {
+   width: 208px;
+}
+
+.status {
+   position: absolute;
+   right: calc(max(38px, var(--safe-right, 0px)) + 102px);
+   top: max(17px, var(--safe-top, 0px));
+   width: 547px;
+   height: 84px;
+   border-radius: 42px;
+   background: var(--surface);
+   box-shadow: var(--shadow);
+   display: flex;
+   align-items: center;
+   padding: 0 12px 0 34px;
+   gap: 14px;
+}
+
+.level {
+   width: 68px;
+   text-align: center;
+   font-size: 16px;
+}
+
+.level b {
+   display: block;
+   font-size: 30px;
+   line-height: 1.1;
+}
+
+.mid {
+   width: 150px;
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+}
+
+.exp {
+   display: flex;
+   align-items: center;
+   gap: 5px;
+   font-size: 12px;
+}
+
+.exp b {
+   font-size: 20px;
+}
+
+.expBar {
+   width: 52px;
+   height: 26px;
+   background: #bfbeba;
+   transform: skewX(-14deg);
+   overflow: hidden;
+   margin-right: 4px;
+}
+
+.expBar div {
+   height: 100%;
+   background: var(--exp);
+}
+
+.right {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+}
+
+.row {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+}
+
+.row img,
+.fire img {
+   width: 34px;
+   height: 34px;
+   object-fit: contain;
+   flex: none;
+   position: relative;
+   z-index: 1;
+}
+
+.val {
+   flex: 1;
+   height: 28px;
+   border-radius: var(--r-xl);
+   background: var(--light-pill);
+   margin-left: -18px;
+   padding: 0 12px;
+   text-align: right;
+   font-size: 18px;
+   line-height: 28px;
+}
+
+.plus {
+   width: 28px;
+   height: 28px;
+   border-radius: 50%;
+   background: var(--pink);
+   color: #fff;
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   flex: none;
+}
+
+.plus i {
+   width: 20px;
+   height: 20px;
+}
+
+.fire {
+   display: flex;
+   align-items: center;
+   gap: 4px;
+   height: 34px;
+   border-radius: 17px;
+   background: var(--dark-pill);
+   color: #fff;
+   padding-right: 3px;
+}
+
+.fire img {
+   margin-left: -4px;
+}
+
+.fire b {
+   font-size: 21px;
+}
+
+.fire small {
+   font-size: 13px;
+}
+
+.timer {
+   flex: 1;
+   text-align: right;
+   font-size: 16px;
+   padding-right: 6px;
+}
+
+.info {
+   text-align: center;
+   white-space: pre-wrap;
+}
+
+.rules {
+   font-size: 16px;
+   line-height: 1.85;
+}
+
+.popup {
+   display: flex;
+   flex-direction: column;
+   gap: 12px;
+   text-align: center;
+   align-items: stretch;
+}
+
+.who b {
+   display: block;
+   font-size: 26px;
+}
+
+.who small {
+   color: var(--sub);
+   font-size: 14px;
+}
+
+.lv {
+   font-size: 20px;
+   color: var(--pink);
+   font-weight: 700;
+   display: flex;
+   gap: 16px;
+   justify-content: center;
+   align-items: baseline;
+}
+
+.lv small {
+   font-size: 15px;
+   color: var(--sub);
+}
+
+.stats {
+   color: var(--sub);
+   font-size: 15px;
+}
+
+.navs {
+   display: grid;
+   grid-template-columns: repeat(3, 1fr);
+   gap: 12px;
+   margin-top: 6px;
+}
+
+.nav {
+   flex-direction: column;
+   min-height: 86px;
+   gap: 4px;
+   font-size: 16px;
+}
+
+.nav i {
+   width: 30px;
+   height: 30px;
+}
 
 /* Phone canvas (data-compact): the same pieces, on a 62px bar. The `--safe-*`
    terms are in the shared rules above; these only restate the design offsets. */
-:global(:root[data-compact]) .compact { height: var(--topbar-h); }
-:global(:root[data-compact]) .compact .back { left: max(14px, var(--safe-left, 0px)); top: max(8px, var(--safe-top, 0px)); width: 46px; height: 46px; }
-:global(:root[data-compact]) .compact .back i { width: 24px; height: 24px; }
-:global(:root[data-compact]) .compact .crumb { left: calc(max(14px, var(--safe-left, 0px)) + 54px); top: max(6px, var(--safe-top, 0px)); width: 212px; }
-:global(:root[data-compact]) .compact .section { height: 24px; width: 170px; font-size: 13px; padding: 3px 14px 0; border-radius: 12px 12px 12px 3px; }
-:global(:root[data-compact]) .compact .title { height: 34px; margin-top: -3px; border-radius: 17px; font-size: 17px; padding: 0 14px; }
-:global(:root[data-compact]) .compact .back { top: max(4px, var(--safe-top, 0px)); width: 50px; height: 50px; }
-:global(:root[data-compact]) .compact .back i { width: 28px; height: 28px; }
-:global(:root[data-compact]) .compact .crumb { left: calc(max(14px, var(--safe-left, 0px)) + 54px); top: max(6px, var(--safe-top, 0px)); width: 170px; }
-:global(:root[data-compact]) .compact .section { height: 20px; width: 140px; font-size: 12px; padding: 2px 12px 0; }
-:global(:root[data-compact]) .compact .title { height: 28px; font-size: 15px; padding: 0 12px; }
-:global(:root[data-compact]) .compact .section { height: 22px; padding: 3px 12px 0; line-height: 1.2; }
-:global(:root[data-compact]) .compact .title { margin-top: -2px; }
+:global(:root[data-compact]) .compact {
+   height: var(--topbar-h);
+}
+
+:global(:root[data-compact]) .compact .back {
+   left: max(14px, var(--safe-left, 0px));
+   top: max(8px, var(--safe-top, 0px));
+   width: 46px;
+   height: 46px;
+}
+
+:global(:root[data-compact]) .compact .back i {
+   width: 24px;
+   height: 24px;
+}
+
+:global(:root[data-compact]) .compact .crumb {
+   left: calc(max(14px, var(--safe-left, 0px)) + 54px);
+   top: max(6px, var(--safe-top, 0px));
+   width: 212px;
+}
+
+:global(:root[data-compact]) .compact .section {
+   height: 24px;
+   width: 170px;
+   font-size: 13px;
+   padding: 3px 14px 0;
+   border-radius: 12px 12px 12px 3px;
+}
+
+:global(:root[data-compact]) .compact .title {
+   height: 34px;
+   margin-top: -3px;
+   border-radius: 17px;
+   font-size: 17px;
+   padding: 0 14px;
+}
+
+:global(:root[data-compact]) .compact .back {
+   top: max(4px, var(--safe-top, 0px));
+   width: 50px;
+   height: 50px;
+}
+
+:global(:root[data-compact]) .compact .back i {
+   width: 28px;
+   height: 28px;
+}
+
+:global(:root[data-compact]) .compact .crumb {
+   left: calc(max(14px, var(--safe-left, 0px)) + 54px);
+   top: max(6px, var(--safe-top, 0px));
+   width: 170px;
+}
+
+:global(:root[data-compact]) .compact .section {
+   height: 20px;
+   width: 140px;
+   font-size: 12px;
+   padding: 2px 12px 0;
+}
+
+:global(:root[data-compact]) .compact .title {
+   height: 28px;
+   font-size: 15px;
+   padding: 0 12px;
+}
+
+:global(:root[data-compact]) .compact .section {
+   height: 22px;
+   padding: 3px 12px 0;
+   line-height: 1.2;
+}
+
+:global(:root[data-compact]) .compact .title {
+   margin-top: -2px;
+}
