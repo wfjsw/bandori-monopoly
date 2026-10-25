@@ -19,20 +19,48 @@
    is the clip, so it can never be narrower or offset inside the column -- a
    measured px size would lag the layout and clip a panned board early) and
    clips the transformed board layer. */
-.wrap { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
-.wrap:focus-visible { outline: 2px solid var(--pink); outline-offset: -4px; }
+.wrap {
+   position: absolute;
+   inset: 0;
+   overflow: hidden;
+   touch-action: none;
+}
+
+.wrap:focus-visible {
+   outline: 2px solid var(--pink);
+   outline-offset: -4px;
+}
+
 /* The zoomed layer: `translate(tx, ty) scale(z)` placing the board rect
    (viewport.ts) in the window. Sized to the board, not the window -- on a
    wide slot the board keeps its aspect and is centred at fit. Only board
    content (tiles, tokens, the interior) lives here. */
-.viewport { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.viewport {
+   position: absolute;
+   left: 0;
+   top: 0;
+   transform-origin: 0 0;
+}
+
 /* Fixed overlays on the board window: never zoomed, never in the way. */
-.overlay { position: absolute; inset: 0; pointer-events: none; }
-.ring { position: relative; width: 100%; height: 100%;
-  /* Board-wide type/size unit (same as a tile's `--u`), so the centre
+.overlay {
+   position: absolute;
+   inset: 0;
+   pointer-events: none;
+}
+
+.ring {
+   position: relative;
+   width: 100%;
+   height: 100%;
+   /* Board-wide type/size unit (same as a tile's `--u`), so the centre
      pockets -- event deck, movement hint -- scale with the board on every
      screen instead of holding fixed px. ~13.6px on a desktop board. */
-  --u: min(calc(var(--cell-h, 80px) * 0.18), calc(var(--cell-w, 80px) * 0.17)); display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); }
+   --u: min(calc(var(--cell-h, 80px) * 0.18), calc(var(--cell-w, 80px) * 0.17));
+   display: grid;
+   grid-template-columns: repeat(12, minmax(0, 1fr));
+   grid-template-rows: repeat(10, minmax(0, 1fr));
+}
 
 /* tiles: a generated face per cell (TileFace) plus every live overlay.
    Type scale: one unit `--u` off the measured cell (`--cell-w` / `--cell-h`,
@@ -40,346 +68,719 @@
    proportions from the narrow 1366 cells up to the wide 2560 ones. Name size
    then steps down by a width tier (`.nameL`..`.nameXS`) and up for corners /
    agents (`.specialName`). */
-.tile { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; cursor: pointer; color: #25342f; background: var(--surface); border: 0.5px solid #52635f; overflow: hidden; transition: background 0.2s; padding: 0; font: inherit; text-align: center;
-  /* Type unit: the cell's height drives the scale, but a narrow cell (the
+.tile {
+   position: relative;
+   z-index: 1;
+   display: flex;
+   flex-direction: column;
+   min-width: 0;
+   min-height: 0;
+   cursor: pointer;
+   color: #25342f;
+   background: var(--surface);
+   border: 0.5px solid #52635f;
+   overflow: hidden;
+   transition: background 0.2s;
+   padding: 0;
+   font: inherit;
+   text-align: center;
+   /* Type unit: the cell's height drives the scale, but a narrow cell (the
      square 1366 board) is width-bound -- min() keeps long Latin words like
      「Live House」 from wrapping one-per-line and ellipsising. */
-  --u: min(calc(var(--cell-h, 80px) * 0.18), calc(var(--cell-w, 80px) * 0.17));
-  --name-k: 1;
-  --kind-k: 1;
+   --u: min(calc(var(--cell-h, 80px) * 0.18), calc(var(--cell-w, 80px) * 0.17));
+   --name-k: 1;
+   --kind-k: 1;
 }
-.tile:hover { background: #ffeef3; }
-.tile:focus-visible { outline: 3px solid var(--pink); outline-offset: -3px; }
+
+.tile:hover {
+   background: #ffeef3;
+}
+
+.tile:focus-visible {
+   outline: 3px solid var(--pink);
+   outline-offset: -3px;
+}
+
 /* The `#index` chip IS the colour band (what the old colour strip carried).
    Text colour flips on dark tile colours; a hairline under the band keeps the
    chip legible on the white corner faces. */
 .tileNumber {
-  flex: 0 0 auto;
-  width: 100%;
-  height: calc(var(--u) * 1.45);
-  padding: 0 calc(var(--u) * 0.22);
-  font-size: calc(var(--u) * 0.78);
-  font-weight: 700;
-  line-height: calc(var(--u) * 1.45);
-  letter-spacing: 0.02em;
-  text-align: left;
-  box-shadow: inset 0 -1px 0 rgba(23, 34, 30, 0.14);
+   flex: 0 0 auto;
+   width: 100%;
+   height: calc(var(--u) * 1.45);
+   padding: 0 calc(var(--u) * 0.22);
+   font-size: calc(var(--u) * 0.78);
+   font-weight: 700;
+   line-height: calc(var(--u) * 1.45);
+   letter-spacing: 0.02em;
+   text-align: left;
+   box-shadow: inset 0 -1px 0 rgba(23, 34, 30, 0.14);
 }
+
 .tileBody {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  /* Bottom gutter: room for the owner strip / mortgage band / marks row so
+   flex: 1;
+   min-height: 0;
+   width: 100%;
+   /* Bottom gutter: room for the owner strip / mortgage band / marks row so
      they never sit on the caption. */
-  padding: calc(var(--u) * 0.1) calc(var(--u) * 0.12) calc(var(--u) * 1.1);
-  display: flex;
-  flex-direction: column;
-  pointer-events: none;
+   padding: calc(var(--u) * 0.1) calc(var(--u) * 0.12) calc(var(--u) * 1.1);
+   display: flex;
+   flex-direction: column;
+   pointer-events: none;
 }
+
 /* Name: centred in the body, at most two balanced lines. */
 .tileName {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 calc(var(--u) * 0.08);
-  font-size: calc(var(--u) * var(--name-k) * var(--kind-k));
-  font-weight: 600;
-  line-height: 1.14;
+   flex: 1;
+   min-height: 0;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   padding: 0 calc(var(--u) * 0.08);
+   font-size: calc(var(--u) * var(--name-k) * var(--kind-k));
+   font-weight: 600;
+   line-height: 1.14;
 }
+
 /* Name lines are pre-split in JS (`splitNameLines`) so CJK does not break
    mid-word. Each line clips with an ellipsis if the tier still overflows. */
 .nameText {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  /* Soft halo so tokens / marks sliding over the name stay readable. */
-  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 1px 0 #fff;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   width: 100%;
+   /* Soft halo so tokens / marks sliding over the name stay readable. */
+   text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 1px 0 #fff;
 }
+
 .nameLine {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+   display: block;
+   max-width: 100%;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
 }
-.specialName { font-weight: 700; }
+
+.specialName {
+   font-weight: 700;
+}
+
 /* Short corners / agents only: 「CiRCLE」 gets a step up, 「Live House」 does not. */
-.nameBoost { --kind-k: 1.12; }
-.nameL { --name-k: 1.1; }
-.nameM { --name-k: 1; }
-.nameS { --name-k: 0.92; }
-.nameXS { --name-k: 0.8; }
+.nameBoost {
+   --kind-k: 1.12;
+}
+
+.nameL {
+   --name-k: 1.1;
+}
+
+.nameM {
+   --name-k: 1;
+}
+
+.nameS {
+   --name-k: 0.92;
+}
+
+.nameXS {
+   --name-k: 0.8;
+}
+
 /* Caption on a common bottom baseline, centred under the name. */
 .tileCaption {
-  flex: 0 0 auto;
-  font-size: calc(var(--u) * 0.78);
-  font-weight: 600;
-  line-height: 1.15;
-  color: color-mix(in srgb, #25342f 74%, #fff);
-  font-variant-numeric: tabular-nums;
+   flex: 0 0 auto;
+   font-size: calc(var(--u) * 0.78);
+   font-weight: 600;
+   line-height: 1.15;
+   color: color-mix(in srgb, #25342f 74%, #fff);
+   font-variant-numeric: tabular-nums;
 }
+
 /* Money-direction cue (`TileQuote.flow`): colour is the primary channel, the
    − / + glyph the redundant one. Long RiNG ranges step the size down one notch
    so `20–400` still fits the narrow 1366 cell. */
-.flowMustPay { color: var(--money-pay); }
-.flowMayPay { color: var(--money-optional); }
-.flowReceive { color: var(--money-receive); }
-.captionLong { font-size: calc(var(--u) * 0.68); }
+.flowMustPay {
+   color: var(--money-pay);
+}
+
+.flowMayPay {
+   color: var(--money-optional);
+}
+
+.flowReceive {
+   color: var(--money-receive);
+}
+
+.captionLong {
+   font-size: calc(var(--u) * 0.68);
+}
+
 /* CiRCLE pass / stop notes: same baseline slot as the caption, two centred lines. */
 .tileNote {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  font-size: calc(var(--u) * 0.62);
-  line-height: 1.2;
-  color: color-mix(in srgb, #25342f 78%, #fff);
+   flex: 0 0 auto;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 0;
+   font-size: calc(var(--u) * 0.62);
+   line-height: 1.2;
+   color: color-mix(in srgb, #25342f 78%, #fff);
 }
+
 /* Ownership: a tint, an inner ring, and the colour strip along the bottom
    (inside the body's bottom gutter, never on the caption). */
-.owned { background: color-mix(in srgb, var(--owner) 12%, var(--white)); box-shadow: inset 0 0 0 2px var(--owner); }
-.ownerStrip {
-  position: absolute;
-  left: calc(var(--u, 12px) * 0.3);
-  right: calc(var(--u, 12px) * 0.3);
-  bottom: calc(var(--u, 12px) * 0.12);
-  height: calc(var(--u, 12px) * 0.22);
-  border-radius: var(--r-pill);
-  background: var(--owner);
-  pointer-events: none;
+.owned {
+   background: color-mix(in srgb, var(--owner) 12%, var(--white));
+   box-shadow: inset 0 0 0 2px var(--owner);
 }
-.mortgaged { background: #e2e2e2; }
+
+.ownerStrip {
+   position: absolute;
+   left: calc(var(--u, 12px) * 0.3);
+   right: calc(var(--u, 12px) * 0.3);
+   bottom: calc(var(--u, 12px) * 0.12);
+   height: calc(var(--u, 12px) * 0.22);
+   border-radius: var(--r-pill);
+   background: var(--owner);
+   pointer-events: none;
+}
+
+.mortgaged {
+   background: #e2e2e2;
+}
+
 /* 抵押 sits in the same bottom gutter as the owner strip -- not over the caption. */
 .mortgaged::after {
-  content: "抵押";
-  position: absolute;
-  left: 0; right: 0;
-  bottom: calc(var(--u, 12px) * 0.1);
-  text-align: center;
-  font-size: calc(var(--u, 12px) * 0.72);
-  font-weight: 700;
-  line-height: calc(var(--u, 12px) * 0.9);
-  color: #fff;
-  background: rgba(90, 90, 90, 0.72);
-  pointer-events: none;
+   content: "抵押";
+   position: absolute;
+   left: 0;
+   right: 0;
+   bottom: calc(var(--u, 12px) * 0.1);
+   text-align: center;
+   font-size: calc(var(--u, 12px) * 0.72);
+   font-weight: 700;
+   line-height: calc(var(--u, 12px) * 0.9);
+   color: #fff;
+   background: rgba(90, 90, 90, 0.72);
+   pointer-events: none;
 }
-.landed { box-shadow: inset 0 0 0 3px var(--pink); z-index: 2; }
+
+.landed {
+   box-shadow: inset 0 0 0 3px var(--pink);
+   z-index: 2;
+}
+
 /* The walked route: an overlay above the tile face, so the tile's own
    background (and colour band) is never replaced. */
-.trail::before, .dest::before { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; box-shadow: inset 0 0 0 3px var(--gold); background: rgba(246, 178, 30, 0.22); }
-.dest::before { animation: destGlow 0.9s ease-in-out infinite alternate; }
-@keyframes destGlow { from { opacity: 0.55; } to { opacity: 1; } }
-.trail, .dest { z-index: 2; }
-.pickable { animation: glow 0.9s ease-in-out infinite alternate; z-index: 3; }
-@keyframes glow { from { box-shadow: inset 0 0 0 3px var(--gold); } to { box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 4px rgba(246, 178, 30, 0.8); background: rgba(246, 178, 30, 0.16); } }
+.trail::before,
+.dest::before {
+   content: "";
+   position: absolute;
+   inset: 0;
+   z-index: 5;
+   pointer-events: none;
+   box-shadow: inset 0 0 0 3px var(--gold);
+   background: rgba(246, 178, 30, 0.22);
+}
+
+.dest::before {
+   animation: destGlow 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes destGlow {
+   from {
+      opacity: 0.55;
+   }
+
+   to {
+      opacity: 1;
+   }
+}
+
+.trail,
+.dest {
+   z-index: 2;
+}
+
+.pickable {
+   animation: glow 0.9s ease-in-out infinite alternate;
+   z-index: 3;
+}
+
+@keyframes glow {
+   from {
+      box-shadow: inset 0 0 0 3px var(--gold);
+   }
+
+   to {
+      box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 4px rgba(246, 178, 30, 0.8);
+      background: rgba(246, 178, 30, 0.16);
+   }
+}
 
 /* Houses tuck under the colour band, left; the name keeps a little inline pad
    so text does not run under them. */
 .houses {
-  position: absolute;
-  top: calc(var(--u, 12px) * 1.6);
-  left: calc(var(--u, 12px) * 0.16);
-  display: flex;
-  gap: 1px;
-  pointer-events: none;
+   position: absolute;
+   top: calc(var(--u, 12px) * 1.6);
+   left: calc(var(--u, 12px) * 0.16);
+   display: flex;
+   gap: 1px;
+   pointer-events: none;
 }
-.houses img { width: calc(var(--u, 12px) * 1.05); height: calc(var(--u, 12px) * 1.05); }
+
+.houses img {
+   width: calc(var(--u, 12px) * 1.05);
+   height: calc(var(--u, 12px) * 1.05);
+}
+
 /* Marks share the bottom gutter with the owner strip -- never the name. The
    row is width-capped (left + right) so a wide [指定] pill cannot spill past
    the cell; children shrink and ellipsise instead. */
 .marks {
-  position: absolute;
-  left: calc(var(--u, 12px) * 0.16);
-  right: calc(var(--u, 12px) * 0.16);
-  bottom: calc(var(--u, 12px) * 0.42);
-  z-index: 4;
-  display: flex;
-  gap: 1px;
-  min-width: 0;
-  overflow: hidden;
-  pointer-events: none;
+   position: absolute;
+   left: calc(var(--u, 12px) * 0.16);
+   right: calc(var(--u, 12px) * 0.16);
+   bottom: calc(var(--u, 12px) * 0.42);
+   z-index: 4;
+   display: flex;
+   gap: 1px;
+   min-width: 0;
+   overflow: hidden;
+   pointer-events: none;
 }
+
 /* With a [指定] ribbon in the bottom gutter, the small chips move to the
    top-right so they never sit under the ribbon (houses stay top-left). */
 .marksAside {
-  left: auto;
-  right: calc(var(--u, 12px) * 0.16);
-  top: calc(var(--u, 12px) * 1.6);
-  bottom: auto;
+   left: auto;
+   right: calc(var(--u, 12px) * 0.16);
+   top: calc(var(--u, 12px) * 1.6);
+   bottom: auto;
 }
-.marks .mark { pointer-events: auto; cursor: help; box-shadow: 0 0 0 1px #fff; min-width: 0; flex: 0 1 auto; }
+
+.marks .mark {
+   pointer-events: auto;
+   cursor: help;
+   box-shadow: 0 0 0 1px #fff;
+   min-width: 0;
+   flex: 0 1 auto;
+}
+
 .mark {
-  width: calc(var(--u, 12px) * 1.15);
-  height: calc(var(--u, 12px) * 1.15);
-  border-radius: 50%;
-  color: #fff;
-  font-size: calc(var(--u, 12px) * 0.68);
-  text-align: center;
-  line-height: calc(var(--u, 12px) * 1.15);
+   width: calc(var(--u, 12px) * 1.15);
+   height: calc(var(--u, 12px) * 1.15);
+   border-radius: 50%;
+   color: #fff;
+   font-size: calc(var(--u, 12px) * 0.68);
+   text-align: center;
+   line-height: calc(var(--u, 12px) * 1.15);
 }
+
 /* [CP点] is its own tile-mark category: no seat owns one, so it does not wear a
    seat colour. A gold rounded square keeps it visually apart from the player
    marks beside it. */
 .mark.cp {
-  border-radius: 3px;
-  background: var(--gold);
-  color: #4a3400;
-  font-size: calc(var(--u, 12px) * 0.58);
-  font-weight: 700;
-  letter-spacing: -0.2px;
+   border-radius: 3px;
+   background: var(--gold);
+   color: #4a3400;
+   font-size: calc(var(--u, 12px) * 0.58);
+   font-weight: 700;
+   letter-spacing: -0.2px;
 }
+
 /* [指定] designation: a tab on the right end of the tile's colour band (the
    `#index` chip leaves that half empty), so the tile name is never covered.
    The designating card's short name in the designating seat's colour; further
    designations collapse into a +N chip. */
 .desig {
-  position: absolute;
-  right: 0;
-  top: 0;
-  height: calc(var(--u, 12px) * 1.45);
-  max-width: 72%;
-  z-index: 6;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  justify-content: flex-end;
-  gap: 1px;
-  min-width: 0;
-  pointer-events: none;
+   position: absolute;
+   right: 0;
+   top: 0;
+   height: calc(var(--u, 12px) * 1.45);
+   max-width: 72%;
+   z-index: 6;
+   display: flex;
+   flex-direction: row;
+   align-items: stretch;
+   justify-content: flex-end;
+   gap: 1px;
+   min-width: 0;
+   pointer-events: none;
 }
+
 .markDesignate {
-  display: block;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 0 max(3px, calc(var(--u, 12px) * 0.24));
-  border-radius: 0 0 0 max(3px, calc(var(--u, 12px) * 0.2));
-  /* No px floor and no viewport media query: the tab scales with the tile name
+   display: block;
+   min-width: 0;
+   box-sizing: border-box;
+   padding: 0 max(3px, calc(var(--u, 12px) * 0.24));
+   border-radius: 0 0 0 max(3px, calc(var(--u, 12px) * 0.2));
+   /* No px floor and no viewport media query: the tab scales with the tile name
      (smallest name tier is 0.8u) on every screen, landscape phones included. */
-  font-size: calc(var(--u, 12px) * 0.8);
-  font-weight: 800;
-  line-height: calc(var(--u, 12px) * 1.45);
-  color: #fff;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
-  /* White hairline + drop shadow lift the tab off a same-coloured band. */
-  border: 1.5px solid rgba(255, 255, 255, 0.95);
-  border-top: 0;
-  border-right: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-  pointer-events: auto;
-  cursor: help;
+   font-size: calc(var(--u, 12px) * 0.8);
+   font-weight: 800;
+   line-height: calc(var(--u, 12px) * 1.45);
+   color: #fff;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+   /* White hairline + drop shadow lift the tab off a same-coloured band. */
+   border: 1.5px solid rgba(255, 255, 255, 0.95);
+   border-top: 0;
+   border-right: 0;
+   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+   pointer-events: auto;
+   cursor: help;
 }
+
 /* Light seat colours flip the ink dark; the white halo keeps either case
    legible on a busy face. */
 .markDesignate.lightInk {
-  color: #17221e;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+   color: #17221e;
+   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
+
 .desigMore {
-  flex: 0 0 auto;
-  align-self: center;
-  padding: 0 calc(var(--u, 12px) * 0.22);
-  border-radius: var(--r-pill);
-  background: rgba(30, 22, 28, 0.72);
-  color: #fff;
-  font-size: calc(var(--u, 12px) * 0.62);
-  font-weight: 700;
-  line-height: calc(var(--u, 12px) * 0.85);
-  pointer-events: none;
+   flex: 0 0 auto;
+   align-self: center;
+   padding: 0 calc(var(--u, 12px) * 0.22);
+   border-radius: var(--r-pill);
+   background: rgba(30, 22, 28, 0.72);
+   color: #fff;
+   font-size: calc(var(--u, 12px) * 0.62);
+   font-weight: 700;
+   line-height: calc(var(--u, 12px) * 0.85);
+   pointer-events: none;
 }
-.ember { background: var(--tag-red); }
+
+.ember {
+   background: var(--tag-red);
+}
 
 /* tokens: chibi SD art standing in the tile's lower third (off the name) */
-.tokens { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
-.token { position: absolute; width: 0; height: 0; transition: left 0.13s ease, top 0.13s ease; }
+.tokens {
+   position: absolute;
+   inset: 0;
+   pointer-events: none;
+   z-index: 10;
+}
+
+.token {
+   position: absolute;
+   width: 0;
+   height: 0;
+   transition: left 0.13s ease, top 0.13s ease;
+}
+
 .sd {
-  position: absolute;
-  left: 0;
-  bottom: -2px;
-  width: min(calc(var(--cell-w, 80px) * 0.42), 44px);
-  transform: translateX(-50%);
-  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25));
+   position: absolute;
+   left: 0;
+   bottom: -2px;
+   width: min(calc(var(--cell-w, 80px) * 0.42), 44px);
+   transform: translateX(-50%);
+   filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25));
 }
+
 .shadow {
-  position: absolute;
-  left: 0;
-  top: -8px;
-  width: min(calc(var(--cell-w, 80px) * 0.32), 32px);
-  transform: translateX(-50%);
-  opacity: 0.6;
+   position: absolute;
+   left: 0;
+   top: -8px;
+   width: min(calc(var(--cell-w, 80px) * 0.32), 32px);
+   transform: translateX(-50%);
+   opacity: 0.6;
 }
+
 .dot {
-  position: absolute;
-  left: 0;
-  top: -30px;
-  width: 30px;
-  height: 30px;
-  margin-left: -15px;
-  border-radius: 50%;
-  color: #fff;
-  text-align: center;
-  line-height: 30px;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px #fff;
+   position: absolute;
+   left: 0;
+   top: -30px;
+   width: 30px;
+   height: 30px;
+   margin-left: -15px;
+   border-radius: 50%;
+   color: #fff;
+   text-align: center;
+   line-height: 30px;
+   font-weight: 700;
+   box-shadow: 0 0 0 2px #fff;
 }
-.current .sd { animation: bob 1.2s ease-in-out infinite; }
-@keyframes bob { 50% { transform: translateY(-3px); } }
-.hop.sd { animation: hop 0.13s ease-out; }
-@keyframes hop { 50% { transform: translateY(-18px); } }
+
+.current .sd {
+   animation: bob 1.2s ease-in-out infinite;
+}
+
+@keyframes bob {
+   50% {
+      transform: translateY(-3px);
+   }
+}
+
+.hop.sd {
+   animation: hop 0.13s ease-out;
+}
+
+@keyframes hop {
+   50% {
+      transform: translateY(-18px);
+   }
+}
 
 /* Generated interior zones beneath the live cards. The board colour is the
    `.pocket` spans only (the ring's five enclosed areas) -- never the side
    notches outside the ring. */
-.inner { grid-row: 1 / -1; grid-column: 1 / -1; position: relative; pointer-events: none; }
-.zones { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); }
-.zones > span { display: flex; align-items: center; justify-content: center; color: #344c44; font-size: 18px; font-weight: 700; text-align: center; overflow: hidden; }
-.zones > .pocket { background: #d3e9e5; }
+.inner {
+   grid-row: 1 / -1;
+   grid-column: 1 / -1;
+   position: relative;
+   pointer-events: none;
+}
+
+.zones {
+   position: absolute;
+   inset: 0;
+   display: grid;
+   grid-template-columns: repeat(12, minmax(0, 1fr));
+   grid-template-rows: repeat(10, minmax(0, 1fr));
+}
+
+.zones>span {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   color: #344c44;
+   font-size: 18px;
+   font-weight: 700;
+   text-align: center;
+   overflow: hidden;
+}
+
+.zones>.pocket {
+   background: #d3e9e5;
+}
+
 /* Dice-storage labels sit in one-cell columns flanking the roll zone. */
-.zones > .zoneNarrow { font-size: 13px; line-height: 1.2; padding: 0 2px; }
-.inner button, .field, .fieldPreview { pointer-events: auto; }
-.piles, .field { z-index: 2; }
+.zones>.zoneNarrow {
+   font-size: 13px;
+   line-height: 1.2;
+   padding: 0 2px;
+}
+
+.inner button,
+.field,
+.fieldPreview {
+   pointer-events: auto;
+}
+
+.piles,
+.field {
+   z-index: 2;
+}
 
 /* Board geometry as fractions of the map rect (the cells stretch, so the
    pockets stay grid-aligned at any size): the event deck is cols 1-3 /
    rows 7-8, the central field cols 4-7 / rows 3-6, and the movement hint
    takes the bottom-right pocket (cols 8-10 / rows 7-8). */
-.piles { position: absolute; left: 8.3333%; top: 70%; width: 25%; height: 20%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.pile { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.3); pointer-events: auto; }
-.stack { position: relative; width: calc(var(--u) * 7); height: calc(var(--u) * 5.3); transition: transform 0.12s; }
-.pile:hover .stack { transform: translateY(-3px); }
-.stack img { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 5.3); height: calc(var(--u) * 7); transform: translate(-50%, -50%) rotate(270deg); object-fit: cover; border-radius: calc(var(--u) * 0.6); box-shadow: calc(var(--u) * 0.3) calc(var(--u) * 0.3) 0 #fff, calc(var(--u) * 0.37) calc(var(--u) * 0.37) 0 #f0b3c3, 0 calc(var(--u) * 0.45) calc(var(--u) * 1)  rgba(0, 0, 0, 0.18); }
-.stack img.face { border: max(1.5px, calc(var(--u) * 0.22)) solid #fff; }
-.pileEmpty { position: absolute; inset: 0; border-radius: calc(var(--u) * 0.6); border: max(1.5px, calc(var(--u) * 0.22)) dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(246, 242, 243, 0.5); }
-.pileLabel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: calc(var(--u) * 1.9); padding: 0 calc(var(--u) * 0.9); border-radius: calc(var(--u) * 0.95); background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: calc(var(--u) * 0.95); font-weight: 700; line-height: calc(var(--u) * 1.9); white-space: nowrap; }
-.pileLabel b { color: var(--pink); margin-left: calc(var(--u) * 0.45); }
-.hint { position: absolute; left: 66.6667%; top: 70%; width: 25%; height: 20%; box-sizing: border-box; padding: 0 calc(var(--u) * 1.2); display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: calc(var(--u) * 1.1); line-height: 1.5; pointer-events: none; }
+.piles {
+   position: absolute;
+   left: 8.3333%;
+   top: 70%;
+   width: 25%;
+   height: 20%;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   pointer-events: none;
+}
+
+.pile {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: calc(var(--u) * 0.3);
+   pointer-events: auto;
+}
+
+.stack {
+   position: relative;
+   width: calc(var(--u) * 7);
+   height: calc(var(--u) * 5.3);
+   transition: transform 0.12s;
+}
+
+.pile:hover .stack {
+   transform: translateY(-3px);
+}
+
+.stack img {
+   position: absolute;
+   left: 50%;
+   top: 50%;
+   width: calc(var(--u) * 5.3);
+   height: calc(var(--u) * 7);
+   transform: translate(-50%, -50%) rotate(270deg);
+   object-fit: cover;
+   border-radius: calc(var(--u) * 0.6);
+   box-shadow: calc(var(--u) * 0.3) calc(var(--u) * 0.3) 0 #fff, calc(var(--u) * 0.37) calc(var(--u) * 0.37) 0 #f0b3c3, 0 calc(var(--u) * 0.45) calc(var(--u) * 1) rgba(0, 0, 0, 0.18);
+}
+
+.stack img.face {
+   border: max(1.5px, calc(var(--u) * 0.22)) solid #fff;
+}
+
+.pileEmpty {
+   position: absolute;
+   inset: 0;
+   border-radius: calc(var(--u) * 0.6);
+   border: max(1.5px, calc(var(--u) * 0.22)) dashed rgba(237, 78, 118, 0.5);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   color: var(--pink);
+   background: rgba(246, 242, 243, 0.5);
+}
+
+.pileLabel {
+   position: absolute;
+   left: 50%;
+   top: 50%;
+   transform: translate(-50%, -50%);
+   height: calc(var(--u) * 1.9);
+   padding: 0 calc(var(--u) * 0.9);
+   border-radius: calc(var(--u) * 0.95);
+   background: var(--surface);
+   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+   font-size: calc(var(--u) * 0.95);
+   font-weight: 700;
+   line-height: calc(var(--u) * 1.9);
+   white-space: nowrap;
+}
+
+.pileLabel b {
+   color: var(--pink);
+   margin-left: calc(var(--u) * 0.45);
+}
+
+.hint {
+   position: absolute;
+   left: 66.6667%;
+   top: 70%;
+   width: 25%;
+   height: 20%;
+   box-sizing: border-box;
+   padding: 0 calc(var(--u) * 1.2);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   text-align: center;
+   color: var(--sub);
+   font-size: calc(var(--u) * 1.1);
+   line-height: 1.5;
+   pointer-events: none;
+}
+
 /* The die button, in the roll zone's centre band (cols 6-8 / rows 4-8 of the
    12 x 10 interior grid). Die-styled to sit in the teal pocket: a white disc
    with the d20 face, the running number over it and the caption beneath. */
-.rollDock { position: absolute; left: 41.6667%; top: 30%; width: 16.6667%; height: 40%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.rollDock { flex-direction: column; gap: 8px; }
-.rollHint { max-width: 100%; text-align: center; font-size: 12px; line-height: 1.4; font-weight: 700; color: var(--pink-deep); text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8); pointer-events: none; }
-.roll {
-  position: relative; width: 118px; height: 118px; border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, var(--white), #f3e2e8 78%);
-  box-shadow: 0 8px 22px rgba(60, 20, 40, 0.22), inset 0 -3px 8px rgba(60, 20, 40, 0.1);
-  color: var(--pink); pointer-events: auto; cursor: default;
+.rollDock {
+   position: absolute;
+   left: 41.6667%;
+   top: 30%;
+   width: 16.6667%;
+   height: 40%;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   pointer-events: none;
 }
-.roll.can { cursor: pointer; box-shadow: 0 8px 22px rgba(237, 78, 118, 0.32), inset 0 0 0 3px var(--pink); }
-.roll.can:hover { background: radial-gradient(circle at 32% 28%, var(--white), var(--pink-pale) 78%); }
-.roll:disabled { opacity: 0.82; }
-.diceImg { position: absolute; left: 50%; top: 46%; width: 74px; height: 74px; transform: translate(-50%, -50%); transition: transform 0.12s; }
-.roll.can:hover .diceImg { transform: translate(-50%, -50%) rotate(-8deg) scale(1.05); }
-.diceNum { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 22px; font-weight: 700; color: var(--pink); -webkit-text-stroke: 1px #fff; }
-.diceCap { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; font-size: 13px; font-weight: 700; color: var(--pink-deep); }
-.roll.rolling .diceImg { animation: rollShake 0.11s linear infinite; }
-@keyframes rollShake { 50% { transform: translate(-50%, -50%) rotate(12deg) scale(1.06); } }
+
+.rollDock {
+   flex-direction: column;
+   gap: 8px;
+}
+
+.rollHint {
+   max-width: 100%;
+   text-align: center;
+   font-size: 12px;
+   line-height: 1.4;
+   font-weight: 700;
+   color: var(--pink-deep);
+   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+   pointer-events: none;
+}
+
+.roll {
+   position: relative;
+   width: 118px;
+   height: 118px;
+   border-radius: 50%;
+   background: radial-gradient(circle at 32% 28%, var(--white), #f3e2e8 78%);
+   box-shadow: 0 8px 22px rgba(60, 20, 40, 0.22), inset 0 -3px 8px rgba(60, 20, 40, 0.1);
+   color: var(--pink);
+   pointer-events: auto;
+   cursor: default;
+}
+
+.roll.can {
+   cursor: pointer;
+   box-shadow: 0 8px 22px rgba(237, 78, 118, 0.32), inset 0 0 0 3px var(--pink);
+}
+
+.roll.can:hover {
+   background: radial-gradient(circle at 32% 28%, var(--white), var(--pink-pale) 78%);
+}
+
+.roll:disabled {
+   opacity: 0.82;
+}
+
+.diceImg {
+   position: absolute;
+   left: 50%;
+   top: 46%;
+   width: 74px;
+   height: 74px;
+   transform: translate(-50%, -50%);
+   transition: transform 0.12s;
+}
+
+.roll.can:hover .diceImg {
+   transform: translate(-50%, -50%) rotate(-8deg) scale(1.05);
+}
+
+.diceNum {
+   position: absolute;
+   left: 0;
+   right: 0;
+   top: 40%;
+   text-align: center;
+   font-size: 22px;
+   font-weight: 700;
+   color: var(--pink);
+   -webkit-text-stroke: 1px #fff;
+}
+
+.diceCap {
+   position: absolute;
+   left: 0;
+   right: 0;
+   bottom: 16px;
+   text-align: center;
+   font-size: 13px;
+   font-weight: 700;
+   color: var(--pink-deep);
+}
+
+.roll.rolling .diceImg {
+   animation: rollShake 0.11s linear infinite;
+}
+
+@keyframes rollShake {
+   50% {
+      transform: translate(-50%, -50%) rotate(12deg) scale(1.06);
+   }
+}
 
 /* The turn / action banners and the card activation flash are match-screen
    chrome -- they live in Board.module.css over the centre column, detached
@@ -395,39 +796,141 @@
    sliver; size it by its text instead. Ring.tsx clamps its `left` by the
    measured width so the 220px box stays fully inside the board window, and
    flips it below the marker near the top edge. */
-.markTip { position: absolute; z-index: var(--z-dock); transform: translate(-50%, calc(-100% - 6px)); width: max-content; max-width: 220px; padding: 6px 10px; border-radius: 8px; background: rgba(40, 30, 40, 0.92); color: #fff; font-size: 12px; line-height: 1.4; display: flex; flex-direction: column; gap: 2px; pointer-events: none; white-space: normal; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); }
-.markTip b { font-size: 13px; }
+.markTip {
+   position: absolute;
+   z-index: var(--z-dock);
+   transform: translate(-50%, calc(-100% - 6px));
+   width: max-content;
+   max-width: 220px;
+   padding: 6px 10px;
+   border-radius: 8px;
+   background: rgba(40, 30, 40, 0.92);
+   color: #fff;
+   font-size: 12px;
+   line-height: 1.4;
+   display: flex;
+   flex-direction: column;
+   gap: 2px;
+   pointer-events: none;
+   white-space: normal;
+   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.markTip b {
+   font-size: 13px;
+}
 
 /* Pan/zoom buttons, top-right of the board window. Same pill language as the
    animation-speed control (Side.module.css): small, white, pink on hover. */
-.zoomCtl { position: absolute; right: 8px; top: 8px; z-index: var(--z-modal); display: flex; align-items: center; gap: 2px; height: 28px; padding: 2px; border-radius: var(--r-xl); background: rgba(246, 242, 243, 0.82); border: 1.5px solid var(--line); opacity: 0.72; transition: opacity 0.15s, background 0.15s; pointer-events: auto; }
-.zoomCtl:hover, .zoomCtl:focus-within { opacity: 1; background: var(--surface); }
-.zoomCtl button { width: 30px; height: 23px; border-radius: 11px; color: var(--sub); font-size: 13px; font-weight: 700; line-height: 23px; text-align: center; padding: 0; }
-.zoomCtl button:hover { color: var(--pink); background: var(--light-pill); }
-.zoomCtl button:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+.zoomCtl {
+   position: absolute;
+   right: 8px;
+   top: 8px;
+   z-index: var(--z-modal);
+   display: flex;
+   align-items: center;
+   gap: 2px;
+   height: 28px;
+   padding: 2px;
+   border-radius: var(--r-xl);
+   background: rgba(246, 242, 243, 0.82);
+   border: 1.5px solid var(--line);
+   opacity: 0.72;
+   transition: opacity 0.15s, background 0.15s;
+   pointer-events: auto;
+}
+
+.zoomCtl:hover,
+.zoomCtl:focus-within {
+   opacity: 1;
+   background: var(--surface);
+}
+
+.zoomCtl button {
+   width: 30px;
+   height: 23px;
+   border-radius: 11px;
+   color: var(--sub);
+   font-size: 13px;
+   font-weight: 700;
+   line-height: 23px;
+   text-align: center;
+   padding: 0;
+}
+
+.zoomCtl button:hover {
+   color: var(--pink);
+   background: var(--light-pill);
+}
+
+.zoomCtl button:focus-visible {
+   outline: 2px solid var(--pink);
+   outline-offset: 2px;
+}
+
 /* Players-panel hover: the hovered seat's tiles and token stand out; the rest fade. */
-.tile.hot { box-shadow: inset 0 0 0 3px var(--owner), 0 0 12px 3px var(--owner); z-index: 2; }
-.tile.dim { opacity: 0.35; filter: grayscale(0.7); }
-.token.hot .sd, .token.hot .dot { filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 12px var(--pink, #f6a)) drop-shadow(0 0 24px var(--pink, #f6a)); transform: scale(1.25); transform-origin: 50% 100%; }
-.token.hot { z-index: 999; }
-.token.dim { opacity: 0.3; filter: grayscale(0.8); }
+.tile.hot {
+   box-shadow: inset 0 0 0 3px var(--owner), 0 0 12px 3px var(--owner);
+   z-index: 2;
+}
+
+.tile.dim {
+   opacity: 0.35;
+   filter: grayscale(0.7);
+}
+
+.token.hot .sd,
+.token.hot .dot {
+   filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 12px var(--pink, #f6a)) drop-shadow(0 0 24px var(--pink, #f6a));
+   transform: scale(1.25);
+   transform-origin: 50% 100%;
+}
+
+.token.hot {
+   z-index: 999;
+}
+
+.token.dim {
+   opacity: 0.3;
+   filter: grayscale(0.8);
+}
 
 /* A bobbing arrow over the hovered seat's token, else the turn-holder's. */
 .arrow {
-  position: absolute;
-  left: 0;
-  bottom: calc(min(calc(var(--cell-w, 80px) * 0.42), 44px) * 1.75 + 2px);
-  width: 22px;
-  height: 18px;
-  margin-left: -11px;
-  background: var(--pink, #f6a);
-  clip-path: polygon(50% 100%, 0 30%, 30% 30%, 30% 0, 70% 0, 70% 30%, 100% 30%);
-  animation: arrowBob 0.7s ease-in-out infinite;
+   position: absolute;
+   left: 0;
+   bottom: calc(min(calc(var(--cell-w, 80px) * 0.42), 44px) * 1.75 + 2px);
+   width: 22px;
+   height: 18px;
+   margin-left: -11px;
+   background: var(--pink, #f6a);
+   clip-path: polygon(50% 100%, 0 30%, 30% 30%, 30% 0, 70% 0, 70% 30%, 100% 30%);
+   animation: arrowBob 0.7s ease-in-out infinite;
 }
-@keyframes arrowBob { 50% { transform: translateY(-5px); } }
+
+@keyframes arrowBob {
+   50% {
+      transform: translateY(-5px);
+   }
+}
 
 /* Phone canvas: pan / zoom buttons -- a thumb-sized strip in the corner, faint
    until touched (pinch is the main way to zoom). */
-:global(:root[data-compact]) .zoomCtl { height: 36px; right: 4px; top: 4px; opacity: 0.6; }
-:global(:root[data-compact]) .zoomCtl:active, :global(:root[data-compact]) .zoomCtl:focus-within { opacity: 1; }
-:global(:root[data-compact]) .zoomCtl button { width: 34px; height: 30px; line-height: 30px; font-size: 15px; }
+:global(:root[data-compact]) .zoomCtl {
+   height: 36px;
+   right: 4px;
+   top: 4px;
+   opacity: 0.6;
+}
+
+:global(:root[data-compact]) .zoomCtl:active,
+:global(:root[data-compact]) .zoomCtl:focus-within {
+   opacity: 1;
+}
+
+:global(:root[data-compact]) .zoomCtl button {
+   width: 34px;
+   height: 30px;
+   line-height: 30px;
+   font-size: 15px;
+}
