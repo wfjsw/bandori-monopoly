@@ -13,9 +13,10 @@
 // actually binds tiles (「指定」) lights those and fades the rest, and lifting
 // the finger is not a tap. A card with no tile binding has no hold effect.
 
-import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDockRaise } from "../../hooks/dock";
 import { holdPeek } from "../../hooks/hold";
+import { PICK_ATTR, usePickDeselect } from "../../hooks/pick";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D } from "../../core/data";
@@ -70,8 +71,11 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   }, [any]);
   // Touch screens: a short tap presents the card out, highlights it and feeds
   // the standing preview (like the hand's first click). A second tap on the
-  // same card opens its detail popup. A tap never lights tiles.
+  // same card opens its detail popup. A tap never lights tiles. Clicking
+  // anywhere else drops the pick again -- it is a lens, not a mode.
   const [picked, setPicked] = useState<string | null>(null);
+  const unpick = useCallback(() => setPicked(null), []);
+  usePickDeselect(picked, unpick);
   // Skill rules (`skill:`) are engine plumbing on the field, not cards in play.
   const rows = S.players
     .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
@@ -118,7 +122,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const tiles = designatedTiles(S.marks, fieldCardTiles(fc.uid));
           const key = `c${fc.uid}`;
           return (
-            <div key={fc.uid} className={cx(s.slot, picked === key && s.picked, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
+            <div key={fc.uid} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
@@ -156,6 +160,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           return (
             <div
               key={e.id}
+              {...{ [PICK_ATTR]: key }}
               className={cx(s.slot, picked === key && s.picked, k === 0 && s.sep, hoverSeat >= 0 && s[e.playerId === hoverSeat ? "hot" : "dim"])}
               {...tileHold(tiles)}
               style={{ ["--own" as string]: e.playerId >= 0 ? m.colorOf(e.playerId) : "var(--purple)" }}
