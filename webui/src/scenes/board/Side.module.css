@@ -409,9 +409,11 @@
 /* Dense overlap: each card after the first starts `--skill-step` from the
    previous centre, so only a strip of the covered ones shows. Later cards
    paint on top; the hovered one jumps above them all and lifts like a hand
-   card. */
+   card. Each slot is its own stacking context, so the face and its markers
+   stack as one card -- a covered card's markers go under the cover with it. */
 .skillSlot {
   position: relative;
+  isolation: isolate;
   pointer-events: auto;
   display: flex;
   transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease;
@@ -428,13 +430,14 @@
 .skillCard {
   cursor: pointer;
 }
-/* Live markers pinned to the card's top-right corner. They sit above the
-   neighbouring slots (which overlap this one) so they stay readable. */
+/* Live markers pinned to the card's top-right corner. No z-index of their own:
+   the slot is isolated, so the badges already sit above their own face and are
+   occluded by any card that covers this one (hover lifts the whole slot if you
+   need to read them). */
 .skillMarks {
   position: absolute;
   top: -6px;
   right: -4px;
-  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
