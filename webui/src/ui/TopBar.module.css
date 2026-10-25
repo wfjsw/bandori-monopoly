@@ -39,6 +39,26 @@
   color: #fff;
 }
 
+/* The title's two toggles (TitleToggles). While both are there they are two
+   half-pills of one segmented pair: flat facing ends, a 2px seam where the
+   title's surface shows through, and the facing paddings pulled in -- so the
+   pair is narrower than two free-standing pills and their gap. `:only-child`
+   is the "are they all there" test, so the rule never has to know *why* the
+   other pill is missing (compact canvas parks it on the hand bar; a replay
+   hides both): a lone pill falls through to `topbarBtn`'s full round. */
+.duo { display: flex; gap: 2px; }
+/* Nothing docked (a replay hides both): drop the wrapper too, so the title
+   row does not grow an empty 8px gap for it. */
+.duo:empty { display: none; }
+.duo > button:not(:only-child):first-child {
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+  padding-right: 5px;
+}
+.duo > button:not(:only-child):last-child {
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  padding-left: 5px;
+}
+
 .compact .back { width: 72px; height: 70px; }
 .compact .back i { width: 34px; height: 34px; }
 .compact .crumb { left: 125px; width: 263px; }

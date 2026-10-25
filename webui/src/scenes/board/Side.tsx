@@ -1,6 +1,6 @@
 // Compact turn controls at the bottom left; the Hand is docked below the map.
 
-import { memo, useCallback, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { handLimit } from "../../core/hand";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
@@ -23,6 +23,7 @@ import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model } from "./model";
 import { byTitle, showDeck, showDeedList } from "./Popups";
 import { useCompactValue } from "../../app/Stage";
+import { designBox } from "../../app/stageScale";
 import { BOARD_MID, COMPACT_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
@@ -202,8 +203,8 @@ function SkillStack({ m, sess, peek, unpeek }: {
  * below the hand, a gentle vertical arc (outer cards lower, centre highest),
  * and a spread that tightens as the hand grows so 1-10 cards all fit the
  * centre column. `spread` is the budget for the gaps between card centres --
- * the caller shrinks it to whatever the skill stack leaves free. Returns the
- * CSS custom properties `.fanCard` reads.
+ * the caller shrinks it to the dock's measured width minus whatever the skill
+ * stack leaves free. Returns the CSS custom properties `.fanCard` reads.
  */
 export function fanArc(n: number, k: number, spread = 660): Record<string, string> {
   const step = n > 1 ? Math.min(8, 52 / (n - 1)) : 0; // degrees per card, total ≤ 52°
@@ -290,17 +291,32 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   const deck = byTitle(m.v.draw ?? []);
   // Left skill stack: the fan stays centred on the column regardless; its
   // spread reserves the stack's width on *both* sides, so a wide hand tightens
-  // symmetrically and never runs under the stack.
+  // symmetrically and never runs under the stack. The budget is the dock's own
+  // width -- the centre column at the stage size actually on screen -- not the
+  // narrowest compact canvas: a phone wider than that floor would otherwise
+  // clump its hand in the middle of an empty bottom bar (FieldSheet's row
+  // spread follows the same measured width).
   const compact = useCompactValue();
   const skillN = skillSlots(m).length;
   const skillStep = skillN > 1 ? Math.min(SKILL_STEP, (240 - SKILL_CARD_W) / (skillN - 1)) : SKILL_STEP;
   const skillW = skillN ? SKILL_CARD_W + (skillN - 1) * skillStep + SKILL_FAN_GAP : 0;
-  const fanSpread = Math.min(660, Math.max(0, (compact ? COMPACT_MID : BOARD_MID) - 2 * skillW - 120));
+  const dockRef = useRef<HTMLDivElement>(null);
+  // First paint falls back to the layout constants (desktop's column, or the
+  // compact floor) so the fan never starts wider than the narrowest case.
+  const [midW, setMidW] = useState(compact ? COMPACT_MID : BOARD_MID);
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setMidW(designBox(el).width));
+    ro.observe(el);
+    setMidW(designBox(el).width);
+    return () => ro.disconnect();
+  }, []);
+  const fanSpread = Math.min(660, Math.max(0, midW - 2 * skillW - 120));
   // The preview is `pointer-events: none` (it sits above the hand, not under
   // the cursor), so a long card text is scrolled from the hovered card:
   // the wheel over the dock (fan or skill stack), or PgUp/PgDn/↑/↓ while a
   // card is hovered.
-  const dockRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   useResetScroll(textRef, hover?.id);
   const scrollableText = () => {
