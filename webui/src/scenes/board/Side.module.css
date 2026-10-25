@@ -210,16 +210,6 @@
   z-index: 2;
   filter: var(--peek-lift);
 }
-/* `playable[k]` is false while the coarse play gate is on: dim just this
-   card (same treatment as a disabled skill slot). */
-.cardOff {
-  opacity: 0.55;
-  filter: grayscale(0.6);
-}
-.cardOff:hover,
-.cardOff:focus-within {
-  filter: grayscale(0.6) var(--peek-lift);
-}
 
 /* The slim bar under the fan: always visible, so the hand count, hint, draw
    pile and 托管 stay reachable while the hand is retracted. */
@@ -426,14 +416,6 @@
   font-weight: 700;
   white-space: nowrap;
   box-shadow: 0 0 0 1.5px #fff;
-}
-.skillOff {
-  opacity: 0.55;
-  filter: grayscale(0.6);
-}
-.skillOff:hover,
-.skillOff:focus-within {
-  filter: grayscale(0.6) var(--peek-lift);
 }
 
 /* Draw-pile peek grows upward above the hand dock (and rides up with a

@@ -154,7 +154,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
           return (
             <div
               key={a.id}
-              className={cx(s.skillSlot, !a.enabled && s.skillOff)}
+              className={s.skillSlot}
               title={a.tip}
             >
               <CardFace
@@ -163,6 +163,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
                 width={SKILL_CARD_W}
                 className={s.skillCard}
                 on={picked === a.id}
+                playable={usable}
                 onClick={() => {
                   if (using) return;
                   if (picked !== a.id) return void setPicked(a.id);
@@ -253,6 +254,12 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
     stickCard(id, note);
   };
   const peekHand = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
+  // Playable right now -- the play action's own gate. Glows blue on the face;
+  // everything else stays an ordinary card (no dimming). Over the hand limit
+  // the action is discard, not play, so nothing glows. Absent `playable` (solo
+  // before merge / failed online extras) keeps the card eligible.
+  const cardPlayable = (k: number) =>
+    canPlay && !sess.readOnly && !sheet.open && !m.overHand && m.v.playable?.[k] !== false;
   // First click selects (highlighted border); clicking the selected card (or
   // Enter) plays it directly; while over the limit it instead opens the detail
   // popup, whose button discards (discarding needs that confirmation).
@@ -267,7 +274,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
       const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
       return void showCard(id, [{ label: tr("board.discardThis"), enabled: true, kind: "white", run: () => act(sess, { act: "discard", card: id }) }], note);
     }
-    if (canPlay && m.v.playable?.[k] !== false) void act(sess, { act: "play", card: id });
+    if (cardPlayable(k)) void act(sess, { act: "play", card: id });
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
@@ -327,13 +334,11 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
         <div className={s.cards}>
           <div className={s.fan} style={{ ["--fan-rise" as string]: fanRise(m.v.hand.length, fanSpread) }}>
             {m.v.hand.map((id, k) => (
-              // Per-card `playable` greys a card only while the coarse gate is
-              // on (otherwise the whole hand is inspect-only anyway). Absent
-              // `playable` (solo before merge / failed online extras) keeps the
-              // card looking normal.
+              // Playable cards glow blue (`cardPlayable`); the rest keep a
+              // plain face. Inspect / pick still work either way.
               <div
                 key={`${id}:${k}`}
-                className={cx(s.fanCard, canPlay && m.v.playable?.[k] === false && s.cardOff)}
+                className={s.fanCard}
                 style={fanArc(m.v.hand.length, k, fanSpread) as CSSProperties}
               >
                 <CardFace
@@ -341,6 +346,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
                   size="mini"
                   title={cardTitle(id)}
                   on={picked === `${id}:${k}`}
+                  playable={cardPlayable(k)}
                   onClick={() => activate(id, k)}
                   onMouseEnter={() => peekHand(k, id)}
                   onMouseLeave={() => setHover(null)}
