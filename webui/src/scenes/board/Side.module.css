@@ -289,6 +289,34 @@
 .deck b {
   font-size: 16px;
 }
+/* The 托管 toggle, docked beside the draw pile when the TopBar title has no
+   room for it (the compact canvas). Wears this bar's chip chrome -- the same
+   panel fill, radius and 30px row height as `.deck` -- so the two read as one
+   row of controls. The label must not be selectable for the same reason as
+   the pile's count. */
+.autoChip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 var(--sp-2);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--sub);
+  font-size: 14px;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.autoChip:hover {
+  color: var(--pink);
+}
+.autoChip i {
+  width: 18px;
+  height: 18px;
+}
 .warn {
   color: var(--tag-red);
   font-weight: 700;
