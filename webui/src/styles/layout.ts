@@ -35,10 +35,9 @@ export const BOARD_MID_OFFSET = 25;
 export const SHEET_STRIP = 60;
 /** Field row's retracted peek: the face's bottom zone (title + marks + pad). */
 export const FIELD_PEEK = 60;
-/** Hand fan peek above the bottom edge (Side `.fan`). */
+/** Hand fan peek above the bottom edge (Side `.fan`). The skill stack peeks the
+ *  same strip, so its cards sit at the hand's height (Side `.cards` / `.skillStack`). */
 export const HAND_PEEK = 30;
-/** Skill-stack peek: the top strip of the skill cards while the hand is retracted (Side `.skillStack`). */
-export const SKILL_PEEK = 28;
 /** Skill-stack card face width: the same face as a hand card (Card `mini`), so the two always match. */
 export const SKILL_CARD_W = 120;
 /** Skill-stack dense horizontal step: px between neighbouring card centres. */

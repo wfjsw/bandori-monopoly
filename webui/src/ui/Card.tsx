@@ -52,6 +52,9 @@ export interface CardFaceProps {
    */
   width?: number;
   on?: boolean;
+  /** Blue glowing border: the card can be played right now. Unplayable faces
+   *  stay ordinary -- nothing dims. */
+  playable?: boolean;
   /**
    * Field-row face: the tags tuck above the title and the title + `children`
    * (the caller's marker badges) form a fixed-height bottom zone -- exactly
@@ -69,13 +72,13 @@ export interface CardFaceProps {
   style?: CSSProperties;
 }
 
-export const CardFace = memo(function CardFace({ id, size = "mini", width, on, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
+export const CardFace = memo(function CardFace({ id, size = "mini", width, on, playable, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
   const c = D.card(id);
   const faceStyle = width != null ? { ...style, ["--card-w" as string]: `${width}px` } : style;
   const clickable = !!onClick;
   return (
     <div
-      className={cx(s.face, s[size], on && s.on, field && s.field, className)}
+      className={cx(s.face, s[size], on && s.on, playable && s.playable, field && s.field, className)}
       style={faceStyle}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
