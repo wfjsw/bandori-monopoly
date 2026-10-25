@@ -160,7 +160,7 @@
   transform: translateY(calc(100% - var(--hand-peek) - var(--fan-rise, 0px) - var(--sheet-strip)));
 }
 .dock[data-sheet="down"] .skillStack {
-  transform: translateY(calc(100% - var(--skill-peek) - var(--sheet-strip)));
+  transform: translateY(calc(100% - var(--hand-peek) - var(--sheet-strip)));
 }
 /* The fan: overlapping cards, anchored to the bottom, arranged as a circular
    sector (Master Duel's arc): each card is rotated a little around a pivot
@@ -351,20 +351,32 @@
   margin-top: 4px;
 }
 
+/* Fan + skill stack in one box above the bar: the skill cards' baseline is the
+   fan's, so both rows are the same height when the dock raises (the old stack
+   pinned itself `bottom: 40px` off the dock and rode a different peek). */
+.cards {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Click-through like the fan: only the cards' own boxes capture, so the map
+     stays reachable between and below them. */
+  pointer-events: none;
+}
 /* The skill stack: the player's pressable skills as a dense horizontal row on
    the left of the hand fan, rising and retracting with it (the cards' top strip
-   peeks while down). Straight -- no arc -- and overlapped tighter than the fan so
-   1-4 cards read as one short strip. Hover lifts a card to the top of the
-   stack; the fan's narrowed spread (Hand) keeps the two apart. */
+   peeks while down, `--hand-peek` like the fan). Straight -- no arc -- and
+   overlapped tighter than the fan so 1-4 cards read as one short strip. Hover
+   lifts a card to the top of the stack; the fan's narrowed spread (Hand) keeps
+   the two apart. */
 .skillStack {
   position: absolute;
   left: 0;
-  bottom: 40px;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   pointer-events: none;
-  transform: translateY(calc(100% - var(--skill-peek)));
+  transform: translateY(calc(100% - var(--hand-peek)));
   transition: transform var(--dur-slow) var(--ease-sheet);
 }
 .dock[data-state="raised"] .skillStack {
