@@ -602,6 +602,12 @@ fn to_world(fx: &Fixture) -> KWorld {
     w.trig_target = fx.trig.target;
     w.trig_tile = fx.trig.tile;
     w.trig_value = fx.trig.value as i32;
+    // Leak justified (Owned arm only): `spelling()` is `Cow<'static, str>` --
+    // a borrowed arm is already `'static`, but a synthesised spelling arrives
+    // as a fresh `String` and `w.trig_kind` is `&'static str` (it mirrors
+    // production's world, which we must not widen to `Cow` just for the
+    // harness). Promote it: one Kani harness, one fixture, process exits with
+    // the proof.
     w.trig_kind = match fx.trig.kind.spelling() {
         std::borrow::Cow::Borrowed(s) => s,
         std::borrow::Cow::Owned(s) => Box::leak(s.into_boxed_str()),
@@ -614,6 +620,9 @@ fn to_world(fx: &Fixture) -> KWorld {
 fn to_overlay(fx: &Fixture) -> TriggerOverlay {
     let t = &fx.trig;
     let mut ov = TriggerOverlay::default();
+    // Leak justified (Owned arm only): same `Cow<'static, str>` ->
+    // `&'static str` promotion as `trig_kind` above -- `TriggerOverlay::kind`
+    // is `&'static str`, and the harness must not reshape production types.
     ov.kind = Some(match t.kind.spelling() {
         std::borrow::Cow::Borrowed(s) => s,
         std::borrow::Cow::Owned(s) => Box::leak(s.into_boxed_str()),
