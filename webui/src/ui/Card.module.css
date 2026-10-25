@@ -5,11 +5,38 @@
 .title { font-size: 13px; font-weight: 700; line-height: 1.3; padding: 4px 2px 2px; }
 .tags { display: flex; gap: 3px; flex-wrap: wrap; padding: 0 2px 2px; }
 .on { box-shadow: 0 0 0 4px var(--pink); }
-/* Playable: a blue glowing border, so the cards you can act on read first.
-   Unplayable cards keep their ordinary face -- no dimming. The selected (`on`)
-   pink ring takes the inner slot; the glow stays under it either way. */
-.playable { box-shadow: var(--card-shadow), 0 0 0 2px var(--blue), 0 0 12px 2px rgba(107, 186, 241, 0.55); }
-.playable.on { box-shadow: 0 0 0 4px var(--pink), 0 0 12px 2px rgba(107, 186, 241, 0.55); }
+/* Playable: a Master Duel-style flare -- a crisp light-blue edge under a wide
+   soft bloom that breathes, so the cards you can act on read first and keep
+   reading as lit. Unplayable faces stay ordinary -- no dimming. The bloom lives
+   on `::after` so the ring (and the selected pink one) can keep their own
+   box-shadow and transition while the flare pulses underneath. */
+.playable { box-shadow: var(--card-shadow), 0 0 0 2px rgba(150, 215, 255, 1), 0 0 8px 2px rgba(180, 225, 255, 0.75); }
+.playable.on { box-shadow: 0 0 0 4px var(--pink), 0 0 8px 2px rgba(180, 225, 255, 0.55); }
+.playable::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    0 0 18px 5px rgba(107, 186, 241, 0.78),
+    0 0 44px 16px rgba(87, 163, 230, 0.55),
+    0 0 88px 32px rgba(70, 145, 225, 0.36),
+    0 0 150px 56px rgba(55, 130, 220, 0.22);
+  animation: playableFlare 2s ease-in-out infinite alternate;
+}
+@keyframes playableFlare {
+  to {
+    box-shadow:
+      0 0 28px 10px rgba(120, 195, 250, 0.92),
+      0 0 64px 24px rgba(87, 163, 230, 0.7),
+      0 0 120px 44px rgba(70, 145, 225, 0.48),
+      0 0 190px 72px rgba(55, 130, 220, 0.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .playable::after { animation: none; }
+}
 
 /* Sizing is one rule per size class, always `width: var(--card-w, <default>)`.
    A caller sets `--card-w` (CardFace's `width` prop, or a class) and the face

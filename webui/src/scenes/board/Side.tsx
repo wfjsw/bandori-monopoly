@@ -1,6 +1,6 @@
 // Compact turn controls at the bottom left; the Hand is docked below the map.
 
-import { memo, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { handLimit } from "../../core/hand";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
@@ -9,6 +9,7 @@ import { useAutoplay } from "../../core/hooks";
 import { useEventListener, useHotkeys } from "../../hooks/dom";
 import { useDockRaise } from "../../hooks/dock";
 import { holdPeek } from "../../hooks/hold";
+import { PICK_ATTR, usePickDeselect } from "../../hooks/pick";
 import { useResetScroll } from "../../hooks/measure";
 import type { GameSession } from "../../game/session";
 import { AutoToggle, ThinkingPill } from "../../ui/AutoToggle";
@@ -115,7 +116,8 @@ export function skillSlots(m: Model): SkillSlot[] {
  * Click is the hand's two-step: first click highlights the card, clicking it
  * again opens the detail popup, whose button is the confirmation that fires
  * the skill (inspect-only when disabled, 托管, replay, a prompt sheet up, or a
- * use already in flight).
+ * use already in flight). The pick is a lens, not a mode: a pointer-down
+ * anywhere outside that card drops it again.
  * The list is the engine's (`MatchView.skills`): only rules with an
  * activatable `On::Play` appear, each already gated. Passive / hook rules
  * never land here -- they have no activation and are read from the
@@ -134,8 +136,11 @@ function SkillStack({ m, sess, peek, unpeek }: {
   // One use in flight: a second click before the engine answers is dropped.
   const [using, setUsing] = useState(false);
   // First click selects (highlighted border); clicking the selected card opens
-  // the detail popup -- same two-step as the hand and the field row.
+  // the detail popup -- same two-step as the hand and the field row. Clicking
+  // anywhere else drops the pick again -- it is a lens, not a mode.
   const [picked, setPicked] = useState<string | null>(null);
+  const unpick = useCallback(() => setPicked(null), []);
+  usePickDeselect(picked, unpick);
   if (!slots.length) return null;
   const fire = async (id: string) => {
     if (using) return;
@@ -155,6 +160,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
           return (
             <div
               key={a.id}
+              {...{ [PICK_ATTR]: a.id }}
               className={s.skillSlot}
               title={a.tip}
             >
@@ -263,8 +269,11 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
     canPlay && !sess.readOnly && !sheet.open && !m.overHand && m.v.playable?.[k] !== false;
   // First click selects (highlighted border); clicking the selected card (or
   // Enter) plays it directly; while over the limit it instead opens the detail
-  // popup, whose button discards (discarding needs that confirmation).
+  // popup, whose button discards (discarding needs that confirmation). Clicking
+  // anywhere else drops the pick again -- it is a lens, not a mode.
   const [picked, setPicked] = useState<string | null>(null);
+  const unpick = useCallback(() => setPicked(null), []);
+  usePickDeselect(picked, unpick);
   const activate = (id: string, k: number) => {
     const key = `${id}:${k}`;
     if (picked !== key) return void setPicked(key);
@@ -339,6 +348,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
               // plain face. Inspect / pick still work either way.
               <div
                 key={`${id}:${k}`}
+                {...{ [PICK_ATTR]: `${id}:${k}` }}
                 className={s.fanCard}
                 style={fanArc(m.v.hand.length, k, fanSpread) as CSSProperties}
               >
