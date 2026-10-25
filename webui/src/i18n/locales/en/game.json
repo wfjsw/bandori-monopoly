@@ -212,7 +212,7 @@
   "log.deck_ready": "{{who}} picked a deck",
   "log.deeds_freed": "{{who}}'s {{n}} deeds are now unowned",
   "log.deeds_freed_houses": "{{who}}'s {{n}} deeds are now unowned (the houses stay on the tiles and are bought with them)",
-  "log.dice": "{{who}} rolls {{count}}d{{sides}}{{what}} = {{sum}}{{detail}}",
+  "log.dice": "{{who}} rolls {{count}}d{{sides}}{{extra}}{{what}} = {{sum}}{{detail}}",
   "log.discard": "{{who}}'s hand is over {{limit}} cards -- discarded \"{{card}}\"",
   "log.draw": "{{who}} drew {{n}} cards{{over}}",
   "log.dropped": "{{who}} disconnected -- the computer is taking over",

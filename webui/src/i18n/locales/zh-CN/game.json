@@ -212,7 +212,7 @@
   "log.deck_ready": "{{who}} 选好了卡组",
   "log.deeds_freed": "{{who}} 的 {{n}} 块地变成无主",
   "log.deeds_freed_houses": "{{who}} 的 {{n}} 块地变成无主（房屋留在格子上，以后买的人连房屋一起买）",
-  "log.dice": "{{who}} 掷 {{count}}d{{sides}}{{what}} = {{sum}}{{detail}}",
+  "log.dice": "{{who}} 掷 {{count}}d{{sides}}{{extra}}{{what}} = {{sum}}{{detail}}",
   "log.discard": "{{who}} 手牌超过 {{limit}} 张，弃掉了「{{card}}」",
   "log.draw": "{{who}} 抽了 {{n}} 张手牌{{over}}",
   "log.dropped": "{{who}} 掉线了，由电脑托管",

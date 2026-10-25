@@ -73,6 +73,38 @@ fn ceil10_money(x: i32) -> i32 {
     ((x as i64 + 9) / 10 * 10).clamp(0, i32::MAX as i64) as i32
 }
 
+/// The `log.dice` line a move-plan roll posts ([`Cx::card_do_move_roll`]).
+///
+/// The first `base`/`dice` term becomes the `count`d`sides` pair -- a flat
+/// term is a `0`-sided `count`, the same convention [`Cx::card_roll`] uses --
+/// and any further terms ride `extra` (`+1d4`, `+2`). Empty tables are `0d0`,
+/// the roll of nothing. This is what keeps 松原花音's second 「移动掷骰」
+/// reading 「掷 1d20 = 5」 instead of the old hardcoded 「掷 0d0 = 5」.
+fn plan_dice_msg(player_id: i32, plan: &Move, total: i32) -> Msg {
+    let mut terms = plan.base.iter().chain(plan.dice.iter());
+    let (count, sides) = match terms.next() {
+        Some(t) => (t.dice.count, t.dice.sides.max(0)),
+        None => (0, 0),
+    };
+    let mut extra = String::new();
+    for t in terms {
+        extra.push('+');
+        if t.dice.sides > 0 {
+            extra.push_str(&format!("{}d{}", t.dice.count, t.dice.sides));
+        } else {
+            extra.push_str(&t.dice.count.to_string());
+        }
+    }
+    let mut msg = Msg::new("log.dice")
+        .player_id("who", player_id)
+        .i("count", count)
+        .i("sides", sides);
+    if !extra.is_empty() {
+        msg = msg.text("extra", extra);
+    }
+    msg.i("sum", total).opt("detail", None)
+}
+
 fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     if plan.kind != before.kind {
         m.kind = plan.kind;
@@ -2093,18 +2125,19 @@ impl Cx<'_> {
     }
 
     /// A card-driven reroll (resource-powered dice): sum the
-    /// move plan's `base` + `dice` tables, honouring `TurnCtx::extreme`. The
-    /// caller raises the `Roll` chain link on the face. Logs one `"dice"`
-    /// event (all rolls animate).
+    /// move plan's `base` + `dice` tables. The caller raises the `Roll` chain
+    /// link on the face. Logs one `"dice"` event (all rolls animate), naming
+    /// the plan's dice -- 松原花音's second 「移动掷骰」 reads 「掷 1d20 = 5」,
+    /// never a bare `0d0`.
+    // TODO(规则书): `roll_tables` ignores `TurnCtx::extreme`, so a forced
+    // 「以理论最大值或最小值结算」 (AG 微小的『能做到』的事) does not reach this
+    // roll -- nor the turn's main move, which rolls the same way. The old
+    // `World::do_move_roll` did honour it; that path is no longer what
+    // `ctx::do_move_roll` calls. Fix both together.
     pub fn card_do_move_roll(&mut self, player_id: usize) -> i32 {
         let plan = self.w.turn.plan.clone();
         let total = self.roll_tables(&plan);
-        let text = Msg::new("log.dice")
-            .player_id("who", player_id as i32)
-            .i("count", 0)
-            .i("sides", 0)
-            .i("sum", total)
-            .opt("detail", None);
+        let text = plan_dice_msg(player_id as i32, &plan, total);
         self.w.log("dice", player_id as i32, text).value = total;
         total
     }
