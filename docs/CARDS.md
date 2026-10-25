@@ -995,16 +995,21 @@ On::Action(Action::SettleBody("", Some(lands_on_cp), on_land)),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();
+    let count = ctx::message::a();
     let src = ctx::message::sender_uid();       // provenance 「此卡在格子上添加的」
+    // `message::seat()` is the acting player the sender put in `Message.seat`
+    // (`message::sender_seat()` is the host's `turn_player()`).
+    let who = ctx::message::seat();
     ctx::place_mark(
         tile, mark::CP_KIND, mark::CP_CATEGORY,
-        /* owner */ -1, src, ctx::message::a().max(1),
+        /* owner */ -1, src, count,
         &Msg::new("log.cp_place")
-            .player_id("who", ctx::message::sender_seat())
+            .player_id("who", who)
             .tile("tile", tile)
-            .i("n", ctx::message::a().max(1)),
+            .i("n", count as i64),
+        card_sdk::abi::Stack::Merge,
     );
-    ctx::message::reply(1);
+    ctx::message::reply(cp_on(tile));
     Ok(())
 }
 

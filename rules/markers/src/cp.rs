@@ -122,6 +122,11 @@ fn on_place(_owner: i32) -> card_sdk::Asked {
     let tile = ctx::message::tile();
     let count = ctx::message::a();
     let src = ctx::message::sender_uid();
+    // `who` for the note is the payload's `Message.seat` (the acting player),
+    // **not** `message::sender_seat()` -- that one is the host's
+    // `turn_player()` and names the wrong seat for an off-turn placement.
+    let seat = ctx::message::seat();
+    let who = if seat >= 0 { seat } else { ctx::message::sender_seat() };
     ctx::place_mark(
         tile,
         mark::CP_KIND,
@@ -135,7 +140,7 @@ fn on_place(_owner: i32) -> card_sdk::Asked {
         // 「格子上」. Name the placer, the tile it landed on, and how many --
         // `log.cp_place` interpolates all three, so leave none of them off.
         &Msg::new("log.cp_place")
-            .player_id("who", ctx::message::sender_seat())
+            .player_id("who", who)
             .tile("tile", tile)
             .i("n", count as i64),
         card_sdk::abi::Stack::Merge,

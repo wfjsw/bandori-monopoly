@@ -132,7 +132,7 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「添加1个[CP点]」 -- a **tile** [CP点], through a cross-card
     // message to the `mark:cp` owner, which stamps the neutral owner and this
     // card instance as the provenance 「此卡在格子上添加的[CP点]」.
-    place_tile_cp(tile)?;
+    place_tile_cp(tile, player_id)?;
     // 规则书[手]: 「并在自己[场上]添加6个[CP点]」 -- the **on-card** [CP点]
     // stock on this very instance (named counter [`counter::CP`], user ruling
     // 2026-10-07: 「the cp point attached to the card」). The settle clause
@@ -157,13 +157,19 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
 /// and `mark:cp`'s `On::Message("place")` handler runs
 /// `ctx::place_mark` with provenance = this sender (`message::sender_uid()`).
 /// That is what 「此卡在格子上添加的[CP点]」 keys on.
-fn place_tile_cp(tile: i32) -> card_sdk::Asked {
+///
+/// `seat` is the acting player, carried in [`Message::seat`] for the mark's
+/// note. `ctx::message::sender_seat()` is the **turn** player, not the sender,
+/// so an off-turn placement (a [反击] window) must name its placer here --
+/// the same shape `rules/tiles/src/circle.rs` uses for its cross-card reward.
+fn place_tile_cp(tile: i32, seat: i32) -> card_sdk::Asked {
     ctx::send(
         &Target::Board("mark:cp".into()),
         "place",
         &Message {
             name: "place".into(),
             tile,
+            seat,
             // 「添加1个[CP点]」 -- one unit per placement.
             a: 1,
             ..Default::default()
@@ -213,7 +219,7 @@ fn spread(player_id: i32) -> card_sdk::Asked {
         // 「在相邻的没有[CP点]的格子添加1个[CP点]」
         for &adj in &[(t + 1) % n, (t - 1 + n) % n] {
             if ctx::count_marks(adj, &MarkFilter::any().category(mark::CP_CATEGORY)) == 0 {
-                place_tile_cp(adj)?;
+                place_tile_cp(adj, player_id)?;
                 added += 1;
                 break;
             }

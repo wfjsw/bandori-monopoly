@@ -99,7 +99,10 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
     }
     return x.kind === "card"
       ? `${who}${tr("common.quotes", { x: cardTitle(x.card) })}${note ? tr("common.noteColon", { x: note }) : ""}`
-      : `${who}${fmtMsg({ k: x.kind }, names)}${x.count > 1 ? ` ×${x.count}` : ""}${note ? tr("common.paren", { x: note }) : ""}`;
+      // A non-card mark (a [CP点], a `skillBlock`, …) still names the creating
+      // card when it has one -- the tile tooltip's 「来自」 already does, and
+      // this line is the deed popup's only place to show it.
+      : `${who}${fmtMsg({ k: x.kind }, names)}${x.card ? tr("common.quotes", { x: cardTitle(x.card) }) : ""}${x.count > 1 ? ` ×${x.count}` : ""}${note ? tr("common.paren", { x: note }) : ""}`;
   });
   const art = sceneImg(`area_${t.area}`);
   const a = deedAction(m, i);
