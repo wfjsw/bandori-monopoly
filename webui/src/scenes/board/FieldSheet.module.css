@@ -24,6 +24,7 @@
      behind the bottom one). */
   overflow: hidden;
 }
+
 /* Grown past the sheet the stack overlaps tighter and still fills the width
    (rowSpread), so this only bites if the spread is somehow wider than the
    sheet: vertical stays clipped, horizontal may scroll. */
@@ -33,7 +34,11 @@
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
-.sheet::-webkit-scrollbar { display: none; }
+
+.sheet::-webkit-scrollbar {
+  display: none;
+}
+
 /* Retracted, the row rides up so only its bottom `--field-peek` px show.
    That zone is the face's own bottom (Card `.field .title` 38px + `.marks`
    18px + the face's 4px padding = 60px) -- name and markers in view either
@@ -53,6 +58,7 @@
   transform: translateY(calc(-100% + var(--field-peek)));
   transition: transform var(--dur-slow) var(--ease-sheet);
 }
+
 .up .row {
   transform: translateY(0);
   /* Slid out, the face reads as an ordinary card: the name follows the tags
@@ -77,11 +83,13 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease;
+  transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease, opacity var(--dur-mid) ease;
 }
-.slot + .slot {
+
+.slot+.slot {
   margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px));
 }
+
 .slot:hover,
 .slot:focus-within {
   transform: translateY(12px);
@@ -95,31 +103,70 @@
   z-index: 3;
   animation: pulse-out var(--pulse-ms, 1500ms) ease-in-out both;
 }
+
 .pulse .card {
   /* One blink, mid-hold: after the slide-out, before the retract. */
   animation: pulse-glow calc(var(--pulse-ms, 1500ms) * 0.4) ease-in-out calc(var(--pulse-ms, 1500ms) * 0.25) 1 both;
 }
+
 /* Only this slot comes out: the row stays retracted. A slot's own height is the
    card's, so dropping it by 100% less the peek brings its whole face into view. */
 @keyframes pulse-out {
-  0% { transform: translateY(0) scale(1); }
-  17% { --field-fill: 1; }
-  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); --field-fill: 0; }
-  83% { --field-fill: 1; }
-  100% { transform: translateY(0) scale(1); --field-fill: 1; }
+  0% {
+    transform: translateY(0) scale(1);
+  }
+
+  17% {
+    --field-fill: 1;
+  }
+
+  18%,
+  82% {
+    transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08);
+    --field-fill: 0;
+  }
+
+  83% {
+    --field-fill: 1;
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    --field-fill: 1;
+  }
 }
+
 /* Row already lowered by hover: the slot only lifts a little. */
 .up .pulse {
   animation-name: pulse-lift;
 }
+
 @keyframes pulse-lift {
-  0% { transform: translateY(0) scale(1); }
-  18%, 82% { transform: translateY(14px) scale(1.08); }
-  100% { transform: translateY(0) scale(1); }
+  0% {
+    transform: translateY(0) scale(1);
+  }
+
+  18%,
+  82% {
+    transform: translateY(14px) scale(1.08);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+  }
 }
+
 @keyframes pulse-glow {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.45); box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--own, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7); }
+
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.45);
+    box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--own, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7);
+  }
 }
 
 /* The face itself: a clear border in the owner's colour, readable whether the
@@ -143,10 +190,12 @@
   font-weight: 700;
   box-shadow: 0 0 0 1.5px #fff;
 }
+
 .crystal,
 .count {
   background: var(--purple);
 }
+
 .cp {
   background: var(--teal);
 }
@@ -159,6 +208,7 @@
   overflow: hidden;
   box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
 }
+
 .back img {
   width: 100%;
   height: 100%;
@@ -167,18 +217,30 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .row,
   .slot {
     transition: none;
   }
+
   .pulse,
   .pulse .card {
     animation: none;
   }
 }
+
 /* Players-panel hover: the hovered seat's field cards light up; the rest fade. */
-.slot.hot { filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own)); transform: translateY(6px); }
-.slot.dim { opacity: 0.35; filter: grayscale(0.7); }
+.slot.hot {
+  filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own));
+  transform: translateY(6px);
+  z-index: var(--z-lift);
+}
+
+.slot.dim {
+  opacity: 0.35;
+  filter: grayscale(0.7);
+}
+
 /* A coarse-pointer tap picks the card: it is presented out of the row (a touch
    has no hover to leave it there) and the face ring highlights it. Last, so it
    outranks the seat-hover transform / fade above. */
