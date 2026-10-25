@@ -120,6 +120,23 @@ export function stickCard(id: string, note = "", pills?: CardPill[]): void {
   emit();
 }
 
+/** Non-zero tick bumped when the user *picks* a card (the field row's coarse
+ *  first tap). A hover or a flash updates the stand without pulling the phone
+ *  off the log; a pick is asking to see that card, so `RightTabs` opens it. */
+let pickTick = 0;
+
+/** Pin the standing panel *because the user picked this card* (see {@link useCardPick}). */
+export function pickCard(id: string, note = "", pills?: CardPill[]): void {
+  stick = { id, note, pills };
+  pickTick += 1;
+  emit();
+}
+
+/** The user-pick tick. Changes when {@link pickCard} runs; never on hover/flash. */
+export function useCardPick(): number {
+  return useSyncExternalStore(subscribe, () => pickTick);
+}
+
 /** Turn the floating hover popups off while a standing panel is on screen. */
 export function useStandingPreviewOn(): void {
   useMountEffect(() => {
