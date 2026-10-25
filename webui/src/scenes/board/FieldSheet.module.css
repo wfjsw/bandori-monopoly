@@ -45,7 +45,11 @@
   pointer-events: none;
   flex: none;
   margin-inline: auto;
-  padding-inline: 6px;
+  /* Keep in sync with `PAD_X` (rowSpread): the owner ring and the holder
+     avatar hang past a face, so the ends need room or the last face clips at
+     the sheet edge on a phone. The spread counts this padding out of the
+     width it fills. */
+  padding-inline: 14px;
   transform: translateY(calc(-100% + var(--field-peek)));
   transition: transform var(--dur-slow) var(--ease-sheet);
 }
