@@ -26,12 +26,18 @@
 .help { width: 28px; height: 28px; border-radius: 50%; background: var(--pink); color: #fff; font-weight: 700; font-size: 17px; flex: none; }
 /* Animation speed, one looping button at the right of the title (was a
    1×/2×/4× group in the hand header). The title pill is the surface, so the
-   button reads as an inset chip; pink once the speed is off 1×. */
-.speed { flex: none; height: 30px; min-width: 44px; padding: 0 10px; border: 1.5px solid var(--line); border-radius: 15px; background: var(--surface); color: var(--sub); font-size: 15px; font-weight: 700; }
-.speed:hover { color: var(--pink); border-color: var(--pink); }
-.speed.speedOn { background: var(--pink); border-color: var(--pink); color: #fff; }
-.speed.speedOn:hover { color: #fff; }
-.speed:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+   button reads as an inset chip (`topbarBtn`, shared with the 托管 toggle);
+   pink once the speed is off 1×. The compound with `.speed` outranks the
+   primitive's `:hover` tint while engaged. */
+.speed {
+  composes: topbarBtn from "./primitives.module.css";
+}
+.speed.speedOn,
+.speed.speedOn:hover {
+  background: var(--pink);
+  border-color: var(--pink);
+  color: #fff;
+}
 
 .compact .back { width: 72px; height: 70px; }
 .compact .back i { width: 34px; height: 34px; }
@@ -85,4 +91,3 @@
 :global(:root[data-compact]) .compact .title { height: 28px; font-size: 15px; padding: 0 12px; }
 :global(:root[data-compact]) .compact .section { height: 22px; padding: 3px 12px 0; line-height: 1.2; }
 :global(:root[data-compact]) .compact .title { margin-top: -2px; }
-:global(:root[data-compact]) .compact .speed { height: 22px; min-width: 36px; padding: 0 6px; font-size: 12px; border-radius: 11px; border-width: 1px; }

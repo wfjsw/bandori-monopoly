@@ -24,6 +24,43 @@
   white-space: nowrap;
 }
 
+/* Controls docked in the TopBar title pill (speed, 托管): inset chips on the
+   title's surface, one family so they read as a pair. Sizes are part of the
+   shape here (the two title buttons are the same size by design); a component
+   keeps its own icon gap and accent fill. Adopted by TopBar `.speed`,
+   AutoToggle `.toggle`. */
+.topbarBtn {
+  composes: pill;
+  flex: none;
+  height: 30px;
+  min-width: 44px;
+  padding: 0 10px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--sub);
+  font-size: var(--fs-md);
+}
+
+.topbarBtn:hover {
+  color: var(--pink);
+  border-color: var(--pink);
+}
+
+.topbarBtn:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+
+/* Phone canvas (data-compact): the title pill shrinks (TopBar), and the chips
+   shrink with it. */
+:global(:root[data-compact]) .topbarBtn {
+  height: 22px;
+  min-width: 36px;
+  padding: 0 6px;
+  font-size: 12px;
+  border-width: 1px;
+}
+
 /* Small rounded label (tag / badge / marker chip). */
 .chip {
   display: inline-block;

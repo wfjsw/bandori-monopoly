@@ -226,7 +226,8 @@ size and colour.
 | Primitive | What it is | Adopted by |
 | --- | --- | --- |
 | `floatCard` | white peek/preview card: surface, `--r-lg`, `--float-shadow`, `--sp-2` padding, click-through | Players peek, Side peek/preview, CardPreview |
-| `pill` | full-round pill skeleton: `--r-pill`, centred, bold | Chips, lang switch, AutoToggle, list labels |
+| `pill` | full-round pill skeleton: `--r-pill`, centred, bold | Chips, lang switch, `topbarBtn`, list labels |
+| `topbarBtn` | TopBar title control: inset chip on the title surface (`composes: pill`), same size in both title buttons, pink tint on hover | TopBar speed, AutoToggle 托管 |
 | `chip` | small rounded label (tag / badge) | Card tags, FieldSheet markers, Replay badges |
 | `panel` | surface panel: `--panel`, `--shadow`, `--r-md` | scene panels (Deck, Room, Boot…) |
 

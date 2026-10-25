@@ -8,9 +8,10 @@ import { D, cardTitle, cardText } from "../../core/data";
 import { useAutoplay } from "../../core/hooks";
 import { useEventListener, useHotkeys } from "../../hooks/dom";
 import { useDockRaise } from "../../hooks/dock";
+import { holdPeek } from "../../hooks/hold";
 import { useResetScroll } from "../../hooks/measure";
 import type { GameSession } from "../../game/session";
-import { ThinkingPill } from "../../ui/AutoToggle";
+import { AutoToggle, ThinkingPill } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { CardFace, type CardAction, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
@@ -362,11 +363,16 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
         <div className={s.bar}>
           <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit ?? "∞" })}</PanelTab>
           {/* Your draw pile, at the head of the hand it feeds (it used to sit in
-              the board centre). Hover lists what is left; click opens the cards. */}
-          <div className={cx(s.handTools, !sess.readOnly && s.withAuto)}>
-            <button type="button" className={s.deck} title={tr("board.drawPile")} onMouseEnter={() => setPeek(true)} onMouseLeave={() => setPeek(false)} onFocus={() => setPeek(true)} onBlur={() => setPeek(false)} onClick={() => { setPeek(false); showDeck(m); }}>
+              the board centre). Hover (or touch-hold) lists what is left; only a
+              short tap opens the cards -- releasing a hold is not a tap.
+              Beside it, on the compact canvas only: the 托管 toggle, which the
+              TopBar title has no room for there (`skin="host"` wears this
+              bar's chip chrome). */}
+          <div className={s.handTools}>
+            <button type="button" className={s.deck} title={tr("board.drawPile")} onFocus={() => setPeek(true)} onBlur={() => setPeek(false)} onClick={() => { setPeek(false); showDeck(m); }} {...holdPeek(() => setPeek(true), () => setPeek(false))}>
               <img src={sceneImg("card_back")} alt="" /><b>{m.me.draw}</b>
             </button>
+            {compact && <AutoToggle sess={sess} skin="host" className={s.autoChip} />}
             <div className={s.thinkingSlot}><ThinkingPill sess={sess} /></div>
           </div>
         </div>
