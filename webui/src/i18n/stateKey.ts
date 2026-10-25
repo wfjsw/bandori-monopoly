@@ -10,7 +10,9 @@
 //   3. the key itself as a `game` key -- `skill.*` scratch names and kin
 //      already carry their phrase there (tools/i18n/check.py pins those)
 //
-// An unknown key falls back to its wire spelling, never to a lookup path.
+// A key that resolves to nothing falls through to `fallbackLabel`: a bare wire
+// key is dropped (the markers list never prints it), anything else (a mark
+// kind's own display name) stands as itself.
 
 /** Standard engine state keys share the log's display phrase. Scratch keys the
  *  log leaves silent (`outcome_state` returns early on them) still sit in
@@ -38,4 +40,17 @@ export const STATE_LOG: Record<string, string> = {
 /** The `game`-namespace key a wire state key's display phrase lives under. */
 export function stateKeyOf(key: string): string {
   return STATE_LOG[key] ?? key;
+}
+
+/** A bare wire key (`charge`, `sports_talent_next`, `fate_hit`, `layer.keep`):
+ *  snake/camel segments joined by dots. One of these with no phrase is
+ *  bookkeeping the player must never see spelled out. A mark kind or kin is
+ *  not one -- 「水母标记」 carries its display name in the spelling itself. */
+const WIRE_KEY = /^[A-Za-z][A-Za-z0-9_]*([.][A-Za-z0-9_]+)*$/;
+
+/** What the markers list shows for a key that resolved to no phrase: `null`
+ *  drops the row for a bare wire key, anything else is already its display
+ *  name and stands as-is. */
+export function fallbackLabel(key: string): string | null {
+  return WIRE_KEY.test(key) ? null : key;
 }

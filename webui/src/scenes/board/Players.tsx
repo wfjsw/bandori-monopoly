@@ -3,6 +3,7 @@
 import { useCompactValue } from "../../app/Stage";
 import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
 import { fireMaxOf, fireOf, stateOf } from "../../core/names";
+import { NO_HAND_LIMIT } from "../../core/hand";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cardTitle } from "../../core/data";
@@ -20,7 +21,7 @@ import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
 import { borrowedBand, byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
-import { stateLabel } from "../../i18n/stateLabel";
+import { counterLabel, stateLabel } from "../../i18n/stateLabel";
 import { setHoverSeat } from "./hoverSeat";
 import { holdPeek } from "../../hooks/hold";
 import { clockSync, displayRemainingMs } from "../../game/clockSync";
@@ -99,15 +100,24 @@ function turnOrder(S: Model["S"]): number[] {
   return [...seats.filter((i) => !out(i)), ...seats.filter(out)];
 }
 
-/** Every marker a player holds: counter units, keyed state values, plus each field card's crystals, CP and named counters. */
-function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
+/** Every marker a player holds: counter units, keyed state values, plus each field card's crystals, CP and named counters.
+ *  `n` is `∞` for a lifted hand limit (`NO_HAND_LIMIT`), absent for a phrase that carries no count.
+ *  A row whose name has no display phrase is dropped -- never printed as its wire key. */
+function markersOf(x: MatchPlayer | undefined): { label: string; n?: number | "∞" }[] {
   if (!x) return [];
-  const out: { label: string; n: number }[] = [];
-  for (const tok of x.tokens ?? []) if (tok.value > 0) out.push({ label: tok.name, n: tok.value });
+  const out: { label: string; n?: number | "∞" }[] = [];
+  for (const tok of x.tokens ?? []) {
+    if (tok.value <= 0) continue;
+    const label = stateLabel(tok.name);
+    if (label) out.push({ label, n: tok.value });
+  }
   for (const [key, v] of Object.entries(x.state ?? {})) {
-    if (typeof v === "number") {
-      if (v > 0) out.push({ label: stateLabel(key), n: v });
-    } else if ((v?.value ?? 0) > 0) out.push({ label: stateLabel(key), n: v.value });
+    const n = typeof v === "number" ? v : (v?.value ?? 0);
+    if (n <= 0) continue;
+    const label = stateLabel(key);
+    if (!label) continue;
+    // `handLimit`'s i32-max sentinel is 「手牌数没有上限」, not a count.
+    out.push({ label, n: key === "handLimit" && n === NO_HAND_LIMIT ? "∞" : n });
   }
   for (const fc of x.field ?? []) {
     const card = cardTitle(fc.card);
@@ -118,7 +128,9 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
     if (crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: crystals });
     if (cp > 0) out.push({ label: `${card} · CP`, n: cp });
     for (const [name, n] of Object.entries(fc.counters ?? {})) {
-      if (n > 0 && name !== "crystals" && name !== "cp") out.push({ label: `${card} · ${name}`, n });
+      if (n <= 0 || name === "crystals" || name === "cp") continue;
+      const label = counterLabel(name);
+      if (label) out.push({ label: `${card} · ${label}`, n });
     }
   }
   return out;
@@ -209,7 +221,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
           <>
             <div className={s.peekHead}>{tr("board.markers")}<b>×{fireMarks.length}</b></div>
             {fireMarks.length
-              ? fireMarks.map((mk, k) => <div key={k} className={s.peekRow}><span>{mk.label}</span><b>{mk.n}</b></div>)
+              ? fireMarks.map((mk, k) => <div key={k} className={s.peekRow}><span>{mk.label}</span>{mk.n != null && <b>{mk.n}</b>}</div>)
               : <div className={s.peekEmpty}>{tr("board.markersEmpty")}</div>}
           </>
         )}
