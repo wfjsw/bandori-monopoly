@@ -10,6 +10,11 @@ import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
 import { canSend } from "./inputLock";
+import {
+  forceBuyCost as deedForceBuyCost,
+  mortgageValue as deedMortgageValue,
+  redeemCost as deedRedeemCost,
+} from "./deedCost";
 
 const FALLBACK_COLORS = ["#ED4E76", "#6BBAF1", "#F6B21E", "#4CC38A", "#C97DFC", "#EE5E4A", "#3EC1C9", "#E05CCF", "#8BBF2A", "#7C8796"];
 export const modeName = (mode: number) => [tr("mode.solo"), tr("mode.casual"), tr("mode.ranked")][mode] ?? "";
@@ -97,5 +102,9 @@ export async function act(sess: GameSession, cmd: Command, overAuto = false): Pr
   return !err;
 }
 
-export const mortgageValue = (i: number) => Math.floor(D.tiles[i].price / 2);
-export const redeemCost = (i: number) => Math.round(D.tiles[i].price * 0.6);
+/** Deed economics -- see `deedCost.ts`, the single source the tile face /
+ *  tooltip / deed popup all quote. Index-based wrappers over the tile data. */
+export const mortgageValue = (i: number) => deedMortgageValue(D.tiles[i].price);
+export const redeemCost = (i: number) => deedRedeemCost(D.tiles[i].price);
+export const forceBuyCost = (i: number, houses: number) =>
+  deedForceBuyCost(D.tiles[i].price, D.tiles[i].house, houses);
