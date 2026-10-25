@@ -107,6 +107,9 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .collect(),
         })
         .collect();
+    // Leak justified by [`leak`]: the host reads the manifest bytes after this
+    // export returns, so they must outlive the call. Built once per module
+    // instantiation, not per query.
     leak(postcard::to_allocvec(&entries).unwrap_or_default())
 }
 
@@ -141,28 +144,53 @@ pub fn metadata(bands: &'static [&'static [CardDef]], sources: &RosterSources) -
             .then(a.id.cmp(&b.id))
     });
     let doc = MetaDoc { rows };
+    // Leak justified by [`leak`]: host reads the roster blob after return.
+    // Built only when the host asks (see the fn doc), so rare in practice.
     leak(postcard::to_allocvec(&doc).unwrap_or_default())
 }
 
-/// Hand a buffer to the host as packed `(ptr << 32) | len`. The bytes live as
-/// long as the run (bump allocator; the module is re-instantiated per run).
+/// Hand a buffer to the host as packed `(ptr << 32) | len`. This is **the**
+/// way a guest returns bytes; every guest-out buffer goes through here so the
+/// wasm / native split cannot drift.
+///
+/// # Why this leaks
+///
+/// The guest returns a bare `i64` to the host -- there is no lifetime on the
+/// ABI boundary, and no way for the host to free what it cannot name. So the
+/// bytes must outlive the guest call that produced them: the host reads them
+/// *after* this function has returned. The guest allocator is a bump allocator
+/// that lives as long as the module instance (re-instantiated per run), so
+/// `Box::leak` is not a bug here -- it is the only way to hand over a `'static`
+/// slice. Cost is bounded by one run's worth of out-buffers and reset with the
+/// instance.
+///
+/// # Why native does *not* leak
 ///
 /// On a native build the "pointer" is an arena handle (see [`crate::native`]):
 /// `b.as_ptr() as u32` would truncate a 64-bit address and the host's
 /// `native::read` would look up a garbage slot. The arena is cleared at the
 /// start of the next [`on`], which is long enough for the host to read the
-/// buffer it just asked for.
-pub(crate) fn leak(bytes: Vec<u8>) -> i64 {
+/// buffer it just asked for -- so native interns instead of leaking, and the
+/// memory is reclaimed.
+///
+/// Never hand-roll `(ptr << 32) | len` at a call site: it silently produces a
+/// garbage handle on native. Call this.
+pub fn leak(bytes: Vec<u8>) -> i64 {
     // Real pointers only for a pure wasm32 guest module. Native **and**
     // the wasm32-linked monolith (`native-rules`) go through the arena:
     // `NativeHost` always reads `card_sdk::native::read`.
     #[cfg(all(target_arch = "wasm32", not(feature = "native-rules")))]
     {
+        // Justified: see the "Why this leaks" section above -- the host reads
+        // these bytes after we return, and the bump allocator ties the
+        // allocation to the module instance's lifetime, not to this frame.
         let b: &'static [u8] = Box::leak(bytes.into_boxed_slice());
         pack(b.as_ptr() as u32, b.len() as u32)
     }
     #[cfg(any(not(target_arch = "wasm32"), feature = "native-rules"))]
     {
+        // No leak: an arena slot, reclaimed when the next [`on`] starts a
+        // fresh frame. The handle plays the role the wasm path's pointer does.
         let (h, l) = crate::native::intern(&bytes);
         pack(h as u32, l as u32)
     }
@@ -235,6 +263,8 @@ pub fn on(
                 #[cfg(kani)]
                 Some(_reason) => 1,
                 #[cfg(not(kani))]
+                // Leak justified by [`leak`]: the host reads the reason bytes
+                // after this call returns to render "why can't I play this".
                 Some(reason) => leak(postcard::to_allocvec(&reason).unwrap_or_default()),
             },
             None => 0,

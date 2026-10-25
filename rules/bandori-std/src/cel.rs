@@ -277,6 +277,12 @@ mod typed {
     const NO_FX: Fx = Fx::Neighbor;
 
     /// Single-element `LowerAs::{Call,CallEq}.bake` slot.
+    ///
+    /// Leak justified: `LowerAs::Call.bake` is a `&'static [&'static str]` and
+    /// a one-element array literal cannot be const-promoted here because the
+    /// key is a runtime `&str` (match on `&str` is not const-stable -- see the
+    /// module header). Called once per sugar row during [`ext`]'s leak-once
+    /// build, so the cost is one 8-byte box per row for the process lifetime.
     fn bake1(key: &'static str) -> &'static [&'static str] {
         Box::leak(Box::new([key]))
     }
@@ -408,6 +414,13 @@ mod typed {
         if !p.is_null() {
             return unsafe { &*p };
         }
+        // Leak justified: this is the leak-once singleton the whole module
+        // header describes. `CondExt` must be `&'static` (callers hold it
+        // across arbitrary compiles), `OnceLock` is std-only and this crate is
+        // `no_std` on wasm32, and `match` on `&str` is not const-stable so the
+        // rows cannot be built in a `const`. Two allocations, once per process
+        // (the losing CAS leg leaks one extra table and is discarded -- both
+        // are `'static`, see the fn doc).
         let names: &'static [Name] = Box::leak(
             SUGAR
                 .iter()
