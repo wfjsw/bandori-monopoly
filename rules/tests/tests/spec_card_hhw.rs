@@ -1427,6 +1427,72 @@ fn kanon_moves_by_the_difference_of_two_rolls() {
     }
 }
 
+/// The second 「移动掷骰」 is a real move-plan roll: its `log.dice` line names
+/// the plan's dice. Regression for the line reading 「掷 0d0 = 5」.
+#[test]
+fn kanon_second_roll_logs_the_plan_dice() {
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    let mark = t.mark();
+    // Faces 8 and 3: the first is the main roll, the second the subtracted pair.
+    t.dice(&[8, 3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let dice: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "dice" || rules_spec::event_key(&e) == "log.dice")
+        .collect();
+    assert_eq!(
+        dice.len(),
+        1,
+        "the second roll posts one dice line; keys={:?}",
+        t.recent_keys(20)
+    );
+    let msg = &dice[0].msg;
+    assert_eq!(msg.key(), "log.dice", "{msg:?}");
+    assert_eq!(rules_spec::int_arg(msg, "count"), Some(1), "{msg:?}");
+    assert_eq!(rules_spec::int_arg(msg, "sides"), Some(20), "{msg:?}");
+    assert_eq!(rules_spec::int_arg(msg, "sum"), Some(3), "the second face: {msg:?}");
+}
+
+/// Silence (「三个回合内没有拿过Circle奖励」) rewrites the roll to 1d20+1d4;
+/// the second roll's line carries the `+1d4` term rather than folding it away.
+#[test]
+fn kanon_silence_second_roll_logs_the_extra_d4() {
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.m
+        .world_mut()
+        .st
+        .players[0]
+        .state_set("skill.kanonLost.silent", 3);
+    let mark = t.mark();
+    // Each roll is 1d20+1d4: (8+2) and (7+1) → |10-8| = 2.
+    t.dice(&[8, 2, 7, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let dice: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "dice" || rules_spec::event_key(&e) == "log.dice")
+        .collect();
+    let msg = &dice
+        .iter()
+        .map(|e| &e.msg)
+        .find(|m| m.a.contains_key("extra"))
+        .unwrap_or_else(|| panic!("no dice line carried the +1d4 term; {dice:?}"));
+    assert_eq!(msg.key(), "log.dice", "{msg:?}");
+    assert_eq!(rules_spec::int_arg(msg, "count"), Some(1), "{msg:?}");
+    assert_eq!(rules_spec::int_arg(msg, "sides"), Some(20), "{msg:?}");
+    match msg.a.get("extra") {
+        Some(game_core::msg::Arg::Text(s)) => assert_eq!(s, "+1d4", "{msg:?}"),
+        other => panic!("extra is not the +1d4 term: {other:?} in {msg:?}"),
+    }
+}
+
 // ----- 北泽育美 -- 全垒打！ --------------------------------------------
 
 /// C-HHW-hagumi-skill-05 -- each held 可乐饼 adds one 1d2 to the move.
