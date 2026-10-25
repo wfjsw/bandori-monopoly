@@ -404,38 +404,6 @@
 
 :global(:root[data-compact]) .compact .back {
    left: max(14px, var(--safe-left, 0px));
-   top: max(8px, var(--safe-top, 0px));
-   width: 46px;
-   height: 46px;
-}
-
-:global(:root[data-compact]) .compact .back i {
-   width: 24px;
-   height: 24px;
-}
-
-:global(:root[data-compact]) .compact .crumb {
-   left: calc(max(14px, var(--safe-left, 0px)) + 54px);
-   top: max(6px, var(--safe-top, 0px));
-   width: 212px;
-}
-
-:global(:root[data-compact]) .compact .section {
-   height: 24px;
-   width: 170px;
-   font-size: 13px;
-   padding: 0 12px;
-}
-
-:global(:root[data-compact]) .compact .title {
-   height: 34px;
-   margin-top: -2px;
-   font-size: 14px;
-   line-height: 14px;
-   padding: 0 12px;
-}
-
-:global(:root[data-compact]) .compact .back {
    top: max(4px, var(--safe-top, 0px));
    width: 50px;
    height: 50px;
@@ -453,20 +421,18 @@
 }
 
 :global(:root[data-compact]) .compact .section {
-   height: 20px;
+   height: 22px;
    width: 140px;
    font-size: 12px;
-   padding: 2px 12px 0;
+   line-height: 12px;
+   padding: 0 12px;
 }
 
 :global(:root[data-compact]) .compact .title {
    height: 28px;
+   margin-top: -2px;
    font-size: 15px;
+   line-height: 15px;
    padding: 0 12px;
 }
 
-:global(:root[data-compact]) .compact .section {
-   height: 22px;
-   padding: 3px 12px 0;
-   line-height: 1.2;
-}
