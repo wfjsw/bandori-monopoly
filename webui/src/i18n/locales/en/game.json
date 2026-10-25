@@ -508,7 +508,7 @@
   "err.build_no_upgrade": "No further upgrades on this tile.",
   "err.no_money": "Not enough cash.",
   "err.no_mortgage": "No mortgageable deeds.",
-  "log.cp_place": "{{who}} placed {{n}} CP on {{card}}",
+  "log.cp_place": "{{who}} placed {{n}} CP on {{tile}}",
   "log.flash_cue": "{{what}}",
   "log.gain_charge": "{{who}} gained {{n}} charge",
   "log.gain_charge_capped": "{{who}} is at the charge cap ({{charge}}/{{max}}); nothing gained ({{why}})",

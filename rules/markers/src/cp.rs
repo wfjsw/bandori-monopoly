@@ -131,7 +131,13 @@ fn on_place(_owner: i32) -> card_sdk::Asked {
         -1,
         src,
         count,
-        &Msg::new("log.cp_place"),
+        // The mark's `note` is what the tile tooltip / deed popup print under
+        // 「格子上」. Name the placer, the tile it landed on, and how many --
+        // `log.cp_place` interpolates all three, so leave none of them off.
+        &Msg::new("log.cp_place")
+            .player_id("who", ctx::message::sender_seat())
+            .tile("tile", tile)
+            .i("n", count as i64),
         card_sdk::abi::Stack::Merge,
     );
     ctx::message::reply(cp_on(tile));

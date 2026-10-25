@@ -633,6 +633,17 @@ fn cp_places_one_tile_mark_and_six_on_card_cp() {
     let marks = t.marks_on(5);
     assert_eq!(marks.len(), 1, "marks {:?}", t.marks());
     assert_eq!(marks[0].count, 1);
+    // The mark's `note` is what the tile tooltip / the deed popup print under
+    // 「格子上」. `log.cp_place` interpolates `{{who}}`/`{{tile}}`/`{{n}}`, so the
+    // note must carry all three -- a bare key renders as blank slots.
+    let note = &marks[0].note;
+    assert_eq!(note.key(), "log.cp_place", "note {note}");
+    assert_eq!(note.a.get("who"), Some(&Arg::PlayerId(0)), "note {note}");
+    assert_eq!(note.a.get("tile"), Some(&Arg::Tile(5)), "note {note}");
+    assert!(
+        matches!(note.a.get("n"), Some(Arg::I(1)) | Some(Arg::N(1))),
+        "note {note}"
+    );
     // The **on-card** [CP点]: 6 on this card instance, not a player counter.
     assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(6));
     // The card itself stays on the field as a lasting piece.

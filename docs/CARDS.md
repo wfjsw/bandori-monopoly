@@ -998,7 +998,11 @@ fn place_cp(_owner: i32) -> Asked {
     let src = ctx::message::sender_uid();       // provenance 「此卡在格子上添加的」
     ctx::place_mark(
         tile, mark::CP_KIND, mark::CP_CATEGORY,
-        /* owner */ -1, src, ctx::message::a().max(1), &Msg::new("log.cp_placed"),
+        /* owner */ -1, src, ctx::message::a().max(1),
+        &Msg::new("log.cp_place")
+            .player_id("who", ctx::message::sender_seat())
+            .tile("tile", tile)
+            .i("n", ctx::message::a().max(1)),
     );
     ctx::message::reply(1);
     Ok(())
