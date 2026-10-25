@@ -508,7 +508,7 @@
   "err.build_no_upgrade": "该格子已无法加盖。",
   "err.no_money": "资金不足。",
   "err.no_mortgage": "没有可抵押的地契。",
-  "log.cp_place": "{{who}} 在 {{card}} 上放置了 {{n}} 点 CP",
+  "log.cp_place": "{{who}} 在 {{tile}} 上放置了 {{n}} 点 CP",
   "log.flash_cue": "{{what}}",
   "log.gain_charge": "{{who}} 获得 {{n}} 点充能",
   "log.gain_charge_capped": "{{who}} 的充能已达上限（{{charge}}/{{max}}），没有获得（{{why}}）",
