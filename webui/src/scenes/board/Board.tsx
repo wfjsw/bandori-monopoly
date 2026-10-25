@@ -16,9 +16,9 @@ import { endSession, type GameSession } from "../../game/session";
 import { useSecondBoundary } from "../../hooks/timers";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
-import { AutoBanner, AutoToggle } from "../../ui/AutoToggle";
+import { AutoBanner } from "../../ui/AutoToggle";
 import { CardFace } from "../../ui/Card";
-import { TopBar, AnimationSpeed } from "../../ui/TopBar";
+import { TopBar, TitleToggles } from "../../ui/TopBar";
 import { useBoardSession, type Animator } from "./anim";
 import { act, modeName, model, type Model } from "./model";
 import { Log, Players } from "./Players";
@@ -203,7 +203,7 @@ export function Board({ sess }: { sess: GameSession }) {
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
         onBack={leave}
-        titleRight={<>{!compact && <AutoToggle sess={sess} />}<AnimationSpeed sess={sess} /></>}
+        titleRight={<TitleToggles sess={sess} auto={!compact} />}
         right={<></>}
       />
       <AutoBanner sess={sess} />

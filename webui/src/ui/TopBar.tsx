@@ -1,7 +1,7 @@
 // Screen chrome: square back button, breadcrumb pill (pink section label over
 // the white title, "?" help), the status pill and the ☰ menu (MenuPopupView).
-// The title can carry a right-hand control -- the board's animation-speed
-// toggle lives there.
+// The title can carry right-hand controls -- the board's 托管 and
+// animation-speed toggles dock there (TitleToggles).
 
 import { memo, type ReactNode } from "react";
 import { navigate } from "../app/router";
@@ -12,6 +12,7 @@ import { n0, richText } from "../core/format";
 import { useProfile, useSessionOther, useTick } from "../core/hooks";
 import { hasProfile, markSeen } from "../core/store";
 import type { GameSession } from "../game/session";
+import { AutoToggle } from "./AutoToggle";
 import { Btn } from "./Button";
 import { Icon } from "./Icon";
 import { openModal } from "./Modal";
@@ -85,6 +86,24 @@ export const AnimationSpeed = memo(function AnimationSpeed({ sess }: { sess: Gam
     </button>
   );
 });
+
+/**
+ * The title's docked toggles: the 托管 mode pill and the animation-speed pill.
+ * While both are on the title they read as one segmented control -- two
+ * half-pills, flat facing ends over a hairline seam -- which is narrower than
+ * two free-standing pills plus their gap and leaves the title more room for
+ * the round name. A lone pill keeps its full round shape: `auto` parks the
+ * 托管 pill on the hand bar (compact canvas), and a read-only session hides
+ * both, so the pair only ever half-rounds when it really is two.
+ */
+export function TitleToggles({ sess, auto }: { sess: GameSession; auto: boolean }) {
+  return (
+    <div className={s.duo}>
+      {auto && <AutoToggle sess={sess} />}
+      <AnimationSpeed sess={sess} />
+    </div>
+  );
+}
 
 /** Time until the daily fire refill (local midnight), "HH:MM". */
 function untilRefill(): string {
