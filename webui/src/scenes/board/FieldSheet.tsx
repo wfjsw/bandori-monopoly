@@ -1,11 +1,13 @@
-// The cards in play, docked at the top edge of the centre column -- the mirror
-// of the hand's bottom fan. A straight overlapping row of full card faces (no
-// circular sector), retracted upward behind the top edge so each face's bottom
-// zone -- the name and the live markers -- peeks below it. Hovering / focusing
-// the row lowers it into view and it retracts again after a short idle;
-// hovering one card drops that one further and brings it to the front. Per-card
-// info is the shared one: the owner's colour on the frame, the standing hover
-// preview, click-to-inspect.
+// The cards in play -- field cards and events in effect as one stack -- docked
+// at the top edge of the centre column: the mirror of the hand's bottom fan. A
+// straight overlapping row of full card faces (no circular sector), retracted
+// upward behind the top edge so each face's bottom zone -- the name and the
+// live markers -- peeks below it. Hovering / focusing the row lowers it into
+// view and it retracts again after a short idle; hovering one card drops that
+// one further and brings it to the front. Every face wears the same on-field
+// card style: an event is just another face in the stack, not a separate
+// group. Per-card info is the shared one: the owner's colour on the frame, the
+// standing hover preview, click-to-inspect.
 //
 // Touch splits that in two (the same hold-vs-tap table the draw-pile chip
 // uses): a short tap presents the card out, highlights it and feeds the
@@ -24,30 +26,29 @@ import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
 import { InspectCard, showCard } from "../../ui/Card";
-import { pickCard, previewFrom, previewHide, type CardPill } from "../../ui/CardPreview";
+import { pickCard, type CardPill } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
-import { showEvent } from "./Popups";
 import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles";
 import { t as tr } from "../../i18n/t";
 import { designBox } from "../../app/stageScale";
 import s from "./FieldSheet.module.css";
 
-/** Card face width (px) and the step bounds of the overlapped row. */
+/** Card face width (px) and the widest step of the overlapped row. */
 const CARD_W = 120;
 const SLOT_MAX = 112;
-const SLOT_MIN = 44;
 
 /**
  * The straight row spread (`--row-slot`: the px step between card centres),
- * tightening with the count so the cards fit the sheet's `width`. Below
- * `SLOT_MIN` the cards stop overlapping further (they would be too thin to tap)
- * and the sheet scrolls sideways instead. The field row has no arc -- unlike
- * the hand's `fanArc`.
+ * tightening with the count so the stack fits the sheet's `width`. Grown past
+ * the width the faces overlap tighter -- the skill stack's dense overlap -- and
+ * the stack still fills the sheet edge to edge (maximum space, never a sideways
+ * scroll). `SLOT_MAX` keeps a near-full step while they still fit. The field
+ * row has no arc -- unlike the hand's `fanArc`.
  */
 export function rowSpread(n: number, width = 480 + CARD_W): Record<string, string> {
   const fit = n > 1 ? (width - CARD_W) / (n - 1) : 0;
-  const slot = n > 1 ? Math.max(SLOT_MIN, Math.min(SLOT_MAX, fit)) : 0;
+  const slot = n > 1 ? Math.min(SLOT_MAX, Math.max(0, fit)) : 0;
   return { "--row-slot": `${slot.toFixed(1)}px` };
 }
 
@@ -57,7 +58,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const dock = useDockRaise();
   const hoverSeat = useHoverSeat();
   // The sheet's real width: on a phone the centre column is far narrower than
-  // a desktop one, so the row spread follows it (and scrolls when still too long).
+  // a desktop one, so the row spread follows it (and overlaps tighter when still too long).
   const sheetRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(480 + CARD_W);
   const any = S.players.some((x) => (x.field ?? []).length) || (S.eventActive ?? []).length > 0;
@@ -76,11 +77,16 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const [picked, setPicked] = useState<string | null>(null);
   const unpick = useCallback(() => setPicked(null), []);
   usePickDeselect(picked, unpick);
-  // Skill rules (`skill:`) are engine plumbing on the field, not cards in play.
-  const rows = S.players
-    .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
-    .filter(([, f]) => f.length);
-  const events = S.eventActive ?? [];
+  // One stack, cards in play and events in effect alike. Skill rules (`skill:`)
+  // are engine plumbing on the field, not cards in play.
+  const stack = [
+    ...S.players.flatMap((x, i) =>
+      (x.field ?? [])
+        .filter((c) => !c.card.startsWith("skill:"))
+        .map((fc) => ({ kind: "card" as const, seat: i, fc })),
+    ),
+    ...(S.eventActive ?? []).map((e) => ({ kind: "event" as const, e })),
+  ];
   /** Hover (mouse) or press-and-hold (touch) lights the card's tiles; a tap does not. */
   const tileHold = (tiles: readonly number[]) =>
     tiles.length
@@ -95,16 +101,56 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
     pickCard(id, note, pills);
   };
   const coarse = () => window.matchMedia("(pointer: coarse)").matches;
-  const total = rows.reduce((a, [, f]) => a + f.length, 0) + events.length;
+  const total = stack.length;
   if (!total) return null;
   // A picked card keeps the row out from under the top edge until it is unpicked.
   return (
     <div ref={sheetRef} className={cx(s.sheet, (dock.raised || picked) && s.up)} {...dock.hover}>
       <div className={s.row} style={rowSpread(total, width) as CSSProperties}>
-        {rows.flatMap(([i, f]) => f.map((fc) => {
+        {stack.map((it) => {
+          if (it.kind === "event") {
+            const e = it.e;
+            const note = e.note?.k ? fmtMsg(e.note, names) : "";
+            const tiles = designatedTiles(S.marks, eventTiles(e.id));
+            const key = `e${e.id}`;
+            // An event's frame is its player's colour; a face with no player
+            // (a neutral one) falls back to the event purple.
+            const owner = e.playerId >= 0 ? e.playerId : -1;
+            const pills = owner >= 0
+              ? [{ label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) }]
+              : [];
+            return (
+              <div key={key} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, hoverSeat >= 0 && s[e.playerId === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: owner >= 0 ? m.colorOf(owner) : "var(--purple)" }}>
+                {e.faceDown ? (
+                  <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
+                ) : (
+                  <InspectCard
+                    id={e.id}
+                    size="mini"
+                    field
+                    className={s.card}
+                    title={D.event(e.id)?.name ?? e.id}
+                    note={note}
+                    pills={pills}
+                    actions={[]}
+                    on={picked === key}
+                    onClick={() => {
+                      if (coarse() && picked !== key) return void present(key, e.id, note, pills);
+                      setPicked(null);
+                      void showCard(e.id, [], note, pills);
+                    }}
+                  >
+                    {e.counter > 0 && <span className={s.count}>×{e.counter}</span>}
+                    {e.counter2 > 0 && <span className={s.count}>×{e.counter2}</span>}
+                  </InspectCard>
+                )}
+              </div>
+            );
+          }
+          const { seat, fc } = it;
           // The frame takes the owner's colour (`fc.owner`), not the field it
           // happens to sit on -- a borrowed card still reads as its owner's.
-          const owner = fc.owner >= 0 ? fc.owner : i;
+          const owner = fc.owner >= 0 ? fc.owner : seat;
           const note = fc.note ? fmtMsg(fc.note, names) : "";
           const live = [
             note,
@@ -113,7 +159,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           ].filter(Boolean).join(" · ");
           // A card on its owner's own field designates no one else: only a card
           // parked on another player's field has a designee.
-          const designee = i !== owner ? i : -1;
+          const designee = seat !== owner ? seat : -1;
           const pills = [
             { label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) },
             ...(designee >= 0 ? [{ label: tr("board.pillDesignee", { who: m.nameOf(designee) }), color: m.colorOf(designee), char: m.charOf(designee) }] : []),
@@ -122,9 +168,9 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const tiles = designatedTiles(S.marks, fieldCardTiles(fc.uid));
           const key = `c${fc.uid}`;
           return (
-            <div key={fc.uid} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
+            <div key={key} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
-                <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
+                <div className={s.back} title={`${m.nameOf(seat)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
                 <InspectCard
                   id={fc.card}
@@ -147,42 +193,6 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                 </InspectCard>
               )}
               {designee >= 0 && <Avatar c={m.charOf(designee)} size={28} className={s.holder} />}
-            </div>
-          );
-        }))}
-        {/* Events in effect ride the row's end as a separated group, with the
-            same face shape (art, name, counters) and the same peek. */}
-        {events.map((e, k) => {
-          const ev = D.event(e.id);
-          const note = e.note?.k ? fmtMsg(e.note, names) : "";
-          const tiles = designatedTiles(S.marks, eventTiles(e.id));
-          const key = `e${e.id}`;
-          return (
-            <div
-              key={e.id}
-              {...{ [PICK_ATTR]: key }}
-              className={cx(s.slot, picked === key && s.picked, k === 0 && s.sep, hoverSeat >= 0 && s[e.playerId === hoverSeat ? "hot" : "dim"])}
-              {...tileHold(tiles)}
-              style={{ ["--own" as string]: e.playerId >= 0 ? m.colorOf(e.playerId) : "var(--purple)" }}
-            >
-              {e.faceDown ? (
-                <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
-              ) : (
-                <button type="button" className={cx(s.event, picked === key && s.picked)} title={tr("board.activeEvents")} onClick={() => {
-                    if (coarse() && picked !== key) return void present(key, e.id, note);
-                    setPicked(null);
-                    showEvent(e.id, note);
-                  }}
-                  onMouseEnter={(x) => previewFrom(x.currentTarget, e.id, note)} onFocus={(x) => previewFrom(x.currentTarget, e.id, note)}
-                  onMouseLeave={previewHide} onBlur={previewHide}>
-                  <div className={s.eventArt}><img src={sceneImg("card_back")} alt="" /></div>
-                  <div className={s.eventName}>{ev?.name ?? e.id}</div>
-                  <div className={s.marks}>
-                    {e.counter > 0 && <span className={s.count}>×{e.counter}</span>}
-                    {e.counter2 > 0 && <span className={s.count}>×{e.counter2}</span>}
-                  </div>
-                </button>
-              )}
             </div>
           );
         })}
