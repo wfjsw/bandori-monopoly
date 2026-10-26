@@ -783,6 +783,16 @@ impl Cx<'_> {
         if as_main {
             self.w.st.step = stage::MOVE;
         }
+        // The capture is the authoritative shape for this move: the engine
+        // discards the run's world copy on pause, so `turn.plan` never saw the
+        // card's writes (`plan::set_steps`, `plan::set_resolve(false)`, …).
+        // Adopt it before the walk's mid-step plan sync reads the plan --
+        // otherwise a stale `resolve = true` revives settlement on a
+        // 「不触发结算」 card move.
+        self.w.turn.plan = plan.clone();
+        // `settle_redirect` is engine-set on `card_settle_move` only; never let
+        // a plan seed carry a sticky `true`.
+        self.w.turn.plan.settle_redirect = false;
         if plan.teleport_to.is_some() {
             let to = plan.teleport_to.unwrap().0 as usize;
             let resolve = plan.resolve;
@@ -798,10 +808,6 @@ impl Cx<'_> {
         } else {
             if plan.steps.is_none() {
                 // No fixed step count: roll it now, with the same raise points.
-                self.w.turn.plan = plan.clone();
-                // `settle_redirect` is engine-set on `card_settle_move` only;
-                // never let a plan seed carry a sticky `true`.
-                self.w.turn.plan.settle_redirect = false;
                 raise!(self, "diceRollPlan", i, @m plan)?;
                 plan = self.w.turn.plan.clone();
                 // A `rollPlan` body may have rewritten this move as a teleport
