@@ -68,7 +68,10 @@ function PromptTimer({ sess }: { sess: GameSession }) {
   // The deadline is measured against the time the prompt was first shown.
   const total = useRef(0);
   const p = view?.state.prompt;
-  if (sess.kind !== "online" || !view || !p) return null;
+  // The opening-hand re-roll is a hard barrier, not a timed offer: every seat
+  // decides and nothing moves on until then, so a countdown bar would only
+  // imply a deadline the engine does not enforce.
+  if (sess.kind !== "online" || !view || !p || p.title?.k === "ask.mulligan.title") return null;
   const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
   if (!total.current) total.current = Math.max(1, left);
   return (

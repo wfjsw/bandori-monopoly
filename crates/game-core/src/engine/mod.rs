@@ -2287,6 +2287,14 @@ impl Match {
                 if l.answers[k] >= 0 || !auto[k] {
                     continue;
                 }
+                if l.kind() == "mulligan" {
+                    // Machine seats decide at once. The barrier waits on
+                    // people; making a human sit out most of the window for a
+                    // bot's simulated thinking time is pure friction, and the
+                    // answer is already precomputed (`Ask::ai`).
+                    l.answers[k] = l.ask.ai[k].clamp(0, max.max(0));
+                    continue;
+                }
                 match l.ai_at[k] {
                     None => l.ai_at[k] = Some(l.time_left - (0.4 + rng.f64() as f32 * 0.6)),
                     Some(at) if l.time_left <= at => {
@@ -2312,7 +2320,14 @@ impl Match {
                     _ => {}
                 }
             }
-            if uses_pool {
+            if l.kind() == "mulligan" {
+                // 初始重抽 is a hard barrier (rulebook 时点流程 step 6 before
+                // 7/8): every seat must answer, and nobody is forced into
+                // "keep" by a window. Machine seats fill on their own beat
+                // above; a human waits however long they need -- the seat
+                // takeover path is the only way an absent one is answered.
+                l.answers.iter().all(|&a| a >= 0)
+            } else if uses_pool {
                 force_exhausted(l);
                 let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
                 if l.answers.iter().all(|&a| a >= 0) {

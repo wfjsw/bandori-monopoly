@@ -160,6 +160,31 @@ export function displayRemainingMs(deadlineMs: number, localNow: number, offset:
   return Math.max(0, deadlineMs - (localNow + offset) + EXPIRY_EPSILON_MS);
 }
 
+/**
+ * Remaining whole seconds of a setup window (ban / pick / deck), identical on
+ * every client at the same wall-clock moment.
+ *
+ * The deadline is derived from the frame's own server stamps --
+ * `serverTimeMs + timeLeft * 1000` -- and measured on the NTP-synced server
+ * clock, so two tabs cannot drift apart by their own receive latency. The old
+ * local interpolation (`timeLeft` minus time since *this* tab got the frame)
+ * made each client run ahead of the server by its own RTT and re-based on every
+ * later frame, which is why one seat's deck countdown could sit a second above
+ * another's and the window did not appear to open for everyone at once.
+ *
+ * `at` (`performance.now()` when the frame arrived) is the fallback for a
+ * session with no clock sample -- a replay's locally built view, which has no
+ * `serverTimeMs` to anchor to.
+ */
+export function setupSecs(serverTimeMs: number | undefined, timeLeft: number, at: number): number {
+  if (serverTimeMs != null && clockSync.hasSample) {
+    clockSync.step();
+    const deadlineMs = serverTimeMs + Math.max(0, timeLeft) * 1000;
+    return Math.max(0, Math.ceil(displayRemainingMs(deadlineMs, performance.now(), clockSync.offset) / 1000));
+  }
+  return Math.max(0, Math.ceil(timeLeft - (performance.now() - at) / 1000));
+}
+
 /** Uncertainty band of the current estimate: ±RTT/2. */
 export function uncertaintyMs(rtt: number): number {
   return Math.max(0, rtt) / 2;

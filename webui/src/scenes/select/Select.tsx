@@ -3,7 +3,7 @@
 // grid; bottom: turn order strip and the big button. The `deck` phase has its
 // own full-screen scene (`DeckAdjust`).
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { navigate } from "../../app/router";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
@@ -13,6 +13,7 @@ import { useLatestRef } from "../../hooks/latest";
 import { getProfile } from "../../core/store";
 import type { PersonaData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
+import { setupSecs } from "../../game/clockSync";
 import { blankPlayer } from "../board/model";
 import { Btn } from "../../ui/Button";
 import { SkillBody } from "../../ui/SkillBody";
@@ -75,6 +76,23 @@ export function Select({ sess }: { sess: GameSession }) {
     }
   }, []);
 
+  // Seed the profile's home character as the selection the moment the pick
+  // phase opens and it is still free. The preview/checkmark already fell back
+  // to it (`chosen`), but `picked` alone gated the continue button — so the
+  // highlighted default still needed a second click on itself before you
+  // could decide. Mirror `pickChar`: same state write, same private preselect
+  // so a timeout resolves to what the screen shows. Ban keeps an empty pick
+  // meaning "no ban", so this never seeds there.
+  const phase = view?.state.phase ?? "";
+  const home = getProfile().homePersona || D.personas[0].name;
+  useEffect(() => {
+    if (spectating || auto || phase !== "pick") return;
+    const r = pickRef.current;
+    if (r.hasChar || picked || !r.free(home)) return;
+    setPicked(home);
+    void r.sess.act({ act: "preselect", persona: home }).catch(() => {});
+  }, [phase, picked, spectating, auto, home]);
+
   if (!view) return null;
   const st = view.state;
   const myTurn = st.turn === view.playerId;
@@ -82,7 +100,9 @@ export function Select({ sess }: { sess: GameSession }) {
   // home character, which would paint it as "chosen" on the public board.
   const chosen = spectating ? picked : me.persona || picked || getProfile().homePersona || D.personas[0].name;
   const preview = D.persona(chosen);
-  const secs = Math.max(0, Math.ceil(st.timeLeft - (performance.now() - at) / 1000));
+  // Same shared deadline as the deck window: the ban / pick clock is one
+  // server-side countdown, so every seat's copy of it must read the same.
+  const secs = setupSecs(view.serverTimeMs, st.timeLeft, at);
   const takenBy = new Map(st.players.map((x, playerId) => [x.persona, { name: x.player, playerId }] as const).filter(([c]) => c));
   const free = (n: string) => !st.bans.includes(n) && !takenBy.has(n);
   const cur = st.players[st.turn]?.player ?? "";

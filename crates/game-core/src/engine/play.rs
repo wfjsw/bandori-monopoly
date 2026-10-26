@@ -413,19 +413,30 @@ impl Cx<'_> {
             self.draw(i, n, false)?;
         }
         self.wait(3.0);
-        let humans: Vec<usize> = (0..self.w.player_count())
-            .filter(|&p| !self.w.st.players[p].ai)
-            .collect();
-        if !humans.is_empty() {
-            let n = humans
+        // 2. 初始重抽 -- **every** seat decides, not only the human ones. The
+        // window is a hard barrier (rulebook 时点流程: step 6 completes before
+        // step 7's 游戏开始时 effects and step 8's first turn): no seat may
+        // activate an effect or advance the game until every seat has an
+        // answer on record. Bots decide through their policy (`fill_ai`), a
+        // seat the machine has taken over answers as the machine, and nobody
+        // is force-defaulted into "keep" -- the once-only opening-hand choice
+        // is not a 恢复时间 prompt and must not expire on that pool.
+        //
+        // A table whose every seat is machine-decided has nothing to wait for
+        // and keeps the old fast path (no ask, implicit keep) -- sims and
+        // bot-only matches would otherwise halt on a prompt no one reads.
+        let any_decider = (0..self.w.player_count()).any(|p| !self.w.st.players[p].ai);
+        let all: Vec<usize> = (0..self.w.player_count()).collect();
+        if any_decider && !all.is_empty() {
+            let n = all
                 .iter()
                 .map(|&p| self.start_hand(p))
                 .max()
                 .unwrap_or(START_HAND);
             self.w
                 .log("text", -1, Msg::new("log.mulligan_offer").i("n", n as i64));
-            let ask = Ask::choice(
-                humans.clone(),
+            let mut ask = Ask::choice(
+                all.clone(),
                 Msg::new("ask.mulligan.title"),
                 Msg::new("ask.mulligan.text").i("n", n as i64),
                 vec![
@@ -436,8 +447,10 @@ impl Cx<'_> {
                 20.0,
             )
             .with_kind("mulligan");
+            // Not an ordinary prompt: keep the seat's 恢复时间 pool out of it.
+            ask.use_pool = false;
             let r = self.ask(ask)?;
-            let redo: Vec<usize> = humans.into_iter().filter(|&p| r.of(p) == 1).collect();
+            let redo: Vec<usize> = all.into_iter().filter(|&p| r.of(p) == 1).collect();
             for &p in &redo {
                 self.mulligan(p)?;
             }

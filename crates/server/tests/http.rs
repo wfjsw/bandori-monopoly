@@ -1376,6 +1376,27 @@ async fn advanced_room(server: &Arc<Server>, who: &Client, bots: usize) -> Strin
     };
     // Skip pick / deck so the match is in play immediately.
     handle.quick_start().unwrap();
+    // Skip the opening-hand re-roll too: it is a barrier with no expiry
+    // (rulebook 时点流程 step 6), and the host drives nothing in these tests.
+    // The prompt opens a `wait` after `quick_start`, so poll for it.
+    let until = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < until {
+        let (_, st) = who.get(&format!("/api/rooms/{id}/state")).await;
+        let p = &st["match"]["state"]["prompt"];
+        if p["kind"].as_str() == Some("mulligan") {
+            if let Some(pid) = p["id"].as_i64().filter(|&n| n > 0) {
+                let fallback = p["fallback"].as_i64().unwrap_or(0);
+                let _ = who
+                    .post(
+                        &format!("/api/rooms/{id}/act"),
+                        json!({ "act": "answer", "prompt": pid, "value": fallback }),
+                    )
+                    .await;
+            }
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
     id
 }
 

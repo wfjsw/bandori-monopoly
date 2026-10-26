@@ -12,7 +12,7 @@ use game_core::engine::{
     FORCE_BUY_RESERVE, REDEEM_RESERVE,
 };
 use game_core::msg::Msg;
-use game_core::net::RoomMember;
+use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{BotMentality, MatchState};
 use game_core::MatchMode;
@@ -43,9 +43,27 @@ fn new_match(
 }
 
 /// Tick until the match ends (or `max_rounds` pass, then finish it).
+///
+/// Every ordinary prompt is left to time out to its fallback, as before. The
+/// opening-hand re-roll is a barrier with no expiry (rulebook 时点流程 step 6),
+/// so the harness answers it with the fallback to let the game start at all.
 fn play_out(m: &mut Match, max_rounds: i32) {
     let mut ticks = 0;
     while !m.ended() {
+        let st = m.state();
+        if st.prompt.kind == "mulligan" {
+            let members: Vec<i32> = st.players.iter().map(|p| p.member).collect();
+            for member in members {
+                let _ = m.act(
+                    member,
+                    &NetMessage {
+                        prompt: st.prompt.id,
+                        value: st.prompt.fallback,
+                        ..NetMessage::act("answer")
+                    },
+                );
+            }
+        }
         m.tick(0.25);
         ticks += 1;
         if m.state().round > max_rounds {
