@@ -13,7 +13,6 @@ import { t as tr } from "../../i18n/t";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
-import { useSecondBoundary } from "../../hooks/timers";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
@@ -103,17 +102,14 @@ function useMatchDriver(opts: {
 
 /** The empty tile-pick list, so `useMemo` can hand out a stable `[]`. */
 const NO_TILES: number[] = [];
+/** The bar's empty right slot, stable so `memo(TopBar)` can skip a tick. */
+const NO_RIGHT = <></>;
 
 export const Board = memo(function Board({ sess }: { sess: GameSession }) {
   const { view, at, anim } = useBoardSession(sess);
-  // Turn timer: online frames carry absolute deadlines, so repaint exactly
-  // when the displayed second flips (not on a 500ms grid). Fallback tick for
-  // paths with no deadline (replay / older server / local countdowns).
-  // Bonus drains first; `baseDeadlineMs` is the end of the whole clock, so it
-  // is the one that keeps the second-boundary ticker running through both
-  // phases (bonus then base).
-  const clockDeadline = view?.clock ? view.clock.baseDeadlineMs : null;
-  useSecondBoundary(clockDeadline);
+  // The turn clock's exact-second repaint lives in `Players`, which owns the
+  // display: a `useSecondBoundary` here would only re-render Board, and the
+  // memoized seat list would skip it.
   useTick(500);
   const auto = useAutoplay(sess); // 托管 -- one shared input-lock
   // The match screen is the one scene that fills the window: no top / bottom
@@ -188,6 +184,34 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
     };
   }, [m, auto, anim.animating, anim.rolling, anim.dice, sess.readOnly, sess.connected, onRoll]);
 
+  // The FX layer's size, and the log node the right column draws. Both are
+  // hooks, so they sit above the `!m` return: a session that mounts before its
+  // first frame renders once with `m === null`, and a hook added below the
+  // return would fire on the next render ("more hooks than during the previous
+  // render") and blank the board.
+  const fxRef = useRef<HTMLDivElement>(null);
+  const [fxH, setFxH] = useState(FX_REF_H);
+  useLayoutEffect(() => {
+    const el = fxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setFxH(designBox(el).height || FX_REF_H));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // One log element, reused across the board's own ticks: `memo(Log)` (and
+  // `memo(RightTabs)`) then actually skip, instead of re-rendering on a fresh
+  // element identity every 500ms.
+  const settle = useMemo(() => (m ? <SettleVote m={m} sess={sess} /> : null), [m, sess]);
+  const logNode = useMemo(
+    () => (m ? <Log lines={anim.log} colorOf={m.colorOf} titled={false}>{settle}</Log> : null),
+    [anim.log, m, settle],
+  );
+  // The title bar's props, memoized so its own `memo` can skip a board tick.
+  const titleRight = useMemo(() => <TitleToggles sess={sess} auto={!compact} />, [sess, compact]);
+  // A stable back handler (the `onBack` prop); it reads the latest `leave`.
+  const leaveRef = useRef<() => void>(() => undefined);
+  const onBack = useCallback(() => leaveRef.current(), []);
+
   if (!m) return null;
   const S = m.S;
   tileClick.current = (i: number) => {
@@ -196,6 +220,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
     openDeed(sess, i);
   };
   const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
+  leaveRef.current = leave;
   // The die lives in the board's roll zone (Ring); replays hide it entirely.
   const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
   rollClick.current = () => {
@@ -207,24 +232,8 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
   const cardW0 = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
   // The chain is sized as a fraction of the FX layer (the centre column), so it
   // fills the same share of it on a desktop and on a phone's shorter compact canvas.
-  const fxRef = useRef<HTMLDivElement>(null);
-  const [fxH, setFxH] = useState(FX_REF_H);
-  useLayoutEffect(() => {
-    const el = fxRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setFxH(designBox(el).height || FX_REF_H));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
   const chainK = fxH / FX_REF_H;
   const cardW = Math.round(cardW0 * chainK);
-  // One log element, reused across the board's own ticks: `memo(Log)` (and
-  // `memo(RightTabs)`) then actually skip, instead of re-rendering on a fresh
-  // element identity every 500ms.
-  const settle = useMemo(() => <SettleVote m={m} sess={sess} />, [m, sess]);
-  const logNode = useMemo(() => (
-    <Log lines={anim.log} colorOf={m.colorOf} titled={false}>{settle}</Log>
-  ), [anim.log, m.colorOf, settle]);
   return (
     <>
       <TopBar
@@ -232,9 +241,9 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
         help={false}
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
-        onBack={leave}
-        titleRight={<TitleToggles sess={sess} auto={!compact} />}
-        right={<></>}
+        onBack={onBack}
+        titleRight={titleRight}
+        right={NO_RIGHT}
       />
       <AutoBanner sess={sess} />
       <div className={s.body}>

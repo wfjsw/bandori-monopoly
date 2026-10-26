@@ -5,7 +5,7 @@
 // bottom sheet over the hand (Modal `chrome: "prompt"`): content-sized, up to
 // the centre column, retractable to its title strip.
 
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { cx } from "../../core/cx";
 import { D, cardTitle, cardText, cardBody, cardColor, cardArtUrl, cardCounterReason } from "../../core/data";
 import { n0, plain } from "../../core/format";
@@ -94,10 +94,16 @@ const Prompt = memo(function Prompt({ sess, id, close }: { sess: GameSession; id
   useRaiseSheetOn(live ? p?.id : id);
   // Keep the panel's content through the close slide (the options go inert).
   const showing = useLinger(live);
-  if (!showing || !view || !p) return null;
-  const answer = (extra: Partial<Command>) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
-
-  const bodyCards = uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]);
+  // Everything below is derived from the live view. It sits above the `!showing`
+  // return because two of these are hooks: a hook below the return would fire
+  // only once a prompt exists ("more hooks than during the previous render").
+  // The names table is memoized on the view so the memoized option rows can
+  // skip a re-render that did not change the frame.
+  const names = useMemo(() => namesOf(view?.state), [view]);
+  const bodyCards = useMemo(
+    () => (p ? uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]) : []),
+    [p],
+  );
   // The prompt names a source card (the trigger a [反击] answers): the standing
   // card panel on the right follows it, so the player sees what they are
   // answering while they choose.
@@ -105,6 +111,12 @@ const Prompt = memo(function Prompt({ sess, id, close }: { sess: GameSession; id
   useMountEffect(() => {
     if (standCard) stickCard(standCard);
   });
+  // A stable `answer` for the memoized option rows: it reads the latest
+  // closure (托管 / session / prompt id) through the ref.
+  const answerRef = useRef<Answer>(() => Promise.resolve(false));
+  const answer = useCallback<Answer>((extra) => answerRef.current(extra), []);
+  if (!showing || !view || !p) return null;
+  answerRef.current = (extra) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
 
   // One layout rule for every prompt that shows cards: a panel that is just a
   // row of card faces (the hand), or more than one related-card detail, stacks
@@ -165,18 +177,18 @@ const Prompt = memo(function Prompt({ sess, id, close }: { sess: GameSession; id
       <div className={s.main}>
         {!returnsGroup && (
           <div className={s.text}>
-            <MsgBody m={p.text} names={namesOf(view.state)} />
+            <MsgBody m={p.text} names={names} />
           </div>
         )}
         <div className={s.options}>
           {returnsGroup && <ReturnsOptions p={p} sess={sess} auto={auto} />}
-          {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
-          {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
+          {p.kind === "tile" && <TileOptions p={p} answer={answer} names={names} auto={auto} />}
+          {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} names={names} />}
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
-          {p.kind === "multi" && <MultiOptions p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
-          {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? namesOf(view.state).playerId(p.bidder) : ""} answer={answer} auto={auto} />}
+          {p.kind === "multi" && <MultiOptions p={p} answer={answer} auto={auto} names={names} />}
+          {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? names.playerId(p.bidder) : ""} answer={answer} auto={auto} />}
           {p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "pick" && p.kind !== "multi" && p.kind !== "auction" && !returnsGroup && (
-            <Options p={p} answer={answer} auto={auto} names={namesOf(view.state)} />
+            <Options p={p} answer={answer} auto={auto} names={names} />
           )}
         </div>
       </div>

@@ -11,6 +11,7 @@ import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
 import { useTick } from "../../core/hooks";
 import { useScrollFollow } from "../../hooks/measure";
+import { useSecondBoundary } from "../../hooks/timers";
 import { Avatar } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -140,10 +141,14 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n?: number | "â
 /**
  * Player panels on the left. The turn clock repaints on its own 500ms tick
  * (`at` is the view's arrival time and is stable per snapshot), so the parent
- * board's animation / timer re-renders do not drag the seat list along.
+ * board's animation / timer re-renders do not drag the seat list along -- and
+ * it owns the exact-second repaint too: online frames carry an absolute
+ * deadline (`baseDeadlineMs`, which keeps running through the bonus phase), so
+ * the displayed second flips on the boundary rather than on the tick grid.
  */
 export const Players = memo(function Players({ m, solo, at }: { m: Model; solo: boolean; at: number }) {
   useTick(500);
+  useSecondBoundary(m.v.clock ? m.v.clock.baseDeadlineMs : null);
   const elapsed = (performance.now() - at) / 1000;
   const S = m.S;
   // The seat list's height: 548 on the 900px stage, what the phone canvas leaves otherwise.
@@ -230,7 +235,7 @@ export const Players = memo(function Players({ m, solo, at }: { m: Model; solo: 
           <>
             <div className={s.peekHead}>{tr("board.markers")}<b>Ã—{fireMarks.length}</b></div>
             {fireMarks.length
-              ? fireMarks.map((mk) => <div key={mk.label} className={s.peekRow}><span>{mk.label}</span>{mk.n != null && <b>{mk.n}</b>}</div>)
+              ? fireMarks.map((mk, k) => <div key={`${mk.label}#${k}`} className={s.peekRow}><span>{mk.label}</span>{mk.n != null && <b>{mk.n}</b>}</div>)
               : <div className={s.peekEmpty}>{tr("board.markersEmpty")}</div>}
           </>
         )}

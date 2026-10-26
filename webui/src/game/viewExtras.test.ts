@@ -283,7 +283,11 @@ test("carry-forward: a new key keeps the previous extras until its own land", as
   const v2 = view({ state: state({ seq: 5 }) });
   const done = emitOnlineView(extras, v2, emit, () => live);
   assert.deepEqual(notified.at(-1)?.skills?.map((s) => s.id), ["skill:0:old"], "stand-in carried forward");
-  assert.deepEqual(notified.at(-1)?.playable, [true, false], "and the rest of the extras too");
+  // The decision fields are NOT borrowed: they describe one prompt, and a
+  // stale one greys a legal card / answers 托管 with the previous choice.
+  assert.equal(notified.at(-1)?.playable, undefined, "playable is not carried");
+  assert.equal(notified.at(-1)?.estCost, undefined, "estCost is not carried");
+  assert.equal(notified.at(-1)?.aiAnswer, undefined, "aiAnswer is not carried");
   await delay(0); // `request` reaches the pool on a microtask
   assert.equal(pool.calls.length, 2, "the exact extras for the new key are still requested");
 

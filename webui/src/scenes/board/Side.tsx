@@ -400,6 +400,10 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
   const deckKeys = cardKeys(deck);
+  // Identity keys for the fan: position would change on every play / discard,
+  // remounting each survivor's face and reloading its art. `k` still drives
+  // the arc and the pick id, so the face receives it as a prop.
+  const handKeys = cardKeys(m.v.hand);
   // Left skill stack: the fan stays centred on the column regardless; its
   // spread reserves the stack's width on *both* sides, so a wide hand tightens
   // symmetrically and never runs under the stack. The budget is the dock's own
@@ -474,7 +478,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
               // Playable cards glow blue (`cardPlayable`); the rest keep a
               // plain face. Inspect / pick still work either way.
               <div
-                key={`${id}:${k}`}
+                key={handKeys[k]}
                 {...{ [PICK_ATTR]: `${id}:${k}` }}
                 className={s.fanCard}
                 style={fanArc(m.v.hand.length, k, fanSpread) as CSSProperties}
