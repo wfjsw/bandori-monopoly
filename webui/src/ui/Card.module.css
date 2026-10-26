@@ -9,36 +9,53 @@
    dense, bright bloom, so the cards you can act on read first and keep reading
    as lit. Small on purpose (a quarter of the first pass): it hugs the card
    instead of washing the board. Unplayable faces stay ordinary -- no dimming.
-   The bloom lives on `::after` so the ring (and the selected pink one) keep
-   their own box-shadow and transition while the flare pulses underneath.
+   The bloom lives on `::after`: a positioned pseudo paints *above* the face's
+   own box-shadow, so the selected ring is drawn there too, first in the shadow
+   list -- on top of the bloom instead of washed out by it.
    `pointer-events: none` -- the flare is decoration only and must never take
    the cursor from the card (or from whatever sits under its glow). */
-.playable { box-shadow: var(--card-shadow), 0 0 0 2px rgba(175, 230, 255, 1), 0 0 5px 1.5px rgba(200, 240, 255, 0.9); }
-.playable.on { box-shadow: 0 0 0 4px var(--pink), 0 0 5px 1.5px rgba(200, 240, 255, 0.65); }
+.playable {
+  /* The flare's layers, once: resting (--flare-*) and pulse peak
+     (--flare-peak-*), so the base rule, both keyframes and the selected ring
+     can never drift apart. */
+  --flare-a: 0 0 5px 1.5px rgba(150, 215, 255, 0.95);
+  --flare-b: 0 0 12px 4px rgba(115, 195, 250, 0.82);
+  --flare-c: 0 0 24px 8px rgba(90, 175, 245, 0.62);
+  --flare-d: 0 0 40px 14px rgba(70, 155, 240, 0.42);
+  --flare-peak-a: 0 0 8px 2.5px rgba(185, 235, 255, 1);
+  --flare-peak-b: 0 0 18px 6px rgba(130, 205, 255, 0.95);
+  --flare-peak-c: 0 0 32px 11px rgba(100, 185, 250, 0.78);
+  --flare-peak-d: 0 0 52px 18px rgba(80, 165, 245, 0.55);
+  box-shadow: var(--card-shadow), 0 0 0 2px rgba(175, 230, 255, 1), 0 0 5px 1.5px rgba(200, 240, 255, 0.9);
+}
 .playable::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow:
-    0 0 5px 1.5px rgba(150, 215, 255, 0.95),
-    0 0 12px 4px rgba(115, 195, 250, 0.82),
-    0 0 24px 8px rgba(90, 175, 245, 0.62),
-    0 0 40px 14px rgba(70, 155, 240, 0.42);
+  box-shadow: var(--flare-a), var(--flare-b), var(--flare-c), var(--flare-d);
   animation: playableFlare 2s ease-in-out infinite alternate;
 }
+/* Selected: the pink ring leads the list, so it paints over the bloom. */
+.playable.on::after {
+  box-shadow: 0 0 0 4px var(--pink), var(--flare-a), var(--flare-b), var(--flare-c), var(--flare-d);
+  animation-name: playableFlareOn;
+}
 @keyframes playableFlare {
-  to {
-    box-shadow:
-      0 0 8px 2.5px rgba(185, 235, 255, 1),
-      0 0 18px 6px rgba(130, 205, 255, 0.95),
-      0 0 32px 11px rgba(100, 185, 250, 0.78),
-      0 0 52px 18px rgba(80, 165, 245, 0.55);
-  }
+  from { box-shadow: var(--flare-a), var(--flare-b), var(--flare-c), var(--flare-d); }
+  to { box-shadow: var(--flare-peak-a), var(--flare-peak-b), var(--flare-peak-c), var(--flare-peak-d); }
+}
+/* The selected ring is in every frame, so the pulse never fades it. */
+@keyframes playableFlareOn {
+  from { box-shadow: 0 0 0 4px var(--pink), var(--flare-a), var(--flare-b), var(--flare-c), var(--flare-d); }
+  to { box-shadow: 0 0 0 4px var(--pink), var(--flare-peak-a), var(--flare-peak-b), var(--flare-peak-c), var(--flare-peak-d); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .playable::after { animation: none; }
+  /* Both rules: `.playable.on::after` out-specifies the bare `animation: none`
+     with its own `animation-name`, so it needs stopping too. */
+  .playable::after,
+  .playable.on::after { animation: none; }
 }
 
 /* Sizing is one rule per size class, always `width: var(--card-w, <default>)`.
