@@ -44,15 +44,25 @@ export function mergeExtras(v: MatchView, e: ViewExtras): MatchView {
  * Online extras cache. Keyed by [`extrasKey`]; computed in the bot worker so
  * the main thread never blocks on the determinize pass.
  *
+ * Each key caches its own exact extras. On a miss, the most recent set's
+ * `skills` carries forward -- a stale-but-present stand-in, so a new state seq
+ * does not empty the skill row and unmount its faces for a paint. The decision
+ * fields (`playable` / `estCost` / `aiAnswer`) never carry: they describe one
+ * prompt, and borrowing another key's would grey a legal card or answer 托管
+ * with the wrong choice.
+ *
  * Failure is not fatal: a refused / timed-out `extras` leaves the frame
- * without the fields (consumers already tolerate that -- `view.playable &&
- * !view.playable[i]`, `view.skills ?? []`, `view.aiAnswer ?? null`) and the
- * key is marked failed so the same decision is not retried.
+ * carrying whatever stand-in is already there (consumers already tolerate a
+ * missing field -- `view.playable && !view.playable[i]`, `view.skills ?? []`,
+ * `view.aiAnswer ?? null`) and the key is marked failed so the same decision
+ * is not retried.
  */
 export class OnlineExtras {
   private cache = new Map<string, ViewExtras>();
   private inflight = new Map<string, Promise<void>>();
   private failed = new Set<string>();
+  /** Most recent successful extras: the stand-in for a key still in flight. */
+  private latest: ViewExtras | null = null;
   private pool: BotPool | null;
   /** Room id folded into the seed (`"solo"` never reaches here). */
   private room: string;
@@ -70,15 +80,24 @@ export class OnlineExtras {
     this.pool = pool ?? null;
   }
 
-  /** Merge already-cached extras into `v`. Returns `v` itself when the key is
-   *  not cached (or the frame already carries those exact fields). */
+  /** Merge already-cached extras into `v`. An exact-key hit wins. On a miss,
+   *  **only `skills`** carries the most recent set forward: the roster's
+   *  pressable skills are stable across a decision, and an absent list empties
+   *  the skill row (its faces remount, and their art flashes). `playable` /
+   *  `estCost` / `aiAnswer` are decision-specific and must never be borrowed
+   *  from another key -- a stale `playable` greys a legal card, and a stale
+   *  `aiAnswer` hands 托管 the previous prompt's answer. Returns `v` itself
+   *  when nothing can be merged (or the frame already carries those fields). */
   mergeCached(v: MatchView): MatchView {
-    const e = this.cache.get(extrasKey(v));
-    if (!e) return v;
-    if (v.playable === e.playable && v.estCost === e.estCost && v.skills === e.skills && v.aiAnswer === e.aiAnswer) {
-      return v;
+    const exact = this.cache.get(extrasKey(v));
+    if (exact) {
+      if (v.playable === exact.playable && v.estCost === exact.estCost && v.skills === exact.skills && v.aiAnswer === exact.aiAnswer) {
+        return v;
+      }
+      return mergeExtras(v, exact);
     }
-    return mergeExtras(v, e);
+    if (!this.latest || v.skills === this.latest.skills) return v;
+    return { ...v, skills: this.latest.skills };
   }
 
   /**
@@ -99,6 +118,7 @@ export class OnlineExtras {
       .then((pool) => pool.extras(v, seed))
       .then((e) => {
         this.cache.set(key, e);
+        this.latest = e;
         onDone(e);
       })
       .catch((err) => {
@@ -127,13 +147,17 @@ export class OnlineExtras {
 
 /**
  * The online emit cycle (`OnlineSession.emitView`'s body): merge cached
- * extras, emit, and kick off the seat-view computation when they are not in
- * yet. `emit` notifies the session's subscribers; `current` returns the live
- * frame so a late extras reply only re-emits for the same decision.
+ * extras (exact, else the most recent `skills` as a stale-but-present
+ * stand-in), emit, and always kick off the seat-view computation for this key
+ * when it is not already cached. `emit` notifies the session's subscribers;
+ * `current` returns the live frame so a late extras reply only re-emits for
+ * the same decision.
  *
- * Until the extras arrive the fields stay absent (consumers already tolerate
- * that); a failed / slow `extras` never blocks the frame -- greying may be
- * coarse and 托管 falls back to its policy table.
+ * Until *any* extras have landed the fields stay absent (consumers already
+ * tolerate that); after that they never drop out -- the stand-in is replaced
+ * by the exact set as soon as it arrives. A failed / slow `extras` never
+ * blocks the frame -- greying may be coarse and 托管 falls back to its policy
+ * table.
  */
 export function emitOnlineView(
   extras: OnlineExtras,
@@ -141,9 +165,11 @@ export function emitOnlineView(
   emit: (merged: MatchView) => void,
   current: () => MatchView | null,
 ): Promise<void> {
-  const merged = extras.mergeCached(v);
-  emit(merged);
-  if (merged !== v) return Promise.resolve(); // already had them
+  // Emit the stand-in (or the exact extras) first. The request below must run
+  // even when that stand-in made `merged !== v` -- otherwise a cache miss for
+  // this key would never compute the real ones. `request` is a no-op when the
+  // key is already cached / failed / in flight.
+  emit(extras.mergeCached(v));
   return extras.request(v, (e) => {
     // Only re-emit when this is still the live decision (same seq +
     // prompt); a newer frame starts its own request.

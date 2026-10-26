@@ -2,7 +2,7 @@
 // with the cards-in-play row over its top edge, and the collapsed hand
 // underneath. Controls sit below the players; the right is a full match log.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { navigate } from "../../app/router";
 import { useCompactValue, useStageFill } from "../../app/Stage";
 import { designBox } from "../../app/stageScale";
@@ -13,7 +13,6 @@ import { t as tr } from "../../i18n/t";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
-import { useSecondBoundary } from "../../hooks/timers";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
@@ -101,16 +100,16 @@ function useMatchDriver(opts: {
   });
 }
 
-export function Board({ sess }: { sess: GameSession }) {
+/** The empty tile-pick list, so `useMemo` can hand out a stable `[]`. */
+const NO_TILES: number[] = [];
+/** The bar's empty right slot, stable so `memo(TopBar)` can skip a tick. */
+const NO_RIGHT = <></>;
+
+export const Board = memo(function Board({ sess }: { sess: GameSession }) {
   const { view, at, anim } = useBoardSession(sess);
-  // Turn timer: online frames carry absolute deadlines, so repaint exactly
-  // when the displayed second flips (not on a 500ms grid). Fallback tick for
-  // paths with no deadline (replay / older server / local countdowns).
-  // Bonus drains first; `baseDeadlineMs` is the end of the whole clock, so it
-  // is the one that keeps the second-boundary ticker running through both
-  // phases (bonus then base).
-  const clockDeadline = view?.clock ? view.clock.baseDeadlineMs : null;
-  useSecondBoundary(clockDeadline);
+  // The turn clock's exact-second repaint lives in `Players`, which owns the
+  // display: a `useSecondBoundary` here would only re-render Board, and the
+  // memoized seat list would skip it.
   useTick(500);
   const auto = useAutoplay(sess); // 托管 -- one shared input-lock
   // The match screen is the one scene that fills the window: no top / bottom
@@ -142,48 +141,54 @@ export function Board({ sess }: { sess: GameSession }) {
   // fresh closure each time; it reads the latest handler below.
   const tileClick = useRef<(i: number) => void>(() => undefined);
   const onTile = useCallback((i: number) => tileClick.current(i), []);
-
-  if (!m) return null;
-  const S = m.S;
   // Tile-pick clicks answer a `tile` prompt; while 托管 is on they must not
-  // (the deed-inspect click stays -- that is read-only).
-  const tilePick = !auto && waitingOn(S.prompt, m.playerId) && S.prompt.kind === "tile" && !anim.animating ? S.prompt.items.map(Number) : [];
-  tileClick.current = (i: number) => {
-    const k = tilePick.indexOf(i);
-    if (k >= 0) return void act(sess, { act: "answer", prompt: S.prompt.id, value: k });
-    openDeed(sess, i);
-  };
-  const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
-  // The die lives in the board's roll zone (Ring); replays hide it entirely.
-  const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
-  const advance = control === "end";
-  const names = namesOf(S);
-  const cur = S.players[S.turn];
-  // Why the button is (or is not) live, shown under it.
-  let hint: string;
-  if (S.phase !== "play") hint = "";
-  else if (m.out) hint = m.playerId < 0 ? tr("board.watching") : m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
-  else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
-  else if (S.busy || anim.animating) hint = tr("board.settling");
-  else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: names.playerId(S.turn) });
-  else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
-  else if (advance) hint = tr("board.moved");
-  else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: names.playerId(S.roller) });
-  else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
-  else hint = tr("board.waiting", { who: names.playerId(S.turn), bot: cur?.bot ? tr("board.botSuffix") : "" });
-  const roll: RollControl | null = sess.readOnly ? null : {
-    enabled: control !== null,
-    rolling: anim.rolling,
-    dice: anim.dice,
-    caption: advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice"),
-    hint,
-    onClick: () => control && void act(sess, { act: control }),
-  };
+  // (the deed-inspect click stays -- that is read-only). Memoized so the
+  // board's 500ms tick hands Ring the same array.
+  const tilePick = useMemo(() => {
+    if (!m) return NO_TILES;
+    const S = m.S;
+    if (auto || anim.animating || !waitingOn(S.prompt, m.playerId) || S.prompt.kind !== "tile") return NO_TILES;
+    return S.prompt.items.map(Number);
+  }, [m, auto, anim.animating]);
+  // A stable roll control, so `memo(Center)` skips the 500ms tick and the
+  // animation-only re-renders. Everything it shows is derived inside; the
+  // click reads the latest `control` through `rollClick` below.
+  const rollClick = useRef<() => void>(() => undefined);
+  const onRoll = useCallback(() => rollClick.current(), []);
+  const roll: RollControl | null = useMemo(() => {
+    if (!m || sess.readOnly) return null;
+    const S = m.S;
+    const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
+    const advance = control === "end";
+    const names = namesOf(S);
+    const cur = S.players[S.turn];
+    // Why the button is (or is not) live, shown under it.
+    let hint: string;
+    if (S.phase !== "play") hint = "";
+    else if (m.out) hint = m.playerId < 0 ? tr("board.watching") : m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
+    else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
+    else if (S.busy || anim.animating) hint = tr("board.settling");
+    else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: names.playerId(S.turn) });
+    else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
+    else if (advance) hint = tr("board.moved");
+    else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: names.playerId(S.roller) });
+    else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
+    else hint = tr("board.waiting", { who: names.playerId(S.turn), bot: cur?.bot ? tr("board.botSuffix") : "" });
+    return {
+      enabled: control !== null,
+      rolling: anim.rolling,
+      dice: anim.dice,
+      caption: advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice"),
+      hint,
+      onClick: onRoll,
+    };
+  }, [m, auto, anim.animating, anim.rolling, anim.dice, sess.readOnly, sess.connected, onRoll]);
 
-  const nLinks = anim.chain?.links.length ?? 0;
-  const cardW0 = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
-  // The chain is sized as a fraction of the FX layer (the centre column), so it
-  // fills the same share of it on a desktop and on a phone's shorter compact canvas.
+  // The FX layer's size, and the log node the right column draws. Both are
+  // hooks, so they sit above the `!m` return: a session that mounts before its
+  // first frame renders once with `m === null`, and a hook added below the
+  // return would fire on the next render ("more hooks than during the previous
+  // render") and blank the board.
   const fxRef = useRef<HTMLDivElement>(null);
   const [fxH, setFxH] = useState(FX_REF_H);
   useLayoutEffect(() => {
@@ -193,6 +198,40 @@ export function Board({ sess }: { sess: GameSession }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // One log element, reused across the board's own ticks: `memo(Log)` (and
+  // `memo(RightTabs)`) then actually skip, instead of re-rendering on a fresh
+  // element identity every 500ms.
+  const settle = useMemo(() => (m ? <SettleVote m={m} sess={sess} /> : null), [m, sess]);
+  const logNode = useMemo(
+    () => (m ? <Log lines={anim.log} colorOf={m.colorOf} titled={false}>{settle}</Log> : null),
+    [anim.log, m, settle],
+  );
+  // The title bar's props, memoized so its own `memo` can skip a board tick.
+  const titleRight = useMemo(() => <TitleToggles sess={sess} auto={!compact} />, [sess, compact]);
+  // A stable back handler (the `onBack` prop); it reads the latest `leave`.
+  const leaveRef = useRef<() => void>(() => undefined);
+  const onBack = useCallback(() => leaveRef.current(), []);
+
+  if (!m) return null;
+  const S = m.S;
+  tileClick.current = (i: number) => {
+    const k = tilePick.indexOf(i);
+    if (k >= 0) return void act(sess, { act: "answer", prompt: S.prompt.id, value: k });
+    openDeed(sess, i);
+  };
+  const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
+  leaveRef.current = leave;
+  // The die lives in the board's roll zone (Ring); replays hide it entirely.
+  const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
+  rollClick.current = () => {
+    if (control) void act(sess, { act: control });
+  };
+  const names = namesOf(S);
+
+  const nLinks = anim.chain?.links.length ?? 0;
+  const cardW0 = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
+  // The chain is sized as a fraction of the FX layer (the centre column), so it
+  // fills the same share of it on a desktop and on a phone's shorter compact canvas.
   const chainK = fxH / FX_REF_H;
   const cardW = Math.round(cardW0 * chainK);
   return (
@@ -202,14 +241,14 @@ export function Board({ sess }: { sess: GameSession }) {
         help={false}
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
-        onBack={leave}
-        titleRight={<TitleToggles sess={sess} auto={!compact} />}
-        right={<></>}
+        onBack={onBack}
+        titleRight={titleRight}
+        right={NO_RIGHT}
       />
       <AutoBanner sess={sess} />
       <div className={s.body}>
         <div className={s.left}>
-          <Players m={shown ?? m} solo={sess.kind !== "online"} elapsed={(performance.now() - at) / 1000} />
+          <Players m={shown ?? m} solo={sess.kind !== "online"} at={at} />
           <Side sess={sess} />
         </div>
         <div className={s.middle}>
@@ -220,7 +259,9 @@ export function Board({ sess }: { sess: GameSession }) {
           <div className={s.mapSlot}>
             <Ring
               m={shown ?? m}
-              anim={anim}
+              animPos={anim.pos}
+              animRoute={anim.route}
+              hop={anim.hop}
               pickable={tilePick}
               walk={tilePick.length > 0 && S.prompt.walk}
               onTile={onTile}
@@ -303,7 +344,7 @@ export function Board({ sess }: { sess: GameSession }) {
           {compact ? (
             <RightTabs
               flash={anim.flash?.card}
-              log={<Log lines={anim.log} colorOf={m.colorOf} titled={false}><SettleVote m={m} sess={sess} /></Log>}
+              log={logNode}
             />
           ) : (
             <>
@@ -311,7 +352,7 @@ export function Board({ sess }: { sess: GameSession }) {
                 <CardStand flash={anim.flash?.card} />
               </div>
               <div className={s.logSlot}>
-                <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
+                <Log lines={anim.log} colorOf={m.colorOf}>{settle}</Log>
               </div>
             </>
           )}
@@ -319,7 +360,7 @@ export function Board({ sess }: { sess: GameSession }) {
       </div>
     </>
   );
-}
+});
 
 /** The FX layer height (design px) the chain's desktop sizes were drawn for: 900 stage - 110 top bar. */
 const FX_REF_H = 790;
@@ -329,7 +370,7 @@ const ROLL_KINDS = new Set(["diceRollBefore", "diceRollValue"]);
 /** The tile standing in for a chain's link 1 when the timing is no card (a
  *  roll, a payment, a landing ...): an icon, what happened, and the
  *  particulars the engine recorded on the trigger. */
-function ChainOrigin({ msg, names, w, k }: { msg?: Msg; names: ReturnType<typeof namesOf>; w: number; k: number }) {
+const ChainOrigin = memo(function ChainOrigin({ msg, names, w, k }: { msg?: Msg; names: ReturnType<typeof namesOf>; w: number; k: number }) {
   const text = (k: string) => (msg?.a?.[k] as { text?: string } | undefined)?.text ?? "";
   const num = (k: string) => (msg?.a?.[k] as { i?: number } | undefined)?.i ?? 0;
   const kind = text("kind");
@@ -378,14 +419,14 @@ function ChainOrigin({ msg, names, w, k }: { msg?: Msg; names: ReturnType<typeof
       {lines.map((l, k) => <span key={k}>{l}</span>)}
     </div>
   );
-}
+});
 
 /** A die face (five pips), drawn inline so it never depends on an asset. */
-function DiceIcon({ size }: { size: number }) {
+const DiceIcon = memo(function DiceIcon({ size }: { size: number }) {
   return (
     <svg className={s.chainDice} width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
       <rect x="3" y="3" width="34" height="34" rx="8" fill="#fff" stroke="#e0527f" strokeWidth="3" />
       {[[12, 12], [28, 12], [20, 20], [12, 28], [28, 28]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="3.2" fill="#e0527f" />)}
     </svg>
   );
-}
+});

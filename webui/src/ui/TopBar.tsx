@@ -33,7 +33,7 @@ export interface TopBarProps {
   compact?: boolean;
 }
 
-export function TopBar({ section, title, onBack, help, right, titleRight, compact }: TopBarProps) {
+export const TopBar = memo(function TopBar({ section, title, onBack, help, right, titleRight, compact }: TopBarProps) {
   const onHelp = help === undefined ? showRules : help;
   return (
     <header className={cx(s.bar, compact && s.compact)}>
@@ -60,7 +60,7 @@ export function TopBar({ section, title, onBack, help, right, titleRight, compac
       )}
     </header>
   );
-}
+});
 
 /** Cycle of the single speed toggle: 1× → 2× → 4× → 1×. */
 const NEXT_SPEED: Record<number, number> = { 1: 2, 2: 4, 4: 1 };
@@ -96,14 +96,14 @@ export const AnimationSpeed = memo(function AnimationSpeed({ sess }: { sess: Gam
  * 托管 pill on the hand bar (compact canvas), and a read-only session hides
  * both, so the pair only ever half-rounds when it really is two.
  */
-export function TitleToggles({ sess, auto }: { sess: GameSession; auto: boolean }) {
+export const TitleToggles = memo(function TitleToggles({ sess, auto }: { sess: GameSession; auto: boolean }) {
   return (
     <div className={s.duo}>
       {auto && <AutoToggle sess={sess} />}
       <AnimationSpeed sess={sess} />
     </div>
   );
-}
+});
 
 /** Time until the daily fire refill (local midnight), "HH:MM". */
 function untilRefill(): string {
@@ -117,7 +117,7 @@ function info(title: string, text: string): void {
   openModal(title, <p className={s.info}>{text}</p>, { size: "small" });
 }
 
-export function StatusPill() {
+export const StatusPill = memo(function StatusPill() {
   const p = useProfile();
   useTick(30_000);
   if (!p) return null;
@@ -169,7 +169,7 @@ export function StatusPill() {
       </div>
     </div>
   );
-}
+});
 
 export function showRules(): void {
   if (hasProfile()) markSeen("rules");

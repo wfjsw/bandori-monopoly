@@ -4,12 +4,14 @@ import { useCompactValue } from "../../app/Stage";
 import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
 import { fireMaxOf, fireOf, stateOf } from "../../core/names";
 import { NO_HAND_LIMIT } from "../../core/hand";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { cardArt, sceneImg } from "../../core/assets";
-import { cardTitle } from "../../core/data";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { sceneImg } from "../../core/assets";
+import { cardTitle, cardArtUrl } from "../../core/data";
 import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
+import { useTick } from "../../core/hooks";
 import { useScrollFollow } from "../../hooks/measure";
+import { useSecondBoundary } from "../../hooks/timers";
 import { Avatar } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -19,7 +21,7 @@ import type { LogLine } from "./anim";
 import type { Model } from "./model";
 import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
-import { borrowedBand, byTitle, showGraveyard, showPlayerInfo } from "./Popups";
+import { borrowedBand, byTitle, cardKeys, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
 import { counterLabel, stateLabel } from "../../i18n/stateLabel";
 import { setHoverSeat } from "./hoverSeat";
@@ -136,7 +138,18 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n?: number | "�
   return out;
 }
 
-export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {
+/**
+ * Player panels on the left. The turn clock repaints on its own 500ms tick
+ * (`at` is the view's arrival time and is stable per snapshot), so the parent
+ * board's animation / timer re-renders do not drag the seat list along -- and
+ * it owns the exact-second repaint too: online frames carry an absolute
+ * deadline (`baseDeadlineMs`, which keeps running through the bonus phase), so
+ * the displayed second flips on the boundary rather than on the tick grid.
+ */
+export const Players = memo(function Players({ m, solo, at }: { m: Model; solo: boolean; at: number }) {
+  useTick(500);
+  useSecondBoundary(m.v.clock ? m.v.clock.baseDeadlineMs : null);
+  const elapsed = (performance.now() - at) / 1000;
   const S = m.S;
   // The seat list's height: 548 on the 900px stage, what the phone canvas leaves otherwise.
   const compact = useCompactValue();
@@ -159,6 +172,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   const fireRow = firePeek == null ? -1 : order.indexOf(firePeek);
   const fireMarks = firePeek == null ? [] : markersOf(S.players[firePeek]);
   const peekCards = peek == null ? [] : byTitle(S.players[peek]?.discard ?? []);
+  const peekKeys = cardKeys(peekCards);
   // The panels unmount-proof the highlight: clear it when this column goes away.
   useEffect(() => () => setHoverSeat(-1), []);
   return (
@@ -221,7 +235,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
           <>
             <div className={s.peekHead}>{tr("board.markers")}<b>×{fireMarks.length}</b></div>
             {fireMarks.length
-              ? fireMarks.map((mk, k) => <div key={k} className={s.peekRow}><span>{mk.label}</span>{mk.n != null && <b>{mk.n}</b>}</div>)
+              ? fireMarks.map((mk, k) => <div key={`${mk.label}#${k}`} className={s.peekRow}><span>{mk.label}</span>{mk.n != null && <b>{mk.n}</b>}</div>)
               : <div className={s.peekEmpty}>{tr("board.markersEmpty")}</div>}
           </>
         )}
@@ -231,14 +245,14 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
           <>
             <div className={s.peekHead}>{tr("board.graveyardPile")}<b>×{peekCards.length}</b></div>
             {peekCards.length
-              ? peekCards.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArt(id)} alt="" /><span>{cardTitle(id)}</span></div>)
+              ? peekCards.map((id, k) => <div key={peekKeys[k]} className={s.peekRow}><img src={cardArtUrl(id)} alt="" /><span>{cardTitle(id)}</span></div>)
               : <div className={s.peekEmpty}>{tr("graveyard.empty")}</div>}
           </>
         )}
       </div>
     </div>
   );
-}
+});
 
 /** Group the log per turn: each 「第 N 轮 · … 的回合」 heading opens a block
  *  whose entries follow it, barred in that player's colour. Setup lines before
@@ -255,7 +269,7 @@ function turnGroups(lines: LogLine[]): { head?: LogLine; body: LogLine[] }[] {
 
 /** A card name inside a log line: hover shows the card's details, click opens
  *  the full card view. */
-function CardRef({ card, text, onHover, onLeave }: { card: string; text: string; onHover: (id: string, el: HTMLElement) => void; onLeave: () => void }) {
+const CardRef = memo(function CardRef({ card, text, onHover, onLeave }: { card: string; text: string; onHover: (id: string, el: HTMLElement) => void; onLeave: () => void }) {
   return (
     <span
       className={s.cardRef}
@@ -269,14 +283,18 @@ function CardRef({ card, text, onHover, onLeave }: { card: string; text: string;
       {text}
     </span>
   );
-}
+});
 
-export function Log({ lines, colorOf, children, titled = true }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode; titled?: boolean }) {
+export const Log = memo(function Log({ lines, colorOf, children, titled = true }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode; titled?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   // The log follows its own tail: re-pin only when new lines arrive, so a
   // reader who scrolled up is not thrown back down by a hover re-render.
   useScrollFollow(ref, [lines]);
   // Hovered card reference: the standing card panel (right sidebar) shows it.
+  // Stable identities, so the memoized card refs are not re-rendered by a
+  // fresh closure on every log line the board appends.
+  const onHover = useCallback((id: string) => { stickCard(id); }, []);
+  const onLeave = useCallback(() => undefined, []);
   const groups = turnGroups(lines);
   return (
     <div className={s.log}>
@@ -303,8 +321,8 @@ export function Log({ lines, colorOf, children, titled = true }: { lines: LogLin
                             key={k}
                             card={p.card}
                             text={p.text}
-                            onHover={(id) => stickCard(id)}
-                            onLeave={() => undefined}
+                            onHover={onHover}
+                            onLeave={onLeave}
                           />
                         ))
                     : l.text}
@@ -316,4 +334,4 @@ export function Log({ lines, colorOf, children, titled = true }: { lines: LogLin
       </div>
     </div>
   );
-}
+});

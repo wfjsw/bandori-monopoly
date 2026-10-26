@@ -1,6 +1,6 @@
 // The original's toast: a dark translucent bar in the middle of the stage.
 
-import { useSyncExternalStore } from "react";
+import { memo, useSyncExternalStore } from "react";
 import { cx } from "../core/cx";
 import s from "./Toast.module.css";
 
@@ -33,7 +33,7 @@ const subscribe = (cb: () => void) => {
   return () => listeners.delete(cb);
 };
 
-export function ToastHost() {
+export const ToastHost = memo(function ToastHost() {
   const t = useSyncExternalStore(subscribe, () => current);
   return <div className={s.host}>{t && <div key={t.id} className={cx(s.toast, t.error && s.error, t.out && s.out)}>{t.text}</div>}</div>;
-}
+});

@@ -2,13 +2,12 @@
 // info, event / discard piles, settle and leave. Popups that act on the
 // match read the live state themselves, so they stay correct while open.
 
-import { useState } from "react";
 import { sceneImg } from "../../core/assets";
+import { memo } from "react";
 import { cx } from "../../core/cx";
 import { D, cardTitle, skillText } from "../../core/data";
 import { isLight, n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView } from "../../core/hooks";
-import { useCloseWhen } from "../../hooks/mount";
 import type { MatchPlayer, MatchState } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
@@ -45,13 +44,12 @@ function deedAction(m: Model, i: number): { label: string; cmd: { act: string; v
   return null;
 }
 
-function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => void }) {
+const Deed = memo(function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => void }) {
   const m = useModel(sess);
   const auto = useAutoplay(sess); // 托管: the mortgage/redeem button is locked
-  // A new turn (or the end of the match) closes the deed card.
-  const turnKey = m ? `${m.S.phase}:${m.S.round}:${m.S.turn}` : "";
-  const [openedAt] = useState(turnKey);
-  useCloseWhen(turnKey !== openedAt, close);
+  // Stays open across turns: this popup reads live state (above) so the deed
+  // stays correct while open, and `deedAction` drops its button the moment the
+  // act is no longer legal (including `S.phase !== "play"` at match end).
   if (!m) return null;
   const S = m.S;
   const t = D.tiles[i];
@@ -151,13 +149,13 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
       {a && !sess.readOnly && <Btn kind="pink" className={s.deedAct} disabled={!a.enabled || auto} onClick={async () => { if (await act(sess, a.cmd)) close(); }}>{a.label}</Btn>}
     </div>
   );
-}
+});
 
 export function openDeed(sess: GameSession, i: number): void {
   openModal(plain(D.tiles[i].name), (close) => <Deed sess={sess} i={i} close={close} />, { size: "small", key: "deed" });
 }
 
-function DeedList({ sess, close }: { sess: GameSession; close: () => void }) {
+const DeedList = memo(function DeedList({ sess, close }: { sess: GameSession; close: () => void }) {
   const m = useModel(sess);
   const auto = useAutoplay(sess); // 托管
   if (!m) return null;
@@ -190,7 +188,7 @@ function DeedList({ sess, close }: { sess: GameSession; close: () => void }) {
       <div className={s.status}>{tr("deedList.money", { n: n0(m.me.money) })}</div>
     </div>
   );
-}
+});
 
 export function showDeedList(sess: GameSession): void {
   openModal(tr("board.deeds"), (close) => <DeedList sess={sess} close={close} />, { size: "mid" });
@@ -241,8 +239,8 @@ export function showPlayerInfo(m: Model, i: number): void {
               character's own skill and its band's) belong here, not on the
               board: name in pink, body under it. */}
           <div className={s.skills}>
-            {c && <SkillBody prefix={<span className={s.pink}>{c.skill}</span>} text={skillText(c)} />}
-            {band && <SkillBody prefix={<span className={s.pink}>{band.skill}</span>} text={skillText(band)} />}
+            {c && <SkillBody prefixText={c.skill} text={skillText(c)} />}
+            {band && <SkillBody prefixText={band.skill} text={skillText(band)} />}
           </div>
         </div>
       </div>
@@ -294,16 +292,29 @@ export function showEventPile(S: MatchState): void {
  *  pile are shown, so the draw pile's own order never leaks. */
 export const byTitle = (ids: readonly string[]): string[] => [...ids].sort((a, b) => cardTitle(a).localeCompare(cardTitle(b)));
 
+/** Stable React keys for a card list that may repeat an id: the id plus its
+ *  occurrence, so removing one copy does not remount (and re-flash) the
+ *  survivors. An index key would reuse the DOM node and swap its `src`. */
+export function cardKeys(ids: readonly string[]): string[] {
+  const seen = new Map<string, number>();
+  return ids.map((id) => {
+    const n = seen.get(id) ?? 0;
+    seen.set(id, n + 1);
+    return `${id}#${n}`;
+  });
+}
+
 /** One player's graveyard, alphabetical by name -- the same treatment the draw
  *  pile gets. `showGraveyard` used to open every player's at once from the
  *  board centre; each player module now carries its own indicator. */
 export function showGraveyard(m: Model, playerId: number): void {
   const cards = byTitle(m.S.players[playerId]?.discard ?? []);
+  const keys = cardKeys(cards);
   openModal(tr("board.graveyardPile"), cards.length ? (
     <div className={s.pile}>
       <div className={s.pileRow}>
         <div className={s.who}><Avatar c={m.charOf(playerId)} size={30} /><span>{m.nameOf(playerId)}</span></div>
-        <div className={s.pileCards}>{cards.map((id, k) => <InspectCard key={k} id={id} />)}</div>
+        <div className={s.pileCards}>{cards.map((id, k) => <InspectCard key={keys[k]} id={id} />)}</div>
       </div>
     </div>
   ) : <div className={s.empty}>{tr("graveyard.empty")}</div>, { size: "wide" });
@@ -367,17 +378,18 @@ export function showField(m: Model): void {
  *  Mirrors {@link showGraveyard} -- the pile's own draw order is never shown. */
 export function showDeck(m: Model): void {
   const cards = byTitle(m.v.draw ?? []);
+  const keys = cardKeys(cards);
   openModal(tr("board.drawPile"), cards.length ? (
     <div className={s.pile}>
       <div className={s.pileRow}>
         <div className={s.who}><Avatar c={m.charOf(m.playerId)} size={30} /><span>{m.nameOf(m.playerId)}</span></div>
-        <div className={s.pileCards}>{cards.map((id, k) => <InspectCard key={k} id={id} />)}</div>
+        <div className={s.pileCards}>{cards.map((id, k) => <InspectCard key={keys[k]} id={id} />)}</div>
       </div>
     </div>
   ) : <div className={s.empty}>{tr("board.drawPileEmpty")}</div>, { size: "wide" });
 }
 
-function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => void; exit: () => void }) {
+const LeaveConfirm = memo(function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => void; exit: () => void }) {
   const solo = sess.kind !== "online";
   return (
     <div className={s.confirm}>
@@ -391,7 +403,7 @@ function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => v
       </div>
     </div>
   );
-}
+});
 
 export function showLeave(sess: GameSession, exit: () => void): void {
   openModal(tr(sess.kind === "online" ? "board.leaveVoteTitle" : "board.leaveSettleTitle"), (close) => <LeaveConfirm sess={sess} close={close} exit={exit} />, { size: "mid", key: "leave" });
