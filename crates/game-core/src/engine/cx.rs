@@ -324,14 +324,6 @@ impl AnswerProvider for HeuristicProvider {
     }
 }
 
-/// The answer the engine's bot schedule would land on for `ask` -- the
-/// standard seat's `tick_live` fill, with the auction's bidding loop resolved
-/// in one shot (each seat nudges the minimum once; the last bidder wins).
-/// Every seat plays the default [`crate::strategy::StrategyParams`].
-pub fn heuristic_answer(ask: &Ask) -> Answered {
-    heuristic_answer_with(ask, &|_seat| crate::strategy::StrategyParams::default())
-}
-
 /// A multi-select answer is a bitmask naming exactly `view.count` options out
 /// of `0..options.len()`. Anything else is not a usable answer.
 fn valid_multi_mask(ask: &Ask, v: i32) -> bool {
@@ -345,9 +337,10 @@ fn valid_multi_mask(ask: &Ask, v: i32) -> bool {
     v.count_ones() as i32 == ask.view.count
 }
 
-/// [`heuristic_answer`] with a per-seat parameter lookup (player index →
-/// [`crate::strategy::StrategyParams`]). Only the auction solver reads it
-/// (the raise step); the other prompts just echo the precomputed `ai` fill.
+/// The answer the engine's bot schedule would land on for `ask`, with a
+/// per-seat parameter lookup (player index → [`crate::strategy::StrategyParams`]).
+/// Only the auction solver reads it (the raise step); the other prompts just
+/// echo the precomputed `ai` fill.
 pub fn heuristic_answer_with(
     ask: &Ask,
     params: &dyn Fn(usize) -> crate::strategy::StrategyParams,
@@ -507,8 +500,6 @@ pub struct Cx<'a> {
     /// Dest a just-resumed drive returned (STACK-01). The card-fate work
     /// item reads it after the resume completes.
     pub(crate) last_drive_dest: Option<i32>,
-    /// Nested-settle depth (STACK-01 rulebook guard [`MAX_SETTLE_DEPTH`]).
-    pub(crate) settle_depth: u32,
     /// STACK-01: skip this many `drive` calls on the next counteract
     /// walk (they already completed before a nested-settle suspend).
     pub(crate) drive_skip: u32,
@@ -1029,7 +1020,6 @@ impl<'a> Cx<'a> {
             suspend_base: 0,
             counteract_resume: None,
             last_drive_dest: None,
-            settle_depth: 0,
             drive_skip: 0,
             settle_ops: 0,
         }

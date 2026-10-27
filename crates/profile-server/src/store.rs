@@ -129,17 +129,6 @@ impl Store {
         self.dir.join("uploads").join(id)
     }
 
-    /// The account with display name `name`, if any.
-    pub fn account_by_name(&self, name: &str) -> Option<Account> {
-        self.accounts
-            .lock()
-            .unwrap()
-            .items
-            .iter()
-            .find(|a| a.name == name)
-            .cloned()
-    }
-
     pub fn account(&self, id: &str) -> Option<Account> {
         self.accounts
             .lock()
