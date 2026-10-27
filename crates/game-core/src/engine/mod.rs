@@ -2287,6 +2287,14 @@ impl Match {
                 if l.answers[k] >= 0 || !auto[k] {
                     continue;
                 }
+                if l.kind() == "mulligan" {
+                    // Machine seats decide at once. The barrier waits on
+                    // people; making a human sit out most of the window for a
+                    // bot's simulated thinking time is pure friction, and the
+                    // answer is already precomputed (`Ask::ai`).
+                    l.answers[k] = l.ask.ai[k].clamp(0, max.max(0));
+                    continue;
+                }
                 match l.ai_at[k] {
                     None => l.ai_at[k] = Some(l.time_left - (0.4 + rng.f64() as f32 * 0.6)),
                     Some(at) if l.time_left <= at => {
@@ -2312,7 +2320,33 @@ impl Match {
                     _ => {}
                 }
             }
-            if uses_pool {
+            if l.kind() == "mulligan" {
+                // 初始重抽 is a hard barrier (rulebook 时点流程 step 6 before
+                // 7/8): the game does not advance until every seat has an
+                // answer, and the prompt's own window decides only for a seat
+                // that never answers (keep -- the fallback). It is *not*, in
+                // particular, cut short by the 恢复时间 pool (`use_pool` is
+                // off), which is what used to end it after ~16 s while a
+                // human was still deciding. Solo holds for its local player
+                // like every other prompt.
+                //
+                // The window is still needed: an open tab keeps the seat's
+                // presence alive, so a player who walks away is never taken
+                // over and would otherwise wedge the whole table in the
+                // opening forever.
+                if l.answers.iter().all(|&a| a >= 0) {
+                    true
+                } else if hold || l.time_left > 0.0 {
+                    false
+                } else {
+                    for k in 0..players.len() {
+                        if l.answers[k] < 0 {
+                            l.answers[k] = fallback;
+                        }
+                    }
+                    true
+                }
+            } else if uses_pool {
                 force_exhausted(l);
                 let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
                 if l.answers.iter().all(|&a| a >= 0) {

@@ -91,6 +91,20 @@ fn answer_first(m: &mut Match, member: i32) {
     m.act(member, &msg).unwrap();
 }
 
+/// Answer every open prompt entry, seat by seat. The opening-hand re-roll is
+/// a barrier over the whole table, so one member's answer alone does not lift
+/// it -- the other humans have to be answered too.
+fn answer_all(m: &mut Match) {
+    if m.state().prompt.kind == "mulligan" {
+        common::cross_mulligan(m);
+        return;
+    }
+    let members: Vec<i32> = m.state().players.iter().map(|p| p.member).collect();
+    for member in members {
+        answer_first(m, member);
+    }
+}
+
 /// Drive to `human`'s OPS turn; returns the member id. Any prompt that opens
 /// on the way is answered with its default so the walk continues. Also burns
 /// off the START→OPS beat (`wait = 1.2`) so the clock is actually running.
@@ -99,7 +113,7 @@ fn to_human_ops(m: &mut Match, human: i32) -> i32 {
     for _ in 0..40 {
         m.tick(0.1);
     }
-    answer_first(m, human);
+    answer_all(m);
     let me = m
         .state()
         .players
@@ -109,7 +123,7 @@ fn to_human_ops(m: &mut Match, human: i32) -> i32 {
     let mut guard = 0;
     while !(m.state().turn == me && m.state().step == stage::OPS && !m.state().busy) {
         m.tick(0.25);
-        answer_first(m, human);
+        answer_all(m);
         guard += 1;
         assert!(guard < 10_000, "never got a human OPS turn");
     }

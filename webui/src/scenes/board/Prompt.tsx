@@ -68,6 +68,10 @@ const PromptTimer = memo(function PromptTimer({ sess }: { sess: GameSession }) {
   // The deadline is measured against the time the prompt was first shown.
   const total = useRef(0);
   const p = view?.state.prompt;
+  // Online only. Every prompt that reaches a human here has a real answer
+  // deadline, the opening-hand re-roll included: it is a barrier (nothing
+  // advances until every seat answers), and this window is what decides for a
+  // seat that never does.
   if (sess.kind !== "online" || !view || !p) return null;
   const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
   if (!total.current) total.current = Math.max(1, left);

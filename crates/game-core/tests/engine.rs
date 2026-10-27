@@ -419,17 +419,28 @@ fn a_human_plays_a_turn_with_commands() {
     let mut m = new_match(&members, 7, MatchMode::Casual);
     m.quick_start();
 
-    // Opening: the human is offered a mulligan.
-    for _ in 0..40 {
-        m.tick(0.1);
-    }
+    // Opening: every seat is offered the mulligan together -- a bot's keep is
+    // still a decision, and the window holds until all three are on record.
+    // Checked before any tick so the machine seats have not taken their beat.
     let st = m.state();
     assert_eq!(st.prompt.kind, "mulligan");
-    assert_eq!(st.prompt.players.len(), 1, "only humans are asked");
+    assert_eq!(
+        st.prompt.players.len(),
+        3,
+        "every seat decides, bots included"
+    );
     assert!(st.busy);
+    assert!(
+        st.prompt.answers.iter().all(|&a| a < 0),
+        "nobody has decided yet"
+    );
     assert_eq!(
         m.act(1, &NetMessage::act("roll")).unwrap_err().key(),
         "err.no_roll_now"
+    );
+    assert_eq!(
+        m.act(2, &NetMessage::act("skill")).unwrap_err().key(),
+        "err.skill_not_now"
     );
     let wrong = NetMessage {
         prompt: st.prompt.id + 7,
@@ -437,7 +448,22 @@ fn a_human_plays_a_turn_with_commands() {
     };
     assert_eq!(m.act(1, &wrong).unwrap_err().key(), "err.prompt_over");
     answer_first(&mut m, 1);
-    assert_eq!(m.state().prompt.id, 0);
+    // The human is in; the two machine seats fill their own answers on the
+    // next tick -- and nothing may run in the meantime.
+    assert_eq!(
+        m.state().prompt.kind,
+        "mulligan",
+        "barrier holds for the bots"
+    );
+    assert!(m.state().turn < 0, "no turn has started");
+    for _ in 0..40 {
+        m.tick(0.1);
+    }
+    assert_ne!(
+        m.state().prompt.kind,
+        "mulligan",
+        "the barrier lifts once the machine seats have answered"
+    );
 
     // Run until it is the human's turn to roll.
     let me = m
@@ -496,19 +522,21 @@ fn a_human_plays_a_turn_with_commands() {
 }
 
 #[test]
-fn prompts_time_out_to_the_fallback_and_replay_without_duplicate_events() {
+fn mulligan_waits_for_every_seat_and_replays_without_duplicate_events() {
     let members = [member(1, false), member(2, false), member(3, true)];
     let mut m = new_match(&members, 11, MatchMode::Casual);
     m.quick_start();
-    for _ in 0..40 {
-        m.tick(0.1);
-    }
     let st = m.state();
     assert_eq!(st.prompt.kind, "mulligan");
-    assert_eq!(st.prompt.players.len(), 2, "both humans are asked together");
+    assert_eq!(
+        st.prompt.players.len(),
+        3,
+        "both humans and the bot are asked together"
+    );
     let seen = st.events.last().unwrap().id;
 
-    // Player 1 redraws; player 2 never answers.
+    // Player 1 redraws. Player 2 is still deciding; nothing may move on --
+    // 初始重抽 is a barrier, not a window.
     let redo = NetMessage {
         prompt: st.prompt.id,
         value: 1,
@@ -516,17 +544,32 @@ fn prompts_time_out_to_the_fallback_and_replay_without_duplicate_events() {
     };
     m.act(1, &redo).unwrap();
     assert_eq!(m.act(1, &redo).unwrap_err().key(), "err.answered");
-    assert!(m.state().busy, "still waiting for player 2");
-    for _ in 0..200 {
-        m.tick(0.1); // 20 s timer + grace
+    // Well past the 15 s 恢复时间 pool the prompt used to drain from (and that
+    // used to force it after the 1.5 s grace), still short of the barrier's
+    // own 20 s window: player 2 is simply still deciding.
+    for _ in 0..180 {
+        m.tick(0.1);
     }
     let st = m.state();
-    assert!(!st.busy && st.prompt.id == 0, "timed out");
+    assert!(
+        st.busy && st.prompt.kind == "mulligan",
+        "still waiting for player 2 -- the pool does not end the barrier"
+    );
+    assert!(st.turn < 0, "no turn and no 游戏开始时 effect may run yet");
+
+    // The absent seat is taken over: the machine answers it (keep), which is
+    // that seat's decision -- one way the barrier lifts without one.
+    m.member_left(2, true);
+    for _ in 0..40 {
+        m.tick(0.1);
+    }
+    let st = m.state();
+    assert!(!st.busy && st.prompt.id == 0, "every seat has decided");
     let p1 = st.players.iter().find(|s| s.member == 1).unwrap();
     let p2 = st.players.iter().find(|s| s.member == 2).unwrap();
     assert!(
         p1.mulligan && !p2.mulligan,
-        "answer applied; time-out used the fallback (keep)"
+        "answer applied; the taken-over seat used the fallback (keep)"
     );
 
     // The replay re-created the events before the prompt with the same ids: the
@@ -535,6 +578,29 @@ fn prompts_time_out_to_the_fallback_and_replay_without_duplicate_events() {
     assert!(!after.is_empty());
     assert_eq!(after[0].id, seen + 1);
     assert!(after.windows(2).all(|w| w[1].id == w[0].id + 1));
+}
+
+/// A seat that never answers is forced to "keep" when the barrier's own window
+/// runs out. Presence is not enough: an open tab keeps the seat connected, so
+/// without this a player who walks away wedges the whole table in the opening.
+#[test]
+fn mulligan_forces_keep_when_the_window_runs_out() {
+    let members = [member(1, false), member(2, true)];
+    let mut m = new_match(&members, 13, MatchMode::Casual);
+    m.quick_start();
+    // The bot answers at once; the human never does. 26 s is past the 20 s
+    // window.
+    for _ in 0..260 {
+        m.tick(0.1);
+    }
+    let st = m.state();
+    assert!(
+        !st.busy && st.prompt.id == 0,
+        "the window decided for the seat"
+    );
+    let me = st.players.iter().find(|s| s.member == 1).unwrap();
+    assert!(!me.mulligan, "the fallback is keep, so nothing was redrawn");
+    assert_eq!(st.phase, "play");
 }
 
 #[test]
