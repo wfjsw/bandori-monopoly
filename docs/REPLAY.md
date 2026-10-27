@@ -210,7 +210,7 @@ pub struct MatchSetup { members: Vec<RoomMember> /*incl. mentality*/, seed: u64 
                         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")] rule_params: BTreeMap<String, i32>,
                         #[serde(default, skip_serializing_if = "Option::is_none")] board: Option<Vec<TileData>> }
 pub enum Init { Seed(MatchSetup), Snapshot { save: String } }
-#[serde(tag="t")] pub enum Input { Ticks{k:u8,n:u32}, Act{m:i32,msg:NetMessage,ok:bool}, QuickStart, Finish, Left{m:i32,can_return:bool}, Back{m:i32}, AnimDone{m:i32,seq:i32} }
+#[serde(tag="t")] pub enum Input { Ticks{k:u8,n:u32}, Act{m:i32,msg:NetMessage,ok:bool}, QuickStart, Finish, Left{m:i32,can_return:bool}, Back{m:i32}, AnimDone{m:i32,seq:i32}, OrderReady{m:i32} }
 pub struct Checkpoint { at: u32, tick: u64, round: i32, turn: i32, hash: String }
 pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpoint>, final_hash: String, #[serde(default)] events: Option<Vec<MatchEvent>> }
 ```
