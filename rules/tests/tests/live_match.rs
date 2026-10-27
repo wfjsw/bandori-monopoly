@@ -61,6 +61,28 @@ fn play(card: &str) -> NetMessage {
     }
 }
 
+/// Answer the opening-hand re-roll if it is up. It is a barrier with no expiry
+/// (rulebook 时点流程 step 6) -- ticking alone would stall on a human seat, so
+/// every seat answers with the fallback, exactly as an idle player would.
+fn cross_mulligan(m: &mut Match) {
+    let st = m.state();
+    if st.prompt.kind != "mulligan" {
+        return;
+    }
+    let members: Vec<i32> = st.players.iter().map(|p| p.member).collect();
+    let (id, fallback) = (st.prompt.id, st.prompt.fallback);
+    for member in members {
+        let _ = m.act(
+            member,
+            &NetMessage {
+                prompt: id,
+                value: fallback,
+                ..NetMessage::act("answer")
+            },
+        );
+    }
+}
+
 /// A two-player match where player 1 is human and holds `card` on its own turn.
 fn match_with(card: &str) -> Match {
     match_with_rules(card, rules())
@@ -83,6 +105,7 @@ fn match_with_exclusive(card: &str, persona: &str) -> Match {
     m.quick_start();
     // Same wait as `match_with_rules`: the human must be in 运营 before a play.
     for _ in 0..2000 {
+        cross_mulligan(&mut m);
         let st = m.state();
         let mine = st.phase == "play"
             && st.turn >= 0
@@ -120,6 +143,7 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     m.quick_start();
     // Let the bots take their turns until the human is in the operations phase.
     for _ in 0..2000 {
+        cross_mulligan(&mut m);
         let st = m.state();
         let mine = st.phase == "play"
             && st.turn >= 0
@@ -183,6 +207,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
     }
     // Let the bots run so a `TurnStartBefore` has fired for the human.
     for _ in 0..2000 {
+        cross_mulligan(&mut m);
         let st = m.state();
         let mine = st.phase == "play"
             && st.turn >= 0

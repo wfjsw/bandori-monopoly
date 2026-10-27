@@ -80,6 +80,17 @@ function stageKey(step: number): string {
   return step >= 4 ? "board.stepEnd" : step === 3 ? "board.stepMove" : step === 2 ? "board.stepOps" : "common.start";
 }
 
+/**
+ * Token positions with one seat moved, as a **new** array. Copy-on-write on
+ * purpose: `Animator.pos` is handed to the memoized ring as a prop, so a step
+ * that wrote `pos[i] = x` in place would leave the ring frozen -- `memo` compares
+ * the array by identity and the walk would only land on the next unrelated
+ * re-render. `route` and `hop` are already reassigned rather than mutated.
+ */
+function setSeat(pos: number[], seat: number, to: number): number[] {
+  return pos.map((x, k) => (k === seat ? to : x));
+}
+
 export class Animator {
   private queue: Item[] = [];
   animating = false;
@@ -578,7 +589,7 @@ export class Animator {
     const n = D.tiles.length;
     const dir = steps >= 0 ? 1 : -1;
     let p = from;
-    this.pos[playerId] = from;
+    this.pos = setSeat(this.pos, playerId, from);
     const ahead: number[] = [];
     for (let k = 1, q = from; k <= Math.abs(steps); k++) {
       q = (((q + dir) % n) + n) % n;
@@ -605,7 +616,7 @@ export class Animator {
       if (hop > 0 && !carried && ahead.length > 0) await this.nap(300);
       for (let k = 0; k < Math.abs(steps); k++) {
         p = (((p + dir) % n) + n) % n;
-        this.pos[playerId] = p;
+        this.pos = setSeat(this.pos, playerId, p);
         if (this.route) this.route = this.route.slice(1);
         if (hop > 0) {
           this.hop = { playerId, id: ++this.seq };
@@ -765,7 +776,7 @@ export class Animator {
       case "teleport":
         if (!ok || !this.pos) break;
         if (!fast) sfx("teleport");
-        this.pos[playerId] = e.to;
+        this.pos = setSeat(this.pos, playerId, e.to);
         this.bump();
         await wait(350);
         break;

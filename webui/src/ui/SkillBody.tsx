@@ -11,7 +11,7 @@
 // The same tags also show up as ordinary prose (「作为[反击]使用」) -- see
 // `splitTypeTag`, which only ever looks at the very start of the string.
 
-import { memo, type ReactNode } from "react";
+import { memo } from "react";
 import { cx } from "../core/cx";
 import { itemSubs, splitTypeTag, type Block } from "../core/body";
 import { parse } from "./bodyText";
@@ -33,17 +33,20 @@ function TypeTagged({ text }: { text: string }) {
 export const SkillBody = memo(function SkillBody({
   text,
   blocks,
-  prefix,
+  prefixText,
   className,
 }: {
   /** Flat rulebook text; parsed only when `blocks` is absent. */
   text?: string;
   /** Pre-structured sections / bulletpoints (cards, events). Preferred. */
   blocks?: Block[];
-  prefix?: ReactNode;
+  /** Skill-name lead-in, rendered here so the caller can pass a plain string
+   *  (a caller-built `<span>` element would defeat `memo` on every render). */
+  prefixText?: string;
   className?: string;
 }) {
   const parsed = blocks ?? parse(text ?? "");
+  const prefix = prefixText != null ? <span className={s.prefix}>{prefixText}</span> : undefined;
   // The skill name rides with the first paragraph; when the body opens straight
   // onto a list it gets a line of its own above it.
   let head = prefix != null;

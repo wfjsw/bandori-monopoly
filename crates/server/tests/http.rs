@@ -1376,6 +1376,40 @@ async fn advanced_room(server: &Arc<Server>, who: &Client, bots: usize) -> Strin
     };
     // Skip pick / deck so the match is in play immediately.
     handle.quick_start().unwrap();
+    // Skip the opening-hand re-roll too: it is a whole-table barrier (rulebook
+    // 时点流程 step 6) and the host drives nothing in these tests. The prompt
+    // opens a `wait` after `quick_start`, so poll for it -- and fail loudly if
+    // it never shows, rather than handing back a match stalled in the opening.
+    async fn prompt_of(who: &Client, id: &str) -> Value {
+        let (_, st) = who.get(&format!("/api/rooms/{id}/state")).await;
+        st["match"]["state"]["prompt"].clone()
+    }
+    let until = Instant::now() + Duration::from_secs(5);
+    let mut prompt = prompt_of(who, &id).await;
+    while prompt["kind"].as_str() != Some("mulligan") && Instant::now() < until {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        prompt = prompt_of(who, &id).await;
+    }
+    assert_eq!(
+        prompt["kind"].as_str(),
+        Some("mulligan"),
+        "the opening prompt"
+    );
+    let pid = prompt["id"].as_i64().expect("a prompt id");
+    who.ok(
+        &format!("/api/rooms/{id}/act"),
+        json!({ "act": "answer", "prompt": pid, "value": prompt["fallback"] }),
+    )
+    .await;
+    let until = Instant::now() + Duration::from_secs(3);
+    while prompt_of(who, &id).await["id"].as_i64() != Some(0) && Instant::now() < until {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert_eq!(
+        prompt_of(who, &id).await["id"].as_i64(),
+        Some(0),
+        "the re-roll is answered"
+    );
     id
 }
 

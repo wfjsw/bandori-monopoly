@@ -144,6 +144,26 @@ impl Client {
     }
 }
 
+/// Answer the opening-hand re-roll. It blocks the whole table by rule
+/// (rulebook 时点流程 step 6), and these tests drive the host's seat no
+/// further -- without this they would inspect a match still in the opening.
+async fn cross_mulligan(c: &Client, id: &str) {
+    for _ in 0..400 {
+        let (_, st) = c.get(&format!("/api/rooms/{id}/state")).await;
+        let p = st["match"]["state"]["prompt"].clone();
+        if p["kind"].as_str() == Some("mulligan") {
+            c.ok(
+                &format!("/api/rooms/{id}/act"),
+                json!({ "act": "answer", "prompt": p["id"], "value": p["fallback"] }),
+            )
+            .await;
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the opening prompt never opened");
+}
+
 /// A room created on A, visible and joinable on B, started from B with the
 /// host's session (sessions live in the store too).
 #[tokio::test]
@@ -292,6 +312,7 @@ async fn ticks_run_once_per_quantum_across_two_tickers() {
         r.game.as_ref().expect("match").clone()
     };
     handle.quick_start().unwrap();
+    cross_mulligan(&host, &id).await;
 
     // Let both tickers run for a while. The lease means only one of them
     // ticks this room; the other is idle.
@@ -383,6 +404,7 @@ async fn a_rebuilt_server_resumes_a_match_mid_play() {
         let r = room.lock().unwrap();
         r.game.as_ref().expect("match").quick_start().unwrap();
     }
+    cross_mulligan(&host, &id).await;
     let before = store.match_get(&id).unwrap().expect("blob");
     let ticks_before = store.rec_meta_get(&id).unwrap().unwrap().ticks;
 

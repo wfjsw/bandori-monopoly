@@ -413,19 +413,32 @@ impl Cx<'_> {
             self.draw(i, n, false)?;
         }
         self.wait(3.0);
-        let humans: Vec<usize> = (0..self.w.player_count())
-            .filter(|&p| !self.w.st.players[p].ai)
-            .collect();
-        if !humans.is_empty() {
-            let n = humans
+        // 2. 初始重抽 -- **every** seat decides, not only the human ones. The
+        // window is a hard barrier (rulebook 时点流程: step 6 completes before
+        // step 7's 游戏开始时 effects and step 8's first turn): no seat may
+        // activate an effect or advance the game until every seat has an
+        // answer on record. Bots decide through their policy, a seat the
+        // machine has taken over answers as the machine, and a seat that
+        // never answers is forced into "keep" only when the window runs out
+        // -- the choice is not cut short by the 恢复时间 pool (`use_pool` off).
+        //
+        // A table whose every seat is machine-decided has nothing to wait
+        // for, so it skips the ask and applies the same policy answers
+        // directly (`ai_answer_for_entry` is the exact `fill_ai` body, same
+        // RNG draws). Sims and bot-only matches must not halt on a prompt no
+        // one reads, and their chaos seats must still re-draw exactly as they
+        // would in a mixed table.
+        let all: Vec<usize> = (0..self.w.player_count()).collect();
+        if !all.is_empty() {
+            let n = all
                 .iter()
                 .map(|&p| self.start_hand(p))
                 .max()
                 .unwrap_or(START_HAND);
             self.w
                 .log("text", -1, Msg::new("log.mulligan_offer").i("n", n as i64));
-            let ask = Ask::choice(
-                humans.clone(),
+            let mut ask = Ask::choice(
+                all.clone(),
                 Msg::new("ask.mulligan.title"),
                 Msg::new("ask.mulligan.text").i("n", n as i64),
                 vec![
@@ -436,8 +449,26 @@ impl Cx<'_> {
                 20.0,
             )
             .with_kind("mulligan");
-            let r = self.ask(ask)?;
-            let redo: Vec<usize> = humans.into_iter().filter(|&p| r.of(p) == 1).collect();
+            // Not an ordinary prompt: keep the seat's 恢复时间 pool out of it.
+            ask.use_pool = false;
+            let answers: Vec<i32> = if all.iter().all(|&p| self.w.st.players[p].ai) {
+                let mut a = Vec::with_capacity(all.len());
+                for &p in &all {
+                    let v = self.ai_answer_for_entry(&ask, p);
+                    a.push(v);
+                }
+                a
+            } else {
+                let r = self.ask(ask)?;
+                all.iter().map(|&p| r.of(p)).collect()
+            };
+            let redo: Vec<usize> = all
+                .iter()
+                .copied()
+                .zip(&answers)
+                .filter(|&(_, &v)| v == 1)
+                .map(|(p, _)| p)
+                .collect();
             for &p in &redo {
                 self.mulligan(p)?;
             }
@@ -783,6 +814,44 @@ impl Cx<'_> {
         if as_main {
             self.w.st.step = stage::MOVE;
         }
+        // A nested card move (a hook of an outer move calling `ctx::card_move`)
+        // borrows the shared plan for its own duration and hands the outer one
+        // back afterwards, so the outer walk's per-step sync keeps reading its
+        // own move instead of the nested one's.
+        let outer_plan = (self.move_depth > 0)
+            .then(|| std::mem::replace(&mut self.w.turn.plan, Move::default()));
+        self.seed_turn_plan(&plan);
+        let r = self.card_move_seeded(i, plan, as_main);
+        if let Some(outer) = outer_plan {
+            self.w.turn.plan = outer;
+        }
+        r
+    }
+
+    /// Adopt `plan` as the shared `turn.plan` for the move that is about to run.
+    ///
+    /// The plan a card shaped (or the one `main_move` stamped) is the
+    /// authoritative shape: `plan::set_*` writes land on it. Seed `turn.plan`
+    /// from it before anything the move raises -- the settle-side readers
+    /// (`scale_settle_payment`) and the walk's per-step sync
+    /// (`walk_inner_depth`) read `turn.plan`, and a stale `resolve = true`
+    /// there revives settlement on a 「不触发结算」 move.
+    ///
+    /// Note this carries **more** than `Cx::adopt_turn_policy`, which only
+    /// ferries the purchase/settle policy knobs (`pay_factor`, `rent_factor`,
+    /// `can_build`, `no_buy`) across a host-routine pause; the rest of the
+    /// shape (`resolve`, `steps`, `kind`, `teleport_to`, …) is not carried and
+    /// must be seeded here.
+    fn seed_turn_plan(&mut self, plan: &Move) {
+        // `settle_redirect` is engine-set on `card_settle_move` only; never let
+        // a plan seed carry a sticky `true`.
+        let mut p = plan.clone();
+        p.settle_redirect = false;
+        self.w.turn.plan = p;
+    }
+
+    /// [`Self::card_move`] once the shared plan is seeded.
+    fn card_move_seeded(&mut self, i: usize, mut plan: Move, as_main: bool) -> Flow<()> {
         if plan.teleport_to.is_some() {
             let to = plan.teleport_to.unwrap().0 as usize;
             let resolve = plan.resolve;
@@ -798,10 +867,6 @@ impl Cx<'_> {
         } else {
             if plan.steps.is_none() {
                 // No fixed step count: roll it now, with the same raise points.
-                self.w.turn.plan = plan.clone();
-                // `settle_redirect` is engine-set on `card_settle_move` only;
-                // never let a plan seed carry a sticky `true`.
-                self.w.turn.plan.settle_redirect = false;
                 raise!(self, "diceRollPlan", i, @m plan)?;
                 plan = self.w.turn.plan.clone();
                 // A `rollPlan` body may have rewritten this move as a teleport
@@ -1309,10 +1374,7 @@ impl Cx<'_> {
             // The card bodies shape `TurnCtx::plan` (that is what the `World`
             // plan ops write), so the walk has to take the move back afterwards.
             // Seed first so a body that only reads sees the fresh move.
-            self.w.turn.plan = m.clone();
-            // `settle_redirect` is engine-set on `card_settle_move` only;
-            // never let a plan seed carry a sticky `true`.
-            self.w.turn.plan.settle_redirect = false;
+            self.seed_turn_plan(&m);
             raise!(self, "diceRollPlan", i, @m m)?;
             m = self.w.turn.plan.clone();
             if self.out(i) || !self.playing() {

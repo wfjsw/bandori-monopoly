@@ -16,6 +16,7 @@ import { useAutoplay, useMatchView, useTick, useWakeLock } from "../../core/hook
 import { hasProfile, profileJson, updateProfile } from "../../core/store";
 import type { CardData, Command, MatchPlayer, MatchView, PersonaData } from "../../core/types";
 import { endSession, type GameSession } from "../../game/session";
+import { setupSecs } from "../../game/clockSync";
 import { useCardTap } from "../../hooks/doubleTap";
 import { Btn } from "../../ui/Button";
 import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, type CardKind } from "../../ui/Card";
@@ -105,7 +106,10 @@ function Adjust({ sess, view, at, auto, me, c }: {
   const [filter, setFilter] = useState<Filter>("all");
 
   const st = view.state;
-  const secs = Math.max(0, Math.ceil(st.timeLeft - (performance.now() - at) / 1000));
+  // One shared deadline for every seat (see `setupSecs`): the deck window opens
+  // for the whole table at once, so its countdown must not start from whenever
+  // this tab happened to receive the frame.
+  const secs = setupSecs(view.serverTimeMs, st.timeLeft, at);
   const full = buffer.length >= SIZE;
   // Submitted (here, by the timer, or after a refresh elsewhere): lock editing.
   const ready = me.deckReady;

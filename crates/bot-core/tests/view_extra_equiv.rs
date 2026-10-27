@@ -21,7 +21,7 @@ use std::sync::Arc;
 use bot_core::{view_extras, SeatView};
 use game_core::data::{GameData, Roster};
 use game_core::engine::{Match, StubRules};
-use game_core::net::RoomMember;
+use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{BotMentality, MatchState};
 use game_core::MatchMode;
@@ -45,6 +45,28 @@ fn data() -> Arc<GameData> {
         )
         .unwrap(),
     )
+}
+
+/// Answer the opening-hand re-roll from every seat. It is a barrier (rulebook
+/// 时点流程 step 6) and Solo holds it open for its local human, so a harness
+/// that only ticks sits on the same opening frame for the whole test.
+fn cross_mulligan(m: &mut Match) {
+    let st = m.state();
+    if st.prompt.kind != "mulligan" {
+        return;
+    }
+    let members: Vec<i32> = st.players.iter().map(|p| p.member).collect();
+    let (id, fallback) = (st.prompt.id, st.prompt.fallback);
+    for member in members {
+        let _ = m.act(
+            member,
+            &NetMessage {
+                prompt: id,
+                value: fallback,
+                ..NetMessage::act("answer")
+            },
+        );
+    }
 }
 
 fn bots(n: i32) -> Vec<RoomMember> {
@@ -289,6 +311,7 @@ fn seat_view_extras_match_on_a_solo_frame_too() {
         m.quick_start();
         for s in 0..12 {
             for _ in 0..(6 + s * 2) {
+                cross_mulligan(&mut m);
                 m.tick(0.25);
             }
             if m.ended() {

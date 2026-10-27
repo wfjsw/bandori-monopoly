@@ -532,6 +532,41 @@ fn dollhouse_others_choose_and_p0_moves_sum() {
     assert!(saw[1] && saw[2], "both other players were asked: {saw:?}");
 }
 
+#[test]
+fn dollhouse_victim_walk_does_not_settle() {
+    // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」 -- a victim who
+    // takes the move half pays no rent on the tile it lands on.
+    let mut t = Table::vanilla(3);
+    t.set_pos(0, 20);
+    t.set_pos(1, 10);
+    t.set_pos(2, 30);
+    t.own(2, &[13]); // p1 rolls 3 -> 13, owned by p2
+    t.own(1, &[32]); // p2 rolls 2 -> 32, owned by p1
+                     // p0's forced walk then totals 5 from 20 to 25, which stays unowned.
+    t.dice(&[3, 2]);
+    t.give_play(0, "Mujica:人偶的箱庭").unwrap();
+    let money = [t.money(0), t.money(1), t.money(2)];
+    // Take the move half (option 0) for both victims.
+    for _ in 0..10 {
+        let Some(p) = t.prompt() else { break };
+        if !p.title.key().contains("doll_garden") {
+            decline_q(&mut t);
+            continue;
+        }
+        let who = t.asked()[0];
+        answer_q(&mut t, who, 0).unwrap();
+    }
+    fix_step(&mut t);
+    assert_eq!(t.pos(1), 13, "p1 walked its roll");
+    assert_eq!(t.pos(2), 32, "p2 walked its roll");
+    assert_eq!(t.pos(0), 25, "p0 was force-moved by the sum");
+    assert_eq!(
+        [t.money(0), t.money(1), t.money(2)],
+        money,
+        "no victim paid rent (不[触发结算]), and p0's landing stayed unowned"
+    );
+}
+
 // -- Mujica:无法将视线移开 ---------------------------------------------
 
 #[test]

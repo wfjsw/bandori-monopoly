@@ -258,6 +258,44 @@ test("cache: same seq+promptId does not recompute", async () => {
   assert.equal(pool.calls.length, 2);
 });
 
+test("carry-forward: a new key keeps the previous extras until its own land", async () => {
+  const pool = fakePool(async (v) => {
+    // The first key answers immediately; the second parks until released.
+    if (extrasKey(v) === "4:0") return extrasBlob({ skills: [skill("skill:0:old")] });
+    return new Promise<ViewExtras>((resolve) => {
+      setTimeout(() => resolve(extrasBlob({ skills: [skill("skill:0:new")] })), 5);
+    });
+  });
+  const extras = new OnlineExtras("room-1", 1, pool);
+  const notified: MatchView[] = [];
+  let live: MatchView | null = null;
+  const emit = (m: MatchView) => {
+    live = m;
+    notified.push(m);
+  };
+
+  const v1 = view({ state: state({ seq: 4 }) });
+  await emitOnlineView(extras, v1, emit, () => live);
+  assert.deepEqual(notified.at(-1)?.skills?.map((s) => s.id), ["skill:0:old"]);
+
+  // A new decision: its first paint must not drop the skills row (the
+  // stale-but-present stand-in), and the exact extras must still be requested.
+  const v2 = view({ state: state({ seq: 5 }) });
+  const done = emitOnlineView(extras, v2, emit, () => live);
+  assert.deepEqual(notified.at(-1)?.skills?.map((s) => s.id), ["skill:0:old"], "stand-in carried forward");
+  // The decision fields are NOT borrowed: they describe one prompt, and a
+  // stale one greys a legal card / answers 托管 with the previous choice.
+  assert.equal(notified.at(-1)?.playable, undefined, "playable is not carried");
+  assert.equal(notified.at(-1)?.estCost, undefined, "estCost is not carried");
+  assert.equal(notified.at(-1)?.aiAnswer, undefined, "aiAnswer is not carried");
+  await delay(0); // `request` reaches the pool on a microtask
+  assert.equal(pool.calls.length, 2, "the exact extras for the new key are still requested");
+
+  await done;
+  assert.deepEqual(notified.at(-1)?.skills?.map((s) => s.id), ["skill:0:new"], "exact extras overwrite the stand-in");
+  assert.equal(notified.at(-1)?.state.seq, 5);
+});
+
 test("failure: missing extras leaves the view usable", async () => {
   const pool = fakePool(async () => {
     throw new Error("worker exploded");

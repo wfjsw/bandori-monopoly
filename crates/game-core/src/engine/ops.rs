@@ -642,7 +642,13 @@ impl World {
         let stored_max = self.tok_max(player_id, name);
         let ceiling = if max > 0 { max } else { i32::MAX };
         let now = (was + n).clamp(0, ceiling);
-        self.set_tok(player_id, name, now, instance, if max > 0 { max } else { stored_max });
+        self.set_tok(
+            player_id,
+            name,
+            now,
+            instance,
+            if max > 0 { max } else { stored_max },
+        );
         now - was
     }
 
@@ -841,7 +847,11 @@ impl World {
         if n <= 0 || s.out() {
             return 0;
         }
-        let before = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.value);
+        let before = s
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .map_or(0, |t| t.value);
         let after = (before + n).max(0);
         // Uncapped dumb add: do not clamp to `Counter::max` (policy is the
         // rules-layer kernel). Keep any existing instance.
@@ -851,7 +861,11 @@ impl World {
             .find(|t| t.name == name)
             .and_then(|t| t.instance)
             .unwrap_or(-1);
-        let max = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.max);
+        let max = s
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .map_or(0, |t| t.max);
         set_named(&mut s.tokens, name, after, inst, max);
         after - before
     }
@@ -865,7 +879,11 @@ impl World {
         if n <= 0 {
             return 1;
         }
-        let have = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.value);
+        let have = s
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .map_or(0, |t| t.value);
         if have < n {
             return 0;
         }
@@ -875,7 +893,11 @@ impl World {
             .find(|t| t.name == name)
             .and_then(|t| t.instance)
             .unwrap_or(-1);
-        let max = s.tokens.iter().find(|t| t.name == name).map_or(0, |t| t.max);
+        let max = s
+            .tokens
+            .iter()
+            .find(|t| t.name == name)
+            .map_or(0, |t| t.max);
         set_named(&mut s.tokens, name, have - n, inst, max);
         1
     }
