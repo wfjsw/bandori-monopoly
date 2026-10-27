@@ -930,7 +930,6 @@ dependencies = [
 name = "game-core"
 version = "0.1.0"
 dependencies = [
- "bitflags",
  "flate2",
  "game-kinds",
  "rand_chacha",

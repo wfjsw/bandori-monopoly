@@ -231,11 +231,6 @@ impl Server {
         let _ = self.store.session_put(&s);
     }
 
-    /// Drop a session entirely (logout / sweep).
-    pub fn drop_session(&self, token: &str) {
-        let _ = self.store.session_del(token);
-    }
-
     /// Warm the room cache from the store. Not the source of truth --
     /// [`Server::room`] loads whatever this missed -- but a restart that calls
     /// this once brings every live room back before the first request.
@@ -339,12 +334,6 @@ pub fn random_hex(n: usize) -> String {
     let mut buf = vec![0u8; n];
     getrandom::fill(&mut buf).expect("OS randomness");
     buf.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-pub fn random_u64() -> u64 {
-    let mut buf = [0u8; 8];
-    getrandom::fill(&mut buf).expect("OS randomness");
-    u64::from_le_bytes(buf)
 }
 
 /// Short room code, unambiguous personas only.

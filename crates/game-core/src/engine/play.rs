@@ -4579,14 +4579,6 @@ impl Cx<'_> {
         Ok(got)
     }
 
-    /// A card-driven draw of `n` cards (raises the draw hooks).
-    pub(crate) fn draw_r(&mut self, i: usize, n: usize, _why: &str) -> Flow<()> {
-        if !self.out(i) && n > 0 {
-            self.draw(i, n, true)?;
-        }
-        Ok(())
-    }
-
     /// Discard down to the hand limit.
     pub(crate) fn discard(&mut self, i: usize, card: &str) -> Flow<()> {
         // `discardBefore` -- before the card leaves the hand.

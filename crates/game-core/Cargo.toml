@@ -12,7 +12,6 @@ bot-cost = []
 [dependencies]
 game-kinds = { path = "../game-kinds" }
 serde = { workspace = true, features = ["rc"] }
-bitflags = { workspace = true }
 serde_json = { workspace = true }
 # One zstd frame format for every target (wasm and native alike): two
 # encoders, one decoder. `zstd-sys` would need a C toolchain for wasm32.

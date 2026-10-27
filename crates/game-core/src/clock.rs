@@ -42,11 +42,11 @@ pub struct ClockSettings {
     /// Per-turn base refill, seconds (the `turnBaseTime` hook's default value).
     /// Applied as `min(base + refill, max(base_time, refill))` at turn start.
     pub base_refill: f32,
-    /// Ranked ban decision window, seconds (`setup::BAN_SECONDS` default).
+    /// Ranked ban decision window, seconds.
     pub ban_seconds: f32,
-    /// Pick decision window, seconds (`setup::PICK_SECONDS` default).
+    /// Pick decision window, seconds.
     pub pick_seconds: f32,
-    /// Deck-build window, seconds (`setup::DECK_SECONDS` default).
+    /// Deck-build window, seconds.
     pub deck_seconds: f32,
     /// Bankruptcy leftover-auction window, seconds. **Not** drawn from any
     /// seat pool: a liquidation auction is a shared board event with its own

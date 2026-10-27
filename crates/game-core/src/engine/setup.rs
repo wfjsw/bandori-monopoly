@@ -9,13 +9,6 @@ use super::cx::Cx;
 use crate::deck;
 use crate::msg::{Arg, Msg};
 
-/// Defaults for the three setup windows, kept here as documentation and as
-/// the values a pre-settings (`legacy_clock`) match uses. The live values are
-/// `ClockSettings::ban_seconds` / `pick_seconds` / `deck_seconds`.
-pub const BAN_SECONDS: f32 = 20.0;
-pub const PICK_SECONDS: f32 = 25.0;
-pub const DECK_SECONDS: f32 = 45.0;
-
 impl Cx<'_> {
     /// 1d20 each, ties re-roll; players are reordered high to low.
     pub(crate) fn roll_order(&mut self) {
