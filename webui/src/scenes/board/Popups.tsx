@@ -18,7 +18,7 @@ import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model, model, mortgageValue, RING_MULTIPLIER, redeemCost } from "./model";
 import { deedStandingCost } from "./deedCost";
 import { winningTileText } from "./tileText";
-import { showTurnsChip } from "./markers";
+import { eventMarkers, fieldMarkers, markerNote } from "./markers";
 import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
@@ -30,14 +30,6 @@ function useModel(sess: GameSession): Model | null {
   const { view } = useMatchView(sess);
   return view ? model(view) : null;
 }
-
-/** The `⌛N` countdown chip, or "" when nothing is scheduled to end (or another
- *  marker on the face already carries that number -- see `showTurnsChip`). */
-const turnsNote = (n: number | undefined, ...others: (number | undefined)[]): string =>
-  showTurnsChip(n ?? 0, ...others) ? `⌛${n}` : "";
-
-/** A card-face note: the instance note first, then any marker chips. */
-const cardNote = (note: string, ...chips: string[]): string => [note, ...chips].filter(Boolean).join(" · ");
 
 const kindLabel = (kind: string) => ({ ring: "RiNG", agent: tr("deed.dealer"), circle: tr("deed.start"), cafe: tr("deed.cafe"), edogawa: tr("deed.draw"), ryuseido: tr("deed.cafe") } as Record<string, string>)[kind] ?? tr("deed.land");
 
@@ -281,7 +273,7 @@ export function showEventPile(S: MatchState): void {
           <b>{tr("events.active")}</b>
           <div className={s.pileCards}>
             {S.eventActive.map((e) => {
-              const note = cardNote(e.note?.k ? fmtMsg(e.note, namesOf(S)) : "", turnsNote(e.turnsLeft, e.counter, e.counter2));
+              const note = markerNote(e.note?.k ? fmtMsg(e.note, namesOf(S)) : "", eventMarkers(e));
               return (
                 <div key={e.id} className={s.fieldSlot}>
                   <InspectCard id={e.id} note={note} />
@@ -347,12 +339,7 @@ export function showField(m: Model): void {
           <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
           <div className={s.pileCards}>
             {f.map((fc) => {
-              const note = cardNote(
-                fc.note ? fmtMsg(fc.note, names) : "",
-                turnsNote(fc.props?.turnsLeft, ...Object.values(fc.counters)),
-                (fc.counters["crystals"] ?? 0) > 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "",
-                (fc.counters["cp"] ?? 0) > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : "",
-              );
+              const note = markerNote(fc.note ? fmtMsg(fc.note, names) : "", fieldMarkers(fc));
               return fc.faceDown ? (
                 <div key={fc.uid} className={s.fieldSlot}>
                   <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>
@@ -373,11 +360,11 @@ export function showField(m: Model): void {
           <div className={s.who}><span>{tr("board.activeEvents")}</span></div>
           <div className={s.pileCards}>
             {events.map((e) => {
-              const note = cardNote(e.note?.k ? fmtMsg(e.note, names) : "", turnsNote(e.turnsLeft, e.counter, e.counter2));
+              const note = markerNote(e.note?.k ? fmtMsg(e.note, names) : "", eventMarkers(e));
               return (
                 <div key={e.id} className={s.fieldSlot}>
                   <InspectCard id={e.id} note={note} />
-                  {(note || e.counter > 0) && <small>{cardNote(note, e.counter > 0 ? `×${e.counter}` : "")}</small>}
+                  {note && <small>{note}</small>}
                 </div>
               );
             })}

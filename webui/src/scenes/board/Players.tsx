@@ -23,9 +23,9 @@ import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
 import { borrowedBand, byTitle, cardKeys, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
-import { counterLabel, stateLabel } from "../../i18n/stateLabel";
+import { stateLabel } from "../../i18n/stateLabel";
 import { setHoverSeat } from "./hoverSeat";
-import { showTurnsChip } from "./markers";
+import { fieldMarkers } from "./markers";
 import { holdPeek } from "../../hooks/hold";
 import { clockSync, displayRemainingMs } from "../../game/clockSync";
 
@@ -124,23 +124,9 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n?: number | "�
   }
   for (const fc of x.field ?? []) {
     const card = cardTitle(fc.card);
-    // Crystals and CP have their own labels; the walk below is for the
-    // instance's *other* named counters, so the two are not listed twice.
-    const crystals = fc.counters["crystals"] ?? 0;
-    const cp = fc.counters["cp"] ?? 0;
-    if (crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: crystals });
-    if (cp > 0) out.push({ label: `${card} · CP`, n: cp });
-    // A countdown another marker already carries is not listed twice.
-    const siblings = [crystals, cp];
-    for (const [name, n] of Object.entries(fc.counters ?? {})) {
-      if (n <= 0 || name === "crystals" || name === "cp") continue;
-      const label = counterLabel(name);
-      if (!label) continue;
-      out.push({ label: `${card} · ${label}`, n });
-      siblings.push(n);
-    }
-    const turns = fc.props?.turnsLeft ?? 0;
-    if (showTurnsChip(turns, ...siblings)) out.push({ label: `${card} · ${tr("board.turnsLabel")}`, n: turns });
+    // The same marker table the face prints, so the list never invents a kind
+    // of its own (and a redundant countdown stays dropped).
+    for (const mk of fieldMarkers(fc)) out.push({ label: `${card} · ${mk.label}`, n: mk.n });
   }
   return out;
 }

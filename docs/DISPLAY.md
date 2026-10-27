@@ -117,17 +117,20 @@ blank carries that cell as its `name` instead (`#J11`), so it is never lost.
 ### Card-face counter markers
 
 The field sheet renders an instance's markers as small chips in the face's
-marker zone: `◆N` crystals, `CPN` counteraction points, `×N` unnamed counters,
-and `⌛N` remaining turns. `⌛N` comes from the display-only prop
-`props.turnsLeft` on a `FieldCard`, or `ActiveEvent.turnsLeft` for an event row
-(`docs/EVENTS.md`); it appears only while positive, in the face, the live note,
-and the player marker list. It is a countdown hint, never the expiry itself.
+marker zone: `⌛N` remaining turns, `×N` unnamed counters, `◆N` crystals, `CPN`
+counteraction points, then any named counters. The kinds, their print order and
+their glyphs are one table (`scenes/board/markerKinds.ts` `ORDER`); a surface
+renders the resulting `Marker[]` and knows no kinds itself -- the face
+(`FieldSheet`), the live note, the field / event popups, the player marker list
+and a skill card's corner chips all draw the same plan.
 
-Where another marker on the same face already carries that number -- a crystal
-count that is itself the countdown, a phase counter -- the `⌛N` is **not**
-printed again (`scenes/board/markers.ts` `showTurnsChip`): the existing chip
-already shows how many turns are left. The countdown still stays in the data,
-so the hiding is display-only.
+`⌛N` comes from the display-only prop `props.turnsLeft` on a `FieldCard`, or
+`ActiveEvent.turnsLeft` for an event row (`docs/EVENTS.md`); it appears only
+while positive. It is a countdown hint, never the expiry itself. Where another
+marker on the same face already carries that number -- a crystal count that is
+itself the countdown, a phase counter -- the `⌛N` is **not** printed again
+(`showTurnsChip`): the existing chip already shows how many turns are left. The
+countdown still stays in the data, so the hiding is display-only.
 
 Set a **fixed** initial count as a static card prop -- `CardDef::props(&[(prop::TURNS_LEFT, N)])`
 -- so `place_card` / `bind_event` stamp it with everything else on the instance

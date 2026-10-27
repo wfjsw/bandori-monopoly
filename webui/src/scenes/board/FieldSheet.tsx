@@ -31,7 +31,7 @@ import { pickCard, type CardPill } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
 import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles";
-import { showTurnsChip } from "./markers";
+import { eventMarkers, fieldMarkers, markerNote, type Marker } from "./markers";
 import { t as tr } from "../../i18n/t";
 import { designBox } from "../../app/stageScale";
 import s from "./FieldSheet.module.css";
@@ -68,22 +68,18 @@ export function rowSpread(n: number, width = 480 + CARD_W): Record<string, strin
 /**
  * One field / event face: its own memo boundary, so a seat-hover dim, a pick
  * flip on a neighbour, or the sheet's width measure leaves the other faces
- * (and their `<img>`s) alone. Pills and the live note are derived here from
- * the stable instance, so the parent never hands a fresh array down.
+ * (and their `<img>`s) alone. Pills are derived here; the note and marker
+ * chips come pre-built (`markers.ts`) because several surfaces print them.
  */
-const FieldFace = memo(function FieldFace({ slotKey, card, title, note, turnsLeft, counter, counter2, crystals, cp, owner, designee, m, on, present, dismiss }: {
+const FieldFace = memo(function FieldFace({ slotKey, card, title, note, markers, owner, designee, m, on, present, dismiss }: {
   /** The row's pick identity (`e…` / `c…`), shared with the wrapper div. */
   slotKey: string;
   /** The card / event id whose art this face shows. */
   card: string;
   title: string | undefined;
   note: string;
-  /** Remaining turns before an expiry the rule scheduled; 0 = no chip. */
-  turnsLeft: number;
-  counter: number;
-  counter2: number;
-  crystals: number;
-  cp: number;
+  /** The face's marker chips, in print order (`markers.ts`). */
+  markers: Marker[];
   owner: number;
   /** Seat this instance is parked on for someone else, or -1. */
   designee: number;
@@ -120,11 +116,7 @@ const FieldFace = memo(function FieldFace({ slotKey, card, title, note, turnsLef
       on={on}
       onClick={onClick}
     >
-      {showTurnsChip(turnsLeft, counter, counter2, crystals, cp) && <span className={s.turns} title={tr("board.turnsLeft", { n: turnsLeft, count: turnsLeft })}>⌛{turnsLeft}</span>}
-      {counter > 0 && <span className={s.count}>×{counter}</span>}
-      {counter2 > 0 && <span className={s.count}>×{counter2}</span>}
-      {crystals > 0 && <span className={s.crystal}>◆{crystals}</span>}
-      {cp > 0 && <span className={s.cp} title={tr("board.cp", { n: cp })}>CP{cp}</span>}
+      {markers.map((mk) => <span key={mk.key} className={s[mk.cls]} title={mk.note}>{mk.chip}</span>)}
     </InspectCard>
   );
 });
@@ -193,10 +185,8 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
         {stack.map((it) => {
           if (it.kind === "event") {
             const e = it.e;
-            const note = [
-              e.note?.k ? fmtMsg(e.note, names) : "",
-              showTurnsChip(e.turnsLeft ?? 0, e.counter, e.counter2) ? tr("board.turnsLeft", { n: e.turnsLeft, count: e.turnsLeft }) : "",
-            ].filter(Boolean).join(" · ");
+            const markers = eventMarkers(e);
+            const note = markerNote(e.note?.k ? fmtMsg(e.note, names) : "", markers);
             const tiles = designatedTiles(S.marks, eventTiles(e.id));
             const key = `e${e.id}`;
             // An event's frame is its player's colour; a face with no player
@@ -212,11 +202,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                     card={e.id}
                     title={D.event(e.id)?.name ?? e.id}
                     note={note}
-                    turnsLeft={e.turnsLeft ?? 0}
-                    counter={e.counter}
-                    counter2={e.counter2}
-                    crystals={0}
-                    cp={0}
+                    markers={markers}
                     owner={owner}
                     designee={-1}
                     m={m}
@@ -232,13 +218,8 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           // The frame takes the owner's colour (`fc.owner`), not the field it
           // happens to sit on -- a borrowed card still reads as its owner's.
           const owner = fc.owner >= 0 ? fc.owner : seat;
-          const note = fc.note ? fmtMsg(fc.note, names) : "";
-          const live = [
-            note,
-            showTurnsChip(fc.props?.turnsLeft ?? 0, ...Object.values(fc.counters)) ? tr("board.turnsLeft", { n: fc.props?.turnsLeft, count: fc.props?.turnsLeft }) : "",
-            fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "",
-            fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : "",
-          ].filter(Boolean).join(" · ");
+          const markers = fieldMarkers(fc);
+          const live = markerNote(fc.note ? fmtMsg(fc.note, names) : "", markers);
           // A card on its owner's own field designates no one else: only a card
           // parked on another player's field has a designee.
           const designee = seat !== owner ? seat : -1;
@@ -255,11 +236,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   card={fc.card}
                   title={D.card(fc.card)?.name}
                   note={live}
-                  turnsLeft={fc.props?.turnsLeft ?? 0}
-                  counter={0}
-                  counter2={0}
-                  crystals={fc.counters["crystals"] ?? 0}
-                  cp={fc.counters["cp"] ?? 0}
+                  markers={markers}
                   owner={owner}
                   designee={designee}
                   m={m}
