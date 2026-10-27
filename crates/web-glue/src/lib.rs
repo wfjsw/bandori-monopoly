@@ -618,6 +618,14 @@ thread_local! {
     static PENDING: std::cell::RefCell<Option<game_rules::RulesetBuilder>> = const { std::cell::RefCell::new(None) };
 }
 
+/// Drop modules staged by [`ruleset_add`] without building (a failed or
+/// superseded load). The built set and its tables stay in place until the
+/// next [`ruleset_build`] / [`load_data`].
+#[wasm_bindgen]
+pub fn ruleset_reset() {
+    PENDING.with(|p| *p.borrow_mut() = None);
+}
+
 /// Feed one card module (the bytes of `<sha>.wasm`); call `ruleset_build` after.
 #[wasm_bindgen]
 pub fn ruleset_add(bytes: &[u8]) -> Result<(), JsError> {
@@ -665,6 +673,9 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
 
 /// Build the ruleset from the modules added so far, and make it the roster
 /// source ([`roster_json`] answers immediately, even before [`load_data`]).
+/// With no module staged (an empty `index.json`, or just after
+/// [`ruleset_reset`]) it builds the empty set -- the engine's `StubRules` with
+/// an empty roster -- instead of failing.
 ///
 /// Either call order works with [`load_data`]:
 /// * data already loaded: **rebuild** `GameData` from the kept payload plus
@@ -676,7 +687,7 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
 pub fn ruleset_build() -> Result<usize, JsError> {
     let built = PENDING
         .with(|p| p.borrow_mut().take())
-        .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
+        .unwrap_or_else(game_rules::Ruleset::builder);
     let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
     let n = set.module_count();
     SET.with(|s| *s.borrow_mut() = Some(set.clone()));

@@ -292,14 +292,6 @@ impl MatchState {
             .and_then(|t| self.players.get(t))
     }
 
-    pub fn asking(&self) -> bool {
-        self.prompt.id != 0
-    }
-
-    pub fn voting(&self) -> bool {
-        self.vote.id != 0
-    }
-
     /// Players still in the game.
     pub fn alive(&self) -> usize {
         self.players.iter().filter(|s| !s.out()).count()
@@ -408,21 +400,6 @@ pub mod key {
     /// 移动效果影响」). The walk clamp skips while this is > 0; the turn-start
     /// move-gate skip is a different question and is not cancelled.
     pub const MOVE_EXEMPT: &str = "moveExempt";
-
-    /// Is `key` one the engine itself owns (a status gate the engine ticks or
-    /// enforces), as opposed to a card's own scratch / latch key? Only the
-    /// latter may be carried across a pause from a card's world copy -- a
-    /// stale copy of a status gate must not clobber the live one.
-    ///
-    /// Driven by [`state_flag::ENGINE_OWNED`] on the item when present; new
-    /// items take [`super::default_flags`].
-    pub fn is_engine_owned(key: &str) -> bool {
-        super::default_flags(key) & super::state_flag::ENGINE_OWNED != 0
-            // `skill.*` is skill scratch -- a hook writes it and the hook's own
-            // `swap_world` commits it; it must not be pulled back off a stale
-            // body copy at a pause.
-            || key.starts_with("skill.")
-    }
 }
 
 /// Named **card properties** -- the keys of a card rule's declared property

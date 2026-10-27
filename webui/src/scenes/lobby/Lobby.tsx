@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import { navigate } from "../../app/router";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D } from "../../core/data";
+import { D, switchSource } from "../../core/data";
 import { getProfile } from "../../core/store";
 import type { ClockSettings, RoomInfo, ScoreWeights } from "../../core/types";
 import { OnlineSession, session, startOnline } from "../../game/session";
 import { api, ensureSession, type BuildView } from "../../net/api";
-import { buildId, setBuild, useServer } from "../../net/server";
+import { buildId, useServer } from "../../net/server";
 import { ServerChip } from "../menu/Servers";
 import { fmtMsg } from "../../i18n/msg";
 import { Btn, RoundBtn } from "../../ui/Button";
@@ -56,7 +56,10 @@ function useRoomList(setStatus: (s: "connecting" | "ok" | "offline") => void, se
       };
       await refresh();
       t = window.setInterval(refresh, 3000);
-    })();
+    })().catch(() => {
+      // Session storage / a room switch may throw past `call`'s own guard.
+      if (alive) setStatus("offline");
+    });
     return () => {
       alive = false;
       clearInterval(t);
@@ -77,8 +80,8 @@ export async function connect(): Promise<boolean> {
 }
 
 /** The builds this lobby has seen (`GET /api/builds`), for names on cards and
- *  for resolving "default" consistently. Reset on a page load, which is also
- *  when a server / build change takes effect. */
+ *  for resolving "default" consistently. Refetched whenever the lobby mounts
+ *  (a server switch remounts it). */
 let knownBuilds: BuildView[] = [];
 let knownDefaultBuild = "default";
 
@@ -88,26 +91,26 @@ function buildNameOf(id: string): string {
 }
 
 /**
- * A room's build is the server's truth. Boot-time rules / tables came from the
- * build selected at load; if they disagree, take the room's build and reload so
- * the board's data matches the match (the lobby then rejoins the seat it
- * already took).
+ * A room's build is the server's truth. The live rules / tables follow the
+ * build selected here; if they disagree, switch to the room's build before
+ * rendering the match (the lobby then rejoins the seat it already took).
  */
 function buildMatches(room: RoomInfo): boolean {
   return (room.build || knownDefaultBuild) === (buildId() || knownDefaultBuild);
 }
 
 function enter(room: RoomInfo, you: number): void {
-  if (!buildMatches(room)) {
-    const id = room.build || knownDefaultBuild;
-    // Name the room's actual build (not the "" default alias), so the reload
-    // loads exactly what the server is playing.
-    setBuild(id, buildNameOf(id));
-    location.reload();
-    return;
-  }
-  startOnline(room, you);
-  navigate({ name: "room", id: room.id });
+  const go = () => {
+    startOnline(room, you);
+    navigate({ name: "room", id: room.id });
+  };
+  if (buildMatches(room)) return go();
+  const id = room.build || knownDefaultBuild;
+  // Name the room's actual build (not the "" default alias), so the switch
+  // loads exactly what the server is playing. If it reverts, enter anyway:
+  // the match runs on the server and the previous roster is still usable (the
+  // next navigation into the room retries the switch).
+  void switchSource({ build: id, buildName: buildNameOf(id) }).then(go).catch(go);
 }
 
 async function join(id: string, locked: boolean, password = "", spectate = false): Promise<void> {
@@ -161,10 +164,9 @@ export function Lobby() {
   const pickBuild = (name: string) => {
     const b = builds.find((x) => x.name === name);
     if (!b || b.id === selectedBuild) return;
-    // The client's roster / tables follow the selected build, so reload into
-    // this screen with that build's data.
-    setBuild(b.id, b.name);
-    location.reload();
+    // The client's roster / tables follow the selected build; load its data
+    // in place and let the scene remount.
+    void switchSource({ build: b.id, buildName: b.name }).catch(() => {});
   };
 
   const shown = rooms.filter((r) => filter === "all" || (filter === "ranked" ? r.ranked : filter === "casual" ? !r.ranked : joinable(r)));

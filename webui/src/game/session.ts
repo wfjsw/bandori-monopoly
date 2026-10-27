@@ -5,10 +5,10 @@
 // resumed on load; an online player is re-attached through the server session
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
-import { D, currentSources, customRules, customRulesActive, customRulesBytes, rules } from "../core/data";
+import { D, currentSources, customRules, customRulesActive, customRulesBytes, rules, subscribeData, switchSource } from "../core/data";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
-import { absolute, buildId, setBuild } from "../net/server";
+import { absolute, buildId } from "../net/server";
 import { startClockSync, clockSync, resyncLimiter } from "./clockSync";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
@@ -265,6 +265,9 @@ export abstract class GameSession {
   abstract readonly kind: "solo" | "online" | "replay";
   /** Route id: "solo" or the room id. */
   abstract readonly id: string;
+  /** The rules / tables source this session's engine or stream was booted
+   *  from. A live switch to another source ends the session (below). */
+  readonly bootSources = currentSources();
   view: MatchView | null = null;
   room: RoomInfo | null = null;
   you = 0;
@@ -384,6 +387,11 @@ export abstract class GameSession {
 
 export let session: GameSession | null = null;
 
+// Dev-only seam for browser checks (mirrors `__bmDebug` in `core/data.ts`).
+if (import.meta.env?.DEV) {
+  (globalThis as { __bmSession?: unknown }).__bmSession = () => session;
+}
+
 export function endSession(): void {
   session?.setAutoMode("off");
   session?.leave();
@@ -411,6 +419,10 @@ interface SoloSave {
 let warmEngine: SoloEngine | null = null;
 /** The source the warm worker was booted from (server / build / custom). */
 let warmKey = "";
+/** Bumped when a source switch replaces the page's data, so a warm worker
+ *  keyed on identical-looking settings (same name and byte length) is still
+ *  not reused for the new bytes. */
+let sourceEpoch = 0;
 
 /**
  * Where a solo worker boots from: the selected game server / build (absolute
@@ -428,12 +440,20 @@ function soloBootOpts(): SoloBootOpts {
 }
 
 /** A cheap identity for `soloBootOpts()`, so a worker booted for one source is
- *  never reused for another (a custom module keeps its name when it changes;
- *  changing one reloads the page anyway). */
+ *  never reused for another. The epoch covers a switch that re-uses the same
+ *  custom name and byte length with different bytes. */
 function soloSourceKey(): string {
   const opts = soloBootOpts();
   const c = customRulesActive() ? customRules() : null;
-  return `${opts.rulesBase}\u0000${opts.dataBase}\u0000${c ? `${c.name}:${c.b64.length}` : "-"}`;
+  return `${sourceEpoch}\u0000${opts.rulesBase}\u0000${opts.dataBase}\u0000${c ? `${c.name}:${c.b64.length}` : "-"}`;
+}
+
+/** Drop the warmed worker after a live source switch and warm the new source.
+ *  `takeSoloEngine` would reject it anyway, but this frees the old worker now
+ *  instead of at the next start. */
+export function invalidateSoloEngine(): void {
+  sourceEpoch++;
+  warmSoloEngine();
 }
 
 /**
@@ -829,11 +849,18 @@ export class SoloSession extends GameSession {
   }
 
   leave(): void {
+    this.detach();
+    localStorage.removeItem(SOLO_KEY);
+  }
+
+  /** Close the worker but keep the save: a source switch drops the live
+   *  session and the remounted board resumes this match from it. */
+  detach(): void {
+    this.persist();
     this.closed = true;
     clearInterval(this.ponderTimer);
     window.removeEventListener("pagehide", this.onHide);
     document.removeEventListener("visibilitychange", this.onHide);
-    localStorage.removeItem(SOLO_KEY);
     this.engine.close();
   }
 }
@@ -1053,16 +1080,45 @@ export async function resumeOnline(id: string, player: string, persona: string, 
   if (!(await ensureSession(player, persona, cnId))) return { k: "err.offline" };
   const r = await api.roomState(id);
   if (!r.ok || !r.data) return r.error ?? { k: "err.room.gone" };
-  // The room's build is the server's truth. A refresh may boot from a build
-  // another tab selected; reload into the room's build before rendering it
-  // (`Lobby.enter` does the same on the click path).
+  // The room's build is the server's truth. Another tab may have selected a
+  // different build; switch to the room's before rendering it (`Lobby.enter`
+  // does the same on the click path). The switch remounts the scene, whose
+  // fresh `useOnline` then sees the matching build.
   const room = r.data.room;
   if (room.build && room.build !== buildId()) {
-    setBuild(room.build);
-    location.reload();
+    try {
+      await switchSource({ build: room.build });
+    } catch {
+      // The switch reverted and toasted. Online matches run on the server, so
+      // the room stays playable on the previous (local) roster instead of
+      // bouncing the player out; the room is re-entered on a fresh navigation.
+    }
   }
   return startOnline(room, r.data.you, r.data.game);
 }
+
+/**
+ * The live session's ruleset / tables (and, online, its SSE stream and REST
+ * base) are fixed when it starts. A successful source switch replaces all of
+ * them, so the old session cannot continue: drop it. Screens that remain
+ * (Room, Lobby) re-attach through `resumeOnline` on the new source; a solo
+ * board remounts from its save. A failed switch restores the old source
+ * before bumping, so its session survives.
+ */
+subscribeData(() => {
+  const s = session;
+  if (!s) return;
+  const now = currentSources();
+  if (now.rules === s.bootSources.rules && now.data === s.bootSources.data) return;
+  s.setAutoMode("off");
+  if (s instanceof SoloSession) {
+    // Its save is the resume point; detaching keeps it.
+    s.detach();
+    session = null;
+  } else {
+    endSession();
+  }
+});
 
 /** Which part of the match screen the phase belongs in. */
 export function matchScene(v: MatchView | null): "select" | "deck" | "board" | null {

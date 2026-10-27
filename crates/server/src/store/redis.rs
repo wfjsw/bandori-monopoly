@@ -118,11 +118,6 @@ impl CrossState for Store {
             .map(|_| ())
     }
 
-    fn session_del(&self, token: &str) -> Result<(), StoreError> {
-        self.call(|c| c.del::<_, ()>(format!("{NS_SESSION}{token}")))
-            .map(|_| ())
-    }
-
     fn session_all(&self) -> Result<Vec<Session>, StoreError> {
         let mut out = Vec::new();
         for k in self.keys(NS_SESSION)? {

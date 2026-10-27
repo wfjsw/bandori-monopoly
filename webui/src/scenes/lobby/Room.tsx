@@ -41,6 +41,13 @@ export function useOnline(id: string): OnlineSession | null {
         endSession();
         navigate({ name: "lobby" }, { replace: true });
       } else setSess(r);
+    }, () => {
+      // `ensureSession` can throw on a refused storage write, and the switch
+      // path may reject on its own; never leave the "entering" screen stuck.
+      if (!alive) return;
+      toast(fmtMsg({ k: "err.offline" }), "error");
+      endSession();
+      navigate({ name: "lobby" }, { replace: true });
     });
     return () => {
       alive = false;

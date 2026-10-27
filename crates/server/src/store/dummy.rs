@@ -116,11 +116,6 @@ impl CrossState for Store {
         Ok(())
     }
 
-    fn session_del(&self, token: &str) -> Result<(), StoreError> {
-        lock(&self.inner.sessions)?.remove(token);
-        Ok(())
-    }
-
     fn session_all(&self) -> Result<Vec<Session>, StoreError> {
         Ok(lock(&self.inner.sessions)?
             .values()

@@ -85,7 +85,6 @@ pub trait CrossState: Send + Sync {
     fn session_get(&self, token: &str) -> Result<Option<Session>, StoreError>;
     /// Create or update a session (this is also how a room join is recorded).
     fn session_put(&self, s: &Session) -> Result<(), StoreError>;
-    fn session_del(&self, token: &str) -> Result<(), StoreError>;
     /// Every live session -- what a sweep walks. A store with native expiry may
     /// legitimately return fewer than were written.
     fn session_all(&self) -> Result<Vec<Session>, StoreError>;

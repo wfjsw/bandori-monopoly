@@ -197,7 +197,7 @@ a list of citations, not a reimplementation:
 
 | primitive | wraps today | used by |
 |---|---|---|
-| `ctx::draw` / `ctx::draw_event` | `draw_r` / `draw_event` | circle, edogawa, event |
+| `ctx::draw` / `ctx::draw_event` | `draw` / `draw_event` | circle, edogawa, event |
 | `ctx::offer_buy` / `ctx::offer_build` / `ctx::offer_force_buy` | `offer_*` | property, ring |
 | `ctx::pay_rent(t, half)` | `pay_rent` (incl. the RiNG formula and the agent's 「半价收费」 half-charge) | property, ring, agent |
 | `ctx::buy` / `ctx::buy_quotes` / `ctx::card_build` | the `BuyKind::Agent` purchase / build | agent |
