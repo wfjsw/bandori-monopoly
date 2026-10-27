@@ -28,7 +28,10 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         On::Filter(Filter::DiceRollPlan("card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan)),
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「3个奇迹水晶」: the `⌛3` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"运动的天赋"#)
         .raw_name(r#"运动的天赋"#)
         .tags(&[])
@@ -45,8 +48,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于自己场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("sports_talent_note")));
-    // 规则书: 「每回合结束时失去一个」 -- 3 own turn ends before the fall.
-    ctx::set_turns_left(3);
     // 规则书: 「并放置3个奇迹水晶」 -- the placement's crystal charge (C#
     // `H.PlaceFromPlay(c, -1, -1, 3)`).
     ctx::set_crystals(3);
@@ -63,9 +64,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// (`turn == DecayOn` = the owner's turn) -> `AddCrystals(-1)`. The
 /// 「为0时置入弃牌堆」 half is [`on_crystals_changed`]. `actor == owner &&
 /// card.placed` is the pre.
+///
+/// TODO(规则书): 「每回合结束时」 does not say whose. Read as the owner's own
+/// turn end (C# `DecayCard.TurnEnd`'s `DecayOn`); `R:Fire bird` reads the same
+/// phrase for **every** seat's turn end, so one of the two readings is wrong.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     // 「每回合结束时失去一个」 -- the tick.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }

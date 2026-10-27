@@ -156,8 +156,10 @@ is the rule instance**: `public_state` mirrors `crystals` into `counter`,
 `props["count2"]` into `counter2`, `prop::TURNS_LEFT` into `turnsLeft`, and the
 instance's `note` / `faceDown` into the row. A body that counts down with
 `ctx::decay()` or `set_crystals` shows it for free. `turnsLeft` is display-only
-(the `⌛N` face marker, `docs/DISPLAY.md`): a rule sets it when the event starts
-and ticks it at the drawer's turn boundary; it never drives the expiry itself.
+(the `⌛N` face marker, `docs/DISPLAY.md`): a fixed count rides the event rule's
+static `props` (`CardDef::props`), a body that counts down ticks it with
+`ctx::dec_turns_left()` at the drawer's turn boundary; it never drives the
+expiry itself.
 
 ## ABI and SAVE_VERSION
 

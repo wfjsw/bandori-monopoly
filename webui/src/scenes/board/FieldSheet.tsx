@@ -119,7 +119,7 @@ const FieldFace = memo(function FieldFace({ slotKey, card, title, note, turnsLef
       on={on}
       onClick={onClick}
     >
-      {turnsLeft > 0 && <span className={s.turns} title={tr("board.turnsLeft", { n: turnsLeft })}>⌛{turnsLeft}</span>}
+      {turnsLeft > 0 && <span className={s.turns} title={tr("board.turnsLeft", { n: turnsLeft, count: turnsLeft })}>⌛{turnsLeft}</span>}
       {counter > 0 && <span className={s.count}>×{counter}</span>}
       {counter2 > 0 && <span className={s.count}>×{counter2}</span>}
       {crystals > 0 && <span className={s.crystal}>◆{crystals}</span>}
@@ -194,7 +194,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             const e = it.e;
             const note = [
               e.note?.k ? fmtMsg(e.note, names) : "",
-              (e.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: e.turnsLeft }) : "",
+              (e.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: e.turnsLeft, count: e.turnsLeft }) : "",
             ].filter(Boolean).join(" · ");
             const tiles = designatedTiles(S.marks, eventTiles(e.id));
             const key = `e${e.id}`;
@@ -234,7 +234,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const note = fc.note ? fmtMsg(fc.note, names) : "";
           const live = [
             note,
-            (fc.props?.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: fc.props?.turnsLeft }) : "",
+            (fc.props?.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: fc.props?.turnsLeft, count: fc.props?.turnsLeft }) : "",
             fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "",
             fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : "",
           ].filter(Boolean).join(" · ");

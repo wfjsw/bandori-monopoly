@@ -121,8 +121,15 @@ marker zone: `◆N` crystals, `CPN` counteraction points, `×N` unnamed counters
 and `⌛N` remaining turns. `⌛N` comes from the display-only prop
 `props.turnsLeft` on a `FieldCard`, or `ActiveEvent.turnsLeft` for an event row
 (`docs/EVENTS.md`); it appears only while positive, in the face, the live note,
-and the player marker list. A rule sets it on placement and decrements it at the
-card's own turn boundary -- it is a countdown hint, never the expiry itself.
+and the player marker list. It is a countdown hint, never the expiry itself.
+
+Set a **fixed** initial count as a static card prop -- `CardDef::props(&[(prop::TURNS_LEFT, N)])`
+-- so `place_card` / `bind_event` stamp it with everything else on the instance
+(`R:Fire bird`'s self-chosen X and `Sumimi:Here, the World!`'s draw-armed value
+are the exceptions: those stay in the body). The body's own turn-boundary tick
+is `ctx::dec_turns_left()`, which clamps at 0. A rule that clears the crystals
+early (`HHW:笑容大游行` (2) 「移除其上全部奇迹水晶」) clears the marker with
+them (`ctx::set_turns_left(0)`).
 
 ## Split from the runtime roster
 

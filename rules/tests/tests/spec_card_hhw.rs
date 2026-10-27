@@ -372,6 +372,7 @@ fn athletic_places_three_crystals() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "fprop:P0",
                 "pool:",
                 "hand_n:P0",
                 "draw_n:P0",
@@ -1319,6 +1320,38 @@ fn kaoru_removes_a_phantom_mark_instead_of_a_pot() {
                 .collect::<Vec<_>>()
         );
     }
+}
+
+/// 规则书: 「将此卡放置于场上（充能3，衰减1）」 -- the decay is a three-turn
+/// countdown, shown as `⌛3` and ticked one per owner turn end.
+#[test]
+fn kaoru_thief_shows_and_ticks_the_decay_marker() {
+    let mut t = Table::new(&["濑田薰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &[PHANTOM]);
+    t.play(0, PHANTOM).unwrap();
+    for _ in 0..8 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if p.kind == "player" || p.kind == "choice" || p.kind == "pick" {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    drain(&mut t);
+    assert_eq!(t.turns_left(0, PHANTOM), 3, "⌛3 face marker");
+    assert_eq!(t.crystals(0, PHANTOM), Some(3), "3 crystals");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.turns_left(0, PHANTOM), 2, "one tick");
 }
 
 /// C-HHW-kaoru-02 -- 「消耗7火罐…放置3个[怪盗标记]」.

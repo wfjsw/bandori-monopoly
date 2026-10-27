@@ -24,7 +24,10 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
         // 「收购该地契」) does not raise -- so the bonus never fired there.
         On::Action(Action::Bought("", Some(buy_after_guard), buy_after)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「添加3个奇迹水晶」: the `⌛3` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"演奏我的音乐吧"#)
         .raw_name(r#"（chuchu）演奏我的音乐吧"#)
         .tags(&[])
@@ -72,9 +75,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于你以外的一名玩家场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(hit, ID, &Msg::new(key!("chuchu_music_note")));
-    // 规则书: 「那名玩家的每个回合结束时失去一个」 -- 3 own turn ends before the
-    // pass.
-    ctx::set_turns_left(3);
     // 规则书: 「并为其添加3个奇迹水晶」 -- C# `H.PlaceFromPlay(c, r.index, -1, 3)`.
     ctx::set_crystals(3);
     // C# `User` is the player who played the card; `Mem["hits"]` starts at 0.
@@ -100,7 +100,7 @@ fn turn_end_guard(player_id: i32) -> bool {
 
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 「那名玩家的每个回合结束时失去一个」 -- the tick.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     // 规则书: 「那名玩家的每个回合结束时失去一个」 -- C# `AddCrystals(-1, ...)`.
     if ctx::add_crystals(-1, 0)? > 0 {
         return Ok(());

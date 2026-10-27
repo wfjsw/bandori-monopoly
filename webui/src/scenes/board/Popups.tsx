@@ -30,6 +30,12 @@ function useModel(sess: GameSession): Model | null {
   return view ? model(view) : null;
 }
 
+/** The `⌛N` countdown chip, or "" when nothing is scheduled to end. */
+const turnsNote = (n: number | undefined): string => (n ?? 0) > 0 ? `⌛${n}` : "";
+
+/** A card-face note: the instance note first, then any marker chips. */
+const cardNote = (note: string, ...chips: string[]): string => [note, ...chips].filter(Boolean).join(" · ");
+
 const kindLabel = (kind: string) => ({ ring: "RiNG", agent: tr("deed.dealer"), circle: tr("deed.start"), cafe: tr("deed.cafe"), edogawa: tr("deed.draw"), ryuseido: tr("deed.cafe") } as Record<string, string>)[kind] ?? tr("deed.land");
 
 function deedAction(m: Model, i: number): { label: string; cmd: { act: string; value: number }; enabled: boolean } | null {
@@ -272,7 +278,7 @@ export function showEventPile(S: MatchState): void {
           <b>{tr("events.active")}</b>
           <div className={s.pileCards}>
             {S.eventActive.map((e) => {
-              const note = e.note?.k ? fmtMsg(e.note, namesOf(S)) : "";
+              const note = cardNote(e.note?.k ? fmtMsg(e.note, namesOf(S)) : "", turnsNote(e.turnsLeft));
               return (
                 <div key={e.id} className={s.fieldSlot}>
                   <InspectCard id={e.id} note={note} />
@@ -338,7 +344,12 @@ export function showField(m: Model): void {
           <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
           <div className={s.pileCards}>
             {f.map((fc) => {
-              const note = fc.note ? fmtMsg(fc.note, names) : [fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "", fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : ""].filter(Boolean).join(" · ");
+              const note = cardNote(
+                fc.note ? fmtMsg(fc.note, names) : "",
+                turnsNote(fc.props?.turnsLeft),
+                (fc.counters["crystals"] ?? 0) > 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "",
+                (fc.counters["cp"] ?? 0) > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : "",
+              );
               return fc.faceDown ? (
                 <div key={fc.uid} className={s.fieldSlot}>
                   <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>
@@ -359,11 +370,11 @@ export function showField(m: Model): void {
           <div className={s.who}><span>{tr("board.activeEvents")}</span></div>
           <div className={s.pileCards}>
             {events.map((e) => {
-              const note = e.note?.k ? fmtMsg(e.note, names) : "";
+              const note = cardNote(e.note?.k ? fmtMsg(e.note, names) : "", turnsNote(e.turnsLeft));
               return (
                 <div key={e.id} className={s.fieldSlot}>
                   <InspectCard id={e.id} note={note} />
-                  {(note || e.counter > 0) && <small>{[note, e.counter > 0 ? `×${e.counter}` : ""].filter(Boolean).join(" · ")}</small>}
+                  {(note || e.counter > 0) && <small>{cardNote(note, e.counter > 0 ? `×${e.counter}` : "")}</small>}
                 </div>
               );
             })}

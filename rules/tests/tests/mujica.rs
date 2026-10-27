@@ -86,15 +86,6 @@ fn drain(t: &mut Table) {
     fix_step(t);
 }
 
-/// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no instance.
-fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
-    t.field(who)
-        .into_iter()
-        .find(|f| f.card == card)
-        .map(|f| f.props.get("turnsLeft").copied().unwrap_or(0))
-        .unwrap_or(-1)
-}
-
 /// Answer the first option matching `needle`, or panic with the dump.
 fn answer_opt(t: &mut Table, who: usize, needle: &str) {
     let k = t

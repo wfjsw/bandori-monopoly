@@ -27,6 +27,8 @@ pub const HALLUCINATION: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
 )
+// 「抽到的玩家的下回合开始时」: the `⌛1` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 1)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"幻觉来了"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。"#))
@@ -40,8 +42,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
     ctx::set_prop(TURNS, 0);
-    // 「抽到的玩家的下回合开始时放入事件弃牌」 -- it expires at that turn start.
-    ctx::set_turns_left(1);
+    // 「抽到的玩家的下回合开始时放入事件弃牌」 -- it expires at that turn start
+    // (the `⌛1` face marker is the static `TURNS_LEFT` prop).
     ctx::log(
         player_id,
         &Msg::new("log.event.hallucination_on").player_id("who", player_id),

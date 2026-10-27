@@ -112,7 +112,10 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
 /// means the card is not activated at all.
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 「每回合结束时」 -- the tick, before the burn.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    // TODO(规则书): 「每回合结束时」 does not say whose. Read here as **every**
+    // seat's turn end (C# `DecayCard` had `DecayOn`), while `HHW:运动的天赋` /
+    // `Mujica:#J11` read the same phrase as the owner's only -- one is wrong.
+    ctx::dec_turns_left();
     // 规则书: 「每回合结束时失去400资金」 -- C# `H.LoseR(Seat, 400, "Fire bird")`.
     ctx::pay(
         player_id,

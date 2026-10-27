@@ -23,7 +23,10 @@ pub const SPARKLER: CardDef = CardDef::new(
         On::Action(Action::TurnEndAfter("actor == owner && card.placed", None, turn_end)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「放置2个奇迹水晶」: the `⌛2` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"燃尽前的线香花火"#)
         .raw_name(r#"燃尽前的线香花火"#)
         .tags(&[])
@@ -38,9 +41,6 @@ fn sparkler(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("sparkler_note")));
     ctx::add_crystals(2, 2)?;
-    // 规则书: 「你的回合结束后自动移除一个奇迹水晶」 -- 2 own turn ends before
-    // the burn.
-    ctx::set_turns_left(2);
     ctx::log(
         player_id,
         &Msg::new(key!("sparkler_placed")).player_id("who", player_id),
@@ -64,7 +64,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // auto-skip that extra turn (`play.rs` `stunned` -> `end_turn`) and its
     // 「每回合结束时移除一层」 tick would eat one of the two, netting 1.
     // 「你的回合结束后」 -- the tick.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     let before = ctx::crystals();
     ctx::add_crystals(-1, 0)?;
     if before > 1 {

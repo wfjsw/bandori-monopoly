@@ -22,6 +22,8 @@ pub const A_A_O: CardDef = CardDef::new(
         On::Schedule("expire_at_end", "", None, expire_at_end),
     ],
 )
+// 「抽到的玩家的下回合结束时」: the `⌛1` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 1)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"A！A！O！"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌。此卡在场时全场玩家不能使用卡牌的[手]效果。"#))
@@ -41,8 +43,8 @@ pub const A_A_O: CardDef = CardDef::new(
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
-    // 「抽到的玩家的下回合结束时放入事件弃牌」 -- it expires at that turn end.
-    ctx::set_turns_left(1);
+    // 「抽到的玩家的下回合结束时放入事件弃牌」 -- it expires at that turn end
+    // (the `⌛1` face marker is the static `TURNS_LEFT` prop).
     ctx::at_next_turn_end(player_id, "expire_at_end");
     ctx::log(
         player_id,

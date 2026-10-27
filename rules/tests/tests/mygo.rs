@@ -49,15 +49,6 @@ fn crystals(t: &Table, who: usize, card: &str) -> i32 {
     t.crystals(who, card).unwrap_or(-1)
 }
 
-/// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no instance.
-fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
-    t.field(who)
-        .into_iter()
-        .find(|f| f.card == card)
-        .map(|f| f.props.get("turnsLeft").copied().unwrap_or(0))
-        .unwrap_or(-1)
-}
-
 /// Anon Tokyo crystal-link marks on `tile`.
 fn anon_marks(t: &Table, tile: usize) -> usize {
     t.marks_on(tile).len()
@@ -1052,6 +1043,7 @@ fn journey_places_on_tile_with_four_crystals() {
         t.field_ids(0)
     );
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 4);
+    assert_eq!(t.turns_left(0, "MyGO:哪怕这旅程没有终点"), 4, "⌛4 marker");
     let f = t
         .field(0)
         .into_iter()
@@ -1087,6 +1079,7 @@ fn journey_drains_when_move_exceeds_six() {
     drain(&mut t);
     t.end(0).unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 3, "one drained");
+    assert_eq!(t.turns_left(0, "MyGO:哪怕这旅程没有终点"), 3, "marker ticks");
 }
 
 #[test]
@@ -1100,6 +1093,11 @@ fn journey_no_drain_when_move_is_six_or_less() {
     drain(&mut t);
     t.end(0).unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 4, "6 is not >6");
+    assert_eq!(
+        t.turns_left(0, "MyGO:哪怕这旅程没有终点"),
+        4,
+        "a short main move does not tick the marker"
+    );
 }
 
 // ---------------------------------------------------------------- MyGO:难以复刻的奇迹

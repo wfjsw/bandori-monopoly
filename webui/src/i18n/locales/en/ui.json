@@ -172,6 +172,8 @@
   "board.cp": "CP ×{{n}}",
   "board.crystals": "Crystals ×{{n}}",
   "board.turnsLeft": "Removed in {{n}} turns",
+  "board.turnsLeft_one": "Removed in {{n}} turn",
+  "board.turnsLeft_other": "Removed in {{n}} turns",
   "board.turnsLabel": "Turns until removed",
   "board.dice": "Roll the die",
   "board.discardThis": "Discard this",

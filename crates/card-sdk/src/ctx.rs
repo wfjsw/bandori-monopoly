@@ -1121,9 +1121,10 @@ pub fn set_prop(key: &str, value: i32) -> i32 {
 }
 
 /// Remaining turns before a rule-scheduled expiry, as the client's `⌛N`
-/// marker (`prop::TURNS_LEFT`). Display-only: set it when the card is placed,
-/// tick it down at the card's own turn boundary; the rule body still owns the
-/// actual expiry. Returns the stored value.
+/// marker (`prop::TURNS_LEFT`). Display-only; the rule body still owns the
+/// actual expiry. A fixed initial count is better declared as a static
+/// `CardDef::props` entry (stamped by `place_card` / `bind_event`); use this
+/// setter for a chosen or re-armed value. Returns the stored value.
 #[cfg_attr(kani, inline(always))]
 pub fn set_turns_left(n: i32) -> i32 {
     set_prop(crate::abi::prop::TURNS_LEFT, n)
@@ -1134,6 +1135,13 @@ pub fn set_turns_left(n: i32) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn turns_left() -> i32 {
     prop(crate::abi::prop::TURNS_LEFT)
+}
+
+/// One turn less on the marker (`prop::TURNS_LEFT`), for the body's own
+/// turn-boundary tick; returns the new value (never below `0`).
+#[cfg_attr(kani, inline(always))]
+pub fn dec_turns_left() -> i32 {
+    set_turns_left((turns_left() - 1).max(0))
 }
 
 /// A **property of the rule instance governing `tile`** (`docs/TILES.md`) --

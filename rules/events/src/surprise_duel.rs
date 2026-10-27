@@ -28,6 +28,8 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
 )
+// 「抽到的玩家的下2回合开始时」: the `⌛2` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"意外的对邦"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。"#))
@@ -44,8 +46,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
     ctx::set_prop(TURNS, 0);
-    // 「抽到的玩家的下2回合开始时放入事件弃牌」 -- 2 drawer turn starts.
-    ctx::set_turns_left(2);
     ctx::log(
         player_id,
         &Msg::new("log.event.surprise_duel_on").player_id("who", player_id),
@@ -99,7 +99,7 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     let n = ctx::prop(TURNS) + 1;
     ctx::set_prop(TURNS, n);
     // The drawer turn-start tick.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     if n >= 2 {
         expire(ID);
     }

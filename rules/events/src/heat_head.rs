@@ -31,6 +31,9 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         On::Schedule("phase_end", "", None, phase_end),
     ],
 )
+// 「抽到的玩家的下回合结束前…此后…下回合结束前」: the `⌛2` marker the client
+// shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"超燃甩头"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。"#))
@@ -44,7 +47,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_crystals(PHASE_UP);
     // 「抽到的玩家的下回合结束前…此后…下回合结束前」 -- 2 drawer turn ends.
-    ctx::set_turns_left(2);
     ctx::at_next_turn_end(player_id, "phase_end");
     ctx::log(
         player_id,
@@ -95,7 +97,7 @@ fn sub_die_filter(_player_id: i32, v: RollValue) -> RollValue {
 /// schedules the second; the second discards the event.
 fn phase_end(player_id: i32) -> card_sdk::Asked {
     // The drawer turn-end tick (both phases pass through here).
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     let phase = ctx::crystals();
     if phase == PHASE_UP {
         ctx::set_crystals(PHASE_DOWN);

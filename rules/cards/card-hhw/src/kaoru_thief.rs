@@ -37,7 +37,10 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         On::Filter(Filter::DiceRollPlan("card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null", None, roll_plan)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「充能3，衰减1」: the `⌛3` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"怪盗hello happy"#)
         .raw_name(r#"（薰）怪盗hello happy"#)
         .tags(&[])
@@ -135,6 +138,8 @@ fn pass_marked(player_id: i32) -> card_sdk::Asked {
 /// the owner's turn) -> `AddCrystals(-1)`. `actor == owner && card.placed` is
 /// the pre.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // 「衰减1」 -- the tick.
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }

@@ -24,6 +24,9 @@ pub const BANGDREAM_CHAN: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", Some(always), on_turn_start)),
     ],
 )
+// 「抽到的玩家的第3回合开始时」: the `⌛2` marker the client shows (the draw is
+// mid-turn 1, so two more drawer turn starts remain).
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"元祖！邦多利酱"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家的回合免费时间变为5秒，且回合恢复时间变为0秒。"#))
@@ -48,8 +51,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(prop::BASE_TIME_REFILL_SET, prop::clock_secs(0));
     ctx::set_prop(DRAWER, player_id);
     ctx::set_prop(TURNS, 0);
-    // 「抽到的玩家的第3回合开始时放入事件弃牌」 -- 2 more drawer turn starts.
-    ctx::set_turns_left(2);
     ctx::set_prop(prop::BONUS_TIME_SET, prop::clock_secs(5));
     ctx::log(
         player_id,
@@ -68,7 +69,7 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     let n = ctx::prop(TURNS) + 1;
     ctx::set_prop(TURNS, n);
     // The drawer turn-start tick.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     // The draw happens mid-turn-1: turn starts 1 and 2 are the drawer's 2nd
     // and 3rd turns. 「第3回合开始时」 = `n >= 2` (the same moment 意外的对邦's
     // 「下2回合开始时」 names).

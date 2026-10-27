@@ -166,7 +166,7 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 /// (MatchHost.cs:11375-11406).
 fn turn_start(player_id: i32) -> card_sdk::Asked {
     // 「那名玩家的每个回合开始时移除一个」 -- the tick.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     // C# `AddCrystals(-1, "回合开始")`.
     let left = ctx::add_crystals(-1, 0)?;
     if left > 0 {

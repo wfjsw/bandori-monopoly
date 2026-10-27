@@ -67,7 +67,10 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书（1）「3个[奇迹水晶]」: the `⌛3` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)
         .raw_name(r#"笑容大游行"#)
         .tags(&[r#"反击"#, r#"持续"#])
@@ -101,8 +104,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「为此卡添加3个[奇迹水晶]」 -- the placement's crystal charge
     // (C# `H.PlaceFromPlay(c, ..., 3)`).
     ctx::set_crystals(3);
-    // 规则书（1）: 「你的每回合结束时移除一个」 -- 3 own turn ends before the fall.
-    ctx::set_turns_left(3);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_placed"))
@@ -126,7 +127,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// [`on_crystals_changed`].
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
     // 「你的每回合结束时移除一个」 -- the tick.
-    ctx::set_turns_left(ctx::turns_left() - 1);
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }
@@ -320,6 +321,9 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
     if n > 0 {
         ctx::add_crystals(-n, i32::MAX)?;
     }
+    // 「移除其上全部奇迹水晶」: the (1) countdown is spent with them, so the
+    // face's `⌛N` goes too.
+    ctx::set_turns_left(0);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_moved")).tile("tile", to),

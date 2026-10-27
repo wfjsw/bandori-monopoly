@@ -32,7 +32,10 @@ pub const J11: CardDef = CardDef::new(
         On::Filter(Filter::PaySplitChoose("card.placed", None, pay_choose_cancel)),
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「添加2个[奇迹水晶]」: the `⌛2` marker the client shows.
+.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
+.meta(&card_sdk::meta::CardMeta::new()
         // sheet cell J11 -- the name line is blank; `#J11` is the name.
         .name("#J11")
         .raw_name("")
@@ -44,8 +47,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // C# `H.PlaceFromPlay(c, -1, -1, 2)` -- place with 2 miracle crystals.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("j11_note")));
-    // 规则书: 「每回合结束时移除1个」 -- 2 own turn ends before the fall.
-    ctx::set_turns_left(2);
     ctx::set_crystals(2);
     ctx::log(
         player_id,
@@ -74,6 +75,10 @@ fn charge(player_id: i32) {
 
 /// Field hooks: `DecayCard.TurnEnd` (the crystal tick) and `CardJ11.Targeted`.
 /// Runs through the Fx hook dispatch, so these are field effects, not [反击]s.
+///
+/// TODO(规则书): 「每回合结束时」 does not say whose. Read as the owner's own
+/// turn end (C# `DecayCard.TurnEnd`'s `DecayOn`); `R:Fire bird` reads the same
+/// phrase for **every** seat's turn end, so one of the two readings is wrong.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // `DecayCard.TurnEnd` (C# MatchHost.cs:1874-1897) -- burn one miracle
@@ -84,7 +89,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             // 「每回合结束时移除1个」 -- the tick.
-            ctx::set_turns_left(ctx::turns_left() - 1);
+            ctx::dec_turns_left();
             // C# `AddCrystals(-1, ...)`; the `if (Crystals <= 0) Unplace(discard)`
             // half is [`on_crystals_changed`] (`Empty` is a no-op for `CardJ11`).
             ctx::remove_crystal()?;

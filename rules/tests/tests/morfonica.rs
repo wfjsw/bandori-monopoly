@@ -11,15 +11,6 @@ use game_core::state::{stage, Counter};
 
 // ---------------------------------------------------------------- helpers
 
-/// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no instance.
-fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
-    t.field(who)
-        .into_iter()
-        .find(|f| f.card == card)
-        .map(|f| f.props.get("turnsLeft").copied().unwrap_or(0))
-        .unwrap_or(-1)
-}
-
 /// [`Table::settle`], but also accepts a resting MOVE stage (a card that moves
 /// a non-turn player can leave the engine in MOVE at rest).
 fn settle_move(t: &mut Table) {
