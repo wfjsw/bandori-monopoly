@@ -20,7 +20,7 @@ import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
 import { loadRulesetInto } from "../core/rulesetLoad.ts";
 import type { MatchEvent, MatchView, Command } from "../core/types.ts";
-import { tickQuanta, TICK_STEP, type EngineBoot, type SaveSnap, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
+import { tickQuanta, TICK_STEP, type EngineBoot, type SaveSnap, type SoloBootOpts, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
 
 /** The worker global (tsconfig has no WebWorker lib; only these are used). */
 const ctx = self as unknown as {
@@ -76,8 +76,10 @@ function post(msg: unknown): void {
 
 // ---------------------------------------------------------------- boot
 
-async function ensureInit(): Promise<EngineBoot> {
-  initOnce ??= boot();
+async function ensureInit(opts?: SoloBootOpts): Promise<EngineBoot> {
+  if (initOnce) return initOnce;
+  if (!opts) throw new Error("init first");
+  initOnce = boot(opts);
   return initOnce;
 }
 let initOnce: Promise<EngineBoot> | null = null;
@@ -85,8 +87,10 @@ let initOnce: Promise<EngineBoot> | null = null;
 /** The page's `loadGameData` sequence, minus the display data: ruleset first
  *  (so the roster is non-empty), then the same tables and optional bot books.
  *  Mirrors `core/data.ts`'s order -- a real match needs the roster for
- *  characters, skills and card names. */
-async function boot(): Promise<EngineBoot> {
+ *  characters, skills and card names. The directories come from the page
+ *  (`SoloBootOpts`, absolute URLs) so the worker loads the selected game
+ *  server's build, not whatever this chunk's origin happens to serve. */
+async function boot(opts: SoloBootOpts): Promise<EngineBoot> {
   await init();
   // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9) -- the same
   // value `core/data.ts` hands the page's instance, so both ends seal records
@@ -96,13 +100,18 @@ async function boot(): Promise<EngineBoot> {
   }
   // Ruleset before `load_data`: the roster rides on the built set (was
   // `cards.json` / `characters.json` / `bands.json`). Failure is loud but not
-  // fatal -- see the catch below.
+  // fatal -- see the catch below. A custom solo module rides after the index's
+  // modules (`loadRulesetInto`'s `extra`), entering the same roster / rules.
   try {
-    await loadRulesetInto(glue, async (rel) => {
-      const r = await fetch("/assets/rules/" + rel);
-      if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
-      return new Uint8Array(await r.arrayBuffer());
-    });
+    await loadRulesetInto(
+      glue,
+      async (rel) => {
+        const r = await fetch(opts.rulesBase + rel);
+        if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+        return new Uint8Array(await r.arrayBuffer());
+      },
+      opts.custom && opts.custom.length ? [opts.custom] : [],
+    );
   } catch (e) {
     // Same policy as the page (`core/data.ts`): a solo match may run on the
     // engine's StubRules with an empty roster, but it is loud about it -- a
@@ -114,8 +123,8 @@ async function boot(): Promise<EngineBoot> {
   const files: Record<string, string> = {};
   await Promise.all(
     names.map(async (n) => {
-      const r = await fetch("/data/" + n);
-      if (!r.ok) throw new Error(`/data/${n}: HTTP ${r.status}`);
+      const r = await fetch(opts.dataBase + n);
+      if (!r.ok) throw new Error(`${opts.dataBase}${n}: HTTP ${r.status}`);
       files[n] = await r.text();
     }),
   );
@@ -123,7 +132,7 @@ async function boot(): Promise<EngineBoot> {
   // bot answers and those answers are what a record stores. Mirror the page.
   for (const book of ["deck_book.json", "strategy_book.json"]) {
     try {
-      const r = await fetch("/data/" + book);
+      const r = await fetch(opts.dataBase + book);
       if (r.ok) files[book] = await r.text();
     } catch {
       /* absent book is fine */
@@ -398,7 +407,7 @@ ctx.onmessage = async (e: MessageEvent) => {
   const { id, op, ...rest } = (e.data ?? {}) as { id: number; op: string } & Record<string, unknown>;
   try {
     let value: unknown;
-    if (op === "init") value = await ensureInit();
+    if (op === "init") value = await ensureInit(rest as unknown as SoloBootOpts);
     else {
       if (!OPS.has(op)) throw new Error(`unknown op ${op}`);
       await ensureInit();

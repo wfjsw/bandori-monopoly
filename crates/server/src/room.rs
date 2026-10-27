@@ -652,6 +652,10 @@ pub struct Room {
     /// The running match. Stateless handle over the store's blob (any process
     /// may hold one; the match lock sequences operations).
     pub game: Option<Arc<MatchHandle>>,
+    /// The rule build the room was opened under (its engine is below).
+    pub build: String,
+    /// That build's game tables (bot names etc.).
+    pub data: Arc<game_core::data::GameData>,
     pub engine: Arc<Pool>,
     pub store: Arc<dyn CrossState>,
     pub tx: broadcast::Sender<Note>,
@@ -693,6 +697,8 @@ impl Room {
         password: &str,
         weights: ScoreWeights,
         clock: game_core::clock::ClockSettings,
+        build: &str,
+        data: Arc<game_core::data::GameData>,
         engine: Arc<Pool>,
         store: Arc<dyn CrossState>,
     ) -> Self {
@@ -713,6 +719,7 @@ impl Room {
                 theme: String::new(),
                 weights,
                 clock: clock.sanitized(),
+                build: build.to_string(),
                 members: vec![],
                 spectators: vec![],
                 fair: None,
@@ -721,6 +728,8 @@ impl Room {
             tokens: HashMap::new(),
             next_member: 1,
             game: None,
+            build: build.to_string(),
+            data,
             engine,
             store,
             tx,
@@ -762,7 +771,13 @@ impl Room {
     /// commitment, same already-collected nonces, so a restart is invisible to
     /// the fairness scheme. A record from before the slot was persisted falls
     /// back to a fresh one on [`Room::restore_game`].
-    pub fn from_record(rec: RoomRecord, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Self {
+    pub fn from_record(
+        rec: RoomRecord,
+        build: &str,
+        data: Arc<game_core::data::GameData>,
+        engine: Arc<Pool>,
+        store: Arc<dyn CrossState>,
+    ) -> Self {
         let tokens: HashMap<i32, String> = rec.tokens.clone().into_iter().collect();
         let (tx, _) = broadcast::channel(64);
         let mut this = Self {
@@ -771,6 +786,8 @@ impl Room {
             tokens,
             next_member: rec.next_member,
             game: None,
+            build: build.to_string(),
+            data,
             engine,
             store,
             tx,
@@ -804,6 +821,8 @@ impl Room {
     /// store's blob).
     fn apply_record(&mut self, rec: &RoomRecord) {
         self.info = rec.info.clone();
+        // A record from before builds existed resolves to this room's build.
+        self.info.build = self.build.clone();
         self.password = rec.password.clone();
         self.tokens = rec.tokens.iter().map(|(k, v)| (*k, v.clone())).collect();
         self.next_member = rec.next_member;

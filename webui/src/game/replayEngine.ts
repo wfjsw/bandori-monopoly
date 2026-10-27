@@ -9,7 +9,8 @@
 // UI, with defaults for fields that postdate it.
 
 import type { MatchEvent, MatchView } from "../core/types";
-import { rules } from "../core/data";
+import { currentSources, customRulesActive, customRulesBytes, rules } from "../core/data";
+import { absolute } from "../net/server";
 import { describeWorkerError } from "./workerError";
 import {
   bundleBase,
@@ -262,7 +263,16 @@ export class WorkerReplayHandle implements ReplayHandle {
     const w = new Worker(new URL("./replayWorker.ts", import.meta.url), { type: "module", name: "replay-current" });
     const h = new WorkerReplayHandle(w, 1, bundleId);
     try {
-      const boot = await h.rpc<{ api: number }>("init");
+      // Replay under exactly the source the page booted: a record sealed on a
+      // selected build (or with a custom ruleset) must not be read against the
+      // bundled default set.
+      const from = currentSources();
+      const custom = customRulesActive() ? customRulesBytes() : null;
+      const boot = await h.rpc<{ api: number }>("init", {
+        rulesBase: absolute(from.rules),
+        dataBase: absolute(from.data),
+        ...(custom ? { custom } : {}),
+      });
       (h as { apiVersion: number }).apiVersion = boot.api ?? 1;
       await h.rpc("open", { bytes, force });
     } catch (e) {

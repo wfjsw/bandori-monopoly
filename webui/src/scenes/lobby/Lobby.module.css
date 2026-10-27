@@ -27,6 +27,7 @@
 .state { color: var(--pink); font-weight: 700; }
 .watch { color: var(--teal); font-weight: 700; }
 .watching { color: var(--sub); }
+.build { font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .foot { position: relative; flex: 0 0 100px; margin: 0 50px; }
 .joinPill { position: absolute; left: 0; top: 5px; width: 582px; height: 86px; border-radius: 43px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; padding: 0 22px 0 30px; font-size: 19px; font-weight: 700; }

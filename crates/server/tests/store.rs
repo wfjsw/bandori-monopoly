@@ -218,6 +218,7 @@ fn dummy_store_is_shareable_across_handles() {
         theme: String::new(),
         weights: Default::default(),
         clock: Default::default(),
+        build: "default".into(),
         members: vec![],
         spectators: vec![],
         fair: None,

@@ -2,13 +2,16 @@
 // per seat (or 随机), score rules, and each bot's mentality (标准 / 混沌). A
 // solo match left running (or saved before a refresh) can be continued.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { navigate } from "../../app/router";
 import { cx } from "../../core/cx";
-import { D, rules } from "../../core/data";
+import { D, clearCustomRules, customRules, rules, setCustomRules } from "../../core/data";
 import { getProfile } from "../../core/store";
 import type { BotMentality, PersonaData, ScoreWeights } from "../../core/types";
 import { SoloSession, botSoloCapMs, discardSolo, resumeSolo, setBotSoloCapMs, startSolo, warmSoloEngine } from "../../game/session";
+import { api, type BuildView } from "../../net/api";
+import { uploadGameData } from "../../net/profile";
+import { isRemote, setBuild, useServer } from "../../net/server";
 import { Btn } from "../../ui/Button";
 import { Avatar, CharCard, inTab, tabLabels } from "../../ui/Character";
 import { Chips } from "../../ui/Chips";
@@ -41,6 +44,78 @@ function SoloSetup({ close }: { close: () => void }) {
   // Boot the engine worker while the player picks seats.
   useEffect(() => warmSoloEngine(), []);
   const player = getProfile().playerName;
+  const { build } = useServer();
+  /** Builds offered by the selected server (`GET /api/builds`); `null` while
+   *  loading, `[]` when the server is local / older and lists none. */
+  const [builds, setBuilds] = useState<BuildView[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void api.builds().then((r) => {
+      if (alive) setBuilds(r.ok ? (r.data ?? []) : []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const defaultBuild = builds?.find((b) => b.default)?.id ?? "default";
+  /** On this origin the bundled `/assets/rules` path (the 本地 chip) is a real
+   *  choice alongside any of the server's builds; on a remote server an empty
+   *  build id means that server's default build. */
+  const remote = isRemote();
+  const selectedBuild = remote ? build || defaultBuild : build;
+  const custom = customRules();
+  /**
+   * A solo save carries engine strings keyed to the roster / card ids of the
+   * ruleset it was played under, and the resume path has no source of its own
+   * -- so changing the source drops the save rather than restoring it into a
+   * different ruleset.
+   */
+  const dropSave = () => {
+    if (SoloSession.hasSave()) discardSolo();
+  };
+  const pickBuild = (b: BuildView) => {
+    if (b.id === selectedBuild) return;
+    // Reboot so the roster / tables come from this build. Back to the menu is
+    // fine -- solo setup is a modal (`design`: build changes reload).
+    dropSave();
+    setBuild(b.id, b.name);
+    location.reload();
+  };
+  /** Back to the bundled local ruleset (and thus the custom module, if any). */
+  const pickLocal = () => {
+    if (!build) return;
+    dropSave();
+    setBuild(null);
+    location.reload();
+  };
+  /**
+   * Apply a user's ruleset locally first (always -- solo must not depend on
+   * the profile server), then offer it to the profile server when configured.
+   * The upload is best-effort and time-boxed: a slow / absent profile server
+   * never blocks starting the match.
+   */
+  const pickCustom = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!setCustomRules(bytes, file.name)) {
+      e.target.value = "";
+      return;
+    }
+    dropSave();
+    setBusy(true);
+    await Promise.race([
+      uploadGameData(file, "ruleset"),
+      new Promise((resolve) => setTimeout(resolve, 6000)),
+    ]);
+    location.reload();
+  };
+  const clearCustom = () => {
+    clearCustomRules();
+    dropSave();
+    location.reload();
+  };
   const [bots, setBots] = useState(() => Math.min(9, Math.max(2, Number(localStorage.getItem(BOTS_KEY) ?? 3) || 3)));
   const [weights, setWeights] = useState<ScoreWeights>({ ...DEFAULT_WEIGHTS });
   /** The "all bots" default; a per-name `overrides` entry beats it. */
@@ -136,6 +211,45 @@ function SoloSetup({ close }: { close: () => void }) {
         </p>
         <Btn icon="leaderboard" className={s.score} onClick={() => showScoreWeights(weights, true, setWeights)}>{tr("solo.scoreRules")}</Btn>
       </div>
+      <div className={s.mentalityRow}>
+        <span className={s.mentalityLabel}>{tr("solo.buildVersion")}</span>
+        {!remote && (
+          <button
+            type="button"
+            className={cx(s.mentality, !build && s.mentalityOn)}
+            title={tr("solo.buildLocalHint")}
+            onClick={pickLocal}
+          >
+            {tr("solo.buildLocal")}
+          </button>
+        )}
+        {builds && builds.length > 0 ? (
+          builds.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              className={cx(s.mentality, b.id === selectedBuild && s.mentalityOn)}
+              title={b.description || b.name}
+              onClick={() => pickBuild(b)}
+            >
+              {b.name}{b.default ? <small className={s.buildTag}>{tr("solo.buildDefault")}</small> : null}
+            </button>
+          ))
+        ) : remote ? (
+          <span className={cx(s.mentality, s.mentalityOn)}>{tr("server.defaultBuild")}</span>
+        ) : null}
+      </div>
+      <div className={s.mentalityRow}>
+        <span className={s.mentalityLabel}>{tr("solo.buildCustom")}</span>
+        <label className={s.filePick}>
+          <input type="file" accept=".wasm,application/wasm" onChange={(e) => void pickCustom(e)} disabled={busy} />
+          <span>{tr("solo.buildFile")}</span>
+        </label>
+        {custom && <span className={s.customName}>{custom.name || tr("solo.buildCustom")}</span>}
+        {custom && <Btn size="small" onClick={clearCustom} disabled={busy}>{tr("solo.buildClear")}</Btn>}
+        {busy && <span className={s.hint}>{tr("solo.buildUploading")}</span>}
+      </div>
+      <p className={s.hint}>{tr("solo.buildHint")}</p>
       <div className={s.mentalityRow}>
         <span className={s.mentalityLabel}>{tr("solo.mentality")}</span>
         {MENTALITIES.map((m) => (

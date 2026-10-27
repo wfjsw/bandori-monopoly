@@ -2,9 +2,47 @@
 
 import type { Msg } from "../i18n/msg";
 import type { BotMentality, ClockSettings, Command, MatchEvent, MatchView, RoomInfo, ScoreWeights } from "../core/types";
+import { gameUrl, serverBase, subscribeServer } from "./server";
 
-const TOKEN_KEY = "bm.token";
-let token = sessionStorage.getItem(TOKEN_KEY) ?? "";
+/** One game server's advertised rule build (`GET /api/builds`). */
+export interface BuildView {
+  id: string;
+  name: string;
+  description: string;
+  rulesetSha256: string | null;
+  cards: number;
+  default: boolean;
+}
+
+/**
+ * Game-server sessions are per server: the same browser may hold a different
+ * token (and a different seat) on each one. The classic origin keeps the bare
+ * `bm.token` key; every other server gets its own suffixed key.
+ */
+function tokenKey(): string {
+  const b = serverBase();
+  return b ? `bm.token:${b}` : "bm.token";
+}
+
+let token = sessionStorage.getItem(tokenKey()) ?? "";
+let tokenServer = serverBase();
+subscribeServer(() => {
+  if (serverBase() === tokenServer) return;
+  // A switch must not carry the old server's token anywhere -- not in memory,
+  // not as a request header. `ensureSession` mints (or recovers) one on the
+  // new server.
+  tokenServer = serverBase();
+  token = "";
+});
+
+/** Catch a server switch that happened without the subscribe callback (tests,
+ *  or a storage write from elsewhere) before a call reads `token`. */
+function syncToken(): void {
+  if (serverBase() !== tokenServer) {
+    tokenServer = serverBase();
+    token = "";
+  }
+}
 
 export interface Result<T> {
   ok: boolean;
@@ -18,8 +56,9 @@ export interface Result<T> {
 const msg = (k: string, a?: Msg["a"]): Msg => (a ? { k, a } : { k });
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<Result<T>> {
+  syncToken();
   try {
-    const r = await fetch(path, {
+    const r = await fetch(gameUrl(path), {
       method,
       credentials: "same-origin",
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
@@ -35,14 +74,17 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
 
 /** Make sure this tab has a server session for `player`. */
 export async function ensureSession(player: string, character = "", cnId = ""): Promise<boolean> {
+  syncToken();
   if (!token) {
     // A fresh tab (browser was closed): take the last token over only if it is still seated in a
-    // room, so the player can rejoin their match. Otherwise tabs keep separate sessions.
-    const last = localStorage.getItem(TOKEN_KEY) ?? "";
+    // room, so the player can rejoin their match. Otherwise tabs keep separate sessions. The key
+    // is per server, so a token from another game server is never presented here.
+    const key = tokenKey();
+    const last = localStorage.getItem(key) ?? "";
     if (last) {
       token = last;
       const me = await call<{ player: string; room: string | null }>("GET", "/api/session");
-      if (me.ok && me.data?.player === player && me.data.room) sessionStorage.setItem(TOKEN_KEY, token);
+      if (me.ok && me.data?.player === player && me.data.room) sessionStorage.setItem(key, token);
       else token = "";
     }
   }
@@ -50,19 +92,23 @@ export async function ensureSession(player: string, character = "", cnId = ""): 
     const me = await call<{ player: string }>("GET", "/api/session");
     if (me.ok && me.data?.player === player) return true;
   }
-  const r = await call<{ token: string }>("POST", "/api/session", { player, character, cnId });
+  // The server field is `persona`; `character` is only this function's name.
+  const r = await call<{ token: string }>("POST", "/api/session", { player, persona: character, cnId });
   if (!r.ok || !r.data) return false;
   token = r.data.token;
-  sessionStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(TOKEN_KEY, token);
+  const key = tokenKey();
+  sessionStorage.setItem(key, token);
+  localStorage.setItem(key, token);
   return true;
 }
 
 export const api = {
-  health: () => call<{ version: string; rooms: number }>("GET", "/api/health"),
+  health: () => call<{ version: string; rooms: number; builds?: number }>("GET", "/api/health"),
   session: () => call<{ room: string | null; member: number }>("GET", "/api/session"),
+  /** The rule builds this server offers. Older servers 404 the route. */
+  builds: () => call<BuildView[]>("GET", "/api/builds"),
   rooms: () => call<RoomInfo[]>("GET", "/api/rooms"),
-  createRoom: (o: { name: string; ranked: boolean; maxPlayers: number; password: string; weights?: ScoreWeights; clock?: ClockSettings }) => call<{ room: RoomInfo; you: number }>("POST", "/api/rooms", o),
+  createRoom: (o: { name: string; ranked: boolean; maxPlayers: number; password: string; weights?: ScoreWeights; clock?: ClockSettings; build?: string }) => call<{ room: RoomInfo; you: number }>("POST", "/api/rooms", o),
   /**
    * Join (or rejoin) a room. `spectate` takes a watcher's place instead of a
    * seat: allowed while the room is playing or full, still gated by the
@@ -97,8 +143,9 @@ export const api = {
    * answer plain JSON. The engine's `from_record_bytes` sniffs the magic.
    */
   record: async (id: string): Promise<{ ok: true; bytes: Uint8Array; filename: string } | { ok: false; error: Msg; status: number }> => {
+    syncToken();
     try {
-      const r = await fetch(`/api/rooms/${id}/record`, {
+      const r = await fetch(gameUrl(`/api/rooms/${id}/record`), {
         credentials: "same-origin",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -138,6 +185,7 @@ export interface StreamHandlers {
  * backoff, resuming from the last event id seen.
  */
 export function openStream(roomId: string, h: StreamHandlers): () => void {
+  syncToken();
   let es: EventSource | null = null;
   let stopped = false;
   let lastId = "";
@@ -145,7 +193,7 @@ export function openStream(roomId: string, h: StreamHandlers): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const connect = () => {
     const q = `token=${encodeURIComponent(token)}` + (lastId ? `&lastEventId=${encodeURIComponent(lastId)}` : "");
-    const src = new EventSource(`/api/rooms/${roomId}/stream?${q}`);
+    const src = new EventSource(gameUrl(`/api/rooms/${roomId}/stream?${q}`));
     es = src;
     const on = <T>(name: string, f: (v: T) => void) =>
       src.addEventListener(name, (e) => {

@@ -15,6 +15,7 @@
 //! Critical sections are short and never await.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -40,7 +41,75 @@ pub struct Session {
     pub room: Option<(String, i32)>,
 }
 
+/// One selectable **rule build**: a ruleset directory, its game tables, and
+/// the worker pool that runs matches against them. A room binds one for its
+/// life, so two builds never share engine identity (the fairness commitment
+/// pins the build's ruleset hash).
+pub struct Build {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    /// Directory served at `/builds/{id}/data` (falls back to the server's).
+    pub data_path: PathBuf,
+    /// Directory served at `/builds/{id}/rules`.
+    pub rules_path: PathBuf,
+    pub data: Arc<GameData>,
+    pub rules: Arc<dyn CardRules>,
+    /// Match workers, started on this build's first room (a manifest may list
+    /// more builds than a deployment ever plays).
+    engine: std::sync::OnceLock<Arc<Pool>>,
+    /// Worker count used if the pool has to start.
+    workers: usize,
+}
+
+impl Build {
+    pub fn new(
+        id: String,
+        name: String,
+        description: String,
+        data_path: PathBuf,
+        rules_path: PathBuf,
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        workers: usize,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            description,
+            data_path,
+            rules_path,
+            data,
+            rules,
+            engine: std::sync::OnceLock::new(),
+            workers,
+        }
+    }
+
+    /// This build's pool, started on first use.
+    pub fn engine(&self) -> Arc<Pool> {
+        self.engine
+            .get_or_init(|| {
+                Pool::start(
+                    self.workers,
+                    Pool::default_exe(),
+                    self.data_path.clone(),
+                    self.rules_path.clone(),
+                )
+            })
+            .clone()
+    }
+
+    /// A build whose pool was already started (the default).
+    pub fn with_engine(mut self, engine: Arc<Pool>) -> Self {
+        let _ = self.engine.set(engine);
+        self
+    }
+}
+
 pub struct Server {
+    /// The default build's tables/rules/pool. Kept as fields because the
+    /// default is what a pre-build record resolves to; rooms use their own.
     pub data: Arc<GameData>,
     pub rules: Arc<dyn CardRules>,
     /// Match execution. Workers hold no match state, so this is shared freely.
@@ -80,6 +149,10 @@ pub struct Server {
     /// Interval between empty-comment keep-alives on SSE streams
     /// (`--sse-keepalive` / `BM_SSE_KEEPALIVE`, seconds).
     pub sse_keepalive: Duration,
+    /// Selectable rule builds, by id. A room names one; the default build is
+    /// also `data`/`rules`/`engine` above.
+    pub builds: HashMap<String, Arc<Build>>,
+    pub default_build: String,
 }
 
 impl Server {
@@ -95,10 +168,25 @@ impl Server {
         if let Err(e) = engine.info() {
             eprintln!("engine stamp unavailable at startup: {e}");
         }
+        let default = Arc::new(
+            Build::new(
+                "default".to_string(),
+                "默认规则".to_string(),
+                String::new(),
+                PathBuf::new(),
+                PathBuf::new(),
+                data.clone(),
+                rules.clone(),
+                0,
+            )
+            .with_engine(engine.clone()),
+        );
         Arc::new(Self {
             data,
             rules,
             engine,
+            builds: HashMap::from([("default".to_string(), default)]),
+            default_build: "default".to_string(),
             store,
             rooms: Mutex::new(HashMap::new()),
             instance: random_hex(8),
@@ -113,8 +201,23 @@ impl Server {
         })
     }
 
-    /// A signed-in client. Goes to the store, so it survives across server
-    /// processes when the store does.
+    /// A build by id; `""` means the default. `None` = no such build.
+    pub fn build(&self, id: &str) -> Option<Arc<Build>> {
+        if id.is_empty() {
+            return self.builds.get(&self.default_build).cloned().or_else(|| self.builds.values().next().cloned());
+        }
+        self.builds.get(id).cloned()
+    }
+
+    /// The build a room resolves to: its own, or the default when the record
+    /// predates builds (or names a build this process does not have).
+    pub fn build_or_default(&self, id: &str) -> Option<Arc<Build>> {
+        self.build(id).or_else(|| self.build(&self.default_build))
+    }
+
+    /// A signed-in client, by opaque local token. The game server mints its
+    /// own tokens; the profile server's token is never forwarded here -- the
+    /// player name is the only thing the two servers share.
     pub fn session(&self, token: &str) -> Option<Session> {
         self.store.session_get(token).ok().flatten()
     }
@@ -150,7 +253,8 @@ impl Server {
         let mut rooms = self.rooms.lock().unwrap();
         for rec in recs {
             let id = rec.info.id.clone();
-            let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
+            let build = self.build_or_default(&rec.info.build).expect("default build");
+            let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine(), self.store.clone());
             r.bot_search = self.bots.is_some();
             r.presence_timeout = self.presence_timeout;
             r.restore_game();
@@ -170,7 +274,8 @@ impl Server {
             return Some(r.clone());
         }
         let rec = self.store.room_get(id).ok().flatten()?;
-        let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
+        let build = self.build_or_default(&rec.info.build)?;
+        let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine(), self.store.clone());
         r.bot_search = self.bots.is_some();
         r.presence_timeout = self.presence_timeout;
         r.restore_game();
