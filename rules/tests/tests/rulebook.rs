@@ -341,21 +341,37 @@ fn s05_no_reward_when_the_move_started_on_circle() {
     t.set_pos(0, tile("CiRCLE"));
     t.set_pos(1, 20);
     let before = t.money(0);
+    let hand_before = t.hand(0).len();
     let mark = t.mark();
     t.give_play(0, "PPP:向着未来的路标").unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), tile("CiRCLE"), "60 tiles is a full lap");
-    let keys = t.keys_since(mark);
-    // The wrap [经过]'d CiRCLE -- the reward step was reached and declined.
+    let events = t.events_since(mark);
+    let keys: Vec<String> = events.iter().map(log_key).collect();
+    // The walk really ran the lap (not a 0-step no-op), and 「并不触发结算」:
+    // no landing settle at CiRCLE (which would draw the settle card).
+    let roll = events
+        .iter()
+        .find(|e| e.msg.key() == "log.roll")
+        .expect("the 60-step walk logged its move");
+    assert_eq!(int_arg(&roll.msg, "n"), Some(60), "a full lap: {keys:?}");
+    // The wrap [经过]'d CiRCLE with 移动起点 == CiRCLE, so the reward arm's
+    // guard suppresses it outright -- no pass-reward prompt and no settle.
     assert!(
-        keys.iter()
-            .any(|k| k.contains("pass") || k.contains("pass_reward") || k.contains("land")),
-        "the wrap passed CiRCLE: {keys:?}"
+        !keys
+            .iter()
+            .any(|k| k.contains("land_start") || k.contains("pass_reward")),
+        "no CiRCLE settle and no reward: {keys:?}"
     );
     assert_eq!(
         t.money(0),
         before,
         "no CiRCLE reward: the move started on CiRCLE ({keys:?})"
+    );
+    assert_eq!(
+        t.hand(0).len(),
+        hand_before,
+        "no reward card was drawn ({keys:?})"
     );
 }
 
