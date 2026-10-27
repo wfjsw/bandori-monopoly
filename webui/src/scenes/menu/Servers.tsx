@@ -76,7 +76,8 @@ function Servers({ close }: { close: () => void }) {
   const connect = (target: string | null) => {
     if (target === null) {
       close();
-      void switchSource({ server: null });
+      // The switch reverts and toasts on failure; nothing is left to do here.
+      void switchSource({ server: null }).catch(() => {});
       return;
     }
     const raw = target.trim();
@@ -84,7 +85,7 @@ function Servers({ close }: { close: () => void }) {
     if (!next) return toast(tr("server.invalid"), "error");
     close();
     // Loads the new server's rules and tables live; the scenes remount on them.
-    void switchSource({ server: next });
+    void switchSource({ server: next }).catch(() => {});
   };
 
   /** A directory URL may be absolute or relative to the profile server. */

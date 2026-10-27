@@ -74,6 +74,16 @@ export function currentSources(): { rules: string; data: string } {
 interface Target {
   rules: string;
   data: string;
+  /** The probed `index.json` body, so the loader does not fetch it again. */
+  indexText?: string;
+}
+
+/** A request that never settles would leave the blocking overlay up forever. */
+const FETCH_TIMEOUT_MS = 30_000;
+
+function timeoutSignal(): AbortSignal | undefined {
+  const timeout = (AbortSignal as { timeout?: (ms: number) => AbortSignal }).timeout;
+  return timeout ? timeout(FETCH_TIMEOUT_MS) : undefined;
 }
 
 /**
@@ -88,10 +98,10 @@ async function resolveTargets(): Promise<Target> {
   const target = { rules: rulesBase(), data: dataBase() };
   if (target.rules === "/assets/rules/") return target;
   try {
-    const r = await fetch(target.rules + "index.json", { cache: "no-cache" });
+    const r = await fetch(target.rules + "index.json", { cache: "no-cache", signal: timeoutSignal() });
     if (r.ok) {
       const text = await r.text();
-      if (!text.trimStart().startsWith("<")) return target;
+      if (!text.trimStart().startsWith("<")) return { ...target, indexText: text };
     }
   } catch {
     /* fall through to the bundled set */
@@ -123,6 +133,7 @@ if (import.meta.env?.DEV) {
     sources: currentSources,
     version: dataVersionOf,
     busy: () => loadState().busy,
+    switch: (change: SourceChange) => switchSource(change),
   };
 }
 
@@ -156,24 +167,39 @@ function setLoad(next: LoadState): void {
   loadListeners.forEach((cb) => cb());
 }
 
-function report(stage: LoadStage, done: number, total: number): void {
+/** The load run whose progress the overlay may show. A failed `loadTables`
+ *  rejects `Promise.all` while its sibling fetches keep going; without this,
+ *  their late `report` calls re-open the overlay after the switch closed it. */
+let activeRun = 0;
+
+function report(stage: LoadStage, done: number, total: number, run: number): void {
+  if (run !== activeRun) return;
   setLoad({ busy: true, stage, done, total });
 }
 
 /** Fetch one rules directory's whole bundle (`index.json`, its modules, the
  *  precompiled conditions) without touching the live glue. Modules and the
  *  conds blob are content-addressed by file name, so only `index.json` is
- *  revalidated (`no-cache`); the rest may come from the HTTP cache. */
-function preloadRules(base: string, onFile?: (done: number, total: number) => void): Promise<RulesetBundle> {
+ *  revalidated (`no-cache`); the rest may come from the HTTP cache. A target
+ *  resolved by `resolveTargets` already carries the probed index body. */
+function preloadRules(
+  base: string,
+  onFile?: (done: number, total: number) => void,
+  indexText?: string,
+): Promise<RulesetBundle> {
   const custom = customRulesActive() ? customRulesBytes() : null;
   return fetchRuleset(
     async (rel) => {
-      const r = await fetch(base + rel, { cache: rel === "index.json" ? "no-cache" : "default" });
+      const r = await fetch(base + rel, {
+        cache: rel === "index.json" ? "no-cache" : "default",
+        signal: timeoutSignal(),
+      });
       if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
       return new Uint8Array(await r.arrayBuffer());
     },
     custom ? [custom] : [],
     onFile,
+    indexText,
   );
 }
 
@@ -287,7 +313,7 @@ function rulesFailed(e: unknown): void {
  * `D`. A throw here leaves the old `D` in place; the engine may already carry
  * the new set, which the caller either reverts or surfaces.
  */
-async function loadTables(target: Target, onProgress?: (p: number) => void): Promise<void> {
+async function loadTables(target: Target, run: number, onProgress?: (p: number) => void): Promise<void> {
   // Game roster after the presentation split: identity plus the rulebook
   // prose (`text`), which is game content and rides `ruleset_metadata`. Pure
   // display columns are merged below from `generated/display.json`.
@@ -300,11 +326,11 @@ async function loadTables(target: Target, onProgress?: (p: number) => void): Pro
   setLoad({ busy: true, stage: "data", done: 0, total: allNames.length });
   await Promise.all(
     allNames.map(async (n) => {
-      const r = await fetch(target.data + n, { cache: "no-cache" });
+      const r = await fetch(target.data + n, { cache: "no-cache", signal: timeoutSignal() });
       if (!r.ok) throw new Error(tr("boot.dataError", { name: n }));
       files[n] = await r.text();
       done++;
-      report("data", done, allNames.length);
+      report("data", done, allNames.length, run);
       onProgress?.(0.45 + (done / allNames.length) * 0.5);
     }),
   );
@@ -313,7 +339,7 @@ async function loadTables(target: Target, onProgress?: (p: number) => void): Pro
   // purpose -- it tunes bots, not the match, so it is not part of the data
   // hash either.
   try {
-    const book = await fetch(target.data + "deck_book.json");
+    const book = await fetch(target.data + "deck_book.json", { signal: timeoutSignal() });
     if (book.ok) files["deck_book.json"] = await book.text();
   } catch {
     /* absent book is fine */
@@ -321,7 +347,7 @@ async function loadTables(target: Target, onProgress?: (p: number) => void): Pro
   // Optional: the bot strategy book (`docs/BOT.md` §3.8). Missing = empty
   // book = the default parameters (today's heuristic constants).
   try {
-    const book = await fetch(target.data + "strategy_book.json");
+    const book = await fetch(target.data + "strategy_book.json", { signal: timeoutSignal() });
     if (book.ok) files["strategy_book.json"] = await book.text();
   } catch {
     /* absent book is fine */
@@ -412,13 +438,18 @@ async function loadTables(target: Target, onProgress?: (p: number) => void): Pro
  * (online play runs the rules server-side), a source switch must not.
  */
 async function loadInto(target: Target, fatal: boolean, onProgress?: (p: number) => void): Promise<void> {
+  const run = ++activeRun;
   let bundle: RulesetBundle | null = null;
   try {
     setLoad({ busy: true, stage: "rules", done: 0, total: 0 });
-    bundle = await preloadRules(target.rules, (done, total) => {
-      report("rules", done, total);
-      onProgress?.(total ? (done / total) * 0.45 : 0);
-    });
+    bundle = await preloadRules(
+      target.rules,
+      (done, total) => {
+        report("rules", done, total, run);
+        onProgress?.(total ? (done / total) * 0.45 : 0);
+      },
+      target.indexText,
+    );
   } catch (e) {
     if (fatal) throw e;
     rulesFailed(e);
@@ -426,7 +457,8 @@ async function loadInto(target: Target, fatal: boolean, onProgress?: (p: number)
   if (bundle) {
     try {
       // Stages the new modules beside the built set; `ruleset_build` swaps it.
-      // A failed build is rolled back by the next `fetchRuleset`'s reset.
+      // A failed build leaves those modules staged; the next `applyRuleset`
+      // (the revert) resets them before staging its own.
       const n = applyRuleset(glue, bundle);
       rulesetLoaded = true;
       console.info(`[rules] ${n} card module(s) loaded`);
@@ -439,7 +471,7 @@ async function loadInto(target: Target, fatal: boolean, onProgress?: (p: number)
     rulesetLoaded = false;
   }
   sources = target;
-  await loadTables(target, onProgress);
+  await loadTables(target, run, onProgress);
   onProgress?.(1);
 }
 
@@ -471,9 +503,16 @@ export async function loadGameData(onProgress: (p: number) => void): Promise<voi
     glue.set_glue_sha(engineId.glueSha256);
   }
   // Ruleset before the tables: the roster rides on the built set. Failure is
-  // degraded (empty roster + StubRules), not fatal -- `loadInto` toasts.
-  await loadInto(target, false, onProgress);
-  setLoad({ busy: false, stage: "idle", done: 0, total: 0 });
+  // degraded (empty roster + StubRules), not fatal -- `loadInto` toasts. The
+  // `finally` still clears the overlay when it is fatal (bad tables), or the
+  // error screen would sit under a busy scrim that never closes.
+  try {
+    await loadInto(target, false, onProgress);
+  } finally {
+    // Invalidate the run: rejected siblings may still settle and report.
+    activeRun++;
+    setLoad({ busy: false, stage: "idle", done: 0, total: 0 });
+  }
 }
 
 // ------------------------------------------------------------ live switching
@@ -519,8 +558,25 @@ function restoreSettings(s: SettingsSnapshot): void {
   }
 }
 
+const sameSettings = (s: SettingsSnapshot): boolean => {
+  const custom = customRules();
+  return (
+    serverBase() === s.server &&
+    buildId() === s.build &&
+    buildNameOf() === s.buildName &&
+    (custom?.name ?? "") === (s.custom?.name ?? "") &&
+    (custom?.b64 ?? "") === (s.custom?.b64 ?? "")
+  );
+};
+
 function applyChange(change: SourceChange): void {
-  if ("server" in change) setServer(change.server ?? null);
+  if ("server" in change) {
+    setServer(change.server ?? null);
+    // `setServer` deliberately keeps the build when the base does not change,
+    // but a server change always means that server's default build (which,
+    // on the same origin, is how a selected build is cleared).
+    if (!("build" in change)) setBuild(null);
+  }
   if ("build" in change) setBuild(change.build ?? null, change.buildName ?? "");
   if (change.custom && !setCustomRules(change.custom.bytes, change.custom.name)) {
     throw new Error(tr("solo.buildStoreError"));
@@ -551,25 +607,34 @@ export function switchSource(change: SourceChange): Promise<void> {
 
 async function doSwitch(change: SourceChange): Promise<void> {
   const before = snapshotSettings();
-  applyChange(change);
   try {
+    // Inside the try: a storage refusal can throw after part of the change was
+    // already persisted, and the page must not be left half-switched.
+    applyChange(change);
     setLoad({ busy: true, stage: "rules", done: 0, total: 0 });
     const target = await resolveTargets();
     await loadInto(target, true);
   } catch (e) {
-    console.error("[rules] source switch failed; reverting", e);
-    restoreSettings(before);
-    try {
-      const target = await resolveTargets();
-      await loadInto(target, true);
-      toast(tr("boot.switchReverted", { detail: detail(e) }), "error");
-    } catch (e2) {
-      console.error("[rules] revert failed; reloading the page", e2);
-      toast(tr("boot.switchReload", { detail: detail(e2) }), "error");
-      location.reload();
+    // The change itself may already have been toasted (e.g. a full storage);
+    // only reload when something actually moved.
+    if (!sameSettings(before)) {
+      console.error("[rules] source switch failed; reverting", e);
+      restoreSettings(before);
+      try {
+        const target = await resolveTargets();
+        await loadInto(target, true);
+        toast(tr("boot.switchReverted", { detail: detail(e) }), "error");
+      } catch (e2) {
+        console.error("[rules] revert failed; reloading the page", e2);
+        toast(tr("boot.switchReload", { detail: detail(e2) }), "error");
+        location.reload();
+      }
     }
     throw e;
   } finally {
+    // Invalidate the last run so its rejected siblings cannot re-open the
+    // overlay after this switch has closed it.
+    activeRun++;
     setLoad({ busy: false, stage: "idle", done: 0, total: 0 });
   }
 }

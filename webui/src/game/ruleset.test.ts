@@ -94,7 +94,9 @@ function probe(over: { actor?: number; owner?: number; roll?: number | null; mov
   const actor = over.actor ?? 0;
   const owner = over.owner ?? 0;
   const win = {
-    kind: 0,
+    // Trigger kind is a wire **spelling** (`rules_cond::kinds::trig`), not an
+    // int; `move.kind` below is the engine's int enum.
+    kind: "pass",
     actor,
     target: 0,
     value: 0,

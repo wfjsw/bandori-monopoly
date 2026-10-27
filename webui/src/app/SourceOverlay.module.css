@@ -4,7 +4,9 @@
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: var(--z-toast);
+  /* Below toasts (`--z-toast`): a toast fired during the load (the fallback
+     notice and the revert result) must stay readable above the scrim. */
+  z-index: calc(var(--z-toast) - 1);
   display: flex;
   align-items: center;
   justify-content: center;

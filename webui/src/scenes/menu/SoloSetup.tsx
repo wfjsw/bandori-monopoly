@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { navigate } from "../../app/router";
 import { cx } from "../../core/cx";
 import { D, customRules, rules, switchSource } from "../../core/data";
+import { useDataVersion, useLoadState } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { BotMentality, PersonaData, ScoreWeights } from "../../core/types";
 import { SoloSession, botSoloCapMs, discardSolo, invalidateSoloEngine, resumeSolo, setBotSoloCapMs, startSolo, warmSoloEngine } from "../../game/session";
@@ -43,6 +44,19 @@ const other = (m: BotMentality): BotMentality => {
 function SoloSetup({ close }: { close: () => void }) {
   // Boot the engine worker while the player picks seats.
   useEffect(() => warmSoloEngine(), []);
+  // This modal lives outside the scene subtree that `dataVersion` remounts
+  // (`ModalHost`), so subscribe here: the roster, the build chips and the
+  // stored custom module all change under a live switch while it is open. The
+  // load state re-renders after the switch cleared (e.g. `custom` is re-read
+  // as gone on clear), and the effect drops picks the new roster lacks.
+  const dataVersion = useDataVersion();
+  useLoadState();
+  useEffect(() => {
+    setChars((cs) => {
+      const next = cs.map((n) => (n && D.persona(n) ? n : ""));
+      return next.some((n, i) => n !== cs[i]) ? next : cs;
+    });
+  }, [dataVersion]);
   const player = getProfile().playerName;
   const { build } = useServer();
   /** Builds offered by the selected server (`GET /api/builds`); `null` while

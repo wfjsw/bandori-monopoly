@@ -88,8 +88,11 @@ export async function fetchRuleset(
   read: (rel: string) => Promise<Uint8Array>,
   extra: readonly Uint8Array[] = [],
   onFile?: (done: number, total: number) => void,
+  /** An already-read index body (the source probe fetched it); skips a second
+   *  download of the same file. */
+  probedIndex?: string,
 ): Promise<RulesetBundle> {
-  const indexText = new TextDecoder().decode(await read("index.json"));
+  const indexText = probedIndex ?? new TextDecoder().decode(await read("index.json"));
   // An SPA dev server answers unknown paths with `index.html` and HTTP 200;
   // `JSON.parse` then throws a SyntaxError with no path in it. Say what failed.
   if (indexText.trimStart().startsWith("<")) {

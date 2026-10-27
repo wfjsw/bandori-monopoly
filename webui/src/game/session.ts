@@ -5,7 +5,7 @@
 // resumed on load; an online player is re-attached through the server session
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
-import { D, currentSources, customRules, customRulesActive, customRulesBytes, rules, switchSource } from "../core/data";
+import { D, currentSources, customRules, customRulesActive, customRulesBytes, rules, subscribeData, switchSource } from "../core/data";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
 import { absolute, buildId } from "../net/server";
@@ -265,6 +265,9 @@ export abstract class GameSession {
   abstract readonly kind: "solo" | "online" | "replay";
   /** Route id: "solo" or the room id. */
   abstract readonly id: string;
+  /** The rules / tables source this session's engine or stream was booted
+   *  from. A live switch to another source ends the session (below). */
+  readonly bootSources = currentSources();
   view: MatchView | null = null;
   room: RoomInfo | null = null;
   you = 0;
@@ -383,6 +386,11 @@ export abstract class GameSession {
 }
 
 export let session: GameSession | null = null;
+
+// Dev-only seam for browser checks (mirrors `__bmDebug` in `core/data.ts`).
+if (import.meta.env?.DEV) {
+  (globalThis as { __bmSession?: unknown }).__bmSession = () => session;
+}
 
 export function endSession(): void {
   session?.setAutoMode("off");
@@ -841,11 +849,18 @@ export class SoloSession extends GameSession {
   }
 
   leave(): void {
+    this.detach();
+    localStorage.removeItem(SOLO_KEY);
+  }
+
+  /** Close the worker but keep the save: a source switch drops the live
+   *  session and the remounted board resumes this match from it. */
+  detach(): void {
+    this.persist();
     this.closed = true;
     clearInterval(this.ponderTimer);
     window.removeEventListener("pagehide", this.onHide);
     document.removeEventListener("visibilitychange", this.onHide);
-    localStorage.removeItem(SOLO_KEY);
     this.engine.close();
   }
 }
@@ -1071,10 +1086,39 @@ export async function resumeOnline(id: string, player: string, persona: string, 
   // fresh `useOnline` then sees the matching build.
   const room = r.data.room;
   if (room.build && room.build !== buildId()) {
-    await switchSource({ build: room.build });
+    try {
+      await switchSource({ build: room.build });
+    } catch {
+      // The switch reverted and toasted. Online matches run on the server, so
+      // the room stays playable on the previous (local) roster instead of
+      // bouncing the player out; the room is re-entered on a fresh navigation.
+    }
   }
   return startOnline(room, r.data.you, r.data.game);
 }
+
+/**
+ * The live session's ruleset / tables (and, online, its SSE stream and REST
+ * base) are fixed when it starts. A successful source switch replaces all of
+ * them, so the old session cannot continue: drop it. Screens that remain
+ * (Room, Lobby) re-attach through `resumeOnline` on the new source; a solo
+ * board remounts from its save. A failed switch restores the old source
+ * before bumping, so its session survives.
+ */
+subscribeData(() => {
+  const s = session;
+  if (!s) return;
+  const now = currentSources();
+  if (now.rules === s.bootSources.rules && now.data === s.bootSources.data) return;
+  s.setAutoMode("off");
+  if (s instanceof SoloSession) {
+    // Its save is the resume point; detaching keeps it.
+    s.detach();
+    session = null;
+  } else {
+    endSession();
+  }
+});
 
 /** Which part of the match screen the phase belongs in. */
 export function matchScene(v: MatchView | null): "select" | "deck" | "board" | null {

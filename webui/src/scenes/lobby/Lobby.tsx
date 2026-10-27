@@ -56,7 +56,10 @@ function useRoomList(setStatus: (s: "connecting" | "ok" | "offline") => void, se
       };
       await refresh();
       t = window.setInterval(refresh, 3000);
-    })();
+    })().catch(() => {
+      // Session storage / a room switch may throw past `call`'s own guard.
+      if (alive) setStatus("offline");
+    });
     return () => {
       alive = false;
       clearInterval(t);
@@ -97,18 +100,17 @@ function buildMatches(room: RoomInfo): boolean {
 }
 
 function enter(room: RoomInfo, you: number): void {
-  if (!buildMatches(room)) {
-    const id = room.build || knownDefaultBuild;
-    // Name the room's actual build (not the "" default alias), so the switch
-    // loads exactly what the server is playing.
-    void switchSource({ build: id, buildName: buildNameOf(id) }).then(() => {
-      startOnline(room, you);
-      navigate({ name: "room", id: room.id });
-    }).catch(() => {});
-    return;
-  }
-  startOnline(room, you);
-  navigate({ name: "room", id: room.id });
+  const go = () => {
+    startOnline(room, you);
+    navigate({ name: "room", id: room.id });
+  };
+  if (buildMatches(room)) return go();
+  const id = room.build || knownDefaultBuild;
+  // Name the room's actual build (not the "" default alias), so the switch
+  // loads exactly what the server is playing. If it reverts, enter anyway:
+  // the match runs on the server and the previous roster is still usable (the
+  // next navigation into the room retries the switch).
+  void switchSource({ build: id, buildName: buildNameOf(id) }).then(go).catch(go);
 }
 
 async function join(id: string, locked: boolean, password = "", spectate = false): Promise<void> {

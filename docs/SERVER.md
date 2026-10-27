@@ -261,7 +261,11 @@ remounts the scenes on the new data without a page reload. If the load fails it
 restores the previous choice and reloads that source; only a failed restore
 falls back to a full page reload. A custom solo ruleset is one wasm module, so
 it must carry no uncompiled `pre` conditions (the browser glue is
-`runtime-only`, `docs/GUARDS.md` §8.3).
+`runtime-only`, `docs/GUARDS.md` §8.3). A live session is bound to the source it
+started on (SSE stream, REST base, engine ruleset), so a successful switch
+drops it: a solo match keeps its save and resumes on the new source, and a room
+re-attaches through the server session. A failed switch restores the old source,
+so its session survives.
 
 ## Auth
 

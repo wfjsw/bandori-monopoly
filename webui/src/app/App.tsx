@@ -3,7 +3,7 @@
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { playSceneBgm, sfx, unlockAudio } from "../core/audio";
 import { isRepeatCrash, reportCrash } from "../core/crash";
-import { useDataVersion, useLangVersion, useProfile } from "../core/hooks";
+import { useDataVersion, useLangVersion, useLoadState, useProfile } from "../core/hooks";
 import { preloadRoute, warmAllWhenIdle, within } from "../core/preload";
 import { useCrossfade } from "../hooks/scene";
 import { Boot } from "../scenes/boot/Boot";
@@ -86,6 +86,9 @@ export function App() {
   const profile = useProfile();
   const lang = useLangVersion();
   const dataVersion = useDataVersion();
+  // Everything behind the switch overlay is inert while it loads: no click or
+  // tab may reach a control whose roster / build is about to be replaced.
+  const busy = useLoadState().busy;
   const path = usePath();
   // Parsed once per path: `useCrossfade` keys on this object, and a fresh one
   // every render would re-run its effect (and cancel its timers) on every
@@ -124,18 +127,22 @@ export function App() {
   return (
     <CrashBoundary>
       <Stage transitioning={fading}>
-        {/* Remount on language change so every already-rendered string is re-read. */}
-        <div key={lang} style={{ position: "absolute", inset: 0 }}>
-          {/* `dimmed` fades this layer out to the backdrop on the fallback path. */}
-          <div style={{ position: "absolute", inset: 0, opacity: dimmed ? 0 : 1, transition: "opacity 0.14s" }}>
-            {/* `dataVersion` remounts the scene after a live source switch so
-                every screen re-reads the new roster / tables. */}
-            {booted ? shown && <div key={`${href(shown)}:${dataVersion}`}><Suspense fallback={null}>{scene(shown)}</Suspense></div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
+        {/* Inert under the switch overlay; `contents` keeps the absolute scene
+            layer positioned by the stage and the fixed hosts unaffected. */}
+        <div inert={busy || undefined} style={{ display: "contents" }}>
+          {/* Remount on language change so every already-rendered string is re-read. */}
+          <div key={lang} style={{ position: "absolute", inset: 0 }}>
+            {/* `dimmed` fades this layer out to the backdrop on the fallback path. */}
+            <div style={{ position: "absolute", inset: 0, opacity: dimmed ? 0 : 1, transition: "opacity 0.14s" }}>
+              {/* `dataVersion` remounts the scene after a live source switch so
+                  every screen re-reads the new roster / tables. */}
+              {booted ? shown && <div key={`${href(shown)}:${dataVersion}`}><Suspense fallback={null}>{scene(shown)}</Suspense></div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
+            </div>
           </div>
+          <ModalHost />
+          <InspectPreviewHost />
+          <ToastHost />
         </div>
-        <ModalHost />
-        <InspectPreviewHost />
-        <ToastHost />
         <SourceOverlay />
       </Stage>
       <InstallHint />
