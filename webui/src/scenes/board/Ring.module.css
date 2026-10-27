@@ -80,7 +80,7 @@
    background: var(--surface);
    border: 0.5px solid #52635f;
    overflow: hidden;
-   transition: background 0.2s;
+   transition: background var(--dur-mid), opacity var(--dur-mid) ease;
    padding: 0;
    font: inherit;
    text-align: center;

@@ -8,7 +8,7 @@ import displayJson from "../generated/display.json";
 import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
-import { bandLogo, charArt } from "./assets";
+import { bandLogo, charArt, cardArt } from "./assets";
 import { cardFaceTitle } from "./cardFace";
 import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile, Block } from "./types";
 
@@ -271,6 +271,14 @@ export function skillCard(id: string): { title: string; text: string; group?: st
   const character = D.personas.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
   if (character) return { title: character.skill, text: skillText(character), group: character.group, color: character.color, art: charArt(D.artId(character), "thumb") };
   return undefined;
+}
+
+/** Art url for any card id: a skill stand-in's own art (band logo / character
+ *  thumb), else the manifest's card art (or the card back). `||`, not `??` --
+ *  `skillCard` returns `""` when the roster entry has no art, and that must
+ *  still fall through to the card back rather than a broken image. */
+export function cardArtUrl(id: string): string {
+  return skillCard(id)?.art || cardArt(id);
 }
 
 /** The effect text of a card id: a data card's text, or a skill stand-in's. */

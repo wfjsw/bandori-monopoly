@@ -372,6 +372,7 @@
   "deed.mortgage": "Mortgage  +{{n}}",
   "deed.mortgageLine": "Mortgage {{mortgage}}   redeem {{redeem}}",
   "deed.mortgagedLine": "Mortgaged: no rent, no building   redeem {{n}}",
+  "deed.mortgagedForceLine": "Mortgaged: no rent, no building   force-buy {{n}}",
   "deed.mortgagedTag": " · mortgaged",
   "deed.noBuild": "No houses",
   "deed.noMortgage": "Not mortgageable",

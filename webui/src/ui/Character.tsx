@@ -94,6 +94,6 @@ export const BandMark = memo(function BandMark({ band, className }: { band: stri
 });
 
 /** Grid wrapper so scenes can lay out cards in their own columns. */
-export function CharGrid({ className, children }: { className?: string; children: ReactNode }) {
+export const CharGrid = memo(function CharGrid({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cx(s.grid, className)}>{children}</div>;
-}
+});

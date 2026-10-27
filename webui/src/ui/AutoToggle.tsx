@@ -6,7 +6,7 @@
 // rendered by the match screens. 进阶 is the worker-pool search
 // (`docs/BOT.md` B6), lazy-loaded; it falls back to 托管 on any failure.
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useAutoMode, useThinking } from "../core/hooks";
 import { cx } from "../core/cx";
 import { useInterval } from "../hooks/timers";
@@ -30,7 +30,7 @@ const LABEL = (m: AutoMode) =>
  * dress the pill as one of its own controls (the hand bar does, beside the
  * draw pile) and it stays coherent with its neighbours.
  */
-export function AutoToggle({ sess, className, skin = "title" }: { sess: GameSession; className?: string; skin?: "title" | "host" }) {
+export const AutoToggle = memo(function AutoToggle({ sess, className, skin = "title" }: { sess: GameSession; className?: string; skin?: "title" | "host" }) {
   const mode = useAutoMode(sess);
   // A replay is read-only: there is no seat to hand to the autopilot.
   if (sess.readOnly) return null;
@@ -46,13 +46,13 @@ export function AutoToggle({ sess, className, skin = "title" }: { sess: GameSess
       <span>{LABEL(mode)}</span>
     </button>
   );
-}
+});
 
 /**
  * The "thinking…" pill: shown while a seat's 进阶 search is running
  * (`docs/BOT.md` B6). Small, transient, never blocks input.
  */
-export function ThinkingPill({ sess, member }: { sess: GameSession; member?: number }) {
+export const ThinkingPill = memo(function ThinkingPill({ sess, member }: { sess: GameSession; member?: number }) {
   const thinking = useThinking(sess, member);
   if (!thinking) return null;
   return (
@@ -61,7 +61,7 @@ export function ThinkingPill({ sess, member }: { sess: GameSession; member?: num
       <span>{tr("board.thinking")}</span>
     </div>
   );
-}
+});
 
 /** How long the strip stays after the cooldown ends (it is transient: the
  *  pill at the hand header is the standing indicator). */
@@ -70,7 +70,7 @@ const BANNER_FADE_MS = 400;
 
 /** The "托管中 / 混沌中" strip: shown when an autopilot mode is switched on (or
  *  changed), through the start-up cooldown, then fades away. */
-export function AutoBanner({ sess }: { sess: GameSession }) {
+export const AutoBanner = memo(function AutoBanner({ sess }: { sess: GameSession }) {
   const mode = useAutoMode(sess);
   const [, tick] = useState(0);
   // When to drop the strip: re-armed on every mode change. Derived at render
@@ -95,4 +95,4 @@ export function AutoBanner({ sess }: { sess: GameSession }) {
       {left > 0 && <span className={s.cooldown}>{tr("board.autoplayStarting", { n: left })}</span>}
     </div>
   );
-}
+});

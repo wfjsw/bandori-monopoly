@@ -2,9 +2,10 @@
 
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { handLimit } from "../../core/hand";
-import { cardArt, sceneImg } from "../../core/assets";
+import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D, cardTitle, cardText } from "../../core/data";
+import { D, cardTitle, cardText, cardArtUrl } from "../../core/data";
+import { useLatestRef } from "../../hooks/latest";
 import { useAutoplay } from "../../core/hooks";
 import { useEventListener, useHotkeys } from "../../hooks/dom";
 import { useDockRaise } from "../../hooks/dock";
@@ -21,7 +22,7 @@ import { usePromptSheet } from "../../ui/Modal";
 import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model } from "./model";
-import { byTitle, showDeck, showDeedList } from "./Popups";
+import { byTitle, cardKeys, showDeck, showDeedList } from "./Popups";
 import { useCompactValue } from "../../app/Stage";
 import { designBox } from "../../app/stageScale";
 import { BOARD_MID, COMPACT_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
@@ -31,18 +32,19 @@ import { fmtMsg } from "../../i18n/msg";
 import { counterLabel, stateLabel } from "../../i18n/stateLabel";
 import { namesOf } from "../../core/names";
 
-export function Side({ sess }: { sess: GameSession }) {
+export const Side = memo(function Side({ sess }: { sess: GameSession }) {
   const auto = useAutoplay(sess);
+  const deeds = useCallback(() => showDeedList(sess), [sess]);
   // A replay is read-only: every action control (skill, roll / continue,
   // mortgage, redeem) is hidden, not disabled, and the grid collapses away --
   // the left column is just the players. Inspection (tiles, cards, log) stays.
   if (sess.readOnly) return null;
   return (
     <div className={s.actions}>
-      <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess)}>{tr("board.deeds")}</Btn>
+      <Btn icon="account_balance" className={s.act} disabled={auto} onClick={deeds}>{tr("board.deeds")}</Btn>
     </div>
   );
-}
+});
 
 /** Only appears when somebody has already requested an online settlement. */
 export const SettleVote = memo(function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
@@ -119,6 +121,56 @@ export function skillSlots(m: Model): SkillSlot[] {
 }
 
 /**
+ * One skill face on the stack: its own memo boundary, so a pick flip, a
+ * neighbour's marker change or the dock's hover state leaves the other faces
+ * (and their `<img>`s) alone. Handlers are ref-indirected to keep that memo
+ * honest -- a fresh closure per render is what defeats it.
+ */
+const SkillFace = memo(function SkillFace({ id, enabled, reason, text, on, usable, isUsing, fire, onPick, peek, unpeek }: {
+  id: string;
+  enabled: boolean;
+  reason: string;
+  text: string;
+  on: boolean;
+  usable: boolean;
+  isUsing: () => boolean;
+  fire: (id: string) => void;
+  onPick: (id: string | null) => void;
+  peek: (id: string, note: string, text?: string) => void;
+  unpeek: () => void;
+}) {
+  const latest = useLatestRef({ id, enabled, reason, text, on, usable, isUsing, fire, onPick, peek, unpeek });
+  const onClick = useCallback(() => {
+    const v = latest.current;
+    if (v.isUsing()) return;
+    if (!v.on) return void v.onPick(v.id);
+    v.onPick(null);
+    // The detail popup is the confirmation: its button fires the skill.
+    const acts: CardAction[] = v.usable ? [{ label: tr("board.useSkill"), enabled: true, run: () => v.fire(v.id) }] : [];
+    showCard(v.id, acts, v.enabled ? v.text : v.reason);
+  }, [latest]);
+  const onHover = useCallback(() => {
+    const v = latest.current;
+    v.peek(v.id, v.enabled ? "" : v.reason, v.text);
+  }, [latest]);
+  return (
+    <CardFace
+      id={id}
+      size="mini"
+      width={SKILL_CARD_W}
+      className={s.skillCard}
+      on={on}
+      playable={usable}
+      onClick={onClick}
+      onMouseEnter={onHover}
+      onMouseLeave={unpeek}
+      onFocus={onHover}
+      onBlur={unpeek}
+    />
+  );
+});
+
+/**
  * The player's pressable skills as a dense horizontal stack on the left of the
  * hand fan, inside the dock so it rises and retracts with the hand. Straight
  * row -- no arc, no rotation -- overlapping tighter than the fan so 1-4 skills
@@ -134,7 +186,7 @@ export function skillSlots(m: Model): SkillSlot[] {
  * never land here -- they have no activation and are read from the
  * character's skill text instead.
  */
-function SkillStack({ m, sess, peek, unpeek }: {
+const SkillStack = memo(function SkillStack({ m, sess, peek, unpeek }: {
   m: Model;
   sess: GameSession;
   peek: (id: string, note: string, text?: string) => void;
@@ -145,23 +197,29 @@ function SkillStack({ m, sess, peek, unpeek }: {
   const slots = skillSlots(m);
   const me = m.me;
   // One use in flight: a second click before the engine answers is dropped.
-  const [using, setUsing] = useState(false);
+  // A ref, not state -- it is a click latch with no visual, so it must not
+  // repaint the stack (and defeat every face's memo) to do its job.
+  const using = useRef(false);
+  const isUsing = useCallback(() => using.current, []);
   // First click selects (highlighted border); clicking the selected card opens
   // the detail popup -- same two-step as the hand and the field row. Clicking
   // anywhere else drops the pick again -- it is a lens, not a mode.
   const [picked, setPicked] = useState<string | null>(null);
   const unpick = useCallback(() => setPicked(null), []);
   usePickDeselect(picked, unpick);
-  if (!slots.length) return null;
-  const fire = async (id: string) => {
-    if (using) return;
-    setUsing(true);
+  // Always keep the row mounted, even through a transient empty (`skills`
+  // briefly absent online before the extras land): tearing the container and
+  // its CardFace <img>s down is what flashes the skill art. An empty row
+  // collapses to zero size and leaves no gap.
+  const fire = useCallback(async (id: string) => {
+    if (using.current) return;
+    using.current = true;
     try {
       await act(sess, { act: "skill", card: id });
     } finally {
-      setUsing(false);
+      using.current = false;
     }
-  };
+  }, [sess]);
   return (
     <div className={s.skillStack}>
       <div className={s.skillRow}>
@@ -175,25 +233,18 @@ function SkillStack({ m, sess, peek, unpeek }: {
               className={s.skillSlot}
               title={a.tip}
             >
-              <CardFace
+              <SkillFace
                 id={a.id}
-                size="mini"
-                width={SKILL_CARD_W}
-                className={s.skillCard}
+                enabled={a.enabled}
+                reason={a.reason}
+                text={a.text}
                 on={picked === a.id}
-                playable={usable}
-                onClick={() => {
-                  if (using) return;
-                  if (picked !== a.id) return void setPicked(a.id);
-                  setPicked(null);
-                  // The detail popup is the confirmation: its button fires the skill.
-                  const acts: CardAction[] = usable ? [{ label: tr("board.useSkill"), enabled: true, run: () => fire(a.id) }] : [];
-                  showCard(a.id, acts, a.enabled ? a.text : a.reason);
-                }}
-                onMouseEnter={() => peek(a.id, a.enabled ? "" : a.reason, a.text)}
-                onMouseLeave={unpeek}
-                onFocus={() => peek(a.id, a.enabled ? "" : a.reason, a.text)}
-                onBlur={unpeek}
+                usable={usable}
+                isUsing={isUsing}
+                fire={fire}
+                onPick={setPicked}
+                peek={peek}
+                unpeek={unpeek}
               />
               {marks.length > 0 && (
                 <div className={s.skillMarks}>
@@ -206,7 +257,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
       </div>
     </div>
   );
-}
+});
 
 /**
  * One card's place in the hand's circular-sector fan: a tilt around a pivot
@@ -239,6 +290,46 @@ export function fanRise(n: number, spread = 660): string {
 }
 
 /**
+ * One hand card in the fan: its own memo boundary, so a pick flip, the dock
+ * raising or a neighbour's glow leaves the other faces (and their `<img>`s)
+ * alone. Handlers are ref-indirected to keep that memo honest.
+ */
+const HandFace = memo(function HandFace({ id, k, on, playable, title, onPick, onPeek, onUnpeek }: {
+  id: string;
+  k: number;
+  on: boolean;
+  playable: boolean;
+  title: string;
+  onPick: (id: string, k: number) => void;
+  onPeek: (k: number, id: string) => void;
+  onUnpeek: () => void;
+}) {
+  const latest = useLatestRef({ id, k, onPick, onPeek, onUnpeek });
+  const onClick = useCallback(() => {
+    const v = latest.current;
+    v.onPick(v.id, v.k);
+  }, [latest]);
+  const onEnter = useCallback(() => {
+    const v = latest.current;
+    v.onPeek(v.k, v.id);
+  }, [latest]);
+  return (
+    <CardFace
+      id={id}
+      size="mini"
+      title={title}
+      on={on}
+      playable={playable}
+      onClick={onClick}
+      onMouseEnter={onEnter}
+      onMouseLeave={onUnpeek}
+      onFocus={onEnter}
+      onBlur={onUnpeek}
+    />
+  );
+});
+
+/**
  * The match hand, docked at the bottom of the middle column like Master Duel's:
  * a fanned row of full card faces, retracted so only the top strip of each card
  * peeks above the bottom edge. Hovering the dock (or focusing a card) raises
@@ -266,12 +357,14 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   const S = m.S;
   const limit = handLimit(m.me);
   const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy && !auto;
-  // Hovering a card lifts it and feeds the standing card panel.
-  const peekCard = (id: string, note: string, text?: string) => {
+  // Hovering a card lifts it and feeds the standing card panel. Stable: only
+  // `setHover` / `stickCard`, so the memoized skill faces are not re-rendered
+  // by a fresh closure each time Hand repaints for its own hover/peek state.
+  const peekCard = useCallback((id: string, note: string, text?: string) => {
     setHover({ id, note, text });
     stickCard(id, note);
-  };
-  const peekHand = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
+  }, []);
+  const unpeek = useCallback(() => setHover(null), []);
   // Playable right now -- the play action's own gate. Glows blue on the face;
   // everything else stays an ordinary card (no dimming). Over the hand limit
   // the action is discard, not play, so nothing glows. Absent `playable` (solo
@@ -285,7 +378,14 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   const [picked, setPicked] = useState<string | null>(null);
   const unpick = useCallback(() => setPicked(null), []);
   usePickDeselect(picked, unpick);
-  const activate = (id: string, k: number) => {
+  // Fresh handlers behind stable identities, so `memo(HandFace)` holds across
+  // Hand's own re-renders (dock raise, skill hover, the 500ms parent tick).
+  const handPick = useRef<(id: string, k: number) => void>(() => undefined);
+  const onPick = useCallback((id: string, k: number) => handPick.current(id, k), []);
+  const handPeek = useRef<(k: number, id: string) => void>(() => undefined);
+  const onPeek = useCallback((k: number, id: string) => handPeek.current(k, id), []);
+  handPeek.current = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
+  handPick.current = (id: string, k: number) => {
     const key = `${id}:${k}`;
     if (picked !== key) return void setPicked(key);
     setPicked(null);
@@ -299,6 +399,11 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
+  const deckKeys = cardKeys(deck);
+  // Identity keys for the fan: position would change on every play / discard,
+  // remounting each survivor's face and reloading its art. `k` still drives
+  // the arc and the pick id, so the face receives it as a prop.
+  const handKeys = cardKeys(m.v.hand);
   // Left skill stack: the fan stays centred on the column regardless; its
   // spread reserves the stack's width on *both* sides, so a wide hand tightens
   // symmetrically and never runs under the stack. The budget is the dock's own
@@ -373,28 +478,26 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
               // Playable cards glow blue (`cardPlayable`); the rest keep a
               // plain face. Inspect / pick still work either way.
               <div
-                key={`${id}:${k}`}
+                key={handKeys[k]}
                 {...{ [PICK_ATTR]: `${id}:${k}` }}
                 className={s.fanCard}
                 style={fanArc(m.v.hand.length, k, fanSpread) as CSSProperties}
               >
-                <CardFace
+                <HandFace
                   id={id}
-                  size="mini"
+                  k={k}
                   title={cardTitle(id)}
                   on={picked === `${id}:${k}`}
                   playable={cardPlayable(k)}
-                  onClick={() => activate(id, k)}
-                  onMouseEnter={() => peekHand(k, id)}
-                  onMouseLeave={() => setHover(null)}
-                  onFocus={() => peekHand(k, id)}
-                  onBlur={() => setHover(null)}
+                  onPick={onPick}
+                  onPeek={onPeek}
+                  onUnpeek={unpeek}
                 />
               </div>
             ))}
           </div>
           {/* Pressable skills as a dense stack on the left of the fan. */}
-          <SkillStack m={m} sess={sess} peek={peekCard} unpeek={() => setHover(null)} />
+          <SkillStack m={m} sess={sess} peek={peekCard} unpeek={unpeek} />
         </div>
         <div className={s.bar}>
           <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit ?? "∞" })}</PanelTab>
@@ -417,7 +520,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
         <div className={cx(s.preview, hover && !stand && s.previewOn)}>
           {hover && !stand && (
             <>
-              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.group) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
+              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.group) : "#ED4E76" }}><img src={cardArtUrl(hover.id)} alt="" /></div>
               <div className={s.pTitle}>{cardTitle(hover.id)}</div>
               {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
               <div className={s.pText} ref={textRef}><SkillBody blocks={hover.text ? undefined : hc?.body} text={hover.text ?? hc?.text ?? ""} /></div>
@@ -430,7 +533,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
       <div className={cx(s.peek, peek && s.peekOn)}>
         <div className={s.peekHead}>{tr("board.drawPile")}<b>×{m.me.draw}</b></div>
         {deck.length
-          ? deck.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArt(id)} alt="" /><span>{cardTitle(id)}</span></div>)
+          ? deck.map((id, k) => <div key={deckKeys[k]} className={s.peekRow}><img src={cardArtUrl(id)} alt="" /><span>{cardTitle(id)}</span></div>)
           : <div className={s.peekEmpty}>{tr("board.drawPileEmpty")}</div>}
       </div>
     </>

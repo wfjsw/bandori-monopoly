@@ -5,10 +5,9 @@
 // bottom sheet over the hand (Modal `chrome: "prompt"`): content-sized, up to
 // the centre column, retractable to its title strip.
 
-import { useRef, useState } from "react";
-import { cardArt } from "../../core/assets";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { cx } from "../../core/cx";
-import { D, cardTitle, cardText, cardBody, cardColor, cardCounterReason } from "../../core/data";
+import { D, cardTitle, cardText, cardBody, cardColor, cardArtUrl, cardCounterReason } from "../../core/data";
 import { n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
 import { useCloseWhen, useMountEffect } from "../../hooks/mount";
@@ -30,6 +29,7 @@ import { fmtMsg, fmtMsgParts, type Msg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 import { toast } from "../../ui/Toast";
 import { msgCards, optionCard, returnsPickCount, returnsPickNumber, submitReturnsSelection } from "./returnsSelection";
+import { cardKeys } from "./Popups";
 
 /** Is this prompt waiting on `playerId`? */
 export function waitingOn(p: MatchPrompt, playerId: number): boolean {
@@ -62,7 +62,7 @@ function useLinger(on: boolean, ms = 180): boolean {
  * solo has no deadline). Lives in the title strip so it stays visible when the
  * sheet is retracted -- and keeps running there.
  */
-function PromptTimer({ sess }: { sess: GameSession }) {
+const PromptTimer = memo(function PromptTimer({ sess }: { sess: GameSession }) {
   const { view, at } = useMatchView(sess);
   useTick(500);
   // The deadline is measured against the time the prompt was first shown.
@@ -83,9 +83,9 @@ function PromptTimer({ sess }: { sess: GameSession }) {
       <span className={s.timerNum}>{left}{tr("common.unitSec")}</span>
     </div>
   );
-}
+});
 
-function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () => void }) {
+const Prompt = memo(function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () => void }) {
   const { view } = useMatchView(sess);
   const auto = useAutoplay(sess); // 托管: answers are read-only
   const p = view?.state.prompt;
@@ -98,10 +98,16 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   useRaiseSheetOn(live ? p?.id : id);
   // Keep the panel's content through the close slide (the options go inert).
   const showing = useLinger(live);
-  if (!showing || !view || !p) return null;
-  const answer = (extra: Partial<Command>) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
-
-  const bodyCards = uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]);
+  // Everything below is derived from the live view. It sits above the `!showing`
+  // return because two of these are hooks: a hook below the return would fire
+  // only once a prompt exists ("more hooks than during the previous render").
+  // The names table is memoized on the view so the memoized option rows can
+  // skip a re-render that did not change the frame.
+  const names = useMemo(() => namesOf(view?.state), [view]);
+  const bodyCards = useMemo(
+    () => (p ? uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]) : []),
+    [p],
+  );
   // The prompt names a source card (the trigger a [反击] answers): the standing
   // card panel on the right follows it, so the player sees what they are
   // answering while they choose.
@@ -109,6 +115,12 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   useMountEffect(() => {
     if (standCard) stickCard(standCard);
   });
+  // A stable `answer` for the memoized option rows: it reads the latest
+  // closure (托管 / session / prompt id) through the ref.
+  const answerRef = useRef<Answer>(() => Promise.resolve(false));
+  const answer = useCallback<Answer>((extra) => answerRef.current(extra), []);
+  if (!showing || !view || !p) return null;
+  answerRef.current = (extra) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
 
   // One layout rule for every prompt that shows cards: a panel that is just a
   // row of card faces (the hand), or more than one related-card detail, stacks
@@ -118,13 +130,16 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   const showsHand = /hand|mulligan/.test(p.title.k) && !p.options.some((o) => msgCards(o).length);
   const relatedCards = showsHand ? [] : bodyCards;
   const stacked = showsHand || relatedCards.length > 1;
+  // Hand cards can repeat an id; identity keys keep a removal from remounting
+  // (and re-flashing) the survivors.
+  const handKeys = cardKeys(view.hand);
 
   let side = null;
   if (showsHand) {
     side = (
       <div className={cx(s.side, s.sideTop)}>
         <div className={s.sideTitle}>{tr("prompt.hand")}</div>
-        <div className={s.cardStrip}>{view.hand.map((h, k) => <InspectCard key={k} id={h} size="tile" />)}</div>
+        <div className={s.cardStrip}>{view.hand.map((h, k) => <InspectCard key={handKeys[k]} id={h} size="tile" />)}</div>
         <div className={s.sideHint}>{tr("prompt.handHint")}</div>
       </div>
     );
@@ -146,7 +161,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
                 tabIndex={0}
               >
                 <div className={s.dArt} style={{ borderColor: cardColor(cid) }}>
-                  <img src={cardArt(cid)} alt="" />
+                  <img src={cardArtUrl(cid)} alt="" />
                 </div>
                 <div className={s.dTitle}>{cardTitle(cid)}</div>
                 {!!c?.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
@@ -166,24 +181,24 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
       <div className={s.main}>
         {!returnsGroup && (
           <div className={s.text}>
-            <MsgBody m={p.text} names={namesOf(view.state)} />
+            <MsgBody m={p.text} names={names} />
           </div>
         )}
         <div className={s.options}>
           {returnsGroup && <ReturnsOptions p={p} sess={sess} auto={auto} />}
-          {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
-          {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
+          {p.kind === "tile" && <TileOptions p={p} answer={answer} names={names} auto={auto} />}
+          {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} names={names} />}
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
-          {p.kind === "multi" && <MultiOptions p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
-          {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? namesOf(view.state).playerId(p.bidder) : ""} answer={answer} auto={auto} />}
+          {p.kind === "multi" && <MultiOptions p={p} answer={answer} auto={auto} names={names} />}
+          {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? names.playerId(p.bidder) : ""} answer={answer} auto={auto} />}
           {p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "pick" && p.kind !== "multi" && p.kind !== "auction" && !returnsGroup && (
-            <Options p={p} answer={answer} auto={auto} names={namesOf(view.state)} />
+            <Options p={p} answer={answer} auto={auto} names={names} />
           )}
         </div>
       </div>
     </div>
   );
-}
+});
 
 /**
  * Prompt body text. `{{card}}` arguments render as card references that hover
@@ -191,7 +206,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
  * affordance a log line's card name has. A nested message (the [反击] prompt's
  * `detail`, "what is being answered") is interpolated the same way.
  */
-function MsgBody({ m, names }: { m: Msg; names: Names }) {
+const MsgBody = memo(function MsgBody({ m, names }: { m: Msg; names: Names }) {
   const parts = fmtMsgParts(m, names);
   return (
     <>
@@ -217,7 +232,7 @@ function MsgBody({ m, names }: { m: Msg; names: Names }) {
       )}
     </>
   );
-}
+});
 
 type Answer = (extra: Partial<Command>) => Promise<boolean>;
 
@@ -230,7 +245,7 @@ function uniqCards(ids: string[]): string[] {
  * One option pill -- a text-only option (「不选」, 「返回」, a buy, a direction).
  * Card-bearing options are not pills: they are card tiles in the row above.
  */
-function OptionPill({ o, names, disabled, onAnswer }: {
+const OptionPill = memo(function OptionPill({ o, names, disabled, onAnswer }: {
   o: Msg; names: Names; disabled: boolean; onAnswer: () => void;
 }) {
   return (
@@ -238,7 +253,7 @@ function OptionPill({ o, names, disabled, onAnswer }: {
       {fmtMsg(o, names)}
     </button>
   );
-}
+});
 
 /**
  * Every option laid out as the prompt's card row plus a pill row.
@@ -254,12 +269,13 @@ function OptionPill({ o, names, disabled, onAnswer }: {
  * choice's meaning. Single-select only either way; the multi-select grids
  * (Returns' eight-pick) keep their checkbox grid and confirm.
  */
-function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
-  const carded = p.options.flatMap((o, i) => {
+const Options = memo(function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
+  // Stable identities for the memoized card-row children below.
+  const carded = useMemo(() => p.options.flatMap((o, i) => {
     const id = msgCards(o)[0];
     return id ? [{ o, i, id }] : [];
-  });
-  const plain = p.options.flatMap((o, i) => (msgCards(o).length ? [] : [{ o, i }]));
+  }), [p.options]);
+  const plain = useMemo(() => p.options.flatMap((o, i) => (msgCards(o).length ? [] : [{ o, i }])), [p.options]);
   const pick = carded.length > 0 && !isLabeledChoice(p) && carded.every(({ o }) => isCardPickOption(o));
   if (pick) return <CardPick p={p} carded={carded} answer={answer} auto={auto} />;
   return (
@@ -300,7 +316,7 @@ function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; a
       ))}
     </>
   );
-}
+});
 
 /** Is this window's option label the choice itself (distance / payment method /
  *  a player name with a card decoration) rather than "play this card"? */
@@ -315,7 +331,7 @@ function isCardPickOption(o: Msg): boolean {
 }
 
 /** The select-then-confirm card row: a tray of tiles, then 确认 / 取消. */
-function CardPick({ p, carded, answer, auto }: {
+const CardPick = memo(function CardPick({ p, carded, answer, auto }: {
   p: MatchPrompt;
   carded: { o: Msg; i: number; id: string }[];
   answer: Answer;
@@ -390,9 +406,9 @@ function CardPick({ p, carded, answer, auto }: {
       </div>
     </>
   );
-}
+});
 
-function ReturnsOptions({ p, sess, auto }: { p: MatchPrompt; sess: GameSession; auto: boolean }) {
+const ReturnsOptions = memo(function ReturnsOptions({ p, sess, auto }: { p: MatchPrompt; sess: GameSession; auto: boolean }) {
   const seed = (prompt: MatchPrompt) => ({
     ids: prompt.options.map(optionCard).filter((c): c is string => c !== null),
     count: returnsPickCount(prompt),
@@ -444,9 +460,9 @@ function ReturnsOptions({ p, sess, auto }: { p: MatchPrompt; sess: GameSession; 
       <span className={s.confirmLabel}>{busy ? tr("prompt.addingToDraw", { n: sent, total: pool.count }) : tr("prompt.confirmDraw", { n: picked.length, total: pool.count })}</span>
     </button>
   </>;
-}
+});
 
-function TileOptions({ p, answer, names, auto }: { p: MatchPrompt; answer: Answer; names: Names; auto: boolean }) {
+const TileOptions = memo(function TileOptions({ p, answer, names, auto }: { p: MatchPrompt; answer: Answer; names: Names; auto: boolean }) {
   return (
     <>
       <p className={s.sub}>{tr("prompt.tapTiles")}</p>
@@ -456,9 +472,9 @@ function TileOptions({ p, answer, names, auto }: { p: MatchPrompt; answer: Answe
       <button type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: p.items.length })}>{tr("prompt.none")}</button>
     </>
   );
-}
+});
 
-function MortgageOptions({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
+const MortgageOptions = memo(function MortgageOptions({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
   const [picked, setPicked] = useState<string[]>([]);
   const cancellable = p.options.length > 0;
   const sum = picked.reduce((a, t) => a + Math.floor(D.tiles[Number(t)].price / 2), 0);
@@ -480,9 +496,9 @@ function MortgageOptions({ p, answer, auto, names }: { p: MatchPrompt; answer: A
       {cancellable && <OptionPill o={p.options[0]} names={names} disabled={auto} onAnswer={() => void answer({ value: 1 })} />}
     </>
   );
-}
+});
 
-function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto: boolean }) {
+const PickOptions = memo(function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto: boolean }) {
   const [picked, setPicked] = useState<number[]>([]);
   const toggle = (k: number) => setPicked(picked.includes(k) ? picked.filter((x) => x !== k) : picked.length < p.count ? [...picked, k] : picked);
   return (
@@ -493,14 +509,14 @@ function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto
       </button>
     </>
   );
-}
+});
 
 /**
  * `multi`: exactly `count` of the labeled effects, answered as a bitmask in
  * `value` (bit *i* = option *i*). The options are effect labels, not cards --
  * a checklist of text rows, never a `CardGrid`.
  */
-function MultiOptions({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
+const MultiOptions = memo(function MultiOptions({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
   const [picked, setPicked] = useState<number[]>([]);
   const toggle = (k: number) => setPicked(picked.includes(k) ? picked.filter((x) => x !== k) : picked.length < p.count ? [...picked, k] : picked);
   return (
@@ -523,7 +539,7 @@ function MultiOptions({ p, answer, auto, names }: { p: MatchPrompt; answer: Answ
       </button>
     </>
   );
-}
+});
 
 /** Prompts whose options are cards: they render as card tiles (or the
  *  multi-select grid), never as text-only buttons. */
@@ -540,7 +556,7 @@ export function isCardChoice(p: MatchPrompt): boolean {
 /** Cards laid out like the hand, but larger, with a detail panel: hovering
  *  previews a card, clicking selects it and keeps it in the panel. The detail
  *  panel is the hover preview here, so the floating one is off. */
-function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled = false }: { ids: string[]; picked: number[]; onPick: (k: number) => void; onConfirm?: (k: number) => void; multiple?: boolean; disabled?: boolean }) {
+const CardGrid = memo(function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled = false }: { ids: string[]; picked: number[]; onPick: (k: number) => void; onConfirm?: (k: number) => void; multiple?: boolean; disabled?: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
   const focus = hover ?? picked[picked.length - 1] ?? null;
   const id = focus === null ? null : ids[focus];
@@ -566,7 +582,7 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
       <div className={s.detail} onDoubleClick={() => focus !== null && onConfirm?.(focus)}>
         {id && c ? (
           <>
-            <div className={s.dArt} style={{ borderColor: bandColor(c.group) }}><img src={cardArt(id)} alt="" /></div>
+            <div className={s.dArt} style={{ borderColor: bandColor(c.group) }}><img src={cardArtUrl(id)} alt="" /></div>
             <div className={s.dTitle}>{cardTitle(id)}</div>
             {!!c.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
             <div className={s.dText}><SkillBody blocks={c.body} text={c.text} /></div>
@@ -576,9 +592,9 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
       </div>
     </div>
   );
-}
+});
 
-function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; playerId: number; bidderName: string; answer: Answer; auto: boolean }) {
+const Auction = memo(function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; playerId: number; bidderName: string; answer: Answer; auto: boolean }) {
   const min = p.bid <= 0 ? 100 : p.bid + 100;
   const [bid, setBid] = useState(min);
   // The engine's minimum is a floor: when the standing bid rises, the field
@@ -600,7 +616,7 @@ function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; pl
       )}
     </div>
   );
-}
+});
 
 export function openPrompt(sess: GameSession, p: MatchPrompt): void {
   openModal(fmtMsg(p.title, namesOf(sess.view?.state)) || tr("prompt.title"), (close) => <Prompt sess={sess} id={p.id} close={close} />, {

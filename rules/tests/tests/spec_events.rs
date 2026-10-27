@@ -97,6 +97,11 @@ fn filing() -> [&'static str; 5] {
 fn allow(extra: &[&str]) -> Vec<&'static str> {
     let mut v: Vec<&'static str> = filing().to_vec();
     for e in extra {
+        // Leak justified: the allow-list type is `Vec<&'static str>` (it is
+        // handed to the harness and compared against later writes, so it
+        // cannot borrow from `extra`'s frame), and these are test-only path
+        // strings -- a handful per test, in a process that exits. Cheaper than
+        // threading a lifetime through the whole filing API for no benefit.
         v.push(Box::leak(e.to_string().into_boxed_str()));
     }
     v

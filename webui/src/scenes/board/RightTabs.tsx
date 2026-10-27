@@ -5,7 +5,7 @@
 // merely pointed at or flashed updates the (mounted) stand but never pulls the
 // user away from the log they are reading.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { cx } from "../../core/cx";
 import { t as tr } from "../../i18n/t";
 import { useCardPick } from "../../ui/CardPreview";
@@ -13,7 +13,12 @@ import { Icon } from "../../ui/Icon";
 import { CardStand } from "./CardStand";
 import s from "./RightTabs.module.css";
 
-export function RightTabs({ flash, log }: { flash?: string; log: ReactNode }) {
+/**
+ * The phone canvas' two-tab right column. Its own memo boundary: the board's
+ * 500ms tick leaves it (and the mounted log / stand) alone, as long as the
+ * caller hands in a stable `log` element (see Board's `logNode`).
+ */
+export const RightTabs = memo(function RightTabs({ flash, log }: { flash?: string; log: ReactNode }) {
   const [tab, setTab] = useState<"card" | "log">("log");
   // A user pick opens the card stand; a hover / flash never does.
   const pick = useCardPick();
@@ -42,4 +47,4 @@ export function RightTabs({ flash, log }: { flash?: string; log: ReactNode }) {
       <div className={cx(s.pane, tab !== "log" && s.hidden)}>{log}</div>
     </div>
   );
-}
+});

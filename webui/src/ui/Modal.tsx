@@ -9,7 +9,7 @@
 // hand bar -- and Esc does the same. The board and the hand stay usable while
 // it is retracted; a new question always raises it again.
 
-import { cloneElement, type ReactElement, type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
+import { cloneElement, memo, useCallback, type ReactElement, type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
 import { cx } from "../core/cx";
 import { useAutoFocus, useHotkeys } from "../hooks/dom";
 import { Btn } from "./Button";
@@ -203,14 +203,16 @@ export function useRaiseSheetOn(key: unknown): void {
   }, [key]);
 }
 
-function ModalEntry({ e }: { e: Entry }) {
+const ModalEntry = memo(function ModalEntry({ e }: { e: Entry }) {
   const prompt = e.chrome === "prompt";
   const closable = e.closable ?? true;
   const winRef = useRef<HTMLDivElement>(null);
   // The sheet takes focus when it opens and when it raises again (and hands
   // focus back on retract / close).
   useAutoFocus(prompt && !e.closing && !e.retracted, winRef);
-  const close = () => requestClose(e.id);
+  // Stable close: `useCloseWhen` (and anything else holding it) must not
+  // re-run its effect every render just because the identity moved.
+  const close = useCallback(() => requestClose(e.id), [e.id]);
   // Keep drafts, checked cards, scroll position and live subscriptions
   // mounted; minimizing only hides the window and its backdrop.
   return (
@@ -268,9 +270,9 @@ function ModalEntry({ e }: { e: Entry }) {
       </div>
     </div>
   );
-}
+});
 
-export function ModalHost() {
+export const ModalHost = memo(function ModalHost() {
   const list = useSyncExternalStore(subscribe, () => entries);
   // Esc retracts / raises the prompt sheet -- prompts never dismiss on Esc.
   useHotkeys([{ key: "Escape", once: true, run: () => { togglePromptSheet(); } }]);
@@ -290,4 +292,4 @@ export function ModalHost() {
       )}
     </>
   );
-}
+});

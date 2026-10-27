@@ -210,6 +210,9 @@ impl Slot {
 #[cfg(kani)]
 fn leak_name(s: &[u8]) -> &'static [u8] {
     let n = s.len().min(MAX_NAME);
+    // Leak justified by the `leak_name` docs above: the bytes are write-once
+    // and must be a real `'static` so a returned slice can outlive every
+    // `&mut Table`. Fixed `MAX_NAME` block; one per interned name, freed never.
     let buf: &'static mut [u8] = Box::leak(Box::new([0u8; MAX_NAME]));
     macro_rules! cpy {
         ($i:expr) => {
@@ -290,6 +293,9 @@ fn leak_name(s: &[u8]) -> &'static [u8] {
 /// write-once note on the `cfg(kani)` twin for why the bytes are leaked.
 #[cfg(not(kani))]
 fn leak_name(s: &[u8]) -> &'static [u8] {
+    // Leak justified by the `leak_name` docs above: write-once name bytes that
+    // must be a real `'static` (no later `&mut Table` may alias them). One
+    // allocation per distinct name, sized to the name, never freed.
     Box::leak(Vec::from(s).into_boxed_slice())
 }
 

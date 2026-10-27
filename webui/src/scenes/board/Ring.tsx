@@ -7,9 +7,8 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
-import { isLight, plain, prefersDarkInk } from "../../core/format";
+import { isLight, n0, plain, prefersDarkInk } from "../../core/format";
 import type { TileData, TileQuote } from "../../core/types";
-import type { Animator } from "./anim";
 import type { Model } from "./model";
 import { showEventPile } from "./Popups";
 import s from "./Ring.module.css";
@@ -50,7 +49,12 @@ const cellY = (row: number, h: number) => (row + 0.5) * (h / ROWS);
 
 export interface RingProps {
   m: Model;
-  anim: Animator;
+  /** Token positions while animating (the animator's `pos`); null: the state. */
+  animPos: number[] | null;
+  /** The walk under way (the animator's `route`): the tiles still ahead. */
+  animRoute: number[] | null;
+  /** The hop animation under way, if any (the animator's `hop`). */
+  hop: { playerId: number; id: number } | null;
   /** Tiles a "tile" prompt lets you pick by clicking. */
   pickable: number[];
   /** The pending tile prompt is walked to: light the path to the hovered tile. */
@@ -202,9 +206,10 @@ function fitName(name: string, u: number, avail: number, special: boolean): { ti
 }
 
 /** Caption text for a quote: `−` / `+` as a redundant flow cue, `min–max` for
- *  a RiNG dice range. Colour (`.flowMustPay` / …) is the primary channel. */
+ *  a RiNG dice range. Colour (`.flowMustPay` / …) is the primary channel.
+ *  `n0` keeps the digits identical to the tooltip and the deed popup. */
 function quoteCaption(q: TileQuote): string {
-  const n = q.max != null ? `${q.value}–${q.max}` : String(q.value);
+  const n = q.max != null ? `${n0(q.value)}–${n0(q.max)}` : n0(q.value);
   if (q.flow === "mustPay") return q.max != null ? n : `−${n}`;
   if (q.flow === "receive") return q.max != null ? n : `+${n}`;
   return n;
@@ -215,8 +220,8 @@ function quoteTip(q: TileQuote): string {
   const label = tr(`tileQuote.${q.kind}`);
   const n =
     q.max != null
-      ? tr("tileQuote.range", { min: q.value, max: q.max })
-      : String(q.value);
+      ? tr("tileQuote.range", { min: n0(q.value), max: n0(q.max) })
+      : n0(q.value);
   return tr("tileQuote.line", { label, n });
 }
 
@@ -301,7 +306,7 @@ const TileFace = memo(function TileFace({
  *  mid-hover (spent, moved, or just pushed out of the slice shown) would leave
  *  the tip stuck on screen with nothing left to hover -- so the pill drops its
  *  own tip on the way out. */
-function MarkPill({ tipKey, className, style, label, title, lines, showTip, hideTip, dropTip }: {
+const MarkPill = memo(function MarkPill({ tipKey, className, style, label, title, lines, showTip, hideTip, dropTip }: {
   tipKey: string;
   className?: string;
   style?: React.CSSProperties;
@@ -321,7 +326,7 @@ function MarkPill({ tipKey, className, style, label, title, lines, showTip, hide
       onMouseLeave={hideTip}
     >{label}</span>
   );
-}
+});
 
 /** One tile: its own memo boundary, so a marker hover, a zoom-less re-render
  *  or the turn timer leaves the 60 tiles alone. Everything it draws derives
@@ -459,12 +464,18 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   );
 });
 
-export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
+/**
+ * The 60-tile ring. Its own memo boundary: the board's 500ms tick and the
+ * animation-only re-renders leave the 60 tiles alone, because every anim
+ * value it reads arrives as a prop (the `Animator` instance itself is a
+ * mutable class with a stable identity -- passing it would freeze the ring).
+ */
+export const Ring = memo(function Ring({ m, animPos, animRoute, hop, pickable, walk, onTile, roll }: RingProps) {
   const S = m.S;
   const [hovered, setHovered] = useState<number | null>(null);
   // The tiles stepped over on the shorter way round to the hovered pick.
   const trail = new Set<number>();
-  const route = anim.route ?? [];
+  const route = animRoute ?? [];
   const dest = route.length > 0 ? route[route.length - 1] : -1;
   for (const q of route.slice(0, -1)) trail.add(q);
   if (walk && hovered !== null && pickable.includes(hovered)) {
@@ -474,7 +485,7 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
     const dir = fwd <= n - fwd ? 1 : -1;
     for (let k = 1, len = Math.min(fwd, n - fwd); k < len; k++) trail.add((((from + dir * k) % n) + n) % n);
   }
-  const pos = anim.pos ?? S.players.map((x) => x.pos);
+  const pos = animPos ?? S.players.map((x) => x.pos);
   const pick = new Set(pickable);
   const vp = useBoardViewport();
   const hoverSeat = useHoverSeat();
@@ -549,7 +560,7 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
               const n = same.length;
               const dx = n > 1 ? (k - (n - 1) / 2) * Math.min(14, 40 / (n - 1)) : 0;
               const ch = m.charOf(i);
-              const hop = anim.hop?.playerId === i ? anim.hop.id : 0;
+              const hopId = hop?.playerId === i ? hop.id : 0;
               // Anchor near the cell's lower third so the SD art sits over the
               // caption / gutter, not over the name.
               const top = cellY(row, vp.board.height) + (vp.board.height / ROWS) * 0.22;
@@ -558,7 +569,7 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
                   {i === (hoverSeat >= 0 ? hoverSeat : S.turn) && <span className={s.arrow} />}
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                   {ch
-                    ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />
+                    ? <img key={hopId} className={cx(s.sd, hopId > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />
                     : <div className={s.dot} style={{ background: m.colorOf(i) }}>{namesOf(S).playerId(i).slice(0, 1)}</div>}
                 </div>
               );
@@ -582,11 +593,11 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
       <ZoomControls vp={vp} />
     </div>
   );
-}
+});
 
 /** + / − / fit controls, on the board's top-right corner. Outside the zoom
  *  layer: they stay put and stay the same size at any zoom. */
-function ZoomControls({ vp }: { vp: ViewportApi }) {
+const ZoomControls = memo(function ZoomControls({ vp }: { vp: ViewportApi }) {
   return (
     <div className={s.zoomCtl} data-vp-ctl role="group">
       <button type="button" onClick={vp.zoomOut} title={tr("board.zoomOut")} aria-label={tr("board.zoomOut")}>−</button>
@@ -594,9 +605,9 @@ function ZoomControls({ vp }: { vp: ViewportApi }) {
       <button type="button" onClick={vp.zoomIn} title={tr("board.zoomIn")} aria-label={tr("board.zoomIn")}>+</button>
     </div>
   );
-}
+});
 
-function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
+const Center = memo(function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
   const S = m.S;
   return (
     <div className={s.inner} data-vp-bg>
@@ -651,4 +662,4 @@ function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
       <div className={s.hint}>{tr("board.ringHint")}</div>
     </div>
   );
-}
+});

@@ -55,10 +55,12 @@ export function cardArt(id: string): string {
   const man = m();
   const a = man.cards[id];
   if (a) return url(a);
-  // Skill stand-ins (`skill:<band>:<skill>` -- the 团卡 / character skill) have
-  // no card art; their band logo stands in so a prompt that names one still
-  // shows a picture. Bands the asset set has no logo for fall back to the card
-  // back, never to a broken image.
+  // Skill stand-ins (`skill:<owner>:<skill>` -- the 团卡 / character skill) have
+  // no card art. The display-side resolver (`cardArtUrl` in `data.ts`) owns
+  // their real stand-in (band logo / character thumb); this fallback is for
+  // callers that still hit `cardArt` directly and for a roster-less boot.
+  // Bands the asset set has no logo for fall back to the card back, never to
+  // a broken image.
   if (id.startsWith("skill:")) {
     const owner = id.slice("skill:".length).split(":")[0];
     return url(man.groups[owner]) || url(man.scene?.img?.card_back);
