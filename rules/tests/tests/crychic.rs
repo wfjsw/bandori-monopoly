@@ -644,6 +644,42 @@ fn destiny_together_plays() {
     drain(&mut t);
 }
 
+#[test]
+fn destiny_together_move_skips_settle() {
+    // 规则书（1）: 「每当场上任意格子发生一次收款时，你移动到…（不触发结算）。」
+    // p1 lands on p0's tile and pays rent (the 收款), which arms the move; p0
+    // must hop to the next tile ahead owned by p1 WITHOUT settling there.
+    let mut t = Table::vanilla(2);
+    t.give(0, &["CRYCHIC:一起演奏音乐的命运共同体"]);
+    let r = t.play(0, "CRYCHIC:一起演奏音乐的命运共同体");
+    assert!(r.is_ok(), "card plays: {r:?}");
+    drain(&mut t);
+    assert!(t.on_field(0, "CRYCHIC:一起演奏音乐的命运共同体"));
+    t.set_pos(0, 0);
+    // The hop's landing tile is p1's; a settle there would charge p0 its rent.
+    let landing = 5;
+    t.own(0, &[2]); // p0's tile p1 will land on
+    t.own(1, &[landing]); // the tile p0 hops onto
+    t.dice(&[1]);
+    t.roll(0).ok();
+    drain(&mut t);
+    assert!(t.end(0).is_ok());
+    drain(&mut t);
+    let money0_before = t.money(0);
+    let rent = data().tiles[2].rent[0]; // what p1's payment hands p0
+                                        // p1 at tile 1, rolls 1 -> tile 2, pays that rent to p0.
+    t.set_pos(1, 1);
+    t.dice(&[1]);
+    t.roll(1).ok();
+    drain(&mut t);
+    assert_eq!(t.pos(0), landing, "p0 hopped to p1's tile ahead");
+    assert_eq!(
+        t.money(0),
+        money0_before + rent,
+        "the hop must not settle: p0 should only receive the {rent} rent"
+    );
+}
+
 // -- CRYCHIC:主唱太拼命了 -----------------------------------------------
 
 #[test]
