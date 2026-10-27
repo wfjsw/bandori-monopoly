@@ -375,6 +375,19 @@ impl Pool {
         })
     }
 
+    /// `value` is whether the ack registered (a repeat / stale one is a no-op).
+    pub fn order_ready(&self, state: &str, member: i32) -> Result<Out<bool>, String> {
+        let v = self.call(json!({"op": "order_ready", "state": state, "member": member}))?;
+        let (state, checkpoint, ended) = split(&v)?;
+        let ready = v.get("ready").and_then(Value::as_bool).unwrap_or(false);
+        Ok(Out {
+            state,
+            value: ready,
+            checkpoint,
+            ended,
+        })
+    }
+
     pub fn finish(&self, state: &str) -> Result<Out<()>, String> {
         let v = self.call(json!({"op": "finish", "state": state}))?;
         Out::unit(v)

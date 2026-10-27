@@ -710,6 +710,31 @@ pub async fn anim_done(
     ))
 }
 
+/// `POST /api/rooms/{id}/order-ready` -- this seat's client has the rolled
+/// turn order on screen. The order phase ends once every seat with a client
+/// has acked (a 4s cap covers a seat that never does). Recorded as
+/// `Input::OrderReady` so a replay reproduces the shortened phase.
+pub async fn order_ready(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let (m, me) = as_member(&s, &sess, &id, |r, me| {
+        let m = r
+            .match_handle()
+            .ok_or_else(|| ApiError::bad("err.room.no_match"))?;
+        Ok((m, me))
+    })?;
+    let ready = tokio::task::spawn_blocking(move || m.order_ready(me))
+        .await
+        .map_err(|e| ApiError::bad(format!("order_ready task: {e}").as_str()))?
+        .map_err(|e| ApiError::bad(e.as_str()))?;
+    if let Some(room) = s.room(&id) {
+        room.lock().unwrap().notify();
+    }
+    Ok(Json(serde_json::json!({ "ok": true, "ready": ready })))
+}
+
 /// `POST /api/rooms/{id}/act` -- a match command (`NetMessage` with `act` set).
 pub async fn act(
     State(s): S,

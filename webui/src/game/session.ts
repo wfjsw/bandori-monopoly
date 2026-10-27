@@ -382,6 +382,14 @@ export abstract class GameSession {
   animDone(_seq: number): Promise<void> {
     return Promise.resolve();
   }
+  /**
+   * This seat has the rolled turn order on screen. Online matches end the
+   * order phase on every seat's ack; solo goes straight from the roll to the
+   * deck and replay has no session to tell.
+   */
+  orderReady(): Promise<void> {
+    return Promise.resolve();
+  }
   abstract leave(): void;
 }
 
@@ -1036,6 +1044,15 @@ export class OnlineSession extends GameSession {
     // endpoint (it would answer `err.not_a_player`) on every frame.
     if (this.readOnly) return;
     await api.animDone(this.id, seq);
+  }
+
+  /**
+   * This seat has the rolled order on screen. A watcher has no seat to ack
+   * for, so it stays silent.
+   */
+  async orderReady(): Promise<void> {
+    if (this.readOnly) return;
+    await api.orderReady(this.id);
   }
 
   leave(): void {

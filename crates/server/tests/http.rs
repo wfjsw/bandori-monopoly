@@ -883,6 +883,53 @@ async fn a_match_over_http_and_sse() {
     assert_eq!(n, last_id.1 + 1, "no duplicates, no gaps");
 }
 
+/// The order roll leaves on every seat's ack, not on its 4s cap. The host is
+/// the only human seat; its client's ack alone must end the phase.
+#[tokio::test]
+async fn the_order_phase_ends_on_a_seat_ack() {
+    let (base, _) = spawn_scaled(Duration::from_secs(20), 1.0).await;
+    let a = Client::new(&base, "Kasumi").await;
+    let made = a.ok("/api/rooms", json!({})).await;
+    let id = made["room"]["id"].as_str().unwrap().to_string();
+    for _ in 0..2 {
+        a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+            .await;
+    }
+    a.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+
+    fn phase(st: &Value) -> String {
+        st["match"]["state"]["phase"].as_str().unwrap_or("").into()
+    }
+    let order = format!("/api/rooms/{id}/order-ready");
+    // The 4s cap is far away while the only client has not acked.
+    let (_, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(phase(&st), "order", "{st}");
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    let (_, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(phase(&st), "order", "the cap has not run out yet: {st}");
+
+    let (s, v) = a.post(&order, json!({})).await;
+    assert_eq!((s, v["ready"].as_bool()), (StatusCode::OK, Some(true)));
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+        assert_eq!(s, StatusCode::OK, "{st}");
+        if phase(&st) == "pick" {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the ack did not end the order phase: {st}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    // A repeat is accepted but registers nothing.
+    let (_, v) = a.post(&order, json!({})).await;
+    assert_eq!(v["ready"].as_bool(), Some(false));
+}
+
 #[tokio::test]
 async fn silent_players_are_handed_to_the_ai_and_come_back() {
     let (base, server) = spawn(Duration::from_millis(600)).await;
@@ -1307,6 +1354,7 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
             Input::Left { .. } => "left",
             Input::Back { .. } => "back",
             Input::AnimDone { .. } => "anim_done",
+            Input::OrderReady { .. } => "order_ready",
         })
         .collect();
     for want in ["ticks", "quick_start", "left", "back", "finish"] {

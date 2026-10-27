@@ -371,6 +371,17 @@ that is still animating late events does not lose clock time to the lag:
   Solo never hold. The ack is recorded as `Input::AnimDone` so replays
   reproduce the same pauses (`docs/REPLAY.md`).
 
+### Order roll (`/order-ready`)
+
+The match opens on the 1d20 turn order (`G-FLOW-13`). Each seat's client
+posts `POST /api/rooms/{id}/order-ready` once it has the settled faces on
+screen; the phase ends as soon as every seat with a client has acked, so it
+does not sit out a fixed pause. A 4 s cap of ticks still ends it for a seat
+that never acks (hidden / closed tab, dropped connection), and bots /
+taken-over seats never need one. The ack is recorded as `Input::OrderReady`
+so a replay reproduces the shortened phase; a repeat or stale ack is accepted
+but changes nothing (`{ok, ready}` says whether it registered).
+
 ### Match commands (`/act`)
 
 The body is the original `NetMessage` shape; only the fields the command uses matter.
@@ -505,7 +516,7 @@ no seat, no secrets, no input.
   while empty. Spectator ids come from the same counter as seats, so a
   spectator id is never a seat id. `GET …/state` and the SSE `match` frame use
   the unseated view above (`playerId: -1`).
-* **What they cannot do.** `act` / `anim-done` / `ready` / `start` / `bots` /
+* **What they cannot do.** `act` / `anim-done` / `order-ready` / `ready` / `start` / `bots` /
   `weights` / `clock` / `nonce` are seat-only and answer `err.not_a_player`.
   The engine would also refuse an unseated member (`err.not_in_match`).
   `GET …/record` stays 403 `err.record.forbidden` -- the sealed record reveals
