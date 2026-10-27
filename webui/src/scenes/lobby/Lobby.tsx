@@ -9,7 +9,9 @@ import { D } from "../../core/data";
 import { getProfile } from "../../core/store";
 import type { ClockSettings, RoomInfo, ScoreWeights } from "../../core/types";
 import { OnlineSession, session, startOnline } from "../../game/session";
-import { api, ensureSession } from "../../net/api";
+import { api, ensureSession, type BuildView } from "../../net/api";
+import { buildId, setBuild, useServer } from "../../net/server";
+import { ServerChip } from "../menu/Servers";
 import { fmtMsg } from "../../i18n/msg";
 import { Btn, RoundBtn } from "../../ui/Button";
 import { Avatar } from "../../ui/Character";
@@ -74,7 +76,36 @@ export async function connect(): Promise<boolean> {
   return ensureSession(p.playerName, home?.name ?? "", home ? D.artId(home) : "");
 }
 
+/** The builds this lobby has seen (`GET /api/builds`), for names on cards and
+ *  for resolving "default" consistently. Reset on a page load, which is also
+ *  when a server / build change takes effect. */
+let knownBuilds: BuildView[] = [];
+let knownDefaultBuild = "default";
+
+function buildNameOf(id: string): string {
+  const build = id || knownDefaultBuild;
+  return knownBuilds.find((b) => b.id === build)?.name ?? build;
+}
+
+/**
+ * A room's build is the server's truth. Boot-time rules / tables came from the
+ * build selected at load; if they disagree, take the room's build and reload so
+ * the board's data matches the match (the lobby then rejoins the seat it
+ * already took).
+ */
+function buildMatches(room: RoomInfo): boolean {
+  return (room.build || knownDefaultBuild) === (buildId() || knownDefaultBuild);
+}
+
 function enter(room: RoomInfo, you: number): void {
+  if (!buildMatches(room)) {
+    const id = room.build || knownDefaultBuild;
+    // Name the room's actual build (not the "" default alias), so the reload
+    // loads exactly what the server is playing.
+    setBuild(id, buildNameOf(id));
+    location.reload();
+    return;
+  }
   startOnline(room, you);
   navigate({ name: "room", id: room.id });
 }
@@ -102,10 +133,39 @@ function PasswordForm({ onDone }: { onDone: (pw: string) => void }) {
 export function Lobby() {
   const [status, setStatus] = useState<"connecting" | "ok" | "offline">("connecting");
   const [rooms, setRooms] = useState<RoomInfo[]>([]);
+  const [builds, setBuilds] = useState<BuildView[]>([]);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<LobbyFilter>("all");
   const [code, setCode] = useState("");
+  const { build, buildName } = useServer();
   useRoomList(setStatus, setRooms, setError);
+
+  // The builds this server offers (older servers 404 the route: no chip row).
+  useEffect(() => {
+    let alive = true;
+    void api.builds().then((r) => {
+      if (!alive) return;
+      const list = r.ok ? (r.data ?? []) : [];
+      knownBuilds = list;
+      knownDefaultBuild = list.find((b) => b.default)?.id ?? "default";
+      setBuilds(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const defaultBuild = builds.find((b) => b.default)?.id ?? knownDefaultBuild;
+  const selectedBuild = build || defaultBuild;
+  const selectedName = builds.find((b) => b.id === selectedBuild)?.name ?? buildName;
+  const pickBuild = (name: string) => {
+    const b = builds.find((x) => x.name === name);
+    if (!b || b.id === selectedBuild) return;
+    // The client's roster / tables follow the selected build, so reload into
+    // this screen with that build's data.
+    setBuild(b.id, b.name);
+    location.reload();
+  };
 
   const shown = rooms.filter((r) => filter === "all" || (filter === "ranked" ? r.ranked : filter === "casual" ? !r.ranked : joinable(r)));
   const quickJoin = () => {
@@ -117,7 +177,7 @@ export function Lobby() {
 
   return (
     <>
-      <TopBar section={tr("menu.online")} title={tr("lobby.title")} onBack={() => navigate({ name: "menu" })} />
+      <TopBar section={tr("menu.online")} title={tr("lobby.title")} onBack={() => navigate({ name: "menu" })} titleRight={<ServerChip />} />
       <div className={s.body}>
         {status === "offline" ? (
           <div className={s.area}><Empty title={tr("lobby.offlineTitle")} text={tr("lobby.offlineText")} /></div>
@@ -128,8 +188,14 @@ export function Lobby() {
                 <span className={s.listLabel}><Icon name="groups" />{tr("lobby.roomList")}</span>
                 <Chips items={FILTERS.map(filterLabel)} on={filterLabel(filter)} onPick={(l) => setFilter(FILTERS.find((f) => filterLabel(f) === l) ?? "all")} className={s.chips} />
               </div>
+              {builds.length > 0 && (
+                <div className={s.filters}>
+                  <span className={s.listLabel}><Icon name="swap_horiz" />{tr("lobby.build")}</span>
+                  <Chips items={builds.map((b) => b.name)} on={selectedName} onPick={pickBuild} className={s.chips} />
+                </div>
+              )}
               {error ? <Empty title={tr("lobby.offlineTitle")} text={error} />
-                : shown.length ? <div className={s.grid}>{shown.map((r) => <RoomCard key={r.id} r={r} />)}</div>
+                : shown.length ? <div className={s.grid}>{shown.map((r) => <RoomCard key={r.id} r={r} build={r.build ? buildNameOf(r.build) : ""} />)}</div>
                 : <Empty title={status === "connecting" ? tr("lobby.loading") : tr("lobby.emptyTitle")} text={tr("lobby.emptyText")} />}
             </div>
             <div className={s.foot}>
@@ -158,7 +224,7 @@ function Empty({ title, text }: { title: string; text: string }) {
   );
 }
 
-function RoomCard({ r }: { r: RoomInfo }) {
+function RoomCard({ r, build }: { r: RoomInfo; build: string }) {
   const host = r.members.find((m) => m.host);
   const watching = r.spectators?.length ?? 0;
   // A playing / full room has no seat to take: the card offers the watch path.
@@ -170,6 +236,7 @@ function RoomCard({ r }: { r: RoomInfo }) {
         <b>{r.name}</b>
         {r.locked && <Icon name="lock" />}
       </div>
+      {build && <div className={s.build}>{tr("lobby.buildName", { name: build })}</div>}
       <div className={s.members}>
         {r.members.slice(0, 6).map((m) => <Avatar key={m.id} c={D.persona(m.persona)} size={40} />)}
         {r.members.length > 6 && <span>+{r.members.length - 6}</span>}
@@ -195,7 +262,7 @@ function CreateRoom({ close }: { close: () => void }) {
   const [clock, setClock] = useState<ClockSettings>({ ...DEFAULT_CLOCK });
   const [lo, hi] = ranked ? [5, 6] : [3, 10];
   const submit = async () => {
-    const r = await api.createRoom({ name, ranked, maxPlayers: max, password: pw, weights, clock });
+    const r = await api.createRoom({ name, ranked, maxPlayers: max, password: pw, weights, clock, build: buildId() });
     if (!r.ok) return toast(fmtMsg(r.error!), "error");
     close();
     enter(r.data!.room, r.data!.you);

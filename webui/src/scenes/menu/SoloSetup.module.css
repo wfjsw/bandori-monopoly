@@ -18,6 +18,12 @@
 .mentalityLabel { font-size: 15px; color: var(--sub); margin-right: 4px; }
 .mentality { height: 34px; padding: 0 18px; border-radius: 17px; background: var(--surface); color: var(--text); font-size: 15px; font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
 .mentalityOn { background: var(--pink); color: #fff; }
+.buildTag { font-size: 11px; margin-left: 6px; opacity: 0.7; }
+.filePick { position: relative; display: inline-flex; align-items: center; height: 34px; padding: 0 18px; border-radius: 17px; background: var(--surface); color: var(--text); font-size: 15px; font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); cursor: pointer; }
+.filePick:hover { color: var(--pink); }
+.filePick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.customName { max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--sub); }
+.hint { margin: 0; font-size: 13px; color: var(--sub); line-height: 1.5; }
 .mentalityTag { cursor: pointer; border: none; background: var(--light-pill); border-radius: 13px; line-height: 26px; height: 28px; font-weight: 700; }
 .mentalityTagChaos { background: var(--pink); color: #fff; }
 .mentalityTagAdvanced { background: var(--blue); color: #fff; }

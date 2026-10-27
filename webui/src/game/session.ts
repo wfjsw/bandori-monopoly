@@ -5,9 +5,10 @@
 // resumed on load; an online player is re-attached through the server session
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
-import { D, rules } from "../core/data";
+import { D, currentSources, customRules, customRulesActive, customRulesBytes, rules } from "../core/data";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
+import { absolute } from "../net/server";
 import { startClockSync, clockSync, resyncLimiter } from "./clockSync";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
@@ -16,7 +17,7 @@ import { advancedSeats, driveSeat, decisionAt, ponderUpcoming, type DriveHooks }
 import { emitOnlineView, OnlineExtras } from "./viewExtras";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 import { SoloEngine } from "./soloEngine";
-import type { SaveSnap, SoloPush } from "./soloProtocol";
+import type { SaveSnap, SoloBootOpts, SoloPush } from "./soloProtocol";
 
 type ViewCb = (v: MatchView) => void;
 type EventCb = (e: MatchEvent) => void;
@@ -408,28 +409,73 @@ interface SoloSave {
 
 /** An engine worker booted ahead of a solo start, if any. */
 let warmEngine: SoloEngine | null = null;
+/** The source the warm worker was booted from (server / build / custom). */
+let warmKey = "";
+
+/**
+ * Where a solo worker boots from: the selected game server / build (absolute
+ * URLs -- the worker has no page-relative base) and, only when that is the
+ * local bundled path, the user's custom rules module. The page's `D` and the
+ * worker therefore come from the same source.
+ */
+function soloBootOpts(): SoloBootOpts {
+  const from = currentSources();
+  return {
+    rulesBase: absolute(from.rules),
+    dataBase: absolute(from.data),
+    custom: customRulesActive() ? customRulesBytes() : null,
+  };
+}
+
+/** A cheap identity for `soloBootOpts()`, so a worker booted for one source is
+ *  never reused for another (a custom module keeps its name when it changes;
+ *  changing one reloads the page anyway). */
+function soloSourceKey(): string {
+  const opts = soloBootOpts();
+  const c = customRulesActive() ? customRules() : null;
+  return `${opts.rulesBase}\u0000${opts.dataBase}\u0000${c ? `${c.name}:${c.b64.length}` : "-"}`;
+}
 
 /**
  * Boot a solo engine worker in the background (glue, data, ruleset) so the
- * next `startSolo` / `resumeSolo` skips that cost. Idempotent; the setup
- * screen calls it when it opens. A failed warm-up is dropped and the start
- * falls back to a cold worker (and reports its own error).
+ * next `startSolo` / `resumeSolo` skips that cost. Idempotent for one source;
+ * a worker booted for a different server / build / custom rules is discarded
+ * and replaced. The setup screen calls it when it opens. A failed warm-up is
+ * dropped and the start falls back to a cold worker (and reports its own
+ * error).
  */
 export function warmSoloEngine(): void {
-  if (warmEngine) return;
+  const key = soloSourceKey();
+  if (warmEngine && warmKey === key) return;
+  if (warmEngine) {
+    warmEngine.close();
+    warmEngine = null;
+  }
   const e = new SoloEngine();
   warmEngine = e;
-  e.boot().catch(() => {
-    if (warmEngine === e) warmEngine = null;
+  warmKey = key;
+  e.boot(soloBootOpts()).catch(() => {
+    if (warmEngine === e) {
+      warmEngine = null;
+      warmKey = "";
+    }
     e.close();
   });
 }
 
-/** The warmed worker (handed over once), else a fresh one. */
+/** The warmed worker (handed over once) when it matches the current source,
+ *  else a fresh one. */
 function takeSoloEngine(): SoloEngine {
-  const e = warmEngine ?? new SoloEngine();
+  const key = soloSourceKey();
+  let e = warmEngine;
+  const warmedFor = warmKey;
   warmEngine = null;
-  return e;
+  warmKey = "";
+  if (e && warmedFor !== key) {
+    e.close();
+    e = null;
+  }
+  return e ?? new SoloEngine();
 }
 
 /**
@@ -544,7 +590,7 @@ export class SoloSession extends GameSession {
     // the commitment.
     const engine = takeSoloEngine();
     return new SoloSession(engine, weights, async () => {
-      await engine.boot();
+      await engine.boot(soloBootOpts());
       await engine.start({ members, mode: 0, weights, you: 1 });
       engine.setVisibility(document.hidden);
     });
@@ -564,7 +610,7 @@ export class SoloSession extends GameSession {
         engine,
         s.weights,
         async () => {
-          await engine.boot();
+          await engine.boot(soloBootOpts());
           await engine.restore({ save: s.match, rec: s.rec, last: s.last, you: 1 });
           engine.setVisibility(document.hidden);
         },

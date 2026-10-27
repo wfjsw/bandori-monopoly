@@ -15,7 +15,7 @@ import type { Command, MatchView } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";
 import { reportCrash } from "../core/crash.ts";
 import { describeWorkerError } from "./workerError.ts";
-import type { EngineBoot, SaveSnap, SoloOpen, SoloPush, SoloRestore, SoloWorkerLike } from "./soloProtocol.ts";
+import type { EngineBoot, SaveSnap, SoloBootOpts, SoloOpen, SoloPush, SoloRestore, SoloWorkerLike } from "./soloProtocol.ts";
 
 /**
  * The page-side handle to one engine worker. Requests resolve in order; every
@@ -74,9 +74,14 @@ export class SoloEngine {
     });
   }
 
-  /** Load the glue, the game tables and the card ruleset in the worker. */
-  boot(): Promise<EngineBoot> {
-    return this.rpc<EngineBoot>("init");
+  /** Load the glue, the game tables and the card ruleset in the worker, from
+   *  the selected game server / build (and the custom module, when it applies). */
+  boot(opts: SoloBootOpts): Promise<EngineBoot> {
+    return this.rpc<EngineBoot>("init", {
+      rulesBase: opts.rulesBase,
+      dataBase: opts.dataBase,
+      ...(opts.custom && opts.custom.length ? { custom: opts.custom } : {}),
+    });
   }
 
   start(spec: SoloOpen): Promise<true> {

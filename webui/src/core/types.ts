@@ -359,6 +359,9 @@ export interface RoomInfo {
   spectators?: RoomSpectator[];
   /** Match clock / timer settings (host-editable before start). */
   clock?: ClockSettings;
+  /** Rule build the room plays (`GET /api/builds`); absent on older servers /
+   *  rooms, which means the server's default build. */
+  build?: string;
   /** Commit-reveal fairness (`docs/FAIRNESS.md`): the commitment is public
    *  from the moment the room is created (and a fresh one after every match);
    *  the openings never travel here. */

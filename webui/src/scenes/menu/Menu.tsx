@@ -15,6 +15,7 @@ import { Live2DStand } from "../../ui/Live2DStand";
 import { showRules, TopBar } from "../../ui/TopBar";
 import s from "./Menu.module.css";
 import { showFire, showHistory, showSettings } from "./MenuPopups";
+import { ServerChip } from "./Servers";
 import { showSoloSetup } from "./SoloSetup";
 import { t as tr } from "../../i18n/t";
 
@@ -44,7 +45,7 @@ export function Menu() {
 
   return (
     <>
-      <TopBar section={tr("menu.section")} title={tr("menu.selectMode")} />
+      <TopBar section={tr("menu.section")} title={tr("menu.selectMode")} titleRight={<ServerChip />} />
       {/* Stand + dialogue are one column so they share a horizontal axis; the
           dialogue is pulled up over the art's lower half. */}
       <div className={s.left}>

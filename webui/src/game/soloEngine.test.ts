@@ -69,6 +69,7 @@ function open(opts: { handle: (msg: Record<string, unknown>, w: FakeWorker) => v
 
 const ok = (msg: Record<string, unknown>, w: FakeWorker) => w.reply(msg.id as number, true);
 const boot = { stamp: { format: 1, bundle: "b1" }, cheats: true };
+const bootOpts = { rulesBase: "/assets/rules/", dataBase: "/data/" };
 
 // ---------------------------------------------------------------- boot / open
 
@@ -76,9 +77,11 @@ test("boot sends init and resolves the worker's engine identity", async () => {
   const { engine, w } = open({
     handle: (m, fw) => (m.op === "init" ? fw.reply(m.id as number, boot) : ok(m, fw)),
   });
-  assert.deepEqual(await engine.boot(), boot);
+  assert.deepEqual(await engine.boot(bootOpts), boot);
   assert.equal(w.sent.length, 1);
   assert.equal(w.sent[0].op, "init");
+  assert.equal(w.sent[0].rulesBase, "/assets/rules/");
+  assert.equal(w.sent[0].dataBase, "/data/");
   assert.equal(typeof w.sent[0].id, "number");
 });
 
@@ -90,7 +93,7 @@ test("start / restore carry the open spec the worker builds the match from", asy
       fw.reply(m.id as number, m.op === "init" ? boot : true);
     },
   });
-  await engine.boot();
+  await engine.boot(bootOpts);
   await engine.start({
     members: [{ id: 1, player: "P", character: "美竹兰", cnId: "", ready: true, host: true, bot: false, away: false, mentality: "standard" }],
     mode: 0,
@@ -129,7 +132,7 @@ test("act resolves with the engine Msg and sees the post-act pushes first", asyn
     },
   });
   engine.onPush = (p) => order.push(p.push);
-  await engine.boot();
+  await engine.boot(bootOpts);
   const got = await engine.act(1, { act: "answer", prompt: 1, value: 0 });
   assert.deepEqual(got, err);
   assert.deepEqual(order, ["sync", "save"], "pushes land before the reply resolves");
@@ -144,7 +147,7 @@ test("act resolves null on success; error replies reject", async () => {
       ok(m, fw);
     },
   });
-  await engine.boot();
+  await engine.boot(bootOpts);
   assert.equal(await engine.act(1, { act: "end" }), null);
   await assert.rejects(() => engine.view(2), /no match open/);
   assert.equal(w.lastOp(), "view");
@@ -160,7 +163,7 @@ test("save pushes refresh the snapshot and save() asks for a fresh one", async (
     },
   });
   engine.onPush = (p) => pushes.push(p);
-  await engine.boot();
+  await engine.boot(bootOpts);
   const w = (engine as unknown as { w: FakeWorker }).w;
   w.push({ push: "save", match: "M1", rec: "R1", last: 4 });
   assert.deepEqual(pushes, [{ push: "save", match: "M1", rec: "R1", last: 4 }]);
@@ -179,7 +182,7 @@ test("export returns the sealed record bytes", async () => {
       ok(m, fw);
     },
   });
-  await engine.boot();
+  await engine.boot(bootOpts);
   assert.deepEqual(await engine.export("2026-10-08 12:00"), bytes);
 });
 
@@ -192,7 +195,7 @@ test("close terminates the worker and rejects anything still in flight", async (
       ok(m, fw);
     },
   });
-  await engine.boot();
+  await engine.boot(bootOpts);
   const inFlight = engine.act(1, { act: "end" });
   engine.close();
   await assert.rejects(() => inFlight, /closed/);
@@ -209,7 +212,7 @@ test("visibility forwards the page's hidden state for the tick pacing", async ()
       fw.reply(m.id as number, m.op === "init" ? boot : true);
     },
   });
-  await engine.boot();
+  await engine.boot(bootOpts);
   engine.setVisibility(true);
   engine.setVisibility(false);
   await Promise.resolve(); // the fire-and-forget rpcs settle

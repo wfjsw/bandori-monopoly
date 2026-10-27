@@ -1,0 +1,12 @@
+[package]
+name = "profile-token"
+version.workspace = true
+edition.workspace = true
+description = "Signed profile-session tickets shared by the profile server and game servers."
+
+[dependencies]
+base64 = "0.22"
+hmac = "0.12"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

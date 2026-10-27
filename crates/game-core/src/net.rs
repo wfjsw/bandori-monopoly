@@ -125,6 +125,11 @@ pub struct RoomInfo {
     /// banSeconds, pickSeconds, deckSeconds, bankruptAuctionTime }`.
     #[serde(default)]
     pub clock: crate::clock::ClockSettings,
+    /// The rule build this room plays (`docs/SERVER.md` §Rule builds). Empty
+    /// on records from before builds existed; the server resolves that to its
+    /// default build.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub build: String,
     pub members: Vec<RoomMember>,
     /// Watchers with no seat: they see the public view, never act, and never
     /// count toward [`Self::is_full`] or the match's participants. Absent on

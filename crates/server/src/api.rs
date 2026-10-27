@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Auth, COOKIE};
 use crate::error::{ApiError, ApiResult};
 use crate::room::{NewMember, Room};
-use crate::state::{random_hex, room_code, Server, Session};
+use crate::state::{room_code, Server, Session};
 use crate::store;
 
 type S = State<Arc<Server>>;
@@ -50,6 +50,10 @@ fn view(s: &Session) -> SessionView {
 
 /// `POST /api/session` -- a new player session. Also sets the cookie the browser's
 /// `EventSource` will send.
+///
+/// The name is the only identity: the game server never sees the profile
+/// server or its ticket. A client re-opens a session here with the same name
+/// on every game server it connects to.
 pub async fn create_session(
     State(s): S,
     Json(req): Json<SessionReq>,
@@ -58,8 +62,9 @@ pub async fn create_session(
     if player.is_empty() {
         return Err(ApiError::bad("err.name_required"));
     }
+    let token = crate::state::random_hex(24);
     let session = Session {
-        token: random_hex(32),
+        token,
         player,
         persona: req.persona,
         cn_id: req.cn_id,
@@ -79,7 +84,44 @@ pub async fn get_session(Auth(sess): Auth) -> Json<SessionView> {
 pub async fn health(State(s): S) -> Json<serde_json::Value> {
     // The lobby's room count is the store's, not this process's cache.
     let rooms = s.store.room_all().map(|r| r.len()).unwrap_or(0);
-    Json(serde_json::json!({ "game": net::GAME, "version": net::VERSION, "rooms": rooms }))
+    Json(serde_json::json!({
+        "game": net::GAME,
+        "version": net::VERSION,
+        "rooms": rooms,
+        "builds": s.builds.len(),
+    }))
+}
+
+/// One advertised rule build.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub ruleset_sha256: Option<String>,
+    pub cards: usize,
+    pub default: bool,
+}
+
+/// `GET /api/builds` -- the rule builds this server offers. The client picks
+/// one when opening a room (or a solo match) and loads its modules from
+/// `/builds/{id}/rules`.
+pub async fn list_builds(State(s): S) -> Json<Vec<BuildView>> {
+    let mut list: Vec<BuildView> = s
+        .builds
+        .values()
+        .map(|b| BuildView {
+            id: b.id.clone(),
+            name: b.name.clone(),
+            description: b.description.clone(),
+            ruleset_sha256: b.rules.ruleset_sha256().map(str::to_string),
+            cards: b.data.cards.len(),
+            default: b.id == s.default_build,
+        })
+        .collect();
+    list.sort_by(|a, b| b.default.cmp(&a.default).then(a.name.cmp(&b.name)));
+    Json(list)
 }
 
 // ------------------------------------------------------------------ rooms
@@ -110,6 +152,9 @@ pub struct CreateRoom {
     /// Match clock / timer settings. Absent = defaults (the pre-settings
     /// constants). Sanitized on the way in (`ClockSettings::sanitized`).
     pub clock: Option<game_core::clock::ClockSettings>,
+    /// Rule build to open the room under (`GET /api/builds`). Absent = the
+    /// server's default.
+    pub build: String,
 }
 
 impl Default for CreateRoom {
@@ -121,6 +166,7 @@ impl Default for CreateRoom {
             password: String::new(),
             weights: None,
             clock: None,
+            build: String::new(),
         }
     }
 }
@@ -202,7 +248,12 @@ pub async fn create_room(
     let defaults = rules_weights(&s);
     let weights = req.weights.unwrap_or(defaults).sanitized(defaults);
     let clock = req.clock.unwrap_or_default().sanitized();
-    let engine = s.engine.clone();
+    let build = s
+        .build(&req.build)
+        .ok_or_else(|| ApiError::bad("err.build.unknown"))?;
+    let engine = build.engine.clone();
+    let build_id = build.id.clone();
+    let data = build.data.clone();
     let store = s.store.clone();
     let bot_search = s.bots.is_some();
     let presence_timeout = s.presence_timeout;
@@ -224,6 +275,8 @@ pub async fn create_room(
             &req.password,
             weights,
             clock,
+            &build_id,
+            data,
             engine,
             store,
         );
@@ -405,7 +458,8 @@ pub async fn bots(
             "add" => {
                 let m = game_core::state::BotMentality::parse(&req.mentality)
                     .ok_or_else(|| ApiError::bad("err.bad_mentality"))?;
-                r.add_bot(me, &s.data.match_rules.bot_names, m)?
+                let names = r.data.match_rules.bot_names.clone();
+                r.add_bot(me, &names, m)?
             }
             "remove" => r.remove_bot(me, req.member)?,
             _ => return Err(ApiError::bad("err.bad_bot_op")),

@@ -40,11 +40,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{header, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 
 pub use state::Server;
@@ -119,6 +120,9 @@ pub fn router(
             "/api/session",
             post(api::create_session).get(api::get_session),
         )
+        .route("/api/builds", get(api::list_builds))
+        .route("/builds/{id}/rules/{*file}", get(build_rules))
+        .route("/builds/{id}/data/{*file}", get(build_data))
         .route("/api/rooms", get(api::list_rooms).post(api::create_room))
         .route("/api/rooms/{id}/join", post(api::join_room))
         .route("/api/rooms/{id}/ready", post(api::ready))
@@ -135,6 +139,15 @@ pub fn router(
         .route("/api/rooms/{id}/stream", get(sse::stream))
         .route("/api/clock", post(api::clock_ping))
         .layer(DefaultBodyLimit::max(game_core::net::MAX_MESSAGE))
+        // Game servers are reached cross-origin from the profile server's app
+        // (bearer tokens, no cookies), and `EventSource` cannot set headers --
+        // CORS is what makes both work.
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]),
+        )
         .with_state(server);
     if let Some(dir) = data_dir {
         app = app.nest_service("/data", ServeDir::new(dir));
@@ -147,6 +160,60 @@ pub fn router(
         app = app.fallback_service(ServeDir::new(dir).fallback(index));
     }
     app
+}
+
+/// A build's rule module / index file (`/builds/{id}/rules/...`).
+async fn build_rules(State(s): State<Arc<Server>>, Path((id, file)): Path<(String, String)>) -> Response {
+    serve_build(&s, &id, &file, false).await
+}
+
+/// A build's game table (`/builds/{id}/data/...`).
+async fn build_data(State(s): State<Arc<Server>>, Path((id, file)): Path<(String, String)>) -> Response {
+    serve_build(&s, &id, &file, true).await
+}
+
+async fn serve_build(s: &Server, id: &str, file: &str, data: bool) -> Response {
+    // `default` is an alias for the manifest's default build: a client that has
+    // not picked a build yet asks for `default`, and a manifest may name its
+    // default anything.
+    // `default` is always an alias for the manifest's default build: a client
+    // that has not picked a build yet asks for `default`, and a manifest may
+    // name its default anything. (`Server::new` seeds a placeholder build named
+    // `default`; production replaces the whole map, but the alias must not
+    // depend on that.)
+    let build = if id == "default" {
+        s.build(&s.default_build)
+    } else {
+        s.builds.get(id).cloned()
+    };
+    let Some(build) = build else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let rel = file.trim_start_matches('/');
+    // No traversal, no empty segments.
+    if rel.is_empty() || rel.split('/').any(|p| p.is_empty() || p == "." || p == "..") {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let root = if data { &build.data_path } else { &build.rules_path };
+    if root.as_os_str().is_empty() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let mime = if rel.ends_with(".json") {
+        "application/json"
+    } else if rel.ends_with(".wasm") {
+        "application/wasm"
+    } else {
+        "application/octet-stream"
+    };
+    let cache = if data {
+        "no-cache"
+    } else {
+        "public, max-age=31536000, immutable"
+    };
+    match tokio::fs::read(root.join(rel)).await {
+        Ok(bytes) => ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache)], bytes).into_response(),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// `index.html` for client-side routes; a real 404 for missing files and API paths.

@@ -25,13 +25,33 @@ export interface RulesetIndex {
   conds?: { file: string } | null;
 }
 
-/** Load `index.json`, every module and the precompiled-condition blob into
- *  `glue`, then build. `read` returns the bytes of a file under the rules
- *  directory (`/assets/rules/` in the page). Throws on any failure; nothing
- *  here degrades silently. Returns the number of modules loaded. */
+/** Add one rules module, with the native digest when the glue and a secure
+ *  context allow it (`crypto.subtle`). */
+async function addModule(glue: RulesetGlue, bytes: Uint8Array): Promise<void> {
+  // The native digest is ~30 ms cheaper per 0.5 MB module than the glue's
+  // own SHA-256 (wasm). `crypto.subtle` needs a secure context; fall back.
+  const subtle = globalThis.crypto?.subtle;
+  if (glue.ruleset_add_hashed && subtle) {
+    const sum = new Uint8Array(await subtle.digest("SHA-256", bytes as BufferSource));
+    glue.ruleset_add_hashed(bytes, Array.from(sum, (b) => b.toString(16).padStart(2, "0")).join(""));
+  } else {
+    glue.ruleset_add(bytes);
+  }
+}
+
+/**
+ * Load `index.json`, every module and the precompiled-condition blob into
+ * `glue`, then build. `read` returns the bytes of a file under the rules
+ * directory (`/assets/rules/` in the page). `extra` modules (a user's custom
+ * solo ruleset) are added after the index's own modules and before the build,
+ * so they enter the same roster / rule set. Throws on any failure; nothing
+ * here degrades silently. Returns the number of modules loaded (the index's
+ * plus `extra`).
+ */
 export async function loadRulesetInto(
   glue: RulesetGlue,
   read: (rel: string) => Promise<Uint8Array>,
+  extra: readonly Uint8Array[] = [],
 ): Promise<number> {
   const indexText = new TextDecoder().decode(await read("index.json"));
   // An SPA dev server answers unknown paths with `index.html` and HTTP 200;
@@ -43,16 +63,10 @@ export async function loadRulesetInto(
   }
   const index: RulesetIndex = JSON.parse(indexText);
   for (const m of index.modules) {
-    const bytes = await read(m.file);
-    // The native digest is ~30 ms cheaper per 0.5 MB module than the glue's
-    // own SHA-256 (wasm). `crypto.subtle` needs a secure context; fall back.
-    const subtle = globalThis.crypto?.subtle;
-    if (glue.ruleset_add_hashed && subtle) {
-      const sum = new Uint8Array(await subtle.digest("SHA-256", bytes as BufferSource));
-      glue.ruleset_add_hashed(bytes, Array.from(sum, (b) => b.toString(16).padStart(2, "0")).join(""));
-    } else {
-      glue.ruleset_add(bytes);
-    }
+    await addModule(glue, await read(m.file));
+  }
+  for (const bytes of extra) {
+    await addModule(glue, bytes);
   }
   if (index.conds?.file) {
     glue.ruleset_precompiled(await read(index.conds.file));

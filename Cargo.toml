@@ -9,6 +9,8 @@ members = [
     "crates/game-kinds",
     "crates/game-rules",
     "crates/player-meta",
+    "crates/profile-server",
+    "crates/profile-token",
     "crates/spec-kit",
     "crates/cond",
     "crates/cond-ir",

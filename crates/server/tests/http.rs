@@ -1052,6 +1052,7 @@ async fn a_restart_restores_the_room_and_its_match() {
             theme: String::new(),
             weights: Default::default(),
             clock: Default::default(),
+            build: "default".into(),
             members: vec![member],
             spectators: vec![],
             fair: None,

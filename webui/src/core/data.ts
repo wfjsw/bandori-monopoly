@@ -8,6 +8,7 @@ import displayJson from "../generated/display.json";
 import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
+import { buildId, dataBase, isRemote, rulesBase } from "../net/server";
 import { bandLogo, charArt, cardArt } from "./assets";
 import { cardFaceTitle } from "./cardFace";
 import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile, Block } from "./types";
@@ -59,6 +60,41 @@ export const rules = glue;
  *  UI reads this to explain a divergence instead of showing it as engine drift. */
 export let rulesetLoaded = false;
 
+/** The rules / data directories this boot actually used. Normally the
+ *  selected server's build; older servers (no `/builds/...` routes) fall back
+ *  to the bundled paths so connecting to them still boots. */
+let sources = { rules: rulesBase(), data: dataBase() };
+
+/** The resolved sources, for the solo worker -- it must load exactly what the
+ *  page booted (`session.ts`). */
+export function currentSources(): { rules: string; data: string } {
+  return sources;
+}
+
+/**
+ * Resolve the build's rules / data directories. `rulesBase()` / `dataBase()`
+ * name the selected build, but a server from before rule builds answers
+ * `/builds/...` with 404 (or the SPA's index.html). Probe `index.json` once and
+ * fall back to the bundled paths -- the page ships them anyway, and an older
+ * server's single ruleset is that same set.
+ */
+async function resolveSources(): Promise<void> {
+  sources = { rules: rulesBase(), data: dataBase() };
+  if (sources.rules === "/assets/rules/") return;
+  try {
+    const r = await fetch(sources.rules + "index.json");
+    if (r.ok) {
+      const text = await r.text();
+      if (!text.trimStart().startsWith("<")) return;
+    }
+  } catch {
+    /* fall through to the bundled set */
+  }
+  console.warn("[rules] the selected server does not serve rule builds; using the bundled ruleset");
+  toast(tr("boot.rulesFallback"));
+  sources = { rules: "/assets/rules/", data: "/data/" };
+}
+
 /** The card / skill / tile rule modules `tools/build-ruleset.mjs` copies to
  *  `/assets/rules/`. Without them every solo match runs on the engine's
  *  `StubRules` (plain-Monopoly tiles, no card or skill effects) and the roster
@@ -73,17 +109,108 @@ async function loadRuleset(): Promise<void> {
     // The sequence lives in `rulesetLoad.ts` and is shared with the node gate
     // (`webui/src/game/ruleset.test.ts`): index.json -> modules -> the
     // precompiled-condition blob (`conds-*.bin`, docs/GUARDS.md §8.2) ->
-    // `ruleset_build`.
-    const n = await loadRulesetInto(glue, async (rel) => {
-      const r = await fetch("/assets/rules/" + rel);
-      if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
-      return new Uint8Array(await r.arrayBuffer());
-    });
+    // `ruleset_build`. The directory follows the selected game server / build.
+    const base = sources.rules;
+    const custom = customRulesActive() ? customRulesBytes() : null;
+    const n = await loadRulesetInto(
+      glue,
+      async (rel) => {
+        const r = await fetch(base + rel);
+        if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+        return new Uint8Array(await r.arrayBuffer());
+      },
+      custom ? [custom] : [],
+    );
     rulesetLoaded = true;
     console.info(`[rules] ${n} card module(s) loaded`);
   } catch (e) {
     console.error("[rules] card modules failed to load; solo matches will run without card, skill or tile rules", e);
     toast(tr("boot.rulesError", { detail: e instanceof Error ? e.message : String(e) }), "error");
+  }
+}
+
+// ------------------------------------------------------------- custom ruleset
+
+/** One user-supplied ruleset module, kept as base64 in localStorage. */
+export interface CustomRules {
+  name: string;
+  b64: string;
+}
+
+const CUSTOM_RULES_KEY = "bm.customRules";
+/** A solo ruleset is one wasm module; 8 MiB is far above the shipped size. */
+export const CUSTOM_RULES_MAX = 8 * 1024 * 1024;
+
+/**
+ * True when the custom module participates in the ruleset: only on the local
+ * bundled path, with no server build selected. With a server or a build
+ * chosen, that build wins.
+ */
+export function customRulesActive(): boolean {
+  return !isRemote() && !buildId();
+}
+
+/** The stored custom ruleset, or null. */
+export function customRules(): CustomRules | null {
+  try {
+    const raw = localStorage.getItem(CUSTOM_RULES_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { name?: unknown; b64?: unknown };
+    if (typeof v?.b64 !== "string") return null;
+    return { name: typeof v.name === "string" ? v.name : "", b64: v.b64 };
+  } catch {
+    return null;
+  }
+}
+
+/** Decode the stored custom ruleset; null when absent or unreadable. */
+export function customRulesBytes(): Uint8Array | null {
+  const c = customRules();
+  if (!c) return null;
+  try {
+    const bin = atob(c.b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store a user's custom solo ruleset (one wasm module). Returns false when it
+ * is too large or the browser's storage refuses it (toasted here). The caller
+ * reloads so the boot-time roster / rules include it.
+ */
+export function setCustomRules(bytes: Uint8Array, name: string): boolean {
+  if (!bytes.length) {
+    toast(tr("solo.buildEmpty"), "error");
+    return false;
+  }
+  if (bytes.length > CUSTOM_RULES_MAX) {
+    toast(tr("solo.buildTooLarge", { mb: Math.round(CUSTOM_RULES_MAX / 1024 / 1024) }), "error");
+    return false;
+  }
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + chunk)));
+  }
+  try {
+    localStorage.setItem(CUSTOM_RULES_KEY, JSON.stringify({ name, b64: btoa(bin) }));
+    return true;
+  } catch {
+    toast(tr("solo.buildStoreError"), "error");
+    return false;
+  }
+}
+
+/** Forget the custom ruleset; the next boot uses the bundled / server build. */
+export function clearCustomRules(): void {
+  try {
+    localStorage.removeItem(CUSTOM_RULES_KEY);
+  } catch {
+    /* storage unavailable */
   }
 }
 
@@ -102,6 +229,10 @@ async function loadRuleset(): Promise<void> {
  */
 export async function loadGameData(progress: (p: number) => void): Promise<void> {
   await init();
+  // Resolve the selected build's rules / data directories before anything
+  // reads them (an older server without `/builds/...` falls back to the
+  // bundled set there, consistently for both).
+  await resolveSources();
   // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9): every
   // record this build seals names the bundle that can replay it. Comes from
   // `tools/build-glue.mjs`; empty only if a glue was built without it.
@@ -126,9 +257,10 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   const allNames = [...new Set([...engineNames, ...UI_DATA_FILES])];
   const files: Record<string, string> = {};
   let done = 0;
+  const datasets = sources.data;
   await Promise.all(
     allNames.map(async (n) => {
-      const r = await fetch("/data/" + n);
+      const r = await fetch(datasets + n);
       if (!r.ok) throw new Error(tr("boot.dataError", { name: n }));
       files[n] = await r.text();
       progress(++done / allNames.length);
@@ -139,7 +271,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // purpose -- it tunes bots, not the match, so it is not part of the data
   // hash either.
   try {
-    const book = await fetch("/data/deck_book.json");
+    const book = await fetch(datasets + "deck_book.json");
     if (book.ok) files["deck_book.json"] = await book.text();
   } catch {
     /* absent book is fine */
@@ -147,7 +279,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // Optional: the bot strategy book (`docs/BOT.md` §3.8). Missing = empty
   // book = the default parameters (today's heuristic constants).
   try {
-    const book = await fetch("/data/strategy_book.json");
+    const book = await fetch(datasets + "strategy_book.json");
     if (book.ok) files["strategy_book.json"] = await book.text();
   } catch {
     /* absent book is fine */

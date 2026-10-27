@@ -90,5 +90,18 @@ export interface EngineBoot {
   cheats: boolean;
 }
 
+/**
+ * Where the worker boots its rules and tables from. The page resolves these to
+ * absolute URLs (`net/server.ts`'s `absolute`) so the worker can fetch them
+ * whatever the page's own location is. `custom` is one extra ruleset module
+ * (the user's solo `.wasm`), added after the index's modules when no server
+ * build is selected.
+ */
+export interface SoloBootOpts {
+  rulesBase: string;
+  dataBase: string;
+  custom?: Uint8Array | null;
+}
+
 /** Every request op the worker answers. */
 export type SoloOp = "init" | "start" | "restore" | "act" | "quick_start" | "view" | "save" | "export" | "visibility" | "close";

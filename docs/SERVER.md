@@ -2,12 +2,19 @@
 
 `crates/server` — axum + tokio. Commands are HTTP; updates are Server-Sent Events.
 
+The game server is one half of a split deployment: the **profile server**
+(`crates/profile-server`, [PROFILE.md](PROFILE.md)) owns accounts, profile sync,
+the game-server directory and game-data uploads. The two share only the
+player's display name — no token, no shared secret. A game server also runs
+alone; the client simply opens a session on whichever server it is pointed at.
+
 ```sh
 cargo run -p server --release -- --port 8080 --data data --static webui/dist
-# env: PORT, BM_HOST, BM_DATA, BM_STATIC
+# env: PORT, BM_HOST, BM_DATA, BM_STATIC, BM_RULES, BM_BUILDS
 # binds 127.0.0.1 by default (the dev server proxies to it); `--host ::` listens
 # on IPv6 + IPv4, `--host 0.0.0.0` on IPv4 only -- needed when this process
 # itself serves `--static` to the network.
+# optional rule builds (see "Rule builds"): --builds DIR / BM_BUILDS
 # optional advanced-bot decisions (docs/BOT.md B5) -- see "Enabling it in a deploy":
 #   --bot-service <path> / BM_BOT_SERVICE, --bot-threads N / BOT_THREADS,
 #   --bot-search-threads N / BOT_SEARCH_THREADS
@@ -55,6 +62,7 @@ node --test webui/src/game/botBudget.test.ts webui/src/game/botDrive.test.ts web
 # webui/public/assets/engine/bot-worker.js. The archive / replay path does not
 # need it (replays never run the bot).
 cargo test -p game-rules -p rules-cond -j 2
+cargo test -p server -p profile-server
 cd webui && npx tsc --noEmit
 ```
 
@@ -218,22 +226,59 @@ answers from that cache. `bot-service --no-ponder` turns the whole path off.
 * The service sees exactly one seat's view — the same frame the client gets.
   It only proposes answers; the sandboxed engine stays authoritative.
 
+## Rule builds
+
+A server can offer several rulesets side by side. `--builds DIR` points at a
+`builds.json` manifest:
+
+```json
+[
+  { "id": "live", "name": "现行规则", "rules": "dist/cards", "data": "data", "default": true },
+  { "id": "draft", "name": "草案", "rules": "dist/cards-draft" }
+]
+```
+
+* `id` — ASCII letters/digits/`-`/`_`, unique, at most 16 builds. `name` falls
+  back to `id`; `description` is free text.
+* `rules` — ruleset directory holding `index.json`, the wasm modules and their
+  `conds-*.bin` (relative to the manifest unless absolute).
+* `data` — game tables directory; absent = the server's `--data`.
+* `default` — the build a room/record names when none is given. Exactly one
+  entry should set it; without a manifest the single `--rules` set is `default`.
+
+Each build loads its own roster, tables and worker pool, so matches on
+different builds never share engine identity (the fairness commitment pins the
+build's ruleset hash). `GET /api/builds` advertises them; a room names one at
+creation and keeps it for its life. The ruleset and tables are served read-only
+at `/builds/{id}/rules/...` and `/builds/{id}/data/...`; the web client loads
+the chosen build from there. A room record naming a build this process does not
+have resolves to the default.
+
 ## Auth
 
-`POST /api/session {player}` returns `{token}` and sets an `HttpOnly` cookie
-`bm_session`. Send the token as `Authorization: Bearer <token>`; the browser's
-`EventSource` (which can't set headers) uses the cookie automatically. `?token=` also
-works, for tools.
+`POST /api/session {player, character?, cnId?}` returns `{token}` and sets an
+`HttpOnly` cookie `bm_session`. Send the token as `Authorization: Bearer
+<token>`; the browser's `EventSource` (which can't set headers) uses the cookie
+automatically. `?token=` also works, for tools.
+
+The token is **local to this server** and its store; it is not a profile-server
+ticket and nothing from the profile server is forwarded here. The name is the
+identity — the client posts it on every game server it connects to. There is no
+password: a name opens (or resumes) a session on whichever server is addressed.
+Putting a real IdP in front is future work.
 
 ## Endpoints
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET  | `/api/health` | | `{game, version, rooms}` |
+| GET  | `/api/health` | | `{game, version, rooms, builds}` |
 | POST | `/api/session` | `{player, character?, cnId?}` | `{token, player}` |
 | GET  | `/api/session` | | `{token, player, room, member}` |
+| GET  | `/api/builds` | | `[{id, name, description, rulesetSha256, cards, default}]` |
+| GET  | `/builds/{id}/rules/{*file}` | | a build's ruleset module / `index.json` / conds |
+| GET  | `/builds/{id}/data/{*file}` | | a build's game tables |
 | GET  | `/api/rooms` | | `RoomInfo[]` |
-| POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?, clock?}` | `{room, you}` |
+| POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?, clock?, build?}` | `{room, you}` |
 | POST | `/api/rooms/{id}/join` | `{password, version?, spectate?}` | `{room, you}` |
 | POST | `/api/rooms/{id}/ready` | `{on}` | `RoomInfo` |
 | POST | `/api/rooms/{id}/bots` | `{op: "add" \| "remove", member?, mentality?}` | `RoomInfo` (host) |
