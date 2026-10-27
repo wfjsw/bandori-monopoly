@@ -36,3 +36,28 @@ pub fn data() -> GameData {
 pub fn data_arc() -> Arc<GameData> {
     Arc::new(data())
 }
+
+/// Answer the opening-hand re-roll, if it is up, for every seat.
+///
+/// 初始重抽 is a whole-table barrier with no advance until every seat answers
+/// (rulebook 时点流程 step 6), so a harness that only ticks stalls in the
+/// opening. Every seat takes the fallback -- what an idle player would do.
+/// Tolerant of a seat that already answered.
+pub fn cross_mulligan(m: &mut game_core::engine::Match) {
+    let st = m.state();
+    if st.prompt.kind != "mulligan" {
+        return;
+    }
+    let members: Vec<i32> = st.players.iter().map(|p| p.member).collect();
+    let (id, fallback) = (st.prompt.id, st.prompt.fallback);
+    for member in members {
+        let _ = m.act(
+            member,
+            &game_core::net::NetMessage {
+                prompt: id,
+                value: fallback,
+                ..game_core::net::NetMessage::act("answer")
+            },
+        );
+    }
+}

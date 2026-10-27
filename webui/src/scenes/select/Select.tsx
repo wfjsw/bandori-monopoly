@@ -3,7 +3,7 @@
 // grid; bottom: turn order strip and the big button. The `deck` phase has its
 // own full-screen scene (`DeckAdjust`).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { navigate } from "../../app/router";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
@@ -61,37 +61,48 @@ export function Select({ sess }: { sess: GameSession }) {
     },
     sess,
   });
+  // Private pick-screen intent: if this seat times out, the engine picks this
+  // character while it is still free. Fire-and-forget (no toast); the confirm
+  // button still sends `act: "pick"`. Only the pick phase takes one -- the ban
+  // phase's empty choice means "no ban".
+  const preselect = useCallback((name: string) => {
+    void pickRef.current.sess.act({ act: "preselect", persona: name }).catch(() => {});
+  }, []);
+
   const pickChar = useCallback((c: PersonaData) => {
     if (pickRef.current.auto || pickRef.current.spectating) return;
     sfx("place");
     if (pickRef.current.hasChar) return;
     setPicked(c.name);
-    // Private pick-screen intent: if this seat times out, the engine picks
-    // this character while it is still free. Fire-and-forget (no toast); a
-    // preview click on a taken/banned character sends nothing and leaves any
-    // earlier intent in place. The confirm button still sends `act: "pick"`.
-    const { phase, free, sess: s } = pickRef.current;
-    if (phase === "pick" && free(c.name)) {
-      void s.act({ act: "preselect", persona: c.name }).catch(() => {});
-    }
-  }, []);
+    // A preview click on a taken/banned character sets nothing server-side and
+    // leaves any earlier intent in place.
+    const { phase, free } = pickRef.current;
+    if (phase === "pick" && free(c.name)) preselect(c.name);
+  }, [preselect]);
 
   // Seed the profile's home character as the selection the moment the pick
   // phase opens and it is still free. The preview/checkmark already fell back
   // to it (`chosen`), but `picked` alone gated the continue button — so the
   // highlighted default still needed a second click on itself before you
-  // could decide. Mirror `pickChar`: same state write, same private preselect
-  // so a timeout resolves to what the screen shows. Ban keeps an empty pick
-  // meaning "no ban", so this never seeds there.
+  // could decide.
+  //
+  // Only on the phase *change*: `picked` carries the ban choice into the pick
+  // phase (`matchScene` keeps this component mounted across ban → pick), and
+  // a later re-run would also undo a deliberate preview of a taken character.
+  // A ban-phase `picked` that is somehow still free is a real choice, so it
+  // wins over the home character.
   const phase = view?.state.phase ?? "";
   const home = getProfile().homePersona || D.personas[0].name;
+  const lastPhase = useRef("");
   useEffect(() => {
-    if (spectating || auto || phase !== "pick") return;
+    const entered = lastPhase.current !== phase;
+    lastPhase.current = phase;
+    if (!entered || spectating || auto || phase !== "pick") return;
     const r = pickRef.current;
-    if (r.hasChar || picked || !r.free(home)) return;
+    if (r.hasChar || !r.free(home) || (picked && r.free(picked))) return;
     setPicked(home);
-    void r.sess.act({ act: "preselect", persona: home }).catch(() => {});
-  }, [phase, picked, spectating, auto, home]);
+    preselect(home);
+  }, [phase, picked, spectating, auto, home, preselect]);
 
   if (!view) return null;
   const st = view.state;

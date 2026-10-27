@@ -59,30 +59,8 @@ fn setup(members: Vec<RoomMember>, seed: u64) -> MatchSetup {
     }
 }
 
-/// Cross the opening-hand re-roll if it is up. It is a barrier with no expiry
-/// (rulebook 时点流程 step 6), so a harness that only ticks would stall there;
-/// every seat answers with the fallback, exactly as an idle player would.
-fn cross_mulligan(m: &mut Match) {
-    let st = m.state();
-    if st.prompt.kind != "mulligan" {
-        return;
-    }
-    let members: Vec<i32> = st.players.iter().map(|p| p.member).collect();
-    let (id, fallback) = (st.prompt.id, st.prompt.fallback);
-    for member in members {
-        let _ = m.act(
-            member,
-            &NetMessage {
-                prompt: id,
-                value: fallback,
-                ..NetMessage::act("answer")
-            },
-        );
-    }
-}
-
-/// [`cross_mulligan`] for a recorder: the answers go through `act` so they land
-/// in the input log like any other player decision.
+/// [`common::cross_mulligan`] for a recorder: the answers go through `act` so
+/// they land in the input log like any other player decision.
 fn cross_mulligan_rec(rm: &mut RecordedMatch) {
     let st = rm.inner().state();
     if st.prompt.kind != "mulligan" {
@@ -329,7 +307,7 @@ fn partial_snapshot_records() {
     );
     m.quick_start();
     for _ in 0..40 {
-        cross_mulligan(&mut m);
+        common::cross_mulligan(&mut m);
         m.tick(0.25);
     }
     let mut rm = RecordedMatch::from_snapshot(m);

@@ -417,17 +417,19 @@ impl Cx<'_> {
         // window is a hard barrier (rulebook 时点流程: step 6 completes before
         // step 7's 游戏开始时 effects and step 8's first turn): no seat may
         // activate an effect or advance the game until every seat has an
-        // answer on record. Bots decide through their policy (`fill_ai`), a
-        // seat the machine has taken over answers as the machine, and nobody
-        // is force-defaulted into "keep" -- the once-only opening-hand choice
-        // is not a 恢复时间 prompt and must not expire on that pool.
+        // answer on record. Bots decide through their policy, a seat the
+        // machine has taken over answers as the machine, and a seat that
+        // never answers is forced into "keep" only when the window runs out
+        // -- the choice is not cut short by the 恢复时间 pool (`use_pool` off).
         //
-        // A table whose every seat is machine-decided has nothing to wait for
-        // and keeps the old fast path (no ask, implicit keep) -- sims and
-        // bot-only matches would otherwise halt on a prompt no one reads.
-        let any_decider = (0..self.w.player_count()).any(|p| !self.w.st.players[p].ai);
+        // A table whose every seat is machine-decided has nothing to wait
+        // for, so it skips the ask and applies the same policy answers
+        // directly (`ai_answer_for_entry` is the exact `fill_ai` body, same
+        // RNG draws). Sims and bot-only matches must not halt on a prompt no
+        // one reads, and their chaos seats must still re-draw exactly as they
+        // would in a mixed table.
         let all: Vec<usize> = (0..self.w.player_count()).collect();
-        if any_decider && !all.is_empty() {
+        if !all.is_empty() {
             let n = all
                 .iter()
                 .map(|&p| self.start_hand(p))
@@ -449,8 +451,24 @@ impl Cx<'_> {
             .with_kind("mulligan");
             // Not an ordinary prompt: keep the seat's 恢复时间 pool out of it.
             ask.use_pool = false;
-            let r = self.ask(ask)?;
-            let redo: Vec<usize> = all.into_iter().filter(|&p| r.of(p) == 1).collect();
+            let answers: Vec<i32> = if all.iter().all(|&p| self.w.st.players[p].ai) {
+                let mut a = Vec::with_capacity(all.len());
+                for &p in &all {
+                    let v = self.ai_answer_for_entry(&ask, p);
+                    a.push(v);
+                }
+                a
+            } else {
+                let r = self.ask(ask)?;
+                all.iter().map(|&p| r.of(p)).collect()
+            };
+            let redo: Vec<usize> = all
+                .iter()
+                .copied()
+                .zip(&answers)
+                .filter(|&(_, &v)| v == 1)
+                .map(|(p, _)| p)
+                .collect();
             for &p in &redo {
                 self.mulligan(p)?;
             }

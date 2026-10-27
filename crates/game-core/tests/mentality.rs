@@ -12,9 +12,9 @@ use game_core::engine::{
     FORCE_BUY_RESERVE, REDEEM_RESERVE,
 };
 use game_core::msg::Msg;
-use game_core::net::{NetMessage, RoomMember};
+use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
-use game_core::state::{BotMentality, MatchState};
+use game_core::state::{stage, BotMentality, MatchState};
 use game_core::MatchMode;
 
 fn member(id: i32, bot: bool, m: BotMentality) -> RoomMember {
@@ -45,25 +45,12 @@ fn new_match(
 /// Tick until the match ends (or `max_rounds` pass, then finish it).
 ///
 /// Every ordinary prompt is left to time out to its fallback, as before. The
-/// opening-hand re-roll is a barrier with no expiry (rulebook 时点流程 step 6),
-/// so the harness answers it with the fallback to let the game start at all.
+/// opening-hand re-roll is a whole-table barrier (rulebook 时点流程 step 6), so
+/// the harness answers it with the fallback to let the game start at all.
 fn play_out(m: &mut Match, max_rounds: i32) {
     let mut ticks = 0;
     while !m.ended() {
-        let st = m.state();
-        if st.prompt.kind == "mulligan" {
-            let members: Vec<i32> = st.players.iter().map(|p| p.member).collect();
-            for member in members {
-                let _ = m.act(
-                    member,
-                    &NetMessage {
-                        prompt: st.prompt.id,
-                        value: st.prompt.fallback,
-                        ..NetMessage::act("answer")
-                    },
-                );
-            }
-        }
+        common::cross_mulligan(m);
         m.tick(0.25);
         ticks += 1;
         if m.state().round > max_rounds {
@@ -162,6 +149,32 @@ fn chaos_bot_buys_with_no_reserve() {
         broke,
         "no chaos purchase in 6 games left under the standard reserve"
     );
+}
+
+/// An all-machine table raises no prompt for the opening re-roll (nothing can
+/// be waited on), but it must still play each seat's own policy, not an
+/// implicit keep: a chaos bot re-draws there exactly as it does among humans,
+/// and a standard one keeps.
+#[test]
+fn a_bot_only_table_still_plays_the_mulligan_policy() {
+    for seed in 1..=4 {
+        let run = |m: BotMentality| {
+            let members: Vec<RoomMember> = (1..=3).map(|i| member(i, true, m)).collect();
+            let mut match_ = new_match(&members, seed, Arc::new(StubRules));
+            match_.quick_start();
+            let st = match_.state();
+            assert_eq!(st.prompt.id, 0, "no prompt for a machine-only table");
+            st.players.iter().map(|p| p.mulligan).collect::<Vec<_>>()
+        };
+        assert!(
+            run(BotMentality::Chaos).iter().all(|&redrew| redrew),
+            "chaos re-draws (seed {seed})"
+        );
+        assert!(
+            run(BotMentality::Standard).iter().all(|&redrew| !redrew),
+            "standard keeps (seed {seed})"
+        );
+    }
 }
 
 // ---------------------------------------------------------------- prompt picks
@@ -347,26 +360,51 @@ fn standard_counters_at_the_default_propensity() {
 // ---------------------------------------------------------------- card play
 
 /// Chaos plays every playable card before it rolls -- no 70% roll, no
-/// two-per-turn cap beyond the engine's own.
+/// two-per-turn cap beyond the engine's own. Counted per seat against that
+/// seat's own hand: a one-card hand owes one play, not two.
 #[test]
-fn chaos_plays_a_playable_card_instead_of_rolling() {
+fn chaos_plays_every_playable_card_instead_of_rolling() {
     for seed in 1..=6 {
         let members: Vec<RoomMember> = (1..=4)
             .map(|i| member(i, true, BotMentality::Chaos))
             .collect();
         let mut m = new_match(&members, seed, Arc::new(StubRules));
         m.quick_start();
-        let mut last = 0;
-        let mut plays_before_first_move = 0;
-        let mut saw_move = false;
+        // Wait for the first seat's 运营; the bots drive themselves.
         let mut ticks = 0;
-        while !m.ended() && !saw_move {
+        while !m.ended() {
+            let st = m.state();
+            if !st.busy && st.turn >= 0 && st.step == stage::OPS {
+                break;
+            }
             m.tick(0.25);
             ticks += 1;
+            assert!(ticks < 2_000_000, "seed {seed}: no first turn");
+        }
+        let st = m.state();
+        let seat = st.turn as usize;
+        let member = st.players[seat].member;
+        // How many of its cards this seat could play at the top of its turn.
+        let owed = m
+            .view_extra_typed(member)
+            .playable
+            .iter()
+            .filter(|&&ok| ok)
+            .count();
+        assert!(
+            owed > 0,
+            "seed {seed}: nothing playable, the case is vacuous"
+        );
+
+        let mut last = 0;
+        let mut played = 0;
+        let mut saw_move = false;
+        while !m.ended() && !saw_move {
+            m.tick(0.25);
             for e in m.events_since(last) {
                 last = e.id;
                 match e.r#type.as_str() {
-                    "play" => plays_before_first_move += 1,
+                    "play" if e.player_id as usize == seat => played += 1,
                     "diceRollBefore" | "move" => saw_move = true,
                     _ => {}
                 }
@@ -377,8 +415,8 @@ fn chaos_plays_a_playable_card_instead_of_rolling() {
             assert!(ticks < 2_000_000);
         }
         assert!(
-            plays_before_first_move >= 2,
-            "seed {seed}: only {plays_before_first_move} card(s) played before the first move"
+            played >= owed,
+            "seed {seed}: played {played} of {owed} playable card(s) before rolling"
         );
     }
 }

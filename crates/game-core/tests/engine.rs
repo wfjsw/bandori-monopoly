@@ -544,18 +544,21 @@ fn mulligan_waits_for_every_seat_and_replays_without_duplicate_events() {
     };
     m.act(1, &redo).unwrap();
     assert_eq!(m.act(1, &redo).unwrap_err().key(), "err.answered");
-    for _ in 0..200 {
-        m.tick(0.1); // far past any ordinary prompt window
+    // Well past the 15 s 恢复时间 pool the prompt used to drain from (and that
+    // used to force it after the 1.5 s grace), still short of the barrier's
+    // own 20 s window: player 2 is simply still deciding.
+    for _ in 0..180 {
+        m.tick(0.1);
     }
     let st = m.state();
     assert!(
         st.busy && st.prompt.kind == "mulligan",
-        "still waiting for player 2 -- the barrier does not expire"
+        "still waiting for player 2 -- the pool does not end the barrier"
     );
     assert!(st.turn < 0, "no turn and no 游戏开始时 effect may run yet");
 
     // The absent seat is taken over: the machine answers it (keep), which is
-    // that seat's decision -- the only way the barrier lifts without one.
+    // that seat's decision -- one way the barrier lifts without one.
     m.member_left(2, true);
     for _ in 0..40 {
         m.tick(0.1);
@@ -575,6 +578,29 @@ fn mulligan_waits_for_every_seat_and_replays_without_duplicate_events() {
     assert!(!after.is_empty());
     assert_eq!(after[0].id, seen + 1);
     assert!(after.windows(2).all(|w| w[1].id == w[0].id + 1));
+}
+
+/// A seat that never answers is forced to "keep" when the barrier's own window
+/// runs out. Presence is not enough: an open tab keeps the seat connected, so
+/// without this a player who walks away wedges the whole table in the opening.
+#[test]
+fn mulligan_forces_keep_when_the_window_runs_out() {
+    let members = [member(1, false), member(2, true)];
+    let mut m = new_match(&members, 13, MatchMode::Casual);
+    m.quick_start();
+    // The bot answers at once; the human never does. 26 s is past the 20 s
+    // window.
+    for _ in 0..260 {
+        m.tick(0.1);
+    }
+    let st = m.state();
+    assert!(
+        !st.busy && st.prompt.id == 0,
+        "the window decided for the seat"
+    );
+    let me = st.players.iter().find(|s| s.member == 1).unwrap();
+    assert!(!me.mulligan, "the fallback is keep, so nothing was redrawn");
+    assert_eq!(st.phase, "play");
 }
 
 #[test]

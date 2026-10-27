@@ -95,6 +95,10 @@ fn answer_first(m: &mut Match, member: i32) {
 /// a barrier over the whole table, so one member's answer alone does not lift
 /// it -- the other humans have to be answered too.
 fn answer_all(m: &mut Match) {
+    if m.state().prompt.kind == "mulligan" {
+        common::cross_mulligan(m);
+        return;
+    }
     let members: Vec<i32> = m.state().players.iter().map(|p| p.member).collect();
     for member in members {
         answer_first(m, member);
