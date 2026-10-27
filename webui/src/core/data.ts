@@ -470,7 +470,9 @@ async function loadInto(target: Target, fatal: boolean, onProgress?: (p: number)
   } else {
     rulesetLoaded = false;
   }
-  sources = target;
+  // The public source identity is just the two directories (`indexText` is a
+  // fetch detail of this run).
+  sources = { rules: target.rules, data: target.data };
   await loadTables(target, run, onProgress);
   onProgress?.(1);
 }

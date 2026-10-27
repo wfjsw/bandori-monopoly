@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { switchSource } from "../../core/data";
 import { normalizeServer, probeGameServer, useServer } from "../../net/server";
-import { health, listServers, profileBase, setProfileBase, type ProfileGameServer } from "../../net/profile";
+import { health, listServers, profileBase, type ProfileGameServer } from "../../net/profile";
 import { Btn } from "../../ui/Button";
 import { TextInput } from "../../ui/Form";
 import { Icon } from "../../ui/Icon";
@@ -45,16 +45,15 @@ export function ServerChip() {
 
 function Servers({ close }: { close: () => void }) {
   const current = useServer();
-  const [profile, setProfile] = useState(profileBase());
   const [directory, setDirectory] = useState<ProfileGameServer[] | null>(null);
-  const [profileOnline, setProfileOnline] = useState<boolean | null>(null);
+  const [directoryOnline, setDirectoryOnline] = useState<boolean | null>(null);
   const [url, setUrl] = useState(current.base);
   const [ping, setPing] = useState<{ ok: boolean; version?: string; rooms?: number; builds?: number } | null>(null);
   const [pinging, setPinging] = useState(false);
 
   const refreshDirectory = () => {
     void listServers().then(setDirectory);
-    void health().then((h) => setProfileOnline(h.ok));
+    void health().then((h) => setDirectoryOnline(h.ok));
   };
 
   useEffect(refreshDirectory, []);
@@ -97,13 +96,6 @@ function Servers({ close }: { close: () => void }) {
     }
   };
 
-  const saveProfile = () => {
-    const next = profile.trim();
-    if (next && !normalizeServer(next)) return toast(tr("server.invalid"), "error");
-    setProfileBase(next);
-    refreshDirectory();
-  };
-
   return (
     <div className={s.wrap}>
       <div className={s.current}>
@@ -117,19 +109,10 @@ function Servers({ close }: { close: () => void }) {
       </div>
 
       <div className={s.section}>
-        <div className={s.sectionTitle}>{tr("server.profileBase")}</div>
-        <div className={s.field}>
-          <TextInput className={s.grow} value={profile} placeholder={tr("server.profilePlaceholder")} onChange={(e) => setProfile(e.target.value)} />
-          <Btn size="small" onClick={saveProfile}>{tr("server.save")}</Btn>
-        </div>
-        <div className={profileOnline === false ? s.bad : s.hint}>
-          {profileOnline === null ? tr("server.loading") : profileOnline ? tr("server.profileOnline") : tr("server.directoryOffline")}
-        </div>
-      </div>
-
-      <div className={s.section}>
         <div className={s.sectionTitle}>{tr("server.directory")}</div>
-        {directory === null ? (
+        {directoryOnline === false ? (
+          <div className={s.bad}>{tr("server.directoryOffline")}</div>
+        ) : directory === null || directoryOnline === null ? (
           <div className={s.hint}>{tr("server.loading")}</div>
         ) : directory.length === 0 ? (
           <div className={s.hint}>{tr("server.directoryEmpty")}</div>

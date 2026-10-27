@@ -78,7 +78,9 @@ a path component), so the account and directory indexes are reachable there.
 
 The web client is served by the profile server and points its API calls at the
 profile server, its game traffic at a game server picked from the directory (or
-entered by hand). Game-server CORS is permissive because the app is cross-origin
-from it and `EventSource` cannot set headers. Solo play runs entirely in the
-browser and works with no server at all; a custom WASM ruleset can be uploaded
-here for sharing but is also applied locally.
+entered by hand). The profile server's address is fixed per deployment -- the
+web build's `BM_PROFILE` (empty = the page's own origin, the normal hosting
+above) -- and there is no in-app control for it. Game-server CORS is permissive
+because the app is cross-origin from it and `EventSource` cannot set headers.
+Solo play runs entirely in the browser and works with no server at all; a custom
+WASM ruleset can be uploaded here for sharing but is also applied locally.
