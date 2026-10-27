@@ -94,7 +94,9 @@ function probe(over: { actor?: number; owner?: number; roll?: number | null; mov
   const actor = over.actor ?? 0;
   const owner = over.owner ?? 0;
   const win = {
-    kind: 0,
+    // Trigger kind is a wire **spelling** (`rules_cond::kinds::trig`), not an
+    // int; `move.kind` below is the engine's int enum.
+    kind: "pass",
     actor,
     target: 0,
     value: 0,
@@ -189,4 +191,22 @@ test("a listed conds blob that cannot be fetched fails loudly", async () => {
     () => loadRulesetInto(glue as unknown as RulesetGlue, read),
     /404/,
   );
+});
+
+test("ruleset_reset drops staged modules and keeps the built set", async () => {
+  // A live source switch can fail after modules were staged; the reset must
+  // discard them while the built set (and its tables) stay live. An empty
+  // build after a reset is the stub set, not an error.
+  const { glue, dir } = await loadGlue("reset");
+  const index = readIndex(dir);
+  assert.ok(index.modules.length > 0, "this test needs a built ruleset");
+  await loadRulesetInto(glue as unknown as RulesetGlue, reader(dir));
+  const before = JSON.parse(glue.roster_json()).cards.length;
+  assert.ok(before > 0, "the built set has a roster");
+
+  glue.ruleset_add(new Uint8Array(readFileSync(join(dir, index.modules[0].file))));
+  glue.ruleset_reset();
+  assert.equal(JSON.parse(glue.roster_json()).cards.length, before, "reset keeps the live set");
+  assert.equal(glue.ruleset_build(), 0, "an empty build after reset is allowed");
+  assert.equal(JSON.parse(glue.roster_json()).cards.length, 0, "and replaces it with the stub set");
 });

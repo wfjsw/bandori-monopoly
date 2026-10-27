@@ -153,6 +153,10 @@ export function useCrossfade<K>(
             new Promise<void>((res) => setTimeout(res, 80)),
           ]);
         });
+        // A transition started while another is running is skipped: `ready`
+        // then rejects. Awaiting only `finished` leaves that rejection
+        // unhandled (a source switch can remount the scene mid-fade).
+        void vt.ready.catch(() => undefined);
         void vt.finished.then(settle, settle);
       });
     } else {

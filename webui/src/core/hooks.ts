@@ -10,6 +10,7 @@ import { langVersion, onLangChange } from "../i18n";
 import { useLatestRef } from "../hooks/latest";
 import { startVideoWake } from "../hooks/videoWake";
 import { getProfile, hasProfile, onProfile, settings } from "./store";
+import { dataVersionOf, loadState, subscribeData, subscribeLoad, type LoadState } from "./data";
 import type { MatchEvent, MatchView, PlayerProfile } from "./types";
 import type { GameSession } from "../game/session";
 import { isAuto, type AutoMode } from "../game/autopilot";
@@ -24,6 +25,17 @@ onProfile(() => profileVersion++);
 export function useProfile(): PlayerProfile | null {
   useSyncExternalStore(subscribeProfile, () => profileVersion);
   return hasProfile() ? getProfile() : null;
+}
+
+/** Bumps whenever `D` has been replaced (a live server / build / custom-rules
+ *  switch). Scenes key on it to re-read the new roster and tables. */
+export function useDataVersion(): number {
+  return useSyncExternalStore(subscribeData, dataVersionOf);
+}
+
+/** The live source-switch progress, for the blocking overlay. */
+export function useLoadState(): LoadState {
+  return useSyncExternalStore(subscribeLoad, loadState);
 }
 
 export function useSettings() {

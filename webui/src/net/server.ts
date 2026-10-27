@@ -74,8 +74,9 @@ export function serverBase(): string {
 /**
  * Point the page at another game server (or back at this origin with `null`).
  * A build id only means something on the server it was chosen on, so it is
- * cleared with the server. Callers reload the page afterwards: boot-time data
- * is keyed to this choice.
+ * cleared with the server. Callers then reload the page's data with
+ * `switchSource` (`core/data`) -- the live rules / tables are keyed to this
+ * choice.
  */
 export function setServer(url: string | null): void {
   const next = normalizeServer(url);
@@ -99,7 +100,8 @@ export function buildNameOf(): string {
   return buildName;
 }
 
-/** Select a rule build (`null`/`""` = the server's default). */
+/** Select a rule build (`null`/`""` = the server's default). The data is
+ *  loaded by `switchSource` (`core/data`), not here. */
 export function setBuild(id: string | null, name = ""): void {
   const next = (id ?? "").trim();
   if (next === build && name === buildName) return;

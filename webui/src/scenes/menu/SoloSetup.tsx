@@ -5,13 +5,14 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { navigate } from "../../app/router";
 import { cx } from "../../core/cx";
-import { D, clearCustomRules, customRules, rules, setCustomRules } from "../../core/data";
+import { D, customRules, rules, switchSource } from "../../core/data";
+import { useDataVersion, useLoadState } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { BotMentality, PersonaData, ScoreWeights } from "../../core/types";
-import { SoloSession, botSoloCapMs, discardSolo, resumeSolo, setBotSoloCapMs, startSolo, warmSoloEngine } from "../../game/session";
+import { SoloSession, botSoloCapMs, discardSolo, invalidateSoloEngine, resumeSolo, setBotSoloCapMs, startSolo, warmSoloEngine } from "../../game/session";
 import { api, type BuildView } from "../../net/api";
 import { uploadGameData } from "../../net/profile";
-import { isRemote, setBuild, useServer } from "../../net/server";
+import { isRemote, useServer } from "../../net/server";
 import { Btn } from "../../ui/Button";
 import { Avatar, CharCard, inTab, tabLabels } from "../../ui/Character";
 import { Chips } from "../../ui/Chips";
@@ -43,6 +44,19 @@ const other = (m: BotMentality): BotMentality => {
 function SoloSetup({ close }: { close: () => void }) {
   // Boot the engine worker while the player picks seats.
   useEffect(() => warmSoloEngine(), []);
+  // This modal lives outside the scene subtree that `dataVersion` remounts
+  // (`ModalHost`), so subscribe here: the roster, the build chips and the
+  // stored custom module all change under a live switch while it is open. The
+  // load state re-renders after the switch cleared (e.g. `custom` is re-read
+  // as gone on clear), and the effect drops picks the new roster lacks.
+  const dataVersion = useDataVersion();
+  useLoadState();
+  useEffect(() => {
+    setChars((cs) => {
+      const next = cs.map((n) => (n && D.persona(n) ? n : ""));
+      return next.some((n, i) => n !== cs[i]) ? next : cs;
+    });
+  }, [dataVersion]);
   const player = getProfile().playerName;
   const { build } = useServer();
   /** Builds offered by the selected server (`GET /api/builds`); `null` while
@@ -76,45 +90,46 @@ function SoloSetup({ close }: { close: () => void }) {
   };
   const pickBuild = (b: BuildView) => {
     if (b.id === selectedBuild) return;
-    // Reboot so the roster / tables come from this build. Back to the menu is
-    // fine -- solo setup is a modal (`design`: build changes reload).
+    // Load the build's roster / tables in place; the setup modal stays open.
     dropSave();
-    setBuild(b.id, b.name);
-    location.reload();
+    void switchSource({ build: b.id, buildName: b.name }).then(invalidateSoloEngine).catch(() => {});
   };
   /** Back to the bundled local ruleset (and thus the custom module, if any). */
   const pickLocal = () => {
     if (!build) return;
     dropSave();
-    setBuild(null);
-    location.reload();
+    void switchSource({ build: null }).then(invalidateSoloEngine).catch(() => {});
   };
   /**
    * Apply a user's ruleset locally first (always -- solo must not depend on
    * the profile server), then offer it to the profile server when configured.
    * The upload is best-effort and time-boxed: a slow / absent profile server
-   * never blocks starting the match.
+   * never blocks the live load or starting the match.
    */
   const pickCustom = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (!setCustomRules(bytes, file.name)) {
-      e.target.value = "";
-      return;
-    }
     dropSave();
     setBusy(true);
-    await Promise.race([
+    const upload = Promise.race([
       uploadGameData(file, "ruleset"),
       new Promise((resolve) => setTimeout(resolve, 6000)),
     ]);
-    location.reload();
+    try {
+      await switchSource({ custom: { bytes, name: file.name } });
+      invalidateSoloEngine();
+    } catch {
+      /* switchSource reverted and toasted */
+    } finally {
+      e.target.value = "";
+      setBusy(false);
+    }
+    await upload;
   };
   const clearCustom = () => {
-    clearCustomRules();
     dropSave();
-    location.reload();
+    void switchSource({ clearCustom: true }).then(invalidateSoloEngine).catch(() => {});
   };
   const [bots, setBots] = useState(() => Math.min(9, Math.max(2, Number(localStorage.getItem(BOTS_KEY) ?? 3) || 3)));
   const [weights, setWeights] = useState<ScoreWeights>({ ...DEFAULT_WEIGHTS });
