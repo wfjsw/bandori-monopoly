@@ -656,25 +656,27 @@ fn destiny_together_move_skips_settle() {
     drain(&mut t);
     assert!(t.on_field(0, "CRYCHIC:一起演奏音乐的命运共同体"));
     t.set_pos(0, 0);
+    // The hop's landing tile is p1's; a settle there would charge p0 its rent.
+    let landing = 5;
     t.own(0, &[2]); // p0's tile p1 will land on
-    t.own(1, &[5]); // p1's tile p0 hops onto
+    t.own(1, &[landing]); // the tile p0 hops onto
     t.dice(&[1]);
     t.roll(0).ok();
     drain(&mut t);
     assert!(t.end(0).is_ok());
     drain(&mut t);
     let money0_before = t.money(0);
-    // p1 at tile 1, rolls 1 -> tile 2, pays 260 rent to p0.
+    let rent = data().tiles[2].rent[0]; // what p1's payment hands p0
+                                        // p1 at tile 1, rolls 1 -> tile 2, pays that rent to p0.
     t.set_pos(1, 1);
     t.dice(&[1]);
     t.roll(1).ok();
     drain(&mut t);
-    assert_eq!(t.pos(0), 5, "p0 hopped to p1's tile ahead");
-    // 偶像经纪公司's base rent is 160: a settle there would take it from p0.
+    assert_eq!(t.pos(0), landing, "p0 hopped to p1's tile ahead");
     assert_eq!(
         t.money(0),
-        money0_before + 260,
-        "the hop must not settle: p0 should only receive the 260 rent"
+        money0_before + rent,
+        "the hop must not settle: p0 should only receive the {rent} rent"
     );
 }
 

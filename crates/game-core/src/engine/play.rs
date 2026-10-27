@@ -783,16 +783,44 @@ impl Cx<'_> {
         if as_main {
             self.w.st.step = stage::MOVE;
         }
-        // The capture is the authoritative shape for this move: the engine
-        // discards the run's world copy on pause, so `turn.plan` never saw the
-        // card's writes (`plan::set_steps`, `plan::set_resolve(false)`, …).
-        // Adopt it before the walk's mid-step plan sync reads the plan --
-        // otherwise a stale `resolve = true` revives settlement on a
-        // 「不触发结算」 card move.
-        self.w.turn.plan = plan.clone();
+        // A nested card move (a hook of an outer move calling `ctx::card_move`)
+        // borrows the shared plan for its own duration and hands the outer one
+        // back afterwards, so the outer walk's per-step sync keeps reading its
+        // own move instead of the nested one's.
+        let outer_plan = (self.move_depth > 0)
+            .then(|| std::mem::replace(&mut self.w.turn.plan, Move::default()));
+        self.seed_turn_plan(&plan);
+        let r = self.card_move_seeded(i, plan, as_main);
+        if let Some(outer) = outer_plan {
+            self.w.turn.plan = outer;
+        }
+        r
+    }
+
+    /// Adopt `plan` as the shared `turn.plan` for the move that is about to run.
+    ///
+    /// The plan a card shaped (or the one `main_move` stamped) is the
+    /// authoritative shape: `plan::set_*` writes land on it. Seed `turn.plan`
+    /// from it before anything the move raises -- the settle-side readers
+    /// (`scale_settle_payment`) and the walk's per-step sync
+    /// (`walk_inner_depth`) read `turn.plan`, and a stale `resolve = true`
+    /// there revives settlement on a 「不触发结算」 move.
+    ///
+    /// Note this carries **more** than `Cx::adopt_turn_policy`, which only
+    /// ferries the purchase/settle policy knobs (`pay_factor`, `rent_factor`,
+    /// `can_build`, `no_buy`) across a host-routine pause; the rest of the
+    /// shape (`resolve`, `steps`, `kind`, `teleport_to`, …) is not carried and
+    /// must be seeded here.
+    fn seed_turn_plan(&mut self, plan: &Move) {
         // `settle_redirect` is engine-set on `card_settle_move` only; never let
         // a plan seed carry a sticky `true`.
-        self.w.turn.plan.settle_redirect = false;
+        let mut p = plan.clone();
+        p.settle_redirect = false;
+        self.w.turn.plan = p;
+    }
+
+    /// [`Self::card_move`] once the shared plan is seeded.
+    fn card_move_seeded(&mut self, i: usize, mut plan: Move, as_main: bool) -> Flow<()> {
         if plan.teleport_to.is_some() {
             let to = plan.teleport_to.unwrap().0 as usize;
             let resolve = plan.resolve;
@@ -1315,10 +1343,7 @@ impl Cx<'_> {
             // The card bodies shape `TurnCtx::plan` (that is what the `World`
             // plan ops write), so the walk has to take the move back afterwards.
             // Seed first so a body that only reads sees the fresh move.
-            self.w.turn.plan = m.clone();
-            // `settle_redirect` is engine-set on `card_settle_move` only;
-            // never let a plan seed carry a sticky `true`.
-            self.w.turn.plan.settle_redirect = false;
+            self.seed_turn_plan(&m);
             raise!(self, "diceRollPlan", i, @m m)?;
             m = self.w.turn.plan.clone();
             if self.out(i) || !self.playing() {
