@@ -123,6 +123,12 @@ and `⌛N` remaining turns. `⌛N` comes from the display-only prop
 (`docs/EVENTS.md`); it appears only while positive, in the face, the live note,
 and the player marker list. It is a countdown hint, never the expiry itself.
 
+Where another marker on the same face already carries that number -- a crystal
+count that is itself the countdown, a phase counter -- the `⌛N` is **not**
+printed again (`scenes/board/markers.ts` `showTurnsChip`): the existing chip
+already shows how many turns are left. The countdown still stays in the data,
+so the hiding is display-only.
+
 Set a **fixed** initial count as a static card prop -- `CardDef::props(&[(prop::TURNS_LEFT, N)])`
 -- so `place_card` / `bind_event` stamp it with everything else on the instance
 (`R:Fire bird`'s self-chosen X and `Sumimi:Here, the World!`'s draw-armed value

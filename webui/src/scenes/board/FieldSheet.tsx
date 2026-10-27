@@ -31,6 +31,7 @@ import { pickCard, type CardPill } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
 import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles";
+import { showTurnsChip } from "./markers";
 import { t as tr } from "../../i18n/t";
 import { designBox } from "../../app/stageScale";
 import s from "./FieldSheet.module.css";
@@ -119,7 +120,7 @@ const FieldFace = memo(function FieldFace({ slotKey, card, title, note, turnsLef
       on={on}
       onClick={onClick}
     >
-      {turnsLeft > 0 && <span className={s.turns} title={tr("board.turnsLeft", { n: turnsLeft, count: turnsLeft })}>⌛{turnsLeft}</span>}
+      {showTurnsChip(turnsLeft, counter, counter2, crystals, cp) && <span className={s.turns} title={tr("board.turnsLeft", { n: turnsLeft, count: turnsLeft })}>⌛{turnsLeft}</span>}
       {counter > 0 && <span className={s.count}>×{counter}</span>}
       {counter2 > 0 && <span className={s.count}>×{counter2}</span>}
       {crystals > 0 && <span className={s.crystal}>◆{crystals}</span>}
@@ -194,7 +195,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             const e = it.e;
             const note = [
               e.note?.k ? fmtMsg(e.note, names) : "",
-              (e.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: e.turnsLeft, count: e.turnsLeft }) : "",
+              showTurnsChip(e.turnsLeft ?? 0, e.counter, e.counter2) ? tr("board.turnsLeft", { n: e.turnsLeft, count: e.turnsLeft }) : "",
             ].filter(Boolean).join(" · ");
             const tiles = designatedTiles(S.marks, eventTiles(e.id));
             const key = `e${e.id}`;
@@ -234,7 +235,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const note = fc.note ? fmtMsg(fc.note, names) : "";
           const live = [
             note,
-            (fc.props?.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: fc.props?.turnsLeft, count: fc.props?.turnsLeft }) : "",
+            showTurnsChip(fc.props?.turnsLeft ?? 0, ...Object.values(fc.counters)) ? tr("board.turnsLeft", { n: fc.props?.turnsLeft, count: fc.props?.turnsLeft }) : "",
             fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "",
             fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : "",
           ].filter(Boolean).join(" · ");

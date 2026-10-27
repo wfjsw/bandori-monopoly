@@ -25,6 +25,7 @@ import { borrowedBand, byTitle, cardKeys, showGraveyard, showPlayerInfo } from "
 import { t as tr } from "../../i18n/t";
 import { counterLabel, stateLabel } from "../../i18n/stateLabel";
 import { setHoverSeat } from "./hoverSeat";
+import { showTurnsChip } from "./markers";
 import { holdPeek } from "../../hooks/hold";
 import { clockSync, displayRemainingMs } from "../../game/clockSync";
 
@@ -129,13 +130,17 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n?: number | "�
     const cp = fc.counters["cp"] ?? 0;
     if (crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: crystals });
     if (cp > 0) out.push({ label: `${card} · CP`, n: cp });
-    const turns = fc.props?.turnsLeft ?? 0;
-    if (turns > 0) out.push({ label: `${card} · ${tr("board.turnsLabel")}`, n: turns });
+    // A countdown another marker already carries is not listed twice.
+    const siblings = [crystals, cp];
     for (const [name, n] of Object.entries(fc.counters ?? {})) {
       if (n <= 0 || name === "crystals" || name === "cp") continue;
       const label = counterLabel(name);
-      if (label) out.push({ label: `${card} · ${label}`, n });
+      if (!label) continue;
+      out.push({ label: `${card} · ${label}`, n });
+      siblings.push(n);
     }
+    const turns = fc.props?.turnsLeft ?? 0;
+    if (showTurnsChip(turns, ...siblings)) out.push({ label: `${card} · ${tr("board.turnsLabel")}`, n: turns });
   }
   return out;
 }
