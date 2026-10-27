@@ -65,16 +65,27 @@ function SoloSetup({ close }: { close: () => void }) {
   const remote = isRemote();
   const selectedBuild = remote ? build || defaultBuild : build;
   const custom = customRules();
+  /**
+   * A solo save carries engine strings keyed to the roster / card ids of the
+   * ruleset it was played under, and the resume path has no source of its own
+   * -- so changing the source drops the save rather than restoring it into a
+   * different ruleset.
+   */
+  const dropSave = () => {
+    if (SoloSession.hasSave()) discardSolo();
+  };
   const pickBuild = (b: BuildView) => {
     if (b.id === selectedBuild) return;
     // Reboot so the roster / tables come from this build. Back to the menu is
     // fine -- solo setup is a modal (`design`: build changes reload).
+    dropSave();
     setBuild(b.id, b.name);
     location.reload();
   };
   /** Back to the bundled local ruleset (and thus the custom module, if any). */
   const pickLocal = () => {
     if (!build) return;
+    dropSave();
     setBuild(null);
     location.reload();
   };
@@ -92,6 +103,7 @@ function SoloSetup({ close }: { close: () => void }) {
       e.target.value = "";
       return;
     }
+    dropSave();
     setBusy(true);
     await Promise.race([
       uploadGameData(file, "ruleset"),
@@ -101,6 +113,7 @@ function SoloSetup({ close }: { close: () => void }) {
   };
   const clearCustom = () => {
     clearCustomRules();
+    dropSave();
     location.reload();
   };
   const [bots, setBots] = useState(() => Math.min(9, Math.max(2, Number(localStorage.getItem(BOTS_KEY) ?? 3) || 3)));

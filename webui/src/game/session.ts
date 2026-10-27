@@ -8,7 +8,7 @@
 import { D, currentSources, customRules, customRulesActive, customRulesBytes, rules } from "../core/data";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
-import { absolute } from "../net/server";
+import { absolute, buildId, setBuild } from "../net/server";
 import { startClockSync, clockSync, resyncLimiter } from "./clockSync";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
@@ -1053,7 +1053,15 @@ export async function resumeOnline(id: string, player: string, persona: string, 
   if (!(await ensureSession(player, persona, cnId))) return { k: "err.offline" };
   const r = await api.roomState(id);
   if (!r.ok || !r.data) return r.error ?? { k: "err.room.gone" };
-  return startOnline(r.data.room, r.data.you, r.data.game);
+  // The room's build is the server's truth. A refresh may boot from a build
+  // another tab selected; reload into the room's build before rendering it
+  // (`Lobby.enter` does the same on the click path).
+  const room = r.data.room;
+  if (room.build && room.build !== buildId()) {
+    setBuild(room.build);
+    location.reload();
+  }
+  return startOnline(room, r.data.you, r.data.game);
 }
 
 /** Which part of the match screen the phase belongs in. */

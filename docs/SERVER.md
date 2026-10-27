@@ -246,9 +246,10 @@ A server can offer several rulesets side by side. `--builds DIR` points at a
 * `default` — the build a room/record names when none is given. Exactly one
   entry should set it; without a manifest the single `--rules` set is `default`.
 
-Each build loads its own roster, tables and worker pool, so matches on
-different builds never share engine identity (the fairness commitment pins the
-build's ruleset hash). `GET /api/builds` advertises them; a room names one at
+Each build loads its own roster and tables, and gets its own worker pool
+(started on the build's first room, so an unused build costs no processes).
+Matches on different builds never share engine identity (the fairness
+commitment pins the build's ruleset hash). `GET /api/builds` advertises them; a room names one at
 creation and keeps it for its life. The ruleset and tables are served read-only
 at `/builds/{id}/rules/...` and `/builds/{id}/data/...`; the web client loads
 the chosen build from there. A room record naming a build this process does not

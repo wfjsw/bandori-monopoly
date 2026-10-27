@@ -158,15 +158,20 @@ impl Store {
         cn_id: &str,
         now: u64,
     ) -> ApiResult<Account> {
-        if let Some(mut a) = self.account_by_name(name) {
-            a.last_seen = now;
+        // Find and insert under one lock: two simultaneous first sign-ins for
+        // the same name must not create two accounts (later sign-ins resolve by
+        // name and would strand the loser's profile).
+        let mut doc = self.accounts.lock().unwrap();
+        if let Some(slot) = doc.items.iter_mut().find(|a| a.name == name) {
+            slot.last_seen = now;
             if !persona.is_empty() {
-                a.persona = persona.to_string();
+                slot.persona = persona.to_string();
             }
             if !cn_id.is_empty() {
-                a.cn_id = cn_id.to_string();
+                slot.cn_id = cn_id.to_string();
             }
-            self.update_account(a.clone())?;
+            let a = slot.clone();
+            write_doc(&self.account_path(), &doc).map_err(ApiError::internal)?;
             return Ok(a);
         }
         let a = Account {
@@ -178,7 +183,6 @@ impl Store {
             created: now,
             last_seen: now,
         };
-        let mut doc = self.accounts.lock().unwrap();
         doc.items.push(a.clone());
         write_doc(&self.account_path(), &doc).map_err(ApiError::internal)?;
         Ok(a)

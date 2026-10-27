@@ -19,6 +19,15 @@ import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
 import { loadRulesetInto } from "../core/rulesetLoad.ts";
 
+/** Where the page booted its own rules / tables from (absolute URLs), plus
+ *  the user's custom solo module when it applied. The page passes these so a
+ *  record played under a server build replays under the same one. */
+interface BootOpts {
+  rulesBase: string;
+  dataBase: string;
+  custom?: Uint8Array | null;
+}
+
 const ctx = self as unknown as {
   postMessage(msg: unknown): void;
   onmessage: ((e: MessageEvent) => void) | null;
@@ -47,7 +56,7 @@ const CALLS = new Set([
 let match: Replay | null = null;
 let booted: Promise<unknown> | null = null;
 
-async function boot(): Promise<{ api: number; stamp: unknown; id: string }> {
+async function boot(opts: BootOpts): Promise<{ api: number; stamp: unknown; id: string }> {
   await init();
   if (typeof glue.set_glue_sha === "function" && engineId?.glueSha256) {
     glue.set_glue_sha(engineId.glueSha256);
@@ -55,17 +64,21 @@ async function boot(): Promise<{ api: number; stamp: unknown; id: string }> {
   // Ruleset before `load_data`: the roster rides on the built set. Unlike the
   // page this is fatal -- a replay without the rules (or roster) the record
   // was played under only diverges.
-  await loadRulesetInto(glue, async (rel) => {
-    const r = await fetch("/assets/rules/" + rel);
-    if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
-    return new Uint8Array(await r.arrayBuffer());
-  });
+  await loadRulesetInto(
+    glue,
+    async (rel) => {
+      const r = await fetch(opts.rulesBase + rel);
+      if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+      return new Uint8Array(await r.arrayBuffer());
+    },
+    opts.custom && opts.custom.length ? [opts.custom] : [],
+  );
   const names: string[] = JSON.parse(glue.data_files());
   const files: Record<string, string> = {};
   await Promise.all(
     names.map(async (n) => {
-      const r = await fetch("/data/" + n);
-      if (!r.ok) throw new Error(`/data/${n}: HTTP ${r.status}`);
+      const r = await fetch(opts.dataBase + n);
+      if (!r.ok) throw new Error(`${opts.dataBase}${n}: HTTP ${r.status}`);
       files[n] = await r.text();
     }),
   );
@@ -73,7 +86,7 @@ async function boot(): Promise<{ api: number; stamp: unknown; id: string }> {
   // answers a record stores. Mirror the page.
   for (const book of ["deck_book.json", "strategy_book.json"]) {
     try {
-      const r = await fetch("/data/" + book);
+      const r = await fetch(opts.dataBase + book);
       if (r.ok) files[book] = await r.text();
     } catch {
       /* absent book is fine */
@@ -106,7 +119,7 @@ ctx.onmessage = async (e: MessageEvent) => {
   try {
     let value: unknown;
     if (op === "init") {
-      booted ??= boot();
+      booted ??= boot(rest as unknown as BootOpts);
       value = await booted;
     } else if (op === "open") {
       match?.free();

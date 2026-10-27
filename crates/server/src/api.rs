@@ -251,7 +251,7 @@ pub async fn create_room(
     let build = s
         .build(&req.build)
         .ok_or_else(|| ApiError::bad("err.build.unknown"))?;
-    let engine = build.engine.clone();
+    let engine = build.engine();
     let build_id = build.id.clone();
     let data = build.data.clone();
     let store = s.store.clone();

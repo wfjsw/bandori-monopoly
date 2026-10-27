@@ -146,7 +146,10 @@ pub fn router(
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
-                .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]),
+                .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+                // The record download names its file in this header; without
+                // it a cross-origin client sees only the fallback name.
+                .expose_headers([header::CONTENT_DISPOSITION]),
         )
         .with_state(server);
     if let Some(dir) = data_dir {
@@ -205,7 +208,9 @@ async fn serve_build(s: &Server, id: &str, file: &str, data: bool) -> Response {
     } else {
         "application/octet-stream"
     };
-    let cache = if data {
+    // Content-addressed modules may be immutable; `index.json` is rewritten on
+    // every rebuild and names the hashes, so it must always be revalidated.
+    let cache = if data || rel.ends_with(".json") {
         "no-cache"
     } else {
         "public, max-age=31536000, immutable"

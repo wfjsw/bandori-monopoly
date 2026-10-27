@@ -198,14 +198,24 @@ impl Default for NewServer {
     }
 }
 
-pub async fn add_server(State(app): S, Json(req): Json<NewServer>) -> ApiResult<Json<GameServer>> {
+/// Mutations require a session (a free, name-only one): the directory is
+/// shared, so anonymous clients must not be able to wipe or inject entries.
+pub async fn add_server(
+    State(app): S,
+    Auth(_claims): Auth,
+    Json(req): Json<NewServer>,
+) -> ApiResult<Json<GameServer>> {
     if req.name.trim().is_empty() {
         return Err(ApiError::bad(Msg::new("err.server.name")));
     }
     Ok(Json(app.store.add_server(&req.name, &req.url, &req.note)?))
 }
 
-pub async fn remove_server(State(app): S, Path(id): Path<String>) -> ApiResult<Json<serde_json::Value>> {
+pub async fn remove_server(
+    State(app): S,
+    Auth(_claims): Auth,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
     if !app.store.remove_server(&id)? {
         return Err(ApiError::not_found("err.server.unknown"));
     }
@@ -290,6 +300,11 @@ pub async fn remove_upload(
 /// `GET /uploads/{id}/{file}` -- the stored bytes. Public so a game server
 /// owner can fetch a shared build without an account.
 pub async fn serve_upload(State(app): S, Path((id, file)): Path<(String, String)>) -> Response {
+    // `{id}` is a path component. Real ids are hex; `..` is deliberately
+    // allowed and resolves to the data directory itself (`uploads/../…`).
+    if id.is_empty() || id == "." || id.contains(['/', '\\']) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     if file.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
         return StatusCode::NOT_FOUND.into_response();
     }

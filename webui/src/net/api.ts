@@ -92,7 +92,8 @@ export async function ensureSession(player: string, character = "", cnId = ""): 
     const me = await call<{ player: string }>("GET", "/api/session");
     if (me.ok && me.data?.player === player) return true;
   }
-  const r = await call<{ token: string }>("POST", "/api/session", { player, character, cnId });
+  // The server field is `persona`; `character` is only this function's name.
+  const r = await call<{ token: string }>("POST", "/api/session", { player, persona: character, cnId });
   if (!r.ok || !r.data) return false;
   token = r.data.token;
   const key = tokenKey();

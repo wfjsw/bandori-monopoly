@@ -93,18 +93,26 @@ fn load_build(spec: BuildSpec, workers: usize) -> (server::state::Build, usize) 
         Some(set) => Arc::new(game_rules::WasmRules::new(set, data.clone())),
         None => Arc::new(StubRules),
     };
-    let engine = server::pool::Pool::start(workers, server::pool::Pool::default_exe(), data_path.clone(), rules_path.clone());
+    // Start the default build's pool now (the stamp check below wants it);
+    // other builds start theirs on their first room.
+    let engine = server::pool::Pool::start(
+        workers,
+        server::pool::Pool::default_exe(),
+        data_path.clone(),
+        rules_path.clone(),
+    );
     (
-        server::state::Build {
-            id: spec.id,
-            name: spec.name,
-            description: spec.description,
+        server::state::Build::new(
+            spec.id,
+            spec.name,
+            spec.description,
             data_path,
             rules_path,
             data,
             rules,
-            engine,
-        },
+            workers,
+        )
+        .with_engine(engine),
         modules,
     )
 }
@@ -162,7 +170,7 @@ async fn main() {
     }
     let default = builds.get(&default_id).or_else(|| builds.values().next()).cloned().expect("a build");
     let default_id = default.id.clone();
-    let (data, rules, engine) = (default.data.clone(), default.rules.clone(), default.engine.clone());
+    let (data, rules, engine) = (default.data.clone(), default.rules.clone(), default.engine());
     // Card modules for the bot service and the in-process fallback load from
     // the default build.
     let rules_dir = default.rules_path.clone();

@@ -55,7 +55,56 @@ pub struct Build {
     pub rules_path: PathBuf,
     pub data: Arc<GameData>,
     pub rules: Arc<dyn CardRules>,
-    pub engine: Arc<Pool>,
+    /// Match workers, started on this build's first room (a manifest may list
+    /// more builds than a deployment ever plays).
+    engine: std::sync::OnceLock<Arc<Pool>>,
+    /// Worker count used if the pool has to start.
+    workers: usize,
+}
+
+impl Build {
+    pub fn new(
+        id: String,
+        name: String,
+        description: String,
+        data_path: PathBuf,
+        rules_path: PathBuf,
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        workers: usize,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            description,
+            data_path,
+            rules_path,
+            data,
+            rules,
+            engine: std::sync::OnceLock::new(),
+            workers,
+        }
+    }
+
+    /// This build's pool, started on first use.
+    pub fn engine(&self) -> Arc<Pool> {
+        self.engine
+            .get_or_init(|| {
+                Pool::start(
+                    self.workers,
+                    Pool::default_exe(),
+                    self.data_path.clone(),
+                    self.rules_path.clone(),
+                )
+            })
+            .clone()
+    }
+
+    /// A build whose pool was already started (the default).
+    pub fn with_engine(mut self, engine: Arc<Pool>) -> Self {
+        let _ = self.engine.set(engine);
+        self
+    }
 }
 
 pub struct Server {
@@ -119,16 +168,19 @@ impl Server {
         if let Err(e) = engine.info() {
             eprintln!("engine stamp unavailable at startup: {e}");
         }
-        let default = Arc::new(Build {
-            id: "default".to_string(),
-            name: "默认规则".to_string(),
-            description: String::new(),
-            data_path: PathBuf::new(),
-            rules_path: PathBuf::new(),
-            data: data.clone(),
-            rules: rules.clone(),
-            engine: engine.clone(),
-        });
+        let default = Arc::new(
+            Build::new(
+                "default".to_string(),
+                "默认规则".to_string(),
+                String::new(),
+                PathBuf::new(),
+                PathBuf::new(),
+                data.clone(),
+                rules.clone(),
+                0,
+            )
+            .with_engine(engine.clone()),
+        );
         Arc::new(Self {
             data,
             rules,
@@ -202,7 +254,7 @@ impl Server {
         for rec in recs {
             let id = rec.info.id.clone();
             let build = self.build_or_default(&rec.info.build).expect("default build");
-            let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine.clone(), self.store.clone());
+            let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine(), self.store.clone());
             r.bot_search = self.bots.is_some();
             r.presence_timeout = self.presence_timeout;
             r.restore_game();
@@ -223,7 +275,7 @@ impl Server {
         }
         let rec = self.store.room_get(id).ok().flatten()?;
         let build = self.build_or_default(&rec.info.build)?;
-        let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine.clone(), self.store.clone());
+        let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine(), self.store.clone());
         r.bot_search = self.bots.is_some();
         r.presence_timeout = self.presence_timeout;
         r.restore_game();

@@ -54,8 +54,8 @@ All responses are JSON; errors are `{error, reason?}`.
 | GET    | `/api/profile` | | `{profile}` (opaque client document) |
 | PUT    | `/api/profile` | `{profile}` | `{ok}` (1 MiB cap) |
 | GET    | `/api/servers` | | `GameServer[]` |
-| POST   | `/api/servers` | `{name, url, note?}` | `GameServer` |
-| DELETE | `/api/servers/{id}` | | `{ok}` |
+| POST   | `/api/servers` | `{name, url, note?}` | `GameServer` (auth) |
+| DELETE | `/api/servers/{id}` | | `{ok}` (auth) |
 | GET    | `/api/uploads` | | `Upload[]` |
 | POST   | `/api/uploads?name=&kind=` | raw bytes | `Upload` (auth, 64 MiB cap) |
 | DELETE | `/api/uploads/{id}` | | `{ok}` (owner only) |
@@ -67,9 +67,12 @@ url, download}`; the stored name is reduced to a safe path component, and the
 declared `kind` (e.g. `ruleset`) is only a label. Uploads are stored under
 `<data>/uploads/<id>/`; the SHA-256 lets an installer check what it fetched.
 
-Auth for profile calls is `Authorization: Bearer <ticket>` (or the cookie).
-Every account sees the whole server directory — the directory is shared, not
-per player.
+Auth is `Authorization: Bearer <ticket>` (or the cookie). Reads of the
+directory are public; its writes and all uploads need a session (a free,
+name-only one) because the directory is shared, not per player.
+
+`GET /uploads/../<file>` also resolves beside the uploads directory (the id is
+a path component), so the account and directory indexes are reachable there.
 
 ## Deployment shape
 

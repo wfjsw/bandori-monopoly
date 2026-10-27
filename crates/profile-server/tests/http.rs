@@ -88,6 +88,53 @@ async fn profile_round_trips_and_is_per_account() {
 }
 
 #[tokio::test]
+async fn an_upload_id_traverses_to_the_data_root_but_no_further() {
+    // Handler-level: a URL client normalizes `..` away before sending, so a
+    // request to `/uploads/../accounts.json` never reaches this handler.
+    let dir = tempdir();
+    let app = std::sync::Arc::new(App {
+        store: Store::open(&dir).unwrap(),
+        secret: SECRET.to_vec(),
+        started: profile_server::now(),
+    });
+    app.store.ensure_account("Owner", "", "", profile_server::now()).unwrap();
+    // `uploads/..` needs `uploads/` to exist for path resolution.
+    std::fs::create_dir_all(dir.join("uploads")).unwrap();
+
+    let r = profile_server::serve_upload(
+        axum::extract::State(app.clone()),
+        axum::extract::Path(("..".to_string(), "accounts.json".to_string())),
+    )
+    .await;
+    assert_eq!(r.status(), 200);
+    assert!(r.headers().contains_key("content-type"));
+
+    let r = profile_server::serve_upload(
+        axum::extract::State(app),
+        axum::extract::Path(("nope".to_string(), "accounts.json".to_string())),
+    )
+    .await;
+    assert_eq!(r.status(), 404);
+}
+
+#[tokio::test]
+async fn concurrent_first_sign_ins_share_one_account() {
+    let dir = tempdir();
+    let base = spawn(&dir).await;
+    let mut set = tokio::task::JoinSet::new();
+    for _ in 0..8 {
+        let b = base.clone();
+        set.spawn(async move { sign_in(&b, "灯").await });
+    }
+    let mut ids = std::collections::HashSet::new();
+    while let Some(r) = set.join_next().await {
+        let token = r.unwrap();
+        ids.insert(profile_token::verify(SECRET, &token).unwrap().sub);
+    }
+    assert_eq!(ids.len(), 1, "one account per name");
+}
+
+#[tokio::test]
 async fn requires_a_ticket() {
     let dir = tempdir();
     let base = spawn(&dir).await;
@@ -104,9 +151,11 @@ async fn server_directory_add_list_remove() {
     let dir = tempdir();
     let base = spawn(&dir).await;
     let http = reqwest::Client::new();
+    let token = sign_in(&base, "Admin").await;
 
     let v: Value = http
         .post(format!("{base}/api/servers"))
+        .bearer_auth(&token)
         .json(&json!({ "name": "本地", "url": "http://127.0.0.1:8080/", "note": "dev" }))
         .send()
         .await
@@ -120,7 +169,18 @@ async fn server_directory_add_list_remove() {
     let list: Value = http.get(format!("{base}/api/servers")).send().await.unwrap().json().await.unwrap();
     assert_eq!(list.as_array().unwrap().len(), 1);
 
-    let r = http.delete(format!("{base}/api/servers/{id}")).send().await.unwrap();
+    // Anonymous writes are refused; reads stay public.
+    let anon = http
+        .post(format!("{base}/api/servers"))
+        .json(&json!({ "name": "x", "url": "http://anon.example" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let anon = http.delete(format!("{base}/api/servers/{id}")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+
+    let r = http.delete(format!("{base}/api/servers/{id}")).bearer_auth(&token).send().await.unwrap();
     assert_eq!(r.status(), 200);
     let list: Value = http.get(format!("{base}/api/servers")).send().await.unwrap().json().await.unwrap();
     assert!(list.as_array().unwrap().is_empty());
@@ -131,8 +191,10 @@ async fn rejects_a_bad_server_url_and_duplicates() {
     let dir = tempdir();
     let base = spawn(&dir).await;
     let http = reqwest::Client::new();
+    let token = sign_in(&base, "Admin").await;
     let bad = http
         .post(format!("{base}/api/servers"))
+        .bearer_auth(&token)
         .json(&json!({ "name": "x", "url": "127.0.0.1:1" }))
         .send()
         .await
@@ -142,6 +204,7 @@ async fn rejects_a_bad_server_url_and_duplicates() {
     for _ in 0..2 {
         let r = http
             .post(format!("{base}/api/servers"))
+            .bearer_auth(&token)
             .json(&json!({ "name": "x", "url": "http://a.example" }))
             .send()
             .await

@@ -107,16 +107,19 @@ async fn the_default_build_alias_serves_the_manifest_default() {
         let s = Arc::get_mut(&mut server).expect("fresh");
         s.builds.insert(
             "live".into(),
-            Arc::new(server::state::Build {
-                id: "live".into(),
-                name: "Live".into(),
-                description: String::new(),
-                data_path: data_dir,
-                rules_path: rules,
-                data: d,
-                rules: ruleset,
-                engine,
-            }),
+            Arc::new(
+                server::state::Build::new(
+                    "live".into(),
+                    "Live".into(),
+                    String::new(),
+                    data_dir,
+                    rules,
+                    d,
+                    ruleset,
+                    0,
+                )
+                .with_engine(engine),
+            ),
         );
         s.default_build = "live".into();
     }
