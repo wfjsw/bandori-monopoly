@@ -4,13 +4,21 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { planMarkers, showTurnsChip } from "./markerKinds.ts";
+import { glyphOf, planMarkers, showTurnsChip } from "./markerKinds.ts";
 
 /** Named-counter display phrases for the plan; anything else is unlabelled. */
 const nameOf = (name: string) => (name === "fire" ? "火罐" : undefined);
 
 const kinds = (counts: Parameters<typeof planMarkers>[0]) =>
   planMarkers(counts, nameOf).map((m) => `${m.kind}:${m.n}`);
+
+test("each kind carries its own glyph in its own definition", () => {
+  assert.equal(glyphOf("turns", 3), "⌛3");
+  assert.equal(glyphOf("counter", 1), "×1");
+  assert.equal(glyphOf("crystals", 2), "◆2");
+  assert.equal(glyphOf("cp", 4), "CP4");
+  assert.equal(glyphOf("named", 2, "火罐"), "火罐×2");
+});
 
 test("a countdown carried by another marker is not repeated", () => {
   assert.equal(showTurnsChip(3, 3), false, "same number as a crystal count");

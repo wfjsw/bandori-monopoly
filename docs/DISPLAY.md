@@ -118,11 +118,13 @@ blank carries that cell as its `name` instead (`#J11`), so it is never lost.
 
 The field sheet renders an instance's markers as small chips in the face's
 marker zone: `⌛N` remaining turns, `×N` unnamed counters, `◆N` crystals, `CPN`
-counteraction points, then any named counters. The kinds, their print order and
-their glyphs are one table (`scenes/board/markerKinds.ts` `ORDER`); a surface
-renders the resulting `Marker[]` and knows no kinds itself -- the face
-(`FieldSheet`), the live note, the field / event popups, the player marker list
-and a skill card's corner chips all draw the same plan.
+counteraction points, then any named counters. A kind is one row of
+`scenes/board/markerKinds.ts` `MARKER_KINDS` -- its print position, CSS class,
+glyph (`{n}` = the count, `{name}` = a named counter) and its note / list
+sentences (a `tr` key or a literal template). A new marker is that row and
+nothing else; a surface renders the resulting `Marker[]` and knows no kinds
+itself -- the face (`FieldSheet`), the live note, the field / event popups, the
+player marker list and a skill card's corner chips all draw the same plan.
 
 `⌛N` comes from the display-only prop `props.turnsLeft` on a `FieldCard`, or
 `ActiveEvent.turnsLeft` for an event row (`docs/EVENTS.md`); it appears only

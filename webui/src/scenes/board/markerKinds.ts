@@ -1,8 +1,13 @@
-// Which markers a card face prints, in what order -- the part that needs no
-// i18n runtime (so it is testable under `node --test`).
+// What a card face prints in its marker zone: one row per marker kind, in
+// print order, each with its own glyph, styling and sentence.
 //
-// `markers.ts` turns a plan into display strings; the face, the notes, the
-// popups and the marker list all consume that, and none of them knows a kind.
+// Adding a marker kind is a row in `MARKER_KINDS` -- nothing else. The face,
+// the live note, the popups, the player marker list and the skill chips all
+// render the plan built here and none of them knows a kind.
+//
+// The module holds no i18n runtime (so it is testable under `node --test`):
+// a text slot is either a `tr` key (resolved by `markers.ts`) or a literal
+// template with `{n}` / `{name}` placeholders.
 
 /** CSS class (in `FieldSheet.module.css`) a chip of this kind wears. */
 export type ChipClass = "turns" | "count" | "crystal" | "cp";
@@ -22,19 +27,56 @@ export interface PlannedMarker {
   name?: string;
 }
 
-interface KindSpec {
+/** One text slot: a `tr` key, or a literal template. */
+export interface TextSlot {
+  key?: string;
+  text?: string;
+}
+
+/** One marker kind: how it is written, styled and described. */
+export interface MarkerKindDef {
   kind: MarkerKind;
   cls: ChipClass;
   countdown?: boolean;
+  /** Glyph on the face. `{n}` = the count, `{name}` = a named counter. */
+  glyph: string;
+  /** Sentence for the live note and the chip's tooltip. */
+  note: TextSlot;
+  /** Label the player marker list pairs with the card name. */
+  label: TextSlot;
 }
 
 /** Face order: the countdown, then the unnamed counters, then the named ones. */
-const ORDER: KindSpec[] = [
-  { kind: "turns", cls: "turns", countdown: true },
-  { kind: "counter", cls: "count" },
-  { kind: "crystals", cls: "crystal" },
-  { kind: "cp", cls: "cp" },
+const MARKER_KINDS: MarkerKindDef[] = [
+  {
+    kind: "turns",
+    cls: "turns",
+    countdown: true,
+    glyph: "⌛{n}",
+    note: { key: "board.turnsLeft" },
+    label: { key: "board.turnsLabel" },
+  },
+  { kind: "counter", cls: "count", glyph: "×{n}", note: { text: "×{n}" }, label: { text: "×{n}" } },
+  { kind: "crystals", cls: "crystal", glyph: "◆{n}", note: { key: "board.crystals" }, label: { key: "board.crystalsLabel" } },
+  { kind: "cp", cls: "cp", glyph: "CP{n}", note: { key: "board.cp" }, label: { text: "CP" } },
+  {
+    kind: "named",
+    cls: "count",
+    glyph: "{name}×{n}",
+    note: { text: "{name} ×{n}" },
+    label: { text: "{name}" },
+  },
 ];
+
+/** A kind's definition. */
+export const MARKER_KIND: Record<MarkerKind, MarkerKindDef> = Object.fromEntries(
+  MARKER_KINDS.map((k) => [k.kind, k]),
+) as Record<MarkerKind, MarkerKindDef>;
+
+/** Fill a glyph template (`{n}` / `{name}`). */
+export function glyphOf(kind: MarkerKind, n: number, name?: string): string {
+  return MARKER_KIND[kind].glyph.replaceAll("{n}", `${n}`).replaceAll("{name}", name ?? "");
+}
 
 /** Whether a `⌛N` countdown should print: a number is scheduled to end and no
  *  other marker on the same face already carries it. The countdown stays in the
@@ -62,25 +104,24 @@ export interface Counts {
  */
 export function planMarkers(c: Counts, nameOf: (name: string) => string | undefined): PlannedMarker[] {
   const out: PlannedMarker[] = [];
-  const add = (spec: KindSpec, kind: MarkerKind, n: number, key: string = spec.kind, name?: string) => {
-    out.push({ key, kind, n, cls: spec.cls, countdown: spec.countdown ?? false, name });
+  const add = (kind: MarkerKind, n: number, key: string = kind, name?: string) => {
+    out.push({ key, kind, n, cls: MARKER_KIND[kind].cls, countdown: MARKER_KIND[kind].countdown ?? false, name });
   };
-  const addIfAny = (spec: KindSpec, n: number | undefined, key?: string) => {
-    if (n !== undefined && n > 0) add(spec, spec.kind, n, key);
+  const addIfAny = (kind: MarkerKind, n: number | undefined, key?: string) => {
+    if (n !== undefined && n > 0) add(kind, n, key);
   };
 
-  const [turns, counter, crystals, cp] = ORDER;
-  addIfAny(turns, c.turnsLeft);
+  addIfAny("turns", c.turnsLeft);
   // `counter2` shares the generic-counter row; it is a second unnamed pool.
-  addIfAny(counter, c.counter);
-  addIfAny(counter, c.counter2, "counter2");
-  addIfAny(crystals, c.crystals);
-  addIfAny(cp, c.cp);
+  addIfAny("counter", c.counter);
+  addIfAny("counter", c.counter2, "counter2");
+  addIfAny("crystals", c.crystals);
+  addIfAny("cp", c.cp);
 
   for (const [name, n] of c.named ?? []) {
     if (n <= 0 || name === "crystals" || name === "cp") continue;
     const label = nameOf(name);
-    if (label) add({ kind: "named", cls: "count" }, "named", n, `c:${name}`, label);
+    if (label) add("named", n, `c:${name}`, label);
   }
 
   return out.filter((m) => !m.countdown || showTurnsChip(m.n, ...out.filter((o) => o !== m).map((o) => o.n)));
