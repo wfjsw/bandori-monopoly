@@ -72,6 +72,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // (`place_card` creates the instance, `Dest::Field` stops the commit from
     // also spending the hand card); see `ctx::place_self_to_field`.
     ctx::place_self_to_field(player_id, ID, &Msg::new(key!("moca_half_note")));
+    // 规则书(1): 「并获得3个奇迹水晶…你的回合结束时移除一个」 -- 3 own turn
+    // ends before the fall.
+    ctx::set_turns_left(3);
     // 规则书(1): 「并获得3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(
@@ -85,6 +88,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// The 「奇迹水晶为0时此卡放入弃牌堆」 half is
 /// [`on_crystals_changed`], not this tick.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // 「你的回合结束时」 -- the tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     ctx::remove_crystal()?;
     Ok(())
 }

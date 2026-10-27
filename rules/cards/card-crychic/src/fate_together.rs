@@ -51,6 +51,8 @@ fn fate_together(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("fate_together_note")).player_id("who", player_id),
     );
     ctx::set_slot(player_id, SLOT_HIT, 0);
+    // 规则书（1）: 「直到你的下回合开始」 -- it ends at the next turn start.
+    ctx::set_turns_left(1);
     Ok(())
 }
 

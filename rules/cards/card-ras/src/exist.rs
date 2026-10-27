@@ -42,6 +42,9 @@ fn exist(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于自己场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("exist_note")));
+    // 规则书: 「直到自己的下一回合开始…你的下回合开始时将其翻入弃牌堆」 -- one
+    // turn start away.
+    ctx::set_turns_left(1);
     ctx::set_prop(PROP_USED, 0);
     ctx::log(
         player_id,

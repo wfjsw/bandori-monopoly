@@ -40,6 +40,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
     ctx::set_prop(TURNS, 0);
+    // 「抽到的玩家的下回合开始时放入事件弃牌」 -- it expires at that turn start.
+    ctx::set_turns_left(1);
     ctx::log(
         player_id,
         &Msg::new("log.event.hallucination_on").player_id("who", player_id),

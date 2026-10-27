@@ -436,6 +436,13 @@ pub mod prop {
     /// on the tile's rule instance (`ctx::set_tile_prop`). Read by
     /// [`crate::engine::ops::World::rent_houses`]; `houses_of` remains real.
     pub const RENT_HOUSES: &str = "rentHouses";
+    /// Display-only **remaining-turn countdown** marker (「…回合后」 / 「…结束时」
+    /// removal). Set by a rule at placement and decremented at the card's own
+    /// turn boundary; the card still owns the expiry (this counter never drives
+    /// it). The client renders it as `⌛N` -- a field card's prop, or
+    /// [`ActiveEvent::turns_left`] for an event instance. `0` / absent = no
+    /// marker. Mirrors `card_sdk::abi::prop::TURNS_LEFT`.
+    pub const TURNS_LEFT: &str = "turnsLeft";
 
     // ---------------------------------------------------------- tile data
     // Stamped onto a board-owned tile rule instance at `bind_tiles` (from
@@ -1073,6 +1080,9 @@ pub struct ActiveEvent {
     pub player_id: i32,
     pub counter: i32,
     pub counter2: i32,
+    /// Display-only remaining-turn countdown (see [`prop::TURNS_LEFT`]); `0` =
+    /// no marker.
+    pub turns_left: i32,
     pub note: Msg,
     pub face_down: bool,
 }
@@ -1084,6 +1094,7 @@ impl Default for ActiveEvent {
             player_id: -1,
             counter: 0,
             counter2: 0,
+            turns_left: 0,
             note: Msg::default(),
             face_down: false,
         }

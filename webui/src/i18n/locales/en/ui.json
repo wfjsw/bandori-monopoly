@@ -171,6 +171,8 @@
   "board.specialMarkerZone": "Special markers",
   "board.cp": "CP ×{{n}}",
   "board.crystals": "Crystals ×{{n}}",
+  "board.turnsLeft": "Removed in {{n}} turns",
+  "board.turnsLabel": "Turns until removed",
   "board.dice": "Roll the die",
   "board.discardThis": "Discard this",
   "board.drawPile": "My draw pile",

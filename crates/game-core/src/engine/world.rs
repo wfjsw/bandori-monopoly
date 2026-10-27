@@ -998,6 +998,11 @@ impl World {
             if let Some(f) = st.board_field.iter().find(|f| f.card == rid && f.tile < 0) {
                 e.counter = f.counters.values().sum();
                 e.counter2 = f.props.get("count2").copied().unwrap_or(0);
+                e.turns_left = f
+                    .props
+                    .get(crate::state::prop::TURNS_LEFT)
+                    .copied()
+                    .unwrap_or(0);
                 e.note = f.note.clone();
                 e.face_down = f.face_down;
             }

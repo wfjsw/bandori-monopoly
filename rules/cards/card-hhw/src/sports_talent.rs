@@ -45,6 +45,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于自己场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("sports_talent_note")));
+    // 规则书: 「每回合结束时失去一个」 -- 3 own turn ends before the fall.
+    ctx::set_turns_left(3);
     // 规则书: 「并放置3个奇迹水晶」 -- the placement's crystal charge (C#
     // `H.PlaceFromPlay(c, -1, -1, 3)`).
     ctx::set_crystals(3);
@@ -62,6 +64,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 「为0时置入弃牌堆」 half is [`on_crystals_changed`]. `actor == owner &&
 /// card.placed` is the pre.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
+    // 「每回合结束时失去一个」 -- the tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     ctx::remove_crystal()?;
     Ok(())
 }

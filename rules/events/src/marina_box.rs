@@ -42,6 +42,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
     ctx::set_prop(TURNS, 0);
+    // 「抽到的玩家的第3回合开始时放入事件弃牌」 -- 2 more drawer turn starts.
+    ctx::set_turns_left(2);
     ctx::log(
         player_id,
         &Msg::new("log.event.marina_box_on").player_id("who", player_id),
@@ -95,6 +97,8 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     }
     let n = ctx::prop(TURNS) + 1;
     ctx::set_prop(TURNS, n);
+    // The drawer turn-start tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     // The draw happens mid-turn-1, so turn starts 1 and 2 are the drawer's 2nd
     // and 3rd turns. 「第3回合开始时」 = `n >= 2`.
     if n >= 2 {

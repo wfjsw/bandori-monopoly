@@ -44,6 +44,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // C# `H.PlaceFromPlay(c, -1, -1, 2)` -- place with 2 miracle crystals.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("j11_note")));
+    // 规则书: 「每回合结束时移除1个」 -- 2 own turn ends before the fall.
+    ctx::set_turns_left(2);
     ctx::set_crystals(2);
     ctx::log(
         player_id,
@@ -81,6 +83,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
+            // 「每回合结束时移除1个」 -- the tick.
+            ctx::set_turns_left(ctx::turns_left() - 1);
             // C# `AddCrystals(-1, ...)`; the `if (Crystals <= 0) Unplace(discard)`
             // half is [`on_crystals_changed`] (`Empty` is a no-op for `CardJ11`).
             ctx::remove_crystal()?;

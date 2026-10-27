@@ -44,6 +44,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
     ctx::set_prop(TURNS, 0);
+    // 「抽到的玩家的下2回合开始时放入事件弃牌」 -- 2 drawer turn starts.
+    ctx::set_turns_left(2);
     ctx::log(
         player_id,
         &Msg::new("log.event.surprise_duel_on").player_id("who", player_id),
@@ -96,6 +98,8 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     }
     let n = ctx::prop(TURNS) + 1;
     ctx::set_prop(TURNS, n);
+    // The drawer turn-start tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     if n >= 2 {
         expire(ID);
     }

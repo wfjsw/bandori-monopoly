@@ -1120,6 +1120,22 @@ pub fn set_prop(key: &str, value: i32) -> i32 {
     unsafe { sys::set_self_prop(p, l, value) }
 }
 
+/// Remaining turns before a rule-scheduled expiry, as the client's `⌛N`
+/// marker (`prop::TURNS_LEFT`). Display-only: set it when the card is placed,
+/// tick it down at the card's own turn boundary; the rule body still owns the
+/// actual expiry. Returns the stored value.
+#[cfg_attr(kani, inline(always))]
+pub fn set_turns_left(n: i32) -> i32 {
+    set_prop(crate::abi::prop::TURNS_LEFT, n)
+}
+
+/// The running instance's remaining-turn marker (`prop::TURNS_LEFT`); `0` =
+/// no marker.
+#[cfg_attr(kani, inline(always))]
+pub fn turns_left() -> i32 {
+    prop(crate::abi::prop::TURNS_LEFT)
+}
+
 /// A **property of the rule instance governing `tile`** (`docs/TILES.md`) --
 /// what a card that bends a *tile* writes instead of an engine flag. The
 /// reader is the tile instance; the source owns the arming and the disarming.

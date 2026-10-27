@@ -41,6 +41,8 @@ pub const A_A_O: CardDef = CardDef::new(
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
+    // 「抽到的玩家的下回合结束时放入事件弃牌」 -- it expires at that turn end.
+    ctx::set_turns_left(1);
     ctx::at_next_turn_end(player_id, "expire_at_end");
     ctx::log(
         player_id,

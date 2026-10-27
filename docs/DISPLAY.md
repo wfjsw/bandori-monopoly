@@ -114,6 +114,16 @@ The sheet cell a row was lifted from is **not** a field any more -- it is a
 `// sheet cell X` comment on the card impl. A row whose sheet name line is
 blank carries that cell as its `name` instead (`#J11`), so it is never lost.
 
+### Card-face counter markers
+
+The field sheet renders an instance's markers as small chips in the face's
+marker zone: `◆N` crystals, `CPN` counteraction points, `×N` unnamed counters,
+and `⌛N` remaining turns. `⌛N` comes from the display-only prop
+`props.turnsLeft` on a `FieldCard`, or `ActiveEvent.turnsLeft` for an event row
+(`docs/EVENTS.md`); it appears only while positive, in the face, the live note,
+and the player marker list. A rule sets it on placement and decrements it at the
+card's own turn boundary -- it is a countdown hint, never the expiry itself.
+
 ## Split from the runtime roster
 
 The display columns above are the authoring surface, and `display.json` is

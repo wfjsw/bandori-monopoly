@@ -123,6 +123,8 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
+            // 「每回合结束时移除一个奇迹水晶」 -- the tick.
+            ctx::set_turns_left(ctx::turns_left() - 1);
             ctx::remove_crystal()?;
         }
         _ => {}
@@ -162,6 +164,8 @@ fn that_day_rain(player_id: i32) -> card_sdk::Asked {
     // `H.PlaceFromPlay(c, -1, -1, 5)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("that_day_rain_note")));
+    // 规则书: 「每回合结束时移除一个奇迹水晶」 -- 5 own turn ends before the fall.
+    ctx::set_turns_left(5);
     // 规则书: 「并为其放置5个奇迹水晶」 -- C# `PlaceFromPlay(..., crystals: 5)`.
     ctx::set_crystals(5);
     ctx::log(

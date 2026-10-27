@@ -86,6 +86,15 @@ fn drain(t: &mut Table) {
     fix_step(t);
 }
 
+/// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no instance.
+fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
+    t.field(who)
+        .into_iter()
+        .find(|f| f.card == card)
+        .map(|f| f.props.get("turnsLeft").copied().unwrap_or(0))
+        .unwrap_or(-1)
+}
+
 /// Answer the first option matching `needle`, or panic with the dump.
 fn answer_opt(t: &mut Table, who: usize, needle: &str) {
     let k = t
@@ -210,6 +219,8 @@ fn dice_cast_places_on_field() {
         .filter(|f| f.card == "Mujica:骰子已经掷下")
         .count();
     assert_eq!(n, 1, "exactly one copy on the field");
+    // 「回合结束后放入弃牌堆」 -- the face counts down from 1.
+    assert_eq!(turns_left(&t, 0, "Mujica:骰子已经掷下"), 1);
 }
 
 #[test]
@@ -249,11 +260,17 @@ fn sparkler_places_with_two_crystals_and_grants_extra_turn() {
     // 规则书: 「将此卡放置于场上并放置2个奇迹水晶（上限2）」
     assert!(t.on_field(0, "Mujica:燃尽前的线香花火"));
     assert_eq!(t.crystals(0, "Mujica:燃尽前的线香花火"), Some(2));
+    assert_eq!(turns_left(&t, 0, "Mujica:燃尽前的线香花火"), 2);
     t.roll(0).unwrap();
     drain(&mut t);
     t.end(0).unwrap();
     // 规则书: 「你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合」
     assert_eq!(t.crystals(0, "Mujica:燃尽前的线香花火"), Some(1));
+    assert_eq!(
+        turns_left(&t, 0, "Mujica:燃尽前的线香花火"),
+        1,
+        "the marker ticks down with the crystal"
+    );
     assert_eq!(t.turn(), 0, "extra turn for player 0");
 }
 

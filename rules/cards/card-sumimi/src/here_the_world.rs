@@ -149,6 +149,9 @@ fn drew(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     store_held(player_id, id.as_str());
+    // 规则书（2）: 「那名玩家的每个回合开始时移除一个」 -- 3 own turn starts
+    // before the return.
+    ctx::set_turns_left(3);
     // 规则书（2）: 「并为其放置3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(
@@ -162,6 +165,8 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 /// 加入手牌，并使此卡使用者抽一张卡。」 -- C# `CardHereTheWorld.TurnStart` -> `Tick`
 /// (MatchHost.cs:11375-11406).
 fn turn_start(player_id: i32) -> card_sdk::Asked {
+    // 「那名玩家的每个回合开始时移除一个」 -- the tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     // C# `AddCrystals(-1, "回合开始")`.
     let left = ctx::add_crystals(-1, 0)?;
     if left > 0 {

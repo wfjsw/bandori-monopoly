@@ -38,6 +38,9 @@ fn sparkler(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("sparkler_note")));
     ctx::add_crystals(2, 2)?;
+    // 规则书: 「你的回合结束后自动移除一个奇迹水晶」 -- 2 own turn ends before
+    // the burn.
+    ctx::set_turns_left(2);
     ctx::log(
         player_id,
         &Msg::new(key!("sparkler_placed")).player_id("who", player_id),
@@ -60,6 +63,8 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // grant 「获得一个额外回合」 -- the 2 [眩晕] it hands out would otherwise
     // auto-skip that extra turn (`play.rs` `stunned` -> `end_turn`) and its
     // 「每回合结束时移除一层」 tick would eat one of the two, netting 1.
+    // 「你的回合结束后」 -- the tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     let before = ctx::crystals();
     ctx::add_crystals(-1, 0)?;
     if before > 1 {

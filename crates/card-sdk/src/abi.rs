@@ -1313,6 +1313,12 @@ pub mod prop {
     /// The rent lookup (`pay_rent` / `rent_of` / `ctx::rent_houses_of`) reads
     /// it; `ctx::houses_of` remains real.
     pub const RENT_HOUSES: &str = "rentHouses";
+    /// Display-only **remaining-turn countdown** marker (「…回合后」 / 「…结束时」
+    /// removal). Set by a rule at placement and decremented at the card's own
+    /// turn boundary; the card still owns the expiry (this counter never drives
+    /// it). The client renders it as `⌛N` -- a field card's prop, or
+    /// `ActiveEvent.turnsLeft` for an event instance. `0` / absent = no marker.
+    pub const TURNS_LEFT: &str = "turnsLeft";
 
     // ---------------------------------------------------------- tile data
     // Stamped onto a board-owned tile rule instance at bind time (from

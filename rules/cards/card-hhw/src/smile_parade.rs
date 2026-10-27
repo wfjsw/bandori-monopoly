@@ -101,6 +101,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「为此卡添加3个[奇迹水晶]」 -- the placement's crystal charge
     // (C# `H.PlaceFromPlay(c, ..., 3)`).
     ctx::set_crystals(3);
+    // 规则书（1）: 「你的每回合结束时移除一个」 -- 3 own turn ends before the fall.
+    ctx::set_turns_left(3);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_placed"))
@@ -123,6 +125,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
 /// [`on_crystals_changed`].
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // 「你的每回合结束时移除一个」 -- the tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     ctx::remove_crystal()?;
     Ok(())
 }

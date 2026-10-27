@@ -63,6 +63,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // (C# `Card.Crystals` / `H.PlaceFromPlay(..., crystals)`), charged here.
     let n = x.max(1);
     ctx::set_crystals(n);
+    // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 -- the chosen X is
+    // also the remaining-turn count.
+    ctx::set_turns_left(n);
     ctx::log(
         player_id,
         &Msg::new(key!("fire_bird_placed"))
@@ -108,6 +111,8 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
 /// Pure guard for [`turn_end`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn turn_end(player_id: i32) -> card_sdk::Asked {
+    // 「每回合结束时」 -- the tick, before the burn.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     // 规则书: 「每回合结束时失去400资金」 -- C# `H.LoseR(Seat, 400, "Fire bird")`.
     ctx::pay(
         player_id,

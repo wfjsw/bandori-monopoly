@@ -72,6 +72,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于你以外的一名玩家场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(hit, ID, &Msg::new(key!("chuchu_music_note")));
+    // 规则书: 「那名玩家的每个回合结束时失去一个」 -- 3 own turn ends before the
+    // pass.
+    ctx::set_turns_left(3);
     // 规则书: 「并为其添加3个奇迹水晶」 -- C# `H.PlaceFromPlay(c, r.index, -1, 3)`.
     ctx::set_crystals(3);
     // C# `User` is the player who played the card; `Mem["hits"]` starts at 0.
@@ -96,6 +99,8 @@ fn turn_end_guard(player_id: i32) -> bool {
 }
 
 fn turn_end(player_id: i32) -> card_sdk::Asked {
+    // 「那名玩家的每个回合结束时失去一个」 -- the tick.
+    ctx::set_turns_left(ctx::turns_left() - 1);
     // 规则书: 「那名玩家的每个回合结束时失去一个」 -- C# `AddCrystals(-1, ...)`.
     if ctx::add_crystals(-1, 0)? > 0 {
         return Ok(());
@@ -160,8 +165,10 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(to, SLOT_HITS, hits + 1);
     ctx::unplace_self();
     ctx::place_card(to, ID, &Msg::new(key!("chuchu_music_note")));
-    // 规则书: 「并将奇迹水晶补充至3个」 -- C# `Crystals = 3`.
+    // 规则书: 「并将奇迹水晶补充至3个」 -- C# `Crystals = 3`. A fresh countdown
+    // starts on the new holder.
     ctx::set_crystals(3);
+    ctx::set_turns_left(3);
     ctx::log(
         user,
         &Msg::new(key!("chuchu_music_moved"))

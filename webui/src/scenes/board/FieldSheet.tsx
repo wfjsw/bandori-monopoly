@@ -70,13 +70,15 @@ export function rowSpread(n: number, width = 480 + CARD_W): Record<string, strin
  * (and their `<img>`s) alone. Pills and the live note are derived here from
  * the stable instance, so the parent never hands a fresh array down.
  */
-const FieldFace = memo(function FieldFace({ slotKey, card, title, note, counter, counter2, crystals, cp, owner, designee, m, on, present, dismiss }: {
+const FieldFace = memo(function FieldFace({ slotKey, card, title, note, turnsLeft, counter, counter2, crystals, cp, owner, designee, m, on, present, dismiss }: {
   /** The row's pick identity (`e…` / `c…`), shared with the wrapper div. */
   slotKey: string;
   /** The card / event id whose art this face shows. */
   card: string;
   title: string | undefined;
   note: string;
+  /** Remaining turns before an expiry the rule scheduled; 0 = no chip. */
+  turnsLeft: number;
   counter: number;
   counter2: number;
   crystals: number;
@@ -117,6 +119,7 @@ const FieldFace = memo(function FieldFace({ slotKey, card, title, note, counter,
       on={on}
       onClick={onClick}
     >
+      {turnsLeft > 0 && <span className={s.turns} title={tr("board.turnsLeft", { n: turnsLeft })}>⌛{turnsLeft}</span>}
       {counter > 0 && <span className={s.count}>×{counter}</span>}
       {counter2 > 0 && <span className={s.count}>×{counter2}</span>}
       {crystals > 0 && <span className={s.crystal}>◆{crystals}</span>}
@@ -189,7 +192,10 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
         {stack.map((it) => {
           if (it.kind === "event") {
             const e = it.e;
-            const note = e.note?.k ? fmtMsg(e.note, names) : "";
+            const note = [
+              e.note?.k ? fmtMsg(e.note, names) : "",
+              (e.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: e.turnsLeft }) : "",
+            ].filter(Boolean).join(" · ");
             const tiles = designatedTiles(S.marks, eventTiles(e.id));
             const key = `e${e.id}`;
             // An event's frame is its player's colour; a face with no player
@@ -205,6 +211,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                     card={e.id}
                     title={D.event(e.id)?.name ?? e.id}
                     note={note}
+                    turnsLeft={e.turnsLeft ?? 0}
                     counter={e.counter}
                     counter2={e.counter2}
                     crystals={0}
@@ -227,6 +234,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const note = fc.note ? fmtMsg(fc.note, names) : "";
           const live = [
             note,
+            (fc.props?.turnsLeft ?? 0) > 0 ? tr("board.turnsLeft", { n: fc.props?.turnsLeft }) : "",
             fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "",
             fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : "",
           ].filter(Boolean).join(" · ");
@@ -246,6 +254,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   card={fc.card}
                   title={D.card(fc.card)?.name}
                   note={live}
+                  turnsLeft={fc.props?.turnsLeft ?? 0}
                   counter={0}
                   counter2={0}
                   crystals={fc.counters["crystals"] ?? 0}

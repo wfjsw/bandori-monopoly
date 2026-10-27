@@ -36,6 +36,9 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
 /// end. 「永久移除此事件！」 is the `AtEnd` body below.
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
+    // 「直到你的下个回合结束…在你的下个回合结束时永久移除此事件！」 -- it
+    // expires at that turn end.
+    ctx::set_turns_left(1);
     ctx::at_next_turn_end(player_id, "expire");
     ctx::log(
         player_id,

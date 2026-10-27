@@ -49,6 +49,15 @@ fn crystals(t: &Table, who: usize, card: &str) -> i32 {
     t.crystals(who, card).unwrap_or(-1)
 }
 
+/// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no instance.
+fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
+    t.field(who)
+        .into_iter()
+        .find(|f| f.card == card)
+        .map(|f| f.props.get("turnsLeft").copied().unwrap_or(0))
+        .unwrap_or(-1)
+}
+
 /// Anon Tokyo crystal-link marks on `tile`.
 fn anon_marks(t: &Table, tile: usize) -> usize {
     t.marks_on(tile).len()
@@ -941,6 +950,8 @@ fn rain_day_places_five_crystals() {
     t.give_play(0, "MyGO:那天的雨").unwrap();
     assert!(t.on_field(0, "MyGO:那天的雨"), "{:?}", t.field_ids(0));
     assert_eq!(crystals(&t, 0, "MyGO:那天的雨"), 5);
+    // 「每回合结束时移除一个奇迹水晶」 -- 5 turn ends are marked.
+    assert_eq!(turns_left(&t, 0, "MyGO:那天的雨"), 5);
 }
 
 #[test]
@@ -991,6 +1002,11 @@ fn rain_day_drains_one_crystal_per_turn_end() {
         crystals(&t, 0, "MyGO:那天的雨"),
         4,
         "exactly one drained at this turn end"
+    );
+    assert_eq!(
+        turns_left(&t, 0, "MyGO:那天的雨"),
+        4,
+        "the marker ticks down with the crystal"
     );
 }
 

@@ -122,7 +122,8 @@ export interface FieldCard {
   counters: Record<string, number>;
   faceDown: boolean;
   /** Continuous numeric props on the instance (e.g. `handLimitDelta`,
-   *  「手卡上限数量减1」). Serde-defaulted `{}`. */
+   *  「手卡上限数量减1」). Serde-defaulted `{}`. `turnsLeft` here is the
+   *  display-only remaining-turn countdown (`⌛N`): 0/absent = none. */
   props?: Record<string, number>;
   /** This instance is a group skill (`skill:<group>:<skill>`); its named
    *  counters are the group-card pool. */
@@ -136,7 +137,7 @@ export interface FieldCard {
  * same gate `act: "skill"` is validated with.
  */
 export interface SkillAction { id: string; source: string; title: Msg; text: Msg; enabled: boolean; reason: Msg }
-export interface ActiveEvent { id: string; playerId: number; counter: number; counter2: number; note: Msg; faceDown: boolean }
+export interface ActiveEvent { id: string; playerId: number; counter: number; counter2: number; /** Remaining turns before an expiry the rule scheduled; 0/absent = none. */ turnsLeft?: number; note: Msg; faceDown: boolean }
 /** One speaking declaration in a tile's deed-text list (`MatchState.tileTexts`).
  *  Ordered by body precedence; take the first entry of each `slot`. An empty
  *  `key` suppresses that slot (renders nothing). See `docs/TILES.md`. */

@@ -94,6 +94,26 @@ fn bind_event_places_a_rule_instance_on_the_board_owner() {
     assert_eq!(m.world().field_by_uid(uid).unwrap().owner, BOARD_OWNER);
 }
 
+// `docs/EVENTS.md`: the active row mirrors the instance's `turnsLeft` prop for
+// the display-only countdown marker; absent reads 0.
+#[test]
+fn active_event_mirrors_the_turns_left_prop() {
+    let mut m = new_match(Arc::new(OneEvent));
+    let d = data();
+    m.quick_start();
+    let uid = m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
+    assert_eq!(m.state().event_active[0].turns_left, 0, "absent = no marker");
+    m.world_mut()
+        .st
+        .board_field
+        .iter_mut()
+        .find(|f| f.uid == uid)
+        .unwrap()
+        .props
+        .insert(game_core::state::prop::TURNS_LEFT.to_string(), 2);
+    assert_eq!(m.state().event_active[0].turns_left, 2);
+}
+
 // `docs/EVENTS.md`: binding is idempotent per event id.
 #[test]
 fn bind_event_is_idempotent() {

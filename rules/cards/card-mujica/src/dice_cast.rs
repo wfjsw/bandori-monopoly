@@ -80,6 +80,8 @@ fn cast(player_id: i32) {
     }
     ctx::set_slot(player_id, PLACED, ctx::turn_key());
     ctx::place_card(player_id, ID, &Msg::new(key!("dice_cast_note")));
+    // 规则书: 「回合结束后放入弃牌堆」 -- it expires at the very next turn end.
+    ctx::set_turns_left(1);
     // 规则书: 「本回合内所有其他玩家无法从手牌中使用[反击]」 -- the engine's
     // `can_counteract_now` honours `state_key::NO_COUNTERACT_TURN` as the
     // no-hand-counteract gate (every seat but the latch owner). Latched to the

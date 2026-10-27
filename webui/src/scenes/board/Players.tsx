@@ -129,6 +129,8 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n?: number | "�
     const cp = fc.counters["cp"] ?? 0;
     if (crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: crystals });
     if (cp > 0) out.push({ label: `${card} · CP`, n: cp });
+    const turns = fc.props?.turnsLeft ?? 0;
+    if (turns > 0) out.push({ label: `${card} · ${tr("board.turnsLabel")}`, n: turns });
     for (const [name, n] of Object.entries(fc.counters ?? {})) {
       if (n <= 0 || name === "crystals" || name === "cp") continue;
       const label = counterLabel(name);
