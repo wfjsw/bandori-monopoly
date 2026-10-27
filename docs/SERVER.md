@@ -255,6 +255,11 @@ at `/builds/{id}/rules/...` and `/builds/{id}/data/...`; the web client loads
 the chosen build from there. A room record naming a build this process does not
 have resolves to the default.
 
+Selecting this page's own origin as the game server (with no build) uses the
+bundled `/assets/rules` + `/data` set directly: that origin served this client,
+so its bundle matches what it plays, and no `/builds/...` probe is made. Only a
+build, or another origin, reads `/builds/{id}/...`.
+
 The web client switches server / build / custom solo ruleset in place: it
 fetches the whole new source (rules and tables) before replacing anything, then
 remounts the scenes on the new data without a page reload. If the load fails it
