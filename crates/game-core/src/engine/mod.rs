@@ -199,8 +199,14 @@ use world::Signal;
 const MAX_WAIT: f32 = 6.0;
 /// Pause between pre-game choices (`StartChoice`).
 const CHOICE_WAIT: f32 = 1.2;
-/// Seconds before the first phase starts (`_wait` in the constructor).
+/// Longest the order roll stays up (`_wait` in the constructor). The phase
+/// normally ends much earlier: every seat's client acks once it has the roll
+/// on screen ([`Match::order_ready`]). This is only the cap for a seat that
+/// never acks -- a closed / hidden tab, a dropped connection.
 const ORDER_WAIT: f32 = 4.0;
+/// Beat between the last order ack and the next phase, so the settled faces
+/// are readable instead of vanishing on the same frame as the ack.
+const ORDER_SETTLE: f32 = 0.4;
 /// Turn-clock defaults. `BASE_TIME` is gone as a reset-to value: the per-turn
 /// base refill is [`crate::clock::ClockSettings::base_refill`] (the
 /// `turnBaseTime` hook's default), and the bonus cap is
@@ -336,6 +342,9 @@ struct Saved {
     vote_seq: i32,
     vote_cooldown: f32,
     deferred: Vec<Deferred>,
+    /// Per-seat order-roll acks (the phase ends when every client has one).
+    #[serde(default)]
+    order_ready: Vec<bool>,
     seq: i32,
     /// Anim-ack clock hold. `None` when the clock is running.
     #[serde(default)]
@@ -371,7 +380,9 @@ struct Saved {
 /// (the `no_recorded_roll` default is gone). `TriggerBuy.deal_owner` is
 /// `Option<Payee>` and `deal_houses` is `Option<i32>`. No compat shims --
 /// older saves are refused (replays ride archived engine bundles).
-pub const SAVE_VERSION: u32 = 12;
+/// v13: per-seat order-roll acks (`order_ready`), so the order phase ends on
+/// every client's ack instead of always burning its 4s cap.
+pub const SAVE_VERSION: u32 = 13;
 
 /// A running match.
 pub struct Match {
@@ -382,6 +393,11 @@ pub struct Match {
     pending: Option<Pending>,
     live_rng: Rng,
     wait: f32,
+    /// Per-seat order-roll acks. The order phase ends as soon as every seat
+    /// with a client has one; [`ORDER_WAIT`] is only the cap. Seat order, so
+    /// it follows the rolled seat order (`roll_order` runs before the first
+    /// ack can arrive).
+    order_ready: Vec<bool>,
     /// Per-seat 免费时间 pool (drains first).
     bonus_time: Vec<f32>,
     /// Per-seat 恢复时间 pool (drains second).
@@ -444,6 +460,7 @@ impl Match {
             pending: self.pending.clone(),
             live_rng: self.live_rng.clone(),
             wait: self.wait,
+            order_ready: self.order_ready.clone(),
             bonus_time: self.bonus_time.clone(),
             base_time: self.base_time.clone(),
             clock: self.world.clock,
@@ -496,6 +513,10 @@ impl Match {
         // creation time. No re-attach runs here: rewriting live v6 state
         // would break save → restore identity (fuzz_save_restore).
         let mut world = s.world;
+        // Same-version saves could predate the field (a hand-built v13 blob);
+        // a short vector would index-panic on the first ack.
+        let mut order_ready = s.order_ready;
+        order_ready.resize(world.st.players.len(), false);
         // v9: clock settings live on the World (so `Cx` sees them mid-routine)
         // and are mirrored at the Saved top level for the bot mirror / docs.
         world.clock = s.clock;
@@ -518,6 +539,7 @@ impl Match {
             pending: s.pending,
             live_rng: s.live_rng,
             wait: s.wait,
+            order_ready,
             bonus_time: s.bonus_time,
             base_time: s.base_time,
             timed_out: s.timed_out,
@@ -760,6 +782,7 @@ impl Match {
             mode,
             pending: None,
             wait: ORDER_WAIT,
+            order_ready: vec![false; n],
             // Pools start at the match settings, not at zero waiting for the
             // first `StartTimer` to fill them (v9). Legacy matches keep the
             // old empty-start: their first turn *sets* base to the hook value.
@@ -1507,6 +1530,7 @@ impl Match {
             pending: self.pending.clone(),
             live_rng: self.live_rng.clone(),
             wait: self.wait,
+            order_ready: self.order_ready.clone(),
             bonus_time: self.bonus_time.clone(),
             base_time: self.base_time.clone(),
             timed_out: self.timed_out,
@@ -1861,6 +1885,61 @@ impl Match {
         });
     }
 
+    /// Feed a "this seat has the rolled order on screen" ack from room
+    /// `member`. The order phase ends as soon as every seat with a client has
+    /// acked; [`ORDER_WAIT`] stays the cap for a seat that never does.
+    /// Recorded as [`crate::record::Input::OrderReady`] so a replay reproduces
+    /// the shortened phase. Returns whether the ack registered (a repeat, a
+    /// non-seat member, or a phase past the roll returns `false`).
+    pub fn order_ready(&mut self, member: i32) -> bool {
+        if self.world.st.phase != "order" {
+            return false;
+        }
+        let Some(seat) = self
+            .world
+            .st
+            .players
+            .iter()
+            .position(|p| p.member == member)
+        else {
+            return false;
+        };
+        if std::mem::replace(&mut self.order_ready[seat], true) {
+            return false;
+        }
+        if self.order_settled() {
+            // Leave the settled faces up for a beat, but never push the phase
+            // past the cap the rows already counted down from.
+            self.wait = self.wait.min(ORDER_SETTLE);
+        }
+        true
+    }
+
+    /// Every seat that owes an ack has one. A machine-answered seat (bot,
+    /// taken-over human, one deferred out for good) never presents anything
+    /// and must not hold the table.
+    fn order_settled(&self) -> bool {
+        self.world
+            .st
+            .players
+            .iter()
+            .enumerate()
+            .all(|(i, p)| self.order_ready[i] || p.bot || self.auto_player(i))
+    }
+
+    /// Leave the order roll: 正规 walks the ban backwards, 娱乐 opens the pick.
+    fn end_order(&mut self) {
+        let ranked = self.mode == MatchMode::Ranked;
+        self.direct(|cx| {
+            if ranked {
+                cx.begin_ban()
+            } else {
+                cx.begin_pick()
+            }
+        });
+        self.wait = CHOICE_WAIT;
+    }
+
     /// Advance the match by `dt` seconds (`Tick`).
     pub fn tick(&mut self, dt: f32) {
         let _tg = rtimer::guard(&rtimer::TICK_NS);
@@ -1875,15 +1954,7 @@ impl Match {
             "order" => {
                 self.world.st.time_left = self.wait.max(0.0);
                 if self.wait <= 0.0 {
-                    let ranked = self.mode == MatchMode::Ranked;
-                    self.direct(|cx| {
-                        if ranked {
-                            cx.begin_ban()
-                        } else {
-                            cx.begin_pick()
-                        }
-                    });
-                    self.wait = CHOICE_WAIT;
+                    self.end_order();
                 }
             }
             "ban" | "pick" | "deck" => self.tick_choice(dt),

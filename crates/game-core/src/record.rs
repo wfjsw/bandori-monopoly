@@ -399,6 +399,13 @@ pub enum Input {
         m: i32,
         seq: i32,
     },
+    /// Order-roll ack from room `m`: its client has the rolled order on
+    /// screen. Ends the order phase once every seat has one (see
+    /// `engine::Match::order_ready`). Recorded so replays reproduce the
+    /// shortened phase instead of always sitting out the cap.
+    OrderReady {
+        m: i32,
+    },
 }
 
 /// A turn-boundary state hash. `at` is how many [`Input`]s had been applied
@@ -1563,6 +1570,9 @@ impl Replayer {
             Input::Back { m } => self.m.member_back(m),
             Input::AnimDone { m, seq } => {
                 self.m.anim_done(m, seq);
+            }
+            Input::OrderReady { m } => {
+                self.m.order_ready(m);
             }
             Input::Ticks { .. } => unreachable!("tick run handled by apply_one_tick"),
         }
