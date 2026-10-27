@@ -255,6 +255,14 @@ at `/builds/{id}/rules/...` and `/builds/{id}/data/...`; the web client loads
 the chosen build from there. A room record naming a build this process does not
 have resolves to the default.
 
+The web client switches server / build / custom solo ruleset in place: it
+fetches the whole new source (rules and tables) before replacing anything, then
+remounts the scenes on the new data without a page reload. If the load fails it
+restores the previous choice and reloads that source; only a failed restore
+falls back to a full page reload. A custom solo ruleset is one wasm module, so
+it must carry no uncompiled `pre` conditions (the browser glue is
+`runtime-only`, `docs/GUARDS.md` §8.3).
+
 ## Auth
 
 `POST /api/session {player, character?, cnId?}` returns `{token}` and sets an

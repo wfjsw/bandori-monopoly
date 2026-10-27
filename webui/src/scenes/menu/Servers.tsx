@@ -1,10 +1,11 @@
 // The server picker: which game server this page plays on, and which of the
-// profile server's advertised servers are available. Connecting reloads the
-// page -- boot-time rules / tables are keyed to the game server and its default
-// build. The profile-server address is edited here too (directory + uploads).
+// profile server's advertised servers are available. Connecting switches the
+// live rules / tables in place (no page reload; the profile-server address is
+// edited here too, for the directory + uploads).
 
 import { useEffect, useState } from "react";
-import { normalizeServer, probeGameServer, setServer, useServer } from "../../net/server";
+import { switchSource } from "../../core/data";
+import { normalizeServer, probeGameServer, useServer } from "../../net/server";
 import { health, listServers, profileBase, setProfileBase, type ProfileGameServer } from "../../net/profile";
 import { Btn } from "../../ui/Button";
 import { TextInput } from "../../ui/Form";
@@ -67,25 +68,23 @@ function Servers({ close }: { close: () => void }) {
   // Ping whatever this page is on right now, so the panel opens with a status.
   useEffect(() => {
     void test(current.base);
-    // Mount-only: `current.base` cannot change without a reload (connecting
-    // reloads the page).
+    // Mount-only: the picker closes on connect (the scene then remounts on the
+    // new data).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const connect = (target: string | null) => {
     if (target === null) {
       close();
-      setServer(null);
-      location.reload();
+      void switchSource({ server: null });
       return;
     }
     const raw = target.trim();
     const next = normalizeServer(raw);
     if (!next) return toast(tr("server.invalid"), "error");
     close();
-    setServer(next);
-    // Boot loads this server's rules and tables; nothing here is live.
-    location.reload();
+    // Loads the new server's rules and tables live; the scenes remount on them.
+    void switchSource({ server: next });
   };
 
   /** A directory URL may be absolute or relative to the profile server. */

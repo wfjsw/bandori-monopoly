@@ -1,0 +1,31 @@
+/* Blocking overlay for a live server / build / ruleset switch. Sits above the
+   stage (and its modals) so nothing can start a match on half-swapped data. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: min(360px, calc(100vw - 48px));
+  padding: 22px 24px;
+  border-radius: var(--r-2xl);
+  background: var(--surface);
+  box-shadow: var(--pop-shadow);
+  text-align: center;
+}
+
+.title { font-size: var(--fs-lg); font-weight: 700; }
+
+.bar { height: 8px; border-radius: 4px; background: var(--pink-pale); overflow: hidden; }
+.fill { height: 100%; background: var(--pink); transition: width 0.12s linear; }
+
+.stage { font-size: var(--fs-sm); color: var(--sub); }

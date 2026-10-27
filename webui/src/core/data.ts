@@ -7,8 +7,8 @@ import engineId from "../wasm/engine_id.json";
 import displayJson from "../generated/display.json";
 import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
-import { loadRulesetInto } from "./rulesetLoad";
-import { buildId, dataBase, isRemote, rulesBase } from "../net/server";
+import { applyRuleset, fetchRuleset, type RulesetBundle } from "./rulesetLoad";
+import { buildId, buildNameOf, dataBase, isRemote, rulesBase, serverBase, setBuild, setServer } from "../net/server";
 import { bandLogo, charArt, cardArt } from "./assets";
 import { cardFaceTitle } from "./cardFace";
 import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine, DisplayFile, Block } from "./types";
@@ -60,9 +60,9 @@ export const rules = glue;
  *  UI reads this to explain a divergence instead of showing it as engine drift. */
 export let rulesetLoaded = false;
 
-/** The rules / data directories this boot actually used. Normally the
- *  selected server's build; older servers (no `/builds/...` routes) fall back
- *  to the bundled paths so connecting to them still boots. */
+/** The rules / data directories the live `D` came from. Normally the selected
+ *  server's build; older servers (no `/builds/...` routes) fall back to the
+ *  bundled paths. */
 let sources = { rules: rulesBase(), data: dataBase() };
 
 /** The resolved sources, for the solo worker -- it must load exactly what the
@@ -71,62 +71,110 @@ export function currentSources(): { rules: string; data: string } {
   return sources;
 }
 
+interface Target {
+  rules: string;
+  data: string;
+}
+
 /**
- * Resolve the build's rules / data directories. `rulesBase()` / `dataBase()`
- * name the selected build, but a server from before rule builds answers
- * `/builds/...` with 404 (or the SPA's index.html). Probe `index.json` once and
- * fall back to the bundled paths -- the page ships them anyway, and an older
- * server's single ruleset is that same set.
+ * Resolve the selected build's rules / data directories without touching the
+ * live set. `rulesBase()` / `dataBase()` name the selected build, but a server
+ * from before rule builds answers `/builds/...` with 404 (or the SPA's
+ * index.html). Probe `index.json` once and fall back to the bundled paths --
+ * the page ships them anyway, and an older server's single ruleset is that
+ * same set.
  */
-async function resolveSources(): Promise<void> {
-  sources = { rules: rulesBase(), data: dataBase() };
-  if (sources.rules === "/assets/rules/") return;
+async function resolveTargets(): Promise<Target> {
+  const target = { rules: rulesBase(), data: dataBase() };
+  if (target.rules === "/assets/rules/") return target;
   try {
-    const r = await fetch(sources.rules + "index.json");
+    const r = await fetch(target.rules + "index.json", { cache: "no-cache" });
     if (r.ok) {
       const text = await r.text();
-      if (!text.trimStart().startsWith("<")) return;
+      if (!text.trimStart().startsWith("<")) return target;
     }
   } catch {
     /* fall through to the bundled set */
   }
   console.warn("[rules] the selected server does not serve rule builds; using the bundled ruleset");
   toast(tr("boot.rulesFallback"));
-  sources = { rules: "/assets/rules/", data: "/data/" };
+  return { rules: "/assets/rules/", data: "/data/" };
 }
 
-/** The card / skill / tile rule modules `tools/build-ruleset.mjs` copies to
- *  `/assets/rules/`. Without them every solo match runs on the engine's
- *  `StubRules` (plain-Monopoly tiles, no card or skill effects) and the roster
- *  is empty, so this runs **before** `roster_json()` / `load_data` (the
- *  ruleset is the roster source) and before any `SoloMatch` is built. Online
- *  play runs the rules on the server, so a failure here is not fatal -- it is
- *  toasted and the page continues with an empty roster / StubRules -- but a
- *  match recorded without card rules and replayed with them (or the other way
- *  round) diverges at the first checkpoint and looks like engine drift. */
-async function loadRuleset(): Promise<void> {
-  try {
-    // The sequence lives in `rulesetLoad.ts` and is shared with the node gate
-    // (`webui/src/game/ruleset.test.ts`): index.json -> modules -> the
-    // precompiled-condition blob (`conds-*.bin`, docs/GUARDS.md §8.2) ->
-    // `ruleset_build`. The directory follows the selected game server / build.
-    const base = sources.rules;
-    const custom = customRulesActive() ? customRulesBytes() : null;
-    const n = await loadRulesetInto(
-      glue,
-      async (rel) => {
-        const r = await fetch(base + rel);
-        if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
-        return new Uint8Array(await r.arrayBuffer());
-      },
-      custom ? [custom] : [],
-    );
-    rulesetLoaded = true;
-    console.info(`[rules] ${n} card module(s) loaded`);
-  } catch (e) {
-    console.error("[rules] card modules failed to load; solo matches will run without card, skill or tile rules", e);
-    toast(tr("boot.rulesError", { detail: e instanceof Error ? e.message : String(e) }), "error");
-  }
+// ------------------------------------------------------------------ versions
+
+/** Bumped after `D` has been replaced by a live source switch. Scenes key
+ *  their subtree on it so every screen re-reads the new roster / tables. */
+let dataVersion = 0;
+const dataListeners = new Set<() => void>();
+
+export const subscribeData = (cb: () => void): (() => void) => {
+  dataListeners.add(cb);
+  return () => dataListeners.delete(cb);
+};
+
+export const dataVersionOf = (): number => dataVersion;
+
+// Dev-only seam for browser checks: lets a script read the live source and
+// roster without reaching into React.
+if (import.meta.env?.DEV) {
+  (globalThis as { __bmDebug?: unknown }).__bmDebug = {
+    data: () => D,
+    sources: currentSources,
+    version: dataVersionOf,
+    busy: () => loadState().busy,
+  };
+}
+
+function bumpData(): void {
+  dataVersion++;
+  dataListeners.forEach((cb) => cb());
+}
+
+export type LoadStage = "rules" | "data";
+
+export interface LoadState {
+  /** True while a source switch is in flight (the overlay blocks the page). */
+  busy: boolean;
+  stage: LoadStage | "idle";
+  done: number;
+  total: number;
+}
+
+let load: LoadState = { busy: false, stage: "idle", done: 0, total: 0 };
+const loadListeners = new Set<() => void>();
+
+export const subscribeLoad = (cb: () => void): (() => void) => {
+  loadListeners.add(cb);
+  return () => loadListeners.delete(cb);
+};
+
+export const loadState = (): LoadState => load;
+
+function setLoad(next: LoadState): void {
+  load = next;
+  loadListeners.forEach((cb) => cb());
+}
+
+function report(stage: LoadStage, done: number, total: number): void {
+  setLoad({ busy: true, stage, done, total });
+}
+
+/** Fetch one rules directory's whole bundle (`index.json`, its modules, the
+ *  precompiled conditions) without touching the live glue. Modules and the
+ *  conds blob are content-addressed by file name, so only `index.json` is
+ *  revalidated (`no-cache`); the rest may come from the HTTP cache. */
+function preloadRules(base: string, onFile?: (done: number, total: number) => void): Promise<RulesetBundle> {
+  const custom = customRulesActive() ? customRulesBytes() : null;
+  return fetchRuleset(
+    async (rel) => {
+      const r = await fetch(base + rel, { cache: rel === "index.json" ? "no-cache" : "default" });
+      if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+      return new Uint8Array(await r.arrayBuffer());
+    },
+    custom ? [custom] : [],
+    onFile,
+  );
 }
 
 // ------------------------------------------------------------- custom ruleset
@@ -163,12 +211,10 @@ export function customRules(): CustomRules | null {
   }
 }
 
-/** Decode the stored custom ruleset; null when absent or unreadable. */
-export function customRulesBytes(): Uint8Array | null {
-  const c = customRules();
-  if (!c) return null;
+/** Decode one stored base64 module; null when unreadable. */
+function decodeCustom(b64: string): Uint8Array | null {
   try {
-    const bin = atob(c.b64);
+    const bin = atob(b64);
     const out = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
@@ -177,10 +223,16 @@ export function customRulesBytes(): Uint8Array | null {
   }
 }
 
+/** Decode the stored custom ruleset; null when absent or unreadable. */
+export function customRulesBytes(): Uint8Array | null {
+  const c = customRules();
+  return c ? decodeCustom(c.b64) : null;
+}
+
 /**
  * Store a user's custom solo ruleset (one wasm module). Returns false when it
  * is too large or the browser's storage refuses it (toasted here). The caller
- * reloads so the boot-time roster / rules include it.
+ * then switches the source (`switchSource`) so the roster / rules include it.
  */
 export function setCustomRules(bytes: Uint8Array, name: string): boolean {
   if (!bytes.length) {
@@ -214,56 +266,46 @@ export function clearCustomRules(): void {
   }
 }
 
-/**
- * The one boot gate for the typed `D`. Order matters:
- *
- * 1. wasm init + glue identity;
- * 2. **ruleset first** -- `roster_json()` is empty until `ruleset_build`, and
- *    deck builder / gallery / home read `D` as soon as this resolves;
- * 3. `roster_json()` for the identity rows (cards / personas / groups);
- * 4. the remaining `data_files()` tables + the UI-only tables + optional bot
- *    books, `load_data` (engine tables only);
- * 5. merge `generated/display.json` onto the roster and assign `D` here, only
- *    at the end, so a throw leaves `D` untouched and Boot shows the error
- *    stage instead of a half-initialized table.
- */
-export async function loadGameData(progress: (p: number) => void): Promise<void> {
-  await init();
-  // Resolve the selected build's rules / data directories before anything
-  // reads them (an older server without `/builds/...` falls back to the
-  // bundled set there, consistently for both).
-  await resolveSources();
-  // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9): every
-  // record this build seals names the bundle that can replay it. Comes from
-  // `tools/build-glue.mjs`; empty only if a glue was built without it.
-  if (typeof glue.set_glue_sha === "function" && engineId?.glueSha256) {
-    glue.set_glue_sha(engineId.glueSha256);
-  }
-  // Ruleset before the tables: the roster rides on the built set. Failure is
-  // degraded (empty roster + StubRules), not fatal -- `loadRuleset` toasts.
-  await loadRuleset();
+/** The identity rows the built ruleset exports (`roster_json()`). */
+interface Roster {
+  cards: { id: string; group: string; name: string; owner: string; derived: boolean; tags: string[]; text: string }[];
+  personas: { name: string; group: string; skill: string; exclusiveCards: string[]; preset: string[]; variantOf?: string; text: string }[];
+  groups: { name: string; skill: string; sharesExclusives?: boolean; text: string }[];
+  events: { id: string; name: string; derived: boolean; text: string }[];
+}
 
+const detail = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+function rulesFailed(e: unknown): void {
+  console.error("[rules] card modules failed to load; solo matches will run without card, skill or tile rules", e);
+  toast(tr("boot.rulesError", { detail: detail(e) }), "error");
+}
+
+/**
+ * Fetch `target`'s tables after its ruleset has been built (the build names
+ * the engine tables), hand the engine its own tables, and only then replace
+ * `D`. A throw here leaves the old `D` in place; the engine may already carry
+ * the new set, which the caller either reverts or surfaces.
+ */
+async function loadTables(target: Target, onProgress?: (p: number) => void): Promise<void> {
   // Game roster after the presentation split: identity plus the rulebook
   // prose (`text`), which is game content and rides `ruleset_metadata`. Pure
   // display columns are merged below from `generated/display.json`.
-  const roster = JSON.parse(glue.roster_json()) as {
-    cards: { id: string; group: string; name: string; owner: string; derived: boolean; tags: string[]; text: string }[];
-    personas: { name: string; group: string; skill: string; exclusiveCards: string[]; preset: string[]; variantOf?: string; text: string }[];
-    groups: { name: string; skill: string; sharesExclusives?: boolean; text: string }[];
-    events: { id: string; name: string; derived: boolean; text: string }[];
-  };
+  const roster = JSON.parse(glue.roster_json()) as Roster;
   // Engine tables only (post-split: board / match_rules).
   const engineNames: string[] = JSON.parse(glue.data_files());
   const allNames = [...new Set([...engineNames, ...UI_DATA_FILES])];
   const files: Record<string, string> = {};
   let done = 0;
-  const datasets = sources.data;
+  setLoad({ busy: true, stage: "data", done: 0, total: allNames.length });
   await Promise.all(
     allNames.map(async (n) => {
-      const r = await fetch(datasets + n);
+      const r = await fetch(target.data + n, { cache: "no-cache" });
       if (!r.ok) throw new Error(tr("boot.dataError", { name: n }));
       files[n] = await r.text();
-      progress(++done / allNames.length);
+      done++;
+      report("data", done, allNames.length);
+      onProgress?.(0.45 + (done / allNames.length) * 0.5);
     }),
   );
   // Optional: the bot deck book (`docs/BOT.md` §3.7). Missing = empty book =
@@ -271,7 +313,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // purpose -- it tunes bots, not the match, so it is not part of the data
   // hash either.
   try {
-    const book = await fetch(datasets + "deck_book.json");
+    const book = await fetch(target.data + "deck_book.json");
     if (book.ok) files["deck_book.json"] = await book.text();
   } catch {
     /* absent book is fine */
@@ -279,7 +321,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // Optional: the bot strategy book (`docs/BOT.md` §3.8). Missing = empty
   // book = the default parameters (today's heuristic constants).
   try {
-    const book = await fetch(datasets + "strategy_book.json");
+    const book = await fetch(target.data + "strategy_book.json");
     if (book.ok) files["strategy_book.json"] = await book.text();
   } catch {
     /* absent book is fine */
@@ -343,6 +385,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   });
   const homeLines = j("home_lines.json").personas ?? [];
   const byId = new Map(cards.map((c) => [c.id, c]));
+  // Assign only after every piece is in, so a throw above leaves the old `D`.
   D = {
     tiles: j("board.json").tiles,
     cards,
@@ -359,6 +402,176 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     artId: (c) => c.art || c.cnId,
     homeTag: (c) => homeLines.find((x: { name: string; tag: string }) => x.name === c.name && x.tag)?.tag ?? c.display,
   };
+  bumpData();
+}
+
+/**
+ * Load one target: fetch its whole rules bundle first (no live mutation),
+ * stage + build it, then fetch and apply its tables. `fatal` makes a rule
+ * failure throw instead of degrading to `StubRules` -- the boot gate degrades
+ * (online play runs the rules server-side), a source switch must not.
+ */
+async function loadInto(target: Target, fatal: boolean, onProgress?: (p: number) => void): Promise<void> {
+  let bundle: RulesetBundle | null = null;
+  try {
+    setLoad({ busy: true, stage: "rules", done: 0, total: 0 });
+    bundle = await preloadRules(target.rules, (done, total) => {
+      report("rules", done, total);
+      onProgress?.(total ? (done / total) * 0.45 : 0);
+    });
+  } catch (e) {
+    if (fatal) throw e;
+    rulesFailed(e);
+  }
+  if (bundle) {
+    try {
+      // Stages the new modules beside the built set; `ruleset_build` swaps it.
+      // A failed build is rolled back by the next `fetchRuleset`'s reset.
+      const n = applyRuleset(glue, bundle);
+      rulesetLoaded = true;
+      console.info(`[rules] ${n} card module(s) loaded`);
+    } catch (e) {
+      rulesetLoaded = false;
+      if (fatal) throw e;
+      rulesFailed(e);
+    }
+  } else {
+    rulesetLoaded = false;
+  }
+  sources = target;
+  await loadTables(target, onProgress);
+  onProgress?.(1);
+}
+
+/**
+ * The one boot gate for the typed `D`. Order matters:
+ *
+ * 1. wasm init + glue identity;
+ * 2. resolve the target directories (older servers fall back to the bundled
+ *    set, consistently for rules and tables);
+ * 3. **ruleset first** -- `roster_json()` is empty until `ruleset_build`, and
+ *    deck builder / gallery / home read `D` as soon as this resolves;
+ * 4. `roster_json()` for the identity rows (cards / personas / groups);
+ * 5. the remaining `data_files()` tables + the UI-only tables + optional bot
+ *    books, `load_data` (engine tables only);
+ * 6. merge `generated/display.json` onto the roster and assign `D` here, only
+ *    at the end, so a throw leaves `D` untouched and Boot shows the error
+ *    stage instead of a half-initialized table.
+ */
+export async function loadGameData(onProgress: (p: number) => void): Promise<void> {
+  await init();
+  // Resolve the selected build's rules / data directories before anything
+  // reads them (an older server without `/builds/...` falls back to the
+  // bundled set there, consistently for both).
+  const target = await resolveTargets();
+  // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9): every
+  // record this build seals names the bundle that can replay it. Comes from
+  // `tools/build-glue.mjs`; empty only if a glue was built without it.
+  if (typeof glue.set_glue_sha === "function" && engineId?.glueSha256) {
+    glue.set_glue_sha(engineId.glueSha256);
+  }
+  // Ruleset before the tables: the roster rides on the built set. Failure is
+  // degraded (empty roster + StubRules), not fatal -- `loadInto` toasts.
+  await loadInto(target, false, onProgress);
+  setLoad({ busy: false, stage: "idle", done: 0, total: 0 });
+}
+
+// ------------------------------------------------------------ live switching
+
+/** What a live switch changes. Everything is persisted here, so `resolveTargets`
+ *  sees exactly what a page reload would. */
+export interface SourceChange {
+  /** New game-server base; `null` = this page's origin. Clears the build. */
+  server?: string | null;
+  /** New build id; `null`/`""` = the server's default build. */
+  build?: string | null;
+  buildName?: string;
+  /** Store this custom module before loading (local bundled path only). */
+  custom?: { bytes: Uint8Array; name: string };
+  clearCustom?: boolean;
+}
+
+interface SettingsSnapshot {
+  server: string;
+  build: string;
+  buildName: string;
+  custom: CustomRules | null;
+}
+
+function snapshotSettings(): SettingsSnapshot {
+  return {
+    server: serverBase(),
+    build: buildId(),
+    buildName: buildNameOf(),
+    custom: customRules(),
+  };
+}
+
+function restoreSettings(s: SettingsSnapshot): void {
+  setServer(s.server || null);
+  setBuild(s.build || null, s.buildName);
+  if (s.custom) {
+    const bytes = decodeCustom(s.custom.b64);
+    if (bytes) setCustomRules(bytes, s.custom.name);
+    else clearCustomRules();
+  } else {
+    clearCustomRules();
+  }
+}
+
+function applyChange(change: SourceChange): void {
+  if ("server" in change) setServer(change.server ?? null);
+  if ("build" in change) setBuild(change.build ?? null, change.buildName ?? "");
+  if (change.custom && !setCustomRules(change.custom.bytes, change.custom.name)) {
+    throw new Error(tr("solo.buildStoreError"));
+  }
+  if (change.clearCustom) clearCustomRules();
+}
+
+/** Switches run one at a time: a second click while one is in flight waits
+ *  for it instead of interleaving two loads on one glue. */
+let queue: Promise<void> = Promise.resolve();
+
+/**
+ * Point the page at another server / build / custom ruleset **without a page
+ * reload**: persist the change, load the whole new source (rules and tables)
+ * before anything live is replaced, and only then remount the scenes on the
+ * new `D` (see `dataVersionOf`).
+ *
+ * A failure reverts the settings and reloads the previous source in place.
+ * Only if that revert also fails does the page fall back to `location.reload`.
+ * Progress is on `loadState`; the caller shows it and swallows the rejection
+ * (the toast here already says what happened).
+ */
+export function switchSource(change: SourceChange): Promise<void> {
+  const run = queue.then(() => doSwitch(change));
+  queue = run.catch(() => {});
+  return run;
+}
+
+async function doSwitch(change: SourceChange): Promise<void> {
+  const before = snapshotSettings();
+  applyChange(change);
+  try {
+    setLoad({ busy: true, stage: "rules", done: 0, total: 0 });
+    const target = await resolveTargets();
+    await loadInto(target, true);
+  } catch (e) {
+    console.error("[rules] source switch failed; reverting", e);
+    restoreSettings(before);
+    try {
+      const target = await resolveTargets();
+      await loadInto(target, true);
+      toast(tr("boot.switchReverted", { detail: detail(e) }), "error");
+    } catch (e2) {
+      console.error("[rules] revert failed; reloading the page", e2);
+      toast(tr("boot.switchReload", { detail: detail(e2) }), "error");
+      location.reload();
+    }
+    throw e;
+  } finally {
+    setLoad({ busy: false, stage: "idle", done: 0, total: 0 });
+  }
 }
 
 /** `band` value of the cards every character may take. A data key from the
