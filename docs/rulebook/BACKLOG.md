@@ -63,6 +63,32 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 ---
 
+# 2026-10-27 card sheet review intake
+
+Full review of all 183 cards on `新卡组卡` (gid 648135790) against their
+implementations and comments; the live sheet was verified identical to
+`docs/rulebook/cards-sheet.csv` the same day. Report:
+`docs/rulebook/CARD-REVIEW-2026-10-27.md`; machine-readable rows:
+`card-review-2026-10-27.{json,csv}`.
+
+- 1733 verified findings: 125 high / 587 medium / 1021 low.
+- 180 of 183 cards affected; clean: `PP:有你与我在这里共度`, `R:轨迹`, `通用:GREAT`.
+- All high are unrecorded. Top cards by volume: `HHW:（花音）Wacha Mocha
+  啪嗒进行曲` (26), `Mujica:#J11` (23), `RAS:（和奏瑞依）寄于指尖的执念` (22),
+  `Sumimi:（真奈）歌唱大赛5连冠` (21).
+- Dominant roots: dead hooks because a play body never places the card on the
+  field; missing owner gates on `TurnEnd`/`PassTile` hooks; `ctx::roll` ignoring
+  `turn.extreme`; card-effect spends wrongly offering skill-cost substitution;
+  `PaySplitMul`/`DESIGNATES` props absent.
+- Comment work: 241 missing call-site citations, 259 missing `TODO(规则书)`,
+  362 misleading comments, 52 wrong quotes, 42 stale TODOs.
+
+This section is the intake pointer, not per-item triage: split the report rows
+into A/B/C/D items as they are worked. Individual rows keep the class and
+severity from the review.
+
+---
+
 # TODO(规则书) ↔ item index (2026-10-20)
 
 The 2026-10-20 review walked every `TODO(规则书)` in `rules/` + `crates/` and
