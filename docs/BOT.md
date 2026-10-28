@@ -965,6 +965,12 @@ per-counteract entry is the card's own spec (0 = hold it back); a card with no
 entry takes `counteract_propensity_milli`. Chaos is **not** parameterised: it
 keeps `CHAOS_RESERVE` / `CHAOS_COUNTER_CHANCE` as literals.
 
+The `[pass-reward]` card roll is not a book param either (web 托管 only, user
+ruling 2026-10-28): at or below 8 000 money the standard bot takes the 2 000
+print, the card odds then rise superlinearly (`t²`) to certain at 80 000, and
+above 80 000 the card is forced even over the engine's answer and the
+advanced search.
+
 **Book** (`data/strategy_book.json`, versioned like the deck book):
 - **Header:** `version`, `ruleset_sha256`, `policy` (standard), `generated_at`, `params_version`.
 - **Entries keyed by public information only**, with back-off, first hit wins:

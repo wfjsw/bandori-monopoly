@@ -489,6 +489,8 @@ parameterised -- it keeps its own literals.
 | `FORCE_BUY_RESERVE` | 4,000 | 「可选择[支付]…两倍…强行购买」 only while it leaves this much |
 | `PLAY_CARD_CHANCE` | 0.7 | odds of playing a card rather than rolling in 运营 |
 | `MAX_PLAYS_PER_TURN` | 2 | hand cards played in one turn before rolling |
+| `PASS_REWARD_CARD_MIN_MONEY` | 8,000 | at or below this money the [pass-reward] is always the 2,000 print (web 托管; user ruling 2026-10-28) |
+| `PASS_REWARD_CARD_MONEY` | 80,000 | above this money the [pass-reward] is always the card; in between the card odds ramp superlinearly (`t²`) |
 
 **Deck pick.** A standard bot (and the browser 托管) submits the deck book's
 entry for its public table -- own character, own seat, the other seats'
