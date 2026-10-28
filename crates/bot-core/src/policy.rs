@@ -878,7 +878,9 @@ pub fn compute_answer(
 pub fn act_for(m: &Match, member: i32) -> Option<NetMessage> {
     let st = m.state();
     let i = st.players.iter().position(|p| p.member == member)?;
-    if st.phase != "play" {
+    // A prompt is an answer surface in any phase (初始重抽 opens in setup); the
+    // turn surfaces below only exist in play.
+    if st.phase != "play" && st.prompt.id == 0 {
         return None;
     }
     // Votes are answered by the scheduler (`tick_vote`), not here; the
