@@ -117,24 +117,37 @@ export function isRemote(): boolean {
   return base !== "";
 }
 
+/** True when the selection is this page's own origin (or no server at all).
+ *  That server hosts this SPA, so its bundled rules / tables are exactly what
+ *  it plays; probing `/builds/...` there would only hit the SPA fallback. */
+function isLocalBase(): boolean {
+  if (!base) return true;
+  try {
+    return base === location.origin;
+  } catch {
+    return false;
+  }
+}
+
 /** Prefix a REST path with the selected server. */
 export function gameUrl(path: string): string {
   return base ? base + path : path;
 }
 
 /**
- * Where the ruleset modules live. With neither a server nor a build selected
- * this is the classic bundled path, unchanged; any explicit choice (a build on
- * this same-origin server included) reads that build's served modules.
+ * Where the ruleset modules live. The local bundled path is the classic
+ * single-server set; it applies with no explicit build, including when this
+ * page's own origin is selected, because that origin served the SPA and its
+ * bundle. A build (even on this origin) reads that build's served modules.
  */
 export function rulesBase(): string {
-  if (!base && !build) return "/assets/rules/";
+  if (isLocalBase() && !build) return "/assets/rules/";
   return `${base}/builds/${encodeURIComponent(build || "default")}/rules/`;
 }
 
 /** Where the game tables live (`board.json`, `match_rules.json`, ...). */
 export function dataBase(): string {
-  if (!base && !build) return "/data/";
+  if (isLocalBase() && !build) return "/data/";
   return `${base}/builds/${encodeURIComponent(build || "default")}/data/`;
 }
 

@@ -202,7 +202,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         // Only a write that did not raise the count speaks for the empty
         // state. A run that writes twice (say up and then back to zero) raises
         // once per write against the count it ended on, and the earlier write

@@ -9,8 +9,9 @@
 
 use alloc::vec::Vec;
 
+use bandori_std::counter;
 use bandori_std::ctx;
-use card_sdk::abi::{counter, roll_source, ActionKind, FilterKind, RollPurpose, TriggerKind};
+use card_sdk::abi::{roll_source, ActionKind, FilterKind, RollPurpose, TriggerKind};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 

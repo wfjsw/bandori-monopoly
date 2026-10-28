@@ -6,8 +6,9 @@
 //!
 //! park on another player; their buys pay the user and pass the card along.
 
+use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{counter, ActionKind};
+use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -27,7 +28,10 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
         // 「收购该地契」) does not raise -- so the bonus never fired there.
         On::Action(Action::Bought("", Some(buy_after_guard), buy_after)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「添加3个奇迹水晶」: the `⌛3` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"演奏我的音乐吧"#)
         .raw_name(r#"（chuchu）演奏我的音乐吧"#)
         .tags(&[])
@@ -102,6 +106,8 @@ fn turn_end_guard(player_id: i32) -> bool {
 }
 
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // 「那名玩家的每个回合结束时失去一个」 -- the tick.
+    ctx::dec_turns_left();
     // 规则书: 「那名玩家的每个回合结束时失去一个」 -- C# `AddCrystals(-1, ...)`.
     // The zero test is not re-checked here: the write raises `CounterChanged`
     // and [`crystals_empty`] owns it (a clause on the count, not on the tick).
@@ -192,8 +198,10 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
     // instance's).
     ctx::set_prop(PROP_USER, user + 1);
     ctx::set_prop(PROP_HITS, hits + 1);
-    // 规则书: 「并将奇迹水晶补充至3个」 -- C# `Crystals = 3`.
+    // 规则书: 「并将奇迹水晶补充至3个」 -- C# `Crystals = 3`. A fresh countdown
+    // starts on the new holder.
     ctx::set_crystals(3);
+    ctx::set_turns_left(3);
     ctx::log(
         user,
         &Msg::new(key!("chuchu_music_moved"))

@@ -187,7 +187,7 @@ fn crystal_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is("TEST:named-counter")
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only the write that did not raise the count speaks for the empty
         // state -- an earlier write in the same run must not speak for the

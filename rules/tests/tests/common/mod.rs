@@ -985,6 +985,16 @@ impl Table {
             .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
+    /// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no
+    /// instance.
+    pub fn turns_left(&self, who: usize, card: &str) -> i32 {
+        self.field(who)
+            .into_iter()
+            .find(|f| f.card == card)
+            .map(|f| f.props.get(bandori_std::marker::TURNS_LEFT).copied().unwrap_or(0))
+            .unwrap_or(-1)
+    }
+
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
     /// card is not placed. This is where band-card crystals go now -- the band
     /// skill's own instance, not a keyed state.
@@ -1124,6 +1134,12 @@ impl Table {
         let all: Vec<String> = self.m.world().recent.iter().map(|e| log_key(e)).collect();
         all[all.len().saturating_sub(n)..].to_vec()
     }
+}
+
+/// [`Table::turns_left`] as a free function, so a call site reads like the
+/// other probes (`crystals(&t, ...)`).
+pub fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
+    t.turns_left(who, card)
 }
 
 /// The key a log event speaks as: its own, or the `what` inside an in-play

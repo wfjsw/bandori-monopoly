@@ -120,7 +120,7 @@ fn cover(player_id: i32) -> card_sdk::Asked {
 /// decrease elsewhere (the band skill's own crystals, another card's) would
 /// otherwise be refunded onto this instance.
 fn refill_guard(_player_id: i32) -> bool {
-    ctx::is_placed() && trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    ctx::is_placed() && trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn refill(player_id: i32) -> card_sdk::Asked {
@@ -203,7 +203,7 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
 /// substitution (a parked [`SLOT_COVERING`]) or when even the refund would
 /// leave the count at 0. Name-filtered to `counter::CRYSTALS`.
 fn sweep_guard(player_id: i32) -> bool {
-    trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)

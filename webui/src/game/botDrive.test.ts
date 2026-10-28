@@ -193,6 +193,65 @@ test("driveSeat applies the search's answer through act", async () => {
   assert.deepEqual(h.sent, [{ act: "answer" }]);
 });
 
+const REWARD_PROMPT = {
+  id: 4,
+  kind: "choice",
+  title: { k: "ask.pass_reward.title" },
+  text: { k: "" },
+  card: "",
+  options: [{ k: "ask.pass_reward.money" }, { k: "ask.pass_reward.card" }],
+  fallback: 0,
+  players: [0],
+  answers: [-1],
+  timeLeft: 10,
+  tile: -1,
+  bid: 0,
+  bidder: -1,
+  items: [],
+  count: 0,
+};
+
+function rewardView(money: number): MatchView {
+  return view({
+    state: state({ busy: true, players: [player({ money })], prompt: REWARD_PROMPT }),
+  });
+}
+
+test("driveSeat forces the card [pass-reward] above 80 000 without searching", async () => {
+  const h = hooks();
+  const outcome = await driveSeat(
+    async (_m, cmd) => {
+      h.sent.push(cmd);
+      return null;
+    },
+    () => rewardView(200_000),
+    1,
+    {
+      ...h,
+      pool: fakePool(async () => {
+        throw new Error("must not search");
+      }),
+    },
+  );
+  assert.equal(outcome, "heuristic");
+  assert.deepEqual(h.sent, [{ act: "answer", prompt: 4, value: 1 }]);
+});
+
+test("driveSeat still searches a mid-stack [pass-reward]", async () => {
+  const h = hooks();
+  const outcome = await driveSeat(
+    async (_m, cmd) => {
+      h.sent.push(cmd);
+      return null;
+    },
+    () => rewardView(50_000),
+    1,
+    { ...h, pool: fakePool(async () => okAnswer("answer")) },
+  );
+  assert.equal(outcome, "searched");
+  assert.deepEqual(h.sent, [{ act: "answer" }]);
+});
+
 test("driveSeat answers a reused ponder from the cache", async () => {
   const v = view();
   const h = hooks();

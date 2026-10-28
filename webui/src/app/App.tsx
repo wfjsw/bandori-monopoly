@@ -143,7 +143,10 @@ export function App() {
           <InspectPreviewHost />
           <ToastHost />
         </div>
-        <SourceOverlay />
+        {/* Boot has its own meter for the whole start-up (wasm, rules, tables,
+            art), so the overlay only belongs to a switch made after it: during
+            boot it would paint a second, coarser bar over Boot's own. */}
+        {booted && <SourceOverlay />}
       </Stage>
       <InstallHint />
       <RotateHint />

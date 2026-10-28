@@ -147,7 +147,7 @@ tilemark) and points on the card (mandated by the card rule)」):
 
 | step | clause | API |
 |---|---|---|
-| placement | 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 | 该清CP了 `ctx::send`s a message to `Target::Board("mark:cp")`; this owner's `On::Message` runs `ctx::place_mark(tile, mark::CP_KIND, mark::CP_CATEGORY, -1, src, 1, …)` -- the *where* is the placer's gate |
+| placement | 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 | 该清CP了 `ctx::send`s a message to `Target::Board("mark:cp")`; this owner's `On::Message` runs `ctx::place_mark(tile, bandori_std::mark::CP_KIND, bandori_std::mark::CP_CATEGORY, -1, src, 1, …)` -- the *where* is the placer's gate |
 | stacking | 「添加1个[CP点]」 onto a 「没有[CP点]的格子」 | one mark object per tile, `count` is the [CP点] there |
 | landing | 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | `On::Action(SettleBody)` on this instance -- spends **both** kinds |
 | removal | 「移除格子上的个[CP点]」 | `ctx::bump_mark` / `remove_marks` over `MarkFilter::any().category("cp")` (a tile-mark write) |

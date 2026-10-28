@@ -639,8 +639,8 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
         // counter, so they outlive any placer.
         w.place_mark(
             w.mark_owner_uid("mark:cp"),
-            card_sdk::abi::mark::CP_KIND,
-            card_sdk::abi::mark::CP_CATEGORY,
+            bandori_std::mark::CP_KIND,
+            bandori_std::mark::CP_CATEGORY,
             tile("CiRCLE") as i32,
             game_core::state::BOARD_OWNER,
             -1,
@@ -674,7 +674,7 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
     assert!(
         t.marks_on(tile("CiRCLE"))
             .iter()
-            .any(|m| m.category == card_sdk::abi::mark::CP_CATEGORY),
+            .any(|m| m.category == bandori_std::mark::CP_CATEGORY),
         "neutral CP marks stay: {:?}",
         t.marks_on(tile("CiRCLE"))
     );

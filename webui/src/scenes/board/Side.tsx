@@ -23,13 +23,14 @@ import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model } from "./model";
 import { byTitle, cardKeys, showDeck, showDeedList } from "./Popups";
+import { fieldMarkers } from "./markers";
 import { useCompactValue } from "../../app/Stage";
 import { designBox } from "../../app/stageScale";
 import { BOARD_MID, COMPACT_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
-import { counterLabel, stateLabel } from "../../i18n/stateLabel";
+import { stateLabel } from "../../i18n/stateLabel";
 import { namesOf } from "../../core/names";
 
 export const Side = memo(function Side({ sess }: { sess: GameSession }) {
@@ -82,26 +83,19 @@ type SkillSlot = {
 
 /**
  * The live markers a skill card carries, for its top-right corner: the field
- * instance's crystals, on-card CP and named counters, plus the player's
- * counter units bound to that instance (fire pots and the like when a skill
- * keeps them as its own counter). Zero counts are dropped. A name with no
- * display phrase is dropped too -- never printed as its wire key.
+ * instance's own markers (`markers.ts` -- crystals, CP, a countdown, named
+ * counters) plus the player's counter units bound to that instance (fire pots
+ * and the like when a skill keeps them as its own counter). Zero counts are
+ * dropped. A name with no display phrase is dropped too -- never printed as
+ * its wire key.
  */
 export function skillMarks(p: Model["S"]["players"][number] | undefined, id: string): { key: string; label: string; title: string }[] {
   const fc = p?.field?.find((c) => c.card === id);
   if (!p || !fc) return [];
-  const out: { key: string; label: string; title: string }[] = [];
-  const crystals = fc.counters["crystals"] ?? 0;
-  const cp = fc.counters["cp"] ?? 0;
-  if (crystals > 0) out.push({ key: "crystals", label: `◆${crystals}`, title: tr("board.crystals", { n: crystals }) });
-  if (cp > 0) out.push({ key: "cp", label: `CP${cp}`, title: tr("board.cp", { n: cp }) });
-  // Crystals and CP already have their own chips above; the walk is for the
-  // instance's *other* named counters, so the two are not listed twice.
-  for (const [name, n] of Object.entries(fc.counters ?? {})) {
-    if (n <= 0 || name === "crystals" || name === "cp") continue;
-    const label = counterLabel(name);
-    if (label) out.push({ key: `c:${name}`, label: `${label}×${n}`, title: `${label} ×${n}` });
-  }
+  // The instance's own markers, from the shared chip table (`markers.ts`) --
+  // here rendered as the skill card's own corner chips.
+  const out: { key: string; label: string; title: string }[] =
+    fieldMarkers(fc).map((mk) => ({ key: mk.key, label: mk.chip, title: mk.note }));
   for (const tok of p.tokens ?? []) {
     if (tok.instance !== fc.uid || tok.value <= 0) continue;
     const label = stateLabel(tok.name);

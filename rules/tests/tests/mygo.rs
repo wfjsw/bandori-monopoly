@@ -941,6 +941,8 @@ fn rain_day_places_five_crystals() {
     t.give_play(0, "MyGO:那天的雨").unwrap();
     assert!(t.on_field(0, "MyGO:那天的雨"), "{:?}", t.field_ids(0));
     assert_eq!(crystals(&t, 0, "MyGO:那天的雨"), 5);
+    // 「每回合结束时移除一个奇迹水晶」 -- 5 turn ends are marked.
+    assert_eq!(turns_left(&t, 0, "MyGO:那天的雨"), 5);
 }
 
 #[test]
@@ -992,6 +994,11 @@ fn rain_day_drains_one_crystal_per_turn_end() {
         4,
         "exactly one drained at this turn end"
     );
+    assert_eq!(
+        turns_left(&t, 0, "MyGO:那天的雨"),
+        4,
+        "the marker ticks down with the crystal"
+    );
 }
 
 // ---------------------------------------------------------------- MyGO:若能再次交汇
@@ -1036,6 +1043,7 @@ fn journey_places_on_tile_with_four_crystals() {
         t.field_ids(0)
     );
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 4);
+    assert_eq!(t.turns_left(0, "MyGO:哪怕这旅程没有终点"), 4, "⌛4 marker");
     let f = t
         .field(0)
         .into_iter()
@@ -1071,6 +1079,7 @@ fn journey_drains_when_move_exceeds_six() {
     drain(&mut t);
     t.end(0).unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 3, "one drained");
+    assert_eq!(t.turns_left(0, "MyGO:哪怕这旅程没有终点"), 3, "marker ticks");
 }
 
 #[test]
@@ -1084,6 +1093,11 @@ fn journey_no_drain_when_move_is_six_or_less() {
     drain(&mut t);
     t.end(0).unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 4, "6 is not >6");
+    assert_eq!(
+        t.turns_left(0, "MyGO:哪怕这旅程没有终点"),
+        4,
+        "a short main move does not tick the marker"
+    );
 }
 
 // ---------------------------------------------------------------- MyGO:难以复刻的奇迹

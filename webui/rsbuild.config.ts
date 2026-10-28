@@ -8,6 +8,10 @@ import { pluginBlurQuery } from "./plugins/pluginBlurQuery";
 // on :8090). `npm run build` writes dist/, which the server can serve.
 const api = process.env.BM_API ?? "http://127.0.0.1:8080";
 
+// The profile server of this deployment (directory + uploads). Fixed at build
+// time; empty = the page's own origin, which hosts the SPA.
+const profile = process.env.BM_PROFILE ?? "";
+
 // `BM_VDIAG=<file>` (dev server only): force the viewport readout on
 // (app/ViewportDiag) and append every reading a client posts to `/__vdiag` to
 // <file>, one JSON line each -- for collecting a real handset's screen
@@ -36,7 +40,10 @@ export default defineConfig({
   plugins: [pluginReact(), pluginBlurQuery()],
   source: {
     entry: { index: "./src/index.tsx" },
-    define: { "import.meta.env.BM_VDIAG": JSON.stringify(vdiagLog ? "1" : "") },
+    define: {
+      "import.meta.env.BM_VDIAG": JSON.stringify(vdiagLog ? "1" : ""),
+      "import.meta.env.BM_PROFILE": JSON.stringify(profile),
+    },
   },
   html: { template: "./index.html", title: "BanG Dream 大富翁" },
   server: {
@@ -46,6 +53,10 @@ export default defineConfig({
     proxy: {
       "/api": { target: api, changeOrigin: true },
       "/data": { target: api, changeOrigin: true },
+      // Rule builds of the dev game server; without this the SPA fallback
+      // answers them with HTML and the client wrongly "falls back" to the
+      // bundled rules.
+      "/builds": { target: api, changeOrigin: true },
     },
     // Registered here, ahead of the built-ins, so the history fallback never
     // answers the readout's POST.

@@ -135,6 +135,12 @@ export const api = {
    */
   animDone: (id: string, seq: number) => call<{ ok: true; released: boolean }>("POST", `/api/rooms/${id}/anim-done`, { seq }),
   /**
+   * This seat has the rolled turn order on screen. The order phase ends once
+   * every seat with a client has acked; a 4s cap covers the rest. Ignored
+   * when stale; never sent in replay / solo.
+   */
+  orderReady: (id: string) => call<{ ok: true; ready: boolean }>("POST", `/api/rooms/${id}/order-ready`, {}),
+  /**
    * The last finished match's `.bdrec` (docs/SERVER.md). The full record
    * reveals every hand, so the server answers 409 `err.record.live` while the
    * room is playing, 403 `err.record.forbidden` to anyone who was not in it,

@@ -35,7 +35,10 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         On::Filter(Filter::DiceRollPlan("card.placed && actor == owner && move.main && plan.fixed_roll == null", None, roll_plan)),
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「3个奇迹水晶」: the `⌛3` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"运动的天赋"#)
         .raw_name(r#"运动的天赋"#)
         .tags(&[])
@@ -73,8 +76,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 规则书: 「每回合结束时失去一个」 -- C# `DecayCard.TurnEnd` -> `AddCrystals(-1)`.
 /// `DecayOn` pinned it to the owner's turn; the cell does not say 你的 and
 /// every peer decay card ticks at every turn end, so `card.placed` alone is
-/// the pre. The 「为0时置入弃牌堆」 half is [`on_crystals_changed`].
+/// the pre. `R:Fire bird` reads the same phrase for every seat's turn end too.
+/// The 「为0时置入弃牌堆」 half is [`on_crystals_changed`].
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
+    // 「每回合结束时失去一个」 -- the tick.
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }
@@ -160,7 +166,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).

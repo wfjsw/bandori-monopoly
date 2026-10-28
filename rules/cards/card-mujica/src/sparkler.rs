@@ -26,7 +26,10 @@ pub const SPARKLER: CardDef = CardDef::new(
         // 规则书: 「最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]」
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「放置2个奇迹水晶」: the `⌛2` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 2)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"燃尽前的线香花火"#)
         .raw_name(r#"燃尽前的线香花火"#)
         .tags(&[])
@@ -67,6 +70,8 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // grant 「获得一个额外回合」 -- the 2 [眩晕] it hands out would otherwise
     // auto-skip that extra turn (`play.rs` `stunned` -> `end_turn`) and its
     // 「每回合结束时移除一层」 tick would eat one of the two, netting 1.
+    // 「你的回合结束后」 -- the tick.
+    ctx::dec_turns_left();
     let before = ctx::crystals();
     ctx::add_crystals(-1, 0)?;
     // TODO(规则书)（并使你获得一个额外回合）: 书 grants an extra turn on every turn-end
@@ -95,7 +100,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// Residual guard -- `card_is` is the real check; the `trigger::name()` test
 /// duplicates the condition's `counter_is('crystals')` (belt and braces).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

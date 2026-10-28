@@ -3,31 +3,11 @@
 //
 // The profile server is a *different service* from the game server. Its token
 // is used here only (uploads), and is never forwarded to a game server; the
-// game server has its own per-server session (`net/api.ts`). Its address is
-// separate too (`bm.profileServer`, `""` = this page's origin). Everything here
+// game server has its own per-server session (`net/api.ts`). Everything here
 // tolerates the service being absent: reads answer offline-shaped results and
 // writes answer `null`, never throw.
 
-/** Profile-server base URL; absent = this page's origin. */
-const PROFILE_BASE_KEY = "bm.profileServer";
 const PROFILE_TOKEN_PREFIX = "bm.profileToken:";
-
-function read(key: string): string {
-  try {
-    return localStorage.getItem(key) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function write(key: string, value: string): void {
-  try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
-  } catch {
-    /* private mode / quota */
-  }
-}
 
 /** Same address rules as a game server: http(s), no trailing slash. */
 function normalizeProfileBase(raw: string | null | undefined): string {
@@ -42,17 +22,14 @@ function normalizeProfileBase(raw: string | null | undefined): string {
   }
 }
 
-let base = normalizeProfileBase(read(PROFILE_BASE_KEY));
+/** Profile-server base URL. Fixed per deployment by `BM_PROFILE` at build time
+ *  (`""` = this page's origin, which serves this SPA); there is no in-app
+ *  setting -- a profile server is preconfigured and does not move. */
+const base = normalizeProfileBase(import.meta.env?.BM_PROFILE);
 
 /** The profile-server base URL (`""` = this page's origin). */
 export function profileBase(): string {
   return base;
-}
-
-/** Point at a profile server (or back at this origin with `null`/""). */
-export function setProfileBase(url: string | null): void {
-  base = normalizeProfileBase(url);
-  write(PROFILE_BASE_KEY, base);
 }
 
 /** A directory entry (`GET /api/servers`). */

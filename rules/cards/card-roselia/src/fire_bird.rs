@@ -70,6 +70,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // (C# `Card.Crystals` / `H.PlaceFromPlay(..., crystals)`), charged here.
     let n = x.max(1);
     ctx::set_crystals(n);
+    // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 -- the chosen X is
+    // also the remaining-turn count.
+    ctx::set_turns_left(n);
     ctx::log(
         player_id,
         &Msg::new(key!("fire_bird_placed"))
@@ -113,6 +116,11 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
 /// then `AddCrystals(-1)`; empty -> `H.Unplace(this, "discard")`). Runs through the
 /// Fx hook dispatch, so this is a field effect, not a [反击].
 fn turn_end(player_id: i32) -> card_sdk::Asked {
+    // 「每回合结束时」 -- the tick, before the burn.
+    // TODO(规则书): 「每回合结束时」 does not say whose. Read here as **every**
+    // seat's turn end (C# `DecayCard` had `DecayOn`), while `HHW:运动的天赋` /
+    // `Mujica:#J11` read the same phrase as the owner's only -- one is wrong.
+    ctx::dec_turns_left();
     // 规则书: 「每回合结束时失去400资金」 -- C# `H.LoseR(Seat, 400, "Fire bird")`.
     ctx::pay(
         player_id,
@@ -137,7 +145,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).

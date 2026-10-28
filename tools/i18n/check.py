@@ -50,6 +50,9 @@ DYNAMIC = (
     "skill.",
 )
 SPECIAL = ("blank", "list")  # message plumbing, not sentences
+# i18next plural suffixes: a `key_one` / `key_other` variant is used when a
+# `tr("key", { count })` call site uses `key`.
+PLURAL = re.compile(r"_(zero|one|two|few|many|other)$")
 # Tile-mark kinds: `TileMark::kind` **is** the i18n key (`trigger_why::mark_kind_name`
 # -> `Msg::new(kind)`), looked up at render time by fmtMsg, never referenced as a
 # message key in source. A colon is part of the key (`mark:cp`), not a namespace.
@@ -210,7 +213,9 @@ def main() -> int:
         report(lang, "game.json is missing run-time mark kinds", (k for k in RUNTIME_KEYS if k not in game))
         report(lang, "game.json has keys no code emits", (k for k in game if k not in engine_used and k not in RUNTIME_KEYS and k not in RETAINED_KEYS and not any(k.startswith(d) for d in DYNAMIC)))
         report(lang, "ui.json is missing keys the code emits", (k for k in ui_used if k not in ui))
-        report(lang, "ui.json has keys no code uses", (k for k in ui if k not in ui_used and k not in RETAINED_KEYS and not any(k.startswith(d) for d in DYNAMIC)))
+        # A plural variant (`key_one` / `key_other`, passed as i18next's `count`)
+        # is used when its base key is.
+        report(lang, "ui.json has keys no code uses", (k for k in ui if k not in ui_used and not PLURAL.sub("", k) in ui_used and k not in RETAINED_KEYS and not any(k.startswith(d) for d in DYNAMIC)))
 
     # card modules: key!(...) must exist in that crate's locale files
     for crate in sorted(ROOT.glob("rules/*/src/lib.rs")):

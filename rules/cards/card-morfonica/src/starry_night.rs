@@ -121,7 +121,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
         //   dispatch has no per-uid dedupe, so with two copies of this card on
         //   one field a single crystal removal runs both copies' payout.
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         // （3） pays for removals; （1） leaves when the count lands on 0.
         && (trigger::value() < 0 || ctx::crystals() == 0)
 }

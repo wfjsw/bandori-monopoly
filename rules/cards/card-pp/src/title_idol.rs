@@ -11,9 +11,9 @@
 //! text mentions 「奇迹水晶」.
 
 use bandori_std::ctx;
-use card_sdk::abi::counter;
+use bandori_std::counter;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{para, sec, steps, CardText};
+use card_sdk::{CardText, para, sec, steps};
 
 pub const TITLE_IDOL: CardDef =
     CardDef::new("PP:TITLE IDOL", &[On::Play("", None, title_idol)])

@@ -14,7 +14,8 @@
 
 use bandori_std::ctx::{self, state, trigger};
 use bandori_std::state_key;
-use card_sdk::abi::{counter, AbKind, ActionKind};
+use bandori_std::counter;
+use card_sdk::abi::{AbKind, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// Latch for 「每回合限一次」.

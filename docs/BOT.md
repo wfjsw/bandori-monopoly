@@ -965,6 +965,12 @@ per-counteract entry is the card's own spec (0 = hold it back); a card with no
 entry takes `counteract_propensity_milli`. Chaos is **not** parameterised: it
 keeps `CHAOS_RESERVE` / `CHAOS_COUNTER_CHANCE` as literals.
 
+The `[pass-reward]` card roll is not a book param either (web 托管 only, user
+ruling 2026-10-28): at or below 8 000 money the standard bot takes the 2 000
+print, the card odds then rise superlinearly (`t²`) to certain at 80 000, and
+above 80 000 the card is forced even over the engine's answer and the
+advanced search.
+
 **Book** (`data/strategy_book.json`, versioned like the deck book):
 - **Header:** `version`, `ruleset_sha256`, `policy` (standard), `generated_at`, `params_version`.
 - **Entries keyed by public information only**, with back-off, first hit wins:
@@ -1638,9 +1644,17 @@ advanced bot seats".
 
 - `Match::auto_vote` (new) answers for **every bot seat** (any mentality --
   standard, chaos, advanced; `p.ai || p.bot`) plus a human under 托管
-  (`apply_left`), and is used **only** by `tick_vote`. The policy is the
-  standard bot's: always **yes** (`answers[k] = 1`, matching `autopilot.ts`'s
+  (`apply_left`). The policy is the standard bot's: always **yes**
+  (`answers[k] = 1`, matching `autopilot.ts`'s
   `vote: () => ({ act: "vote", value: 1 })`).
+- Votes are cast by `Match::fill_auto_votes` -- **when the vote opens**
+  (`Match::vote`, alongside the proposal) and again on each `tick_vote` for a
+  seat that only becomes machine-driven mid-vote. Bots used to be filled only
+  by the tick loop, so a vote sat visibly pending for a beat, and any stopped
+  scheduler left it hanging until the timer killed it (2026-10-28: player
+  report "bot does not vote end of the game"). `bot_action` still returns
+  `None` on a live vote -- the vote surface is the scheduler's, not the
+  search's.
 - `Match::auto_player` is unchanged -- it stays the **prompt** auto-answer
   (`tick_live`, `ai` seats only), so an Advanced bot's prompts still wait for
   its external driver (`docs/BOT.md` B5).
@@ -1648,10 +1662,10 @@ advanced bot seats".
   by the engine) instead of dropping `ai` seats -- so the engine casts a
   standard bot's vote too, and the vote's player list shows the whole table.
 
-`unanimous_vote_ends_the_match` (engine.rs) now expects 3 voters in its
-2-human + 1-bot table and ticks once for the engine's vote;
-`an_advanced_bot_seat_gets_its_vote_cast_by_the_engine` pins the solo hang:
-the vote resolves on the next tick with no external answer. `sim -- 50 4 200`
+`unanimous_vote_ends_the_match` (engine.rs) expects 3 voters in its 2-human +
+1-bot table; `an_advanced_bot_seat_gets_its_vote_cast_by_the_engine` and
+`bots_agree_the_moment_the_vote_opens` pin that a bot seat's yes is already
+cast when the proposal returns, with no tick in between. `sim -- 50 4 200`
 counts are **unchanged** (standard-only sims never vote).
 
 **ckpt impact of the three rulings.** `ckpt_equiv -- 3 4 60` after the rulings

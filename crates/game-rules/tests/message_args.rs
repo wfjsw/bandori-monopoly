@@ -213,7 +213,7 @@ fn chain_kinds_and_counters_have_locale_text() {
 fn mark_kinds_have_locale_text() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../webui/src/i18n/locales");
     let kinds = [
-        card_sdk::abi::mark::CP_KIND,
+        bandori_std::mark::CP_KIND,
         card_sdk::abi::mark::DESIGNATE_KIND,
         card_sdk::abi::mark::NO_TARGET,
         // Ruleset kinds that are not ABI constants (events/skills/cards).

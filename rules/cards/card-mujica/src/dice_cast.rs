@@ -47,7 +47,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         On::Action(Action::TurnEndAfter("card.placed", None, turn_end)),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::SONG, 1), (bandori_std::marker::TURNS_LEFT, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"骰子已经掷下"#)
         .raw_name(r#"骰子已经掷下"#)
         .tags(&[r#"反击"#])
@@ -90,6 +90,8 @@ fn cast(player_id: i32) {
         return;
     }
     ctx::set_slot(player_id, PLACED, ctx::turn_key());
+    // 规则书: 「回合结束后放入弃牌堆」 -- it expires at the very next turn end
+    // (the `⌛1` face marker is the card's static `TURNS_LEFT` prop).
     ctx::place_card(player_id, ID, &Msg::new(key!("dice_cast_note")));
     // 规则书: 「本回合内所有其他玩家无法从手牌中使用[反击]」 -- the engine's
     // `can_counteract_now` honours `state_key::NO_COUNTERACT_TURN` as the

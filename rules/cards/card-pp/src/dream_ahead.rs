@@ -23,6 +23,7 @@
 
 use alloc::vec::Vec;
 
+use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind, CardPile, TriggerKind};
 use card_sdk::{it, items, para, sec, CardText};
@@ -164,7 +165,7 @@ fn overflow(player_id: i32) -> card_sdk::Asked {
 /// Residual guard for [`overflow`] -- scopes the listener to this card's own
 /// instance and the `crystals` counter.
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is("PP:梦在前方，结彩当下") && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is("PP:梦在前方，结彩当下") && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 /// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- both halves are

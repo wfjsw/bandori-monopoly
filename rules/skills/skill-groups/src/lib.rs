@@ -131,7 +131,7 @@ fn l11_cover(player_id: i32) -> i32 {
     let mut n = 0;
     for (uid, id) in bandori_std::ctx::field_instances(player_id) {
         if id == "Sumimi:#L11" {
-            n += bandori_std::ctx::counter_at(uid, card_sdk::abi::counter::CRYSTALS).max(0);
+            n += bandori_std::ctx::counter_at(uid, bandori_std::counter::CRYSTALS).max(0);
         }
     }
     n
@@ -156,11 +156,11 @@ pub fn spend_crystals(player_id: i32, n: i32) -> card_sdk::Asked {
             continue;
         }
         while left > 0 {
-            let have = bandori_std::ctx::counter_at(uid, card_sdk::abi::counter::CRYSTALS);
+            let have = bandori_std::ctx::counter_at(uid, bandori_std::counter::CRYSTALS);
             if have <= 0 {
                 break;
             }
-            bandori_std::ctx::add_counter_at(uid, card_sdk::abi::counter::CRYSTALS, -1, i32::MAX);
+            bandori_std::ctx::add_counter_at(uid, bandori_std::counter::CRYSTALS, -1, i32::MAX);
             left -= 1;
         }
     }

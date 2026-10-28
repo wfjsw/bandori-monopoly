@@ -31,6 +31,11 @@ import { t as tr } from "../../i18n/t";
 
 const modeChip = (mode: number): [string, string] => ([[tr("mode.solo"), "solo"], [tr("mode.casual"), "casual"], [tr("mode.ranked"), "ranked"]] as [string, string][])[mode] ?? [tr("mode.solo"), "solo"];
 
+/** How long the order strip's faces cycle locally before they settle. The
+ *  seat acks right after, and the server ends the phase on every seat's ack
+ *  (its 4s cap covers a hidden / closed tab). */
+const ORDER_REVEAL_MS = 550;
+
 export function Select({ sess }: { sess: GameSession }) {
   const { view, at } = useMatchView(sess);
   useTick(500);
@@ -103,6 +108,39 @@ export function Select({ sess }: { sess: GameSession }) {
     setPicked(home);
     preselect(home);
   }, [phase, picked, spectating, auto, home, preselect]);
+
+  // Turn-order reveal: each face cycles locally, settles on the server's roll,
+  // then this seat acks so the phase may end. The rolled faces are already
+  // final and every seat shows the same ones, so only the local animation is
+  // per-client -- the ack is the same on every screen.
+  const [faces, setFaces] = useState<number[] | null>(null);
+  const acked = useRef(false);
+  const seatCount = view?.state.players.length ?? 0;
+  useEffect(() => {
+    setFaces(null);
+    acked.current = false;
+    if (phase !== "order") return;
+    const final = (view?.state.players ?? []).map((p) => p.roll);
+    const roll = () => final.map((f) => (f > 0 ? 1 + Math.floor(Math.random() * 20) : 0));
+    setFaces(roll());
+    let elapsed = 0;
+    const step = window.setInterval(() => {
+      elapsed += 55;
+      if (elapsed < ORDER_REVEAL_MS) {
+        setFaces(roll());
+        return;
+      }
+      window.clearInterval(step);
+      setFaces(final);
+      if (acked.current) return;
+      acked.current = true;
+      void sess.orderReady();
+    }, 55);
+    return () => window.clearInterval(step);
+    // The effect keys on the phase *entering*: rolls are final by then and a
+    // view re-poll must not restart the reveal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, seatCount, sess]);
 
   if (!view) return null;
   const st = view.state;
@@ -204,6 +242,7 @@ export function Select({ sess }: { sess: GameSession }) {
               {st.players.map((x, i) => {
                 const c = D.persona(x.persona);
                 const turn = (st.phase === "ban" || st.phase === "pick") && st.turn === i;
+                const face = faces?.[i] ?? 0;
                 return (
                   <div key={i} className={cx(s.playerId, turn && s.turn)}>
                     <div className={s.av}>
@@ -211,7 +250,7 @@ export function Select({ sess }: { sess: GameSession }) {
                       <span className={s.n}>{i + 1}</span>
                       {x.bot && <span className={s.bot}><Icon name="smart_toy" /></span>}
                     </div>
-                    <div className={s.name}>{i === view.playerId ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && x.roll > 0 && <b> {x.roll}</b>}</div>
+                    <div className={s.name}>{i === view.playerId ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && face > 0 && <b> {face}</b>}</div>
                     {st.mode === 2 && x.ban && <div className={s.ban}>{tr("select.banMark", { name: D.persona(x.ban)?.display ?? "" })}</div>}
                   </div>
                 );

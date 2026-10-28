@@ -401,6 +401,18 @@ impl MatchHandle {
         )
     }
 
+    /// Seat `member`'s client has the rolled turn order on screen. The order
+    /// phase ends when every seat with a client has acked (4s cap otherwise).
+    /// Recorded as [`Input::OrderReady`] so replays reproduce the shortened
+    /// phase. Returns whether the ack registered (a repeat / stale ack does
+    /// not).
+    pub fn order_ready(&self, member: i32) -> Result<bool, String> {
+        self.run(
+            |_| Input::OrderReady { m: member },
+            |s, e| e.order_ready(s, member),
+        )
+    }
+
     /// One member's view frame. `need_extras` = the caller wants the
     /// per-viewer `view_extra` fields (the bot service does; a human client
     /// computes them itself from the seat view).

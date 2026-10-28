@@ -170,6 +170,9 @@ fn drew(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     store_held(id.as_str());
+    // 规则书（2）: 「那名玩家的每个回合开始时移除一个」 -- 3 own turn starts
+    // before the return.
+    ctx::set_turns_left(3);
     // 规则书（2）: 「并为其放置3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(
@@ -188,6 +191,8 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     if ctx::counter(HELD_LEN) <= 0 {
         return Ok(());
     }
+    // 「那名玩家的每个回合开始时移除一个」 -- the tick.
+    ctx::dec_turns_left();
     // C# `AddCrystals(-1, "回合开始")`.
     let left = ctx::add_crystals(-1, 0)?;
     if left > 0 {

@@ -25,7 +25,10 @@ pub const EXIST: CardDef = CardDef::new(
         // 规则书: 「你的下回合开始时将其翻入弃牌堆」
         On::Action(Action::TurnStart("", Some(turn_start_guard), turn_start)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「直到自己的下一回合开始」: the `⌛1` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"EXIST"#)
         .raw_name(r#"EXIST"#)
         .tags(&[])
@@ -44,6 +47,8 @@ fn exist(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于自己场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("exist_note")));
+    // 规则书: 「直到自己的下一回合开始…你的下回合开始时将其翻入弃牌堆」 -- one
+    // turn start away (the `⌛1` face marker is the static `TURNS_LEFT` prop).
     ctx::set_prop(PROP_USED, 0);
     ctx::log(
         player_id,

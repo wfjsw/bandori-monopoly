@@ -76,7 +76,10 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书（1）「3个[奇迹水晶]」: the `⌛3` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)
         .raw_name(r#"笑容大游行"#)
         .tags(&[r#"反击"#, r#"持续"#])
@@ -133,6 +136,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
 /// [`on_crystals_changed`].
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // 「你的每回合结束时移除一个」 -- the tick.
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }
@@ -156,7 +161,7 @@ fn on_group() -> bool {
 /// and the counter name stay here (the name is not yet in the condition
 /// vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS && on_group()
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS && on_group()
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
@@ -344,6 +349,9 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
     if n > 0 {
         ctx::add_crystals(-n, i32::MAX)?;
     }
+    // 「移除其上全部奇迹水晶」: the (1) countdown is spent with them, so the
+    // face's `⌛N` goes too.
+    ctx::set_turns_left(0);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_moved")).tile("tile", to),

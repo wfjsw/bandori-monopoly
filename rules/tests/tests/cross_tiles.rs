@@ -663,6 +663,11 @@ fn t13_smile_parade() {
                 Some(3),
                 "（1） charges the card with 3 crystals"
             );
+            assert_eq!(
+                t.turns_left(0, "HHW:笑容大游行"),
+                3,
+                "（1） shows the ⌛3 decay marker"
+            );
             placed_with_three = true;
         } else if let Some(k) = t.option("ask.yes") {
             // Accept (2): 「可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」.
@@ -682,6 +687,11 @@ fn t13_smile_parade() {
         f.counters.get("crystals").copied().unwrap_or(0),
         0,
         "(2) clears the crystals"
+    );
+    assert_eq!(
+        f.props.get("turnsLeft").copied().unwrap_or(-1),
+        0,
+        "(2) also clears the ⌛ marker with them"
     );
     eprintln!(
         "t13 swap record: card tile = {} (end {}), crystals = {}",

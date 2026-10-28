@@ -27,9 +27,11 @@
 //! spends both kinds.
 
 use alloc::vec::Vec;
+use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{counter, mark, ActionKind, MarkFilter, Message, Target, TriggerKind};
-use card_sdk::{it, items, para, sec, CardText};
+use bandori_std::mark;
+use card_sdk::abi::{ActionKind, MarkFilter, Message, Target, TriggerKind};
+use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CLEAR_CP: CardDef = CardDef::new(
