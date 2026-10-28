@@ -181,7 +181,7 @@ use std::borrow::Cow;
 ///    玩家一起执行」 (sakiko_lead): the move's result is replayed for each
 ///    follower after the mover settles, in the recorded order (「你先触发结算，
 ///    此后其他玩家按行动顺序依次触发结算」).
-/// v36: [CP点] is its own tile-mark category (`mark::CP_CATEGORY` / `mark::CP_KIND`),
+/// v36: [CP点] is its own tile-mark category (`bandori_std::mark::CP_CATEGORY` / `CP_KIND`),
 ///    owned by the `mark:cp` rule instance on the neutral board owner and never
 ///    by a player. The small writer API is `ctx::place_cp` / `ctx::count_cp` /
 ///    `ctx::clear_cp` plus the attached counts (`ctx::count_cp_from` per tile,
@@ -1075,18 +1075,11 @@ pub mod state_key {
     // rule instance (`docs/TILES.md`).
 }
 
+/// Mark machinery. The ruleset's own category / kind ids live in
+/// `bandori_std::mark`, not here.
 pub mod mark {
     /// Carrying tiles cannot be named as a target (`target_tile` answers -1).
     pub const NO_TARGET: &str = "noTarget";
-
-    /// Tile-mark **category**: [CP点], 「放置于路面上的指示物」
-    /// (`data/rules.txt` 125). Mirrors `game_core::state::mark_category::CP`.
-    /// The tile [CP点] are units of the standing `mark:cp` pseudo card's
-    /// `bandori_std::counter::CP` counter, bound to tiles.
-    pub const CP_CATEGORY: &str = "cp";
-    /// The [CP点] mark's stable `kind`. Mirrors
-    /// `game_core::state::mark_kind::CP`.
-    pub const CP_KIND: &str = "mark:cp";
 
     /// Tile-mark **category**: a [指定] of one or more tiles by a field card /
     /// skill while it is in play (「指定…格子 / 地契 / 地块」). The mark is owned

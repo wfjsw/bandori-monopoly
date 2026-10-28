@@ -45,6 +45,8 @@ pub use card_sdk::msg::Msg as __Msg;
 /// vocabulary in [`marker::counter`].
 pub use marker::counter;
 
+/// Tile-[CP点] mark category / kind ids.
+pub mod mark;
 /// Card-face marker vocabulary: the counter names, the countdown prop and its
 /// helpers, and the display row of each marker kind (`docs/DISPLAY.md`).
 pub mod marker;

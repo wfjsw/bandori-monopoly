@@ -1001,7 +1001,7 @@ fn place_cp(_owner: i32) -> Asked {
     // (`message::sender_seat()` is the host's `turn_player()`).
     let who = ctx::message::seat();
     ctx::place_mark(
-        tile, mark::CP_KIND, mark::CP_CATEGORY,
+        tile, bandori_std::mark::CP_KIND, bandori_std::mark::CP_CATEGORY,
         /* owner */ -1, src, count,
         &Msg::new("log.cp_place")
             .player_id("who", who)
@@ -1018,11 +1018,11 @@ fn on_land(_owner: i32) -> Asked {
     let tile = trigger::tile();
     let src = ctx::mark_src_at(
         tile,
-        &MarkFilter::any().category(mark::CP_CATEGORY),
+        &MarkFilter::any().category(bandori_std::mark::CP_CATEGORY),
     );
     ctx::bump_mark(
         tile,
-        &MarkFilter::any().category(mark::CP_CATEGORY),
+        &MarkFilter::any().category(bandori_std::mark::CP_CATEGORY),
         -1,
     );
     // 「自己[场上]1个[CP点]」 -- the placer's on-card stock

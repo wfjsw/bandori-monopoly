@@ -15,9 +15,10 @@
 //! the tile (which mandated by tilemark) and points on the card (mandated by
 //! the card rule)」):
 //!
-//! * **Tile [CP点]** -- the `TileMark`s of category [`card_sdk::abi::mark::
-//!   CP_CATEGORY`], owned by this rule instance. That is what `data/rules.txt`
-//!   125 defines (「放置于路面上的指示物」) and what the board sees.
+//! * **Tile [CP点]** -- the `TileMark`s of category
+//!   [`bandori_std::mark::CP_CATEGORY`], owned by this rule instance. That is
+//!   what `data/rules.txt` 125 defines (「放置于路面上的指示物」) and what the
+//!   board sees.
 //! * **On-card [CP点]** -- the named counter [`bandori_std::counter::CP`] on
 //!   the 该清CP了 card instance, the card rule's own stock
 //!   (`rules/cards/card-general/src/clear_cp.rs`). This rule only *spends* it
@@ -73,9 +74,10 @@
 //!   here takes the settler. (C# paid `Seat`, but its `m.Seat == Seat` gate
 //!   made settler and card controller the same player.)
 
-use bandori_std::ctx::{self, trigger};
 use bandori_std::counter;
-use card_sdk::abi::{mark, ActionKind, MarkFilter};
+use bandori_std::ctx::{self, trigger};
+use bandori_std::mark;
+use card_sdk::abi::{ActionKind, MarkFilter};
 use card_sdk::{Action, CardDef, Msg, On};
 
 /// The board-owned [CP点] rule. One instance on [`BOARD_OWNER`], governing no
