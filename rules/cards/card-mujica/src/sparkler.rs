@@ -25,7 +25,7 @@ pub const SPARKLER: CardDef = CardDef::new(
     ],
 )
 // 规则书「放置2个奇迹水晶」: the `⌛2` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 2)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"燃尽前的线香花火"#)
         .raw_name(r#"燃尽前的线香花火"#)
@@ -90,7 +90,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// Residual guard -- `card_is` + the counter name stay here (the name is not
 /// yet in the condition vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

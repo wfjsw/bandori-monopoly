@@ -1,31 +1,23 @@
-// What a card face prints in its marker zone: one row per marker kind, in
-// print order, each with its own glyph, styling and sentence.
+// What a card face prints in its marker zone.
 //
-// Adding a marker kind is a row in `MARKER_KINDS` -- nothing else. The face,
-// the live note, the popups, the player marker list and the skill chips all
-// render the plan built here and none of them knows a kind.
+// The kinds are **rules data**: one row per marker in
+// `bandori_std::marker::MARKERS` (`rules/bandori-std/src/marker.rs`), exported
+// through `generated/display.json` (`docs/DISPLAY.md`). This module hardcodes
+// no kind -- it turns rows + an instance's numbers into a print plan. Adding a
+// marker is a rules edit; only a new style tone also needs a CSS class.
+//
+// The face, the live note, the popups, the player marker list and the skill
+// chips all render the plan built here and none of them knows a kind.
 //
 // The module holds no i18n runtime (so it is testable under `node --test`):
 // a text slot is either a `tr` key (resolved by `markers.ts`) or a literal
 // template with `{n}` / `{name}` placeholders.
 
-/** CSS class (in `FieldSheet.module.css`) a chip of this kind wears. */
+/** CSS class (in `FieldSheet.module.css`) a chip tone wears. */
 export type ChipClass = "turns" | "count" | "crystal" | "cp";
 
-export type MarkerKind = "turns" | "counter" | "counter2" | "crystals" | "cp" | "named";
-
-export interface PlannedMarker {
-  /** Stable render key: the kind, or `c:<name>` for a named counter. */
-  key: string;
-  kind: MarkerKind;
-  /** The number the marker counts. */
-  n: number;
-  cls: ChipClass;
-  /** A countdown is dropped when another marker already carries its number. */
-  countdown: boolean;
-  /** Display name, for a named counter. */
-  name?: string;
-}
+/** Where a marker's count is read from on the instance. */
+export type MarkerSource = "prop" | "counter";
 
 /** One text slot: a `tr` key, or a literal template. */
 export interface TextSlot {
@@ -33,49 +25,41 @@ export interface TextSlot {
   text?: string;
 }
 
-/** One marker kind: how it is written, styled and described. */
-export interface MarkerKindDef {
-  kind: MarkerKind;
-  cls: ChipClass;
-  countdown?: boolean;
+/** One exported marker row (`bandori_std::marker::MarkerDef`). */
+export interface MarkerDef {
+  /** The counter / prop name this row describes; absent on the fallback row. */
+  key?: string;
+  source: MarkerSource;
+  /** Style tone. */
+  tone: ChipClass;
   /** Glyph on the face. `{n}` = the count, `{name}` = a named counter. */
   glyph: string;
-  /** Sentence for the live note and the chip's tooltip. */
+  /** Sentence for the chip's tooltip and the live note. */
   note: TextSlot;
   /** Label the player marker list pairs with the card name. */
   label: TextSlot;
+  /** A countdown is dropped when another marker already carries its number. */
+  countdown?: boolean;
+  /** Takes every counter no other row covers. */
+  fallback?: boolean;
 }
 
-/** Face order: the countdown, then the unnamed counters, then the named ones. */
-const MARKER_KINDS: MarkerKindDef[] = [
-  {
-    kind: "turns",
-    cls: "turns",
-    countdown: true,
-    glyph: "⌛{n}",
-    note: { key: "board.turnsLeft" },
-    label: { key: "board.turnsLabel" },
-  },
-  { kind: "counter", cls: "count", glyph: "×{n}", note: { text: "×{n}" }, label: { text: "×{n}" } },
-  { kind: "crystals", cls: "crystal", glyph: "◆{n}", note: { key: "board.crystals" }, label: { key: "board.crystalsLabel" } },
-  { kind: "cp", cls: "cp", glyph: "CP{n}", note: { key: "board.cp" }, label: { text: "CP" } },
-  {
-    kind: "named",
-    cls: "count",
-    glyph: "{name}×{n}",
-    note: { text: "{name} ×{n}" },
-    label: { text: "{name}" },
-  },
-];
-
-/** A kind's definition. */
-export const MARKER_KIND: Record<MarkerKind, MarkerKindDef> = Object.fromEntries(
-  MARKER_KINDS.map((k) => [k.kind, k]),
-) as Record<MarkerKind, MarkerKindDef>;
+export interface PlannedMarker {
+  /** Stable render key: the row's key, or `c:<name>` for a named counter. */
+  key: string;
+  /** The row this marker was planned from (glyph / tone / sentences). */
+  def: MarkerDef;
+  /** The number the marker counts. */
+  n: number;
+  /** A countdown is dropped when another marker already carries its number. */
+  countdown: boolean;
+  /** Display name, for a named counter. */
+  name?: string;
+}
 
 /** Fill a glyph template (`{n}` / `{name}`). */
-export function glyphOf(kind: MarkerKind, n: number, name?: string): string {
-  return MARKER_KIND[kind].glyph.replaceAll("{n}", `${n}`).replaceAll("{name}", name ?? "");
+export function glyphOf(def: MarkerDef, n: number, name?: string): string {
+  return def.glyph.replaceAll("{n}", `${n}`).replaceAll("{name}", name ?? "");
 }
 
 /** Whether a `⌛N` countdown should print: a number is scheduled to end and no
@@ -87,41 +71,41 @@ export function showTurnsChip(n: number, ...others: number[]): boolean {
 
 /** Numbers a card instance can carry, whatever surface it lives on. */
 export interface Counts {
-  turnsLeft?: number;
-  counter?: number;
-  counter2?: number;
-  crystals?: number;
-  cp?: number;
-  /** The instance's other named counters, in map order. */
-  named?: [string, number][];
+  /** The instance's numeric props (the countdown lives here). */
+  props?: Record<string, number>;
+  /** The instance's counters, keyed by counter name. */
+  counters?: Record<string, number>;
 }
 
 /**
- * The face's markers. `nameOf` resolves a named counter to its display phrase;
- * an unresolved one is dropped, never printed as its wire key. A countdown
- * another marker already carries (the crystal count a decay removes, a phase
- * counter) is not printed a second time.
+ * The face's markers, in row order. Each row reads its own `source` + `key`;
+ * the fallback row takes every positive counter no row covers, labelled by
+ * `nameOf` (an unresolved counter is dropped, never printed as its wire key).
+ * A countdown another marker already carries (the crystal count a decay
+ * removes, a phase counter) is not printed a second time.
  */
-export function planMarkers(c: Counts, nameOf: (name: string) => string | undefined): PlannedMarker[] {
+export function planMarkers(
+  defs: MarkerDef[],
+  c: Counts,
+  nameOf: (name: string) => string | undefined,
+): PlannedMarker[] {
   const out: PlannedMarker[] = [];
-  const add = (kind: MarkerKind, n: number, key: string = kind, name?: string) => {
-    out.push({ key, kind, n, cls: MARKER_KIND[kind].cls, countdown: MARKER_KIND[kind].countdown ?? false, name });
+  const push = (def: MarkerDef, key: string, n: number, name?: string) => {
+    out.push({ key, def, n, countdown: def.countdown ?? false, name });
   };
-  const addIfAny = (kind: MarkerKind, n: number | undefined, key?: string) => {
-    if (n !== undefined && n > 0) add(kind, n, key);
-  };
+  const covered = new Set(defs.flatMap((d) => (d.key ? [d.key] : [])));
 
-  addIfAny("turns", c.turnsLeft);
-  // `counter2` shares the generic-counter row; it is a second unnamed pool.
-  addIfAny("counter", c.counter);
-  addIfAny("counter", c.counter2, "counter2");
-  addIfAny("crystals", c.crystals);
-  addIfAny("cp", c.cp);
-
-  for (const [name, n] of c.named ?? []) {
-    if (n <= 0 || name === "crystals" || name === "cp") continue;
-    const label = nameOf(name);
-    if (label) add("named", n, `c:${name}`, label);
+  for (const def of defs) {
+    if (def.fallback) {
+      for (const [name, n] of Object.entries(c.counters ?? {})) {
+        if (n <= 0 || covered.has(name)) continue;
+        const label = nameOf(name);
+        if (label) push(def, `c:${name}`, n, label);
+      }
+      continue;
+    }
+    const n = (def.source === "prop" ? c.props : c.counters)?.[def.key ?? ""];
+    if (n !== undefined && n > 0) push(def, def.key ?? "", n);
   }
 
   return out.filter((m) => !m.countdown || showTurnsChip(m.n, ...out.filter((o) => o !== m).map((o) => o.n)));

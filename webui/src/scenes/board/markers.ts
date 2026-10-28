@@ -1,14 +1,15 @@
 // Render a marker plan (`markerKinds.ts`) as display strings.
 //
-// The kinds, their order and their glyphs live in the marker table; this file
-// only resolves a text slot to its sentence -- a `tr` key here, a literal
+// The rows, their order and their glyphs are rules data (`markerDefs.ts`); this
+// file only resolves a text slot to its sentence -- a `tr` key here, a literal
 // template as-is. Every surface (face, live note, popups, marker list, skill
 // chips) renders the same `Marker[]`.
 
 import { counterLabel } from "../../i18n/stateLabel";
 import { t as tr } from "../../i18n/t";
 import type { ActiveEvent, FieldCard } from "../../core/types";
-import { glyphOf, MARKER_KIND, planMarkers, type PlannedMarker, type TextSlot } from "./markerKinds";
+import { MARKER_DEFS } from "./markerDefs";
+import { glyphOf, planMarkers, type PlannedMarker, type TextSlot } from "./markerKinds";
 
 export { showTurnsChip } from "./markerKinds";
 
@@ -21,7 +22,7 @@ function text(slot: TextSlot, n: number, name?: string): string {
   return (slot.text ?? "").replaceAll("{n}", `${n}`).replaceAll("{name}", name ?? "");
 }
 
-/** A planned marker plus the three strings the UI prints for it. */
+/** A planned marker plus the strings the UI prints for it. */
 export interface Marker extends PlannedMarker {
   chip: string;
   note: string;
@@ -29,36 +30,28 @@ export interface Marker extends PlannedMarker {
 }
 
 function build(planned: PlannedMarker[]): Marker[] {
-  return planned.map((m) => {
-    const def = MARKER_KIND[m.kind];
-    return {
-      ...m,
-      chip: glyphOf(m.kind, m.n, m.name),
-      note: text(def.note, m.n, m.name),
-      label: text(def.label, m.n, m.name),
-    };
-  });
+  return planned.map((m) => ({
+    ...m,
+    chip: glyphOf(m.def, m.n, m.name),
+    note: text(m.def.note, m.n, m.name),
+    label: text(m.def.label, m.n, m.name),
+  }));
 }
+
+/** The prop name the exported countdown row reads (an event row has no props
+ *  map; its `turnsLeft` is a top-level field). */
+const COUNTDOWN_KEY = MARKER_DEFS.find((d) => d.countdown)?.key;
 
 /** The markers of one placed card. */
 export function fieldMarkers(fc: FieldCard): Marker[] {
-  const counters = fc.counters ?? {};
-  return build(
-    planMarkers(
-      {
-        turnsLeft: fc.props?.turnsLeft,
-        crystals: counters["crystals"],
-        cp: counters["cp"],
-        named: Object.entries(counters),
-      },
-      nameOf,
-    ),
-  );
+  return build(planMarkers(MARKER_DEFS, { props: fc.props, counters: fc.counters ?? {} }, nameOf));
 }
 
-/** The markers of one active event (its `counter` is the mirrored crystals). */
+/** The markers of one active event (its `counter` / `counter2` are unnamed
+ *  engine pools, which the counter rows print). */
 export function eventMarkers(e: ActiveEvent): Marker[] {
-  return build(planMarkers({ turnsLeft: e.turnsLeft, counter: e.counter, counter2: e.counter2 }, nameOf));
+  const props = COUNTDOWN_KEY && e.turnsLeft !== undefined ? { [COUNTDOWN_KEY]: e.turnsLeft } : undefined;
+  return build(planMarkers(MARKER_DEFS, { props, counters: { counter: e.counter, counter2: e.counter2 } }, nameOf));
 }
 
 /** The live-note text for a card: its own note, then every marker sentence. */

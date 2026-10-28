@@ -25,7 +25,7 @@ pub const THAT_DAY_RAIN: CardDef = CardDef::new(
     ],
 )
 // 规则书「放置5个奇迹水晶」: the `⌛5` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 5)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 5)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"那天的雨"#)
         .raw_name(r#"那天的雨"#)
@@ -146,7 +146,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).

@@ -28,7 +28,7 @@
 //! `mark:cp` is that standing owner for [CP点]. Under the ruling:
 //!
 //! * The **tile** [CP点] (「放置于路面上的指示物」) are units of `mark:cp`'s own
-//!   named counter [`card_sdk::abi::counter::CP`], bound to tiles. They live
+//!   named counter [`bandori_std::counter::CP`], bound to tiles. They live
 //!   as long as the match does -- `mark:cp` is present for the whole game and
 //!   is associated with nobody.
 //! * **Provenance** (`TileMark.src`) is the 该清CP了 instance that placed them

@@ -34,7 +34,7 @@ pub const J11: CardDef = CardDef::new(
     ],
 )
 // 规则书「添加2个[奇迹水晶]」: the `⌛2` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 2)])
 .meta(&card_sdk::meta::CardMeta::new()
         // sheet cell J11 -- the name line is blank; `#J11` is the name.
         .name("#J11")
@@ -165,7 +165,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).

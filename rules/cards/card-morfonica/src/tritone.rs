@@ -25,7 +25,7 @@ pub const TRITONE: CardDef = CardDef::new(
     ],
 )
 // 规则书「奇迹水晶3」: the `⌛3` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫之蝶们的三全音"#)
         .raw_name(r#"迷茫之蝶们的三全音"#)

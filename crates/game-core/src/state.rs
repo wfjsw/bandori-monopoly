@@ -441,7 +441,7 @@ pub mod prop {
     /// turn boundary; the card still owns the expiry (this counter never drives
     /// it). The client renders it as `⌛N` -- a field card's prop, or
     /// [`ActiveEvent::turns_left`] for an event instance. `0` / absent = no
-    /// marker. Mirrors `card_sdk::abi::prop::TURNS_LEFT`.
+    /// marker. Mirrors `bandori_std::marker::TURNS_LEFT`.
     pub const TURNS_LEFT: &str = "turnsLeft";
 
     // ---------------------------------------------------------- tile data

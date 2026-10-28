@@ -23,7 +23,7 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 /// count emptied by *any* write leaves the field just the same.
 ///
 /// Migrated to CEL: the former Rust residual guard (`trigger::card_is(ID) &&
-/// trigger::name() == card_sdk::abi::counter::CRYSTALS`) is folded into this
+/// trigger::name() == bandori_std::counter::CRYSTALS`) is folded into this
 /// pre as `trigger_card == card.id && counter_is('crystals')`. The cond
 /// vocabulary has no `card_is` function; `trigger_card` / `card.id` are the
 /// same `id_of` hashes and this entry only runs as this card, so the
@@ -60,7 +60,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
     ],
 )
 // 规则书(1) 「3个奇迹水晶」: the `⌛3` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)
         .raw_name(r#"（摩卡）0.5倍速"#)

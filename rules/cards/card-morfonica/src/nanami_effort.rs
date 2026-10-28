@@ -185,7 +185,7 @@ fn gain_circle_money(player_id: i32) -> card_sdk::Asked {
 /// 规则书（4）: 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the exhaustion half of
 /// effect (3). Residual guard: this card's own crystals counter hit 0.
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

@@ -36,7 +36,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         On::Action(Action::TurnEndAfter("actor == owner && card.placed", None, turn_end)),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1), (card_sdk::abi::prop::TURNS_LEFT, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(card_sdk::abi::prop::SONG, 1), (bandori_std::marker::TURNS_LEFT, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"骰子已经掷下"#)
         .raw_name(r#"骰子已经掷下"#)
         .tags(&[r#"反击"#])

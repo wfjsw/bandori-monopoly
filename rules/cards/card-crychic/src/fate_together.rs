@@ -24,7 +24,7 @@ pub const FATE_TOGETHER: CardDef = CardDef::new(
     ],
 )
 // 规则书（1）「直到你的下回合开始」: the `⌛1` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 1)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 1)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一起演奏音乐的命运共同体"#)
         .raw_name(r#"一起演奏音乐的命运共同体"#)

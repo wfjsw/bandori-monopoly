@@ -18,12 +18,19 @@
 //!                                     "cnId": "..." } },
 //!   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
 //!                                     "logo": "..." } },
-//!   "events":   { "<eventId>":     { "name": "...", "text": "..." } }
+//!   "events":   { "<eventId>":     { "name": "...", "text": "..." } },
+//!   "markers":  [ { "key": "turnsLeft", "source": "prop", "tone": "turns",
+//!                   "glyph": "⌛{n}", "countdown": true,
+//!                   "note": { "key": "board.turnsLeft" },
+//!                   "label": { "key": "board.turnsLabel" } } ]
 //! }
 //! ```
 //!
 //! * camelCase keys; empty / absent fields are omitted (so only [反击] cards
 //!   carry `counterReason`).
+//! * `markers` is `bandori_std::marker::MARKERS` verbatim (print order =
+//!   array order); a fallback row has no `key` and takes every counter no
+//!   other row covers.
 //! * Event keys are the **bare** event id (`对邦`), not the `event:` rule-id
 //!   prefix. `derived` is engine data and is not exported.
 //! * `counterReason` is read from the card's [`On::counter_reason_key`] -- the
@@ -102,6 +109,7 @@ fn display_json() -> String {
     root.insert("personas".into(), Value::Object(personas_map()));
     root.insert("groups".into(), Value::Object(groups_map()));
     root.insert("events".into(), Value::Object(events_map()));
+    root.insert("markers".into(), Value::Array(markers_array()));
     let mut s = serde_json::to_string_pretty(&Value::Object(root)).unwrap();
     s.push('\n');
     s
@@ -193,6 +201,52 @@ fn groups_map() -> JsonMap {
     map
 }
 
+/// `bandori_std::marker::MARKERS` as an ordered array: the card-face marker
+/// rows, print order = array order. The client renders a face from these and
+/// knows no marker kind itself.
+fn markers_array() -> Vec<Value> {
+    use bandori_std::marker::{Source, MARKERS};
+
+    MARKERS
+        .iter()
+        .map(|d| {
+            let mut row = JsonMap::new();
+            insert_str(&mut row, "key", d.key);
+            row.insert(
+                "source".into(),
+                Value::String(match d.source {
+                    Source::Prop => "prop".into(),
+                    Source::Counter => "counter".into(),
+                }),
+            );
+            insert_str(&mut row, "tone", d.tone);
+            insert_str(&mut row, "glyph", d.glyph);
+            row.insert("note".into(), Value::Object(text_slot(d.note)));
+            row.insert("label".into(), Value::Object(text_slot(d.label)));
+            if d.countdown {
+                row.insert("countdown".into(), Value::Bool(true));
+            }
+            if d.fallback {
+                row.insert("fallback".into(), Value::Bool(true));
+            }
+            Value::Object(row)
+        })
+        .collect()
+}
+
+/// One text slot: `{ "key": … }` (a locale key the client resolves) or
+/// `{ "text": … }` (a literal template).
+fn text_slot(slot: bandori_std::marker::TextSlot) -> JsonMap {
+    use bandori_std::marker::TextSlot;
+
+    let mut o = JsonMap::new();
+    match slot {
+        TextSlot::Key(k) => o.insert("key".into(), Value::String(k.into())),
+        TextSlot::Lit(s) => o.insert("text".into(), Value::String(s.into())),
+    };
+    o
+}
+
 /// Omit empty / absent fields.
 fn insert_str(row: &mut JsonMap, key: &str, value: &str) {
     if !value.is_empty() {
@@ -254,7 +308,10 @@ fn insert_body(row: &mut JsonMap, text: &card_sdk::text::CardText) {
                             io.insert(
                                 "sub".into(),
                                 Value::Array(
-                                    it.sub.iter().map(|s| Value::String(s.to_string())).collect(),
+                                    it.sub
+                                        .iter()
+                                        .map(|s| Value::String(s.to_string()))
+                                        .collect(),
                                 ),
                             );
                         }

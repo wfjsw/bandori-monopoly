@@ -27,7 +27,7 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
 )
 // 规则书[手]「放置4个奇迹水晶」: the `⌛4` marker the client shows. It only
 // ticks on the long-move clause, so `N` here is long moves left, not turns.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 4)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 4)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"哪怕这旅程没有终点"#)
         .raw_name(r#"哪怕这旅程没有终点"#)
@@ -82,7 +82,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// Residual guard -- `card_is` + the counter name stay here (the name is not
 /// yet in the condition vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

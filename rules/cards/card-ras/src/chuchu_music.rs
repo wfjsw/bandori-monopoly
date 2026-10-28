@@ -26,7 +26,7 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
     ],
 )
 // 规则书「添加3个奇迹水晶」: the `⌛3` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"演奏我的音乐吧"#)
         .raw_name(r#"（chuchu）演奏我的音乐吧"#)

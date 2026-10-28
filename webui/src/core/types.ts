@@ -78,6 +78,14 @@ export interface DisplayFile {
   events?: Record<string, {
     name?: string; text?: string; body?: Block[];
   }>;
+  /** Card-face marker rows (`bandori_std::marker::MARKERS`), in print order.
+   *  `source` is the instance field the count is read from; `tone` is the chip
+   *  style class; `note` / `label` are a `tr` key or a literal template. */
+  markers?: {
+    key?: string; source: "prop" | "counter"; tone: string; glyph: string;
+    note: { key?: string; text?: string }; label: { key?: string; text?: string };
+    countdown?: boolean; fallback?: boolean;
+  }[];
 }
 
 export interface MatchPlayer {

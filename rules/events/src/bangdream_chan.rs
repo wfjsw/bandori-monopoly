@@ -26,7 +26,7 @@ pub const BANGDREAM_CHAN: CardDef = CardDef::new(
 )
 // 「抽到的玩家的第3回合开始时」: the `⌛2` marker the client shows (the draw is
 // mid-turn 1, so two more drawer turn starts remain).
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 2)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 2)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"元祖！邦多利酱"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家的回合免费时间变为5秒，且回合恢复时间变为0秒。"#))

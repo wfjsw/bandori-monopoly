@@ -69,7 +69,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
     ],
 )
 // 规则书（1）「3个[奇迹水晶]」: the `⌛3` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)
         .raw_name(r#"笑容大游行"#)
@@ -151,7 +151,7 @@ fn on_group() -> bool {
 /// and the counter name stay here (the name is not yet in the condition
 /// vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS && on_group()
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS && on_group()
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

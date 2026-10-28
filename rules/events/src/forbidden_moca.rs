@@ -24,7 +24,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     ],
 )
 // 「直到你的下个回合结束」: the `⌛1` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 1)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 1)])
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Forbidden Moca"#)

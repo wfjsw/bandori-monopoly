@@ -28,7 +28,7 @@ pub const HALLUCINATION: CardDef = CardDef::new(
     ],
 )
 // 「抽到的玩家的下回合开始时」: the `⌛1` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 1)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 1)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"幻觉来了"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。"#))

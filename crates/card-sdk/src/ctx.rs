@@ -1120,30 +1120,6 @@ pub fn set_prop(key: &str, value: i32) -> i32 {
     unsafe { sys::set_self_prop(p, l, value) }
 }
 
-/// Remaining turns before a rule-scheduled expiry, as the client's `⌛N`
-/// marker (`prop::TURNS_LEFT`). Display-only; the rule body still owns the
-/// actual expiry. A fixed initial count is better declared as a static
-/// `CardDef::props` entry (stamped by `place_card` / `bind_event`); use this
-/// setter for a chosen or re-armed value. Returns the stored value.
-#[cfg_attr(kani, inline(always))]
-pub fn set_turns_left(n: i32) -> i32 {
-    set_prop(crate::abi::prop::TURNS_LEFT, n)
-}
-
-/// The running instance's remaining-turn marker (`prop::TURNS_LEFT`); `0` =
-/// no marker.
-#[cfg_attr(kani, inline(always))]
-pub fn turns_left() -> i32 {
-    prop(crate::abi::prop::TURNS_LEFT)
-}
-
-/// One turn less on the marker (`prop::TURNS_LEFT`), for the body's own
-/// turn-boundary tick; returns the new value (never below `0`).
-#[cfg_attr(kani, inline(always))]
-pub fn dec_turns_left() -> i32 {
-    set_turns_left((turns_left() - 1).max(0))
-}
-
 /// A **property of the rule instance governing `tile`** (`docs/TILES.md`) --
 /// what a card that bends a *tile* writes instead of an engine flag. The
 /// reader is the tile instance; the source owns the arming and the disarming.
@@ -1181,11 +1157,11 @@ pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
 
 // ------------------------------------------------------ counters & marks
 // Named counters on a card instance, and their units bound to a tile (a tile
-// mark) or a holder (a player token). One API; see `abi::counter` /
+// mark) or a holder (a player token). One API; see `bandori_std::counter` /
 // `abi::MarkFilter`. User ruling 2026-10-10: every mark/token is a unit of
 // some card instance's counter and dies with that instance.
 
-/// On-card named counter of **this** instance (`abi::counter::{CP,CRYSTALS}`
+/// On-card named counter of **this** instance (`bandori_std::counter::{CP,CRYSTALS}`
 /// or a card-invented name).
 #[cfg_attr(kani, inline(always))]
 pub fn counter(name: &str) -> i32 {
@@ -1665,7 +1641,7 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
     // other host string return uses. A raw `buf.as_mut_ptr() as i32` truncates
     // a 64-bit pointer on native (the host writes into an arena slot, not the
     // guest's stack buffer), so the read came back as NULs and
-    // `trigger::name() == counter::CRYSTALS` never matched -- the native
+    // `trigger::name() == bandori_std::counter::CRYSTALS` never matched -- the native
     // build kept a crystal-empty card on the field (drift.rs).
     let (p, scratch) = out_buf(need as usize);
     if fill(p, need) != need {

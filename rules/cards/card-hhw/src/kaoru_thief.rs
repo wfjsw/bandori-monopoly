@@ -39,7 +39,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
     ],
 )
 // 规则书「充能3，衰减1」: the `⌛3` marker the client shows.
-.props(&[(card_sdk::abi::prop::TURNS_LEFT, 3)])
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"怪盗hello happy"#)
         .raw_name(r#"（薰）怪盗hello happy"#)
@@ -154,7 +154,7 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 /// (kept here as well). Card identity is already in the CEL pre (`trigger_card ==
 /// card.id`).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

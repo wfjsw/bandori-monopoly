@@ -8,6 +8,8 @@ webui bundles.
 ```
 rules/cards/**  +  rules/personas/**  +  rules/skills/**  +  rules/events/**
         │  CardMeta / PersonaDef / GroupDef (authoring surface)
+rules/bandori-std/src/marker.rs
+        │  MARKERS (card-face marker rows)
         ▼
 cargo run -q -p rules-native --example dump_display
         ▼
@@ -47,7 +49,11 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
                                    "cnId": "..." } },
   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
                                    "logo": "..." } },
-  "events":   { "<eventId>":     { "name": "...", "text": "...", "body": [ … ] } }
+  "events":   { "<eventId>":     { "name": "...", "text": "...", "body": [ … ] } },
+  "markers": [ { "key": "turnsLeft", "source": "prop", "tone": "turns",
+                 "glyph": "⌛{n}", "countdown": true,
+                 "note": { "key": "board.turnsLeft" },
+                 "label": { "key": "board.turnsLabel" } }, … ]
 }
 ```
 
@@ -59,6 +65,9 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 * Cards without a `CardMeta` (rule-only pseudo cards: tiles / marks / status)
   are absent. Every roster card / persona / group / event that carries the
   relevant fields appears.
+* `markers` is an **array**, not a map: its order is the face's print order.
+  It is `bandori_std::marker::MARKERS` verbatim -- one row per marker kind,
+  authored in the rule code (see 「Card-face counter markers」).
 
 ### Rule text: `text` + `body`
 
@@ -109,6 +118,13 @@ skill text is still a flat `text` only -- the client parses it at render time.
 | event | `name` | `CardMeta::name` | event name |
 | event | `text` | `CardMeta::text` (`flat()`) | event rulebook body |
 | event | `body` | `CardMeta::text` | event body as sections / bulletpoints |
+| marker | `key` | `MarkerDef::key` | counter / prop name the row describes; absent on the fallback row |
+| marker | `source` | `MarkerDef::source` | `prop` (a card prop) or `counter` (a named counter) |
+| marker | `tone` | `MarkerDef::tone` | chip style class: `turns` / `count` / `crystal` / `cp` |
+| marker | `glyph` | `MarkerDef::glyph` | face glyph, `{n}` = count, `{name}` = named counter |
+| marker | `note` / `label` | `MarkerDef::note` / `label` | `{ "key": … }` or `{ "text": … }` |
+| marker | `countdown` | `MarkerDef::countdown` | suppress when another marker carries the number |
+| marker | `fallback` | `MarkerDef::fallback` | takes every counter no other row covers |
 
 The sheet cell a row was lifted from is **not** a field any more -- it is a
 `// sheet cell X` comment on the card impl. A row whose sheet name line is
@@ -118,13 +134,24 @@ blank carries that cell as its `name` instead (`#J11`), so it is never lost.
 
 The field sheet renders an instance's markers as small chips in the face's
 marker zone: `⌛N` remaining turns, `×N` unnamed counters, `◆N` crystals, `CPN`
-counteraction points, then any named counters. A kind is one row of
-`scenes/board/markerKinds.ts` `MARKER_KINDS` -- its print position, CSS class,
-glyph (`{n}` = the count, `{name}` = a named counter) and its note / list
-sentences (a `tr` key or a literal template). A new marker is that row and
-nothing else; a surface renders the resulting `Marker[]` and knows no kinds
-itself -- the face (`FieldSheet`), the live note, the field / event popups, the
-player marker list and a skill card's corner chips all draw the same plan.
+counteraction points, then any named counters. A marker kind is one row of
+`bandori_std::marker::MARKERS` (`rules/bandori-std/src/marker.rs`) -- its print
+order (the array order), style tone, glyph (`{n}` = the count, `{name}` = a
+named counter) and its note / list sentences (a `tr` key or a literal
+template). A new marker is that row and nothing else -- the JSON export carries
+it and the client knows no kinds; adding only a new **tone** also needs the
+matching CSS class in `FieldSheet.module.css`. A surface renders the resulting
+`Marker[]` and knows no kinds itself -- the face (`FieldSheet`), the live note,
+the field / event popups, the player marker list and a skill card's corner
+chips all draw the same plan.
+
+The marker vocabulary -- the counter names (`bandori_std::counter::CP` /
+`CRYSTALS`) and the countdown prop (`bandori_std::marker::TURNS_LEFT`) -- lives
+with the table, not in `card-sdk`. The client's planner
+(`scenes/board/markerKinds.ts`) walks the exported rows in order, reads each
+row's count from `props[key]` / `counters[key]`, and hands every counter no row
+covers to the fallback row with its `log.counter.*` phrase (an unlabelled
+counter is dropped, never printed as its wire key).
 
 `⌛N` comes from the display-only prop `props.turnsLeft` on a `FieldCard`, or
 `ActiveEvent.turnsLeft` for an event row (`docs/EVENTS.md`); it appears only
@@ -134,7 +161,8 @@ itself the countdown, a phase counter -- the `⌛N` is **not** printed again
 (`showTurnsChip`): the existing chip already shows how many turns are left. The
 countdown still stays in the data, so the hiding is display-only.
 
-Set a **fixed** initial count as a static card prop -- `CardDef::props(&[(prop::TURNS_LEFT, N)])`
+Set a **fixed** initial count as a static card prop --
+`CardDef::props(&[(marker::TURNS_LEFT, N)])`
 -- so `place_card` / `bind_event` stamp it with everything else on the instance
 (`R:Fire bird`'s self-chosen X and `Sumimi:Here, the World!`'s draw-armed value
 are the exceptions: those stay in the body). The body's own turn-boundary tick

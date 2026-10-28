@@ -116,7 +116,7 @@ const FieldFace = memo(function FieldFace({ slotKey, card, title, note, markers,
       on={on}
       onClick={onClick}
     >
-      {markers.map((mk) => <span key={mk.key} className={s[mk.cls]} title={mk.note}>{mk.chip}</span>)}
+      {markers.map((mk) => <span key={mk.key} className={s[mk.def.tone]} title={mk.note}>{mk.chip}</span>)}
     </InspectCard>
   );
 });
