@@ -682,6 +682,22 @@ pub fn decide(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
     })))
 }
 
+/// `{view, seed}` -> the policy's command, or `null` when the seat has nothing
+/// to decide. **No search**: the standard / chaos seats' path (`docs/BOT-DRIVE.md`).
+/// The view is the exact frame the seat gets; `seed` is the determinizer's,
+/// derived from the public decision identity like every other worker seed.
+#[wasm_bindgen]
+pub fn act(view_json: &str, seed: u32) -> Result<String, JsError> {
+    let view: SeatView = parse("view", view_json)?;
+    let d = data()?;
+    let r = rules()?;
+    let mut rng = bot_core::determinize::DeterminizerRng::new(seed as u64);
+    match bot_core::policy::act_for_view(&d, &r, &view, &mut rng) {
+        Some(msg) => Ok(json(&msg)),
+        None => Ok("null".into()),
+    }
+}
+
 /// Speculative search while the other seats act (BOT-RESEARCH #5). Same view
 /// frame as [`decide`]; the result is cached by the information-set key.
 ///

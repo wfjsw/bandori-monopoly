@@ -204,7 +204,11 @@ impl Server {
     /// A build by id; `""` means the default. `None` = no such build.
     pub fn build(&self, id: &str) -> Option<Arc<Build>> {
         if id.is_empty() {
-            return self.builds.get(&self.default_build).cloned().or_else(|| self.builds.values().next().cloned());
+            return self
+                .builds
+                .get(&self.default_build)
+                .cloned()
+                .or_else(|| self.builds.values().next().cloned());
         }
         self.builds.get(id).cloned()
     }
@@ -248,8 +252,16 @@ impl Server {
         let mut rooms = self.rooms.lock().unwrap();
         for rec in recs {
             let id = rec.info.id.clone();
-            let build = self.build_or_default(&rec.info.build).expect("default build");
-            let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine(), self.store.clone());
+            let build = self
+                .build_or_default(&rec.info.build)
+                .expect("default build");
+            let mut r = Room::from_record(
+                rec,
+                &build.id,
+                build.data.clone(),
+                build.engine(),
+                self.store.clone(),
+            );
             r.bot_search = self.bots.is_some();
             r.presence_timeout = self.presence_timeout;
             r.restore_game();
@@ -270,7 +282,13 @@ impl Server {
         }
         let rec = self.store.room_get(id).ok().flatten()?;
         let build = self.build_or_default(&rec.info.build)?;
-        let mut r = Room::from_record(rec, &build.id, build.data.clone(), build.engine(), self.store.clone());
+        let mut r = Room::from_record(
+            rec,
+            &build.id,
+            build.data.clone(),
+            build.engine(),
+            self.store.clone(),
+        );
         r.bot_search = self.bots.is_some();
         r.presence_timeout = self.presence_timeout;
         r.restore_game();

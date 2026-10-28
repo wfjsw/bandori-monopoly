@@ -32,14 +32,16 @@ fn new_match(
     seed: u64,
     rules: Arc<dyn game_core::engine::CardRules>,
 ) -> Match {
-    Match::new(
+    let mut m = Match::new(
         data(),
         rules,
         members,
         seed,
         MatchMode::Casual,
         ScoreWeights::default(),
-    )
+    );
+    common::engine_bots(&mut m);
+    m
 }
 
 /// Tick until the match ends (or `max_rounds` pass, then finish it).

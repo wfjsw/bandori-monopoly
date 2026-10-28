@@ -37,6 +37,49 @@ fn stamp() -> EngineStamp {
     }
 }
 
+/// Drive every bot seat over the human interface, the harness counterpart of a
+/// host's bot driver (`docs/BOT-DRIVE.md`): prompt answers and turn commands
+/// until no seat has anything left to do. Goes through `RecordedMatch::act` so
+/// the commands land in the record exactly as a client's would. Setup prompts
+/// (初始重抽) take the fallback, as an idle player would. Bounded, so a command
+/// the engine keeps refusing ends the pump instead of spinning.
+fn pump(rm: &mut RecordedMatch) {
+    for _ in 0..256 {
+        let mut acted = false;
+        let members: Vec<i32> = rm
+            .inner()
+            .state()
+            .players
+            .iter()
+            .filter(|p| p.bot)
+            .map(|p| p.member)
+            .collect();
+        for member in members {
+            let msg = {
+                let st = rm.inner().state();
+                if st.phase != "play" && st.prompt.id > 0 && st.prompt.waiting(member) {
+                    game_core::net::NetMessage {
+                        prompt: st.prompt.id,
+                        value: st.prompt.fallback,
+                        ..game_core::net::NetMessage::act("answer")
+                    }
+                } else {
+                    match rm.inner().bot_action(member) {
+                        Some(msg) => msg,
+                        None => continue,
+                    }
+                }
+            };
+            if rm.act(member, &msg).is_ok() {
+                acted = true;
+            }
+        }
+        if !acted {
+            return;
+        }
+    }
+}
+
 fn members() -> Vec<RoomMember> {
     vec![
         RoomMember {
@@ -135,9 +178,11 @@ fn seeded_record_v(o: &Openings, v: u32) -> game_core::record::RecordFile {
         settings,
     });
     rm.quick_start();
+    pump(&mut rm);
     let mut steps = 0u32;
     while !rm.inner().ended() {
         rm.tick_steps(4);
+        pump(&mut rm);
         steps += 1;
         assert!(steps < 200_000, "game did not finish");
     }
@@ -367,9 +412,11 @@ fn a_record_without_fairness_material_is_reported_not_faked() {
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
     rm.quick_start();
+    pump(&mut rm);
     let mut steps = 0u32;
     while !rm.inner().ended() {
         rm.tick_steps(4);
+        pump(&mut rm);
         steps += 1;
         assert!(steps < 200_000);
     }
@@ -428,9 +475,11 @@ fn legacy_u64_records_still_replay_on_the_legacy_stream() {
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
     rm.quick_start();
+    pump(&mut rm);
     let mut steps = 0u32;
     while !rm.inner().ended() {
         rm.tick_steps(4);
+        pump(&mut rm);
         steps += 1;
         assert!(steps < 200_000);
     }

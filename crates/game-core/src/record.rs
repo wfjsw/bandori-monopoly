@@ -40,7 +40,11 @@ use crate::MatchMode;
 /// their own bundles either way (`docs/REPLAY.md` §9).
 /// v3: body JSON seat field is `persona`; body_check hashes the on-wire
 /// field names, so pre-v3 records do not re-verify under v3.
-pub const RECORD_VERSION: u32 = 3;
+/// v4: bot seats record with `ai` off -- they are clients, and every command
+/// they take is in the body (`docs/BOT-DRIVE.md`). A v3-and-older record has
+/// no such commands: its bots were engine-driven, so a replay turns `ai` back
+/// on for them ([`Replayer::machine_seats`]) and lets the engine decide again.
+pub const RECORD_VERSION: u32 = 4;
 
 /// The tick quantum. `tick_steps(k)` ticks `dt = k as f32 * STEP`, k in 1..=10,
 /// so replay recomputes the identical f32.
@@ -1453,6 +1457,25 @@ impl Replayer {
             Init::Snapshot { save } => Match::restore(data.clone(), rules.clone(), save)
                 .map_err(|e| ReplayError::Corrupt(e.to_string()))?,
         };
+        // A v3-and-older record's bots were engine-driven and their commands
+        // are not in the body: only the engine deciding again reproduces them
+        // (`docs/BOT-DRIVE.md`). A seed init arms them after its `QuickStart`
+        // input (the checkpoint taken right after `quick_start` was written
+        // with `ai` off); a snapshot init is already past it. A v4 record
+        // carries the commands and keeps `ai` off throughout.
+        let mut m = m;
+        if header.engine.format < 4 && matches!(body.init, Init::Snapshot { .. }) {
+            let bots: Vec<i32> = m
+                .state()
+                .players
+                .iter()
+                .filter(|p| p.bot)
+                .map(|p| p.member)
+                .collect();
+            for id in bots {
+                m.set_machine_seat(id, true);
+            }
+        }
         let step = if header.step.is_finite() && header.step > 0.0 {
             header.step
         } else {
@@ -1483,6 +1506,27 @@ impl Replayer {
         };
         rp.drain_events();
         Ok(rp)
+    }
+
+    /// Put every bot seat back on the engine schedule -- the v3-and-older
+    /// replay path (a v4 record carries its bots' commands instead).
+    fn machine_seats(&mut self) {
+        // v4 logs the bots' commands (and their `ai` stays off, as recorded);
+        // only an older, engine-driven log needs the engine deciding again.
+        if self.header.engine.format >= 4 {
+            return;
+        }
+        let bots: Vec<i32> = self
+            .m
+            .state()
+            .players
+            .iter()
+            .filter(|p| p.bot)
+            .map(|p| p.member)
+            .collect();
+        for id in bots {
+            self.m.set_machine_seat(id, true);
+        }
     }
 
     // ------------------------------------------------------------ stepping
@@ -1578,7 +1622,13 @@ impl Replayer {
         }
         self.cursor += 1;
         self.drain_events();
+        // The checkpoint comes first: an act re-runs its routine from a
+        // pre-prompt snapshot, whose players carry `ai = false`; the live
+        // checkpoint was written before the test re-armed them too.
         self.check_checkpoint();
+        if self.header.engine.format < 4 {
+            self.machine_seats();
+        }
         self.maybe_keyframe();
     }
 
@@ -1597,6 +1647,12 @@ impl Replayer {
             self.cursor += 1;
             self.sub = 0;
             self.check_checkpoint();
+            // A v3 log's bots are engine-driven. Re-arm after the checkpoint,
+            // matching `apply_non_tick`: the live checkpoint was written before
+            // the recorder's harness re-armed them too.
+            if self.header.engine.format < 4 {
+                self.machine_seats();
+            }
             self.maybe_keyframe();
         }
         true

@@ -618,6 +618,15 @@ impl<'a> Cx<'a> {
         &self.w
     }
 
+    /// Mutable view of the live world -- **no clone**. A policy context draws
+    /// its randomness through this ([`World::rng`]); see [`Self::world`].
+    pub fn world_mut(&mut self) -> &mut World {
+        // The play memos key on the world stamp; drop them so the next probe
+        // re-asks rather than trusting a verdict from before the write.
+        self.play_memo.borrow_mut().clear();
+        &mut self.w
+    }
+
     /// A shareable handle to the live world -- a refcount bump, **no copy**
     /// (fix B). A pure check (`cant_play` probe, guard body, buy quote) runs
     /// against it; the first write inside the check's sandbox detaches a

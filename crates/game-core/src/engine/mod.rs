@@ -756,7 +756,7 @@ impl Match {
                     // before `new_match`; Solo's driver answers through the
                     // ordinary `act` path and falls back to the heuristic, so
                     // a seat is never parked on answers nobody will send.
-                    ai: m.bot && m.mentality != crate::state::BotMentality::Advanced,
+                    ai: false,
                     mentality: m.mentality,
                     // Carries through `roll_order`, so the seat that rolls high
                     // keeps the persona its member was given.
@@ -877,6 +877,7 @@ impl Match {
             let ti = st.turn as usize;
             st.can_roll_here = false;
             st.can_end_here = false;
+            st.played_count = self.world.turn.played.len() as i32;
             let bonus = self.bonus_time.get(ti).copied().unwrap_or(0.0);
             let base = self.base_time.get(ti).copied().unwrap_or(0.0);
             st.base_time = base;
@@ -1130,6 +1131,19 @@ impl Match {
     /// Test seam: the replayable world, for arranging a scenario (money,
     /// positions, deeds, piles, loaded dice). Only valid with no routine
     /// pending -- a pending routine re-runs from its own snapshot.
+    /// Put a seat back on the engine's prompt/turn schedule (or take it off).
+    /// Safe while a routine is pending -- it writes one flag, not the world.
+    ///
+    /// A replayer uses this: until the driver records bot commands itself, a
+    /// replay must reproduce what the engine decided by letting the engine
+    /// decide again (`docs/BOT-DRIVE.md`, S1).
+    #[doc(hidden)]
+    pub fn set_machine_seat(&mut self, member: i32, ai: bool) {
+        if let Some(i) = self.player_index(member) {
+            self.world.st.players[i].ai = ai;
+        }
+    }
+
     #[doc(hidden)]
     pub fn world_mut(&mut self) -> &mut World {
         assert!(
@@ -1216,6 +1230,13 @@ impl Match {
     /// leaves the engine -- what a caller gets is the *contents*, which is what
     /// a deck list is. Sort the ids however you like for display; sorting here
     /// is what keeps the wire from carrying the draw order.
+    /// This turn's played card ids and how many of them were hand-card plays.
+    /// `TurnCtx` stays off the wire (its plan internals are huge); a view that
+    /// needs the play history for a fork reads it here.
+    pub fn played_context(&self) -> (&[String], usize) {
+        (&self.world.turn.played, self.world.turn.cards_played)
+    }
+
     pub fn draw_of(&self, member: i32) -> Vec<String> {
         let mut v = self
             .player_index(member)
@@ -1540,6 +1561,13 @@ impl Match {
                 })
             }
         }
+    }
+
+    /// A throwaway policy context: the world is a clone and no answers are
+    /// installed, so a policy's RNG draws do not persist into the match.
+    /// `bot-core::policy` decides on one of these.
+    pub fn bot_cx(&self) -> Cx<'_> {
+        Cx::new(self.world.clone(), &self.data, &*self.rules, &[])
     }
 
     /// The standard / chaos policy's **next command** for `member`, ready to
@@ -1876,12 +1904,15 @@ impl Match {
         self.flushing_deferred = false;
     }
 
-    /// Is this prompt player answered by the machine (bot, or a human who left)?
+    /// Is this prompt player answered by the machine (a human under 托管, or a
+    /// human who left)?
     ///
-    /// This is the **prompt** auto-answer ([`Self::tick_live`]): `ai` seats
-    /// (standard / chaos bots, and a human under 托管). An Advanced bot is
-    /// `ai = false` on purpose -- its prompts wait for the external driver
-    /// (`docs/BOT.md` B5). Votes are different; see [`Self::auto_vote`].
+    /// This is the **prompt** auto-answer ([`Self::tick_live`]). A **bot seat is
+    /// not** machine-answered here: every bot is a client driven over the human
+    /// interface (`view(member)` -> policy -> `act(member, cmd)`,
+    /// `docs/BOT-DRIVE.md`), so its prompts fall through to the driver. Setup is
+    /// the exception -- it stays engine-side ([`MatchPlayer::auto_setup`]).
+    /// Votes are different; see [`Self::auto_vote`].
     fn auto_player(&self, player_id: usize) -> bool {
         self.world.st.players[player_id].ai
             || self
@@ -1961,7 +1992,9 @@ impl Match {
             self.clock_hold = None;
             return;
         };
-        if p.ai {
+        // A bot has no client to ack: arming a hold against it would stall the
+        // clock until its turn is taken over.
+        if p.ai || p.bot {
             self.clock_hold = None;
             return;
         }

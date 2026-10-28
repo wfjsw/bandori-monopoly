@@ -212,14 +212,18 @@ cadence, cancelled when the seat's own decision arrives. The service caches
 the result by information-set key and a later `decide` for the same key
 answers from that cache. `bot-service --no-ponder` turns the whole path off.
 
-* When the service is attached, the server holds the seat (the engine does not
-  auto-play it) and asks for one seat's view when that seat must act — an open
-  prompt or its turn decision. The answer is applied through the ordinary
-  `POST …/act` path.
-* On timeout, crash or a bad reply the engine's own heuristic (`aiAnswer`)
-  answers that decision and the match keeps moving — a match never stalls on
-  the service. The engine's turn clock is the last-resort takeover. A wedged
-  child costs at most one probe per seat and never the tick.
+* **Every** bot seat is driven this way (`docs/BOT-DRIVE.md`) — the engine
+  auto-plays none of them. One seat's view is requested when that seat must
+  act, an open prompt or its turn decision, and the answer is applied through
+  the ordinary `POST …/act` path.
+  * `advanced` seat: the service searches (`op: "decide"`).
+  * `standard` / `chaos` seat, or any seat without a service: the server's own
+    `bot-core` policy answers (`op: "act"` on the service, `heuristic: true`,
+    no search — a search would be pure latency for a one-shot policy).
+* On timeout, crash or a bad reply the same local policy answers that
+  decision and the match keeps moving — a match never stalls on the service.
+  The engine's turn clock is the last-resort takeover. A wedged child costs at
+  most one probe per seat and never the tick.
 * Setup (ban / pick / deck) stays engine-side and runs the standard policy.
 * The service sees exactly one seat's view — the same frame the client gets.
   It only proposes answers; the sandboxed engine stays authoritative.

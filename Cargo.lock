@@ -1944,6 +1944,7 @@ name = "ruleset-tests"
 version = "0.1.0"
 dependencies = [
  "bandori-std",
+ "bot-core",
  "card-sdk",
  "game-core",
  "game-rules",

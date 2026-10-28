@@ -45,14 +45,16 @@ fn member(id: i32) -> RoomMember {
 }
 
 fn new_match(rules: Arc<dyn CardRules>) -> Match {
-    Match::new(
+    let mut m = Match::new(
         data(),
         rules,
         &[member(1), member(2)],
         7,
         MatchMode::Solo,
         ScoreWeights::default(),
-    )
+    );
+    common::engine_bots(&mut m);
+    m
 }
 
 // 规则书（data/rules.txt 97–99）: 「抽取的事件卡不进入手卡并向所有玩家公开，

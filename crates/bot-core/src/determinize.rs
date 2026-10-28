@@ -273,6 +273,16 @@ fn sample_world(
     world.event_removed = view.state.event_removed.clone();
     world.ask_seq = ask_seq;
     world.turn.player_id = view.state.turn.max(0) as usize;
+    // The view's public play history, so the fork's max-plays gate and skill
+    // de-dup see what the live seat sees (`MatchState::played_count` alone
+    // cannot answer `played.contains`).
+    // A frame without `played` (older builder) still carries `playedCount`;
+    // pad with blanks so the fork's count matches even when the ids are lost.
+    world.turn.played = view.played.clone();
+    while world.turn.played.len() < view.state.played_count.max(0) as usize {
+        world.turn.played.push(String::new());
+    }
+    world.turn.cards_played = view.cards_played;
     Ok((world, report))
 }
 

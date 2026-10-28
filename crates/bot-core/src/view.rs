@@ -40,6 +40,13 @@ pub struct SeatView {
     pub player_id: i32,
     /// The engine's heuristic answer for this seat's live prompt, if any.
     pub ai_answer: Option<AiAnswer>,
+    /// Card ids already played this turn, in play order (`world.turn.played`;
+    /// the engine's skill de-dup and max-plays gate read it). All plays are
+    /// public; a fact-driven frame builder should carry it.
+    pub played: Vec<String>,
+    /// How many of [`Self::played`] were hand-card plays (`cards_played`; the
+    /// 「same turn, two cards」 trigger reads it).
+    pub cards_played: usize,
     /// Parallel to [`Self::hand`]: would `cant_play` allow each card right now?
     pub playable: Vec<bool>,
     /// Parallel to [`Self::hand`]: the card's bot-only **estimated execution
@@ -57,6 +64,8 @@ impl Default for SeatView {
             you: 0,
             player_id: 0,
             ai_answer: None,
+            played: Vec::new(),
+            cards_played: 0,
             playable: Vec::new(),
             est_cost: Vec::new(),
         }
@@ -71,6 +80,7 @@ impl SeatView {
         let state = m.state();
         let player_id = state.player_of(member);
         let extra = m.view_extra_typed(member);
+        let (played, cards_played) = m.played_context();
         let ai_answer = extra.ai_answer.map(|a| AiAnswer {
             answer: a.answer,
             picked: a.picked,
@@ -83,6 +93,8 @@ impl SeatView {
             you: member,
             player_id,
             ai_answer,
+            played: played.to_vec(),
+            cards_played,
             playable: extra.playable,
             est_cost: extra.est_cost,
         }

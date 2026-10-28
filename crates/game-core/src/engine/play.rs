@@ -984,6 +984,14 @@ impl Cx<'_> {
             );
             return Ok(());
         }
+        // Record the press like a hand play: `turn.played` is the once-per-turn
+        // de-dup the policy's skill pick reads (`ai_skill_choice`). Without it
+        // a client-driven seat presses a free skill on every tick and never
+        // gets to the rest of its turn. The turn-owner guard mirrors
+        // `play_card` (an off-turn press ends nothing and must not count).
+        if self.w.st.turn == player_id as i32 {
+            self.w.turn.played.push(card.to_string());
+        }
         let rules = self.rules;
         rules.play(self, player_id, card)?;
         Ok(())
@@ -2736,7 +2744,7 @@ impl Cx<'_> {
 
     // =============================================================== property
 
-    pub(crate) fn build_cost(&self, t: usize) -> i32 {
+    pub fn build_cost(&self, t: usize) -> i32 {
         purchase::build_cost(self.data, t)
     }
 
@@ -2750,7 +2758,7 @@ impl Cx<'_> {
     /// The redeem charge ([`purchase::redeem_cost`], the engine-side copy of
     /// the rulebook figure). A retuned figure lives on the tile rule
     /// instance's props (`docs/TILES.md`), not on a `CardRules` hook.
-    pub(crate) fn redeem_cost(&self, t: usize) -> i32 {
+    pub fn redeem_cost(&self, t: usize) -> i32 {
         purchase::redeem_cost(self.data, t)
     }
 
@@ -2785,11 +2793,11 @@ impl Cx<'_> {
     /// seat's [`crate::strategy::StrategyParams`] key).
     /// Chaos: a random subset that covers `need` -- at least one deed, never a
     /// tidy little list.
-    pub(crate) fn auto_mortgage(&mut self, player_id: usize, need: i32) -> Vec<String> {
+    pub fn auto_mortgage(&mut self, player_id: usize, need: i32) -> Vec<String> {
         self.auto_mortgage_from(player_id, need, self.mortgageable(player_id))
     }
 
-    pub(crate) fn auto_mortgage_from(
+    pub fn auto_mortgage_from(
         &mut self,
         player_id: usize,
         need: i32,
@@ -2833,12 +2841,7 @@ impl Cx<'_> {
     /// The quoted price for one tile, through the rules crate's `buy_quote`
     /// (`docs/PURCHASE.md`). For `StubRules` this is `quote_native` -- the
     /// plain rulebook formula -- so the sim's behaviour is unchanged.
-    pub(crate) fn buy_quote_for(
-        &self,
-        i: usize,
-        t: usize,
-        kind: purchase::BuyKind,
-    ) -> purchase::Quote {
+    pub fn buy_quote_for(&self, i: usize, t: usize, kind: purchase::BuyKind) -> purchase::Quote {
         // Force-buy and 收购 name the owner as the payee; every other kind buys
         // from the bank (`docs/PURCHASE.md`).
         let seller = match kind {
@@ -4447,7 +4450,7 @@ impl Cx<'_> {
 
     /// The player's own `handLimit` state (cards
     /// can raise or cut it), not the base constant.
-    pub(crate) fn over_hand(&self, i: usize) -> bool {
+    pub fn over_hand(&self, i: usize) -> bool {
         self.w.st.players[i].over_hand(self.w.hidden[i].hand.len())
     }
 
@@ -4657,7 +4660,7 @@ impl Cx<'_> {
     }
 
     /// Why this card cannot be played from hand, or `None` when it can.
-    pub(crate) fn cant_play(&self, i: usize, id: &str, asking: bool) -> Option<Msg> {
+    pub fn cant_play(&self, i: usize, id: &str, asking: bool) -> Option<Msg> {
         if !self.w.hidden[i].hand.iter().any(|c| c == id) {
             return Some(Msg::new("err.no_such_card"));
         }

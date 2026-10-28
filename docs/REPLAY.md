@@ -1023,3 +1023,26 @@ means here:
   record frame. A portable file (§10) appends its engine after that frame and
   leaves the header alone, so the openings ride along unchanged and verify
   the same way.
+
+### 9.6 Client-driven bots (record format v4, 2026-10-28)
+
+A bot seat is a client since `docs/BOT-DRIVE.md`: its commands are recorded
+like a human's and the seat stays at `ai = false` while recording. `format` is
+therefore **4**, and a replay must not put such a seat back on the engine:
+
+* v4 record: replay as recorded, `ai` stays off.
+* v3-and-older record: its bots were engine-driven and the body has no
+  commands for them, so the replayer turns `ai` back on (`Replayer::machine_seats`)
+  and lets the engine decide again. Same for a snapshot init, decided by the
+  same gate. A record written by a v1/v2 body still replays.
+
+Both are hash-exact against the way the record was written; the gate is the
+format, never a guess about the body.
+
+**One v3 caveat.** `Cx::use_skill` now records the press in `turn.played`
+(before, only `Match::ai_step` did, so a client-driven seat could not de-dup
+its own skill and re-pressed it every tick). An old v3 record with a skill
+press replays on its **archived bundle** unchanged, but replaying it on a
+newer engine that re-arms `ai` can diverge on the skill de-dup: the record
+predates the fix. That is a divergence banner on a matching-engine replay,
+not a corrupt record.

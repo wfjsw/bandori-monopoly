@@ -22,14 +22,16 @@ fn member(id: i32, bot: bool) -> RoomMember {
 }
 
 fn new_match(members: &[RoomMember], seed: u64, mode: MatchMode) -> Match {
-    Match::new(
+    let mut m = Match::new(
         data(),
         Arc::new(StubRules),
         members,
         seed,
         mode,
         ScoreWeights::default(),
-    )
+    );
+    common::engine_bots(&mut m);
+    m
 }
 
 /// Invariants that must hold at every step of every game.

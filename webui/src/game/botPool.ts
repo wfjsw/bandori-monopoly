@@ -347,6 +347,19 @@ export class BotPool {
   }
 
   /**
+   * The policy's command for one seat, with **no search** -- the standard /
+   * chaos path (`docs/BOT-DRIVE.md`). One worker, one determinize pass; `seed`
+   * is the determinizer's sampling seed (`decisionSeed`). `null` when the seat
+   * has nothing to decide.
+   */
+  async act(view: MatchView, seed: number): Promise<Command | null> {
+    await this.ensureLoaded();
+    const slot = this.slots[0];
+    if (!slot) throw new Error("bot pool has no workers");
+    return (await slot.call("act", { view, seed }, 5_000)) as Command | null;
+  }
+
+  /**
    * Per-viewer extras from ONE seat's frame (`playable` / `estCost` / `skills`
    * / `aiAnswer`) -- the online path's client-side twin of the server's
    * `Match::view_extra`. One worker is enough: extras is a single determinize

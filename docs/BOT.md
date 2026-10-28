@@ -24,6 +24,14 @@ the C1 record).
 B3 waits on B2 profiling (the [反击] window bookkeeping is now the dominant
 cost).
 
+2026-10-28: the **policy left `game-core`**. Every bot seat -- standard,
+chaos and 进阶 -- is now a client driven over the human interface
+(`view(member)` -> policy -> `act(member, cmd)`) on the server, in the page and
+in the harness; the decision code lives in `crates/bot-core/src/policy.rs`.
+`docs/BOT-DRIVE.md` is the rule and the staging; §1.1's audit, the search and
+the budgets below are unchanged by it. Read §1.1's "heuristic bot
+(`engine/ai.rs`)" references as `bot-core`'s `policy`.
+
 Goal: a bot that plays well while seeing only what an ordinary player sees.
 Method: Information Set Monte Carlo Tree Search over determinizations,
 shallow rollouts with the heuristic bot (`engine/ai.rs`) as the rollout

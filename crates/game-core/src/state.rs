@@ -156,6 +156,11 @@ pub struct MatchState {
     /// mid-turn layer grants -- a bot trusting it sent `end` into
     /// `err.roll_first`).
     pub can_end_here: bool,
+    /// How many hand cards / skills the turn has already played
+    /// (`world.turn.played.len()`) -- what the standard policy's
+    /// per-turn play cap counts. Filled with [`Self::can_roll_here`] /
+    /// [`Self::can_end_here`].
+    pub played_count: i32,
     /// The movement this turn is taking.
     pub plan: MovePlan,
     pub time_left: f32,
@@ -243,6 +248,7 @@ impl Default for MatchState {
             think_time: 0,
             can_roll_here: false,
             can_end_here: false,
+            played_count: 0,
             plan: MovePlan::default(),
             time_left: 0.0,
             base_time: 0.0,
@@ -685,11 +691,11 @@ impl Default for MatchPlayer {
 impl MatchPlayer {
     /// Does the machine handle this seat's **setup** (ban / pick / deck) without
     /// waiting on a human or the server? True for every engine-driven seat
-    /// (`ai`) and for an Advanced bot: its play-phase decisions belong to the
-    /// server's `bot-service` (`docs/BOT.md` B5), but setup remains engine-side
-    /// and runs the standard policy, exactly like a standard bot.
+    /// (`ai`) and every bot: play-phase decisions reach a bot over the human
+    /// interface (`docs/BOT-DRIVE.md`), but setup is engine-side and runs the
+    /// standard policy for all of them.
     pub fn auto_setup(&self) -> bool {
-        self.ai || (self.bot && self.mentality == BotMentality::Advanced)
+        self.ai || self.bot
     }
 
     // ---------------------------------------------------------- keyed state

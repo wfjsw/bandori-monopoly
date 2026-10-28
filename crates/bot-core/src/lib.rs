@@ -25,6 +25,8 @@ pub mod determinize;
 pub mod eval;
 pub mod extras;
 pub mod ismcts;
+/// The one bot policy (`docs/BOT-DRIVE.md`): turn commands and prompt answers.
+pub mod policy;
 pub mod saved;
 pub mod sim;
 pub mod view;

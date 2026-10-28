@@ -156,7 +156,7 @@ impl Cx<'_> {
     /// Resolved from public state only (own persona + the other seats'
     /// personas); chaos never reads them.
     #[inline]
-    pub(crate) fn strategy_of(&self, i: usize) -> StrategyParams {
+    pub fn strategy_of(&self, i: usize) -> StrategyParams {
         crate::strategy::for_seat_sha(
             self.data,
             &self.w.st,
@@ -574,7 +574,7 @@ impl Cx<'_> {
                 self.wait(1.2);
             }
             "skill" => {
-                self.w.turn.played.push(msg.card.clone());
+                // `use_skill` records the press itself (`turn.played`).
                 self.use_skill(i, &msg.card)?;
                 self.wait(1.2);
             }

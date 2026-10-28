@@ -37,6 +37,26 @@ pub fn data_arc() -> Arc<GameData> {
     Arc::new(data())
 }
 
+/// Put every non-advanced bot seat back on the engine's own schedule.
+///
+/// Production leaves `ai` off for bot seats and drives them over the human
+/// interface (`docs/BOT-DRIVE.md`); these engine tests have no driver, so they
+/// opt back into the in-engine answerer. Call between `Match::new` and
+/// `quick_start` (`world_mut` needs no pending routine).
+pub fn engine_bots(m: &mut game_core::engine::Match) {
+    let bots: Vec<usize> = m
+        .state()
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.bot && p.mentality != game_core::state::BotMentality::Advanced)
+        .map(|(i, _)| i)
+        .collect();
+    for i in bots {
+        m.world_mut().st.players[i].ai = true;
+    }
+}
+
 /// Answer the opening-hand re-roll, if it is up, for every seat.
 ///
 /// 初始重抽 is a whole-table barrier with no advance until every seat answers

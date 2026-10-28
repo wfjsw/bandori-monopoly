@@ -168,12 +168,18 @@ pub fn router(
 }
 
 /// A build's rule module / index file (`/builds/{id}/rules/...`).
-async fn build_rules(State(s): State<Arc<Server>>, Path((id, file)): Path<(String, String)>) -> Response {
+async fn build_rules(
+    State(s): State<Arc<Server>>,
+    Path((id, file)): Path<(String, String)>,
+) -> Response {
     serve_build(&s, &id, &file, false).await
 }
 
 /// A build's game table (`/builds/{id}/data/...`).
-async fn build_data(State(s): State<Arc<Server>>, Path((id, file)): Path<(String, String)>) -> Response {
+async fn build_data(
+    State(s): State<Arc<Server>>,
+    Path((id, file)): Path<(String, String)>,
+) -> Response {
     serve_build(&s, &id, &file, true).await
 }
 
@@ -196,10 +202,18 @@ async fn serve_build(s: &Server, id: &str, file: &str, data: bool) -> Response {
     };
     let rel = file.trim_start_matches('/');
     // No traversal, no empty segments.
-    if rel.is_empty() || rel.split('/').any(|p| p.is_empty() || p == "." || p == "..") {
+    if rel.is_empty()
+        || rel
+            .split('/')
+            .any(|p| p.is_empty() || p == "." || p == "..")
+    {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let root = if data { &build.data_path } else { &build.rules_path };
+    let root = if data {
+        &build.data_path
+    } else {
+        &build.rules_path
+    };
     if root.as_os_str().is_empty() {
         return StatusCode::NOT_FOUND.into_response();
     }
@@ -218,7 +232,11 @@ async fn serve_build(s: &Server, id: &str, file: &str, data: bool) -> Response {
         "public, max-age=31536000, immutable"
     };
     match tokio::fs::read(root.join(rel)).await {
-        Ok(bytes) => ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache)], bytes).into_response(),
+        Ok(bytes) => (
+            [(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, cache)],
+            bytes,
+        )
+            .into_response(),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
 }
@@ -299,7 +317,7 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
                         Err(e) => eprintln!("room {id} tick failed: {e}"),
                     }
                     ended = m.ended().unwrap_or(false);
-                    drive = claim_advanced(&server, &id);
+                    drive = claim_bots(&server, &id);
                 }
             }
             // 3. bookkeeping, again under the room lock.
@@ -337,9 +355,15 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
                     dead.push(id.clone());
                 }
                 // 4. ask the bot service -- its own tasks, never the tick.
-                if let (Some(bots), Some(m)) = (server.bots.clone(), m) {
+                if let Some(m) = m {
                     for member in drive {
-                        spawn_probe(server.clone(), bots.clone(), id.clone(), member, m.clone());
+                        spawn_probe(
+                            server.clone(),
+                            server.bots.clone(),
+                            id.clone(),
+                            member,
+                            m.clone(),
+                        );
                     }
                 }
             }
@@ -464,14 +488,12 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
 
 // ------------------------------------------------------- advanced bots (B5)
 
-/// Members of `room` that the bot service drives: bot seats tagged
-/// [`BotMentality::Advanced`]. Claims each one whose probe time is due via the
-/// store, so a seat is only ever asked about once even across processes
-/// (`docs/BOT.md` B5).
-fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
-    if server.bots.is_none() {
-        return Vec::new();
-    }
+/// Members of `room` that a bot driver must move: **every** bot seat
+/// (`docs/BOT-DRIVE.md` -- the engine no longer decides for anyone; a standard
+/// / chaos seat is answered by the local policy, an advanced one by the
+/// service). Claims each one whose probe time is due via the store, so a seat
+/// is only ever asked about once even across processes (`docs/BOT.md` B5).
+fn claim_bots(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
     let members: Vec<i32> = {
         let Some(room) = server.room(room_id) else {
             return Vec::new();
@@ -480,7 +502,7 @@ fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
         r.info
             .members
             .iter()
-            .filter(|m| m.bot && m.mentality == game_core::state::BotMentality::Advanced)
+            .filter(|m| m.bot)
             .map(|m| m.id)
             .collect()
     };
@@ -495,13 +517,13 @@ fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
 /// its own task -- the tick loop is already on to the next room.
 fn spawn_probe(
     server: Arc<Server>,
-    bots: Arc<botsvc::BotService>,
+    bots: Option<Arc<botsvc::BotService>>,
     room_id: String,
     member: i32,
     m: Arc<room::MatchHandle>,
 ) {
     tokio::spawn(async move {
-        let acted = probe_one(&server, &bots, &room_id, member, &m).await;
+        let acted = probe_one(&server, bots.as_ref(), &room_id, member, &m).await;
         botsvc::release_seat(
             server.store.as_ref(),
             &server.instance,
@@ -512,9 +534,23 @@ fn spawn_probe(
     });
 }
 
+/// The policy's own answer, without a service or any search -- the last
+/// resort that keeps a match moving when nothing else can answer
+/// (`docs/BOT-DRIVE.md` §1). Same seedless determinization the seat's client
+/// would get.
+pub fn local_policy(
+    data: &Arc<game_core::data::GameData>,
+    rules: &Arc<dyn game_core::engine::CardRules>,
+    seat: &bot_service::BotSeatView,
+) -> game_core::net::NetMessage {
+    let mut rng = bot_service::determinize::DeterminizerRng::new(0);
+    bot_service::policy::act_for_view(data, rules, seat, &mut rng)
+        .unwrap_or_else(|| bot_service::heuristic_message_view(data, seat))
+}
+
 async fn probe_one(
     server: &Arc<Server>,
-    bots: &Arc<botsvc::BotService>,
+    bots: Option<&Arc<botsvc::BotService>>,
     room_id: &str,
     member: i32,
     m: &Arc<room::MatchHandle>,
@@ -541,6 +577,10 @@ async fn probe_one(
         return false;
     };
     let state = &seat.state;
+    let advanced = state
+        .players
+        .get(seat.player_id.max(0) as usize)
+        .is_some_and(|p| p.mentality == game_core::state::BotMentality::Advanced);
     let Some(prompt_id) = botsvc::decision_at(state, seat.player_id) else {
         // Nothing this seat must answer right now. Speculate on its **next
         // own decision** instead of the dead idle view (BOT-RESEARCH #5,
@@ -553,8 +593,13 @@ async fn probe_one(
         // probes are now free. Non-blocking and rate-limited by the idle
         // probe cadence, one in flight per seat, cancelled when this seat's
         // own decision arrives.
-        if state.phase == "play" && bot_service::next_turn_near(state, seat.player_id) {
-            spawn_ponder(server, bots, room_id, member, view, state.seq);
+        // Only a searching seat speculates; the policy alone has no tree.
+        if advanced {
+            if let Some(bots) = bots {
+                if state.phase == "play" && bot_service::next_turn_near(state, seat.player_id) {
+                    spawn_ponder(server, bots, room_id, member, view, state.seq);
+                }
+            }
         }
         return false;
     };
@@ -576,34 +621,56 @@ async fn probe_one(
     let timeout = server
         .bot_ask_timeout
         .unwrap_or_else(|| botsvc::ask_timeout(budget));
-    let answer = match bots
-        .decide(room_id, member, &view, prompt_id, budget, seed, timeout)
-        .await
-    {
-        Ok(a) => {
-            eprintln!(
-                "room {room_id} bot {member}: {} iters {} ms (budget {budget}, reused {})",
-                a.iterations, a.elapsed_ms, a.reused
-            );
-            a.answer
-        }
-        Err(e) => {
-            // Timeout / crash / bad reply: the engine's own heuristic answers
-            // this decision and the match keeps moving (§1).
-            eprintln!("room {room_id} bot {member}: {e} -- falling back to heuristic");
-            bot_service::heuristic_message_view(&server.data, &seat)
-        }
-    };
-    let m = m.clone();
-    apply_bot_answer(bots, &server.data, &seat, member, answer, move |cmd| {
-        let m = m.clone();
-        async move {
-            match tokio::task::spawn_blocking(move || m.act(member, &cmd)).await {
-                Ok(r) => r,
-                Err(e) => Err(format!("act task: {e}")),
+    // 进阶 searches; every other mentality answers with the policy alone
+    // (`docs/BOT-DRIVE.md`). No service at all: the local policy answers.
+    let answer = match bots {
+        Some(bots) if advanced => {
+            match bots
+                .decide(room_id, member, &view, prompt_id, budget, seed, timeout)
+                .await
+            {
+                Ok(a) => {
+                    eprintln!(
+                        "room {room_id} bot {member}: {} iters {} ms (budget {budget}, reused {})",
+                        a.iterations, a.elapsed_ms, a.reused
+                    );
+                    a.answer
+                }
+                Err(e) => {
+                    // Timeout / crash / bad reply: the local policy answers
+                    // this decision and the match keeps moving (§1).
+                    eprintln!("room {room_id} bot {member}: {e} -- falling back to the policy");
+                    local_policy(&server.data, &server.rules, &seat)
+                }
             }
         }
-    })
+        Some(bots) => match bots.act(room_id, member, &view, seed, ACT_TIMEOUT).await {
+            Ok(a) => a.answer,
+            Err(e) => {
+                eprintln!("room {room_id} bot {member}: {e} -- falling back to the policy");
+                bot_service::heuristic_message_view(&server.data, &seat)
+            }
+        },
+        None => local_policy(&server.data, &server.rules, &seat),
+    };
+    let m = m.clone();
+    apply_bot_answer(
+        bots.map(|b| b.as_ref()),
+        &server.data,
+        &server.rules,
+        &seat,
+        member,
+        answer,
+        move |cmd| {
+            let m = m.clone();
+            async move {
+                match tokio::task::spawn_blocking(move || m.act(member, &cmd)).await {
+                    Ok(r) => r,
+                    Err(e) => Err(format!("act task: {e}")),
+                }
+            }
+        },
+    )
     .await
 }
 
@@ -618,8 +685,9 @@ async fn probe_one(
 /// success (`Ok(None)`) or a failure. It runs at most twice: the service's
 /// answer, then -- only on a refusal -- the heuristic.
 pub async fn apply_bot_answer<F, Fut>(
-    bots: &botsvc::BotService,
+    bots: Option<&botsvc::BotService>,
     data: &Arc<game_core::data::GameData>,
+    rules: &Arc<dyn game_core::engine::CardRules>,
     seat: &bot_service::BotSeatView,
     member: i32,
     answer: game_core::net::NetMessage,
@@ -633,8 +701,10 @@ where
         Ok(None) => true,
         Ok(Some(msg)) => {
             eprintln!("bot {member}: act refused: {msg:?}");
-            bots.invalidate(seat.decision_key()).await;
-            let fallback = bot_service::heuristic_message_view(data, seat);
+            if let Some(bots) = bots {
+                bots.invalidate(seat.decision_key()).await;
+            }
+            let fallback = local_policy(data, rules, seat);
             match act(fallback).await {
                 Ok(None) => true,
                 Ok(Some(msg2)) => {
@@ -705,6 +775,10 @@ fn spawn_ponder(
             .release_ponder(&room_id, member, token);
     });
 }
+
+/// Outer deadline for a policy-only answer (`op: "act"`): a determinize plus a
+/// few loops, well inside one turn. A search budget would be meaningless here.
+const ACT_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1_500);
 
 /// A stable search-side seed. Mixes the public decision identity with a
 /// counter so two identical decisions in one match still get different

@@ -34,7 +34,9 @@ fn member(id: i32, bot: bool, mentality: BotMentality) -> RoomMember {
     }
 }
 
-/// A full stamp as web-glue would build it.
+/// A full stamp as web-glue would build it. The harness drives the bots over
+/// the human interface (`pump`), so the log carries their commands and `ai`
+/// stays off -- a current (v4) record, replayed without re-arming.
 fn stamp() -> EngineStamp {
     EngineStamp {
         format: RECORD_VERSION,
@@ -45,6 +47,179 @@ fn stamp() -> EngineStamp {
         engine: "game-core".into(),
         build: "test".into(),
         bundle: String::new(),
+    }
+}
+
+/// Drive every bot seat over the human interface, the harness counterpart of a
+/// host's bot driver (`docs/BOT-DRIVE.md`): setup prompts take the fallback,
+/// then prompt answers and turn commands. Bots stay `ai = false` -- the
+/// recorded commands are what makes the replay clean. Goes through
+/// `RecordedMatch::act`, so the commands land in the record as a client's
+/// would. Returns how many member-1 (human) setup answers the harness itself
+/// wrote. Bounded, so an endlessly refused command ends the pump.
+///
+/// The setup phase answers every waiting seat (a human seat's mulligan too);
+/// during play only bots are driven, leaving the scripted human alone.
+fn pump(rm: &mut RecordedMatch) -> usize {
+    let mut harness_acts = 0usize;
+    loop {
+        let st = rm.inner().state();
+        if st.phase == "play" || st.prompt.id == 0 {
+            break;
+        }
+        let p = st.prompt;
+        let mut any = false;
+        for (k, &s) in p.players.iter().enumerate() {
+            if p.answers.get(k).copied().unwrap_or(0) >= 0 {
+                continue;
+            }
+            let member = st.players[s as usize].member;
+            let _ = rm.act(
+                member,
+                &NetMessage {
+                    prompt: p.id,
+                    value: p.fallback,
+                    ..NetMessage::act("answer")
+                },
+            );
+            if member == 1 {
+                harness_acts += 1;
+            }
+            any = true;
+        }
+        if !any {
+            break;
+        }
+    }
+    let members: Vec<i32> = rm
+        .inner()
+        .state()
+        .players
+        .iter()
+        .filter(|p| p.bot)
+        .map(|p| p.member)
+        .collect();
+    for member in members {
+        let msg = {
+            let st = rm.inner().state();
+            let me = st.player_of(member);
+            let asked = st.prompt.id > 0 && st.prompt.waiting(me);
+            // Off its turn and not asked, a seat has nothing to do -- skip the
+            // full policy pass that would only return `None`.
+            if st.phase == "play" && !asked && (st.busy || st.turn != me) {
+                continue;
+            }
+            if st.phase != "play" && asked {
+                NetMessage {
+                    prompt: st.prompt.id,
+                    value: st.prompt.fallback,
+                    ..NetMessage::act("answer")
+                }
+            } else {
+                match rm.inner().bot_action(member) {
+                    Some(msg) => msg,
+                    None => continue,
+                }
+            }
+        };
+        if rm.act(member, &msg).is_ok() {
+            // One command per call: the engine's cadence (it answered at most
+            // once per tick). Several commands per call would let a seat that
+            // can still press something keep the pump spinning without a tick.
+            return harness_acts;
+        }
+    }
+    harness_acts
+}
+
+/// [`pump`] on a bare [`Match`] (no record).
+fn pump_m(m: &mut Match) {
+    loop {
+        let st = m.state();
+        if st.phase == "play" || st.prompt.id == 0 {
+            break;
+        }
+        let p = st.prompt;
+        let mut any = false;
+        for (k, &s) in p.players.iter().enumerate() {
+            if p.answers.get(k).copied().unwrap_or(0) >= 0 {
+                continue;
+            }
+            let member = st.players[s as usize].member;
+            let _ = m.act(
+                member,
+                &NetMessage {
+                    prompt: p.id,
+                    value: p.fallback,
+                    ..NetMessage::act("answer")
+                },
+            );
+            any = true;
+        }
+        if !any {
+            break;
+        }
+    }
+    let members: Vec<i32> = m
+        .state()
+        .players
+        .iter()
+        .filter(|p| p.bot)
+        .map(|p| p.member)
+        .collect();
+    for member in members {
+        let msg = {
+            let st = m.state();
+            let me = st.player_of(member);
+            let asked = st.prompt.id > 0 && st.prompt.waiting(me);
+            if st.phase == "play" && !asked && (st.busy || st.turn != me) {
+                continue;
+            }
+            if st.phase != "play" && asked {
+                NetMessage {
+                    prompt: st.prompt.id,
+                    value: st.prompt.fallback,
+                    ..NetMessage::act("answer")
+                }
+            } else {
+                match m.bot_action(member) {
+                    Some(msg) => msg,
+                    None => continue,
+                }
+            }
+        };
+        if m.act(member, &msg).is_ok() {
+            return; // one command per call, like the engine per tick
+        }
+    }
+}
+
+/// Tick one quantum, then let every bot act -- the client cadence. Driving
+/// quantum by quantum matters: an engine-driven bot used to act inside every
+/// `tick`, so one `tick_steps(k)` + one pump would run the game `k` times
+/// slower. The recorded log interleaves the commands with the ticks anyway
+/// (each act closes the tick run), so the replay keeps this cadence.
+fn drive(rm: &mut RecordedMatch, k: u8) {
+    for _ in 0..k {
+        rm.tick_steps(1);
+        pump(rm);
+    }
+}
+
+/// [`drive`] on a bare [`Match`].
+fn drive_m(m: &mut Match, k: u8) {
+    for _ in 0..k {
+        m.tick(STEP);
+        pump_m(m);
+    }
+}
+
+/// The last engine-driven format: v3 bodies carry no bot commands, so the
+/// replayer re-arms `ai` and lets the engine decide again.
+fn stamp_v3() -> EngineStamp {
+    EngineStamp {
+        format: 3,
+        ..stamp()
     }
 }
 
@@ -99,13 +274,14 @@ fn run_bot_game(
     let members = (1..=n).map(|i| member(i, true, mentality)).collect();
     let mut rm = RecordedMatch::new(data(), rules(), setup(members, seed), MatchMode::Casual);
     rm.quick_start();
+    pump(&mut rm);
     let mut rng = Rng::new(seed ^ 0xD1CE);
     let mut events = Vec::new();
     let mut last_id = 0;
     drain(rm.inner(), &mut last_id, &mut events);
     let mut steps = 0u32;
     while !rm.inner().ended() {
-        rm.tick_steps(k_of(&mut rng));
+        drive(&mut rm, k_of(&mut rng));
         drain(rm.inner(), &mut last_id, &mut events);
         steps += 1;
         assert!(steps < 300_000, "seed {seed}: game did not progress");
@@ -135,6 +311,9 @@ fn assert_round_trip(
     let mut guard = 0u32;
     while !rp.status().ended {
         let st = rp.step_ticks(8);
+        if st.diverged {
+            let _ = rp.first_mismatch();
+        }
         assert!(!st.diverged, "{label}: diverged at tick {}", st.tick);
         guard += 1;
         assert!(guard < 500_000, "{label}: replay stuck");
@@ -178,6 +357,7 @@ fn round_trip_across_seeds_players_and_mentalities() {
             .collect();
         let mut rm = RecordedMatch::new(data(), rules(), setup(members, seed), MatchMode::Casual);
         rm.quick_start();
+        pump(&mut rm);
         let mut rng = Rng::new(seed ^ 0xD1CE);
         let mut events = Vec::new();
         let mut last_id = 0;
@@ -185,7 +365,7 @@ fn round_trip_across_seeds_players_and_mentalities() {
         let mut steps = 0u32;
         while !rm.inner().ended() {
             let k = 1 + rng.below(10) as u8;
-            rm.tick_steps(k);
+            drive(&mut rm, k);
             drain(rm.inner(), &mut last_id, &mut events);
             steps += 1;
             assert!(steps < 300_000, "seed {seed}: game did not progress");
@@ -214,6 +394,7 @@ fn round_trip_with_a_scripted_human() {
             .collect();
         let mut rm = RecordedMatch::new(data(), rules(), setup(members, seed), MatchMode::Casual);
         rm.quick_start();
+        pump(&mut rm);
         let mut rng = Rng::new(seed ^ 0xF00D);
         let mut events = Vec::new();
         let mut last_id = 0;
@@ -235,9 +416,11 @@ fn round_trip_with_a_scripted_human() {
                 }
                 drain(rm.inner(), &mut last_id, &mut events);
             } else {
-                rm.tick_steps(k);
+                drive(&mut rm, k);
                 drain(rm.inner(), &mut last_id, &mut events);
             }
+            pump(&mut rm);
+            drain(rm.inner(), &mut last_id, &mut events);
             steps += 1;
             assert!(steps < 300_000, "seed {seed}: stuck");
             if rm.inner().state().round > 12 {
@@ -306,9 +489,10 @@ fn partial_snapshot_records() {
         ScoreWeights::default(),
     );
     m.quick_start();
+    pump_m(&mut m);
     for _ in 0..40 {
         common::cross_mulligan(&mut m);
-        m.tick(0.25);
+        drive_m(&mut m, 1);
     }
     let mut rm = RecordedMatch::from_snapshot(m);
     let mut rng = Rng::new(99);
@@ -317,7 +501,7 @@ fn partial_snapshot_records() {
     drain(rm.inner(), &mut last_id, &mut events);
     let mut steps = 0u32;
     while !rm.inner().ended() {
-        rm.tick_steps(1 + rng.below(6) as u8);
+        drive(&mut rm, 1 + rng.below(6) as u8);
         drain(rm.inner(), &mut last_id, &mut events);
         steps += 1;
         assert!(steps < 200_000);
@@ -333,6 +517,45 @@ fn partial_snapshot_records() {
 }
 
 // ---------------------------------------------------------------- format
+
+/// A v3 body has no bot commands: its bots were engine-driven, so the
+/// replayer must re-arm them (`Replayer::machine_seats`) or the replay stalls.
+/// This pins the one legacy path the pump-driven v4 tests no longer exercise.
+#[test]
+fn v3_records_replay_engine_driven_bots() {
+    let members = vec![
+        member(1, true, BotMentality::Standard),
+        member(2, true, BotMentality::Standard),
+    ];
+    let mut rm = RecordedMatch::new(data(), rules(), setup(members, 3), MatchMode::Casual);
+    rm.quick_start();
+    for id in [1, 2] {
+        rm.inner_mut().set_machine_seat(id, true);
+    }
+    let mut last_id = 0;
+    let mut events = Vec::new();
+    let mut steps = 0u32;
+    while !rm.inner().ended() {
+        rm.tick_steps(1);
+        // Close the tick run (`member_back` is a no-op on a bot) so the
+        // replayer reaches the run end -- where it re-arms `ai` -- at the same
+        // point as this loop. An answering routine restores its pre-prompt
+        // snapshot, whose `ai` bits are off, so re-arm after every tick.
+        rm.member_back(1);
+        for id in [1, 2] {
+            rm.inner_mut().set_machine_seat(id, true);
+        }
+        drain(rm.inner(), &mut last_id, &mut events);
+        steps += 1;
+        assert!(steps < 20_000, "v3 game did not progress");
+        if rm.inner().state().round > 2 {
+            rm.finish();
+            drain(rm.inner(), &mut last_id, &mut events);
+        }
+    }
+    let file = rm.export(stamp_v3(), "2026-10-07 00:00");
+    assert_round_trip(&file, &events, "v3 engine-driven");
+}
 
 #[test]
 fn corruption_is_corrupt_and_unknown_format_is_format() {
@@ -448,6 +671,7 @@ fn tampered_act_is_caught_as_divergence_at_the_next_checkpoint() {
     ];
     let mut rm = RecordedMatch::new(data(), rules(), setup(members, 11), MatchMode::Casual);
     rm.quick_start();
+    pump(&mut rm);
     let mut rng = Rng::new(11);
     let mut last_id = 0;
     let mut events = Vec::new();
@@ -457,8 +681,9 @@ fn tampered_act_is_caught_as_divergence_at_the_next_checkpoint() {
         if rng.below(3) == 0 {
             let _ = rm.act(1, &random_msg(&mut rng, &data()));
         } else {
-            rm.tick_steps(1 + rng.below(5) as u8);
+            drive(&mut rm, 1 + rng.below(5) as u8);
         }
+        pump(&mut rm);
         drain(rm.inner(), &mut last_id, &mut events);
         steps += 1;
         assert!(steps < 200_000);
@@ -528,6 +753,7 @@ fn rejected_acts_replay_to_the_same_err() {
     ];
     let mut rm = RecordedMatch::new(data(), rules(), setup(members, 21), MatchMode::Casual);
     rm.quick_start();
+    let harness_acts = pump(&mut rm);
     let mut rng = Rng::new(21);
     let mut last_id = 0;
     let mut events = Vec::new();
@@ -540,8 +766,9 @@ fn rejected_acts_replay_to_the_same_err() {
             let r = rm.act(1, &msg);
             recorded.push((1, msg.clone(), r.err().map(|e| e.key().to_string())));
         } else {
-            rm.tick_steps(1 + rng.below(4) as u8);
+            drive(&mut rm, 1 + rng.below(4) as u8);
         }
+        pump(&mut rm);
         drain(rm.inner(), &mut last_id, &mut events);
         steps += 1;
         assert!(steps < 200_000);
@@ -559,11 +786,23 @@ fn rejected_acts_replay_to_the_same_err() {
     // Replay input-by-input and compare each act's outcome, Ok and Err alike.
     let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
     let mut seen = 0usize;
-    for input in &file.body.inputs {
+    let mut skipped_harness = 0usize;
+    for input in file.body.inputs.iter() {
         rp.next_input();
         if let Input::Act { m, msg, ok } = input {
             let r = rp.last_act().expect("an act was just applied");
             assert_eq!(r.is_ok(), *ok, "act {seen} ok bit");
+            // The harness answers the opening mulligan for every seat; those
+            // are recorded inputs too, but only member 1 is scripted here.
+            if *m != 1 {
+                continue;
+            }
+            // The harness's mulligan answers are member-1 acts too; only the
+            // scripted acts below are compared.
+            if skipped_harness < harness_acts {
+                skipped_harness += 1;
+                continue;
+            }
             let got = r.as_ref().err().map(|e| e.key().to_string());
             let (want_m, want_msg, want_err) = &recorded[seen];
             assert_eq!(m, want_m, "act {seen} seat");
@@ -635,12 +874,13 @@ fn u64_and_f32_values_are_bit_exact() {
     ];
     let mut rm = RecordedMatch::new(data(), rules(), setup(members, big), MatchMode::Casual);
     rm.quick_start();
+    pump(&mut rm);
     let mut rng = Rng::new(big);
     let mut events = Vec::new();
     let mut last_id = 0;
     drain(rm.inner(), &mut last_id, &mut events);
     while !rm.inner().ended() {
-        rm.tick_steps(1 + rng.below(5) as u8);
+        drive(&mut rm, 1 + rng.below(5) as u8);
         drain(rm.inner(), &mut last_id, &mut events);
         if rm.inner().state().round > 6 {
             rm.finish();
@@ -715,11 +955,12 @@ fn export_with_events_bundles_the_public_log() {
         MatchMode::Casual,
     );
     rm.quick_start();
+    pump(&mut rm);
     let mut last_id = 0;
     let mut live = Vec::new();
     drain(rm.inner(), &mut last_id, &mut live);
     while !rm.inner().ended() {
-        rm.tick_steps(3);
+        drive(&mut rm, 3);
         drain(rm.inner(), &mut last_id, &mut live);
         if rm.inner().state().round > 6 {
             rm.finish();
@@ -747,9 +988,10 @@ fn recorder_json_round_trips_through_restore() {
     ];
     let mut rm = RecordedMatch::new(data(), rules(), setup(members, 31), MatchMode::Casual);
     rm.quick_start();
+    pump(&mut rm);
     for _ in 0..25 {
         cross_mulligan_rec(&mut rm);
-        rm.tick_steps(2);
+        drive(&mut rm, 2);
     }
     let save = rm.inner().save();
     let rec_json = rm.recorder_json();
@@ -759,8 +1001,8 @@ fn recorder_json_round_trips_through_restore() {
     // Continue both by the same 25 steps: the restored recorder picks the log
     // up where it left off and produces the same record.
     for _ in 0..25 {
-        rm.tick_steps(2);
-        restored.tick_steps(2);
+        drive(&mut rm, 2);
+        drive(&mut restored, 2);
     }
     let a = rm.export(stamp(), "x");
     let b = restored.export(stamp(), "x");
@@ -830,12 +1072,13 @@ fn solo_preset_personas_round_trip() {
                 phase == "deck" || phase == "play",
                 "seed {seed} n {n}: preset must skip ban/pick, got {phase}"
             );
+            pump(&mut rm);
             let mut steps = 0u32;
             let mut events: Vec<MatchEvent> = Vec::new();
             let mut last_id = 0;
             drain(rm.inner(), &mut last_id, &mut events);
             while !rm.inner().ended() && rm.inner().state().round < 3 {
-                rm.tick_steps(1 + (steps % 3) as u8);
+                drive(&mut rm, 1 + (steps % 3) as u8);
                 steps += 1;
                 drain(rm.inner(), &mut last_id, &mut events);
                 assert!(steps < 50_000, "seed {seed} n {n}: no progress");
@@ -866,8 +1109,9 @@ fn ruleset_mismatch_is_named_and_non_fatal() {
         })
         .collect();
     let mut rm = RecordedMatch::new(d.clone(), rules(), setup(members, 7), MatchMode::Solo);
+    pump(&mut rm);
     while !rm.inner().ended() && rm.inner().state().round < 2 {
-        rm.tick_steps(2);
+        drive(&mut rm, 2);
     }
     let mut file = rm.export(stamp(), "x");
     // Pretend the record was written under a real ruleset build.
@@ -914,13 +1158,14 @@ fn round_trip_1000_seeds() {
             .collect();
         let mut rm = RecordedMatch::new(data(), rules(), setup(members, seed), MatchMode::Casual);
         rm.quick_start();
+        pump(&mut rm);
         let mut rng = Rng::new(seed ^ 0xD1CE);
         let mut events = Vec::new();
         let mut last_id = 0;
         drain(rm.inner(), &mut last_id, &mut events);
         let mut steps = 0u32;
         while !rm.inner().ended() {
-            rm.tick_steps(1 + rng.below(10) as u8);
+            drive(&mut rm, 1 + rng.below(10) as u8);
             drain(rm.inner(), &mut last_id, &mut events);
             steps += 1;
             assert!(steps < 300_000, "seed {seed}");
@@ -984,8 +1229,9 @@ fn recorded_match_overhead_is_under_two_percent() {
                         ScoreWeights::default(),
                     );
                     m.quick_start();
+                    pump_m(&mut m);
                     while !m.ended() {
-                        m.tick((1 + rng.below(10)) as f32 * STEP);
+                        drive_m(&mut m, 1 + rng.below(10) as u8);
                         if m.world().st.round > 30 {
                             m.finish();
                         }
@@ -1002,9 +1248,10 @@ fn recorded_match_overhead_is_under_two_percent() {
                         ScoreWeights::default(),
                     );
                     m.quick_start();
+                    pump_m(&mut m);
                     let mut last = (i32::MIN, i32::MIN);
                     while !m.ended() {
-                        m.tick((1 + rng.below(10)) as f32 * STEP);
+                        drive_m(&mut m, 1 + rng.below(10) as u8);
                         let st = &m.world().st;
                         let key = (st.round, st.turn);
                         if key != last {
@@ -1024,8 +1271,9 @@ fn recorded_match_overhead_is_under_two_percent() {
                         MatchMode::Casual,
                     );
                     rm.quick_start();
+                    pump(&mut rm);
                     while !rm.inner().ended() {
-                        rm.tick_steps(1 + rng.below(10) as u8);
+                        drive(&mut rm, 1 + rng.below(10) as u8);
                         if rm.inner().world().st.round > 30 {
                             rm.finish();
                         }
@@ -1080,6 +1328,7 @@ fn checkpoint_cost_breakdown() {
         ScoreWeights::default(),
     );
     m.quick_start();
+    pump_m(&mut m);
     let mut last = (i32::MIN, i32::MIN);
     let mut turns = 0u32;
     let mut save_ns = 0u64;
@@ -1087,7 +1336,7 @@ fn checkpoint_cost_breakdown() {
     let mut bytes = 0usize;
     let game0 = std::time::Instant::now();
     while !m.ended() {
-        m.tick(0.25);
+        drive_m(&mut m, 1);
         let st = &m.world().st;
         let key = (st.round, st.turn);
         if key != last {
@@ -1146,9 +1395,11 @@ fn small_index_chunks_match_one_pass() {
 fn index_reports_how_far_it_has_reached() {
     let (file, _) = run_bot_game(9, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
     let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
-    let first = rp.index(5);
+    // The opening mulligan answers replay as non-tick inputs, so the first
+    // chunk can be all of those; give the run room to reach a tick.
+    let first = rp.index(20);
     assert!(
-        !first.done && first.tick > 0 && first.tick <= 5,
+        !first.done && first.tick > 0 && first.tick <= 20,
         "tick {}",
         first.tick
     );

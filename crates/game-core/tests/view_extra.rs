@@ -34,6 +34,12 @@ fn solo(seed: u64) -> Match {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients (`docs/BOT-DRIVE.md`) and stay `ai = false`; these
+    // fixtures only inspect views, so put the bot seats back on the engine
+    // schedule. No tick here -- a caller may want the ban / pick phase.
+    for i in 2..=3 {
+        m.set_machine_seat(i, true);
+    }
     m
 }
 
@@ -142,6 +148,12 @@ fn solo_with(rules: Arc<dyn CardRules>, seed: u64) -> Match {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients (`docs/BOT-DRIVE.md`) and stay `ai = false`; these
+    // fixtures only inspect views, so put the bot seats back on the engine
+    // schedule. No tick here -- a caller may want the ban / pick phase.
+    for i in 2..=3 {
+        m.set_machine_seat(i, true);
+    }
     m
 }
 
@@ -160,6 +172,11 @@ fn wait_ops(m: &mut Match, me: i32) {
             break;
         }
         {
+            // An answering routine restores its pre-prompt snapshot, whose
+            // `ai` bits are off: keep the bots on the engine schedule.
+            for i in 2..=3 {
+                m.set_machine_seat(i, true);
+            }
             let st = m.state();
             if st.turn == seat && st.step == stage::OPS && !st.busy {
                 return;

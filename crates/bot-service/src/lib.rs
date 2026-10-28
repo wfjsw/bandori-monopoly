@@ -58,7 +58,9 @@ use serde_json::{json, Value};
 // the engine's own heuristic from the view alone when this service is slow or
 // gone (`docs/BOT.md` §1).
 pub use bot_core::action as bot_action;
+pub use bot_core::determinize;
 pub use bot_core::heuristic_message_view;
+pub use bot_core::policy;
 pub use bot_core::SeatView as BotSeatView;
 pub use bot_core::{next_turn_near, predict_upcoming_view};
 
@@ -359,6 +361,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
 
         "decide" => decide(ctx, req),
 
+        // The policy alone, no search (`docs/BOT-DRIVE.md`): the standard /
+        // chaos seats' drive.
+        "act" => act(ctx, req),
+
         // Speculative search while other seats act (BOT-RESEARCH #5). The
         // result is cached by the view's decision key and reused by a later
         // `decide` that matches it.
@@ -377,6 +383,25 @@ fn parse_opts_budget(req: &Value) -> u64 {
         .and_then(Value::as_u64)
         .unwrap_or(200)
         .clamp(MIN_BUDGET_MS, MAX_BUDGET_MS)
+}
+
+/// `{room, seat, view, seed}` -> `{answer, iterations: 0, elapsed_ms,
+/// heuristic: true}`. The policy alone on the determinized fork -- no search,
+/// no tree, no ponder cache (`docs/BOT-DRIVE.md`).
+fn act(ctx: &Ctx, req: &Value) -> Result<Value, String> {
+    let started = Instant::now();
+    let view: SeatView = parse(req, "view")?;
+    let seed = req.get("seed").and_then(Value::as_u64).unwrap_or(0);
+    let mut rng = bot_core::determinize::DeterminizerRng::new(seed);
+    let answer = bot_core::policy::act_for_view(&ctx.data, &ctx.rules, &view, &mut rng)
+        .ok_or_else(|| "nothing for this seat to decide".to_string())?;
+    Ok(json!({
+        "ok": true,
+        "answer": answer,
+        "iterations": 0,
+        "heuristic": true,
+        "reused": false,
+    }))
 }
 
 /// `{room, seat, view, prompt_id, budget_ms, seed}` ->
@@ -751,6 +776,20 @@ pub fn decide_request(
         "view": view,
         "prompt_id": prompt_id,
         "budget_ms": budget_ms,
+        "seed": seed,
+    })
+}
+
+/// Build an `act` request: the policy's command for the seat owning `view`,
+/// with no search (`docs/BOT-DRIVE.md`). Same view frame as
+/// [`decide_request`]; `seed` is the determinizer's, never the match's.
+pub fn act_request(id: u64, room: &str, seat: i32, view: &Value, seed: u64) -> Value {
+    json!({
+        "id": id,
+        "op": "act",
+        "room": room,
+        "seat": seat,
+        "view": view,
         "seed": seed,
     })
 }

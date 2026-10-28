@@ -9,7 +9,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { advancedSeats, driveSeat, type DriveHooks } from "./botDrive.ts";
+import { botSeats, driveSeat, type DriveHooks } from "./botDrive.ts";
 import { decisionAt } from "./botBudget.ts";
 import type { Command, MatchView, MatchState, MatchPlayer } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";
@@ -158,21 +158,22 @@ function okAnswer(act: string, extra: Partial<BotDecideResult> = {}): BotDecideR
   };
 }
 
-// ---------------------------------------------------------------- advancedSeats
+// ---------------------------------------------------------------- botSeats
 
-test("advancedSeats: only held advanced bot seats", () => {
+test("botSeats: every held bot seat, no matter its mentality", () => {
   const v = view({
     state: state({
       players: [
         player({ member: 1, bot: false, ai: false }),
         player({ member: 2, bot: true, ai: false, mentality: "advanced" }),
         player({ member: 3, bot: true, ai: true, mentality: "advanced" }), // engine-driven
-        player({ member: 4, bot: true, ai: false, mentality: "standard" }), // not advanced
-        player({ member: 5, bot: true, ai: false, mentality: "advanced", left: true }), // gone
+        player({ member: 4, bot: true, ai: false, mentality: "standard" }),
+        player({ member: 5, bot: true, ai: false, mentality: "chaos" }),
+        player({ member: 6, bot: true, ai: false, mentality: "advanced", left: true }), // gone
       ],
     }),
   });
-  assert.deepEqual(advancedSeats(v), [2]);
+  assert.deepEqual(botSeats(v), [2, 4, 5]);
 });
 
 // ---------------------------------------------------------------- driveSeat

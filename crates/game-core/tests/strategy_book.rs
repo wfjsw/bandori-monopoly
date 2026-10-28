@@ -373,6 +373,22 @@ fn new_match(data: Arc<GameData>, seed: u64) -> Match {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients (`docs/BOT-DRIVE.md`) and stay `ai = false`; these tests
+    // exercise the engine policy, so keep the seats on the engine schedule.
+    // An answering routine re-runs from its pre-prompt snapshot (whose bits are
+    // off), so re-arm around the opening prompts too.
+    for _ in 0..20 {
+        for i in 1..=4 {
+            m.set_machine_seat(i, true);
+        }
+        if m.state().prompt.id == 0 && !m.state().busy {
+            break;
+        }
+        m.tick(0.25);
+    }
+    for i in 1..=4 {
+        m.set_machine_seat(i, true);
+    }
     m
 }
 
