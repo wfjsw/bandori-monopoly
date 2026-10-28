@@ -111,9 +111,13 @@ fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
     #[cfg(kani)]
     {
         // Fixed arena slot — never `vec![0u8; cap]` (`extend_with` cliff when
-        // `cap` is a host return). Scratch is empty: `out_read` pulls the bytes.
+        // `cap` is a host return). `out_read` ignores the scratch and pulls
+        // the bytes from the arena, but it still gets dropped: a cap-0 `Vec`
+        // drops a dangling pointer through the Kani 0.68 niche-`Cap`
+        // read-back (false positive, see `owned_tiles`), so keep a concrete
+        // capacity (64 = `native::arena::MAX_BUF`).
         let (h, _l) = crate::native::reserve(cap);
-        (h, alloc::vec::Vec::new())
+        (h, alloc::vec::Vec::with_capacity(64))
     }
     #[cfg(not(kani))]
     #[cfg(target_arch = "wasm32")]
@@ -344,9 +348,11 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
     // Bounded loop instead of a symbolic-length Range fold (the `collect`
     // → `extend_trusted` path is an unwinding cliff at 32). Same result.
     let n = owned_count(player_id).max(0).min(8) as usize;
-    // Exact capacity: a `Vec::new()` push grows through `__rust_realloc` and
-    // aborts the path in `kani::mem::cbmc::same_allocation` (2026-10-28).
-    let mut v = Vec::with_capacity(n);
+    // Concrete capacity, not `with_capacity(n)`: `n` crosses the host
+    // function-pointer call, so CBMC keeps it symbolic and the `__rust_dealloc`
+    // layout check cannot relate the allocation size to the drop (timeout or
+    // spurious FAIL). A fixed ≤8 capacity makes both sides constant.
+    let mut v = Vec::with_capacity(8);
     let mut i = 0usize;
     while i < n {
         v.push(owned_at(player_id, i as i32));
@@ -455,9 +461,15 @@ pub fn neighbor(player_id: i32, dir: i32) -> i32 {
 
 /// Present players standing on a tile.
 pub fn players_on(tile: i32, except: i32) -> Vec<i32> {
-    (0..players_on_count(tile, except))
-        .map(|i| players_on_at(tile, except, i))
-        .collect()
+    // Concrete cap, same host-call reason as `others`.
+    let n = players_on_count(tile, except);
+    let mut v = Vec::with_capacity(4);
+    let mut i = 0;
+    while i < n {
+        v.push(players_on_at(tile, except, i));
+        i += 1;
+    }
+    v
 }
 
 fn players_on_count(tile: i32, except: i32) -> i32 {
@@ -521,9 +533,18 @@ pub fn others_at(player_id: i32, index: i32) -> i32 {
 
 /// The other players still in the game.
 pub fn others(player_id: i32) -> Vec<i32> {
-    (0..others_count(player_id))
-        .map(|i| others_at(player_id, i))
-        .collect()
+    // Concrete cap: `others_count` crosses a host call, so `collect` would
+    // size the Vec symbolically and its drop trips the Kani 0.68
+    // `__rust_dealloc` layout check (see `owned_tiles`). A match has at most
+    // four seats.
+    let n = others_count(player_id);
+    let mut v = Vec::with_capacity(4);
+    let mut i = 0;
+    while i < n {
+        v.push(others_at(player_id, i));
+        i += 1;
+    }
+    v
 }
 
 /// The player's current cash.
@@ -670,16 +691,20 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
         if payers.len() > 4 {
             kani::assert(false, "split_pay: more than 4 payers under Kani");
         }
+        // Concrete cap on every returned `Vec` (including the empty ones):
+        // the caller drops it, and a cap-0 `Vec` is dropped through the
+        // Kani 0.68 niche-`Cap` read-back (false positive, see
+        // `owned_tiles`).
         if n == 0 || total <= 0 {
-            return Ok(Vec::new());
+            return Ok(Vec::with_capacity(4));
         }
         let Some(shaped) = pay_total(list[0], to, total, src)? else {
-            return Ok(Vec::new());
+            return Ok(Vec::with_capacity(4));
         };
         let ln = n as i32;
         let per = (shaped + ln - 1) / ln;
         let share = (per + 9) / 10 * 10;
-        let mut moved = Vec::new();
+        let mut moved = Vec::with_capacity(4);
         macro_rules! leg {
             ($i:expr) => {
                 if $i < n {
@@ -861,23 +886,29 @@ fn decode_uid_name_list(buf: &[u8]) -> Vec<(i32, NameId)> {
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     // `need` is the encoded buffer size `1 + n`; `n = 0` is the empty pile.
+    // Empty still carries the concrete capacity: a cap-0 `Vec` drops a
+    // dangling pointer whose dealloc layout travels through the Kani 0.68
+    // niche-`Cap` read-back (false positive, see `owned_tiles`).
     if need < 2 {
-        return Vec::new();
+        return Vec::with_capacity(8);
     }
     // Known exact push count: size the Vec once (bounded ≤ 8) so the pushes
     // below never grow it -- a realloc here trips the CBMC dealloc layout
     // checks (same fix as `owned_tiles`).
     let n = (need - 1).min(8) as usize;
     let (p, scratch) = out_buf(need as usize);
+    // (capacity is made concrete at `with_capacity` below, see `owned_tiles`.)
     let got = unsafe { sys::cards_in(player_id, pile as i32, p, need) };
     if got != need {
-        return Vec::new();
+        return Vec::with_capacity(8);
     }
     let buf = out_read(p, got, scratch);
     // Interned short static names. The literal FNV hashes constant-fold;
     // no `String::from`, no `memcmp` on the proof path.
     const SLOTS: [&str; 4] = ["c0", "c1", "c2", "c3"];
-    let mut out: Vec<NameId> = Vec::with_capacity(n);
+    // Concrete cap (see `owned_tiles`): `need` is symbolic through the host
+    // call even when the pile is empty on every feasible path.
+    let mut out: Vec<NameId> = Vec::with_capacity(8);
     let mut i = 0usize;
     while i < n {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
@@ -906,8 +937,13 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
 /// copies of one card; when the player is picking a *title*, list each id
 /// once (C# `Distinct()`).
 pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
-    let mut ids: Vec<NameId> = Vec::new();
-    for c in cards_in(player_id, pile) {
+    // Concrete cap (see `owned_tiles`): the mixed push/realloc growth is
+    // capped at `cards_in`'s own 8 anyway.
+    let mut ids: Vec<NameId> = Vec::with_capacity(8);
+    // By reference: consuming the `cards_in` `Vec` into an `IntoIter` makes
+    // the drop go through the Kani 0.68 niche-`Cap` read-back, which can
+    // deallocate with a bogus size (allocator-check false positive).
+    for &c in &cards_in(player_id, pile) {
         if !ids.contains(&c) {
             ids.push(c);
         }
@@ -2423,7 +2459,15 @@ pub fn pick_take_from(
         }
         return Ok(None);
     }
-    let refs: Vec<&str> = cards.iter().map(|c| c.as_str()).collect();
+    // Concrete cap: `cards.len()` is symbolic and the `collect` sizing
+    // crosses the `ask_card` host call before the drop (Kani 0.68
+    // `__rust_dealloc` layout check, see `owned_tiles`); callers cap at 8.
+    let mut refs: Vec<&str> = Vec::with_capacity(8);
+    let mut i = 0usize;
+    while i < cards.len() {
+        refs.push(cards[i].as_str());
+        i += 1;
+    }
     let pick = ask_card(player_id, title, text, &refs)?;
     let id = cards[pick.min(cards.len() - 1)];
     Ok(take_card(player_id, id.as_str(), pile).then_some(id))

@@ -1222,13 +1222,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_query_guard"
         )]
-        pub fn query_guard(
-            player_id: i32,
-            ptr: i32,
-            len: i32,
-            e_ptr: i32,
-            e_len: i32,
-        ) -> i32;
+        pub fn query_guard(player_id: i32, ptr: i32, len: i32, e_ptr: i32, e_len: i32) -> i32;
         /// The running activation's declared arg as postcard bytes
         /// (docs/ACTIVATION.md §2). `out_ptr=0` asks for the size.
         #[cfg_attr(

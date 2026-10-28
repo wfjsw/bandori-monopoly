@@ -177,3 +177,9 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 pub fn settle_before_kani(player_id: i32) -> card_sdk::Asked {
     settle_before(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_tag_kani(player_id: i32) -> card_sdk::Asked {
+    clear_tag(player_id)
+}

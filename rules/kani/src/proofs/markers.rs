@@ -29,8 +29,9 @@ use crate::world::{self, Effect, Mark, World, MAX_PLAYERS};
 fn call_mark_cp_land(player: i32) {
     let def = rules_markers::MARK_CP;
     for on in def.on.iter() {
-        if let card_sdk::On::Action(_, _, _, _, f) = on {
-            invoke::unwrap_done(f(player));
+        if let card_sdk::On::Action(e) = on {
+            // The body is erased (`*const ()`); its `drive` owns the cast.
+            invoke::unwrap_done((e.drive)(player, e.body));
             return;
         }
     }
@@ -79,8 +80,10 @@ fn symbolic_cp_world(settler: i32, tile: i32) -> World {
 fn mark_cp_guard(player: i32) -> bool {
     let card = rules_markers::MARK_CP;
     for on in card.on.iter() {
-        if let card_sdk::On::Action(_, _, _, Some(g), _) = on {
-            return g(player);
+        if let card_sdk::On::Action(e) = on {
+            if let Some(g) = e.guard {
+                return g(player);
+            }
         }
     }
     false

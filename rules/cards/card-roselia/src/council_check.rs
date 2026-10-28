@@ -50,12 +50,25 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
 /// C# `CardCouncilCheck.Near` -- own deeds within 3 tiles either way (`H.Dist`).
 fn near(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
-    ctx::owned_tiles(player_id)
-        .into_iter()
+    let owned = ctx::owned_tiles(player_id);
+    // Explicit loop + exact capacity instead of `filter(..).collect()`: the
+    // `collect` specialization reuses the source allocation in place and its
+    // dealloc layout trips the CBMC allocator checks under Kani. Iterate by
+    // reference: consuming a cap-0 `Vec` into `IntoIter` makes its drop
+    // deallocate the dangling pointer with a bogus size under Kani 0.68
+    // (allocator-check false positive), while a direct `Vec` drop is fine.
+    // Concrete cap: `owned.len()` crosses a call, and CBMC then cannot relate
+    // the allocation size to the drop layout (Kani 0.68 allocator-check
+    // false positive); `owned_tiles` is capped at 8.
+    let mut out = Vec::with_capacity(8);
+    for &t in &owned {
         // TODO(规则书)（前后三格内）: 书中没说算不算脚下这一格 -- `ctx::dist` 把所在
         //   格算 0，即落在自己的地契上也可以放（与「所在格子前后2格内」的既有读法一致）.
-        .filter(|&t| ctx::dist(pos, t) <= 3)
-        .collect()
+        if ctx::dist(pos, t) <= 3 {
+            out.push(t);
+        }
+    }
+    out
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -77,10 +90,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     ctx::linger(player_id, 0);
     // 规则书[反击]: 「但可支付那格一层房屋的建造价格一半将此卡放于那个格子上」 -- only
     // near deeds with a house build cost (C# `H._tiles[t].house > 0`).
-    let spots: Vec<i32> = near(player_id)
-        .into_iter()
-        .filter(|&t| ctx::build_cost(t) > 0)
-        .collect();
+    let near_tiles = near(player_id);
+    let mut spots: Vec<i32> = Vec::with_capacity(8);
+    // Same non-specialized, by-reference loop reason as `near`.
+    for &t in &near_tiles {
+        if ctx::build_cost(t) > 0 {
+            spots.push(t);
+        }
+    }
     if spots.is_empty() {
         return Ok(());
     }

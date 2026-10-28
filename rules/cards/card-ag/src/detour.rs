@@ -115,17 +115,34 @@ fn some_plan_fires(player_id: i32) -> bool {
         .any(|id| ctx::query_guard(player_id, id, ctx::entry::PRESS))
 }
 
-/// The card's own activation argument -- private to this file
+/// The card's own activation argument -- nobody else uses the type
 /// (docs/ACTIVATION.md §2). Not shared with any other card: only `postcard`
-/// crosses, so the shape is ours to choose.
+/// crosses, so the shape is ours to choose. `pub` so the `cfg(kani)`
+/// `*_with_plan_kani` exports can name it in their signature.
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
-struct DetourPick {
+pub struct DetourPick {
     /// Index into [`PLANS`].
     plan: i32,
     /// Unused: always -1 (`apply_plan` recomputes the aim from `plan`).
     tile: i32,
     /// Unused: always -1.
     seat: i32,
+}
+
+/// `kani::any()` for the two `*_with_plan_kani` exports the generated dispatch
+/// calls (the buffer-ABI argument cannot be synthesised under Kani). `plan`
+/// stays inside `PLANS`; the two unused fields stay at their real `-1`.
+#[cfg(kani)]
+impl kani::Arbitrary for DetourPick {
+    fn any() -> Self {
+        let plan: i32 = kani::any();
+        kani::assume(plan >= 0 && plan < PLANS.len() as i32);
+        DetourPick {
+            plan,
+            tile: -1,
+            seat: -1,
+        }
+    }
 }
 
 /// Activation-argument collector (docs/ACTIVATION.md §2): which 「(2)」 to arm.

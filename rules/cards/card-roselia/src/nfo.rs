@@ -86,7 +86,9 @@ fn nearest_ahead(player_id: i32) -> i32 {
     }
     let mut best = -1;
     let mut best_d = i32::MAX;
-    for o in ctx::others(player_id) {
+    // By reference: consuming the `Vec` into `IntoIter` trips the Kani 0.68
+    // `__rust_dealloc` layout check (see `replay_from_discard`).
+    for &o in &ctx::others(player_id) {
         let p = ctx::player_pos(o);
         if p < 0 || p == pos {
             continue;
@@ -230,10 +232,22 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
     // discard while this runs (a hand play removed it from the hand; a replayed
     // copy was taken by `pick_take_from`), so another copy is a legal choice --
     // NFO has no play gate.
-    let ok = ctx::distinct_cards_in(player_id, ctx::CardPile::Graveyard)
-        .into_iter()
-        .filter(|id| ctx::query_guard(player_id, id.as_str(), ctx::entry::PRESS))
-        .collect::<Vec<_>>();
+    // Explicit loop + exact capacity: `filter(..).collect()` would use the
+    // in-place `collect` specialization, whose dealloc layout trips the CBMC
+    // allocator checks under Kani. Iterate by reference: consuming a cap-0
+    // `Vec` into `IntoIter` makes its drop deallocate the dangling pointer
+    // with a bogus size under Kani 0.68 (allocator-check false positive),
+    // while a direct `Vec` drop is fine.
+    let ids = ctx::distinct_cards_in(player_id, ctx::CardPile::Graveyard);
+    // Concrete cap: `ids.len()` crosses a call, and CBMC then cannot relate
+    // the allocation size to the drop layout (Kani 0.68 allocator-check
+    // false positive). `distinct_cards_in` is capped at 8.
+    let mut ok = Vec::with_capacity(8);
+    for &id in &ids {
+        if ctx::query_guard(player_id, id.as_str(), ctx::entry::PRESS) {
+            ok.push(id);
+        }
+    }
     let Some(id) = ctx::pick_take_from(
         player_id,
         ctx::CardPile::Graveyard,

@@ -225,3 +225,9 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 pub fn buy_after_kani(player_id: i32) -> card_sdk::Asked {
     buy_after(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn crystals_empty_kani(player_id: i32) -> card_sdk::Asked {
+    crystals_empty(player_id)
+}

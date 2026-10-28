@@ -96,7 +96,9 @@ crate::host_subset!(nfo_play_dispatch {
     roll | roll_direct => arm_roll,
     schedule_turn_end => arm_schedule_turn_end,
     log | effect => arm_log,
+    // `ctx::player_out` reads `player_count` under Kani before the out bit.
     player_out => arm_player_out,
+    player_count => arm_player_count,
     gain | gain_typed | gain_fixed => arm_gain,
     tile_count => arm_tile_count,
     player_pos => arm_player_pos,

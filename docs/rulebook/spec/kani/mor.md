@@ -48,8 +48,8 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-light-02 | 「此次移动以"月之森女子学院"为起点（不触发起点地块效果）」 | PROTOCOL-LEVEL | — | — | `plan::set_start` scheduling | OPEN-移动起点 |
 | C-MOR-again-01 | 「[反击]当…前一名玩家[消耗]或[支付]大于0资金后…并[消耗]等量资金」 | PROTOCOL-LEVEL | — | — | [反击] window (KANI.md §6) | — |
 | C-MOR-again-02 | 「[持续]：[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 | PROVEN | `again_02_cancel_iff`, `again_02_mutant_is_detected` | (pending) | SetPayAmount(0) + dest=Graveyard | OPEN-取消范围 |
-| C-MOR-courage-01 | 「…所有者向你支付…购买价格+…房子的建造价格总额的一半」 | PROVEN | `courage_01_pay_iff`, `courage_01_pay_user1_iff`, `courage_01_mutant_is_detected` | **SUCCESSFUL 450/475/640 s at 900 s timeout** (pay/user1/mutant) | the amount is pinned (harness sets `World::forced_roll`; `courage_01_amount` asserts the exact figure); `tile_price`/`buy_price` are 0-based and house-aware. All three run past the 420 s runner default — give them a per-harness timeout of at least 900 s | — |
-| C-MOR-courage-02 | 「若为地产商地块，获得1000资金」 | BLOCKED-HOST | `courage_02_agent_iff` | (pending) | `is_agent` off-by-one (tile 5 property reads as agent) | — |
+| C-MOR-courage-01 | 「…所有者向你支付…购买价格+…房子的建造价格总额的一半」 | PROVEN | `courage_01_pay_iff`, `courage_01_pay_user1_iff`, `courage_01_mutant_is_detected` | **SUCCESSFUL 497/511/589 s at 1800 s timeout** (pay/user1/mutant) | the amount is pinned (harness sets `World::forced_roll`; `courage_01_amount` asserts the exact figure); `tile_price`/`buy_price` are 0-based and house-aware. All three run past the 420 s runner default — give them a per-harness timeout of at least 900 s | — |
+| C-MOR-courage-02 | 「若为地产商地块，获得1000资金」 | PROVEN | `courage_02_agent_iff`, `courage_02_agent_user1_iff`, `courage_02_property_iff` | **SUCCESSFUL 387/341/321 s at 1800 s timeout** (agent/user1/property) | `forced_roll` pins the agent face and the neighbouring property face; agent ⇒ exactly GainMoney 1000, property ⇒ empty log, no money | — |
 | C-MOR-courage-03 | unowned tile ⇒ nobody pays | PROVEN | `courage_03_unowned_iff`, `courage_03_empty_when_no_agent_misfire` | (pending) | empty-effect limb + money frame | — |
 | C-MOR-summer-01 | 「直到下个自己的回合开始前，你只会被自己发动的效果指定」 | PROTOCOL-LEVEL | — | — | multi-turn designation window | OPEN-指定 |
 | C-MOR-summer-02 | 「当此卡效果结束…则抽一张牌」 | PROTOCOL-LEVEL | — | — | window end + negation counter | — |
@@ -226,12 +226,13 @@ Genuine D in this unit remains the rainbow-01/02 CeilTo-10 rows (keep FAILING).
 
 ## BLOCKED-HOST ops / fields needed
 
-1. **Tile indexing consistency** — `tile_price` / `buy_price` / `is_agent` /
-   `tile_group` must use the same 0-based index as `tile_owner` / `houses_of`
-   (real game is 0-based). Blocks courage-01/02, noble-01, toko swap.
-2. **`buy_price` must include houses** — currently land-only; blocks courage-01
-   amount and toko 「地契+房屋价格」.
-3. **`rent_of`** — unmodeled `Op`. Blocks `skill:桐谷透子` (2).
+1. ~~**Tile indexing consistency**~~ — fixed 2026-10-28: `tile_price` /
+   `buy_price` / `is_agent` / `tile_group` all use the 0-based engine index,
+   the same as `tile_owner` / `houses_of`.
+2. ~~**`buy_price` must include houses**~~ — fixed 2026-10-28: the arm folds
+   `houses × house_cost` like `quote_native`.
+3. ~~**`rent_of`**~~ — fixed 2026-10-28: modelled via `arm_rent_of`.
+   Unblocks `skill:桐谷透子` (2).
 4. **`tok_names`** — must list hand character marks. Blocks NNM-01/02/03/04.
 5. **`placed_cards`** — must return a name list, not a raw count. Blocks NNM-04.
 6. **`trig_move_main` / `trig_move_roll`** — unmodeled. Blocks starry-03/04.
