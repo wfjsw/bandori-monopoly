@@ -584,6 +584,8 @@ pub fn c_mygo_journey_frame(step: &Step<'_>) -> Result<(), String> {
             &format!("crystals:P{who}"),
             &format!("discard:P{who}"),
             &format!("discard_pub:P{who}"),
+            // The place stamps the `⌛4` face marker.
+            &format!("fprop:P{who}"),
         ],
     )
 }
@@ -635,6 +637,8 @@ fn journey_place_and_settle_gain() {
                 "crystals:P0",
                 "discard:P0",
                 "discard_pub:P0",
+                // The place stamps the `⌛4` face marker.
+                "fprop:P0",
             ],
         )?;
 
@@ -826,6 +830,8 @@ fn rainday_place_and_zone_stay() {
                 "state:P1:stay",
                 "state:P2:stay",
                 "turn.abnormal",
+                // The place stamps the `⌛5` face marker.
+                "fprop:P0",
             ],
         )
     })
