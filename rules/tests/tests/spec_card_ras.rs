@@ -474,6 +474,10 @@ fn please_choose_contract() {
         let houses = rng.range(1, 2);
         t.set_houses(SPACE, houses);
         t.give(0, &["RAS:PLEASE CHOOSE"]);
+        // 「视为可触发乐队技能」 witness: `MyGO:难以复刻的奇迹` records every
+        // other player the owner passes; the owner's own settle landing does not
+        // count, so only the teleport landing can set bit 1.
+        t.place_raw(0, "MyGO:难以复刻的奇迹");
         t.begin_turn(1);
         drain(&mut t);
         t.set_pos(1, SPACE - 1);
@@ -506,6 +510,14 @@ fn please_choose_contract() {
                 "C-RAS-please-choose-03: counteractor money {m0} -> {}, \
                  teleport must not settle",
                 t.money(0)
+            ));
+        }
+        // 「视为可触发乐队技能」 -- the landing raises `passTile`: the miracle
+        // records p1 (bit 1) as passed by p0.
+        if t.state(0, "miracle_passed") != 1 << 1 {
+            return Err(format!(
+                "C-RAS-please-choose-03: passTile mask {:b}, expected bit 1",
+                t.state(0, "miracle_passed")
             ));
         }
         Ok(())

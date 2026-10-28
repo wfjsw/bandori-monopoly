@@ -556,7 +556,7 @@ fn two_donuts_exile_holds_across_owner_turns() {
 }
 
 // 规则书 (1) 「直至…被其他玩家经过」 -- the exile ends the moment the original
-// tile is passed, not at the passer's settle. (2)/(3) then run unexiled, so
+// tile is passed, not at the passer's settle. (2) then runs unexiled, so
 // the overflow money is not blocked by 「无法收付款」.
 #[test]
 fn two_donuts_exile_ends_at_the_pass_and_money_is_not_blocked() {

@@ -158,9 +158,9 @@ pub fn fever_01_log_ok_mutant(effects: &[Effect], player: i32, this_card: u8) ->
 // 02: any [获得] to the owner while the card is on their field.
 // 03: any [支付] to the owner (a pure transfer) -- the transferred amount is
 //     raised by X.
-// OPEN / BLOCKED: the body reads the printed 600 through `ctx::n(0, 600)`;
-// the `play_doubled` host stub returns 0, which `n(0, …)` treats as "double
-// the 0th number". The BOOK value is 600. See the unit table.
+// The body reads the printed 600 through `ctx::n(1, 600)`; doubling slots are
+// 1-based (「后勤人员的努力」 names 1..9), so an armed slot 1 yields 1200. With
+// no doubling armed the BOOK value is 600. See the unit table.
 // ===========================================================================
 
 /// X = 600 - 200 * n, free to go below 0. `n` = number of face-up cards on
@@ -364,18 +364,22 @@ pub fn party_pays_out_mutant(roll_sum: i32) -> bool {
 // 「[手]：立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。」
 // The main-move rewrite + settle is engine scheduling (PROTOCOL-LEVEL). The
 // step-count bound is a pure contract: the chosen integer is in 1..=6.
-// The body also reads the printed 6 through `ctx::n(0, 6)` -- same
-// `play_doubled` stub issue as fever (BLOCKED-HOST for the printed bound).
+// Doubling slots are 1-based (`后勤人员的努力` names 1..9), so the body tags
+// the printed 6 as slot 1 (`ctx::n(1, 6)`) and a doubled play lifts the legal
+// set to 1..=12.
 // ===========================================================================
 
-/// Every legal step count of 「移动1到6以内的任意整数」.
-pub fn harvest_steps_ok(steps: i32) -> bool {
-    (1..=6).contains(&steps)
+/// Every legal step count of 「移动1到6以内的任意整数」. `doubled` is
+/// 「后勤人员的努力」 having named the printed 6 (cap 6 → 12).
+pub fn harvest_steps_ok(steps: i32, doubled: bool) -> bool {
+    let cap = if doubled { 12 } else { 6 };
+    (1..=cap).contains(&steps)
 }
 
 /// MUTANT: off-by-one high bound.
-pub fn harvest_steps_ok_mutant(steps: i32) -> bool {
-    (1..=7).contains(&steps)
+pub fn harvest_steps_ok_mutant(steps: i32, doubled: bool) -> bool {
+    let cap = if doubled { 13 } else { 7 };
+    (1..=cap).contains(&steps)
 }
 
 // ===========================================================================

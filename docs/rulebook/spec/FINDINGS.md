@@ -98,7 +98,7 @@ counted under the first tag; the dual is named in the row.)
 
 | clause ID | unit | class | what the book says | what the implementation does | evidence | status |
 |---|---|---|---|---|---|---|
-| C-MUJICA-视线-01 | mujica | WRONG (also LESS) | 「对你打出过[反击]的所有玩家…移动1~4」 | Body force-moves the immediate counter-user only (book: full turn's counteractor set). Engine also moves every other player when nobody countered. | `look_away_only_moves_counteractors` | REGRESSION-ONLY |
+| C-MUJICA-视线-01 | mujica | WRONG (also LESS) | 「对你打出过[反击]的所有玩家…移动1~4」 | Body force-moves the immediate counter-user only (book: full turn's counteractor set). A normal hand play currently moves nobody at all (`run` returns on the guard) -- the test passes only because its empty-target case expects no movement. | `look_away_only_moves_counteractors` | REGRESSION-ONLY |
 | C-MUJICA-欢迎-02 | mujica | WRONG | 「转换任意一名玩家的状态（…无效果）」 (「任意一名」 includes self; no 状态2 ⇒ no effect) | Prompt omits the user; toggles a non-状态2 seat instead of no-opping. | `welcome_offers_self_as_well` (LESS self), `welcome_no_state2_is_noop` (MORE) | REGRESSION-ONLY |
 | C-MUJICA-团技能-01 | mujica | MORE | 「1.5倍（只对自己结算，对应的其他玩家收支不变）」 | Engine moves 1.5x on **both** sides (owner receives 450 on a 300 rent). | `band_state2_pay_is_150_only_on_self` | REGRESSION-ONLY |
 | C-MUJICA-花火-03 | mujica | WRONG | 「最后一个奇迹水晶移除后…立刻使你获得2层[眩晕]」 | Engine leaves the user at 1 stun after the last crystal (turn-end layer tick). OPEN-花火眩晕掉层. | `sparkler_burn_and_last_stun` (pins 2; red at 1) | REGRESSION-ONLY |

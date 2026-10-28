@@ -93,6 +93,8 @@ crate::host_subset!(doll_garden_subset {
     others_at => arm_others_at,
     tile_forward | dist => arm_dist,
     player_pos => arm_player_pos,
+    // `state_key::UNSTOPPABLE` / `STUN_START` reads on the [无法移动] gate.
+    state_get => arm_state_get,
     ask => arm_ask,
     opt_str | opt_int | opt_tile => arm_opt,
     pay_to => arm_pay_to,

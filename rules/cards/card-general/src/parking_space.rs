@@ -15,7 +15,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";
@@ -27,6 +27,7 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
     "通用:[都筑诗船]Parking Space",
     &[
         On::Play("", Some(cant_play), play),
+        // 规则书（1）[持续]: 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
         On::Action(Action::SettleBody(
             "",
@@ -61,6 +62,7 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
 /// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile
 /// (`没有 Space`).
 fn cant_play(_player: i32) -> Option<Msg> {
+    // 规则书[手]: 「将此卡放置于“Space”格子上」 -- 没有 Space 格则不能打出.
     if ctx::tile_named("Space") >= 0 {
         return None;
     }
@@ -75,10 +77,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置于“Space”格子上」 -- bound to the Space tile, not
     // to the player's field.
     ctx::place_card_on(player_id, space, ID, &Msg::new(key!("parking_space_note")));
-    // （2）[持续]「位于此卡所在格子上的玩家无法使用角色及乐队技能」 -- the
+    // 规则书（2）[持续]: 「位于此卡所在格子上的玩家无法使用角色及乐队技能」 -- the
     // `skillBlock` mark is what the shared skill-press gate reads
     // (`ctx::skill_blocked` -> `count_marks(t, &MarkFilter::any().kind("skillBlock"))`).
     if space >= 0 {
+        // TODO(规则书)（2）: 卡背面朝上时不产生效果 -- 而 skillBlock 标记仍留在格上，
+        //   照样封技能.
         ctx::place_mark(
             space,
             "skillBlock",
@@ -91,28 +95,24 @@ fn play(player_id: i32) -> card_sdk::Asked {
         );
     }
     // 规则书[手]: 「将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）」
-    // -- C# takes `H.State.houses[s]` houses off the Space tile (only when the
-    // player owns it) and hands one to each of the player's other buildable deeds
-    // (`H.State.houses[s]--` then `H.AddHouse(i, item, ...)`, at most one per
-    // destination).
-    let mut num = if space >= 0 && ctx::tile_owner(space) == player_id {
-        ctx::houses_of(space)
-    } else {
-        0
-    };
+    // -- C# takes `H.State.houses[s]` houses off the Space tile, whoever owns it
+    // (the cell does not require the user to own Space), and hands one to each of
+    // the player's other owned tiles (`H.State.houses[s]--` then
+    // `H.AddHouse(i, item, ...)`, at most one per destination).
+    let mut num = if space >= 0 { ctx::houses_of(space) } else { 0 };
     for t in ctx::owned_tiles(player_id) {
+        // TODO(规则书)（将其上的房屋转移至其他你拥有的格子上）: 书要把其上的房屋
+        //   全部转走 -- 目的地用完即停，剩下的房屋留在 Space（OPEN-GEN-parking-houses）。
         if num <= 0 {
             break;
         }
         if t == space {
             continue;
         }
-        // 规则书[手]: the destination must be one the player could build on --
-        // the same gate the build step uses, so it cannot hand over a house to a
-        // tile the engine would refuse.
-        if !ctx::can_build_on(player_id, t) {
-            continue;
-        }
+        // 规则书[手]: the destination is any 「其他你拥有的格子」 -- no
+        // buildability condition: a mortgaged tile still receives, and a full
+        // (or house-less) one still spends a house of Space: `add_house` clamps
+        // the +1 away. The one-per-tile cap is the only limit the cell states.
         ctx::add_house(space, -1);
         ctx::add_house(t, 1);
         num -= 1;
@@ -141,6 +141,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             let space = ctx::tile_named("Space");
+            // TODO(规则书)（此卡所在格子的[结算]改为回合结束后获得一层[停留]）:
+            //   书按此卡所在格子的[结算] -- 我们看落点格子（`set_settle_tile` 的改写不回读）.
             if space < 0 || trigger::tile() != space {
                 return Ok(());
             }
@@ -172,6 +174,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             ctx::set_slot(turn, SLOT_STAY, 0);
             // C# `H.GiveStay(turn, layers, Seat, "Parking Space")` -> `AddStay`.
             // Our line names the source up front: 「Parking Space 的效果：…」.
+            // TODO(规则书)（回合结束后获得一层[停留]）: 结算已改，[停留]应在回合末
+            //   照付 -- 卡离场后这个场上钩子不再运行，层数留在槽里.
             rules_status::stay::add(turn, layers);
             ctx::log(
                 turn,

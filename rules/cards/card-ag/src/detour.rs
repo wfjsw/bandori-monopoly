@@ -1,4 +1,4 @@
-//! `AG:回家的路上绕个道` 
+//! `AG:回家的路上绕个道`
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:回家的路上绕个道`）:
 //! > 回家的路上绕个道：
@@ -7,13 +7,13 @@
 //! > （2）效果），并将下一次的移动掷骰变更为1d6
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
-//! 
+//!
 //! Reviewed 10/23/2026
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ChainKind, Dice};
 use card_sdk::serde;
-use card_sdk::{Activation, CardText, it};
+use card_sdk::{it, Activation, CardText};
 use card_sdk::{key, Action, CardDef, Declared, Filter, Msg, On, PlanValue};
 
 /// The four 「"afterglow"式的移动」 plans the C# offers, as the skill ids whose
@@ -57,11 +57,18 @@ pub const DETOUR: CardDef = CardDef::new(
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
         // > (1)此卡可作为反击使用
+        // 规则书: 「(1)此卡可作为反击使用」
         On::Counteract(
             &[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport",
-            // TODO: Only handle the `blocked by status` case, not the `not_my_turn` and `already` case.
+            // The window opens at `diceRollResult`, after the main move already
+            // latched `main_moved` (`cant_move` 2) and possibly for a roll
+            // outside this seat's turn (1) -- both are expected here, so only
+            // the [停留] move gate (3) refuses.
+            // TODO(规则书)（(1)此卡可作为反击使用）: the sheet gives no gate -- the
+            //   not-your-turn / already-moved / [停留] split is the C#
+            //   `MoveWhyNot` reading.
             Some(|player_id| {
-                rules_status::move_blocked(player_id).is_none() && some_plan_fires(player_id)
+                ctx::cant_move_code(player_id) != 3 && some_plan_fires(player_id)
             }),
             unused_body
             // TODO: This should not be pickable at all. Change it to act based on active skill card.
@@ -73,10 +80,14 @@ pub const DETOUR: CardDef = CardDef::new(
         // > （2）效果），并将下一次的移动掷骰变更为1d6
         On::Filter(Filter::DiceRollPlan("slot('detour_next_roll') != 0", None, next_roll)),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
-        // plan just built (DiceRollAfter is the next event after DiceRollPlan).
+        // plan just built (`diceRollPlan` -> the roll -> `diceRollValue` ->
+        // `diceRollAfter`).
         // > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
         // > （2）效果），并将下一次的移动掷骰变更为1d6
         On::Action(Action::DiceRollAfter("slot('detour_next_roll') != 0", None, consume_next_roll)).silent(),
+        // 规则书: 「视为使用一次初始Afterglow角色的（2）效果」 -- the CiRCLE veto
+        // armed by the reverse plan ends with the turn.
+        On::Schedule("clear_no_reward", "", None, clear_no_reward),
 
     ],
 )
@@ -111,9 +122,9 @@ fn some_plan_fires(player_id: i32) -> bool {
 struct DetourPick {
     /// Index into [`PLANS`].
     plan: i32,
-    /// The tile the plan aims at, or -1.
+    /// Unused: always -1 (`apply_plan` recomputes the aim from `plan`).
     tile: i32,
-    /// The seat it aims at, or -1.
+    /// Unused: always -1.
     seat: i32,
 }
 
@@ -172,10 +183,11 @@ fn play_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     // [`PLANS`] index.
     // TODO(规则书)[judgement] OPEN-afterglow式移动: the four plans below are
     //   the C# reading, not the text's.
-    // TODO: Call the skill card to apply the 2nd effect there. Switching to
-    //   `ctx::invoke_skill` would make the skill body spend a fire pot and
-    //   reset `REST_TURNS`, which the C# detour did not -- whether 「视为使用」
-    //   pays the cost is an open ruling, so the plan mutations stay inlined.
+    // TODO(规则书)（视为使用一次初始Afterglow角色的（2）效果）: calling the skill
+    //   card instead (`ctx::invoke_skill`) would make the skill body spend a
+    //   fire pot and reset `REST_TURNS`, which the C# detour did not -- whether
+    //   「视为使用」 pays the cost is an open ruling, so the plan mutations stay
+    //   inlined.
     apply_plan(player_id, pick);
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- C# `plan.Base.Clear();
     // plan.Base.Add((1, 6, "（回家的路上绕个道）"))` (MatchHost.cs:1337-1338)
@@ -191,6 +203,7 @@ fn play_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
 
 /// The four plans mutate the turn's `MoveCtx` (C# `H._turnCtx.Plan`).
 /// `pick` is a [`PLANS`] index.
+/// 规则书: 「视为使用一次初始Afterglow角色的（2）效果」
 fn apply_plan(player_id: i32, pick: DetourPick) {
     match pick.plan {
         0 => {
@@ -200,10 +213,15 @@ fn apply_plan(player_id: i32, pick: DetourPick) {
         }
         2 => {
             // Himari odd: `plan.Parity = 1`.
+            // TODO(规则书)（视为使用一次初始Afterglow角色的（2）效果）: the step loop
+            //   derives the next tile from the direction alone and never reads
+            //   `Move.parity`, so the odd/even (2) (cases 2 and 3) is a no-op.
             ctx::plan::set_parity(1);
         }
         3 => {
             // Himari even: `plan.Parity = 0`.
+            // TODO(规则书)（视为使用一次初始Afterglow角色的（2）效果）: same no-op as
+            //   case 2 -- the walk never reads `Move.parity`.
             ctx::plan::set_parity(0);
         }
         _ => {
@@ -244,14 +262,22 @@ fn counteract_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     // TODO: This used to hard-code the reverse plan and diverged from `play`;
     //   it now shares `apply_plan`, which is a behaviour change on the
     //   counter path.
+    // `apply_plan` arms the CiRCLE veto itself for the reverse plan (case 0) --
+    // the other plans have no 「不获得CiRCLE奖励」 clause.
+    // TODO(规则书)（进行一次 “afterglow”式的移动）: the walk cloned the move before
+    //   this `diceRollResult` window and pulls only `roll`/`resolve` back, so
+    //   these plan writes are lost -- the counter performs no afterglow move.
+    //   The engine has to re-seed the move from `turn.plan` after the raise.
     apply_plan(player_id, pick);
-    arm_no_reward(player_id);
+    // A counter's card is not placed, so the card's own hooks below have no
+    // field instance to dispatch from: bind the def as a turn-scoped lingering
+    // instance (`0` = this turn only, the latch is one-shot) instead.
+    ctx::linger(player_id, 0);
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- armed here, consumed by the
     // `DiceRollPlan` hook below when the next plan is being built. One-shot: the hook
     // clears it so it does not rewrite the roll after that.
 
     // TODO: Such key we need to keep it scoped to this card.
-    // TODO: This diverged from what `play` handles.
     ctx::state::set(player_id, NEXT_ROLL, 1);
     ctx::log(
         player_id,
@@ -281,11 +307,12 @@ fn consume_next_roll(player_id: i32) -> card_sdk::Asked {
 }
 
 // TODO: Remove
-/// 「向后移动经过CiRCLE时不获得CiRCLE奖励」 -- the veto is `prop::NO_REWARD` on
+/// 规则书: 「视为使用一次初始Afterglow角色的（2）效果」 -- the reverse (2) carries
+/// 「向后移动经过CiRCLE时不获得CiRCLE奖励」. The veto is `prop::NO_REWARD` on
 /// the CiRCLE tile's `tile:circle` instance (`docs/TILES.md`), not a walk-plan
 /// flag. This card is played from hand and leaves the field, so it cannot arm
-/// the prop in a per-pass hook: it arms it here and [`clear_no_reward`]
-/// disarms it at the turn end, when the clause 「进行一次 "afterglow"式的移动」
+/// the prop in a per-pass hook: it arms it here and schedules
+/// [`clear_no_reward`] for the turn end, when the clause 「进行一次 "afterglow"式的移动」
 /// is over. The reward step consumes the prop, so a walk that does pass CiRCLE
 /// disarms it early.
 fn arm_no_reward(player_id: i32) {
@@ -294,9 +321,7 @@ fn arm_no_reward(player_id: i32) {
         return;
     }
     ctx::set_tile_prop(circle, prop::NO_REWARD, 1);
-    // TODO(规则书): the historical `ctx::at_turn_end` here was a silent no-op
-    // (this card declares no `On::Schedule` entry). Deleted rather than given
-    // an entry -- behaviour is identical.
+    ctx::at_turn_end(player_id, "clear_no_reward");
 }
 
 // TODO: Remove

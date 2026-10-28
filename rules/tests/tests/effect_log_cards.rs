@@ -51,16 +51,14 @@ fn deck_before_game_self_place_announces_once() {
     );
 }
 
-/// `RAS:成为最强` rolls 1d10 only when the player already owns a livehouse;
-/// otherwise it logs 「没有Livehouse格子」 and teleports to Live House with no
-/// roll. The 4x4x40 seed-0 delta (master dice 18, ours 17) is this branch:
-/// master's multi-pass re-run sees the deed this card's own agent-settle buys
-/// and rolls; the check at play time says no livehouse, so we skip the roll.
-/// Destinations coincide (roll 10 and the no-livehouse branch both pick Live
-/// House), which is why the state hashes match.
+/// `RAS:成为最强` casts its 1d10 before the 若 clause, so **both** branches
+/// roll; only the destination differs. The fallback ignores the face and still
+/// logs 「没有Livehouse格子」. (Old code branched on ownership first and never
+/// rolled on the fallback.)
 #[test]
-fn be_strongest_rolls_only_with_a_livehouse() {
-    // No livehouse: no dice, and the 「没有」 line is logged.
+fn be_strongest_always_rolls_and_ignores_the_face_on_the_fallback() {
+    // No livehouse: one dice event, and the face is ignored -- roll 3 would
+    // map to DUB MUSIC EXPERIMENT (21) but the fallback lands on Live House (31).
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -73,6 +71,7 @@ fn be_strongest_rolls_only_with_a_livehouse() {
             p.field.clear();
         }
     }
+    t.dice(&[3]);
     let mark = t.mark();
     t.give_play(0, "RAS:成为最强").ok();
     drain(&mut t);
@@ -81,15 +80,25 @@ fn be_strongest_rolls_only_with_a_livehouse() {
         .into_iter()
         .filter(|e| e.r#type == "dice")
         .count();
-    assert_eq!(dice, 0, "no livehouse -> no 1d10 roll");
+    assert_eq!(dice, 1, "no livehouse -> the 1d10 is still cast");
+    assert_eq!(t.pos(0), 31, "the fallback ignores the face (Live House)");
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("be_strongest_none")),
+        "the 「没有Livehouse格子」 line is logged: {:?}",
+        t.recent_keys(20)
+    );
 
-    // Owns a livehouse (RiNG 3 is group 6): the 1d10 must land exactly once.
+    // Owns a livehouse (RiNG 3 is group 6): the face steers the destination --
+    // roll 5 is the 5th entry ("RiNG 3", 36).
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
     t.set_money(0, 50_000);
     t.set_money(1, 50_000);
     t.set_owner(36, Some(0));
+    t.dice(&[5]);
     let mark = t.mark();
     t.give_play(0, "RAS:成为最强").ok();
     drain(&mut t);
@@ -99,4 +108,5 @@ fn be_strongest_rolls_only_with_a_livehouse() {
         .filter(|e| e.r#type == "dice")
         .count();
     assert_eq!(dice, 1, "owns a livehouse -> exactly one 1d10 roll");
+    assert_eq!(t.pos(0), 36, "the roll picks the 5th livehouse");
 }

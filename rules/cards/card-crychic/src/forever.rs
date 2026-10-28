@@ -7,42 +7,51 @@
 //!
 //! > （2）[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。
 //!
-//! crystals for 2,000 + 500·X, then stays in play as [持续] until a draw
-//! leaves the owner holding 7+ cards.
+//! crystals for 2,000 + 500·X, then stays in play as [持续] while the owner
+//! holds fewer than 7 cards.
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const FOREVER: CardDef = CardDef::new(
     "CRYCHIC:如果能一直持续下去...",
     &[
+        // 规则书（1）[手]: 「移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。」
         On::Play("", None, forever),
         // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a
         // continuous condition, so the check runs at every point a hand size
         // moves (draw, discard-from-hand, play-from-hand) and at the turn
         // boundaries as a backstop. `Drew` alone only sees draws.
+        // TODO(规则书)（此卡立即置入弃牌堆）: 「立即」 is any hand-size change -- an
+        //   add-to-hand (tutor / bounce / skill) raises no event, so it is only
+        //   seen at the next draw / discard / play or at a turn boundary.
         On::Action(Action::Drew(
             "card.placed && owner.hand >= 7",
             None,
-            on_drew)),
+            on_drew,
+        )),
         On::Action(Action::DiscardAfter(
             "card.placed && owner.hand >= 7",
             None,
-            on_drew)),
+            on_drew,
+        )),
         On::Action(Action::CardPlayed(
             "card.placed && owner.hand >= 7",
             None,
-            on_drew)),
+            on_drew,
+        )),
         On::Action(Action::TurnEndBefore(
             "card.placed && owner.hand >= 7",
             None,
-            on_drew)),
+            on_drew,
+        )),
         On::Action(Action::TurnEnd(
             "card.placed && owner.hand >= 7",
             None,
-            on_drew)),
+            on_drew,
+        )),
     ],
 )
 .meta(
@@ -72,8 +81,8 @@ fn forever(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("forever_why")).i("x", x as i64),
     )?;
     // 规则书（1）[手]: 「获得2000+500*X资金，X为移除的奇迹水晶数量」
-    // 规则书（2）[持续]: the card lives in play until a draw leaves 7+ in hand
-    // (`on_drew` below).
+    // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a standing
+    // check, not a draw-only expiry: `on_drew` is wired to every event above.
     ctx::set_dest(ctx::Dest::Field); // 规则书（2）[持续]: the card lives in play
     ctx::place_card(player_id, ID, &Msg::new(key!("forever_note")));
     Ok(())

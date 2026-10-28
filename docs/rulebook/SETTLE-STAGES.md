@@ -167,7 +167,7 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 | `skill:冰川纱夜:踏上荆棘之路的觉悟` （1） | 「每次**被别的玩家[经过]**时获得1个[火罐]」 | `HookKind::PassPlayer` `sayo_thorns.rs:32` | 12 「被[经过]」 | **PASS** |
 | `skill:丰川祥子:请把你们的人生交给我` 状态1 | 「**经过其他玩家**时，可将其所有层数的停留，眩晕转移至自己身上」 | `HookKind::PassPlayer` `sakiko_life.rs:35` | 12 「经过其他玩家」 | **PASS** |
 | `skill:凑友希那:来练习吧` （3） | 「当其他玩家**移动[经过]您**时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算」 | `HookKind::PassPlayer` `kokoro_practice.rs:39` | 12; body guards `move_remaining() <= 0 → return`, which is **always** true at `passPlayer` (it fires at move end) — so this never fires today | **PASS** (latent bug) |
-| `AG:刻入天穹傲岸的烈光` [反击] | 「当你**经过一名角色**时，你可以打出此卡…」 | `ChainKind::PassPlayer` `proud_light.rs:15` | 12 「经过一名角色」 | **PASS** |
+| `AG:刻入天穹傲岸的烈光` [反击] | 「当你**经过一名角色**时，你可以打出此卡…」 | `ChainKind::PassTile` `proud_light.rs:24` | 12 「经过一名角色」 | **PASS** |
 | `MyGO:难以复刻的奇迹` （2） | 「当你**[经过]场上的所有玩家各一次**…」 | `HookKind::PassPlayer` `miracle.rs:24` | 12 | **PASS** |
 | `CRYCHIC:想要抓住...` （2） | 「当第一位其他玩家**经过你**…」 | `HookKind::PassPlayer` `want_to_grab.rs:29` | 12 | **PASS** |
 | `skill:要乐奈:投币式停车场的猫` （3） | 「你与其他玩家**重合**时，获得其800资金」 | `HookKind::PassPlayer` `rana_parking.rs:36` | 13 「[重叠]」/「重合」 | OK |

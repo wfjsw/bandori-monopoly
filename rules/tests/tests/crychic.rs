@@ -340,6 +340,7 @@ fn haruhikage_counteracts_settle_before() {
     drain(&mut t);
     t.set_pos(0, 0);
     t.set_pos(1, 3); // within 5
+    t.set_fire(0, 1, 10); // 丰川祥子's skill spends 1 fire pot
     t.dice(&[1]);
     t.roll(0).unwrap();
     // Two [反击] windows on this roll: diceRollResult first, then settleBefore.
@@ -388,6 +389,7 @@ fn haruhikage_not_offered_outside_its_windows() {
     t.give(0, &["CRYCHIC:春日影"]);
     t.begin_turn(1);
     drain(&mut t);
+    t.set_pos(1, 10); // land more than 5 from P0 so the (2) settle arm also fails
     t.dice(&[3]);
     t.roll(1).unwrap();
     assert!(
@@ -802,6 +804,56 @@ fn riki_crychic_card_is_counter() {
     assert!(t
         .hand(0)
         .contains(&"CRYCHIC:（立希）即便比不上...".to_string()));
+}
+
+/// Regression: an armed theoretical extreme ([反击] 鸫 (1) 「以理论最大值或最小值
+/// 结算」) wins over the dice -- the reroll must settle at the extreme too, not
+/// cast a fresh face.
+#[test]
+fn riki_reroll_settles_at_the_armed_extreme() {
+    const TAKI: &str = "CRYCHIC:（立希）即便比不上...";
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "椎名立希（CRYCHIC）");
+    t.give(0, &[TAKI]);
+    t.begin_turn(0);
+    while t.prompt().is_some() {
+        decline_q(&mut t);
+    }
+    t.set_pos(0, 0);
+    t.set_extreme(1);
+    let mark = t.mark();
+    t.dice(&[5]); // loaded 5 -- the extreme must override it
+    t.roll(0).unwrap();
+    assert!(
+        t.counteract_offered(TAKI),
+        "the [反击] window after the move roll: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, TAKI).unwrap();
+    // 规则书: 「你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止」 --
+    // the forced 20 repeats this turn's only face, so a further reroll is offered
+    // (and would also be 20); decline it.
+    let p = t.expect_prompt();
+    assert!(
+        format!("{:?}", p.title).contains("taki_again"),
+        "the repeat offers another reroll: {}",
+        t.dump_prompt()
+    );
+    t.decline();
+    while t.prompt().is_some() {
+        decline_q(&mut t);
+    }
+    assert_eq!(
+        t.pos(0),
+        20,
+        "the reroll settled at the theoretical max, not the loaded 5"
+    );
+    let face = t
+        .events_since(mark)
+        .iter()
+        .find(|e| e.msg.key().contains("taki_reroll"))
+        .and_then(|e| int_arg(&e.msg, "n"));
+    assert_eq!(face, Some(20), "the reroll face is logged at the extreme");
 }
 
 // =====================================================================
@@ -1274,16 +1326,33 @@ fn run_shout_move(t: &mut Table, from: usize, n: i32, accept: bool) -> bool {
 
 #[test]
 fn tomori_shout_window_is_the_controller_near_the_card() {
-    // 规则书（3）: 「你位于此卡前后5格内时」 -- 你 (the controller) near the card,
-    // not the mover's endpoint. P0 stands 2 from the card; P1 lands far away.
+    // 规则书（3）: 「你位于此卡前后5格内时」 + the borrowed (2)'s own
+    // 「[移动终点]位于您前后5格内」 -- 你 (the controller) near the card and the
+    // mover's landing near 你. P0 stands 2 from the card; P1 lands 3 from P0.
     let mut t = Table::vanilla(2);
     t.clean();
     t.set_pos(0, 32);
     place_shout_at(&mut t, 0, 30);
     t.set_fire(0, 1, 10);
     assert!(
-        run_shout_move(&mut t, 5, 4, false),
+        run_shout_move(&mut t, 25, 4, false),
         "offered although the mover is far; keys={:?}",
+        t.recent_keys(16)
+    );
+}
+
+#[test]
+fn tomori_shout_window_closed_when_the_landing_is_far() {
+    // The borrowed (2) skill's own window: 「当其他玩家的[移动终点]位于您前后
+    // 5格内时」. 你 is near the card, but the mover lands far from 你.
+    let mut t = Table::vanilla(2);
+    t.clean();
+    t.set_pos(0, 32);
+    place_shout_at(&mut t, 0, 30);
+    t.set_fire(0, 1, 10);
+    assert!(
+        !run_shout_move(&mut t, 5, 4, false),
+        "offered although the landing is far; keys={:?}",
         t.recent_keys(16)
     );
 }
@@ -1315,7 +1384,10 @@ fn tomori_shout_pulls_to_the_controllers_own_tile_with_settle() {
     place_shout_at(&mut t, 0, ((deed + 3) % 60) as i32);
     t.set_fire(0, 1, 10);
     t.set_money(1, 5000);
-    run_shout_move(&mut t, (deed + 20) % 60, 8, true);
+    // The landing must be within 5 of 你 (the (2) skill's own window): start 6
+    // behind P0 and walk 8, landing 2 past them (the pull then takes the mover
+    // 20+ tiles to P0's own tile).
+    run_shout_move(&mut t, (deed + 54) % 60, 8, true);
     assert_eq!(
         t.pos(1),
         deed,
@@ -1350,7 +1422,8 @@ fn tomori_shout_pulls_to_the_controllers_own_tile_with_settle() {
 }
 
 // LOY-TOMORI-03 「最早拥有的格子」 is unpinned: (3) only runs for a MyGO-band
-// player (`ctx::in_group(…, "MyGO!!!!!")`), and the harness has no band setter
+// player (`ctx::group_skills(…)` naming `skill:MyGO!!!!!:…`), and the harness
+// has no band setter
 // -- 高松灯（CRYCHIC）is the card's exclusive and is CRYCHIC band, so the (3)
 // placement path is unreachable from a test today. The fallback itself is
 // documented at the `TODO(规则书)` in `tomori_inner_shout.rs`.

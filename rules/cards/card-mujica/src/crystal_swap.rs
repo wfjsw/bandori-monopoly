@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use card_sdk::abi::counter;
 use card_sdk::ctx::NameId;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CRYSTAL_SWAP: CardDef = CardDef::new(
@@ -26,7 +26,9 @@ pub const CRYSTAL_SWAP: CardDef = CardDef::new(
         .name(r#"会被骗着买水晶的人"#)
         .raw_name(r#"会被骗着买水晶的人"#)
         .tags(&[])
-        .text(CardText::para(r#"将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上。"#))
+        .text(CardText::para(
+            r#"将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上。"#,
+        ))
         // sheet cell J13
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]),
 );
@@ -55,6 +57,8 @@ impl Slot {
     /// uncapped; the C# clamps at the card's own `MaxCrystals`, which the ABI
     /// does not expose.
     fn add(&self, n: i32) {
+        // TODO(ABI)（每卡奇迹水晶上限）: `MaxCrystals` -- no per-uid cap read, so
+        //   `add_counter_at(max = 0)` never clamps (see the destination TODO).
         ctx::add_counter_at(self.uid, counter::CRYSTALS, n, 0);
     }
 
@@ -91,10 +95,11 @@ fn is_group_label(card: &str, player_id: i32) -> bool {
     !ctx::persona_is(player_id, owner)
 }
 
-/// C# `CardCrystalSwap.Slots` -- every card on every live player's field that
-/// can hold [奇迹水晶]. 「可以放置奇迹水晶的卡」 is any card in play (the
-/// instance carries `Card.Crystals`); face-down and 「不受任何效果影响」 cards
-/// are not touchable (C# `p.Live && !p.Immune`).
+/// C# `CardCrystalSwap.Slots` -- every card on every live player's field.
+/// 「可以放置奇迹水晶的卡」 is treated as any card in play (the instance
+/// carries `Card.Crystals`); a card already at its own 上限 is still offered
+/// and overfilled (see the TODO at the destination filter). Face-down and
+/// 「不受任何效果影响」 cards are not touchable (C# `p.Live && !p.Immune`).
 fn slots() -> Vec<Slot> {
     let mut v: Vec<Slot> = Vec::new();
     for s in 0..ctx::player_count() {
@@ -102,6 +107,10 @@ fn slots() -> Vec<Slot> {
             continue;
         }
         for (uid, c) in ctx::field_instances(s) {
+            // 规则书: 「场上一张卡」 -- C# `p.Live && !p.Immune` is the field scope.
+            // TODO(规则书)（「场上一张卡」）: the cell names no face-down exclusion --
+            //   face-down cards are dropped from both endpoints; only the immune
+            //   half is grounded in 「不受任何效果影响」.
             if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
                 continue;
             }
@@ -142,6 +151,10 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
     let src = from[src_i.min(from.len() - 1)];
     // 规则书: 「到另一张可以放置奇迹水晶的卡上」 -- pick the destination
     // (C# `slots.Where(x => x.label != src.label)`).
+    // TODO(规则书)[judgement]（「另一张可以放置奇迹水晶的卡上」）: 「可以放置」 is
+    //   undefined as a class -- every non-face-down, non-immune field card is
+    //   treated as a legal destination (one already at its own 上限 included)
+    //   and the write is uncapped (TODO(ABI): no per-uid `MaxCrystals` read).
     let to: Vec<usize> = (0..all.len()).filter(|&i| i != src).collect();
     let to_labels: Vec<Msg> = to.iter().map(|&i| all[i].label()).collect();
     let dst_i = ctx::ask_pick(

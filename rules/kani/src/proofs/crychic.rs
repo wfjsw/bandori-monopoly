@@ -66,10 +66,13 @@ crate::host_subset!(vocalist_dispatch {
     log | effect => arm_log,
 });
 
-/// `CRYCHIC:想要抓住...` play — one [停留] + arm the PASSER latch.
+/// `CRYCHIC:想要抓住...` play — one [停留] + arm the PASSER latch + place the
+/// card as the (2)/(3) window's field instance.
 crate::host_subset!(grab_dispatch {
     apply_abnormal => arm_apply_abnormal,
     state_set => arm_state_set,
+    set_dest => arm_set_dest,
+    place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
 
@@ -320,10 +323,11 @@ fn grab_01_iff_at(user: i32) {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    // GiveStay + the PASSER latch write. Host-faithful and book-exact.
+    // GiveStay + the PASSER latch write + the field placement. Host-faithful
+    // and book-exact.
     crate::kassert!(
         spec::grab_01_log_ok(effects, user, passer_key),
-        "C-CRYCHIC-grab-01: GiveStay{{1}} + SetState(PASSER, -1)"
+        "C-CRYCHIC-grab-01: GiveStay{{1}} + SetState(PASSER, -1) + PlaceCard(Field)"
     );
     crate::kassert!(
         post.stay[user as usize] == pre.stay[user as usize] + 1,

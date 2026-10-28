@@ -7,7 +7,7 @@
 //!
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec};
+use card_sdk::{para, sec, CardText};
 
 pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play("", None, budokan)])
     // 规则书: 「[指定][使用者]以外的所有玩家」 -- `Card.Def.Targeting`, so
@@ -44,7 +44,8 @@ fn budokan(player_id: i32) -> card_sdk::Asked {
     for p in got {
         ctx::transfer(p, player_id, x, &why)?;
     }
-    // 规则书[手]: 「Y设为[存活]玩家数量减1」 -- Y is defined but unused in the passage.
+    // TODO(规则书)（Y设为[存活]玩家数量减1）: Y is printed but nothing in the
+    //   passage reads it -- we compute only X, so Y is never named (OPEN-GEN-budokan-Y).
     Ok(())
 }
 

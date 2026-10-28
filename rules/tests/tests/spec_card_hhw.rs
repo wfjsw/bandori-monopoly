@@ -372,6 +372,8 @@ fn athletic_places_three_crystals() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                // `play` resets the roll-reward ladder to 「起始为700」.
+                "state:P0:sports_talent_next",
                 "pool:",
                 "hand_n:P0",
                 "draw_n:P0",
@@ -888,6 +890,9 @@ fn wacha_jump_at_nine_markers() {
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
+    // P0 starts on #30 弦卷豪宅 (the vanilla start), so move away first or the
+    // landing check would pass with no move at all.
+    t.set_pos(0, 0);
     t.place_raw(0, WACHA);
     set_tok(&mut t, 0, "水母标记", 9);
     t.skill(0, WACHA)
@@ -934,7 +939,8 @@ pub fn supply_seeds(step: &Step<'_>) -> Result<(), String> {
     }
     let tg = 28; // #29 弦卷集团
                  // 「奇迹水晶」 on a tile. The engine's kind for this card's crystal is
-                 // the card name (「黑衣人的补给」) with note `black_suits_crystal_note`.
+                 // the locale key `cards:card-hhw.black_suits_crystal` with note
+                 // `black_suits_crystal_note`.
     let crystal = |m: &game_core::state::TileMark| {
         m.kind.contains("crystal")
             || m.kind.contains("奇迹")
@@ -1454,7 +1460,11 @@ fn kanon_second_roll_logs_the_plan_dice() {
     assert_eq!(msg.key(), "log.dice", "{msg:?}");
     assert_eq!(rules_spec::int_arg(msg, "count"), Some(1), "{msg:?}");
     assert_eq!(rules_spec::int_arg(msg, "sides"), Some(20), "{msg:?}");
-    assert_eq!(rules_spec::int_arg(msg, "sum"), Some(3), "the second face: {msg:?}");
+    assert_eq!(
+        rules_spec::int_arg(msg, "sum"),
+        Some(3),
+        "the second face: {msg:?}"
+    );
 }
 
 /// Silence (「三个回合内没有拿过Circle奖励」) rewrites the roll to 1d20+1d4;
@@ -1464,11 +1474,7 @@ fn kanon_silence_second_roll_logs_the_extra_d4() {
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
-    t.m
-        .world_mut()
-        .st
-        .players[0]
-        .state_set("skill.kanonLost.silent", 3);
+    t.m.world_mut().st.players[0].state_set("skill.kanonLost.silent", 3);
     let mark = t.mark();
     // Each roll is 1d20+1d4: (8+2) and (7+1) → |10-8| = 2.
     t.dice(&[8, 2, 7, 1]);

@@ -36,17 +36,20 @@ fn split_cards_declare_filter_and_action_halves() {
     };
 
     // no_expectation (ABI v94): Play / Filter(DiceRollValue) /
-    //   Filter(PaySplitAdd) / Action(Reshuffled). The roll shave + 0-step
-    //   no-settle clamp are one Filter (option C).
+    //   Filter(PaySplitAdd) / Action(PayAfter) / Action(Reshuffled). The roll
+    //   shave + 0-step no-settle clamp are one Filter (option C); the PayAfter
+    //   entry spends the 「生效2次」 charges.
     let s = shape("PP:不要背负期待");
-    assert_eq!(s.len(), 4, "no_expectation entries: {s:?}");
+    assert_eq!(s.len(), 5, "no_expectation entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Filter"));
     assert_eq!(s[1].1, vec!["diceRollValue".to_string()], "DiceRollValue");
     assert_eq!(s[2].0, kind("Filter"));
     assert_eq!(s[2].1, vec!["paySplitAdd".to_string()], "PaySplitAdd");
     assert_eq!(s[3].0, kind("Action"));
-    assert_eq!(s[3].1, vec!["reshuffled".to_string()], "Reshuffled");
+    assert_eq!(s[3].1, vec!["payAfter".to_string()], "PayAfter");
+    assert_eq!(s[4].0, kind("Action"));
+    assert_eq!(s[4].1, vec!["reshuffled".to_string()], "Reshuffled");
 
     // j11 (ABI v94 one-kind-per-entry): Play / Action(TurnEnd) / Action(Targeted) /
     //   Action(PaySplitChooseBefore) / Filter(PaySplitChoose) / Action(CounterChanged)
@@ -129,8 +132,8 @@ fn manifest_spellings_are_namespaced_strings() {
     }
 }
 
-/// The shifted `.silent` index on no_expectation still points at the
-/// Reshuffled bookkeeping entry (now index 4 after the v74 Filter/Action split).
+/// The `.silent` marks on no_expectation still point at the two bookkeeping
+/// entries (PayAfter charge spend at 3, Reshuffled at 4 after the v74 split).
 #[test]
 fn no_expectation_silent_index_follows_the_split() {
     let r = rules();
@@ -152,7 +155,12 @@ fn no_expectation_silent_index_follows_the_split() {
     assert_eq!(
         info.on[3].presentation,
         card_sdk::abi::Presentation::Silent,
-        "entry 3 (Reshuffled) must stay silent after the merge"
+        "entry 3 (PayAfter charge spend) must stay silent"
+    );
+    assert_eq!(
+        info.on[4].presentation,
+        card_sdk::abi::Presentation::Silent,
+        "entry 4 (Reshuffled) must stay silent after the merge"
     );
 }
 

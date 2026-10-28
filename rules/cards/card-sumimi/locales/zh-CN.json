@@ -43,6 +43,7 @@
   "two_donuts_title": "一人两个甜甜圈",
   "two_donuts_yes": "要 [传送] 并结算吗？（你原本的格子和 {{by}} 的终点之间，可不传送）",
   "two_in_one_note": "替换为另一名角色",
+  "two_in_one_not_sumimi": "不是 Sumimi 的角色，不能打出",
   "two_in_one_swap": "Sumimi是二人一体的 的效果：{{who}} 换成 Sumimi 的另一名角色",
   "two_in_one_when": "你的移动掷骰后"
 }

@@ -8,37 +8,37 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BEFORE_LIVE: CardDef = CardDef::new(
     "R:live前的准备",
     &[On::Counteract(
-        &[ChainKind::Pass],
-        "actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')",
+        // 规则书[反击]: 「经过江户川乐器店时可打出此卡」 -- [经过] is every path
+        // tile including the 移动终点 (`SETTLE-STAGES.md`), so the step count
+        // does not gate the offer; `passTile` also covers a teleport's 经过.
+        &[ChainKind::PassTile],
+        "actor == owner && tile.id == tile_named('江户川乐器店')",
         None,
-        counteract).counter_reason(key!("before_live_when"))],
+        counteract,
+    )
+    .counter_reason(key!("before_live_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"live前的准备"#)
         .raw_name(r#"live前的准备"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 经过江户川乐器店时可打出此卡，使自己在江户川乐器店强制停下并触发结算"#))
+        .text(CardText::para(
+            r#"[反击] 经过江户川乐器店时可打出此卡，使自己在江户川乐器店强制停下并触发结算"#,
+        ))
         // sheet cell E8
         .fields(&[("group", r#"Roselia"#), ("owner", "")]),
 );
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && move.remaining > 0 && tile.id ==
-    // tile_named('江户川乐器店')` is the pre; no residual guard.
-    // 规则书[反击]: 「使自己在江户川乐器店强制停下并触发结算」
-    ctx::log(
-        player_id,
-        &Msg::new(key!("before_live_stop"))
-            .player_id("who", player_id)
-            .tile("tile", ctx::tile_named("江户川乐器店")),
-    );
+    // `actor == owner && tile.id == tile_named('江户川乐器店')` is the pre;
+    // no residual guard.
     // 规则书[反击]: 「强制停下并触发结算」 -- C# `CardBeforeLive.Counteract`:
     // `m.Stopped = true; m.Resolve = true` behind `H.AbnormalGate`.
     if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
@@ -48,6 +48,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if shop >= 0 {
         ctx::plan::set_stop_at(shop);
         ctx::plan::set_resolve(true);
+        // 规则书[反击]: 「使自己在江户川乐器店强制停下并触发结算」 -- logged
+        // only once the gate let the stop through.
+        ctx::log(
+            player_id,
+            &Msg::new(key!("before_live_stop"))
+                .player_id("who", player_id)
+                .tile("tile", shop),
+        );
     }
     Ok(())
 }

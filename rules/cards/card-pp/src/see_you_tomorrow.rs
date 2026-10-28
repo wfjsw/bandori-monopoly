@@ -14,7 +14,7 @@
 //! `P✽P粉丝` face-up (up to the fan count). The [特] gate lives in `cant_play`.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use skill_groups::fans;
 
 pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
@@ -28,15 +28,17 @@ pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
         .derived(true)
         .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
         .text(CardText::of(&[
-            sec(r#"[特]："#, &[
-                items(&[
+            sec(
+                r#"[特]："#,
+                &[items(&[
                     it(r#"只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可使用。"#),
                     it(r#"[共鸣]无视此卡的[特]效果（1）。"#),
-                ]),
-            ]),
-            sec(r#"[手]："#, &[
-                para(r#"将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#),
-            ]),
+                ])],
+            ),
+            sec(
+                r#"[手]："#,
+                &[para(r#"将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#)],
+            ),
         ]))
         // sheet cell D6
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
@@ -60,11 +62,19 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
     let down = fans::down(player_id);
     // 规则书[特]（2）: 「[共鸣]无视此卡的[特]效果（1）」 -- when the gate was passed
     // only because a 共鸣 is in hand, paying that 共鸣 is the cost of the play.
-    // Declining means the play was never allowed (「才可使用」): the card goes
-    // back to the hand instead of the discard pile (`Dest::Hand`).
-    // TODO(规则书): the engine has no pre-commit abort, so the play was already
-    // announced (log, `card` window, played/two-cards counters) before this
-    // refusal; only the card's fate is undone here.
+    // TODO(规则书)（1）: 「才可使用」 -- declining undoes the play and the card goes
+    //   back to the hand instead of the discard pile (`Dest::Hand`), but the play
+    //   was already announced by the time this body runs: the log, the `card`
+    //   window and the played/two-cards counters all ran, so a refused 共鸣 still
+    //   counts as a played card and can be counteracted. The collector exists now
+    //   (`docs/ACTIVATION.md` §2, `.declare_arg`) -- move the 共鸣 into it, return
+    //   `Activation::Decline` on refusal, and no card ever leaves the hand.
+    //   BACKLOG LOY-SEEYOU-01.
+    // TODO(规则书)（2）: 「[共鸣]无视此卡的[特]效果（1）」 says ignore, not that the
+    //   共鸣 is a mandatory cost -- we refuse the play instead of merely letting it
+    //   through, and the offer is short-circuited behind the (1) gate, so a player
+    //   who could already play can never pay it (and its +2 crystals). BACKLOG
+    //   LOY-SEEYOU-02.
     if up > down && !crate::resonance::try_resonance(player_id)? {
         ctx::set_dest(ctx::Dest::Hand);
         return Ok(());

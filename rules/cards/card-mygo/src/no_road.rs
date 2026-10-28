@@ -6,14 +6,16 @@
 //!
 //! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
+use alloc::vec::Vec;
+
 use card_sdk::abi::{FilterKind, Payee, Seat};
-use card_sdk::{CardText};
-use card_sdk::{ctx, key, CardDef, Filter, Msg, On, PayAddValue};
+use card_sdk::CardText;
+use card_sdk::{ctx, key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",
     &[
-        // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- only while
+        // 规则书: 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- only while
         // the exile lasts, only for this player's own tile rent, and only with a
         // live partner. The clause is residual (live exile count + the pay
         // shape); `card.placed` is the `pre`.
@@ -22,6 +24,11 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // the new target; the wrapper calls `set_pay_target`). Pure.
         On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner", Some(redirect_applies), redirect)),
         On::Play("", Some(cant_play), no_road),
+        // 规则书: 「[除外]期间」 -- the stand-in and its designation exist only
+        // while the exile lasts. The exile tick runs in `turnStartBefore`, so by
+        // `turnStart` a live layer count still means exiled; with none left the
+        // return teleport has already run and the card retires here.
+        On::Action(Action::TurnStart("", Some(retire_guard), retire)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -32,23 +39,32 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // sheet cell I6
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
+/// The 「场上」 others: alive and not [除外] -- an exiled piece is on no tile
+/// (`rules/status/src/exile.rs`), so it has no 所在格子 to designate and
+/// `ctx::target` would refuse it after the pick.
+fn on_board_others(player_id: i32) -> Vec<i32> {
+    (0..ctx::player_count())
+        .filter(|&p| p != player_id && !ctx::player_out(p) && rules_status::exile::get(p) == 0)
+        .collect()
+}
+
 /// 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `CardNoRoad.WhyNot`
 /// refuses the card with no other player alive ("没有别的玩家").
 fn cant_play(player_id: i32) -> Option<Msg> {
-    if ctx::others(player_id).is_empty() {
+    if on_board_others(player_id).is_empty() {
         return Some(Msg::new(key!("no_road_why_not_none")));
     }
     None
 }
 
 fn no_road(player_id: i32) -> card_sdk::Asked {
-    let others = ctx::others(player_id);
+    let others = on_board_others(player_id);
     if others.is_empty() {
         return Ok(());
     }
     // 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `H.PickTarget` asks among
-    // `H.Others` (already out/exile-free) and then runs the `H.Target` gate; the
-    // seat that lands (`t.index`, possibly redirected) is the one used below.
+    // `H.Others` and then runs the `H.Target` gate; the seat that lands
+    // (`t.index`, possibly redirected) is the one used below.
     let picked = ctx::ask_player(
         player_id,
         &Msg::new(key!("no_road_title")),
@@ -91,7 +107,12 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`. The
-    // engine's exile tick reads this slot and consumes the turn's main move.
+    // engine's exile tick reads this slot and consumes the turn's main move,
+    // and its return teleport now settles the landing (`resolve = true`,
+    // `rules/status/src/exile.rs`).
+    // TODO(规则书)（视为当回合的主要移动）: C-Q21 / MOVE-07 may instead rule the
+    //   immediate-`offer_buy` shape -- the return currently takes the ordinary
+    //   main-move landing settle.
     ctx::set_slot(player_id, bandori_std::state_key::EXILE_MAIN, 1);
     // 规则书: 「在[除外]层数归0后[传送]至该格子」 -- the log names both the
     // destination and the redirect below.
@@ -102,12 +123,14 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
             .player_id("who", who)
             .card("card", "MyGO:无路矢"),
     );
-    // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- the redirect
-    // hook below reroutes this player's rent to `who` while the exile lasts. The
-    // redirect must outlive the play body, and a field hook only runs on a
-    // *placed* card -- so the card stands in on the field for the exile (the
-    // same field-stand-in + slot pattern Anon Tokyo uses). The hook's own
-    // `exile > 0` guard stops it once the exile ticks away.
+    // 规则书: 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- the
+    // redirect hook below reroutes this player's rent to `who` while the exile
+    // lasts. The redirect must outlive the play body, and a field hook only
+    // runs on a *placed* card -- so the card stands in on the field for the
+    // exile (the same field-stand-in + slot pattern Anon Tokyo uses). The
+    // hook's own `exile > 0` guard stops it once the exile ticks away, and the
+    // `TurnStart` retire above takes the stand-in off the field at that point
+    // (the exile ends in `turnStartBefore`, exactly one layer at a time).
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "MyGO:无路矢", &Msg::new(key!("no_road_log")));
     ctx::set_slot(player_id, "noRoad.who", who);
@@ -115,9 +138,9 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     // this field stand-in is in play is a designation mark on that tile (the
     // board label for 「被指定的那格」). The exile return above stays engine-side
     // (the exile tick owns the teleport); this mark is the displayed record and
-    // dies with the card (`destroy_instance_units`) when it leaves the field
-    // after the exile. The card is not unplaced early (the `exile > 0` guard on
-    // `redirect` only stops the hook), so no `undesignate_tile` here.
+    // dies with the card (`destroy_instance_units`) when it leaves the field,
+    // which the `TurnStart` retire above drives at the end of the exile. An
+    // early leave needs no separate `undesignate_tile` here.
     ctx::designate_tile(
         tile,
         player_id,
@@ -136,7 +159,25 @@ fn redirect_applies(player_id: i32) -> bool {
     ctx::state::get(player_id, bandori_std::state_key::EXILE) > 0
 }
 
-/// 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
+/// Guard for [`retire`]: the play body ran (a slot names the partner) and the
+/// exile is gone again. The `TurnStart` hook fires for every seat's turn start,
+/// so an exile cleared by some other effect retires on the next one too.
+fn retire_guard(player_id: i32) -> bool {
+    ctx::slot(player_id, "noRoad.who") >= 0
+        && ctx::state::get(player_id, bandori_std::state_key::EXILE) <= 0
+}
+
+/// 规则书: 「[除外]期间」 -- the exile is over: drop the stand-in (its
+/// designation mark dies with the instance) and the stale partner. The card
+/// files to its owner's discard: the sheet names no other fate, so the default
+/// applies (`unplace_self` alone would banish it).
+fn retire(player_id: i32) -> card_sdk::Asked {
+    ctx::set_slot(player_id, "noRoad.who", -1);
+    ctx::send_to_dest(ctx::Dest::Graveyard);
+    Ok(())
+}
+
+/// 规则书: 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
 /// `NoRoadFx.RedirectReceiver`. Applicability is the `pre` +
 /// [`redirect_applies`]; this side only reroutes the pay target.
 /// Pure: the new payee rides `PayAddValue.payee` (amount unchanged).
@@ -173,4 +214,10 @@ pub fn redirect_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayA
 #[inline(always)]
 pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
     no_road(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn retire_kani(player_id: i32) -> card_sdk::Asked {
+    retire(player_id)
 }

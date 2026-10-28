@@ -9,12 +9,15 @@
 
 use alloc::vec::Vec;
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const TAKI_SERIOUS: CardDef = CardDef::new(
     "MyGO:（立希）想认真去做",
-    &[On::Play("", Some(cant_play), taki_serious)],
+    // 规则书: 「使场上所有拥有[停留]的玩家立刻…」 -- the cell carries no [限], and
+    // the 专有名词 「[限]」 entry makes only 「[限]X」 cards conditional on X, so an
+    // empty set is still a legal (no-op) play; the C# `WhyNot` refusal is gone.
+    &[On::Play("", None, taki_serious)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想认真去做"#)
         .raw_name(r#"（立希）想认真去做"#)
@@ -25,21 +28,17 @@ pub const TAKI_SERIOUS: CardDef = CardDef::new(
 
 /// C# `CardTakiSerious.Stayers` -- present players holding [停留].
 fn stayers() -> Vec<i32> {
-    // C# `H.Present(p) && H.State.seats[p].stay > 0`. `Present` is "in the game
-    // and not exiled"; `player_out` covers the out-of-game half (exile layers are
-    // not readable, so an exiled stayer may slip in).
+    // 规则书: 「使场上所有拥有[停留]的玩家」 -- C# `H.Present(p) && H.State.seats[p].stay > 0`.
+    // `Present` is "in the game and not exiled": an exiled piece is on no tile
+    // (`rules/status/src/exile.rs`), so it has no 所在格子 to settle, yet it
+    // keeps its [停留] layers -- both halves are checked here.
     (0..ctx::player_count())
-        .filter(|&p| !ctx::player_out(p) && rules_status::stay::get(p) > 0)
+        .filter(|&p| {
+            !ctx::player_out(p)
+                && rules_status::exile::get(p) == 0
+                && rules_status::stay::get(p) > 0
+        })
         .collect()
-}
-
-fn cant_play(_player: i32) -> Option<Msg> {
-    // 规则书: 「使场上所有拥有[停留]的玩家...」 -- C# `CardTakiSerious.WhyNot`
-    // refuses the play when nobody holds [停留].
-    if stayers().is_empty() {
-        return Some(Msg::new(key!("taki_serious_why_not_stay")));
-    }
-    None
 }
 
 fn taki_serious(player_id: i32) -> card_sdk::Asked {
@@ -70,9 +69,15 @@ fn taki_serious(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("taki_serious_where")).player_id("who", p),
             &tiles,
         )?;
-        // 「...你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为
-        // 原价的四分之一」 -- the stayer settles there at a quarter price.
+        // 规则书: 「本次结算导致的所有[支付]变为原价的四分之一」 -- the stayer
+        // settles there at a quarter price.
+        // TODO(规则书)（本次结算导致的所有[支付]变为原价的四分之一）: 只限本次结算
+        //   -- `set_pay_factor` 写整回合的 `turn.plan` 且不还原，之后本回合的移动
+        //   落地也按四分之一付。
         ctx::plan::set_pay_factor(250);
+        // TODO(规则书)（进行一次[触发结算]）: 这个强制结算记为 `main = true`（当作
+        //   该回合的落点）-- 书只写[触发结算]；`main` 会改写 `landed` 并让
+        //   `move.main` 的结算体生效（与轮符雨的 `false` 不同）。
         ctx::card_settle_at(p, pick, true);
         ctx::log(
             player_id,

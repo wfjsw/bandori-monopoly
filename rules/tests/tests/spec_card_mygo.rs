@@ -985,6 +985,8 @@ fn miracle_transfers_band_crystals_and_ineffective_discard() {
                 "crystals:P0",
                 "discard:P0",
                 "discard_pub:P0",
+                // The (1) play resets the [经过] bookkeeping mask.
+                "state:P0:miracle_passed",
             ],
         )?;
 
@@ -2068,11 +2070,7 @@ fn tomori_skill_fire_on_passing_ring() {
 fn tomori_skill_fire_cap_and_initial() {
     let t = Table::new(&["高松灯", "千早爱音"]);
     assert_eq!(t.charge(0), 4, "C-MYGO-tomori-skill-01: initial 4");
-    assert_eq!(
-        t.charge_max(0),
-        4,
-        "C-MYGO-tomori-skill-01: cap 4"
-    );
+    assert_eq!(t.charge_max(0), 4, "C-MYGO-tomori-skill-01: cap 4");
 }
 
 /// C-MYGO-tomori-skill-02/03/04: force-teleport for 4 pots; d20<=6 stay +
@@ -2538,11 +2536,7 @@ fn rikki_skill_fire_on_any_stay_gain() {
 fn rikki_skill_fire_cap_and_initial() {
     let t = Table::new(&["椎名立希", "高松灯"]);
     assert_eq!(t.charge(0), 0, "C-MYGO-rikki-skill-01: initial 0");
-    assert_eq!(
-        t.charge_max(0),
-        5,
-        "C-MYGO-rikki-skill-01: cap 5"
-    );
+    assert_eq!(t.charge_max(0), 5, "C-MYGO-rikki-skill-01: cap 5");
 }
 
 /// C-MYGO-rikki-skill-02: 运营, 1 pot, +1 crystal on a field card, once/turn.

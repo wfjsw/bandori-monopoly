@@ -21,8 +21,10 @@
 //! swells the starting deck, sits on the field from game start, and copies another
 //! player's band card at a sticker price.
 //! A pure [特] card (C# has no `Play`): deck setup and game-start placement sit on
-//! the `DeckBeforeGame` / `DeckAtGameStart` hooks. The band-card copying and the
-//! four [持续] clauses still need machinery the ABI does not carry (TODO below).
+//! the `DeckBeforeGame` / `DeckAtGameStart` hooks; the band copying and the four
+//! [持续] clauses ride field hooks (`TurnStartBefore`, `CardPlayed`) and the
+//! poppin field scan. Only the generic activation-cost ABI form stays deferred
+//! (BACKLOG, not this file).
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -30,7 +32,7 @@ use alloc::vec::Vec;
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, CardPile, RollPurpose};
 use card_sdk::ctx::{intern, NameId};
-use card_sdk::{CardText, it, items, sec};
+use card_sdk::{it, items, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:Returns";
@@ -44,12 +46,17 @@ const PROP_FROM: &str = "returns.from";
 pub const RETURNS: CardDef = CardDef::new(
     "PPP:Returns",
     &[
-        // [持续]（4）「[拥有者]的通用卡的[手]效果全部生效后」 -- `pre::MINE`
+        // TODO(ABI)（[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸）:
+        // `cardPlayed` carries no play-cancelled flag -- it is raised even when the
+        // play was counteracted, so a negated 通用 play still pays -- and a hand
+        // [反击] card is resolved in the counteraction tree and raises no
+        // `cardPlayed` at all, so a 通用 [反击] pays nothing.
+        // 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后」 -- `pre::MINE`
         // states the actor; the residual guard names the 通用 card. The body
         // used to re-check the actor and the prefix and return early -- a flash
         // per non-通用 play by the owner.
         On::Action(Action::CardPlayed(card_sdk::pre::MINE, Some(on_played_is_general), on_played)),
-        // [持续]（2）「每回合开始时选择一个其他存活玩家的团卡」 -- the offer
+        // 规则书[持续]（2）: 「每回合开始时选择一个其他存活玩家的团卡」 -- the offer
         // exists only while Returns is placed and some other survivor has a
         // band card to borrow. Derived scans (pool + `is_placed`), residual.
         On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, Some(choose_band_applies), choose_band)),
@@ -217,9 +224,9 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     // `SKILLS` index -- Poppin' Party -- so it cannot serve as the sentinel).
     ctx::set_prop(PROP_BAND, -1);
     ctx::set_prop(PROP_FROM, -1);
-    // [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果」 -- arm the token
-    // `skill-groups::poppin` reads to skip its no-build-on-main-settle rule.
-    ctx::set_tok(player_id, "returns.noBuild4", 1, 0, -1);
+    // 规则书[持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果」 -- no token
+    // to arm: `skill-groups::poppin` decides it by a direct field scan
+    // (`find_card("PPP:Returns")`), so this placement is the switch.
     ctx::log(
         player_id,
         &Msg::new(key!("returns_placed")).player_id("who", player_id),
@@ -231,19 +238,19 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果。」 -- while Returns is
-// in play the PPP band card's main-settle build restriction is lifted. Read by
-// `skill-groups::poppin` off the owner's field (`find_card("PPP:Returns")`).
-// [持续]（2）「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡
-// 获得的团卡不一样则替换并移除上面的所有[奇迹水晶]」 -- a `turnStart` press.
+// 规则书[持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果。」 -- while Returns
+// is in play the PPP band card's main-settle build restriction is lifted. Read
+// by `skill-groups::poppin` off the owner's field (`find_card("PPP:Returns")`).
+// 规则书[持续]（2）: 「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前
+// 因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]」 -- a `turnStart` press.
 // The borrowed band sits beside the PPP one (ruling 2026-10-06); only a prior
-// borrow is swapped out, and its crystals leave with it.
-// [持续]（3）「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the copy
-// is the instance `place_card` returned (`returns.borrow_uid`); the owner's own
+// borrow is swapped out (by its recorded uid), and its crystals leave with it.
+// 规则书[持续]（3）: 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the
+// copy is the instance `place_card` returned (`returns.borrow_uid`); the owner's own
 // band card sits beside it and its presses are free.
 // `skill_groups::copy_sticker_gate` is the activation cost (0 stickers → the
 // press is refused) and `spend_copy_sticker` charges the 1 when it runs.
-// [持续]（4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」 -- the
+// 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」 -- the
 // `cardPlayed` hook is in; a card's band is the prefix of its id (`通用:`, `G:`),
 // which is what `H.Db.Card(c.Id)?.group == "通用"` reads.
 
@@ -259,7 +266,7 @@ fn on_played_is_general(_player_id: i32) -> bool {
         .is_some_and(|id| id.as_str().starts_with("通用") || id.as_str().starts_with("G:"))
 }
 
-/// （4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.
+/// 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.
 fn on_played(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("returns_sticker")));
@@ -347,7 +354,8 @@ fn deck_pool_ready(player_id: i32) -> bool {
     !pool_for(player_id).is_empty()
 }
 
-/// （2）「每回合开始时选择一个其他存活玩家的团卡…替换并移除上面的所有[奇迹水晶]」.
+/// 规则书[持续]（2）: 「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前
+/// 因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]」.
 /// Applicability is `choose_band_applies`.
 fn choose_band(player_id: i32) -> card_sdk::Asked {
     borrow_band(player_id)
@@ -356,12 +364,13 @@ fn choose_band(player_id: i32) -> card_sdk::Asked {
 /// Shared by the game-start borrow ([特]（2）) and the per-turn replacement
 /// ([持续]（2）). The borrowed band sits **beside** the owner's own Poppin'
 /// Party band card (ruling 2026-10-06): only a previously borrowed band is
-/// replaced, never the PPP one.
+/// replaced -- addressed by the uid recorded in `returns.borrow_uid`, never by
+/// name, so the owner's own card (same id) is not the one taken.
 ///
 /// The pool-empty early-out stays here: `deck_at_game_start` calls this after
-/// the mandatory placement side effects (take/field/token), so lifting it to
-/// that entry's residual would skip the placement when the pool is empty --
-/// more than the offer's existence. `choose_band`'s entry is guarded instead.
+/// the mandatory placement side effects (take/field), so lifting it to that
+/// entry's residual would skip the placement when the pool is empty -- more
+/// than the offer's existence. `choose_band`'s entry is guarded instead.
 fn borrow_band(player_id: i32) -> card_sdk::Asked {
     let pool = band_pool(player_id);
     if pool.is_empty() {
@@ -416,10 +425,13 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     // Drop only the previously *borrowed* band skill (「替换并移除上面的所有
     // [奇迹水晶]」 -- its crystals live on its own instance and leave with it).
     // The owner's own Poppin' Party band card stays: ruling 2026-10-06 says the
-    // borrowed card sits BESIDE it, and its skills (1)–(3) keep working.
+    // borrowed card sits BESIDE it, and its skills (1)–(3) keep working. The
+    // address is the recorded uid -- a name lookup would take the owner's own
+    // card first when both carry `skill:Poppin' Party:星之鼓动`.
     if prev >= 0 {
-        if let Some(old) = SKILLS.get(prev as usize) {
-            ctx::unplace_card_named(player_id, old);
+        let prev_uid = ctx::tok(player_id, "returns.borrow_uid");
+        if prev_uid > 0 {
+            ctx::unplace_at(prev_uid);
         }
     }
     let borrowed = ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));

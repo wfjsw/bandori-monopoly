@@ -344,7 +344,9 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
     // Bounded loop instead of a symbolic-length Range fold (the `collect`
     // → `extend_trusted` path is an unwinding cliff at 32). Same result.
     let n = owned_count(player_id).max(0).min(8) as usize;
-    let mut v = Vec::new();
+    // Exact capacity: a `Vec::new()` push grows through `__rust_realloc` and
+    // aborts the path in `kani::mem::cbmc::same_allocation` (2026-10-28).
+    let mut v = Vec::with_capacity(n);
     let mut i = 0usize;
     while i < n {
         v.push(owned_at(player_id, i as i32));
@@ -862,6 +864,10 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     if need < 2 {
         return Vec::new();
     }
+    // Known exact push count: size the Vec once (bounded ≤ 8) so the pushes
+    // below never grow it -- a realloc here trips the CBMC dealloc layout
+    // checks (same fix as `owned_tiles`).
+    let n = (need - 1).min(8) as usize;
     let (p, scratch) = out_buf(need as usize);
     let got = unsafe { sys::cards_in(player_id, pile as i32, p, need) };
     if got != need {
@@ -871,8 +877,7 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     // Interned short static names. The literal FNV hashes constant-fold;
     // no `String::from`, no `memcmp` on the proof path.
     const SLOTS: [&str; 4] = ["c0", "c1", "c2", "c3"];
-    let n = (need - 1).min(8) as usize;
-    let mut out: Vec<NameId> = Vec::new();
+    let mut out: Vec<NameId> = Vec::with_capacity(n);
     let mut i = 0usize;
     while i < n {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
@@ -1274,8 +1279,8 @@ pub fn place_mark(
 /// Place **one** paired mark spanning tiles `a` and `b` (the miracle-crystal
 /// shape: one unit bound to two tiles). One row per tile, each row's
 /// `partner` naming the other. Place-or-refuse atomic: returns `false` and
-/// places **nothing** when either tile already carries a matching mark for
-/// that owner (the pair cap 「上限1」 is on the pair; a tile cannot sit in two
+/// places **nothing** when either tile already carries a matching mark, any
+/// owner (the pair cap 「上限1」 is on the pair; a tile cannot sit in two
 /// links at once). `owner` / `category` / `src` / `note` / `stack` speak as in
 /// [`place_mark`]; both rows die with the creating instance like any mark.
 #[cfg_attr(kani, inline(always))]
@@ -1898,6 +1903,13 @@ pub fn can_pay(player_id: i32) -> bool {
     unsafe { sys::can_pay(player_id) != 0 }
 }
 
+/// [`cant_move`]'s raw code: 0 = free, 1 = not your turn, 2 = the main move
+/// is already spent, 3 = the move gate holds (a [停留] latch).
+#[doc(hidden)]
+pub fn cant_move_code(player_id: i32) -> i32 {
+    unsafe { sys::cant_move(player_id) }
+}
+
 /// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
 #[doc(hidden)]
@@ -2085,8 +2097,20 @@ pub fn ask_tile_walk(
         if let Some(&t) = tiles.get(3) {
             unsafe { sys::opt_int(t) }
         }
-        if tiles.len() > 4 {
-            kani::assert(false, "ask_tile_walk: more than 4 tiles under Kani");
+        if let Some(&t) = tiles.get(4) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(5) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(6) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(7) {
+            unsafe { sys::opt_int(t) }
+        }
+        if tiles.len() > 8 {
+            kani::assert(false, "ask_tile_walk: more than 8 tiles under Kani");
         }
         let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
         return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
@@ -3649,28 +3673,47 @@ pub fn turn_rolls() -> Vec<i32> {
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
-/// Turn-start snapshot: starting square + whole keyed state map.
-/// Host writes postcard of `(i32, BTreeMap<String, i32>)`.
-pub fn turn_snap_map(player_id: i32) -> (i32, alloc::collections::BTreeMap<String, i32>) {
-    let cap = 4096;
+/// Turn-start snapshot payload (`ruleset_turn_snap`): starting square, keyed
+/// state map, that player's money and the board ownership arrays. Field order
+/// mirrors `game_core::engine::TurnSnap` -- postcard carries no field names,
+/// so the two must stay in step.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct TurnSnapshot {
+    pub pos: i32,
+    pub state: alloc::collections::BTreeMap<String, i32>,
+    pub money: i32,
+    pub owners: Vec<i32>,
+    pub houses: Vec<i32>,
+    pub mortgaged: Vec<bool>,
+}
+
+/// The host's postcard [`TurnSnapshot`]; `pos = -1` when there is no snapshot.
+pub fn turn_snap_map(player_id: i32) -> TurnSnapshot {
+    let cap = 16_384;
     let (p, scratch) = out_buf(cap);
     let n = unsafe { sys::turn_snap(player_id, p) };
     if n <= 0 || n as usize > cap {
-        return (-1, alloc::collections::BTreeMap::new());
+        return TurnSnapshot {
+            pos: -1,
+            ..Default::default()
+        };
     }
     let buf = out_read(p, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or((-1, alloc::collections::BTreeMap::new()))
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or(TurnSnapshot {
+        pos: -1,
+        ..Default::default()
+    })
 }
 
 /// `(pos, v0, v1, v2)` for the caller's three keys (the caller names them) --
 /// the three layer counters 「回到起始地点并取消所有受到的效果」 restores.
 pub fn turn_snap(player_id: i32, k0: &str, k1: &str, k2: &str) -> (i32, i32, i32, i32) {
-    let (pos, map) = turn_snap_map(player_id);
+    let snap = turn_snap_map(player_id);
     (
-        pos,
-        map.get(k0).copied().unwrap_or(0),
-        map.get(k1).copied().unwrap_or(0),
-        map.get(k2).copied().unwrap_or(0),
+        snap.pos,
+        snap.state.get(k0).copied().unwrap_or(0),
+        snap.state.get(k1).copied().unwrap_or(0),
+        snap.state.get(k2).copied().unwrap_or(0),
     )
 }
 

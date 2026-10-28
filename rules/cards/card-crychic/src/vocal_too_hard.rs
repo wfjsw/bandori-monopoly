@@ -8,23 +8,33 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
     "CRYCHIC:主唱太拼命了",
     &[On::Counteract(
         &[ChainKind::Effect],
-        "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
+        // 规则书: 「[反击] 一次性向其他玩家支付至少5000资金时」 -- a payment to
+        // another player (`target != owner`; the bank is `target < 0`).
+        // TODO(规则书)（一次性向其他玩家支付至少5000资金时）: 「一次性」是一笔转账，
+        //   不含[分摊]的份额 -- 分摊腿 (`total_stage = false`) 也会开出此窗。
+        // TODO(规则书)（支付至少5000资金）: 门槛应是实际支付额 -- the `effect`
+        //   窗的 `value` 是修正前的宣告额 (CROSS-TESTS C20)。
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value >= 5000",
         None,
-        counteract).counter_reason(key!("vocal_too_hard_when"))],
+        counteract,
+    )
+    .counter_reason(key!("vocal_too_hard_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"主唱太拼命了"#)
         .raw_name(r#"主唱太拼命了"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。"#))
+        .text(CardText::para(
+            r#"[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。"#,
+        ))
         // sheet cell M10
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );

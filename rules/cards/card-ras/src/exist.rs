@@ -7,7 +7,7 @@
 
 use bandori_std::ctx::{self};
 use card_sdk::abi::{ActionKind, FilterKind, Payee, Seat};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RedirectValue};
 
 pub const EXIST: CardDef = CardDef::new(
@@ -20,7 +20,9 @@ pub const EXIST: CardDef = CardDef::new(
         // 「造成影响」 latch: the redirect lands, then `Effect` fires at the
         // target window. Mark used there (Action) rather than inside the
         // Redirect Filter (`set_prop` is refuse_if_filter'd).
+        // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」
         On::Action(Action::Effect("target == owner && actor != owner", None, mark_used)),
+        // 规则书: 「你的下回合开始时将其翻入弃牌堆」
         On::Action(Action::TurnStart("", Some(turn_start_guard), turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -33,9 +35,9 @@ pub const EXIST: CardDef = CardDef::new(
 
 const ID: &str = "RAS:EXIST";
 
-/// C# `Mem["used"]` -- set by the redirect when this card retargeted a card.
-/// Stored on the card instance (`FieldCard::props`), not in the player's
-/// keyed-state map, so the write stays inside this rule's scope.
+/// C# `Mem["used"]` -- 「造成影响」, written by [`mark_used`] on the effect
+/// declaration. Stored on the card instance (`FieldCard::props`), not in the
+/// player's keyed-state map, so the write stays inside this rule's scope.
 const PROP_USED: &str = "exist.used";
 
 fn exist(player_id: i32) -> card_sdk::Asked {
@@ -52,9 +54,10 @@ fn exist(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardExist.Redirects` -> `Used()` -- while the card is placed, every
 /// single-target play is retargeted at this seat (「包括其他玩家指向自身的卡」
-/// covers another player's self-targeted plays too). The engine only raises
-/// `redirect` at single-target `ctx::target` calls and applies the answer only
-/// when it differs from both the intended target and the actor (C# `H.Target`'s
+/// covers another player's self-targeted plays too -- `target_player` folds the
+/// redirect before its `p == by` early-out). The engine only raises `redirect`
+/// at single-target `ctx::target` calls and applies the answer only when it
+/// differs from both the intended target and the actor (C# `H.Target`'s
 /// `card.Seat != p && card.Seat != c.Seat`).
 /// Pure: the retarget rides `RedirectValue.payee`. The 「造成影响」 latch is
 /// [`mark_used`] on `Effect`.
@@ -67,15 +70,21 @@ fn redirect(player_id: i32, v: RedirectValue) -> RedirectValue {
     }
 }
 
-/// C# `CardExist.Used` -> `Mem["used"] = 1` -- this card retargeted a play.
-/// Rides `Effect` (the target window's declaration, after the `redirect`
-/// fold). The condition is "someone else's effect now targets us".
-/// TODO(规则书)[judgement]: 「造成影响」 is taken to mean *the effect resolved*.
+/// C# `CardExist.Used` -> `Mem["used"] = 1` -- the 「造成影响」 latch that
+/// suppresses the end-of-window draw. Rides `Effect` (the target window's
+/// declaration, after the `redirect` fold). The condition is "someone else's
+/// effect now targets us".
+/// TODO(规则书)（若在此期间此卡没有造成影响）: 「造成影响」 is latched on the
+///   effect **declaration** here, before any counter settles (C-Q8 /
+///   WINDOW-03); the book asks whether the card had an influence.
 /// TODO(规则书): this marks used for any other-player Effect aimed at the
 ///   owner, not only ones that went through the Redirect fold. C# `Used()`
 ///   runs only when the redirect lands; a direct targeting of the owner also
-///   matches here. Over-mark suppresses the extra draw (「没有造成影响」).
+///   matches here, and so does an `effect` raised by a money movement (rent
+///   paid to us, a bank print). Over-mark suppresses the extra draw
+///   (「没有造成影响」).
 fn mark_used(_player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」
     ctx::set_prop(PROP_USED, 1);
     Ok(())
 }
@@ -90,11 +99,14 @@ fn turn_start_guard(player_id: i32) -> bool {
 
 fn turn_start(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「你的下回合开始时将其翻入弃牌堆」 -- C# `H.Unplace(this, "discard")`.
+    // `send_to_dest` files it **now**: the flip precedes the draw in the text,
+    // and a deferred fate would leave the card on the field while the draw
+    // reshuffles the (empty) deck without it.
     let used = ctx::prop(PROP_USED);
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」 -- C# draws 1 only when
-    // `Mem["used"]` was never set; the `redirect` hook above sets it (C#
-    // `CardExist.Used` -> `Mem["used"] = 1`) when this card retargeted a play.
+    // `Mem["used"]` was never set. The flag is written by [`mark_used`] on the
+    // `effect` declaration, not by the (pure) `redirect` hook.
     if used == 0 {
         ctx::draw(player_id, 1)?;
     }

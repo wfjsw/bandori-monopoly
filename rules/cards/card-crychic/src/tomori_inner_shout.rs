@@ -12,8 +12,8 @@
 //! re-declare 「想要成为人类」's X for money, then a MyGO placement + pull skill.
 
 use bandori_std::ctx;
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
-use card_sdk::{CardText, it};
 
 use crate::want_human::SLOT_X;
 
@@ -21,17 +21,22 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:（灯）内心的呐喊",
     &[
         // 规则书（3）: 「你位于此卡前后5格内时可在时机合适时消耗1火罐…」 -- the
-        // offer exists only within 5 of this card and with a fire to spend.
-        // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
-        On::Action(Action::SettleBefore("actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(owner), card.tile) <= 5", Some(not_latched), pull)),
+        // offer exists only within 5 of this card, and the borrowed (2) skill
+        // asks for the mover's 「[移动终点]」 within 5 of you
+        // (`dist(pos(actor), pos(owner))`). The fire is left to
+        // `fire::spend`, which opens its substitution window even on an empty
+        // pool, so no pool gate here (「消耗1火罐」 may be covered by a crystal).
+        // TODO(规则书)（使用一次高松灯（MyGO!!!!!）的（2）技能）: (2) 在其他玩家的
+        //   任意[移动终点]都可发动 -- the pre narrows it to the main move.
+        On::Action(Action::SettleBefore("actor != owner && move.main && card.placed && dist(pos(actor), pos(owner)) <= 5 && dist(pos(owner), card.tile) <= 5", Some(not_latched), pull)),
         // Once-per-move latch drop (the redirect re-raises `settleBefore` at the
         // destination; see `pull`).
         On::Action(Action::MoveResolved("", None, clear_latch)),
         // 高松灯（MyGO!!!!!）(2): 「在此技能影响下的支付价格变为原本的一半」 -- the
         // mover's payments on the pulled settle.
         On::Filter(Filter::PaySplitMul("", Some(half), on_pay)),
-        // （2）「乐队技能的（2）效果发动时展示此卡并将其洗入抽牌堆」 lives in the
-        // band skill's (2) body (`skill-groups/src/crychic.rs`), not here: the
+        // 规则书（2）: 「乐队技能的（2）效果发动时展示此卡并将其洗入抽牌堆」 lives in
+        // the band skill's (2) body (`skill-groups/src/crychic.rs`), not here: the
         // band effect is what moves the card, and by a separate empty-piles hook
         // the deck has already been refilled so the proxy never fires.
         On::Play("", None, tomori_inner_shout),
@@ -51,11 +56,25 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
 fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得
     // 两个X差值*120的资金。」 -- C# finds this player's placed `CardWantHuman` and
-    // re-declares its `Mem["x"]`. The slot `want_human_x` is the stand-in for
-    // "that card is placed here and its X"; 0 means "no X written down", so (1)
-    // is skipped exactly like the C# does without the card.
+    // re-declares its `Mem["x"]`. The player-scoped slot `want_human_x` is the
+    // stand-in for that card's X, but it outlives the instance (nothing clears
+    // it when the card leaves), so the live-instance check below is what stands
+    // in for "the card is placed"; 0 means "no X was ever written down".
+    // TODO(规则书)（你可重置一次“想要成为人类”所声明的X）: X belongs to the placed
+    //   card instance (C# `Mem`) -- we keep it in a player slot, so it survives
+    //   the card and two copies share it.
     let old = ctx::slot(player_id, SLOT_X);
-    if old > 0 {
+    let mut reset = old > 0 && want_human_placed(player_id);
+    if reset {
+        // 规则书（1）: 「你可重置一次」 -- optional: ask first, then the new X
+        // (`H.AskNumber(i, ..., 1, 20, ...)`).
+        reset = ctx::ask_yes(
+            player_id,
+            &Msg::new(key!("tomori_inner_shout_title")),
+            &Msg::new(key!("tomori_inner_shout_may")).card("card", "CRYCHIC:想要成为人类"),
+        )?;
+    }
+    if reset {
         // 规则书（1）: 「重置一次“想要成为人类”所声明的X」 -- C# `H.AskNumber(i, ..., 1, 20, ...)`.
         let x = ctx::ask_number(
             player_id,
@@ -76,6 +95,8 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
                 .i("n", x as i64),
         );
         // 规则书（1）: 「并获得两个X差值*120的资金」 -- C# `H.GainR(i, |new-old| * 120, ...)`.
+        // TODO(规则书)（获得两个X差值*120的资金）: 「两个」读作 ×2 (OPEN-两个X差值) --
+        //   现按 |ΔX| * 120（1×）支付。
         let diff = (x - old).abs();
         if diff > 0 {
             ctx::gain(
@@ -85,8 +106,8 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
             )?;
         }
     }
-    // （2）「此卡不会被你乐队技能的（2）效果移除」 -- see the band skill's (2)
-    // band skill's sweep, which spares this card.
+    // 规则书（2）: 「此卡不会被你乐队技能的（2）效果移除」 -- see the band
+    // skill's (2) sweep, which spares this card.
     // 规则书（3）: 「若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上」
     // -- C# `H.InBand(i, "MyGO!!!!!")` then `H.PlaceFromPlay(c, i, tile)` at the
     // first owned tile (`H.V(i, "firstTile") - 1` falling back to `list.Min()`).
@@ -101,7 +122,13 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
     //   before this card was played are already ordered. Until that lands, the
     //   lowest board index stands in for "earliest owned", and `firstTile` is
     //   honoured if anything ever writes it.
-    if ctx::in_group(player_id, "MyGO!!!!!") {
+    // 「你的乐队技能为“MyGO!!!!!”」 is about the band skill held, not the persona
+    // group: the only player of this card is 高松灯（CRYCHIC）, whose persona group
+    // stays CRYCHIC even after the band (2) transform attaches a MyGO!!!!! skill.
+    if ctx::group_skills(player_id)
+        .iter()
+        .any(|(_, id, _)| id.as_str().starts_with("skill:MyGO!!!!!:"))
+    {
         let owned = ctx::owned_tiles(player_id);
         if let Some(&first) = owned.iter().min() {
             let remembered = ctx::slot(player_id, "firstTile") - 1;
@@ -131,25 +158,39 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Once per move: the teleport re-raises `settleBefore` at the destination.
-const LATCH: &str = "card.tomoriInnerShout.pulled";
-/// The mover's payments on the pulled settle are halved.
-const HALF: &str = "card.tomoriInnerShout.half";
+/// Keyed on this **instance** as well as the mover, so two copies on the field
+/// each get their own use (the latch lives on the mover, one integer per key).
+fn latch_key() -> alloc::string::String {
+    alloc::format!("card.tomoriInnerShout.pulled.{}", ctx::self_uid())
+}
+/// The mover's payments on the pulled settle are halved (per instance).
+fn half_key() -> alloc::string::String {
+    alloc::format!("card.tomoriInnerShout.half.{}", ctx::self_uid())
+}
 
 fn not_latched(_player_id: i32) -> bool {
-    ctx::slot(ctx::trigger::player_id(), LATCH) == 0
+    ctx::slot(ctx::trigger::player_id(), &latch_key()) == 0
 }
 
 fn clear_latch(_player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
     if mover >= 0 {
-        ctx::set_slot(mover, LATCH, 0);
-        ctx::set_slot(mover, HALF, 0);
+        ctx::set_slot(mover, &latch_key(), 0);
+        ctx::set_slot(mover, &half_key(), 0);
     }
     Ok(())
 }
 
 fn half(_player_id: i32) -> bool {
-    ctx::is_placed() && ctx::slot(ctx::trigger::player_id(), HALF) > 0
+    ctx::is_placed() && ctx::slot(ctx::trigger::player_id(), &half_key()) > 0
+}
+
+/// Is a 「想要成为人类」 instance on this player's field? The X slot is
+/// player-scoped and never cleared, so on its own it does not prove placement.
+fn want_human_placed(player_id: i32) -> bool {
+    ctx::field_instances(player_id)
+        .iter()
+        .any(|(_, c)| c.as_str() == "CRYCHIC:想要成为人类")
 }
 
 fn on_pay(_player_id: i32, value: i32) -> i32 {
@@ -160,9 +201,10 @@ fn on_pay(_player_id: i32, value: i32) -> i32 {
 }
 
 /// （3）: 「你位于此卡前后5格内时可…消耗1火罐使用一次高松灯（MyGO!!!!!）的（2）技能」.
-/// The window is the **controller** ("你") within 5 of this card, not the
-/// mover's endpoint (entry condition `dist(pos(owner), card.tile) <= 5`). The
-/// body is 诗超绊 (2) with the cost swapped to 1 fire: another player (the
+/// The window is the **controller** ("你") within 5 of this card, plus the
+/// borrowed (2) skill's own condition -- the mover's endpoint within 5 of you
+/// (entry condition `dist(pos(actor), pos(owner)) <= 5 && dist(pos(owner),
+/// card.tile) <= 5`). The body is 诗超绊 (2) with the cost swapped to 1 fire: another player (the
 /// mover, before their settle) is teleported to 「自己所在的格子」 -- the
 /// controller's own tile -- and the redirected settle runs there (`teleport_to`
 /// inside `SettleBefore`: `after_walk` settles once at the destination), with
@@ -184,22 +226,20 @@ fn pull(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::teleport_to(mover, card_tile);
-    ctx::set_slot(mover, LATCH, 1);
-    ctx::set_slot(mover, HALF, 1);
+    ctx::set_slot(mover, &latch_key(), 1);
+    ctx::set_slot(mover, &half_key(), 1);
     ctx::log(
         player_id,
         &Msg::new(key!("tomori_inner_shout_pulled"))
             .player_id("who", mover)
             .tile("tile", card_tile),
     );
-    // TODO(规则书)（3）: half-pay is applied unconditionally to the pulled
-    //   settle; 诗超绊 (2) itself only halves after a 1d20 <= 6 (its `DUE`
-    //   state), so the exact scope of 「在此技能影响下」 is unsettled (the
-    //   persona body may itself diverge from the book).
-    // TODO(规则书)（3）: the second half -- a 1d20 (<=6: `H.TomoriBind` +
-    //   `TomoriLaterFx` delayed settles at half pay). The bind and the
-    //   delayed-settle queue have no vocabulary: nothing schedules "this player
-    //   settles these tiles later at half pay".
+    // The sheet separates the two halves with a semicolon, so the half-price on
+    // 「在此技能影响下的支付」 is unconditional (the persona body's `DUE` gate
+    // is the different, still-open divergence).
+    // TODO(规则书)（使用一次高松灯（MyGO!!!!!）的（2）技能）: (2) 的后半也须执行 --
+    //   使其投掷 1d20，<=6 则获得一层[停留]并在其下回合结束时[触发结算]。现在
+    //   既不投骰、也不加[停留]、也不排延后结算（无该词汇，见 TOMORI-BIND-01）。
     Ok(())
 }
 

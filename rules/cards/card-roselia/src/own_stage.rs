@@ -9,11 +9,15 @@
 
 use bandori_std::ctx::{self, AbKind};
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
+    // TODO(规则书)（受到[除外]以外的异常移动效果影响时可打出此卡）: the window must
+    //   follow a landing abnormal -- the host raises it before the `ImmuneAll`
+    //   refusal, so a protected player still spends the card and answers for a
+    //   move that never happens.
     &[On::Counteract(
         &[ChainKind::Effect],
         "target == owner",
@@ -64,14 +68,23 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「（或无法移动的回合结束时）」 -- C# `H.SetV(i, "stageEnd", yes ? 1 : 2)`
     // when the abnormal is stay/stun (C# `CardOwnStage.Counteract` branches on
     // `c.Trigger.Ab.Kind`).
+    // TODO(规则书)（或无法移动的回合结束时）: the turn-end half is only written to
+    //   a slot (`stageEnd`) and no reader consumes it -- nothing settles at the
+    //   end of a movement-locked turn. (The move half is read by
+    //   `Cx::take_resolve_override`.)
     match abnormal_kind() {
         Some(bandori_std::kind::abnormal::Stay) | Some(bandori_std::kind::abnormal::Stun) => {
+            // TODO(规则书)（或无法移动的回合结束时）: the turn-end half applies only
+            //   when the move is actually blocked -- the kind alone is the branch, so
+            //   a [停留] walked through under 「不可阻挡」 still lands here.
             ctx::set_slot(player_id, "stageEnd", if yes { 1 } else { 2 });
         }
         // 规则书[反击]: 「选择自己的本次移动…是否触发结算」 -- C# `H._resolveOverride[i] =
-        // (yes ? 1 : 0)` for every other abnormal.
+        // (yes ? 1 : 0)` for every other abnormal. The slot is one-shot: the
+        // engine consumes it into the move and clears it (`take_resolve_override`),
+        // so 1 = settle and 2 = pin off (0 would be indistinguishable from unset).
         _ => {
-            ctx::set_slot(player_id, "resolveOverride", if yes { 1 } else { 0 });
+            ctx::set_slot(player_id, "resolveOverride", if yes { 1 } else { 2 });
         }
     }
     Ok(())

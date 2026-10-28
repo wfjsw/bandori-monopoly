@@ -179,8 +179,11 @@ Card text (cards.json#Mor:夏日合宿):
 * **Condition:** no effect was negated by the shield during the window.
 * **Effect:** the user draws one card; the card leaves the field.
 * **Frame:** the user's hand / draw / discard and the field.
-* **Rulings & OPEN:** the negation counter is engine-internal; the clause
-  observes "the window ended and the card left the field with a draw".
+* **Rulings & OPEN:** the negation count is the card's own `summer_camp_blocked`
+  slot, incremented on each `Untargetable` refusal; the draw is gated on it
+  being zero (「没有…无效化任何影响」). The end path is the owner's next turn
+  start only -- if the card leaves the field earlier the counter never runs and
+  the count is never reset (in-file `TODO(ABI)` leave-field hook).
 * **Executable:** [`c_mor_summer_draw`].
 
 ---
@@ -413,10 +416,10 @@ Card text (cards.json#Mor:迷茫之蝶们的三全音):
 * **ID:** `C-MOR-tritone-02`
 * **Source:** `cards.json#Mor:迷茫之蝶们的三全音`
 * **Quote:** 「三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金」
-* **Trigger:** the third owner turn-end after placement (the crystal
-  count hits 0).
+* **Trigger:** every turn end after placement (the crystal count ticks by
+  one at each, whoever's turn is ending), with the discard when it hits 0.
 * **Condition:** the card is on the field.
-* **Effect:** one crystal is removed at each owner turn end; when they run
+* **Effect:** one crystal is removed at each turn end; when they run
   out the card is discarded and the user pays back the money it gained.
 * **Frame:** the crystal count, the field / discard, and the payback leg.
 * **Rulings & OPEN:** OPEN-三全音收款人 -- 「支付由此卡获得的资金」

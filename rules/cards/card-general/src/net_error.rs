@@ -12,8 +12,8 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const NET_ERROR: CardDef = CardDef::new(
     "通用:网络链接异常",
@@ -50,15 +50,27 @@ fn can_counteract(player_id: i32) -> bool {
         TriggerKind::Event => true,
         TriggerKind::Card => {
             // C# `t.Play != null && !t.Play.Cancelled && t.Seat != seat`.
-            trigger::player_id() != player_id
-            // TODO(规则书)[judgement](ABI): the trigger carries no PlayCtx, so `t.Play == null` and
-            //   the clause under-specifies -- see the note above it
-            // `t.Play.Cancelled` cannot be checked (C# `CardNetError.CanCounteract`).
+            !trigger::cancelled() && trigger::player_id() != player_id && {
+                // Clause 1 has nothing left to cancel once every designation
+                // is already dropped; another copy would be spent for nothing.
+                let designations = ctx::designations(trigger::player_id());
+                designations.is_empty()
+                    || designations.iter().any(|&s| !ctx::designation_cancelled(s))
+            }
+            // TODO(规则书)[judgement]: 「1张手卡的[手]效果」 does not restrict the
+            //   play to another player's -- we refuse the play's own seat its own
+            //   [反击] (OPEN-自我反击).
+            // TODO(规则书)[judgement](ABI): the trigger carries no PlayCtx, so
+            //   `t.Play == null` cannot be checked -- the clause under-specifies.
         }
-        // 规则书（1）的可表达半边: a player-designation of this player (C# `H.Target`,
+        // 规则书（1）[反击]: 「手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]」
+        // -- the expressible half: a player-designation of this player (C# `H.Target`,
         // not `H.TargetTile` -- the `immune<p>` tag only guards `H.Target`).
         TriggerKind::Effect => {
-            ctx::effect::has(TriggerKind::Target)
+            // 规则书（1）[反击]: 「手卡的[手]效果且有[指定]目标」 -- a hand card's
+            // effect only: a placed card's press or a skill body is not 「手卡」.
+            ctx::play_from_hand()
+                && ctx::effect::has(TriggerKind::Target)
                 && trigger::tile() < 0
                 && trigger::target() == player_id
                 && trigger::by_card().is_some_and(|by| by != player_id)
@@ -84,61 +96,76 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         TriggerKind::Card => {
             // 规则书（1）[反击]: 「手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]」
-            // -- the per-play half, PARTIAL: C# sets `play.Tags["immune"+seat]=1`
-            // so every later `H.Target(me)` on this play fails silently. Those
-            // tags are not ported (see below); the per-designation cancel that
-            // IS expressible runs at the `target` window instead.
+            // -- C# sets `play.Tags["immune"+seat]=1`, which is our
+            // `ctx::cancel_designation(seat)`: the play's later `H.Target(me)`
+            // fails silently while the rest of its designations still land.
             // 规则书（2）[反击]: 「手卡的[手]效果且没有[指定]目标则抵消其所有的效果」
             // C# branches on `t.Play.Def.Targeting`: the `immune<p>` tag above vs
             // `play.Cancelled = true`.
-            // The two branches are decided by whether the play *names* anyone:
-            // `H.Db.Card(id).Targeting` is the effect list's own recipients, which
-            // is `ctx::effect::count()` / `effect::target(i)`.
+            // The two branches are decided by whether the play *names* anyone
+            // (`ctx::designations`, the static targeting list).
             let designations = ctx::designations(trigger::player_id());
-            if !designations.is_empty() {
-                // （1）「取消其对目标之一的[指定]」 -- per-pair cancel (C#
-                // `play.Tags["immune"+seat]=1`): cancel the counteractor's own
-                // designation when it has one, else the first named seat. The
-                // rest of the play's designations still land.
-                let self_seat = designations.iter().copied().find(|&s| s == player_id);
-                // 真奈 join (「改为你」): when played under a join, the
-                // self-targeted cancel is redirected to 真奈's user.
-                if let (Some(_), Some(to)) = (self_seat, ctx::join_redirect_target()) {
-                    ctx::cancel_designation(to);
-                    ctx::set_join_used();
-                    // 真奈's clause: 「若以此种方式使你免于受到该影响，打出那张
-                    // [反击]卡的玩家可抽一张卡」.
-                    // TODO(规则书): this draw is 真奈's effect, not this card's
-                    //   -- once the nested join window reports joiners, move it
-                    //   to 真奈's body.
-                    ctx::draw(player_id, 1)?;
-                    ctx::log(
-                        player_id,
-                        &Msg::new(key!("net_error_target")).player_id("who", to),
-                    );
-                } else {
-                    let seat = self_seat.unwrap_or(designations[0]);
-                    ctx::cancel_designation(seat);
-                    ctx::log(
-                        player_id,
-                        &Msg::new(key!("net_error_target")).player_id("who", seat),
-                    );
-                }
-            } else {
+            if designations.is_empty() {
                 // （2）「没有[指定]目标则抵消其所有的效果」
                 trigger::set_cancelled();
                 ctx::log(
                     player_id,
                     &Msg::new(key!("net_error_card")).player_id("who", player_id),
                 );
+            } else {
+                // （1）「取消其对目标之一的[指定]」 -- per-pair cancel: cancel the
+                // counteractor's own designation when it has one, else the first
+                // named seat still standing (an earlier copy may have dropped one).
+                // The rest of the play's designations still land.
+                let live = |s: i32| !ctx::designation_cancelled(s);
+                let self_seat = designations
+                    .iter()
+                    .copied()
+                    .find(|&s| s == player_id && live(s));
+                let next = self_seat.or_else(|| designations.iter().copied().find(|&s| live(s)));
+                // No live designation left: clause 1 has nothing to do (C# re-sets
+                // an already-set `immune<p>` tag) -- the play is NOT clause 2 and
+                // keeps its non-designation effects.
+                if let Some(seat) = next {
+                    // 真奈 join (「改为你」): when played under a join, the
+                    // self-targeted cancel is redirected to 真奈's user.
+                    if let (Some(_), Some(to)) = (self_seat, ctx::join_redirect_target()) {
+                        ctx::cancel_designation(to);
+                        ctx::set_join_used();
+                        // 真奈's clause: 「若以此种方式使你免于受到该影响，打出那张
+                        // [反击]卡的玩家可抽一张卡」 -- 「可」, so the joiner chooses.
+                        // TODO(规则书): this draw is 真奈's effect, not this card's
+                        //   -- once the nested join window reports joiners, move it
+                        //   to 真奈's body.
+                        if ctx::ask_yes(
+                            player_id,
+                            &Msg::new(key!("net_error_draw_title")),
+                            &Msg::new(key!("net_error_draw_ask")),
+                        )? {
+                            ctx::draw(player_id, 1)?;
+                        }
+                        ctx::log(
+                            player_id,
+                            &Msg::new(key!("net_error_target")).player_id("who", to),
+                        );
+                    } else {
+                        ctx::cancel_designation(seat);
+                        ctx::log(
+                            player_id,
+                            &Msg::new(key!("net_error_target")).player_id("who", seat),
+                        );
+                    }
+                }
             }
         }
-        TriggerKind::Target => {
-            // 规则书（1）[反击]: 「取消其对目标之一的[指定]」 -- the expressible half:
-            // cancel the designation of this player at its `target` window
-            // (`ctx::target` then answers `None`). The C# instead pre-tags the
-            // play at the `card` window so `H.Target` never reaches its window
-            // for this player -- that per-play `immune<p>` tag stays TODO'd above.
+        // `effect` is the tail of 「取消其对目标之一的[指定]」 for a play whose
+        // designation the `card` window above did not stop: this link *is* that
+        // one designation, so cancelling its declaration spares it
+        // (`target_player` reads the cancelled list only before raising it).
+        // The settlement `target` hook cannot retract a landed hit, so there is
+        // no `Target` arm and `ChainKind::Target` is not declared.
+        TriggerKind::Effect => {
+            // 规则书（1）[反击]: 「手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]」
             trigger::set_cancelled();
             ctx::log(
                 player_id,

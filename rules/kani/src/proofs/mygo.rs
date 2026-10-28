@@ -14,6 +14,7 @@
 //! **not** on the per-player key map.
 
 use crate::host;
+use crate::intern;
 use crate::invoke;
 use crate::spec::mygo as spec;
 use crate::world::{self, Effect, MAX_PLAYERS};
@@ -26,9 +27,16 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 /// `MyGO:轮符雨` play — +1 [停留] + schedule turn-end settle + narration.
 /// `before_turn_end` is `Op::schedule_turn_end` (a plan stub).
 crate::host_subset!(rinne_rain_dispatch {
-    apply_abnormal => arm_apply_abnormal,
+    trig_player => arm_trig_player,
+    gate => arm_gate,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_state_add,
+    raise_after => arm_raise_after,
+    skip_main_move => arm_stub_zero,
     schedule_turn_end => arm_stub_zero,
     log | effect => arm_log,
+    log_as => arm_log,
 });
 
 /// `MyGO:哪怕这旅程没有终点` play — place on current tile + 4 crystals.
@@ -69,34 +77,95 @@ crate::host_subset!(that_day_rain_dispatch {
     player_count => arm_player_count,
     player_out => arm_player_out,
     player_pos => arm_player_pos,
-    apply_abnormal => arm_apply_abnormal,
+    trig_player => arm_trig_player,
+    gate => arm_gate,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_state_add,
+    raise_after => arm_raise_after,
+    skip_main_move => arm_stub_zero,
     log | effect => arm_log,
+    log_as => arm_log,
 });
 
 /// `MyGO:壱雫空` play — clear [停留]/[眩晕] then the money legs.
 ///
-/// GAP: `stay_of` / `stun_of` have **no** `arm_*` yet (still inline in
-/// `host::dispatch`). Handled locally below so the subset still covers every
-/// op the body reaches; the main agent should extract `arm_stay_of` /
-/// `arm_stun_of` into `host.rs` and swap this to `host_subset!`.
+/// The shared status verbs write `state` keys; stay/stun value traffic is
+/// decoded here straight onto the world's abnormal columns (and logs the
+/// `GiveStay` / `GiveStun` clear) so the kinds spec sees it. The generic
+/// `state_*` arms stay for the `stunStart` / `lockedStay` keys. Two
+/// simplifications are isolation, not modelling gaps: `skip_main_move` is a
+/// protocol stub here (no latch field), and the unobservable FLAGS / EXPIRES
+/// column writes of the clear legs are dropped — the array write already
+/// carries the NEVER_NEGATIVE floor. The clear legs only ever `add` a
+/// negative delta, so the positive-only grant paths (`gate` / `raise_after`
+/// / `log_as`) are not reached. Direct decoding keeps the generic NameMap
+/// loops out of the SSA graph (otherwise the proof does not finish symex).
 fn hitoshizuku_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Args) -> i64 {
     use card_sdk::kani_host::Op;
+    let [a0, a1, a2, a3, a4, _a5] = a;
+    let key = || match crate::intern::decode_handle(a1) {
+        Some(k) => k,
+        None => crate::intern::intern_or_fail("?"),
+    };
+    let slot = if a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
+        a0 as usize
+    } else {
+        0
+    };
     match op {
         Op::player_count => host::arm_player_count(a),
         Op::player_out => host::arm_player_out(a),
-        // Local — see GAP above.
-        Op::stay_of => {
-            let [a0, ..] = a;
-            world::with_world(|w| w.stay[a0 as usize]) as i64
+        Op::skip_main_move => 0,
+        Op::state_get => {
+            let k = key();
+            if a3 != 0 {
+                host::arm_state_get(a)
+            } else if intern::id_eq_str(k, "stay") {
+                world::with_world(|w| w.stay[slot]) as i64
+            } else if intern::id_eq_str(k, "stun") {
+                world::with_world(|w| w.stun[slot]) as i64
+            } else if intern::id_eq_str(k, "lockedStay") || intern::id_eq_str(k, "unstoppable") {
+                // Isolation: neither is granted in this world.
+                0
+            } else if intern::id_eq_str(k, "stunStart") {
+                // Only ever cleared to 0 here; `state_set` still stores it so
+                // the post assertion can read the key.
+                0
+            } else {
+                host::arm_state_get(a)
+            }
         }
-        Op::stun_of => {
-            let [a0, ..] = a;
-            world::with_world(|w| w.stun[a0 as usize]) as i64
+        Op::state_set => {
+            let k = key();
+            // Every write on stay/stun is unobservable (the array is the
+            // value, the floor is applied by `state_add`, no flags/expires
+            // read); only `stunStart` still needs a real key store.
+            if intern::id_eq_str(k, "stay") || intern::id_eq_str(k, "stun") {
+                a4 as i64
+            } else {
+                host::arm_state_set(a)
+            }
         }
-        Op::give_stay => host::arm_apply_abnormal(a),
-        Op::give_stun => host::arm_apply_abnormal(a),
-        Op::state_get => host::arm_state_get(a),
-        Op::state_set => host::arm_state_set(a),
+        Op::state_add => {
+            let k = key();
+            world::with_world_mut(|w| {
+                if a0 < 0 || (a0 as usize) >= MAX_PLAYERS {
+                    return 0;
+                }
+                if intern::id_eq_str(k, "stay") {
+                    w.stay[slot] = (w.stay[slot] + a3).max(0);
+                    w.push(Effect::GiveStay { player: a0, n: a3 });
+                    w.stay[slot]
+                } else if intern::id_eq_str(k, "stun") {
+                    w.stun[slot] = (w.stun[slot] + a3).max(0);
+                    w.push(Effect::GiveStun { player: a0, n: a3 });
+                    w.stun[slot]
+                } else {
+                    w.key_add(a0, k, a3)
+                }
+            }) as i64
+        }
         Op::pay_to => host::arm_pay_to(a),
         Op::gain | Op::gain_typed | Op::gain_fixed => host::arm_gain(a),
         Op::log | Op::effect => host::arm_log(a),
@@ -107,8 +176,14 @@ fn hitoshizuku_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Arg
 /// `MyGO:（灯）不再迷茫` play — 2 locked [停留] + place + discard hand + X+1
 /// crystals. Isolation: empty hand (the `cards_in` String loop is a no-op).
 crate::host_subset!(tomori_no_longer_dispatch {
-    apply_abnormal => arm_apply_abnormal,
+    trig_player => arm_trig_player,
+    gate => arm_gate,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
     state_add => arm_state_add,
+    raise_after => arm_raise_after,
+    skip_main_move => arm_stub_zero,
+    log_as => arm_log,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     cards_in => arm_cards_in,
@@ -499,9 +574,9 @@ fn rainday_01_place_five_crystals_iff_at(user: i32) {
 
     let mut stayed = false;
     let mut i = 0usize;
-    let len = effects.len().min(24);
-    while i < len {
-        if matches!(effects[i], Effect::GiveStay { .. }) {
+    // Fixed 24 (the log capacity) so CBMC unwinds the loop syntactically.
+    while i < 24 {
+        if i < effects.len() && matches!(effects[i], Effect::GiveStay { .. }) {
             stayed = true;
         }
         i += 1;
@@ -552,18 +627,27 @@ pub fn rainday_01_mutant_is_detected() {
 // "body charges global kinds" note is stale — see `spec::mygo`.
 // ===========================================================================
 
-/// Concrete stay / stun on the two live seats (lockedStay stays 0).
+/// The light world: seat 0 holds one stay layer (one kind cleared, one payer
+/// leg) — the cheapest reachable clear. `heavy` adds seat 1's stay and seat
+/// 0's stun on top (seat 0 = 2 kinds, seat 1 = 1 kind).
 ///
-/// Pattern: seat 0 has stay+stun (kinds=2), seat 1 has stay only (kinds=1).
-/// Concrete values keep `cleared.len()` a constant 2, so the body's
-/// `for &(_,_) in &cleared` unrolls twice — a symbolic-length `Vec` iterator
-/// is an SSA cliff (`Not unwinding … iteration 32` at
-/// `hitoshizuku.rs:92`).
-fn hitoshizuku_world(user: i32) {
+/// Concrete values keep `cleared_n` a constant (1 or 2), so the body's
+/// `&cleared[..cleared_n]` slice is a constant length. (The body stores the
+/// pairs in a fixed `[(i32, i32); 4]` -- its earlier `Vec` made Kani's
+/// `__rust_realloc` pointer checks fail and left every post-clear assertion
+/// unreachable.)
+fn hitoshizuku_world(user: i32, heavy: bool) {
     sparse2_user(hitoshizuku_dispatch, user);
     world::with_world_mut(|w| {
-        w.stay = [1, 1, 0, 0];
-        w.stun = [1, 0, 0, 0];
+        w.stay = [1, 0, 0, 0];
+        w.stun = [0; MAX_PLAYERS];
+        // No money post-assertion here; a concrete pile keeps the pay legs off
+        // symbolic arithmetic (and always covers the 2000/1000 legs).
+        w.money = [5_000; MAX_PLAYERS];
+        if heavy {
+            w.stay[1] = 1;
+            w.stun[0] = 1;
+        }
     });
 }
 
@@ -573,20 +657,23 @@ fn hitoshizuku_world(user: i32) {
 fn hitoshizuku_kinds(effects: &[Effect]) -> [i32; MAX_PLAYERS] {
     let mut kinds = [0i32; MAX_PLAYERS];
     let mut i = 0usize;
-    let len = effects.len().min(24);
-    while i < len {
-        match &effects[i] {
-            Effect::GiveStay { player: p, n } if *n < 0 => {
-                if (*p as usize) < MAX_PLAYERS {
-                    kinds[*p as usize] += 1;
+    // Fixed 24 (the log capacity) so CBMC can unwind the loop syntactically;
+    // `len.min(24)` is not a syntactic bound.
+    while i < 24 {
+        if i < effects.len() {
+            match &effects[i] {
+                Effect::GiveStay { player: p, n } if *n < 0 => {
+                    if (*p as usize) < MAX_PLAYERS {
+                        kinds[*p as usize] += 1;
+                    }
                 }
-            }
-            Effect::GiveStun { player: p, n } if *n != 0 => {
-                if (*p as usize) < MAX_PLAYERS {
-                    kinds[*p as usize] += 1;
+                Effect::GiveStun { player: p, n } if *n != 0 => {
+                    if (*p as usize) < MAX_PLAYERS {
+                        kinds[*p as usize] += 1;
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
         i += 1;
     }
@@ -605,9 +692,11 @@ fn kinds_sum(kinds: &[i32; MAX_PLAYERS]) -> i32 {
 
 /// Shared iff against the **book** money rule at a concrete user seat.
 /// Body matches the book (per-player kinds) since the 2026-10-06 ruling.
-fn hitoshizuku_money_iff_at(user: i32) {
+/// The seat-0 harness is the light world; the seat-1 harness carries the
+/// both-kinds / two-payer leg.
+fn hitoshizuku_money_iff_at(user: i32, heavy: bool) {
     debug_assert!(user == 0 || user == 1);
-    hitoshizuku_world(user);
+    hitoshizuku_world(user, heavy);
     let pre = world::snapshot();
     invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
     kani::cover!(true, "body returned");
@@ -627,9 +716,10 @@ fn hitoshizuku_money_iff_at(user: i32) {
         // no money leg — bounded scan, no iterator `any`
         let mut money = false;
         let mut i = 0usize;
-        let len = effects.len().min(24);
-        while i < len {
-            if matches!(effects[i], Effect::PayTo { .. } | Effect::GainMoney { .. }) {
+        while i < 24 {
+            if i < effects.len()
+                && matches!(effects[i], Effect::PayTo { .. } | Effect::GainMoney { .. })
+            {
                 money = true;
             }
             i += 1;
@@ -643,16 +733,23 @@ fn hitoshizuku_money_iff_at(user: i32) {
         );
     }
 
-    // Stay never rises — bounded compare (zip/all is an SSA cliff).
-    let mut stay_ok = true;
+    // Book: 「清除场上所有[停留]与[眩晕]效果」 -- every seat's stay reaches its
+    // locked floor (`lockedStay` = 0 in this world) and stun / stunStart
+    // reach 0. Bounded walk (slice iterators are an SSA cliff).
+    let stun_start = crate::intern::intern("stunStart");
     let mut p = 0usize;
     while p < MAX_PLAYERS {
-        if post.stay[p] > pre.stay[p] {
-            stay_ok = false;
-        }
+        crate::kassert!(
+            post.stay[p] == 0,
+            "C-MYGO-hitoshizuku-01: stay cleared (lockedStay = 0)"
+        );
+        crate::kassert!(post.stun[p] == 0, "C-MYGO-hitoshizuku-01: stun cleared");
+        crate::kassert!(
+            world::with_world(|w| w.key_get(p as i32, stun_start)) == 0,
+            "C-MYGO-hitoshizuku-01: pending stun (stunStart) cleared"
+        );
         p += 1;
     }
-    crate::kassert!(stay_ok, "C-MYGO-hitoshizuku-01: stay never rises");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 
@@ -661,7 +758,7 @@ fn hitoshizuku_money_iff_at(user: i32) {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hitoshizuku_money_iff() {
-    hitoshizuku_money_iff_at(0);
+    hitoshizuku_money_iff_at(0, false);
 }
 
 /// Book-spec iff at seat 1.
@@ -669,7 +766,7 @@ pub fn hitoshizuku_money_iff() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
 pub fn hitoshizuku_user1_money_iff() {
-    hitoshizuku_money_iff_at(1);
+    hitoshizuku_money_iff_at(1, true);
 }
 
 /// Companion: the stale global-kinds reading is a **mutant**. When per-player
@@ -678,7 +775,7 @@ pub fn hitoshizuku_user1_money_iff() {
 /// a row here; the assertion is now "mutant is not what the body does".)
 fn hitoshizuku_body_global_pay_observed_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
-    hitoshizuku_world(user);
+    hitoshizuku_world(user, true);
     invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
     kani::cover!(true, "body returned");
     let (logbuf, log_n) = effects_of();

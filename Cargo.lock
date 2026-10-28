@@ -1946,6 +1946,7 @@ dependencies = [
  "bandori-std",
  "card-sdk",
  "game-core",
+ "game-kinds",
  "game-rules",
  "rules-spec",
  "serde_json",

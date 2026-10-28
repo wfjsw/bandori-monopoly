@@ -13,7 +13,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 const ID: &str = "通用:[衍生]FEVER!";
@@ -69,9 +69,11 @@ fn fever(player_id: i32) -> card_sdk::Asked {
     // `exist.rs`'s `exist.used`. `fever_user_mem_lands_on_the_placed_instance`
     // pins that it is the field copy and not a play-run / linger slot.
     ctx::set_prop(PROP_USER, player_id + 1);
-    // C# `H.PlaceFromPlay(c).Mem["x"] = c.N(0, 600)` -- the printed 600 is the
-    // card's number, read through `ctx::n` in `x_of` (the C# stores the played
-    // value in `Mem["x"]`; equivalent while `PlayCtx.Doubled` is unported).
+    // C# `H.PlaceFromPlay(c).Mem["x"] = c.N(0, 600)` stored the played value on
+    // the instance. The port instead reads the printed 600 through `ctx::n` in
+    // `x_of`, i.e. at *payment* time: doubling is ported (`play_doubled` on
+    // `TurnCtx`) but is reset at the next play's start, so a doubling armed for
+    // this play is lost if any play intervenes -- unlike the baked-in C# Mem.
     // 规则书（1）[持续] runs in `counteract` at `paySplitAdd`; 规则书（2）[持续] at `turnStart`.
     Ok(())
 }
@@ -82,7 +84,9 @@ fn fever(player_id: i32) -> card_sdk::Asked {
 /// printed), free to go below 0.
 fn x_of(player_id: i32) -> i32 {
     let n = ctx::field_instances(player_id).len() as i32;
-    ctx::n(0, 600) - 200 * n
+    // `ctx::n(1, …)`: doubling slots are 1-based (the skill names 1..9), so the C#
+    // index 0 would never be armed (see `fever`).
+    ctx::n(1, 600) - 200 * n
 }
 
 /// 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
@@ -99,6 +103,9 @@ fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
         };
     }
     let x = x_of(player_id);
+    // TODO(规则书)（X降低200（可小于0））: the book prints no floor on the resulting
+    //   amount (sibling cards that floor say 「最低0」) -- we clamp at 0; whether
+    //   「提高」 floors is OPEN-GEN-fever-floor.
     let out = (v.value + x).max(0);
     // C# `p.Note("FEVER! " + ((x >= 0) ? "+" : "") + x)`.
     ctx::log(player_id, &Msg::new(key!("fever_pay")).i("x", x as i64));

@@ -44,7 +44,7 @@
   "no_road_refused": "{{card}}：无法获得新的[除外]层数，视为此卡未生效",
   "no_road_title": "无路矢",
   "no_road_why_not_none": "没有别的玩家",
-  "ordinary_log": "普通与理所当然 的效果：下一次主要移动改为移动 {{n}} 格",
+  "ordinary_log": "普通与理所当然 的效果：下一次非传送的主要移动改为移动 {{n}} 格",
   "ordinary_when": "受到异常移动效果影响",
   "rana_funny_crystal": "{{who}} 经过没停，「有趣的女人」增加一个奇迹水晶",
   "rana_funny_note": "奇迹水晶（经过不停的人 +1；满 5 个后下一个经过的人要选）",

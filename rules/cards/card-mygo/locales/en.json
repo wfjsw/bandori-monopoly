@@ -44,7 +44,7 @@
   "no_road_refused": "{{card}}: cannot gain new [exile] layers; treated as not in effect",
   "no_road_title": "No Road",
   "no_road_why_not_none": "there is no other player",
-  "ordinary_log": "Ordinary and Natural's effect: the next main move becomes {{n}} step(s)",
+  "ordinary_log": "Ordinary and Natural's effect: your next non-teleport main move becomes {{n}} step(s)",
   "ordinary_when": "when you are hit by an abnormal-move effect",
   "rana_funny_crystal": "{{who}} passed without stopping; “The Interesting Woman” gains a miracle crystal",
   "rana_funny_note": "miracle crystals (passers-by who do not stop add 1; at 5 the next passer must choose)",

@@ -1056,7 +1056,7 @@ fn mortis_instinct_plays_without_error() {
     t.begin_turn(0);
     drain(&mut t);
     let r = t.give_play(0, "Mujica:（睦/mortis）表演的本能");
-    // 规则书: 「此卡打出时效果为场上任意其他玩家打出的上一张卡」
+    // 规则书: 「此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）」
     assert!(r.is_ok(), "card plays: {r:?}");
     drain(&mut t);
 }

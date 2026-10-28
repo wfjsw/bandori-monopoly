@@ -4,13 +4,14 @@
 //! > 心の雨：
 //! >  使你前方20格内的所有玩家各自骰1d20，骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金
 //!
-//! A roll ≤3 grants 2 stay layers (not 1+2), 4-12 grants 1. `give_stay` never
-//! refuses a grant in this engine, so "granted stay" and "gained stay" coincide
-//! and the fallback branch keys off the grants.
+//! A roll ≤3 grants 2 stay layers (not 1+2), 4-12 grants 1. The grant is
+//! `rules_status::stay::add`, which the abnormal [反击] window / guard /
+//! untargetable / immune gate can refuse and write no layer, so "granted" and
+//! "gained" do not coincide; the fallback keys off layers that actually landed.
 
 use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, heart_rain)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"心の雨"#)
@@ -42,8 +43,14 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
             0
         };
         if layers > 0 {
+            // 规则书: 「若未能使任何玩家获得[停留]」 -- a refused grant (cancelled
+            // abnormal window / guard / untargetable / immune) writes no layer and
+            // is not 「获得」; only a layer that actually landed counts.
+            let before = rules_status::stay::get(p);
             rules_status::stay::add(p, layers);
-            any_stay = true;
+            if rules_status::stay::get(p) > before {
+                any_stay = true;
+            }
         }
     }
     // 规则书: 「若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金」
@@ -53,6 +60,7 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("heart_rain_fallback")).player_id("who", player_id),
         );
         rules_status::stun::add(player_id, 1);
+        // TODO(规则书)（自身获得一层[晕眩]并获得1000资金）: 晕眩 12「无法收付款」是否挡同一效果里随后的获得 -- 引擎放行，照常 gain（BACKLOG C-Q29）
         ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")))?;
     }
     Ok(())

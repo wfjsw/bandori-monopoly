@@ -58,24 +58,33 @@ pub fn vocalist_01_log_ok_mutant(effects: &[Effect]) -> bool {
 // C-CRYCHIC-grab-01 — 「（1）获得一层[停留]。」
 // ---------------------------------------------------------------------------
 
-/// Play body also arms the PASSER latch (`state::set(PASSER, -1)`).
+/// Play body also arms the PASSER latch (`state::set(PASSER, -1)`) and places
+/// the card on the field (`Dest::Field`, the (2)/(3) window's instance).
 /// `passer_key` is the interned `want_to_grab_passer` NameId.
 pub fn grab_01_log_ok(effects: &[Effect], player: i32, passer_key: u16) -> bool {
-    effects.len() == 2
+    effects.len() == 3
         && matches!(effects[0], Effect::GiveStay { player: p, n: 1 } if p == player)
         && matches!(
             effects[1],
             Effect::SetState { player: p, key, n: -1 } if p == player && key == passer_key
         )
+        && matches!(
+            effects[2],
+            Effect::PlaceCard { player: p, dest: 2, .. } if p == player
+        )
 }
 
 /// MUTANT: two stay layers instead of one.
 pub fn grab_01_log_ok_mutant(effects: &[Effect], player: i32, passer_key: u16) -> bool {
-    effects.len() == 2
+    effects.len() == 3
         && matches!(effects[0], Effect::GiveStay { player: p, n: 2 } if p == player)
         && matches!(
             effects[1],
             Effect::SetState { player: p, key, n: -1 } if p == player && key == passer_key
+        )
+        && matches!(
+            effects[2],
+            Effect::PlaceCard { player: p, dest: 2, .. } if p == player
         )
 }
 

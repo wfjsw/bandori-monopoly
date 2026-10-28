@@ -131,8 +131,9 @@ scope.)
 * **Frame:** the targets' `pos` / settle side-effects.
 * **Rulings & OPEN:** OPEN-触发结算. The target set is exactly 「当前回合内
   对你打出过[反击]的所有玩家」 -- not "every other player".
-* **Executable:** `look_away_only_moves_counteractors` (**failing**; see
-  Findings).
+* **Executable:** `look_away_only_moves_counteractors` (passing, but only its
+  empty-set case: a normal hand play currently moves nobody at all -- see
+  Findings / ABI-03).
 
 * **ID:** `C-MUJICA-视线-02`
 * **Source:** `cards.json#Mujica:无法将视线移开`
@@ -715,8 +716,9 @@ Genuine engine-vs-book discrepancies. Each is a plain failing test in
   300-rent landing the user pays 450 **and** the owner receives 450. The
   owner should receive 300.
 * **C-MUJICA-视线-01** (`look_away_only_moves_counteractors`) -- book targets
-  only 「当前回合内对你打出过[反击]的所有玩家」. Engine force-moves every
-  other player even when nobody has used [反击] against the user this turn.
+  only 「当前回合内对你打出过[反击]的所有玩家」. The counter entry moves the
+  immediate counterer only; a normal hand play moves **nobody** (`run` returns
+  on its guard), which is why the contract passes on the empty-target case.
 * **C-MUJICA-花火-03** (`sparkler_burn_and_last_stun`) -- book says the last
   crystal 「立刻使你获得2层[眩晕]」. Engine leaves the user at 1 stun layer
   after the last crystal is removed.

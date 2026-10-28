@@ -48,8 +48,8 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-light-02 | 「此次移动以"月之森女子学院"为起点（不触发起点地块效果）」 | PROTOCOL-LEVEL | — | — | `plan::set_start` scheduling | OPEN-移动起点 |
 | C-MOR-again-01 | 「[反击]当…前一名玩家[消耗]或[支付]大于0资金后…并[消耗]等量资金」 | PROTOCOL-LEVEL | — | — | [反击] window (KANI.md §6) | — |
 | C-MOR-again-02 | 「[持续]：[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 | PROVEN | `again_02_cancel_iff`, `again_02_mutant_is_detected` | (pending) | SetPayAmount(0) + dest=Graveyard | OPEN-取消范围 |
-| C-MOR-courage-01 | 「…所有者向你支付…购买价格+…房子的建造价格总额的一半」 | BLOCKED-HOST | `courage_01_pay_iff_blocked_host`, `courage_01_mutant_is_detected` | triage3: A loop fixed; then pay-vs-agent arm not partitioned — partitioned, re-time pending | `tile_price`/`buy_price` amount cannot be pinned | — |
-| C-MOR-courage-02 | 「若为地产商地块，获得1000资金」 | BLOCKED-HOST | `courage_02_agent_iff_blocked_host` | (pending) | `is_agent` off-by-one (tile 5 property reads as agent) | — |
+| C-MOR-courage-01 | 「…所有者向你支付…购买价格+…房子的建造价格总额的一半」 | PROVEN | `courage_01_pay_iff`, `courage_01_pay_user1_iff`, `courage_01_mutant_is_detected` | **SUCCESSFUL 450/475/640 s at 900 s timeout** (pay/user1/mutant) | the amount is pinned (harness sets `World::forced_roll`; `courage_01_amount` asserts the exact figure); `tile_price`/`buy_price` are 0-based and house-aware. All three run past the 420 s runner default — give them a per-harness timeout of at least 900 s | — |
+| C-MOR-courage-02 | 「若为地产商地块，获得1000资金」 | BLOCKED-HOST | `courage_02_agent_iff` | (pending) | `is_agent` off-by-one (tile 5 property reads as agent) | — |
 | C-MOR-courage-03 | unowned tile ⇒ nobody pays | PROVEN | `courage_03_unowned_iff`, `courage_03_empty_when_no_agent_misfire` | (pending) | empty-effect limb + money frame | — |
 | C-MOR-summer-01 | 「直到下个自己的回合开始前，你只会被自己发动的效果指定」 | PROTOCOL-LEVEL | — | — | multi-turn designation window | OPEN-指定 |
 | C-MOR-summer-02 | 「当此卡效果结束…则抽一张牌」 | PROTOCOL-LEVEL | — | — | window end + negation counter | — |

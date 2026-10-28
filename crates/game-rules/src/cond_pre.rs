@@ -305,9 +305,12 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn state(&self, seat: i64, key: &str) -> i64 {
         // Sugar keys published through the one `state` door (CondView contract).
         match key {
-            bandori_std::cel::KEY_CHARGE => self.src.tok(seat as i32, bandori_std::cel::KEY_CHARGE) as i64,
+            bandori_std::cel::KEY_CHARGE => {
+                self.src.tok(seat as i32, bandori_std::cel::KEY_CHARGE) as i64
+            }
             bandori_std::cel::KEY_CRYSTALS => {
-                self.src.group_pool(seat as i32, bandori_std::cel::KEY_CRYSTALS) as i64
+                self.src
+                    .group_pool(seat as i32, bandori_std::cel::KEY_CRYSTALS) as i64
             }
             bandori_std::cel::KEY_PERSONA => {
                 id_of(&self.src.persona_name(seat as i32).unwrap_or_default())
@@ -1569,15 +1572,22 @@ pub const SLOT_NAMES: &[&str] = &[
     "lock_dream_tag",
     // `甜甜圈爱好者` half-price window (`state::set(player_id, HALF, 1)`).
     "skill.manaDonut.half",
-    // `（沙绫）总有一天要给这片天空命名` pass tag (`ctx::set_slot(player_id, SLOT_PASSED, 1)`).
+    // `（沙绫）总有一天要给这片天空命名` passed instance uid (`ctx::set_slot(player_id, SLOT_PASSED, ctx::self_uid())`).
     "saaya_sky_passed",
     // `one_of_us` partner seat+1 (`ctx::set_slot(owner, "one_of_us_partner", partner+1)`).
     "one_of_us_partner",
     // `no_road` designated rent-receiver seat (`ctx::set_slot(player_id, "noRoad.who", who)`).
     "noRoad.who",
-    // `骰子已经掷下` turn-key lock (`ctx::set_slot(player_id, NO_COUNTERACT, turn_key)`).
+    // `骰子已经掷下` turn-key lock, current spelling
+    // (`ctx::set_slot(player_id, state_key::NO_COUNTERACT_TURN, turn_key)`) --
+    // the name the card writes and its counter pre reads.
+    "noCounteractTurn",
+    // The same lock's older spelling: an older build's served `pre` blob still
+    // reads `slot('diceCastActive')`, and build rulesets load under this glue.
     "diceCastActive",
-    // `Change the world` once-per-turn tag (`ctx::set_slot(player_id, SLOT_TURN, turn_key)`).
+    // `Change the world` once-per-turn tag -- a player slot before the latch
+    // moved onto the instance's `cw_turn` counter; an older build's served `pre`
+    // blob still reads `slot('change_world_turn')`, so keep it resolvable.
     "change_world_turn",
     // `here_the_world` held-cards count (`ctx::set_slot(player_id, SLOT_HELD_LEN, n)`).
     "here_held_len",

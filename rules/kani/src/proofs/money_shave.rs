@@ -5,15 +5,34 @@
 //! > 「（1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时
 //! >  将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。」
 //!
-//! Trigger: `On::Filter(PaySplitAdd)` with the single-source condition
-//! `"actor == owner && value > 0"` — the SAME string the host compiles.
-//! Under Kani we lower that string to the heap-free IR once (generated) and
-//! evaluate it against a symbolic context. When the guard admits we invoke
-//! the unmodified body and prove the clause; when it rejects we assert the
-//! host would not have called the body (cover + no-op).
+//! Trigger: the `On::Filter(PaySplitAdd)` body (its registration guard is
+//! `"card.placed"`). The body's own residual condition
+//! `"actor == owner && value > 0"` is a single-source CEL string; under Kani
+//! we lower it to the heap-free IR once (generated) and evaluate it against a
+//! symbolic context. When it admits we invoke the unmodified filter body and
+//! prove the clause; when it rejects the body no-ops, so the proof skips the
+//! call (cover). `card.placed` itself is not evaluated -- a filter only runs
+//! while its card is on the field.
 //!
 //! Isolation: no `PP:[衍生]共鸣` in hand, so clause (2)'s stacked 1500
 //! shave cannot fire (`try_resonance` returns false before any prompt).
+
+/// Run the clause-(1) `PaySplitAdd` filter and apply the host's
+/// `drive_payload` write (`PayAddValue::write`): `set_pay_amount` +
+/// `set_price`, only when the figure changed.
+fn run_shave_filter(owner: i32, value: i32) -> i32 {
+    let out = invoke::filter_pay_add_only_idx(
+        crate::card_id!("PP:[丸山彩]憧憬的前方"),
+        card_sdk::abi::FilterKind::PaySplitAdd,
+        owner,
+        card_sdk::PayAddValue { value, payee: None },
+    );
+    if out.value != value {
+        card_sdk::ctx::trigger::set_pay_amount(out.value);
+        card_sdk::ctx::trigger::set_price(out.value);
+    }
+    out.value
+}
 
 use crate::host;
 use crate::invoke;
@@ -75,7 +94,9 @@ fn assume_poorest(w: &World) {
     let owner = w.trig_player as usize;
     let me = w.money[owner];
     for p in 0..MAX_PLAYERS {
-        if p != owner && !w.out[p] {
+        // `player_out` is true for `p >= n_players` under Kani regardless of
+        // the raw `out` bits; the phantom seats must be skipped here too.
+        if p != owner && p < w.n_players as usize && !w.out[p] {
             kani::assume(w.money[p] >= me);
         }
     }
@@ -87,7 +108,7 @@ fn assume_not_poorest(w: &World) {
     let me = w.money[owner];
     let mut poorer = false;
     for p in 0..MAX_PLAYERS {
-        if p != owner && !w.out[p] && w.money[p] < me {
+        if p != owner && p < w.n_players as usize && !w.out[p] && w.money[p] < me {
             poorer = true;
         }
     }
@@ -132,7 +153,7 @@ pub fn aya_haruka_02_shave_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    run_shave_filter(owner, pre_amount);
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -192,8 +213,9 @@ pub fn aya_haruka_02_shave_iff() {
 /// Together the two halves are the clause:
 /// * **guard** (`actor == owner && value > 0`): proved in `shave_iff` (both
 ///   admit and reject) and `wrong_guard` (the single-source string). The
-///   splits assume the host invoked the body (`On::Action` contract) so they
-///   do not re-evaluate the IR — that is a setup cut, not a weaker claim.
+///   splits assume the residual condition holds (`On::Filter(PaySplitAdd)`
+///   body invoked) so they do not re-evaluate the IR — that is a setup cut,
+///   not a weaker claim.
 /// * **poorest** (「资金数是所有存活玩家中最少」 ⇒ shave by X): this half.
 /// * **not-poorest** ⇒ no-op: the other half.
 #[kani::proof]
@@ -212,7 +234,7 @@ pub fn aya_haruka_02_shave_poorest() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    run_shave_filter(owner, pre_amount);
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -252,7 +274,7 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    run_shave_filter(owner, pre_amount);
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -289,7 +311,7 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    run_shave_filter(owner, pre_amount);
     let post = world::snapshot();
     let x =
         spec::aya_haruka_02_x_mutant(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
@@ -298,7 +320,7 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
 }
 
 /// Companion (no `should_panic`): the mutant spec does NOT match the card.
-/// If this FAILS, the off-by-one is live — the expected outcome.
+/// Restricted to amounts the shave does not floor (where X and X+1 differ).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -308,6 +330,11 @@ pub fn aya_haruka_02_mutant_is_detected() {
     let pre_amount = w.pay_amount;
     kani::assume(w.trig_player == owner);
     kani::assume(pre_amount >= 200);
+    // Stay off the 0 floor: `max(pre - X, 0)` and `max(pre - (X+1), 0)`
+    // coincide when the shave bottoms out, so the off-by-one is only
+    // observable while some amount survives even the mutant's X+1.
+    let xm = spec::aya_haruka_02_x_mutant(w.fans_pos[owner as usize], w.fans_neg[owner as usize]);
+    kani::assume(pre_amount > xm);
     for p in 0..MAX_PLAYERS {
         if p != owner as usize {
             kani::assume(w.out[p] || w.money[p] >= w.money[owner as usize]);
@@ -317,11 +344,9 @@ pub fn aya_haruka_02_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    run_shave_filter(owner, pre_amount);
     let post = world::snapshot();
-    let x =
-        spec::aya_haruka_02_x_mutant(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
-    let expected = spec::aya_haruka_02_amount(pre_amount, x);
+    let expected = spec::aya_haruka_02_amount(pre_amount, xm);
     // The card does X, the mutant wants X+1: they must differ.
     crate::kassert!(post.pay_amount != expected);
 }

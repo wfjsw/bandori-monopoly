@@ -126,7 +126,11 @@ fn on_place(_owner: i32) -> card_sdk::Asked {
     // **not** `message::sender_seat()` -- that one is the host's
     // `turn_player()` and names the wrong seat for an off-turn placement.
     let seat = ctx::message::seat();
-    let who = if seat >= 0 { seat } else { ctx::message::sender_seat() };
+    let who = if seat >= 0 {
+        seat
+    } else {
+        ctx::message::sender_seat()
+    };
     ctx::place_mark(
         tile,
         mark::CP_KIND,
@@ -171,6 +175,10 @@ fn lands_on_cp(_owner: i32) -> bool {
     }
     // 「自己[场上]1个[CP点]」 -- the card this tile's mark is attached to.
     let src = ctx::mark_src_at(tile, &MarkFilter::any().category(mark::CP_CATEGORY));
+    // TODO(规则书)（在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金）:
+    //   the book makes the tile-mark removal and the 800 unconditional -- we
+    //   skip the whole clause when the mark's `src` card is gone or holds no
+    //   on-card [CP点] (2026-10-07 ruling), leaving such tile marks inert.
     src >= 0 && ctx::counter_at(src, counter::CP) > 0
 }
 
@@ -194,6 +202,10 @@ fn on_land(_owner: i32) -> card_sdk::Asked {
     // 「自己[场上]1个[CP点]」 -- one on-card [CP点] of the attached 该清CP了
     // card (user ruling 2026-10-07).
     if src >= 0 {
+        // TODO(规则书)（自己[场上]1个[CP点]）: 「自己」 is the settling player, so the
+        //   book removes a [CP点] on the settler's own field -- we spend the on-card
+        //   count of the card the mark is attached to (`src`), per the 2026-10-07
+        //   ruling.
         ctx::add_counter_at(src, counter::CP, -1, 0);
     }
     // 「[获得]800资金」 -- the settling player (see the reading above). C# was

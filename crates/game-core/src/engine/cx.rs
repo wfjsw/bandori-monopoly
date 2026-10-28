@@ -19,7 +19,7 @@ use crate::msg::Msg;
 use crate::state::MatchPrompt;
 
 use super::rules::{CardRules, ExclusiveAsk};
-use super::world::World;
+use super::world::{Extreme, World};
 
 /// Why a routine stopped before finishing. Opaque to card rules: they only pass it
 /// on with `?`.
@@ -455,6 +455,11 @@ pub struct Cx<'a> {
     /// Card uids whose hooks are currently running and must not re-trigger on
     /// their own movement (the termination argument for nested money). Transient.
     pub reentrant_hooks: Vec<i32>,
+    /// How many [触发结算]s are open right now (nested settles included; a
+    /// settle that suspends keeps its count until it resumes and finishes).
+    /// Non-zero is 「结算中」 for the payments it carries -- RAS:游击演出's
+    /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally. Transient.
+    pub(crate) settle_open: u32,
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
@@ -818,13 +823,24 @@ impl<'a> Cx<'a> {
         // runs against the live world, so the knobs have to cross too --
         // otherwise 练习室里的风暴's (4-X)/4 and Repaint's 「支付减半」 are
         // dropped at the `SettleAt` / `Move` boundary.
+        // `resolve` is re-read by `teleport_as_depth` after the pass window and
+        // gates the settle stages. A 「不[触发结算]」 body clears it *before*
+        // the `teleport_to` request (纯真振翅), so it must be on the live plan
+        // at the request, not left stale from an earlier move.
+        t.plan.resolve = f.plan.resolve;
         t.plan.pay_factor = f.plan.pay_factor;
         t.plan.rent_factor = f.plan.rent_factor;
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
+        // Card-owned per-move tags are read by the routine's own raise payloads
+        // (`t.Move.Tags`), so they cross with the knobs too -- 笑容大游行 tags
+        // the move of its nested `card_settle_at` so the redirect does not
+        // swap back.
+        t.plan.tags = f.plan.tags.clone();
         // A card body may latch a decision across the pauses its host routines
-        // cause -- e.g. 黑色生日 freezing 「资金在1000以下」 at resolution so the
-        // replay's re-run takes the same branch across its two pay entries.
+        // cause -- e.g. 黑色生日 freezing 「每名你以外的资金不多于1000的玩家」 at
+        // resolution so the replay's re-run takes the same branch across its
+        // two pay entries.
         // That write lives on the card's world copy and is dropped when the run
         // pauses. Carry it over -- but *only* for keys a body explicitly
         // registers under the `latch.` prefix. (A latch is "already taken", so
@@ -1009,6 +1025,7 @@ impl<'a> Cx<'a> {
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
+            settle_open: 0,
             state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,
@@ -1343,8 +1360,22 @@ impl<'a> Cx<'a> {
     }
 
     /// Roll `count`d`sides` and log a dice event.
+    ///
+    /// Honours [`Extreme`]: a play under 「以理论最大值或最小值结算」 settles
+    /// every die at its maximum / minimum instead of rolling it (same result as
+    /// `World::roll_silent`). Which *plays* may be forced is the counteraction
+    /// window's decision, not this function's -- AG 微小 limits itself to a
+    /// numeric-interval play (「可以对YOLO生效但无法对无论是何种颜色的夕阳
+    /// 生效」); that filter is still OPEN (BACKLOG ABI-04), so a branch-selecting
+    /// die of a play the counter should not reach is forced today too.
     pub fn roll(&mut self, player_id: i32, count: i32, sides: i32, what: Option<Msg>) -> i32 {
-        let faces: Vec<i32> = (0..count).map(|_| self.w.rng.d(sides)).collect();
+        let extreme = self.w.turn.extreme;
+        let faces: Vec<i32> = if extreme == Extreme::Plain {
+            (0..count).map(|_| self.w.rng.d(sides)).collect()
+        } else {
+            let face = if extreme == Extreme::Max { sides } else { 1 };
+            (0..count).map(|_| face).collect()
+        };
         let sum = faces.iter().sum();
         let detail = (count > 1).then(|| {
             let joined = faces

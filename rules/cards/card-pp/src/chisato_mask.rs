@@ -11,23 +11,29 @@
 //! > （2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。
 //!
 //! player split-pays you 2,000. The reshuffle split runs on `Reshuffled`; the
-//! [共鸣] branch is a second, larger split offered at play time.
+//! [共鸣] branch is a second, larger split offered at the owner's turn start.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
         On::Play("", None, chisato_mask),
-        On::Action(Action::Reshuffled(
-            "",
-            Some(reshuffled_guard),
-            reshuffled)),
+        // 规则书[持续]（2）: 「[共鸣]其他玩家[分摊][支付][拥有者]1500资金」 -- a
+        // [持续] [共鸣] is the owner's own choice, but a placed non-skill field
+        // card has no press surface, so the offer rides the owner's turn start.
+        // TODO(规则书)（[共鸣]其他玩家[分摊][支付][拥有者]1500资金）: the sheet gives
+        //   no timing for 「[共鸣]」 -- a turn-start offer stands in for a press.
+        On::Action(
+            Action::TurnStart("actor == owner && card.placed", None, offer_resonance)
+                .counter_reason(key!("chisato_mask_when")),
+        ),
+        On::Action(Action::Reshuffled("", Some(reshuffled_guard), reshuffled)),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
@@ -40,21 +46,31 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
         .raw_name(r#"[白鹭千圣]微笑的铁假面"#)
         .tags(&[r#"手"#, r#"持续"#])
         .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。"#),
-            ]),
-            sec(r#"[持续]："#, &[
-                items(&[
+            sec(
+                r#"[手]："#,
+                &[para(
+                    r#"将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。"#,
+                )],
+            ),
+            sec(
+                r#"[持续]："#,
+                &[items(&[
                     it(r#"[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。"#),
                     it(r#"[共鸣]其他玩家[分摊][支付][拥有者]1500资金。"#),
-                ]),
-            ]),
+                ])],
+            ),
         ]))
         // sheet cell D18
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"白鹭千圣"#)]),
 );
 
 fn chisato_mask(player_id: i32) -> card_sdk::Asked {
+    // A press of the placed card re-runs this entry (`use_skill` binds the
+    // existing instance); the [手] half belongs to the hand play only, so a
+    // press must not place a second copy or charge the 2000 again.
+    if ctx::is_placed() {
+        return Ok(());
+    }
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
@@ -69,16 +85,20 @@ fn chisato_mask(player_id: i32) -> card_sdk::Asked {
         2000,
         &Msg::new(key!("chisato_mask_why")),
     )?;
-    // 规则书[持续]（2）: 「[共鸣]其他玩家[分摊][支付][拥有者]1500资金」
-    if crate::resonance::try_resonance(player_id)? {
-        split_pay(
-            &ctx::others(player_id),
-            player_id,
-            1500,
-            &Msg::new(key!("chisato_mask_resonance")),
-        )?;
-    }
     Ok(())
+}
+
+/// （2）「[共鸣]其他玩家[分摊][支付][拥有者]1500资金」 -- the turn-start offer.
+fn offer_resonance(player_id: i32) -> card_sdk::Asked {
+    if !crate::resonance::try_resonance(player_id)? {
+        return Ok(());
+    }
+    split_pay(
+        &ctx::others(player_id),
+        player_id,
+        1500,
+        &Msg::new(key!("chisato_mask_resonance")),
+    )
 }
 
 /// C# `CardChisatoMask.Reshuffled` -- when the owner's discard pile is shuffled
@@ -91,6 +111,7 @@ fn reshuffled_guard(player_id: i32) -> bool {
 }
 
 fn reshuffled(player_id: i32) -> card_sdk::Asked {
+    // 规则书[持续]（1）: 「[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金」
     split_pay(
         &ctx::others(player_id),
         player_id,
@@ -107,23 +128,34 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
 /// 「分摊前」 figure of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)). Each share
 /// then runs the per-share pipeline through `ctx::pay_leg`.
 fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {
-    let list: Vec<i32> = payers
+    let candidates: Vec<i32> = payers
         .iter()
         .copied()
         .filter(|&p| p != to && !ctx::player_out(p))
         .collect();
-    if list.is_empty() || total <= 0 {
+    // 规则书: 「其他玩家[分摊]」 -- the payers are designations, so the full
+    // targeting pipeline runs (out / Untargetable / the `target` [反击] window;
+    // no redirect on `target_all`) and only the players actually hit split.
+    let list = ctx::target_all(&candidates);
+    // 「取消其对目标之一的[指定]」 -- a per-pair cancel drops one leg of the
+    // split, but the share is the **pre-drop** figure (RULING 2026-10-06): a
+    // cancelled player still counted as a designation, so the divisor is the
+    // candidates that were designated or cancelled at their window (not the
+    // surviving `list` alone).
+    let n = candidates
+        .iter()
+        .filter(|&&p| list.contains(&p) || ctx::designation_cancelled(p))
+        .count() as i32;
+    if n == 0 || total <= 0 {
         return Ok(());
     }
     // The command-wide pre-split stage on the **total**, before any division.
     let Some(shaped) = ctx::pay_total(list[0], to, total, why)? else {
         return Ok(());
     };
-    let per = (shaped + list.len() as i32 - 1) / list.len() as i32;
+    let per = (shaped + n - 1) / n;
     let share = (per + 9) / 10 * 10;
     for p in list {
-        // 「取消其对目标之一的[指定]」 -- a per-pair cancel drops one leg of the
-        // split; the share is the **pre-drop** figure (RULING 2026-10-06).
         if ctx::designation_cancelled(p) {
             continue;
         }
@@ -147,4 +179,10 @@ pub fn chisato_mask_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn reshuffled_kani(player_id: i32) -> card_sdk::Asked {
     reshuffled(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_resonance_kani(player_id: i32) -> card_sdk::Asked {
+    offer_resonance(player_id)
 }

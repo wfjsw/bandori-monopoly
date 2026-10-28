@@ -379,7 +379,8 @@ impl TriggerOverlay {
 // -------------------------------------------------------------------------
 
 pub mod src {
-    /// PP:[丸山彩]憧憬的前方 `On::Filter(PaySplitAdd)`.
+    /// PP:[丸山彩]憧憬的前方 `On::Filter(PaySplitAdd)` -- the **body's own**
+    /// residual condition; the registered filter guard is `"card.placed"`.
     pub const AYA_PAY_ADD: &str = "actor == owner && value > 0";
     /// A function-carrying guard (`is_start`).
     pub const IS_CIRCLE: &str = bandori_std::guards::OWN_START;
@@ -512,8 +513,16 @@ fn fill_state_rows(c: &mut IrCtx, w: &World, p: usize) {
     c.state_set(p as i64, ID_STATE_STAY, w.stay[p] as i64);
     c.state_set(p as i64, ID_STATE_CHARGE, w.charge[p] as i64);
     c.state_set(p as i64, ID_STATE_CRYSTALS, w.group_pool[p] as i64);
-    c.state_set(p as i64, ID_STATE_PERSONA, id_of_name_id(NameId(w.persona_id[p])));
-    c.state_set(p as i64, ID_STATE_GROUP, id_of_name_id(NameId(w.group_id[p])));
+    c.state_set(
+        p as i64,
+        ID_STATE_PERSONA,
+        id_of_name_id(NameId(w.persona_id[p])),
+    );
+    c.state_set(
+        p as i64,
+        ID_STATE_GROUP,
+        id_of_name_id(NameId(w.group_id[p])),
+    );
     c.state_set(
         p as i64,
         ID_STATE_NO_HAND,
@@ -1501,8 +1510,7 @@ pub fn fill_for_guard(
     // kokoro_02 1800 s cliff). Derive the masks from the enum.
     let fid_bit = |f: FnId| 1u64 << (f as u64);
     let needs_sets =
-        (needs.fns & (fid_bit(FnId::TileIs) | fid_bit(FnId::TileIn) | fid_bit(FnId::CandHas)))
-            != 0;
+        (needs.fns & (fid_bit(FnId::TileIs) | fid_bit(FnId::TileIn) | fid_bit(FnId::CandHas))) != 0;
     if needs_sets {
         fill_board_sets(&mut c, w);
     }

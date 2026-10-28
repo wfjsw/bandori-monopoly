@@ -10,20 +10,21 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
-use card_sdk::abi::{roll_source, ActionKind, FilterKind, RollPurpose};
-use card_sdk::{CardText};
+use card_sdk::abi::{counter, roll_source, ActionKind, FilterKind, RollPurpose, TriggerKind};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 pub const NFO: CardDef = CardDef::new(
     "R:NFO",
     &[
-        // 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 --
+        // 规则书: 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」
         // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
-        // live in a Filter. Whole offer on `ActionKind::Effect` (payment
-        // declaration; `t.value` folds there).
+        // live in a Filter. Whole offer on `ActionKind::Effect` -- the generic
+        // effect-declaration kind (payments, layer grants, state toggles);
+        // `gain_guard` keeps only a `pay` effect aimed at this player.
         On::Action(Action::Effect("", Some(gain_guard), gain_bump)),
         On::Play("", None, play),
-        // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
+        // 规则书: 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
         // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
         // PayAfter (always raised, so a shave-to-0 still uses the card up).
@@ -47,6 +48,34 @@ pub const NFO: CardDef = CardDef::new(
         .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 const ID: &str = "R:NFO";
+
+/// Turns the face-5 hook lingers for -- effectively "while crystals remain";
+/// `gain_guard` is the real off switch (`linger` needs a bounded expiry).
+const LINGER_TURNS: i32 = 1_000_000;
+
+/// 规则书: 「为自己的角色卡添加6个奇迹水晶」 -- the shared `crystals` counter
+/// on the seat's character card (the persona-skill instance), so cards that
+/// read or move [奇迹水晶] see the stock. A board with the character card
+/// stripped (test fixtures) keeps it on a player row of the same name.
+fn add_character_crystals(player_id: i32, n: i32) -> card_sdk::Asked {
+    match ctx::persona_skill(player_id) {
+        Some(persona) => {
+            ctx::add_card_crystals(player_id, &persona, n, 0);
+        }
+        None => {
+            // `add_tok` raises the marker window; propagate its pause.
+            ctx::add_tok(player_id, counter::CRYSTALS, n, i32::MAX)?;
+        }
+    }
+    Ok(())
+}
+
+fn character_crystals(player_id: i32) -> i32 {
+    match ctx::persona_skill(player_id) {
+        Some(persona) => ctx::card_crystals(player_id, &persona),
+        None => ctx::tok(player_id, counter::CRYSTALS),
+    }
+}
 
 /// The nearest other player strictly ahead of `player_id` on the ring (C# `H.NearestAhead`).
 fn nearest_ahead(player_id: i32) -> i32 {
@@ -83,12 +112,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「若结果为6，依次获得结果1-5的全部效果。」
         ctx::effect(player_id, &Msg::new(key!("nfo_effect_all")));
         for x in 1..=5 {
-            apply(player_id, x)?;
+            // `x == 5` also ran 3 first, which left this copy placed; its
+            // field instance already carries the crystal hook.
+            apply(player_id, x, x == 5)?;
         }
     } else {
         // 规则书: 「若投掷结果为1，获得1500资金；若结果为2，…；若结果为3，…；若结果为4，…；若结果为5，…」
         ctx::effect(player_id, &Msg::new(key!("nfo_effect")).i("n", k as i64));
-        apply(player_id, k)?;
+        apply(player_id, k, false)?;
     }
     Ok(())
 }
@@ -105,7 +136,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
+fn apply(player_id: i32, k: i32, placed: bool) -> card_sdk::Asked {
     if ctx::player_out(player_id) {
         return Ok(());
     }
@@ -159,7 +190,8 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                 player_id,
                 &Msg::new(key!("nfo_placed")).player_id("who", player_id),
             );
-            // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- see `counteract`.
+            // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- the shave
+            // is `pay_shave`, the unplace `pay_unplace`.
         }
         // 规则书: 「若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出」
         4 => {
@@ -167,14 +199,22 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         }
         // 规则书: 「若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」
         5 => {
-            ctx::add_tok(player_id, key!("nfo_crystals"), 6, i32::MAX)?;
+            // 规则书: 「为自己的角色卡添加6个奇迹水晶」 -- the gain half
+            // (`gain_bump`) is `On::Action(Action::Effect)` on this def, which
+            // only fires for a placed or lingering source; result 5 leaves the
+            // card in the discard, so keep a lingering instance alive. Result 6
+            // ran result 3 first, which leaves the card placed -- only then the
+            // field instance is already a source of its own and a lingering
+            // twin would offer twice. The guard (`crystals > 0`) is the real
+            // expiry.
+            if !placed {
+                ctx::linger(player_id, LINGER_TURNS);
+            }
+            add_character_crystals(player_id, 6)?;
             ctx::log(
                 player_id,
                 &Msg::new(key!("nfo_crystals_added")).player_id("who", player_id),
             );
-            // 「为自己的角色卡添加6个奇迹水晶」 -- held as a player counter
-            // (`nfo_crystals`), the stand-in for the C# `H.ExtraOf<NfoCrystalsFx>`
-            // attachment; the gain half is `gain_bump` below.
         }
         _ => {}
     }
@@ -186,10 +226,13 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
 /// [`ctx::entry::PRESS`], then [`ctx::pick_take_from`] (the card leaves the
 /// discard before it resolves). `H.PlayCard` then applies the card's own `Dest`.
 fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
-    // Not this card itself, and only cards the press entry admits.
+    // Only cards the press entry admits. The resolving NFO is not in the
+    // discard while this runs (a hand play removed it from the hand; a replayed
+    // copy was taken by `pick_take_from`), so another copy is a legal choice --
+    // NFO has no play gate.
     let ok = ctx::distinct_cards_in(player_id, ctx::CardPile::Graveyard)
         .into_iter()
-        .filter(|id| id != ID && ctx::query_guard(player_id, id.as_str(), ctx::entry::PRESS))
+        .filter(|id| ctx::query_guard(player_id, id.as_str(), ctx::entry::PRESS))
         .collect::<Vec<_>>();
     let Some(id) = ctx::pick_take_from(
         player_id,
@@ -240,6 +283,7 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
 /// Runs through the Fx hook dispatch at `paySplitAt` (after `PaySplitChoose`, before the
 /// `pay` [反击] window).
 fn pay_shave(player_id: i32, value: i32) -> i32 {
+    // 规则书: 「你下次付款时自动减免1000资金的消耗」
     let cut = (value - 1000).max(0);
     ctx::log(
         player_id,
@@ -258,27 +302,32 @@ fn pay_unplace(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 规则书: 「你每次获得资金时」 -- only a money movement (a `pay` effect
+/// declaration aimed at this player) with crystals left to spend.
 fn gain_guard(player_id: i32) -> bool {
-    ctx::trigger::target() == player_id && ctx::tok(player_id, "nfo_crystals") > 0
+    ctx::effect::has(TriggerKind::Pay)
+        && ctx::trigger::target() == player_id
+        && character_crystals(player_id) > 0
 }
 
-/// 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 -- C#
+/// 规则书: 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 -- C#
 /// `NfoCrystalsFx.PaySplitChoose`, keyed on `p.to == Player` (the gainer).
 fn gain_bump(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() != player_id {
         return Ok(());
     }
-    if ctx::tok(player_id, "nfo_crystals") < 1 {
+    if character_crystals(player_id) < 1 {
         return Ok(());
     }
-    if !ctx::ask_yes(
+    let yes = ctx::ask_yes(
         player_id,
         &Msg::new(key!("nfo_title")),
         &Msg::new(key!("nfo_bump")),
-    )? {
+    )?;
+    if !yes {
         return Ok(());
     }
-    ctx::add_tok(player_id, "nfo_crystals", -1, i32::MAX)?;
+    add_character_crystals(player_id, -1)?;
     ctx::trigger::set_pay_amount(ctx::trigger::value() + 300);
     ctx::log(player_id, &Msg::new(key!("nfo_bumped")));
     Ok(())

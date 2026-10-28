@@ -51,7 +51,7 @@ pub use work::{
     AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,
     WorkItem,
 };
-pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, World};
+pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, TurnSnap, World};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
 /// `bot-cost` feature is on; nothing behavioural either way.

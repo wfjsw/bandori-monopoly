@@ -205,8 +205,8 @@ fn fire_bird_turn_end_burns_400_and_a_crystal() {
 
 #[test]
 fn fire_bird_burns_on_turn_end() {
-    // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 (observed: the engine
-    // runs the turnEnd hook twice, so the burn is 800 / two crystals per end).
+    // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 (one tick per turn
+    // end: 400 and one crystal, as the -400 exact test above pins).
     let mut t = vanilla2();
     t.place_raw(0, "R:Fire bird");
     {
@@ -675,6 +675,9 @@ fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
     t.begin_turn(0);
     drain(&mut t);
     t.give(0, &[LISA_LINK]);
+    // Keep a non-empty draw pile so the played copy's graveyard fate cannot be
+    // undone by the empty-deck refill reshuffling it back into the deck.
+    t.set_draw(0, &["通用:安可"]);
     t.set_pos(0, 0);
     t.set_pos(1, 10);
     t.set_fire(0, 2, 2);
@@ -719,6 +722,13 @@ fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
         t.on_field(1, LISA_LINK),
         "card placed on the target's field: p1={:?} prompts={prompts:?}",
         t.field_ids(1)
+    );
+    // 「当你发动该效果后，此卡进入弃牌堆」 -- the played copy takes the default
+    // graveyard fate; the field copy above is the `place_card_at` instance.
+    assert!(
+        t.discard(0).contains(&LISA_LINK.to_string()),
+        "the played copy was discarded: {:?}",
+        t.discard(0)
     );
     assert!(
         !t.on_field(0, LISA_LINK),

@@ -11,13 +11,14 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const STUDIO_STORM: CardDef = CardDef::new(
     "RAS:练习室里的风暴",
     &[
         On::Play("", Some(cant_play), play),
+        // 规则书（1）: 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
         On::Action(Action::PassTile("actor == owner && card.placed && tile_is(tile.id, \"circle\")", None, pass_tile)),
         // （2）「在距此卡所在格子X个格子处[结算]时」 is 行动阶段 15
         // (`SETTLE-STAGES.md` §4 M2) -- an entry in the settle's effect list.
@@ -38,25 +39,18 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
 
 const ID: &str = "RAS:练习室里的风暴";
 
-/// C# `H.IsLiveHouse` (color group 6) tiles that can hold houses.
-const LIVEHOUSE_PROPS: [&str; 4] = [
-    "DUB MUSIC EXPERIMENT",
-    "武道馆",
-    "Space",
-    "Live House Galaxy",
-];
-
-/// The tile the card sits on (C# `Mem` on a tile-bound field card).
-
+/// Is `player_id` standing on a livehouse they own? (C# `WhyNot`'s gate.)
+/// 规则书: 「你拥有的livehouse格子」 -- the `livehouse` class, not a hand-kept
+/// name list: growth of the board (RiNG 1-4) and per-player colour overrides
+/// both count.
 fn on_own_lh(player_id: i32) -> bool {
     let pos = ctx::player_pos(player_id);
-    pos >= 0
-        && ctx::tile_owner(pos) == player_id
-        && LIVEHOUSE_PROPS.iter().any(|&n| ctx::tile_named(n) == pos)
+    pos >= 0 && ctx::tile_owner(pos) == player_id && ctx::is_live_house_for(player_id, pos)
 }
 
 /// C# `CardStudioStorm.WhyNot`: 「只有站在自己的 Live House 格子上才能打出」
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书（1）: 「当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上」
     if !on_own_lh(player_id) {
         return Some(Msg::new(key!("studio_storm_not_on_lh")));
     }
@@ -80,17 +74,18 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", pos),
     );
-    // 规则书（1）: 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
-    // -- crystals start at 0 (the default) and cap at 3 via `add_crystals(.., 3)`.
+    // 规则书（1）: 「初始0」 -- the placement charges no crystal (the PassTile
+    // hook adds them, cap 3).
     Ok(())
 }
 
-/// C# `CardStudioStorm.PassTile` -- the user passing a CiRCLE tile adds a crystal.
-/// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// C# `CardStudioStorm.PassTile` -- the user passing a CiRCLE tile adds a
+/// crystal. The activation gate (`actor == owner && …circle`) is the hook's
+/// condition string; this body only runs once it passed.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // C# `m.Seat != User || H.Tile(t)?.kind != "circle"`.
     let t = trigger::tile();
+    // 规则书（1）: 「为此卡放置一个[奇迹水晶]」 -- cap 3 is the printed 「上限3」.
     ctx::add_crystals(1, 3)?;
     ctx::log(
         player_id,
@@ -122,6 +117,9 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
         ctx::player_pos(trigger::player_id())
     };
     // 规则书（2）: 「此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动」
+    // TODO(规则书)（在距此卡所在格子X个格子处[结算]时）: the metric is open
+    //   (OPEN-storm-distance; the spec note says clockwise) -- `ctx::dist` is the
+    //   undirected ring minimum, not the clockwise distance.
     let x = ctx::dist(a, tile);
     let crystals = ctx::crystals();
     if x < 1 || x > crystals {
@@ -148,6 +146,9 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)[ruling]: on a **mortgaged** tile 「普通[结算]」 is a forced-buy
     // offer, not a rent, so there is no obvious 收费 recipient. Class C.
     // `charge_rent` refuses that case (returns 0) rather than guessing.
+    // TODO(规则书)（相当于此卡所在格子普通[结算]的(4-X)/4倍价格的收费）:
+    //   「普通[结算]的价格」 is open (OPEN-storm-price: base rent vs house-level) --
+    //   `charge_rent` uses the tile's house-level / dice rent figure.
     let owner = ctx::tile_owner(tile);
     if owner < 0 {
         return Ok(());

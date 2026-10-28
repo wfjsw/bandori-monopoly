@@ -3,8 +3,9 @@
 //! 规则书（docs/rulebook/cards.json, id `R:必然的联系（莉莎）`）:
 //! > 必然的联系（莉莎）：【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。
 //!
-//! after a skill teleport: park this card on a same-tile character's field so
-//! your skills on them may skip the 「距离最近」 limit.
+//! after a skill teleport: park this card on a same-tile character's field. The
+//! 「距离最近」 skip that your skills on them should get is not wired yet (see
+//! TODO).
 //!
 //! Raised on the unified `MoveAfter` (every movement case) and discriminated
 //! by cond: `move.kind == Teleport && move.by_skill` selects 「使用技能进行传送」.
@@ -14,7 +15,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
@@ -22,8 +23,12 @@ pub const LISA_BOND: CardDef = CardDef::new(
     // TODO(规则书): 「后」 names no stage number (closest is stage 13
     // 「传送后在终点触发重叠」). `MoveAfter` is 「移动后」 (行动阶段 13) --
     // the move-end point every movement case raises.
+    // TODO(规则书)（当你使用技能进行传送后）: the window is after any skill teleport --
+    //   a teleport nested inside a settle raises no `MoveAfter` (`card_teleport`
+    //   only writes the position at `move_depth > 0`), so the card is not offered.
     &[On::Counteract(
         &[ChainKind::MoveAfter],
+        // 规则书: 「【反击】当你使用技能进行传送后，你可以打出此卡」
         "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0",
         None,
         counteract).counter_reason(key!("lisa_bond_when"))],
@@ -51,11 +56,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // the designation, and a `redirect` hook may move the hit.
     let hit = ctx::target(who);
     // 规则书[反击]: 「将此卡放在对方的游戏区」 -- C# `if (r.index >= 0)
-    // H.PlaceFromPlay(c, r.index)` places at the hit player_id's field
+    // H.PlaceFromPlay(c, r.index)` places a marker at the hit player_id's field
     // (`PlaceCard(owner = r.index, user = c.Seat, ...)`), and only when the gate
-    // let the designation through.
+    // let the designation through. The played card itself keeps the default
+    // `Dest::Graveyard` -- 「当你发动该效果后，此卡进入弃牌堆」.
     if let Some(who) = hit {
-        ctx::set_dest(ctx::Dest::Field);
         ctx::place_card_at(
             who,
             "R:必然的联系（莉莎）",
@@ -68,10 +73,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 .player_id("them", who),
         );
     }
-    // TODO(规则书)[反击]: 「你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆」
+    // TODO(规则书)[反击]: 「你对对方使用技能将可以无视【距离最近】这一限制」
     //   -- needs a persistent skill-targeting exemption on the placed card (C#
-    //   `CardLisaBond.NoteText` / the skill system's 「最近」 gate) plus the discard
-    //   once the exemption is used.
+    //   `CardLisaBond.NoteText` / the skill system's 「最近」 gate).
     Ok(())
 }
 

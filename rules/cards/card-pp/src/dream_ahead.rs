@@ -17,22 +17,22 @@
 //! placed before the game starts; crystals grow on draws and settle tax grows
 //! with X.
 //! Not a hand play (C# `Normal => false`, no `Play` override): the card is
-//! placed by `DeckBeforeGame`. The settle tax is live in the `SettleAfter`
-//! hook; the crystal growth runs on the `Drew` hook.
+//! placed by `DeckBeforeGame`. The settle tax is live in the `SettleBody` hook
+//! (stage 15, C# routine `SettleAfter`); the crystal growth runs on the `Drew`
+//! hook and on any other crystal the card gains (its counter listener).
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind, CardPile, TriggerKind};
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
     &[
-        // （4）「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有
-        // 无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…」 --
+        // 规则书[持续]（4）: 「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]」 --
         // a [持续] clause with a [反击] rider: `[反击]X：Y` = Y resolves before
         // X, so the buy is a counteraction at the owner's turn-end timing.
         //
@@ -44,12 +44,21 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         // Wired as a field-card `On::Action` at `TurnEndBefore` (skill-personas:
         // a field card answers settlement points automatically, no declaration)
         // so the buy still settles before the turn end's own effects.
-        On::Action(Action::TurnEndBefore("actor == owner && card.placed && card.counter('crystals') >= 3", // No residual guard: the condition covers placed + ≥3 crystals and
-            // `buy_one` owns the "is there a tile" scan (one board walk per
-            // turn-end instead of two).
-            None, buy_one).counter_reason(key!("dream_ahead_when"))),
+        // The residual guard is the clause's third availability fact -- a free
+        // unowned buyable tile within 3; without it the entry surfaces with no
+        // legal target under the [反击] window.
+        On::Action(Action::TurnEndBefore("actor == owner && card.placed && card.counter('crystals') >= 3", Some(has_free_near), buy_one).counter_reason(key!("dream_ahead_when"))),
         On::Action(Action::DeckBeforeGame("", None, deck_before_game)),
         On::Action(Action::Drew("actor == owner && card.placed", None, drew)),
+        // 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5）」 --
+        // the opening deal draws with `hooks = false` (no `Drew`), and the [特]
+        // has already placed this card before that deal; mirror the dealt hand.
+        On::Action(Action::DeckAtGameStart("card.placed", None, opening_draw)),
+        // 规则书[持续]（1）: 「此卡每获得一个超出上限的[奇迹水晶]就为此卡的X加1」 --
+        // the conversion follows *any* crystal the card gains, not only a draw
+        // (another card may add to a placed instance), so it listens to this
+        // card's own counter change.
+        On::Action(Action::CounterChanged("card.placed && counter_is('crystals') && value > 0", Some(crystals_changed_guard), overflow)),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
@@ -115,24 +124,47 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardDreamAhead.Drew` -- per card drawn, add a crystal (cap 5); at the
-/// cap each further card bumps X instead.
-/// 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每
-/// 获得一个超出上限的[奇迹水晶]就为此卡的X加1（X初始0）」
+/// C# `CardDreamAhead.Drew` -- per card drawn, add a crystal; the 5 cap and the
+/// X bump for an over-cap crystal live on the [`overflow`] counter listener, so
+/// the add here is uncapped.
+/// 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5）」
 /// `actor == owner && card.placed` is the pre.
 /// `drew` fires **per single card** (an N-card draw raises it N times), so
 /// 「每次抽牌时」 is one crystal per raise.
 fn drew(player_id: i32) -> card_sdk::Asked {
-    if ctx::crystals() < 5 {
-        ctx::add_crystals(1, 5)?;
-    } else {
-        ctx::inc_slot(player_id, SLOT_X, 1);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("dream_ahead_overflow")).i("x", x(player_id) as i64),
-        );
+    ctx::add_crystals(1, 0)?;
+    Ok(())
+}
+
+/// The opening deal: the engine's `opening()` passes `hooks = false`, so no
+/// `Drew` is raised for it -- replay the dealt hand through [`drew`].
+fn opening_draw(player_id: i32) -> card_sdk::Asked {
+    for _ in 0..ctx::hand_size(player_id) {
+        drew(player_id)?;
     }
     Ok(())
+}
+
+/// 规则书[持续]（1）: 「此卡每获得一个超出上限的[奇迹水晶]就为此卡的X加1（X初始0）」
+/// -- clamps back to 5 and moves the excess into X.
+fn overflow(player_id: i32) -> card_sdk::Asked {
+    let c = ctx::crystals();
+    if c <= 5 {
+        return Ok(());
+    }
+    ctx::add_crystals(5 - c, 5)?;
+    ctx::inc_slot(player_id, SLOT_X, c - 5);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("dream_ahead_overflow")).i("x", x(player_id) as i64),
+    );
+    Ok(())
+}
+
+/// Residual guard for [`overflow`] -- scopes the listener to this card's own
+/// instance and the `crystals` counter.
+fn crystals_changed_guard(_player_id: i32) -> bool {
+    trigger::card_is("PP:梦在前方，结彩当下") && trigger::name() == card_sdk::abi::counter::CRYSTALS
 }
 
 /// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- both halves are
@@ -176,15 +208,18 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
 // 的无主的[可购买格子]」 -- the buy is `card_buy`, the resonance cost is
 // the same `try_resonance` every other [共鸣] card uses.
 
-/// Free buyable tiles within 3 of the owner (「所在格子前后3格以内的无主的
-/// [可购买格子]」). The `TurnEndBefore` condition already covers placed + ≥3
-/// crystals, so this is the only residual fact -- and `buy_one` owns the scan
-/// (one board walk per turn-end, not two).
+/// Free buyable tiles within 3 of the owner.
+// 规则书[持续]（4）: 「[拥有者]所在格子前后3格以内的无主的[可购买格子]」
 fn free_near(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
     (0..ctx::tile_count())
         .filter(|&t| ctx::is_buyable(t) && ctx::tile_owner(t) < 0 && ctx::dist(pos, t) <= 3)
         .collect()
+}
+
+/// Residual guard for [`buy_one`]: the clause's free-tile availability fact.
+fn has_free_near(player_id: i32) -> bool {
+    !free_near(player_id).is_empty()
 }
 
 fn buy_one(player_id: i32) -> card_sdk::Asked {
@@ -255,4 +290,16 @@ pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
     settle_body(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn opening_draw_kani(player_id: i32) -> card_sdk::Asked {
+    opening_draw(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn overflow_kani(player_id: i32) -> card_sdk::Asked {
+    overflow(player_id)
 }

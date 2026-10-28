@@ -43,6 +43,7 @@
   "two_donuts_title": "Two Donuts Each",
   "two_donuts_yes": "[Teleport] and settle? (between your original tile and {{by}}'s end; you may decline)",
   "two_in_one_note": "swapped to the other character",
+  "two_in_one_not_sumimi": "not a Sumimi character, cannot be played",
   "two_in_one_swap": "Sumimi Is Two in One's effect: {{who}} swapped to the other Sumimi character",
   "two_in_one_when": "after your move roll"
 }

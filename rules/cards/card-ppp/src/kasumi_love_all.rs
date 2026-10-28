@@ -7,12 +7,14 @@
 //! > [持续]：
 //! > 其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子[强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半。
 //!
-//! park on 星之鼓动山丘; anyone who passes it is force-stopped there at half rent.
+//! park on 星之鼓动山丘; any other player passing it without ending there is
+//! force-stopped (rent halved), this card goes to the user's discard and the
+//! user's band card gains a 奇迹水晶.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{para, sec, CardText};
 
 pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
     "PPP:（香澄）大家我都喜欢哦",

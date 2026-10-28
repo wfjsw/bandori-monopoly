@@ -382,14 +382,20 @@ fn m07_encore_vs_forced_move() {
 // =====================================================================
 
 // 规则书: (兰) 像往常一样: 「受到异常移动效果…的回合结束前，回到起始地点并取消所有受到的效果」.
-// RULING: whether 「取消所有受到的效果」 refunds money already paid.
+// 「取消所有受到的效果」 restores the turn-start money and board (the snapshot).
 #[test]
 fn m08_ran_undoes_forced_move() {
     let mut t = Table::new(&["花园多惠", "美竹兰"]);
     t.clean();
-    t.begin_turn(0);
+    // Own the landing deed before the snapshot so the undo can be checked to
+    // keep it; P1 starts on the turn snapshot's square (0).
     t.own(0, &[6]);
     t.give(1, &["AG:(兰) 像往常一样"]);
+    t.begin_turn(0);
+    // 「取消所有受到的效果」 -- the turn-start money comes back after the undo.
+    let money_before = t.money(1);
+    // P1 has since walked to 3; the forced 3-forward now lands on P0's tile 6.
+    t.set_pos(1, 3);
     t.give_play(0, "Mujica:祥，移动").unwrap();
     // P0 forces P1 3 tiles onto P0's owned tile 6.
     let mut saw_counteract = false;
@@ -415,8 +421,15 @@ fn m08_ran_undoes_forced_move() {
         saw_counteract,
         "像往常一样 window must open for the forced move"
     );
-    // P0 rolls their main move, then ends the turn so 像往常一样's undo fires.
     drain(&mut t);
+    assert_eq!(t.pos(1), 6, "the forced move landed on P0's deed");
+    assert!(
+        t.money(1) < money_before,
+        "the landed settle charged rent: {} -> {}",
+        money_before,
+        t.money(1)
+    );
+    // P0 rolls their main move, then ends the turn so 像往常一样's undo fires.
     t.dice(&[1]);
     let _ = t.roll(0);
     while t.prompt().is_some() {
@@ -435,6 +448,12 @@ fn m08_ran_undoes_forced_move() {
         t.money(0)
     );
     assert_eq!(t.pos(1), 0, "P1 is back at its start tile");
+    assert_eq!(
+        t.money(1),
+        money_before,
+        "the rent the forced settle charged is cancelled"
+    );
+    assert_eq!(t.owner(6), Some(0), "P0's deed is untouched");
 }
 
 // =====================================================================
@@ -990,7 +1009,7 @@ fn m21_tomoe_shifts_start() {
 // =====================================================================
 
 // 规则书: MyGO band (2): 「于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」.
-// 想要成为人类: 「每当你的移动掷骰小于X，为此卡添加一个奇迹水晶」.
+// 想要成为人类: 「每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶」 (sheet 2026-10-06 M2).
 // Drive shape matches the green twin `band_move_one_for_a_crystal`: the press
 // is a skill button *before* the roll (`t.skill`), not a window inside
 // `t.roll`. With 1 crystal only the move-1 half is available, so it runs
@@ -1003,7 +1022,8 @@ fn m22_mygo_band_move1() {
     // Band card with 1 crystal.
     let band = t.skill_id(0, "迷途之星");
     t.set_crystals(0, &band, 1);
-    // 想要成为人类 (X = 10) on the field.
+    // 想要成为人类 on the field -- `place_raw` runs no play body, so no X is
+    // declared (the slot stays 0 and the (1) guard `x > 0` cannot fire).
     t.place_raw(0, "CRYCHIC:想要成为人类");
     // Replace the roll with a 1-tile move (the press runs the move itself).
     t.dice(&[15]);
@@ -1031,34 +1051,38 @@ fn m22_mygo_band_move1() {
 fn m23_human_boost_hit_by_stop() {
     let mut t = Table::new(&["高松灯", "凑友希那"]);
     t.clean();
-    t.begin_turn(0);
+    // Everything the turn start reads must already be in place: `place_raw`
+    // runs no play body, so X is written through the player slot by hand.
     t.place_raw(0, "CRYCHIC:想要成为人类");
+    t.m.world_mut().set_slot(0, "want_human_x", 15);
     t.set_crystals(0, "CRYCHIC:想要成为人类", 2);
+    t.begin_turn(0);
     t.set_pos(0, 30);
     t.set_pos(1, 36);
     t.set_fire(1, 1, 1);
     // At turn start the crystals clear and the next roll gets +5 (20 - 15).
     t.dice(&[5]);
     t.roll(0).unwrap();
+    // The [火罐] force stop is a bare `ask_yes`: its options never name the
+    // asker, so match the message key instead (same drive as m12a).
     loop {
         let Some(_) = t.prompt() else { break };
-        let k = t.option("凑友希那").or_else(|| t.option("强制停下"));
-        if let Some(k) = k {
-            t.answer(1, k).unwrap();
+        if t.prompt_refers("kokoro_practice_force") {
+            t.answer_one(0).unwrap(); // yes: stop the passer on P1's tile
         } else {
             t.decline();
         }
     }
-    eprintln!(
-        "m23 record: pos = {}, crystals = {:?} (want 2)",
-        t.pos(0),
-        t.crystals(0, "CRYCHIC:想要成为人类")
-    );
-    // 「若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶」.
+    drain(&mut t);
+    assert_eq!(t.pos(0), 36, "the forced stop cuts the boosted walk");
+    t.end(0).unwrap();
+    drain(&mut t);
+    // 「若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶」 --
+    // the 5 rolled before the boost is ≤ X, so (1) banks one crystal as well.
     assert_eq!(
         t.crystals(0, "CRYCHIC:想要成为人类"),
-        Some(2),
-        "the move was hit by an abnormal effect → 2 crystals"
+        Some(3),
+        "1 for the low roll + 2 for the abnormal stop"
     );
 }
 

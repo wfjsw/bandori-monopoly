@@ -248,11 +248,15 @@ fn exist_flips_into_owner_discard() {
     drain(&mut t);
     t.end(1).unwrap();
     drain(&mut t);
+    // 「将其翻入弃牌堆」 comes before 「抽1张卡」: the flip lands in the owner's
+    // (empty) discard first, so the draw's reshuffle returns that very card
+    // instead of whiffing.
     assert!(
-        t.draw_pile(0).contains(&"RAS:EXIST".to_string()),
-        "book: 「将其翻入弃牌堆」 of the card owner; discard0={:?} discard1={:?}",
-        t.draw_pile(0),
-        t.draw_pile(1)
+        t.hand(0).contains(&"RAS:EXIST".to_string()),
+        "book: the flipped card is in the discard before the draw; hand={:?} discard0={:?} discard1={:?}",
+        t.hand(0),
+        t.discard(0),
+        t.discard(1)
     );
 }
 
@@ -364,7 +368,9 @@ fn hey_kids_transfers_one_house() {
 
 #[test]
 fn hey_kids_two_houses_to_two_targets() {
-    // 规则书: 「每个目标格子至多获得1层房屋」
+    // 规则书: 「转移的房屋与目标格子中，至少一方数量为1，且每个目标格子至多获得1层房屋」
+    // TODO(规则书)（至少一方数量为1）: 2 房屋 -> 2 目标格时两方数量都不是 1 -- 这里
+    //   照样允许转移 (OPEN-hey-kids-split).
     let mut t = Table::vanilla(2);
     t.own(0, &[SHOPPING, EDOGAWA_PARK, 6]);
     t.set_houses(SHOPPING, 2);
@@ -464,6 +470,38 @@ fn hey_kids_money_when_source_house_is_dearer() {
         }
     }
     assert_eq!(t.money(0), 20_500, "net +500 per the formula");
+}
+
+#[test]
+fn hey_kids_fee_when_target_already_has_houses() {
+    // 规则书: 「随后，你失去“转移后各格房屋造价总和－获得房屋数量×500”的资金。」
+    // TODO(规则书)（转移后各格房屋造价总和）: 判读两可 -- 目标格转移后站着的全部房屋，
+    //   还是只算转移过去的那一层？这里按后者收 1000-500=500（源 2000 -> 目标 1000，
+    //   先补 1000 差价，净 +500）；按该格总和则是 2*1000-500=1500，净 -500:
+    //   OPEN-hey-kids-sum.
+    let mut t = Table::vanilla(2);
+    t.own(0, &[SHOPPING, EDOGAWA_PARK]);
+    t.set_houses(SHOPPING, 1);
+    t.set_houses(EDOGAWA_PARK, 1); // the target already stands a house
+    t.set_money(0, 20_000);
+    t.give(0, &["RAS:狂乱Hey Kids!!"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, CIRCLE);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.kind == "tile" {
+            t.answer_tile(0, EDOGAWA_PARK).unwrap();
+        } else {
+            t.answer(0, 0).unwrap();
+        }
+    }
+    assert_eq!(t.houses(SHOPPING), 0);
+    assert_eq!(t.houses(EDOGAWA_PARK), 2);
+    assert_eq!(t.money(0), 20_500, "20000 + 1000 excess - 500 fee");
 }
 
 #[test]
@@ -1644,6 +1682,98 @@ fn guerrilla_special_offers_to_mark_a_deed_as_livehouse() {
         t.dump_prompt(),
         t.field_ids(0),
         t.discard(0),
+    );
+}
+
+/// The shared table for the `paid_in_settle` cases: every buildable livehouse
+/// is owned (the [特]'s later clauses hold), the card is armed in the discard,
+/// and P0 owns the settle target (tile 11) plus 购物中心. `extra` is the card
+/// the caller plays afterwards (given up front, so the post-discard hand is at
+/// the limit and the play gate is open).
+fn guerrilla_tally_table(extra: &str) -> Table {
+    let mut t = Table::vanilla(3);
+    t.own(1, &[DUB, BUDOKAN, SPACE, LH_GALAXY]);
+    t.own(2, &[RING1, 16, RING3, RING4]);
+    t.own(0, &[SHOPPING, 11]);
+    t.set_money(0, 20_000);
+    t.set_money(1, 20_000);
+    t.set_discard(0, &[]);
+    // One over the hand limit so `discard` is a legal 运营 command -- that path
+    // raises `discarded`, which is what arms the [特] check.
+    t.give(
+        0,
+        &[
+            "RAS:游击演出",
+            extra,
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+            "R:[衍生] 压",
+        ],
+    );
+    t.set_draw(0, &["R:[衍生] 觉悟", "R:[衍生] 觉悟"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.discard_card(0, "RAS:游击演出").unwrap();
+    drain(&mut t);
+    t
+}
+
+/// 规则书[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- a settle-caused
+/// payment counts even when it is **not** rent: 梦在前方's settle tax is a
+/// `PayKind::Card` transfer to the deed's owner. The rent alone (60, halved by
+/// 祥，移动's pay factor) stays under 1000, so only the tax can cross it.
+#[test]
+fn guerrilla_tally_counts_non_rent_settle_payment() {
+    let mut t = guerrilla_tally_table("Mujica:祥，移动");
+    t.place_raw(0, "PP:梦在前方，结彩当下");
+    t.set_state(0, "dream_ahead_x", 1_700); // fans 1 × 1700 + 300 = 2000; halved = 1000
+    t.set_state(0, "ppFansUp", 1);
+    t.set_pos(1, 8);
+    t.play(0, "Mujica:祥，移动").unwrap();
+    let k = t.option("PlayerId(1)").expect("player pick");
+    t.answer(0, k).unwrap();
+    let k = t.option("saki_move_forward").expect("direction pick");
+    t.answer(0, k).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(1), 11, "P1 settled on P0's deed");
+    assert!(
+        t.m.world().turn.paid_in_settle >= 1_000,
+        "the non-rent settle tax counts: {}",
+        t.m.world().turn.paid_in_settle
+    );
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    assert!(
+        t.prompt().is_some() || t.on_field(0, "RAS:游击演出"),
+        "turn-end [特] window; paid_in_settle={} prompt={}",
+        t.m.world().turn.paid_in_settle,
+        t.dump_prompt()
+    );
+}
+
+/// 规则书[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- a payment
+/// outside any [触发结算] does not count: 壱雫空 makes P1 pay P0 1000 in the
+/// 运营 phase and no settle runs, so the [特] stays shut.
+#[test]
+fn guerrilla_tally_ignores_non_settle_payment() {
+    let mut t = guerrilla_tally_table("MyGO:壱雫空");
+    t.set_state(1, "stay", 1);
+    t.play(0, "MyGO:壱雫空").unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(0), 21_000, "P1 paid the non-settle 1000");
+    assert_eq!(
+        t.m.world().turn.paid_in_settle,
+        0,
+        "a non-settle payment is not tallied"
+    );
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    assert!(
+        t.prompt().is_none() && !t.on_field(0, "RAS:游击演出"),
+        "no [特] window; prompt={} field={:?}",
+        t.dump_prompt(),
+        t.field_ids(0)
     );
 }
 

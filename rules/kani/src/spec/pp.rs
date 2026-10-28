@@ -279,8 +279,10 @@ pub fn ranger_00_gate_ok(distances: &[i32], owned_with_house: &[bool], owned_fan
 // OPEN-共鸣 (count +1); OPEN-floor (removing 4 crystals when fewer exist).
 // ===========================================================================
 
-/// Effective count = field cards the user owns (the Ranger itself once
-/// played), +1 with [共鸣].
+/// Effective count = field cards the user owns **including the Ranger itself
+/// once played** (docs C-PP-ranger-01), +1 with [共鸣]. The body's
+/// `placed_count` currently omits the in-flight card (card TODO), so the
+/// proof is red until it counts itself.
 pub fn ranger_count(field_owned: i32, echo: bool) -> i32 {
     if echo {
         field_owned + 1
@@ -303,6 +305,24 @@ pub fn ranger_02_band(count: i32) -> i32 {
     } else {
         0
     }
+}
+
+/// Money after the ladder: leg 1 gain, then leg 4's 「失去2000资金」 at 5+.
+pub fn ranger_money_after(pre: i32, count: i32) -> i32 {
+    let mut m = pre + ranger_01_money(count);
+    if count >= 5 {
+        m = (m - 2000).max(0);
+    }
+    m
+}
+
+/// Band pool after legs 2 (＋3) and 3 (－4, OPEN-floor at 0).
+pub fn ranger_band_after(pre: i32, count: i32) -> i32 {
+    let mut b = pre + ranger_02_band(count);
+    if count >= 4 {
+        b = (b - 4).max(0);
+    }
+    b
 }
 
 /// Step 3: band pool change and draw. OPEN-floor on the removal.

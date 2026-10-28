@@ -256,6 +256,9 @@ fn title_idol_crystals() {
 fn title_idol_echo_adds_two() {
     forall(4, 0x50_544A, |rng, _i| {
         let mut t = Table::vanilla(2);
+        // A legal PP deck seats a Pastel✽Palettes character, so clause 1's
+        // 「[使用者]的Pastel✽Palettes乐队卡」 write really lands.
+        t.set_character_raw(0, "丸山彩");
         t.place_raw(0, BAND_SKILL);
         t.place_raw(0, "PP:梦在前方，结彩当下");
         set_band_xtal(&mut t, 0, rng.range(0, 3));
@@ -270,10 +273,12 @@ fn title_idol_echo_adds_two() {
             .map_err(|e| format!("play rejected: {e}"))?;
         accept_echo(&mut t);
 
-        // step1 band+2 + step2 band+2 = +4; dream +2.
+        // step1 band+2 + the fuel's own 「乐队卡+2」 + step2 band+2 = +6; dream +2.
         let band = band_xtal(&t, 0);
-        if band != band0 + 2 + 2 {
-            return Err(format!("band {band0} -> {band}, expected +4 with 共鸣"));
+        if band != band0 + 2 + 2 + 2 {
+            return Err(format!(
+                "band {band0} -> {band}, expected +6 with 共鸣 (2+2+2)"
+            ));
         }
         let dream = t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0);
         if dream != dream0 + 2 {
@@ -468,18 +473,49 @@ fn first_accident_hand() {
 }
 
 /// C-PP-first-accident-02 -- [持续]: owner cannot use any PP character's (2)
-/// skill. The book is absolute; a prompt offering 丸山彩's (2) is a violation.
+/// skill. The book is absolute; a prompt offering 丸山彩's, 大和麻弥's or
+/// 冰川日菜's (2) is a violation.
 #[test]
 fn first_accident_blocks_pp_skill_2() {
     forall(4, 0x46_4144, |rng, _i| {
         let mut t = Table::vanilla(2);
         t.set_character_raw(0, "丸山彩");
         t.place_raw(0, "skill:丸山彩:With~");
-        t.give_play(0, "PP:初次演出事故")
-            .map_err(|e| format!("play rejected: {e}"))?;
-        drain(&mut t);
+        // The other two PP (2) skills the clause covers: 大和麻弥's window sits
+        // on a draw (the accident's own play draws), 冰川日菜's at turn start.
+        t.place_raw(0, "skill:大和麻弥:朝阳照耀的片刻");
+        t.place_raw(0, "skill:冰川日菜:日菜抽中的大奖");
         let up = rng.range(3, 6);
         set_fans(&mut t, 0, up, 0);
+        // A prompt raised by a PP character's (2) skill, by key.
+        let pp_skill_prompt = |t: &Table| -> Option<String> {
+            let p = t.prompt()?;
+            let hit = |k: &str| {
+                p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
+            };
+            ["aya_with", "maya_dawn", "hina_lottery"]
+                .into_iter()
+                .find(|&k| hit(k))
+                .map(|k| k.to_string())
+        };
+        t.give_play(0, "PP:初次演出事故")
+            .map_err(|e| format!("play rejected: {e}"))?;
+        // The seal is written by this very body, and a guest write does not
+        // reach the host routine that raises the (1) draw's hook (BACKLOG
+        // HOST-02): 大和麻弥's window on the accident's own draw can still
+        // open. From the next drive on the committed seal must hold for all
+        // three.
+        while t.prompt().is_some() {
+            if let Some(k) = pp_skill_prompt(&t) {
+                if k != "maya_dawn" {
+                    return Err(format!(
+                        "C-PP-first-accident-02: PP (2) skill {k} offered under 初次演出事故: {}",
+                        t.dump_prompt()
+                    ));
+                }
+            }
+            t.decline();
+        }
         t.own(1, &[7]);
         t.set_houses(7, 1);
         t.begin_turn(0);
@@ -487,15 +523,10 @@ fn first_accident_blocks_pp_skill_2() {
         t.dice(&[2]);
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
         while t.prompt().is_some() {
-            let p = t.expect_prompt();
-            if p.title.key().contains("aya_with")
-                || p.options
-                    .iter()
-                    .any(|o| format!("{o:?}").contains("aya_with"))
-            {
+            if let Some(k) = pp_skill_prompt(&t) {
                 return Err(format!(
-                    "C-PP-first-accident-02: PP (2) skill prompt offered under 初次演出事故: {}",
-                    t.dump_prompt()
+                    "C-PP-first-accident-02: PP (2) skill {k} offered under 初次演出事故: {} blk={}",
+                    t.dump_prompt(), t.token(0, "skillBlock:Pastel✽Palettes")
                 ));
             }
             t.decline();
@@ -987,6 +1018,52 @@ fn ranger_steps_by_count() {
         Ok(())
     })
     .expect("C-PP-ranger-01/02");
+}
+
+/// C-PP-ranger-04 -- 「获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），
+/// 盖房后减少1层”」: the layer survives the turn, discounts the next build, pops
+/// after it, and the excess past the cost comes back (「可溢出」).
+#[test]
+fn ranger_build_discount_survives_and_refunds_overflow() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 0, 0);
+    // The gate wants an owned tile with a house; tile 11's build cost is 500,
+    // so the 2000 cut overflows by 1500.
+    t.own(0, &[11]);
+    t.set_houses(11, 1);
+    // Leg 4 needs count >= 5 -- five field cards before the Ranger.
+    for _ in 0..5 {
+        t.place_raw(0, "PP:再次闪耀");
+    }
+    t.give_play(0, "PP:[衍生]魔法战队Pastel✽Ranger")
+        .map_err(|e| format!("play rejected: {e}"))
+        .unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "ranger.buildOff"), 1, "one banked layer");
+    // Cross a whole round: the status is 「下次盖房时」, not 「本回合」.
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.m.world_mut().st.skip_move = true;
+    t.end(1).unwrap();
+    drain(&mut t);
+    // Land on the owned tile and take the settle's build offer.
+    t.set_pos(0, 10);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    let before = t.money(0);
+    if !t.dump_prompt().contains("ask.build") {
+        panic!("no build offer: {}", t.dump_prompt());
+    }
+    t.build(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.houses(11), 2, "the house went up");
+    assert_eq!(
+        t.money(0),
+        before + 1_500,
+        "500 cost, 2000 cut: the 1500 excess is refunded"
+    );
+    assert_eq!(t.state(0, "ranger.buildOff"), 0, "the layer is consumed");
 }
 
 // ============================================================ 梦在前方

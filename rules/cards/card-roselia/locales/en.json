@@ -30,7 +30,7 @@
   "fire_bird_why": "Fire bird",
   "lisa_bond_ask_text": "[Designate] which character on your tile?",
   "lisa_bond_ask_title": "Inevitable Bond",
-  "lisa_bond_note": "{{who}}'s skills on them ignore the [nearest] limit",
+  "lisa_bond_note": "{{who}}'s skills on them ignore the [nearest] limit (not yet enforced)",
   "lisa_bond_placed": "{{who}} put Inevitable Bond in {{them}}'s play area",
   "lisa_bond_when": "when you teleport with a skill",
   "louder_up": "RiNG base multiplier +{{n}} (louder), now {{mult}}",

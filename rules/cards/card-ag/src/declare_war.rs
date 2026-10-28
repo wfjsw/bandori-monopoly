@@ -5,14 +5,15 @@
 //! > [手]：
 //! > [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。
 //!
-//! [反击] when another player's card affects you, they pay you 500 and you draw.
-//! 
+//! [反击] when another player's card affects you or a tile you own, they pay
+//! you 500 and you draw.
+//!
 //! Reviewed 10/23/2026
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText, para, sec};
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{para, sec, CardText};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
@@ -41,24 +42,32 @@ fn can_counteract(player_id: i32) -> bool {
     // `effect::hits` covers both because a payment touches its payer *and* its
     // payee.
     //
-    // 「或你拥有的格子」 -- the declaration names the owner when a tile-affecting
-    // effect aims at a tile, so the [指定] half lands here; effects that touch a
-    // tile without naming its owner (house removal and friends) declare nothing
-    // aimed at the owner and stay out of reach -- the same gap the C# has.
+    // 规则书: 「或你拥有的格子」 -- the declaration names the owner when a
+    // tile-affecting effect aims at a tile, so the [指定] half lands here;
+    // effects that touch a tile without naming its owner (house removal and
+    // friends) declare nothing aimed at the owner and stay out of reach -- the
+    // same gap the C# has.
 
     // TODO: Move some to CEL?
-    // TODO: Check: effects that touch a tile without naming its owner should still be
-    // handled for this card's counteract condition.
+    // TODO(规则书)（当你或你拥有的格子被其他玩家的卡效果影响时）: an effect that only
+    //   touches a tile you own (add_house / set_houses) declares no effect --
+    //   only effects that name the owner are reachable.
     let Some(by) = trigger::by_card().filter(|&by| by != player_id) else {
         return false;
     };
+    // 规则书: 「其他玩家的卡效果」 -- a seat that has left the game has no live
+    // effects (rulebook 6.1 L81 「所有其正在生效的卡，技能效果停止生效」).
     if ctx::player_out(by) {
         return false;
     }
+    // TODO(规则书)（被其他玩家的卡效果影响）: the sheet says 卡效果, but a rival's
+    //   skill body drives the same effect/pay host calls and also names this
+    //   player, so a skill effect opens this card too -- the source is not
+    //   tagged card vs skill.
     if ctx::effect::hits(player_id) {
         return true;
     }
-    // 「或你拥有的格子」 -- an effect aimed at a tile this player owns.
+    // 规则书: 「或你拥有的格子」 -- an effect aimed at a tile this player owns.
     (0..ctx::effect::count()).any(|i| {
         let t = ctx::effect::tile(i);
         t >= 0 && ctx::tile_owner(t) == player_id

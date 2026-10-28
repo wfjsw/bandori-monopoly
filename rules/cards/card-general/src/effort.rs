@@ -9,25 +9,23 @@
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec};
+use card_sdk::{para, sec, CardText};
 
-pub const EFFORT: CardDef = CardDef::new(
-    "通用:尽力后的收获",
-    &[On::Play("", Some(cant_play), play)],
-)
-.meta(
-    &card_sdk::meta::CardMeta::new()
-        .name(r#"尽力后的收获"#)
-        .raw_name(r#"尽力后的收获"#)
-        .tags(&[r#"手"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#),
-            ]),
-        ]))
-        // sheet cell A11
-        .fields(&[("group", r#"通用"#), ("owner", "")]),
-);
+pub const EFFORT: CardDef =
+    CardDef::new("通用:尽力后的收获", &[On::Play("", Some(cant_play), play)]).meta(
+        &card_sdk::meta::CardMeta::new()
+            .name(r#"尽力后的收获"#)
+            .raw_name(r#"尽力后的收获"#)
+            .tags(&[r#"手"#])
+            .text(CardText::of(&[sec(
+                r#"[手]："#,
+                &[para(
+                    r#"立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#,
+                )],
+            )]))
+            // sheet cell A11
+            .fields(&[("group", r#"通用"#), ("owner", "")]),
+    );
 
 /// C# `CardEffort.WhyNot` defers to `H.MoveWhyNot`: refuses after the main move
 /// (`这回合已经移动过了`) and while `H.State.skipMove` (`本回合不能移动`).
@@ -43,7 +41,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // `int max = c.N(0, 6)` sizes the ask; `H.AskNumber(c.Seat, ..., 1, max, ...)`
     // picks the step count. Include the geometric landing in every label;
     // movement counteractions (including Sayo's extension) still happen afterwards.
-    let max = ctx::n(0, 6);
+    // Doubling slots are 1-based (`后勤人员的努力` offers 1..9), so the C#
+    // `c.N(0, 6)` index 0 is never named -- tag the printed 6 as slot 1.
+    let max = ctx::n(1, 6);
     let dir = ctx::plan::dir();
     let options: Vec<Msg> = (1..=max)
         .map(|n| {

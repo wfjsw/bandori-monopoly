@@ -13,7 +13,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Mujica:（海铃）";
@@ -27,9 +27,11 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
     "Mujica:（海铃）",
     &[
         On::Play("", Some(cant_play), umiri_card),
-        // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-        On::Action(Action::TurnStart("card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1", None, turn_start)),
-        // 规则书（3）: the discard + draw when the card is back at the user's field
+        // 规则书（1）: 「轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上」
+        // -- the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
+        On::Action(Action::TurnStart("card.placed && actor == slot('umiri_user') - 1", None, turn_start)),
+        // 规则书（3）: 「当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。」
+        // -- the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
         On::Action(Action::TurnEnd("card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1", None, turn_end)),
     ],
@@ -38,7 +40,7 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
         .raw_name(r#"（海铃）"#)
         .tags(&[])
         .text(CardText::items(&[
-            it(r#"将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。"#),
+            it(r#"将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。 "#),
             it(r#"使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。"#),
             it(r#"当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。"#),
         ]))
@@ -47,6 +49,12 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
 
 /// C# `CardUmiriCard.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书（1）: 「将此卡放置于在此卡使用者下一名行动的玩家场上」 -- the target is the
+    // implicit precondition of this gate.
+    // TODO(规则书)（将此卡放置于在此卡使用者下一名行动的玩家场上）: 书 does not forbid a
+    //   one-player game (the next actor would be yourself) -- we refuse the play with no
+    //   other live player (C# `WhyNot`), and `umiri_card`'s early return leaves no dest,
+    //   so a gate-skipping play would go to the discard instead of being placed
     if ctx::others(player_id).is_empty() {
         return Some(Msg::new(key!("x_no_others")));
     }
@@ -67,6 +75,11 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置于在此卡使用者下一名行动的玩家场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(next, ID, &Msg::new(key!("umiri_note")));
+    // TODO(ABI): the user rides one per-holder state key, so two copies on the same
+    //   holder would overwrite each other and both `slot('umiri_user')` pre gates would
+    //   read the last writer. Per-instance state exists (`set_prop`) but a pre cannot
+    //   read props (`card.prop` is not in the condition vocabulary); unreachable today
+    //   because a match can hold only one copy.
     ctx::set_slot(next, USER_KEY, player_id + 1);
     ctx::log(
         player_id,
@@ -90,10 +103,14 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
 /// onto `user` as an `extra` (「拿取」).
 fn take_bands(holder: i32, user: i32) {
     for (_uid, id, extra) in ctx::group_skills(holder) {
+        // TODO(规则书)（从卡堆拿取场上有此卡的玩家的所有乐队技能卡）: 书 takes all band
+        //   skill cards -- an `extra` copy on the holder is skipped as "not a second
+        //   source" (C# `Take`), though 「不可叠加」 is already `add_group_skill`'s
+        //   same-id refusal. A holder only carries extras once a second copy exists.
         if extra != 0 {
-            // Only real attachments are taken; an extra copy is not a second source.
             continue;
         }
+        // 规则书（2）: 「从卡堆拿取场上有此卡的玩家的所有乐队技能卡」
         let got = ctx::add_group_skill(user, id.as_str(), true);
         if got >= 0 {
             ctx::log(
@@ -111,8 +128,7 @@ fn take_bands(holder: i32, user: i32) {
 /// user). Runs through the Fx hook dispatch at `turnStart`, so this is a field
 /// effect, not a [反击].
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // The `card.placed && actor == slot('umiri_user') - 1 &&
-    // owner != slot('umiri_user') - 1` pre owns the gate.
+    // The `card.placed && actor == slot('umiri_user') - 1` pre owns the gate.
     let user = ctx::slot(player_id, USER_KEY) - 1;
     // 规则书（1）: 「轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。」
     // C# `int num = NextOf(Player); if (num == User) Player = User; else Player = num`.
@@ -121,6 +137,11 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, USER_KEY, 0);
     ctx::place_card(dest, ID, &Msg::new(key!("umiri_note")));
     ctx::set_slot(dest, USER_KEY, user + 1);
+    // 规则书（2）: 「使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡」
+    // -- `Take()` on whatever field the card now sits on, the user's own included
+    // (C# `CardUmiriCard.TurnStart`). The same-id refusal makes the return-to-user
+    // case a no-op unless the user's own band skill was removed.
+    take_bands(dest, user);
     if dest == user {
         // C# `H.Log("place", User, "「（海铃）」回到了 ... 的场上：回合结束时放入弃卡区")`.
         ctx::log(
@@ -135,8 +156,6 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", dest)
                 .player_id("user", user),
         );
-        // 规则书（2）: `Take()` -- the band-skill take on the new holder.
-        take_bands(dest, user);
     }
     Ok(())
 }
@@ -159,12 +178,12 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
         if extra == 0 {
             continue;
         }
+        // TODO(规则书)（将此卡与使用者拿取的所有乐队技能卡置入弃牌堆）: the sheet
+        //   puts a taken band-skill card into the discard pile -- a band
+        //   attachment is not a card in a pile (C# `Drop` only detaches it) and
+        //   a `skill:` id in the discard would make it drawable, so we only
+        //   detach; the 「置入弃牌堆」 half has no home in the attachment model.
         ctx::unplace_at(uid);
-        // TODO(规则书): 「置入弃牌堆」 for a taken band-skill card. A band
-        //   attachment is not a card in a pile -- C# `Drop` only detaches it --
-        //   and putting a `skill:` id in the discard would make it drawable.
-        //   Detached here; the 「置入弃牌堆」 half has no home in the attachment
-        //   model.
         ctx::log(
             user,
             &Msg::new(key!("umiri_dropped_band"))
@@ -172,6 +191,9 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
                 .card("card", id.as_str()),
         );
     }
+    // TODO(规则书)（将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡）: 书 discards
+    //   before the draw -- `set_dest` only records the fate and the instance enters the
+    //   discard after the body, so the draw (which can reshuffle that discard) runs first
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::set_slot(player_id, USER_KEY, 0);
     ctx::draw(user, 1)?;
@@ -181,7 +203,9 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardUmiriCard.NextOf` -- the next live player after `holder` in turn order
 /// (wraps to `holder` when there is none). Not `H.Neighbor` / `ctx::neighbor`:
-/// that one skips exiled players too and returns -1 instead of `holder`.
+/// the two differ only in the fallback -- `neighbor` answers -1, this answers
+/// `holder`; both skip outed seats and neither skips [除外] (exile is a status
+/// row, not `out`).
 fn next_of(holder: i32) -> i32 {
     let n = ctx::player_count();
     if n <= 0 {

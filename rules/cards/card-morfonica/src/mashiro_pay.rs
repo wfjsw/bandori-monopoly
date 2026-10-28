@@ -10,13 +10,14 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MASHIRO_PAY: CardDef = CardDef::new(
     "Mor:（小白）",
     &[On::Counteract(
         &[ChainKind::Effect],
+        // 规则书[反击]: 「[反击]当你将要向其他玩家支付时打出此卡」
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
         None,
         counteract).counter_reason(key!("mashiro_pay_when"))],
@@ -36,12 +37,19 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // `H.LoseR(to, amount / 2, ..., must: true)`. Redirecting to the bank is what
     // turns the transfer into a pure loss; the forced half-loss is a separate
     // card-driven pay, which is itself a [反击] point.
+    // TODO(ABI): `set_pay_target(-1)` only rewrites the payee -- `p.kind` and the
+    //   `rent`/tile scales still apply to the redirected leg (500 rent factor:
+    //   250/250 instead of 250/125), and the payee's half is read off the pre-scale
+    //   `trigger::value()`, so `milli_scale`/PAY_FACTOR never reach it.
+    // TODO(规则书)（向其他玩家支付）: the redirected settle still counts toward
+    //   「本回合的[结算]向其他玩家支付」 (`turn.paid_in_settle`), though the money now
+    //   went to the bank.
     trigger::set_pay_target(-1);
     ctx::log(
         player_id,
         &Msg::new(key!("mashiro_pay_rewritten"))
-            .player_id("who", player_id)
-            .player_id("to", to)
+            .player_id("who", to)
+            .player_id("to", player_id)
             .n("money", amount as i64)
             .n("half", (amount / 2) as i64),
     );

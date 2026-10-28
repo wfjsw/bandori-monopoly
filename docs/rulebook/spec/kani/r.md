@@ -50,9 +50,9 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | C-R-Sprechchor-01 | 「在Livehouse地块开始回合时，可打出此卡」 | PROTOCOL-LEVEL | — | — | turn-start Livehouse gate is `cant_play` + `turn_start_pos` (protocol stub) + `is_live_house_for` | — |
 | C-R-Sprechchor-02 | 「投掷1d20，获得1000+X*120的资金」 | PROVEN | `sprechchor_pay_iff`, `sprechchor_pay_mutant_is_detected` | (pending) | gain is exactly 1000+X·120 for X∈1..=20 | — |
 | C-R-黑暗大魔姬亚子-01 | 「[反击] 当你即将向其他玩家支付资金时」 | PROTOCOL-LEVEL | — | — | [反击] window / chain is engine scheduling (`KANI.md` §6) | — |
-| C-R-黑暗大魔姬亚子-02 | 「使自己获得一层[眩晕]」 | PROVEN (with host caveat) | `ako_dark_offhand_iff`, `ako_dark_mutant_is_detected` | (pending) | body: GiveStun{1} + SetPayAmount{0} (rulebook 49 「无法收付款」). Host `give_stun` writes the shared `stay` slot (no separate stun field) | — |
-| C-R-黑暗大魔姬亚子-03 | 「若此卡从手牌以外的地方打出，你抽一张卡。」 | BLOCKED-HOST | (covered in offhand harness) | (pending) | `play_from_hand` is a protocol stub (always 0) — host always reports off-hand, so the from-hand no-draw half cannot be distinguished | — |
-| C-R-louder-01 | 「使ring的价格基础乘数+5」 | BLOCKED-HOST | — | — | `add_ring_bonus` / `ring_multiplier` are protocol stubs with no world slot | OPEN-RING-MULT |
+| C-R-黑暗大魔姬亚子-02 | 「使自己获得一层[眩晕]」 | PROVEN (with host caveat) | `ako_dark_offhand_iff`, `ako_dark_mutant_is_detected` | (pending) | body: +1 stun on the state key (`stun::add`) + SetPayAmount{0} (rulebook 49 「无法收付款」). The host mirrors the status-key write into the `w.stun` pilot column (`GiveStun` effect); the proof asserts both the state key and the effect | — |
+| C-R-黑暗大魔姬亚子-03 | 「若此卡从手牌以外的地方打出，你抽一张卡。」 | BLOCKED-HOST | (covered in offhand harness) | (pending) | off-hand = `ctx::is_placed()` (host: `field_n`); the placed half is proven, the from-hand no-draw half is not harnessed | — |
+| C-R-louder-01 | 「使ring的价格基础乘数+5」 | BLOCKED-HOST | — | — | `add_ring_bonus` / `ring_multiplier` are protocol stubs with no world slot (production has the `rentUnitMult` slot read by the ring dice-rent path; this host does not model it) | OPEN-RING-MULT |
 | C-R-Fire bird-01 | 「支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶」 | PROVEN (pay+place) | `fire_bird_place_iff`, `fire_bird_place_mutant_is_detected` | (pending) | PayMoney 1600 + PlaceCard(Field). Crystals are a silent `set_counter` write (no effect-log entry) | OPEN-FIRE-X |
 | C-R-Fire bird-02 | 「每回合结束时失去400资金并移除1个奇迹水晶」 | PROVEN (pay) | `fire_bird_burn_iff`, `fire_bird_burn_mutant_is_detected` | (pending) | PayMoney 400; crystal decay is a silent counter write | — |
 | C-R-Fire bird-03 | 「自己的所有格子收费变成1.5倍」 | PROTOCOL-LEVEL | — | — | rent multiplier is a `PaySplitMul` hook over the settle pipeline | OPEN-R1, OPEN-ROUND10 |
@@ -160,9 +160,9 @@ branch and compile under `cargo build -p rules-kani` (`CARGO_TARGET_DIR=/home/mo
 | op / field | used by | gap |
 |---|---|---|
 | `shuffle_into_deck` | 曲奇时间-01 | protocol stub, piles do not move |
-| `add_ring_bonus` / `ring_multiplier` | louder-01 | protocol stub, no world slot |
-| `play_from_hand` | 黑暗大魔姬亚子-03 | protocol stub, always 0 (always "off-hand") |
-| `give_stun` / `stun_of` | 黑暗大魔姬亚子-02 | writes/reads the shared `stay` slot (no separate stun field) |
+| `add_ring_bonus` / `ring_multiplier` | louder-01 | protocol stub, no world slot (production has `rentUnitMult`, read by the ring dice-rent path; the Kani host does not model it) |
+| `is_placed` | 黑暗大魔姬亚子-03 | modeled as `field_n > 0`; the proof pins a placed instance |
+| `gate` / `state_get` / `state_set` / `state_add` / `raise_after` / `log_as` / `trig_player` | 黑暗大魔姬亚子-02 | the `stun::add` state verb (its `source_of` reads the trigger actor); the stun layer is asserted on the `stun` state key |
 | `set_counter` (crystals) | Fire bird-01 | silent write; no effect-log entry; stored on `trig_player` keys, not `FieldCard.crystals` |
 | `gain_fire` | sayo/rinko/lisa | does **not** clamp at `fire_max` under Kani |
 | `trig_price` / `trig_set_price` | 对音乐的纯粹 | unmodeled (`KANI-COVERAGE.md`) |

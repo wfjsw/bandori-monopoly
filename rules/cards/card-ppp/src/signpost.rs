@@ -7,7 +7,7 @@
 //! lap without settling, then pay 1,000 at end of turn.
 
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 pub const SIGNPOST: CardDef = CardDef::new(
@@ -16,6 +16,9 @@ pub const SIGNPOST: CardDef = CardDef::new(
     // bankrupt seat pays nobody, so the callback must not run (or flash).
     &[
         On::Play("", Some(cant_play), play),
+        // TODO(规则书)（回合结束时[失去]1000资金）: the book is unconditional -- we
+        // skip the loss when the owner is out (benign: an out seat holds no
+        // money to take).
         On::Schedule("at_end", "owner.out == 0", None, at_end),
     ],
 )
@@ -25,12 +28,16 @@ pub const SIGNPOST: CardDef = CardDef::new(
         .name(r#"向着未来的路标"#)
         .raw_name(r#"向着未来的路标"#)
         .tags(&[])
-        .text(CardText::para(r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#))
+        .text(CardText::para(
+            r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#,
+        ))
         // sheet cell B14
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );
 
-/// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
+/// 规则书: 「本回合的主要移动设为移动60格子」 -- the card replaces the main move,
+/// so only while it is still available. C# `CardSignpost.WhyNot` =
+/// `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
     rules_status::move_blocked(player_id)
 }
@@ -61,10 +68,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `On::Schedule` (C# `H._turnCtx.AtEnd` -> `H.LoseR(i, 1000, ...)`) -- scheduled by
-/// `ctx::before_turn_end` in `play`; runs once when the turn ends. The
-/// "still in the game" gate is the entry's condition (`owner.out == 0`).
+/// 规则书: 「回合结束时[失去]1000资金」 -- `On::Schedule` (C# `H._turnCtx.AtEnd` ->
+/// `H.LoseR(i, 1000, ...)`) scheduled by `ctx::before_turn_end` in `play`; runs
+/// once when the turn ends. The "still in the game" gate is the entry's
+/// condition (`owner.out == 0`).
 fn at_end(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「回合结束时[失去]1000资金」 -- an out-of-pocket loss (C# `H.LoseR`)
+    // through the pay pipeline, the same shape as `fire_bird`'s 「失去400资金」: a
+    // raw `lose_raw` would raise no `pay` chain for the 「失去资金」 answerers.
     ctx::pay(player_id, 1000, &Msg::new(key!("signpost_lose")))?;
     Ok(())
 }

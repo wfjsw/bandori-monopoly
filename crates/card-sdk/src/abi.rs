@@ -842,7 +842,13 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 103;
+pub const ABI_VERSION: i32 = 104;
+/// v104: **turn snapshot carries money and the board arrays**. The
+///    `ruleset_turn_snap` payload is the postcard struct
+///    `(pos, state, money, owners, houses, mortgaged)` (was `(pos, state)`):
+///    「取消所有受到的效果」 restores the player's money and the whole
+///    ownership / house / mortgage arrays, not only pos + layer counters.
+///    SAVE_VERSION / RECORD_VERSION unchanged.
 /// v103: **roll API redesign**. `ctx::roll` is the windowed default (raises
 ///    the 「掷骰结算前」 [反击] window on the face) and `ctx::roll_direct` is the
 ///    windowless one; both return `Result<i32, Prompt>` via `asked()` and pause
@@ -892,7 +898,6 @@ pub const ABI_VERSION: i32 = 103;
 ///      is `take_card(..., CardPile::Hand)`. Hostcalls: `ruleset_add_to_dest`
 ///      replaces the three adds; `ruleset_take_card` is
 ///      `(player_id, ptr, len, src)`. SAVE_VERSION / RECORD_VERSION unchanged.
-
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

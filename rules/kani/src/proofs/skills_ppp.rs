@@ -34,8 +34,6 @@ crate::host_subset!(skills_ppp_dispatch {
     money => arm_money,
     pay | pay_to | pay_total | pay_leg => arm_pay,
     gain_marker => arm_gain_marker,
-    charge => arm_fire,
-    ,
     spend_marker => arm_spend_marker,
     draw => arm_draw,
     add_to_dest => arm_add_to_dest,
@@ -58,6 +56,9 @@ crate::host_subset!(skills_ppp_dispatch {
     group_pool => arm_band_crystals,
     counter_self => arm_counter_self,
     add_counter_self => arm_add_counter_self,
+    // `copy_sticker_cost` / `cover_crystals` / `spend_crystals` resolve
+    // `PPP:Returns` / `Sumimi:#L11` by walking the field.
+    field_instances => arm_field_instances,
     ask => arm_ask,
     hand_count => arm_hand_count,
     raise => arm_raise,

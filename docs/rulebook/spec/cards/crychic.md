@@ -69,12 +69,12 @@ Clause IDs: `C-CRYCHIC-<slug>-<n>`.
 ## CRYCHIC:主唱太拼命了 (`vocalist`)
 
 **Source:** `cards.json#CRYCHIC:主唱太拼命了`
-**Quote:** 「主唱太拼命了：[反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。」
+**Quote:** 「主唱太拼命了：[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。」
 
 ### C-CRYCHIC-vocalist-01
 
 * **ID:** `C-CRYCHIC-vocalist-01`
-* **Quote:** 「一次性向其他玩家支付5000以上资金时，免除此次支付。」
+* **Quote:** 「一次性向其他玩家支付至少5000资金时，免除此次支付。」
 * **Trigger:** a [反击] window on a one-shot payment of >= 5000 from the user
   to another player.
 * **Condition:** the payment amount is >= 5000 and is one transfer (not a

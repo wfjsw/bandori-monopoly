@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(
@@ -31,6 +31,13 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
         // latch, the `move_dir` read) stay in the arms below.
         On::Action(Action::PassTile("card.placed", None, fx)),
         On::Action(Action::SettleAfter("card.placed", None, fx)),
+        // A passer whose move never reaches `settleAfter` still ends the (2)
+        // offer here: a 「不触发结算」 teleport raises `passTile` and no settle
+        // (`SETTLE-STAGES.md` §6), and a passer who goes bankrupt on the landing
+        // tile skips the settle stages entirely. `tileResolved` fires even for
+        // an out passer, `moveResolved` for a move that settled to nothing.
+        On::Action(Action::TileResolved("card.placed", None, fx)),
+        On::Action(Action::MoveResolved("card.placed", None, fx)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)
@@ -61,6 +68,11 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
     // 规则书（1）: 「获得[除外]直至你原本所在格子被其他玩家经过」 -- a duration
     // grant (held exile, no layer tick). The pass ends it (see `fx`).
+    // TODO(规则书)（获得[除外]直至你原本所在格子被其他玩家经过）: `hold` throws
+    //   away its grant verdict -- a refused grant ([不可阻挡] / a countered
+    //   abnormal window) leaves the holder still movable, yet the slots, the
+    //   carrier and the later (2) pots run as if the exile had landed
+    //   (DONUT-VOID-01 decides only the already-exiled case).
     rules_status::exile::hold(player_id, pos);
     ctx::set_slot(player_id, SLOT_ORIG, pos);
     ctx::set_slot(player_id, SLOT_BY, -1);
@@ -104,8 +116,9 @@ fn fx(player_id: i32) -> card_sdk::Asked {
             );
         }
         // 规则书（2）: 「你原本所在格子被其他玩家经过时，可在那名玩家触发结算后…」
-        // -- when that passer lands, offer the settle-teleport.
-        TriggerKind::SettleAfter => {
+        // -- when that passer lands, offer the settle-teleport. The tile / move
+        // terminals are the fallback when no settle follows (see the entries).
+        TriggerKind::SettleAfter | TriggerKind::TileResolved | TriggerKind::MoveResolved => {
             let by = ctx::slot(player_id, SLOT_BY);
             if by < 0 || trigger::player_id() != by {
                 return Ok(());
@@ -118,9 +131,9 @@ fn fx(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书（2）: the optional settle-teleport onto a square between `Orig`
-/// (exclusive) and the passer's 移动终点, then the fire pots of (3) for both
-/// players. The exile already ended at the pass (clause (1) 「直至」), so the
-/// teleport and the money run unexiled.
+/// (exclusive) and the passer's 移动终点, then the fire pots of the same
+/// clause for both players. The exile already ended at the pass (clause (1)
+/// 「直至」), so the teleport and the money run unexiled.
 fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_BY, -1);
     let orig = ctx::slot(player_id, SLOT_ORIG);
@@ -134,7 +147,9 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     let mut tiles: Vec<i32> = Vec::new();
     if n > 0 && orig >= 0 {
-        let end = ctx::player_pos(by);
+        // 「本次移动终点」 is the tile the settle was raised on, not the passer's
+        // live position (a settle effect may have moved them since).
+        let end = trigger::tile();
         let d = if dir < 0 { -1 } else { 1 };
         for i in 1..=n {
             let t = ((orig + d * i) % n + n) % n;
@@ -142,6 +157,11 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
             if t == end {
                 break;
             }
+        }
+        // 「（不包括）」 -- when the endpoint is the original tile itself the lap
+        // runs a full circle back onto it, so the excluded square is dropped.
+        if end == orig {
+            tiles.retain(|&t| t != orig);
         }
     }
     if !tiles.is_empty() {
@@ -173,8 +193,17 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
         if ctx::player_out(who) {
             continue;
         }
-        let got = bandori_std::fire::gain(who, 2, &Msg::new(key!("two_donuts_fire")))?;
-        let missed = 2 - got;
+        // Only the pots *over the cap* convert to money, so count the clamped
+        // want before the grant: a cancelled `markerGain` window makes
+        // `fire::gain` answer 0, and that zero must not be read as all 2 pots
+        // overflowing.
+        let want = bandori_std::fire::gain_clamped(
+            bandori_std::fire::get(who),
+            bandori_std::fire::max(who),
+            2,
+        );
+        bandori_std::fire::gain(who, 2, &Msg::new(key!("two_donuts_fire")))?;
+        let missed = 2 - want;
         if missed > 0 {
             ctx::gain(
                 who,

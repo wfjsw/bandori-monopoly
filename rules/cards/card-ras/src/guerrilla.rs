@@ -12,8 +12,8 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
-use card_sdk::{CardText, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{para, sec, CardText};
 
 pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
@@ -60,7 +60,9 @@ fn free_tiles() -> Vec<i32> {
         .collect()
 }
 
-/// C# `lhBuildable` -- a buildable Live House (group 6, not a RiNG agent).
+/// C# `lhBuildable` -- a Live House (group 6, not a RiNG agent) that is still
+/// buyable. This half answers 「场上已不存在可购买的此类格子」 over the unowned
+/// tiles; the owned half is [`owned_buildable_lh`].
 const LIVEHOUSE_PROPS: [&str; 4] = [
     "DUB MUSIC EXPERIMENT",
     "武道馆",
@@ -70,6 +72,14 @@ const LIVEHOUSE_PROPS: [&str; 4] = [
 
 fn lh_buildable(t: i32) -> bool {
     LIVEHOUSE_PROPS.iter().any(|&n| ctx::tile_named(n) == t) && ctx::is_buyable(t)
+}
+
+/// 规则书[特]: 「你不拥有任何可盖房的live house格子」 -- a Live House *for this
+/// player* (the per-player colour sees a `colorFor:<p>` designation, this
+/// card's own included) that the build gate would allow right now
+/// (`can_build_on`: not mortgaged, upgrade available, no `NO_BUILD`).
+fn owned_buildable_lh(player_id: i32, t: i32) -> bool {
+    ctx::is_live_house_for(player_id, t) && ctx::can_build_on(player_id, t)
 }
 
 /// 规则书[手][反击]: 「当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后」
@@ -85,11 +95,20 @@ fn can_counteract(player_id: i32) -> bool {
     if !trigger::pay_is_rent() {
         return false;
     }
-    // TODO(规则书)[手][反击]: 「当你经过属于其他玩家的livehouse格子后」 -- C#
-    // `PassedOthersLH(player_id, H.Settling)` walks the move path for a tile owned by
-    // someone else that is a Live House of this player; needs the move path /
-    // `H.Settling` on the trigger.
+    // 规则书[手][反击]: 「且当次[结算]时被其他玩家的格子收取资金后」 --
+    // a tile's rent (`pay_rent`), not a card's 「收费」 (`charge_rent` stamps
+    // `by_card`, docs/CARDS.md).
+    if trigger::by_card().is_some() {
+        return false;
+    }
+    // TODO(规则书)（当你经过属于其他玩家的livehouse格子后）: pass another
+    // player's Live House before the settle charges -- C# `PassedOthersLH(player_id,
+    // H.Settling)` walks the move path; we only see the rent payment and need the
+    // move path / `H.Settling` on the trigger.
     // C# also requires `Free().Count > 0`; `free_tiles` uses `is_buyable` now.
+    // TODO(规则书)（传送至任意无主可购买的格子并[结算]，且必须购买）: an
+    // unprinted availability precondition -- with no free tile the window stays
+    // shut and the card never enters the discard, so its [特] revive is lost too.
     !free_tiles().is_empty()
 }
 
@@ -99,62 +118,57 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if free.is_empty() {
         return Ok(());
     }
-    // C# prefers tiles the player can afford, falling back to all free ones;
-    // `H.AskTileOf`'s AI default is the most expensive.
-    let affordable: Vec<i32> = free
-        .iter()
-        .copied()
-        .filter(|&t| ctx::money_of(player_id) >= ctx::buy_price(t))
-        .collect();
-    let pool = if affordable.is_empty() {
-        &free
-    } else {
-        &affordable
-    };
+    // 规则书[手][反击]: 「传送至任意无主可购买的格子」 -- the whole free pool is
+    // offered (the book names no affordability gate); a tile the player cannot
+    // cover is the 「必须购买」 shortfall below. C# narrowed to affordable tiles.
     let to = ctx::ask_tile(
         player_id,
         &Msg::new(key!("guerrilla_title")),
         &Msg::new(key!("guerrilla_ask")),
-        pool,
+        &free,
     )?;
     // 规则书[手][反击]: 「传送至任意无主可购买的格子」 -- C# `H.ForceTeleport(i,
     // to, resolve: false, ...)`; the settle is the clause's own separate half.
     ctx::teleport_to(player_id, to);
-    // 规则书[手][反击]: 「并[结算]」 -- C# `H.SettleAt` on the teleported tile.
-    // `main` so the landing only logs (「必须购买」 below is what buys; an
-    // optional buy prompt here would be a second, weaker offer).
+    // 规则书[手][反击]: 「并[结算]」 -- C# `H.SettleAt` on the teleported tile, as
+    // the main-move settle. The settle still opens its own optional buy like any
+    // other landing; 「必须购买」 below is the binding one and runs after it.
     ctx::card_settle_at(player_id, to, true);
     // 规则书[手][反击]: 「且必须购买」 -- C# `H.BuyRoutine(i, to, free: false,
-    // ...)`, or the "资金不够，买不下" log when the player cannot pay.
-    if ctx::money_of(player_id) < ctx::buy_price(to) {
+    // ...)`, or the "资金不够，买不下" log when the player cannot pay or the
+    // purchase is refused (the `card_buy` quote / gate). Accepting the settle's
+    // own optional offer already bought the deed -- `card_buy` would answer
+    // "already owned" false, so the owner check keeps that from logging 买不下.
+    if ctx::tile_owner(to) != player_id
+        && (ctx::money_of(player_id) < ctx::buy_price(to) || !ctx::card_buy(player_id, to))
+    {
         ctx::log(
             player_id,
             &Msg::new(key!("guerrilla_broke"))
                 .player_id("who", player_id)
                 .tile("tile", to),
         );
-    } else {
-        ctx::card_buy(player_id, to);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("guerrilla_moved"))
-                .player_id("who", player_id)
-                .tile("tile", to),
-        );
     }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("guerrilla_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
+    );
     // C# `OnDiscarded` schedules `Check` at turn end once per turn (the card
-    // lands in the discard after this counteraction resolves).
-    if ctx::turn_player() == player_id && ctx::slot(player_id, SLOT_ARMED) == 0 {
+    // lands in the discard after this counteraction resolves). `before_turn_end`
+    // targets the current turn's end, so no owner-turn test is needed.
+    if ctx::slot(player_id, SLOT_ARMED) == 0 {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
         ctx::before_turn_end(player_id, "at_end");
     }
     Ok(())
 }
 
-/// 规则书[特]「此卡进入弃卡区的回合结束时」 -- entering the discard on the
-/// owner's turn arms the check for that turn end.
+/// 规则书[特]「此卡进入弃卡区的回合结束时」 -- entering the discard arms the
+/// check for the end of that same turn, whichever seat's turn it is.
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
-    if ctx::turn_player() == player_id && ctx::slot(player_id, SLOT_ARMED) == 0 {
+    if ctx::slot(player_id, SLOT_ARMED) == 0 {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
         ctx::before_turn_end(player_id, "at_end");
     }
@@ -187,13 +201,16 @@ fn revive_applies(player_id: i32) -> bool {
     if ctx::paid_in_settle() < 1000 {
         return false;
     }
-    if ctx::owned_tiles(player_id).into_iter().any(lh_buildable) {
+    if ctx::owned_tiles(player_id)
+        .into_iter()
+        .any(|t| owned_buildable_lh(player_id, t))
+    {
         return false;
     }
     if (0..ctx::tile_count()).any(|t| lh_buildable(t) && ctx::tile_owner(t) < 0) {
         return false;
     }
-    !ctx::owned_tiles(player_id).is_empty() && ctx::discard_count(player_id, ID) > 0
+    ctx::discard_count(player_id, ID) > 0
 }
 
 /// C# `CardGuerrilla.Check` -- at turn end, offer to revive the card from the
@@ -219,10 +236,10 @@ fn check(player_id: i32) -> card_sdk::Asked {
         .unwrap_or(-1);
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("guerrilla_note")));
-    // 规则书[特]: 「指定你拥有的一个最贵的地契」 -- the lasting [指定] while this
-    // card is in play is a designation mark on that deed (owned by this field
-    // instance). The old `guerrilla_tile` slot was write-only (nothing read it);
-    // the functional effect is the `colorFor:<seat>` tile prop below.
+    // 规则书[特]: 「指定你拥有的一个最贵的地契」 -- the [指定] is a designation
+    // mark on that deed (owned by this field instance, so it dies with the card).
+    // The old `guerrilla_tile` slot was write-only (nothing read it); the
+    // functional effect is the `colorFor:<seat>` tile prop below.
     if best >= 0 {
         ctx::designate_tile(
             best,
@@ -240,6 +257,9 @@ fn check(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[特]: 「使其对你视为live house格子」 -- the `colorFor:<player_id>`
     // tile prop on the deed's board instance: group 6 for this player only.
+    // TODO(规则书)（使其对你视为live house格子）: the status lasts while this
+    // card is on the field -- the prop is board-owned and outlives the card;
+    // nothing clears it when this copy leaves the field.
     if best >= 0 {
         ctx::set_tile_prop(
             best,

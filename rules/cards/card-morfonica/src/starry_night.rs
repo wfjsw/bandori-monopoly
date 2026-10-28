@@ -13,7 +13,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "Mor:蝴蝶飞舞的星月夜";
@@ -26,8 +26,13 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
         On::Play("", None, starry_night),
+        // 规则书（1）: 「此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次」 and
+        // 规则书（2）: 「当其他角色的移动掷骰结果是偶数时」 -- both arrive here.
         On::Action(Action::DiceRollAfter("card.placed && card.counter('crystals') > 0", None, hook)),
+        // 规则书（2）: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」
         On::Action(Action::PassTile("card.placed && card.counter('crystals') > 0", None, hook)),
+        // 规则书（3）: 「此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金」 -- and
+        // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」.
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
@@ -44,15 +49,17 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
 
 fn starry_night(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「支付X次1000的的资金」 -- C# `H.AskNumber(..., 1, max)` with
-    // `max = Math.Max(1, Math.Min(5, money / 1000))`.
-    let money = ctx::money_of(player_id);
-    let max = (money / 1000).clamp(1, 5);
+    // `max = Math.Max(1, Math.Min(5, money / 1000))`. C# is not the spec:
+    // TODO(规则书)（支付X次1000的的资金）: the book prints no bound for X -- the `5`
+    //   is C#'s `Math.Min(5, ...)` (OPEN-X), and the `money / 1000` cash
+    //   pre-cap is a leftover of the removed play gate (`ctx::pay` takes the
+    //   shortfall path).
     let x = ctx::ask_number(
         player_id,
         &Msg::new(key!("starry_night_ask_title")),
         &Msg::new(key!("starry_night_ask_text")),
         1,
-        max,
+        5,
     )?;
     // 规则书（1）: 「支付X次1000的的资金」 -- C# `PayCtx { amount = 1000 * x, kind = "pay", must = false }`.
     let paid = ctx::pay(
@@ -72,6 +79,8 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书（1）: 「将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
+    // TODO(规则书)（将此卡放置在场地中央）: 「场地中央」 is not a board slot -- the
+    //   card is a field card of the owner (OPEN-场地中央).
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
@@ -108,6 +117,9 @@ fn remove_crystal(_player_id: i32) -> card_sdk::Asked {
 fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
+        // TODO(ABI) trigger uid: `trigger::card_is` is name-only and the hook
+        //   dispatch has no per-uid dedupe, so with two copies of this card on
+        //   one field a single crystal removal runs both copies' payout.
         && trigger::card_is(ID)
         && trigger::name() == card_sdk::abi::counter::CRYSTALS
         // （3） pays for removals; （1） leaves when the count lands on 0.
@@ -140,15 +152,19 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::DiceRollAfter => {
-            // C# `!m.Main || m.FixedRoll >= 0` -- only the main move's free roll.
-            if !trigger::move_is_main() || ctx::fixed_roll().is_some() {
-                return Ok(());
-            }
             let roller = trigger::player_id();
             let roll = trigger::move_roll().unwrap_or_else(trigger::value);
             if roller == player_id {
+                // 规则书（1）: 「你每次移动掷骰时可以放弃第一次的结果重骰一次」 --
+                // C# `!m.Main || m.FixedRoll >= 0`: only the main move's own free
+                // roll. The guard belongs to the reroll alone; (2)'s attack below
+                // carries no such qualifier.
+                if !trigger::move_is_main() || ctx::fixed_roll().is_some() {
+                    return Ok(());
+                }
                 reroll(player_id, roll)?;
             } else if roll % 2 == 0 {
+                // 规则书（2）: 「当其他角色的移动掷骰结果是偶数时」.
                 attack(player_id, roller, roll)?;
             }
         }
@@ -169,7 +185,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书（1）: 「此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次」 -- C#
-/// `CardStarryNight.Reroll`: ask (default yes under 8), then `H.DoMoveRoll`.
+/// `CardStarryNight.Reroll`: ask (the timeout falls back to no), then `H.DoMoveRoll`.
 fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         player_id,
@@ -180,6 +196,9 @@ fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
     }
     // 规则书: the C# rerolls with `H.DoMoveRoll`, which sums the move's whole
     // dice table (base + extra dice + flat bonuses) rather than a bare 1d20.
+    // TODO(ABI) dice value stage: `do_move_roll` sums the raw tables and the
+    //   new face never passes `diceRollValue`, so 「最终结算」 modifiers (AG:（摩卡）0.5倍速)
+    //   are not re-applied -- needs an export that re-runs the value stage.
     let new_roll = ctx::do_move_roll(player_id)?;
     trigger::set_move_roll(new_roll);
     ctx::log(
@@ -199,10 +218,10 @@ fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
 /// sheet says. With （3） paying 1,000 per crystal the owner is out net 0 and
 /// the crystal count drops -- a voluntary decay of this card.
 fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
-    if ctx::player_out(player_id)
-        || !rules_status::can_pay(player_id)
-        || ctx::money_of(player_id) < 1000
-    {
+    // 规则书（2）: 「可消耗1000资金」 prints no cash-on-hand rider -- a short
+    // owner is still offered the removal; `ctx::pay` raises funds (mortgage)
+    // when it must, and `paid < 1000` below skips the crystal.
+    if ctx::player_out(player_id) || !rules_status::can_pay(player_id) {
         return Ok(());
     }
     if !ctx::ask_yes(
@@ -226,6 +245,7 @@ fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
             player_id,
             &Msg::new(key!("starry_night_attack_done"))
                 .player_id("who", player_id)
+                .player_id("owner", player_id)
                 .player_id("roller", roller),
         );
     }

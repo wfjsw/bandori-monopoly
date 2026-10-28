@@ -256,11 +256,11 @@ fn a_played_card_runs_its_module_and_answers_a_prompt() {
     m.act(1, &play("HHW:（育美）"))
         .expect("play should start the effect");
 
-    // The module blocked on its tile prompt; answer with the first option.
+    // The module blocked on its roll-option prompt; answer with the first option.
     let st = m.state();
     assert_eq!(
-        st.prompt.kind, "tile",
-        "the module's prompt is an engine tile prompt: {:?}",
+        st.prompt.kind, "choice",
+        "the module's prompt offers one option per roll: {:?}",
         st.prompt
     );
     assert!(!st.prompt.options.is_empty());

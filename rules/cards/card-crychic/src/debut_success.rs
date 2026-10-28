@@ -8,7 +8,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
@@ -23,7 +23,7 @@ pub const DEBUT_SUCCESS: CardDef = CardDef::new(
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 fn debut_success(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「打出此卡后，本回合内你的资金不会下降」 -- C# `H._turnCtx.NoMoneyLoss = true`.
+    // 规则书: 「打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外）」 -- C# `H._turnCtx.NoMoneyLoss = true`.
     ctx::log(
         player_id,
         &Msg::new(key!("debut_success_note")).player_id("who", player_id),
@@ -35,7 +35,8 @@ fn debut_success(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardDebutSuccess.After` -- the scheduled turn-end body.
+/// 规则书: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」 -- the
+/// scheduled turn-end body (C# `CardDebutSuccess.After`).
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」
     rules_status::stun::add(player_id, 1);

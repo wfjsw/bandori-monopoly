@@ -624,6 +624,28 @@ pub fn filter_plan_kind_only_idx(
     fail_no_kind("DiceRollPlan")
 }
 
+/// First `PaySplitAdd`-payload `On::Filter` of card `idx` matching `want`.
+/// Returns the rewritten [`card_sdk::PayAddValue`] (pure body; the caller
+/// applies the host's `drive_payload` write).
+#[inline(always)]
+pub fn filter_pay_add_only_idx(
+    idx: usize,
+    want: card_sdk::abi::FilterKind,
+    player: i32,
+    value: card_sdk::PayAddValue,
+) -> card_sdk::PayAddValue {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::Filter(e) = on {
+            if e.kind == want {
+                debug_assert_eq!(e.shape, card_sdk::FilterShape::Payload);
+                return card_sdk::payload::pure_payload(player, e.body, value);
+            }
+        }
+    }
+    fail_no_kind("PaySplitAdd")
+}
+
 /// Skill entry: alias of [`play_idx`].
 #[inline(always)]
 pub fn skill_play_idx(idx: usize, player: i32) -> Asked {
@@ -862,10 +884,11 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), player_id)
 }
 
-/// `PP:[丸山彩]憧憬的前方` -- `On::Action(PaySplitMulBefore)` (was PaySplitAdd,
-/// then Effect; the interactive resonance shave rides the writable stage
-/// between `PaySplitAdd` and `PaySplitMul` so `set_pay_amount` lands on the
-/// composed Add figure -- see the card's comment).
+/// `PP:[丸山彩]憧憬的前方` -- `On::Action(PaySplitMulBefore)`, i.e. clause
+/// (2)'s interactive resonance shave (the clause-(1) X shave is the
+/// `PaySplitAdd` filter -- see [`filter_pay_add_only_idx`]). It rides the
+/// writable stage between `PaySplitAdd` and `PaySplitMul` so `set_pay_amount`
+/// lands on the composed Add figure -- see the card's comment.
 #[cfg(feature = "band-pp")]
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
     hook_kind_only_idx(

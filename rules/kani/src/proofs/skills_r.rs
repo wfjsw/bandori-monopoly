@@ -15,12 +15,16 @@ use crate::invoke;
 use crate::spec::skills_r as spec;
 use crate::world::{self, Effect, MAX_PLAYERS};
 
-// Ops the sayo/rinko/lisa Pass hooks reach (`gain_charge`, `log`, `player_*`).
+// Ops the sayo/rinko/lisa Pass hooks reach (`fire::gain`'s tok/tok_max row
+// reads, `gain_marker`, `log`, `player_*`).
 crate::host_subset!(skills_r_dispatch {
-    log | effect => arm_log,
+    log | log_as | effect => arm_log,
     gain_marker => arm_gain_marker,
-    charge => arm_fire,
-    ,
+    // `fire::get` / `fire::max` read the held row through `tok` / `tok_max`
+    // (the old named `charge` / `charge_max` readers are retired ops).
+    count_held | count_held_name => arm_count_held,
+    tok_max => arm_tok_max,
+    persona_skill => arm_band_skill,
     spend_marker => arm_spend_marker,
     player_count => arm_player_count,
     player_out => arm_player_out,

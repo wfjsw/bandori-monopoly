@@ -13,14 +13,15 @@
 //! > （2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。
 //!
 //! while short on cash the owner may record a colour and take a rescue.
-//! The rescue runs in the `PaySplitChoose` hook; the recorded colours live in a
-//! player slot (stand-in for the C# per-card `HashSet<int> _colors`).
+//! The rescue runs in the `PaySplitChooseBefore` hook; the recorded colours live
+//! on the card instance (a bitset prop, the stand-in for the C# per-card
+//! `HashSet<int> _colors`).
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -28,8 +29,9 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
     "PP:再次闪耀",
     &[
         // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- the hand play. The
-        // [共鸣] branch (2) is offered from the `PaySplitChoose` hook below, not as a
-        // second `Play` entry (its `is_placed` gate was blocking this play).
+        // [共鸣] branch (2) is offered at the owner's turn start (see its entry
+        // below), not as a second `Play` entry (its `is_placed` gate was blocking
+        // this play).
         On::Play("", None, shine_again),
         // 规则书[持续]（1）: 「[拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡
         // 未记录且[拥有者]拥有同色地契的颜色」 -- the offer exists only while
@@ -66,9 +68,9 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // sheet cell D2
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
-/// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset of the
-/// colour groups already recorded, kept on the owner's player while in play.
-const SLOT_COLORS: &str = "shine_again_colors";
+/// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset prop of the
+/// colour groups already recorded, on this card instance (「此卡未记录」).
+const PROP_COLORS: &str = "shine_again_colors";
 
 fn shine_again(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
@@ -79,18 +81,24 @@ fn shine_again(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("shine_again_note")),
     );
     // 规则书[持续]（1）: 「记录一个此卡未记录的颜色」 -- the recorded set starts
-    // empty (C# `new HashSet<int>()` on the card).
-    ctx::set_slot(player_id, SLOT_COLORS, 0);
+    // empty (C# `new HashSet<int>()` on the card) and is this instance's own.
+    ctx::set_prop(PROP_COLORS, 0);
     // 规则书[特]: 「此卡不受除拥有此卡的玩家以外的玩家的效果影响」 -- C#
-    // `Card.Immune`. A flag on the card; the owner's own effects still reach it.
+    // `Card.Immune`. A plain flag on the card, read causer-blind, so the owner's
+    // own effects skip it too.
+    // TODO(规则书)（此卡不受除拥有此卡的玩家以外的玩家的效果影响）: the book
+    //   exempts the *owner's* effects, but `set_self_immune` is 「不受任何效果影响」
+    //   and every `is_immune_at` consumer skips the card whoever caused the effect.
+    //   Needs an owner-exempt immunity flavour (a by-causer read).
     ctx::set_self_immune(true);
     Ok(())
 }
 
-/// Colour groups of buyable tiles the owner holds, minus the recorded set
-/// (C# `CardShineAgain.Colors(owned: true)`).
+/// 规则书[持续]（1）: 「记录一个此卡未记录且[拥有者]拥有同色地契的颜色」
+/// Colour groups of buyable tiles the owner holds, minus this instance's
+/// recorded set (C# `CardShineAgain.Colors(owned: true)`).
 fn unrecorded_owned_colors(player_id: i32) -> Vec<i32> {
-    let recorded = ctx::slot(player_id, SLOT_COLORS);
+    let recorded = ctx::prop(PROP_COLORS);
     let mut out: Vec<i32> = Vec::new();
     for t in ctx::owned_tiles(player_id) {
         if !ctx::is_buyable(t) {
@@ -131,13 +139,11 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         &options,
     )?;
     let g = colors[pick.min(colors.len() - 1)];
-    ctx::set_slot(
-        player_id,
-        SLOT_COLORS,
-        ctx::slot(player_id, SLOT_COLORS) | (1 << g),
-    );
+    ctx::set_prop(PROP_COLORS, ctx::prop(PROP_COLORS) | (1 << g));
     // 规则书[持续]（1）: 「[拥有者]拥有的1个同色地契的购买价格」÷5 -- C# `Max(price)`
     // over the owner's deeds in that colour (`H._tiles[t].price`).
+    // TODO(规则书)（[拥有者]拥有的1个同色地契的购买价格）: the book does not say which
+    //   deed when several in the colour match -- we take the dearest.
     let mut best = 0;
     for t in ctx::owned_tiles(player_id) {
         if ctx::is_buyable(t) && ctx::tile_group(t) == g {
@@ -152,8 +158,16 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     // Dict writes (`ctx::state`) do not open a `markerGain` [反击] window,
     // so this grant is safe nested in the pay pipeline.
     let _ = fans::grant(player_id, 1, 0)?;
-    // 「购买价格」÷5 is a formula-fixed gain, not a payment -- `gain_raw` so
-    // the pay pipeline (PaySplitChoose etc.) cannot re-enter this hook or alter it.
+    // 规则书[持续]（1）: 「[拥有者][获得]“[拥有者]拥有的1个同色地契的购买价格”÷5的资金」
+    // -- a printed 获得, so it belongs in the ordinary Money pipeline, but that is
+    // deferred: `gain_raw` here. Re-entry is not the reason (the (1) pre is
+    // `actor == owner`, a bank gain's actor is -1, and `is_money_hook_kind`
+    // guards the rest).
+    // TODO(ABI)（[拥有者][获得]“…÷5的资金”） ctx::gain: inside a
+    //   `PaySplitChooseBefore` body the gain parks a Pay host request and the
+    //   body is not re-entered past it -- everything after `ctx::gain`
+    //   (the recorded colour and the fan here) is dropped, so the gain must
+    //   stay raw until the pay-choose drive resumes its body.
     let money = best / 5;
     if money > 0 {
         ctx::gain_raw(
@@ -178,6 +192,7 @@ fn can_record(player_id: i32) -> Option<Msg> {
 }
 
 /// Offer the [共鸣] record at the owner's turn start (see the TODO on the hook).
+/// 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」
 fn offer_resonance(player_id: i32) -> card_sdk::Asked {
     if can_record(player_id).is_some() {
         return Ok(());
@@ -185,15 +200,18 @@ fn offer_resonance(player_id: i32) -> card_sdk::Asked {
     record(player_id)
 }
 
+/// 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]」
 fn record(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
         return Ok(());
     }
-    if !crate::resonance::try_resonance(player_id)? {
-        return Ok(());
-    }
+    // The pool first: the 共鸣 is the cost of the record, so it must not be paid
+    // when there is nothing left to record.
     let pool = unrecorded_owned_colors(player_id);
     if pool.is_empty() {
+        return Ok(());
+    }
+    if !crate::resonance::try_resonance(player_id)? {
         return Ok(());
     }
     let opts: Vec<Msg> = pool
@@ -209,11 +227,8 @@ fn record(player_id: i32) -> card_sdk::Asked {
     let Some(&g) = pool.get(pick) else {
         return Ok(());
     };
-    ctx::set_slot(
-        player_id,
-        SLOT_COLORS,
-        ctx::slot(player_id, SLOT_COLORS) | (1 << g),
-    );
+    ctx::set_prop(PROP_COLORS, ctx::prop(PROP_COLORS) | (1 << g));
+    // 规则书[持续]（2）: 「[拥有者]获得1个正面[P✽P粉丝]」
     let _ = fans::grant(player_id, 1, 0)?;
     ctx::log(
         player_id,

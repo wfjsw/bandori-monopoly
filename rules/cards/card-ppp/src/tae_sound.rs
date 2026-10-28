@@ -4,11 +4,12 @@
 //! > （多惠）寻找更好的声音：
 //! >  传送到“江户川乐器店”并获得一个[火罐]
 //!
-//! Instruments (no settle), +1 fire.
+//! bare 传送 -- `teleport_to` is a position write with `resolve: false` (no 结算
+//! on arrival) -- then +1 [火罐].
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const TAE_SOUND: CardDef = CardDef::new(
     "PPP:（多惠）寻找更好的声音",
@@ -25,10 +26,14 @@ pub const TAE_SOUND: CardDef = CardDef::new(
 );
 
 fn tae_sound(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「传送到“江户川乐器店”」 -- the bare (settle-free) teleport.
     let shop = ctx::tile_named("江户川乐器店");
+    // TODO(规则书)（传送到“江户川乐器店”）: the book teleports unconditionally -- we
+    // silently skip an absent tile (the fire is still paid).
     if shop >= 0 {
         ctx::teleport_to(player_id, shop);
     }
+    // 规则书: 「并获得一个[火罐]」
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tae_sound_why")))?;
     Ok(())
 }

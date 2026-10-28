@@ -7,12 +7,12 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
     "Mor:（筑紫）迷茫的庭园",
-    &[On::Play("", Some(cant_play), tsukushi_garden)],
+    &[On::Play("", None, tsukushi_garden)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫的庭园"#)
         .raw_name(r#"（筑紫）迷茫的庭园"#)
@@ -21,12 +21,10 @@ pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
         // sheet cell G16
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"二叶筑紫"#)]));
 
-/// C# `CardTsukushiGarden.WhyNot` = `H.MoveWhyNot(seat)`.
-fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「并视为主要移动」 -- the hop is the turn's main move, so the C#
-    // `H.MoveWhyNot` gate applies (off-turn / already-moved / skip-move refuse).
-    rules_status::move_blocked(player_id)
-}
+/// `ctx::slot` marker: the `to + 1` tile of the last hop this card ran for
+/// the seat. Written before the move so a replayed body can recognise its own
+/// landing even if a `moveBefore` counteraction redirected it.
+const MOVED: &str = "tsukushi_garden_moved";
 
 fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「获得100资金」 -- C# `H.GainR(i, 100, CardName)`.
@@ -53,7 +51,14 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    let to = ctx::tile_steps_ahead(who, 1);
+    let to = if who == player_id {
+        // 规则书: 「选中自己则前进一格」 -- one step in the turn's walk direction
+        // (a reverse-armed turn walks backwards); the log and the settle prompt
+        // must name the tile actually entered.
+        ctx::tile_steps_ahead(who, ctx::plan::dir())
+    } else {
+        ctx::tile_steps_ahead(who, 1)
+    };
     if to < 0 {
         return Ok(());
     }
@@ -75,42 +80,62 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
                 .i("roll", r as i64),
         );
     }
-    // 规则书: 「可以选择是否触发结算」 -- C# `H.AskYes(..., "这次移动要 [结算] 吗？",
-    //   default yes when the tile is buyable and unowned-or-yours)`.
-    let settle = ctx::ask_yes(
-        player_id,
-        &Msg::new(key!("tsukushi_garden_settle_title")),
-        &Msg::new(key!("tsukushi_garden_settle_text")).tile("tile", to),
-    )?;
     // 规则书: 「并视为主要移动」 -- C# `H.CardMove(c, new MoveCtx { ... })`.
-    if settle {
-        ctx::log(
+    // 「可以选择是否触发结算」 is asked *after* the move (the choice is about
+    // the tile actually entered), so the move runs `Resolve = false` here and
+    // the settle below is applied to the landed tile.
+    // TODO(规则书)（并视为主要移动）: the book prints no play gate, so the card
+    // stays playable and 「获得100资金」/the protection land even with the main
+    // move spent or [停留] latched; only this move arm reads the gate.
+    // Whether it should be gated at all is the same open question as
+    // LOY-TSUGU-01.
+    // The guard must not be re-read on a replay: the body re-runs with the move
+    // already applied, so `move_blocked` would answer "already moved" and skip
+    // the settle prompt (LOY-TSUGU-01). The landed position or the `MOVED`
+    // marker says this play already moved; only a first run consults the gate.
+    let moved_here = ctx::player_pos(player_id) == to || ctx::slot(player_id, MOVED) == to + 1;
+    if moved_here || rules_status::move_blocked(player_id).is_none() {
+        ctx::set_slot(player_id, MOVED, to + 1);
+        if who == player_id {
+            // 规则书: 「选中自己则前进一格」 -- C# `new MoveCtx { Steps = 1 }`.
+            ctx::plan::set_steps(1);
+        } else {
+            // 规则书: 「传送到行动条上对应玩家前一格」 -- C# `new MoveCtx {
+            //   TeleportTo = to }`.
+            ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+            ctx::plan::set_teleport_to(to);
+        }
+        ctx::plan::set_resolve(false);
+        ctx::card_move(player_id);
+        // 规则书: 「可以选择是否触发结算」 -- C# `H.AskYes(..., "这次移动要 [结算]
+        //   吗？", default yes when the tile is buyable and unowned-or-yours)`;
+        //   the generic `ctx::ask_yes` has no default parameter, so its
+        //   fallback is always No.
+        let settle = ctx::ask_yes(
             player_id,
-            &Msg::new(key!("tsukushi_garden_will_settle")).tile("tile", to),
-        ); // 规则书: 「可以选择是否触发结算」
-    }
-    if who == player_id {
-        // 规则书: 「选中自己则前进一格」 -- C# `new MoveCtx { Steps = 1,
-        //   Resolve = rs.yes }` = `set_steps(1)` + `set_resolve(settle)` +
-        //   `card_move(player_id)`.
-        ctx::plan::set_steps(1);
-        ctx::plan::set_resolve(settle);
-        ctx::card_move(player_id);
-    } else {
-        // 规则书: 「传送到行动条上对应玩家前一格」 -- C# `new MoveCtx {
-        //   TeleportTo = to, Resolve = rs.yes }` = `set_kind(Teleport)` +
-        //   `set_teleport_to(to)` + `set_resolve(settle)` + `card_move(player_id)`.
-        ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
-        ctx::plan::set_teleport_to(to);
-        ctx::plan::set_resolve(settle);
-        ctx::card_move(player_id);
+            &Msg::new(key!("tsukushi_garden_settle_title")),
+            &Msg::new(key!("tsukushi_garden_settle_text")).tile("tile", to),
+        )?;
+        if settle {
+            // 规则书: 「可以选择是否触发结算」 -- the landing is settled by hand
+            // (the move ran without it), as the turn's landing.
+            ctx::log(
+                player_id,
+                &Msg::new(key!("tsukushi_garden_will_settle")).tile("tile", to),
+            );
+            ctx::card_settle_at(player_id, to, true);
+        }
     }
     if ctx::player_out(player_id) {
         return Ok(());
     }
-    // 规则书: 「直到下个你的回合开始时，你无法被异常移动」 -- `unstoppable` is
-    // exactly that gate, and `expires: TurnStart` is the 「直到下个你的回合
-    // 开始时」 half (it wears off at the top of the next turn).
+    // 规则书: 「直到下个你的回合开始时，你无法被异常移动」 -- `expires: TurnStart`
+    // is the 「直到下个你的回合开始时」 half (it wears off at the top of the next
+    // turn); the clause is granted as [不可阻挡], whose other halves ([停留]
+    // bypass, no new [晕眩]/[除外] layers) come with the status.
+    // TODO(规则书)（你无法被异常移动）: the book refuses abnormal moves -- the engine's
+    // `abnormal_gate` never consults [不可阻挡], so a received teleport / forced
+    // move / forced stop (and a new [停留] layer) still land.
     ctx::state::add(player_id, bandori_std::state_key::UNSTOPPABLE, 1);
     bandori_std::status::declare_companion(player_id, bandori_std::state_key::UNSTOPPABLE);
     ctx::state::set_expires(

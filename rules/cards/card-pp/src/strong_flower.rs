@@ -11,16 +11,16 @@
 //! > 3. 此卡放入[使用者]弃卡区。
 //!
 //! place on one of your deeds; the user stops there and settles when passing.
-//! The tile is chosen here but `place_card` cannot bind a field card to a tile
-//! (see the TODO); the [持续] stop is expressible via `ctx::plan` once the
-//! tile binding lands.
+//! `place_card_on` stamps the chosen tile on the instance and `self_tile` reads
+//! the binding back; the [持续] stop is forced there with `plan::set_stop_at` +
+//! `plan::set_resolve`.
 
 use alloc::vec::Vec;
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{para, sec, steps, CardText};
 
 const ID: &str = "PP:可爱又强壮的花朵";
 
@@ -28,6 +28,7 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
     "PP:可爱又强壮的花朵",
     &[
         On::Play("", Some(cant_play), strong_flower),
+        // 规则书[持续]: 「[使用者][经过]此卡所在格子时」
         On::Action(Action::PassTile("actor == owner", None, pass_tile)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -73,6 +74,13 @@ fn strong_flower(player_id: i32) -> card_sdk::Asked {
             &tiles,
         )?
     };
+    // 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- the tile goes through the
+    // [指定] pipeline, so a 「不能被指定」 mark refuses the play. (The owner-side
+    // chain/immune half only runs for another player's tile, and this card can
+    // only name the user's own.) Refusal = no placement.
+    if tile >= 0 && !ctx::target_tile(tile) {
+        return Ok(());
+    }
     // 规则书[手]: 「将此卡放置在被[指定]格子上」 -- bound to the chosen tile, so
     // the `PassTile` hook below can ask 「此卡所在格子」.
     if tile >= 0 {
@@ -106,7 +114,13 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if trigger::tile() != tile {
         return Ok(());
     }
-    // 1. 「[强制停下]，此次移动变为[结算]」
+    // 规则书[持续]1: 「[强制停下]，此次移动变为[结算]」 -- [强制停下] is an
+    // [异常移动效果]: it passes `ctx::gate` so [反击] cards get their window, a
+    // [不可阻挡] mover may refuse it, and a refusal voids the whole [持续] (the
+    // card stays on its tile).
+    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
+        return Ok(());
+    }
     plan::set_stop_at(tile);
     plan::set_resolve(true);
     // 2. 「如果[共鸣]则获得1500资金」

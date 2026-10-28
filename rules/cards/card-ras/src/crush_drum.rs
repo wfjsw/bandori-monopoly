@@ -10,7 +10,7 @@
 //! [手] +Xd20 from the discard pile and [特] immunity for dice-adding cards.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec};
+use card_sdk::{para, sec, CardText};
 
 pub const CRUSH_DRUM: CardDef = CardDef::new(
     "RAS:（MASKING）CRUSH ON THE DRUM!!!",
@@ -22,12 +22,18 @@ pub const CRUSH_DRUM: CardDef = CardDef::new(
         .raw_name(r#"（MASKING）CRUSH ON THE DRUM!!!"#)
         .tags(&[r#"手"#, r#"特"#])
         .text(CardText::of(&[
-            sec(r#"[特]："#, &[
-                para(r#"打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。"#),
-            ]),
-            sec(r#"[手]："#, &[
-                para(r#"移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数"#),
-            ]),
+            sec(
+                r#"[特]："#,
+                &[para(
+                    r#"打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。"#,
+                )],
+            ),
+            sec(
+                r#"[手]："#,
+                &[para(
+                    r#"移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数"#,
+                )],
+            ),
         ]))
         // sheet cell H14
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"佐藤益木"#)]),
@@ -54,15 +60,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[特]: 「打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受任何其他效果影响。」
     // -- C# sets `H._turnCtx.DiceCardsImmune = true`, and the play flow then
-    // skips `Counteract` for any `def.AddsDice` card of this player (MatchHost.cs
-    // ~18912).
+    // skips `Counteract` for any `def.AddsDice` card (MatchHost.cs ~18912).
     // TODO(规则书)[judgement](ABI): needs a turn-level dice-immunity flag (C#
     //   the clause under-specifies -- see the note above it
     // `H._turnCtx.DiceCardsImmune`) and a way for the engine to know a card is
-    // dice-adding. The Trigger payload of a card play is only
-    // `{ Kind: Card, Player, Card, Play }` -- it does not expose `Play.Def.AddsDice`,
-    // `t.ByCard`, or `t.Play.Def`, so a card-side guard cannot read "this is a
-    // dice-adding card" either.
+    // dice-adding. The card-play trigger carries `{ Kind, Player, Card, Play,
+    // ByCard }` but no `Play.Def.AddsDice` / `t.Play.Def`, so a card-side guard
+    // cannot read "this is a dice-adding card" either.
     Ok(())
 }
 

@@ -9,13 +9,16 @@
 use bandori_std::ctx::{self, trigger};
 use bandori_std::state_key;
 use card_sdk::abi::{ActionKind, ChainKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
-/// Once-per-turn placement latch. `cast` is reached from both `play` and the
-/// played card's own `counteract` follow-up (`a_played_cards_own_counteract_runs_once`)
-/// on a hand play; `is_placed` is uid-based and reads false on both (the hand
-/// play has `current_uid = -1`), so a turn-key slot is the once-guard.
+/// Once-per-turn placement latch. A hand play reaches `cast` through `play`;
+/// the played card's own `counteract` follow-up also reaches the entry (and
+/// early-returns there), and a real counter use reaches `cast`. `is_placed` is
+/// uid-based and reads false on both hand paths (the hand play has
+/// `current_uid = -1`), so this turn-key slot is the `cant_play` gate and the
+/// in-body once-guard. The [反击] offer side is gated separately by the
+/// `noCounteractTurn` slot `cast` arms.
 const PLACED: &str = "diceCastPlaced";
 
 const ID: &str = "Mujica:骰子已经掷下";
@@ -24,16 +27,24 @@ pub const DICE_CAST: CardDef = CardDef::new(
     "Mujica:骰子已经掷下",
     &[
         On::Play("", Some(cant_play), play),
-        // 「（此卡可以被反击）」 -- the play window stays open for counters
+        // 规则书: 「（此卡可以被反击）」 -- the play window stays open for counters
         // before `cast` sets the lock (the lock is armed in the body).
+        // TODO(规则书)（「（此卡可以被反击）」）: the cell never says the card is itself
+        //   usable as a [反击] -- the counter-use mode is C#-sourced.
+        // TODO(规则书)[judgement]: the clause under-specifies the shape -- the
+        //   engine must still let other [反击]s answer this card's own play
+        //   window (C# plays the declared counteractions in reverse before
+        //   `Cast` sets the lock). Open as C-Q31 / CH-09.
         On::Counteract(
             &[ChainKind::Card],
-            "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key",
+            "actor != owner && slot('noCounteractTurn') != turn_key",
             None,
             counteract).counter_reason(key!("dice_cast_when")),
-        // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
-        // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Action(Action::TurnEndAfter("actor == owner && card.placed", None, turn_end)),
+        // C# `CardDiceCast.TurnEndAfter` -- off the field when the turn in which
+        // it was placed ends (ABI v23 `TurnEndAfter`, matching the C#
+        // `Fx.TurnEndAfter` dispatch).
+        // 规则书: 「回合结束后放入弃牌堆」 -- 回合, not only the owner's turn.
+        On::Action(Action::TurnEndAfter("card.placed", None, turn_end)),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -92,8 +103,9 @@ fn cast(player_id: i32) {
 }
 
 /// C# `CardDiceCast.TurnEndAfter` (MatchHost.cs:5629-5645) -- clear the
-/// no-counteract latch and drop the card into the discard pile at the card's own
-/// turn end while it is in play. Runs through the Fx hook dispatch at
+/// no-counteract latch and drop the card into the discard pile at the end of
+/// the turn it was placed in while it is in play. Runs through the Fx hook
+/// dispatch at
 /// `turnEndAfter` (ABI v23 `TriggerKind::TurnEndAfter`), so this is a field
 /// effect, not a [反击].
 fn turn_end(player_id: i32) -> card_sdk::Asked {
@@ -110,10 +122,6 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("dice_cast_ended")).player_id("who", player_id),
     );
-    // TODO(规则书)[judgement]: 「（此卡可以被反击）」 -- the engine must still let other
-    //   the clause under-specifies -- see the note above it
-    // [反击]s answer this card's own play window (C# counteraction chain plays
-    // declared counteractions in reverse before `Cast` sets the lock).
     Ok(())
 }
 

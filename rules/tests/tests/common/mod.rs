@@ -796,7 +796,9 @@ impl Table {
         let cap = self.m.world().tok_max(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::gain_clamped(have, cap, n);
         if want > 0 {
-            self.m.world_mut().gain_marker(who as i32, bandori_std::fire::KEY, want);
+            self.m
+                .world_mut()
+                .gain_marker(who as i32, bandori_std::fire::KEY, want);
         }
         want
     }
@@ -993,6 +995,14 @@ impl Table {
         }
     }
 
+    /// Force the turn's dice to a theoretical extreme (`1` = max, `-1` = min,
+    /// `0` = plain), as a tsugumi_can (1) counteraction's `ctx::set_extreme`
+    /// leaves it. `settle()` lets an open prompt see it.
+    pub fn set_extreme(&mut self, v: i32) {
+        self.m.world_mut().turn.extreme = game_core::engine::Extreme::from_i32(v.signum());
+        self.settle();
+    }
+
     /// On-card [CP点] on `who`'s first field copy of `card` (None if not
     /// placed) -- `FieldCard::cp`, 「自己[场上]N个[CP点]」 (user ruling
     /// 2026-10-07: the CP points attached to the card). This is the number the
@@ -1069,9 +1079,7 @@ impl Table {
 
     /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
     pub fn charge_max(&self, who: usize) -> i32 {
-        self.m
-            .world()
-            .tok_max(who as i32, bandori_std::fire::KEY)
+        self.m.world().tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     /// A standing tile prop (`World::tile_prop`). Used to read per-player

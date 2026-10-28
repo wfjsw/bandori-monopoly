@@ -109,9 +109,11 @@ fn on_plan(_player_id: i32, mut v: PlanValue) -> PlanValue {
     v
 }
 
-/// 「每当你经过CiRCLE的回合结束后…」 -- the pass clears the memory latch.
+/// 「每当你经过CiRCLE的回合结束后…」 -- the pass clears the memory latch (both
+/// the skill's own key and the neutral mirror a card reads).
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, DIRTY, 0);
+    state::set(player_id, MEMO_DIRTY, 0);
     Ok(())
 }
 

@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::{ActionKind, ChainKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 
 use bandori_std::ctx;
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -20,6 +20,9 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         // first): the placement from hand (「可打出此卡」), or the later press
         // that spends a 火罐 on a kept die. The gate admits whenever either
         // branch is available.
+        // TODO(规则书)（[反击] 当你使用火罐进行掷骰时）: the sheet times the card
+        // only to the [反击] window; the hand placement branch is open in any
+        // phase (and with `COUNTERACT_FROM_FIELD` a premplay stays usable).
         On::Play("", Some(cant_play), play),
         On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, roll_after)),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
@@ -31,17 +34,26 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
             None,
             counter_fire),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 「可保留多个骰点」 -- the card stays on the field and must answer later fire
+// rolls from there (`COUNTERACT_FROM_FIELD`). One reservation per roll so the
+// placed copy cannot re-offer itself on the same window (the tae_police shape).
+.props(&[
+    (card_sdk::abi::prop::COUNTERACT_FROM_FIELD, 1),
+    (card_sdk::abi::prop::COUNTERACT_GROUP, 1),
+])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"寄于指尖的执念"#)
         .raw_name(r#"（和奏瑞依）寄于指尖的执念"#)
-        .tags(&[])
+        .tags(&[r#"反击"#])
         .text(CardText::para(r#"[反击] 当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。"#))
         // sheet cell H16
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"和奏瑞依"#)]));
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
-/// Where the fire-pot system writes the unchosen die (C# `H.V(Seat, "layerUnused")`).
+/// Where the fire-pot reroll is meant to write the unchosen die (C#
+/// `H.V(Seat, "layerUnused")`); no writer exists yet -- see [`roll_after`].
 const SLOT_UNUSED: &str = "layerUnused";
 /// How many dice are kept (C# `_kept.Count`).
 const SLOT_COUNT: &str = "layer_keep_count";
@@ -66,6 +78,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if ctx::slot(player_id, SLOT_COUNT) < 1 {
         return Some(Msg::new(key!("layer_keep_no_die")));
     }
+    // 规则书: 「在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰」
     if bandori_std::fire::get(player_id) < 1 {
         return Some(Msg::new(key!("layer_keep_no_fire")));
     }
@@ -77,8 +90,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return use_die(player_id);
     }
     // 规则书: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
-    // itself just stays in play (C# `H.PlaceFromPlay(c)`); the unchosen die is
-    // written by the `DiceRollAfter` hook below.
+    // itself just stays in play (C# `H.PlaceFromPlay(c)`).
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
     ctx::log(
@@ -88,23 +100,39 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardLayerKeep.DiceRollAfter` -- after a fire-pot roll, keep the unchosen die.
-/// `actor == owner && card.placed` is the pre.
-/// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
-/// source is `roll_source::CHARGE` (the fire-pot reroll).
+/// C# `CardLayerKeep.DiceRollAfter` -- after a roll, keep the unchosen die.
+/// `actor == owner && card.placed` is the pre; it keys on the field copy only
+/// (no roll-source test), so any later roll of the owner reaches the body.
+///
+/// TODO(规则书)（保留（写下）未被选择的另一个骰点）: nothing is banked today --
+/// no code writes the `layerUnused` slot, and a card placed inside the reroll's
+/// own counteraction window is not in the `DiceRollAfter` walk already in flight.
 
-/// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
-/// is played from hand; its `play` body places it on the field. The unchosen
-/// die is written by the fire-pot reroll path to the `layerUnused` slot and
-/// picked up by the `DiceRollAfter` hook.
+/// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- a
+/// counteract declaration runs this body, never `play`, so the placement is here
+/// (C# `H.PlaceFromPlay(c)`; the even_lost shape). A field copy answering a
+/// later fire already sits there and must not be placed twice.
+///
+/// TODO(规则书)（可打出此卡并保留（写下）未被选择的另一个骰点）: the body
+/// places the card but records nothing; the unchosen die is never handed over.
 fn counter_fire(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() {
+        ctx::set_dest(ctx::Dest::Field);
+        ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("layer_keep_placed")).player_id("who", player_id),
+        );
+    }
     ctx::log(player_id, &Msg::new(key!("layer_keep_counter")));
     Ok(())
 }
 
 fn roll_after(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点」
+    // 规则书: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点」
     // -- C# reads `H.V(Seat, "layerUnused")`, keeps `value - 1`, clears the slot.
+    // TODO(规则书)（保留（写下）未被选择的另一个骰点）: the fire reroll writes
+    // no `layerUnused`, so this read is always 0 and nothing is banked.
     let unused = ctx::slot(player_id, SLOT_UNUSED);
     if unused <= 0 {
         return Ok(());
@@ -160,21 +188,25 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("layer_keep_spend")))? {
         return Ok(());
     }
-    // 「删去该骰点」 -- compact the slot list.
+    // 规则书: 「随后删去该骰点」 -- drop the picked slot (one die), not every
+    // equal face, and shift the rest down.
     let mut kept: Vec<i32> = Vec::new();
     for i in 0..n {
         if (i as usize) >= SLOT_DICE.len() {
             break;
         }
-        let v = ctx::slot(player_id, SLOT_DICE[i as usize]);
-        if v != die {
-            kept.push(v);
+        if i as usize != pick {
+            kept.push(ctx::slot(player_id, SLOT_DICE[i as usize]));
         }
     }
     for i in 0..SLOT_DICE.len() {
         ctx::set_slot(player_id, SLOT_DICE[i], *kept.get(i).unwrap_or(&0));
     }
     ctx::set_slot(player_id, SLOT_COUNT, kept.len() as i32);
+    // 规则书: 「消耗一个火罐以用于替代当回合的移动掷骰」
+    // TODO(规则书)（用于替代当回合的移动掷骰）: `fixed_roll` is never one-shot
+    // cleared -- it also feeds any later move roll of the same turn, while the
+    // kept die it replaces has already been deleted.
     ctx::set_fixed_roll(die);
     ctx::log(
         player_id,

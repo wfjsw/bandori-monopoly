@@ -51,12 +51,12 @@ pub mod counter {
     pub const CRYSTALS: &str = "crystals";
 }
 
-/// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
-/// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
-pub mod fire;
 /// CEL sugar tables / kind constants / guard-const expansions for this
 /// ruleset. Plain data; the typed `CondExt` is assembled in `game-rules`.
 pub mod cel;
+/// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
+/// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
+pub mod fire;
 /// Shared CEL guards.
 pub mod guards;
 /// Ruleset-declared raise-point kind ids and tile kind/class strings.
@@ -126,24 +126,41 @@ pub mod ctx {
 
     pub use crate::{
         add_card_crystals, add_crystals, add_crystals_at, add_group_crystals, add_group_skill,
-        add_rent_unit_bonus, add_ring_bonus, card_crystals, crystals, crystals_at, remove_crystal,
-        group_crystals, group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable,
-        is_color, is_deed, is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy,
-        offer_force_buy, pay_rent, persona_is, persona_skill, rent_unit_mult, ring_multiplier,
+        add_rent_unit_bonus, add_ring_bonus, card_crystals, crystals, crystals_at, group_crystals,
+        group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed,
+        is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy,
+        pay_rent, persona_is, persona_skill, remove_crystal, rent_unit_mult, ring_multiplier,
         set_crystals, skill_blocked, turn_snap,
     };
 }
 
-/// Turn-start snapshot of the three layer counters 「回到起始地点并取消所有
-/// 受到的效果」 restores: `(pos, stay, stun, exile)`. Wrapper over the generic
-/// keyed `card_sdk::ctx::turn_snap` with this ruleset's key names.
-pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
-    card_sdk::ctx::turn_snap(
-        player_id,
-        state_key::STAY,
-        state_key::STUN,
-        state_key::EXILE,
-    )
+/// What 「回到起始地点并取消所有受到的效果（不进行任何结算）」 restores: the
+/// turn-start square, the three layer counters, the player's money and the
+/// board ownership arrays. Wrapper over the generic `card_sdk::ctx::turn_snap_map`
+/// with this ruleset's key names; `pos < 0` when there is no snapshot.
+pub struct TurnRestore {
+    pub pos: i32,
+    pub stay: i32,
+    pub stun: i32,
+    pub exile: i32,
+    pub money: i32,
+    pub owners: Vec<i32>,
+    pub houses: Vec<i32>,
+    pub mortgaged: Vec<bool>,
+}
+
+pub fn turn_snap(player_id: i32) -> TurnRestore {
+    let snap = card_sdk::ctx::turn_snap_map(player_id);
+    TurnRestore {
+        pos: snap.pos,
+        stay: snap.state.get(state_key::STAY).copied().unwrap_or(0),
+        stun: snap.state.get(state_key::STUN).copied().unwrap_or(0),
+        exile: snap.state.get(state_key::EXILE).copied().unwrap_or(0),
+        money: snap.money,
+        owners: snap.owners,
+        houses: snap.houses,
+        mortgaged: snap.mortgaged,
+    }
 }
 
 // ------------------------------------------------------------- tile kinds
@@ -185,9 +202,21 @@ pub fn is_live_house_for(player_id: i32, tile: i32) -> bool {
 }
 
 /// Does `tile` count as colour `group` for `player_id`?
+#[cfg(not(kani))]
 pub fn is_color(player_id: i32, tile: i32, group: i32) -> bool {
     let class = format!("color:{}", group);
     card_sdk::ctx::tile_in(player_id, tile, &class)
+}
+
+/// Kani: the host models every `color:<g>` class as the tile's own group
+/// (`host::arm_tile_in`), so skip the `format!` heap String and the UTF-8
+/// validation that come with it -- both are per-call aborts/cliffs
+/// (`same_allocation` / `run_utf8_validation`) in a 60-tile scan.
+#[cfg(kani)]
+#[inline(always)]
+pub fn is_color(_player_id: i32, tile: i32, group: i32) -> bool {
+    // Same range guard as `host::arm_tile_in` (out-of-board is not a colour).
+    (0..60).contains(&tile) && card_sdk::ctx::tile_group(tile) == group
 }
 
 // ------------------------------------------------------------- 奇迹水晶
@@ -391,14 +420,20 @@ pub fn half_ceil10(full: i32) -> i32 {
     ceil * 10
 }
 
-/// The RiNG rent multiplier.
+/// The `rentUnitMult` rule parameter in force (base + card bonus, floored at 1).
+/// RiNG's dice rent uses this as its per-tile unit (`count_owned_kind × this`,
+/// read by `World::rent_of` / `rent_figure` / `rent_quote`; the tile's static
+/// `RENT_DICE_MULT` only marks the tile as dice-rent).
 pub fn rent_unit_mult() -> i32 {
     unsafe { raw::sys::rent_unit_mult() }
 }
 
-/// Add `n` to the RiNG rent multiplier; returns the new multiplier.
+/// 规则书: 「每次打出此卡时使ring的价格基础乘数+5」 -- add `n` to the
+/// `rentUnitMult` bonus; returns the new multiplier (base + bonus), the number
+/// the card's log prints. The host verb itself returns only the bonus.
 pub fn add_rent_unit_bonus(n: i32) -> i32 {
-    unsafe { raw::sys::add_rent_unit_bonus(n) }
+    unsafe { raw::sys::add_rent_unit_bonus(n) };
+    rent_unit_mult()
 }
 
 /// Game sugar for [`rent_unit_mult`] (the RiNG dice-rent convention).

@@ -12,8 +12,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText, it, items, para, sec};
 
 pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"蓝玫瑰的骄傲"#)
@@ -34,18 +34,23 @@ pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play("
 /// The buyable Livehouse deeds (C# `H.IsLiveHouse`: `IsColor(player_id, t, 6)`, and
 /// `H.LiveHouses` also wants `IsBuyable`).
 fn livehouses(player_id: i32) -> Vec<i32> {
-    // `H.IsLiveHouses` = `IsBuyable && IsColor(t, 6)`, and `IsColor` sees both
-    // the `anyColor` tile prop and this player's `colorFor:<p>`.
+    // 规则书: 「Livehouse格子」 -- `H.IsLiveHouses` = `IsBuyable && IsColor(t, 6)`,
+    // and `IsColor` sees both the `anyColor` tile prop and this player's
+    // `colorFor:<p>`.
     (0..ctx::tile_count())
         .filter(|&t| ctx::is_buyable(t) && ctx::is_color(player_id, t, 6))
         .collect()
 }
 
-/// C# `CardBlueRose.Rich` -- Livehouses at least half of your deeds (and you have one).
+/// C# `CardBlueRose.Rich` -- Livehouses at least half of your deeds.
+///
+/// 规则书（1）: 「若你拥有的Livehouse格子多于或等于你拥有的其他格子」 -- the
+/// cell states no "at least one" prerequisite: with no deeds at all, 0 ≥ 0
+/// takes (1) (0 资金), not the (2) teleport.
 fn is_rich(player_id: i32) -> bool {
     let live = live_deeds(player_id).len() as i32;
     let total = ctx::owned_count(player_id);
-    live > 0 && live * 2 >= total
+    live * 2 >= total
 }
 
 fn live_deeds(player_id: i32) -> Vec<i32> {
@@ -72,8 +77,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
     let live = live_deeds(player_id);
     let others = ctx::owned_count(player_id) - live.len() as i32;
-    // 规则书（1）: 「若你拥有的Livehouse格子多于或等于你拥有的其他格子」
-    if !live.is_empty() && live.len() as i32 >= others {
+    // 规则书（1）: 「若你拥有的Livehouse格子多于或等于你拥有的其他格子」 -- with
+    // no deeds at all, 0 ≥ 0 takes this branch.
+    if live.len() as i32 >= others {
         // 规则书（1）: 「获得相当于这些Livehouse格子地契价值20%的资金」 -- the land
         //   price, C# `H._tiles[t].price` (no standing houses).
         let sum: i64 = live.iter().map(|&t| ctx::tile_price(t) as i64).sum();
@@ -120,6 +126,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_resolve(!fallback);
     // C# `H.CardMove` (`MainMoveAs`) consumes the turn's main move and runs the
     // teleport immediately.
+    // 规则书（2）: 「均视为你的主要移动」
     ctx::card_move(player_id);
     let why = if fallback {
         Msg::new(key!("blue_rose_ring4"))

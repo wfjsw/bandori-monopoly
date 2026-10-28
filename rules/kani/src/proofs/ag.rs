@@ -117,9 +117,8 @@ crate::host_subset!(ag_dispatch {
     self_uid => arm_self_uid,
     // dice
     roll | roll_direct => arm_roll,
-    // fire (colors-04 fill)
-    charge => arm_fire,
-    ,
+    // fire (colors-04 fill): the retired named `charge` reader now rides
+    // `state_get`.
     gain_marker => arm_gain_marker,
 });
 
@@ -729,11 +728,13 @@ fn soul_01_place_and_load_iff_at(user: i32) {
     let effects = effects_of(&logbuf, log_n);
     let post_crystals = world::with_world(crystals_of);
 
-    // k is the chosen number of 500-spends (1..=min(5, money/500), at least 1).
-    // Recover it from the pay leg.
+    // k is the chosen number of 500-spends (1..=5). Recover it by counting the
+    // per-500 pay legs.
     let mut k = 0i32;
-    if let Some(Effect::PayMoney { n, .. }) = effects.first() {
-        k = *n / 500;
+    for e in effects {
+        if matches!(e, Effect::PayMoney { n: 500, .. }) {
+            k += 1;
+        }
     }
     kani::cover!(k == 1, "k = 1");
     kani::cover!(k >= 2, "k >= 2");
@@ -741,7 +742,7 @@ fn soul_01_place_and_load_iff_at(user: i32) {
     crate::kassert!(k >= 1 && k <= 5, "C-AG-soul-01: k in 1..=5");
     crate::kassert!(
         spec::ag::soul_01_log_ok(effects, player, card, k),
-        "C-AG-soul-01: pay k*500 then PlaceCard"
+        "C-AG-soul-01: PlaceCard then k × 500 pay"
     );
     crate::kassert!(
         spec::ag::soul_01_post_ok(post_crystals, k),
@@ -783,8 +784,10 @@ pub fn soul_01_mutant_is_detected() {
     let post_crystals = world::with_world(crystals_of);
     let (logbuf, log_n) = log_slice();
     let mut k = 0i32;
-    if let Some(Effect::PayMoney { n, .. }) = effects_of(&logbuf, log_n).first() {
-        k = *n / 500;
+    for e in effects_of(&logbuf, log_n) {
+        if matches!(e, Effect::PayMoney { n: 500, .. }) {
+            k += 1;
+        }
     }
     crate::kassert!(
         !spec::ag::soul_01_post_ok_mutant(post_crystals, k),

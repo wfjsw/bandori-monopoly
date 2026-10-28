@@ -7,14 +7,16 @@
 //! [反击] auto-plays when drawn: money by hand size, else draw.
 
 use bandori_std::ctx;
-use card_sdk::abi::ActionKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
         On::Action(Action::Drawn("trigger_card == card.id", None, counteract).counter_reason(key!("same_sky_when"))),
+        // TODO(规则书)（（开局时抽到此卡洗回））: the book returns the copy as it enters
+        //   the opening hand -- we sweep it only after the 初始重抽 window, so it
+        //   stays visible to the seat through the mulligan.
         On::Action(Action::DeckAtGameStart("", None, return_at_opening)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -29,9 +31,9 @@ const ID: &str = "AG:朝同一片天空迈进";
 
 /// 规则书[反击]: 「（开局时抽到此卡洗回）」 -- C# `ReturnAtOpening` /
 /// `FixOpeningHand`. The opening deal and mulligan raise no `Drawn` hooks, so
-/// the old `step() == 0` branch is unreachable; the brief maps this to
-/// `On::Action(&[ActionKind::DeckAtGameStart], "", Some(...))`, which fires on this card
-/// over draw + hand after the mulligan.
+/// the old `step() == 0` branch is unreachable; this rides
+/// `On::Action(Action::DeckAtGameStart("", None, return_at_opening))`, which
+/// fires on this card over draw + hand after the mulligan.
 fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.
     let mut returned = 0;
@@ -52,13 +54,17 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
 /// the moment it is drawn; it never answers the [反击] window.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `trigger_card == card.id` owns "this card was drawn".
-    // C# `Drawn` pulls the card out of hand first (`hand.Remove(Id)`).
-    if !ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
+    // 规则书[反击]: 「抽出此卡时立刻打出」 -- the drawn copy is played, one
+    // hand -> discard move. (Taking it and then calling `to_discard` would also
+    // strip a *second* held copy, because `to_discard` removes a matching hand
+    // card before pushing; `discard_from_hand` is the single-move op.)
+    if !ctx::discard_from_hand(player_id, ID) {
         return Ok(());
     }
+    // 手牌数 after the play.
     let n = ctx::hand_size(player_id);
     if n >= 3 {
-        // 规则书[反击]: 「如果你手牌数大于等于3，获得手牌数*600的资金」
+        // 规则书[反击]: 「如果你手牌数至少为3，获得手牌数*600的资金」
         ctx::gain(
             player_id,
             n * 600,
@@ -68,8 +74,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // 规则书[反击]: 「如果你的手牌数小于3，抽一张卡」
         ctx::draw(player_id, 1)?;
     }
-    // Played: it goes to the discard pile.
-    ctx::to_discard(player_id, ID);
+    // TODO(ABI): the auto-play raises no `cardPlayed` -- this hand-carried path
+    // bypasses the play pipeline, and `ctx::raise` cannot carry the
+    // card / cards / by_card payload a 「当他人…打出手牌时」 listener reads.
     Ok(())
 }
 

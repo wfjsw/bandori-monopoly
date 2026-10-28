@@ -40,6 +40,9 @@ crate::host_subset!(sumimi_turn_end_dispatch {
     state_set => arm_state_set,
     add_counter_self => arm_add_counter_self,
     counter_self => arm_counter_self,
+    // `cover_crystals` / `spend_crystals` walk the field for `Sumimi:#L11`
+    // (none in this world: the cover arm is not reached).
+    field_instances => arm_field_instances,
     log | effect => arm_log,
 });
 

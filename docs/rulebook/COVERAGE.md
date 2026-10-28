@@ -47,7 +47,7 @@ where the engine disagrees the test is `#[ignore = "DISCREPANCY: …"]`, and
 where the sheet text does not decide the value `#[ignore = "RULING: …"]`.
 Reclassified rows (per-clause rows below are authoritative; the group counts
 above still reflect the pre-audit baseline): `CRYCHIC:如果能一直持续下去...#2`
-ok→ign, `R:（燐子）Ringing Bloom#2` ok→ign, `Sumimi:Sweet Escape#1` ok→ign,
+ok→shl, `R:（燐子）Ringing Bloom#2` ok→ign, `Sumimi:Sweet Escape#1` ok→ign,
 `skill:北泽育美:全垒打！#1/#2` ok→unc, `…#3` ok→shl, and
 `Mujica:欢迎来到ave mujica的世界#1` ign→ok. `PPP:Tomorrow's Door#3` is now
 genuinely covered: both `t06_tomorrows_door_surcharge` and
@@ -140,7 +140,7 @@ assert the clause (or the reason it is not).
 | `AG:（巴）商店街的救世主#2` | buy it at half the normal buyout | **unc** | — |
 | `AG:（巴）商店街的救世主#3` | [反击] when you mortgage a shop-street deed | **unc** | — |
 | `AG:（巴）商店街的救世主#4` | extra mortgage income and flip the deed back | **unc** | — |
-| `AG:（绯玛丽）如果并非没问题#1` | [反击] when your roll < 6 | **ok** | himari_card_bumps_a_low_roll |
+| `AG:（绯玛丽）如果并非没问题#1` | [反击] when your roll < 6 | **shl** | himari_card_bumps_a_low_roll,not_ok_bumps_a_low_roll (both drive only the move roll; a card-driven `ctx::roll` face is untested -- spec header `not-ok`) |
 | `AG:（绯玛丽）如果并非没问题#2` | result +1 | **ok** | himari_card_bumps_a_low_roll |
 | `AG:（鸫）微小的『能做到』的事#1` | choose one of (1)/(2) | **shl** | hagumi_card_is_exclusive |
 | `AG:（鸫）微小的『能做到』的事#2` | (1) [反击] number-range effects settle at theoretical max/min | **unc** | ruleset.rs::hagumi_marks_replays_through_a_dice_dependent_prompt is harness-only |
@@ -183,7 +183,7 @@ assert the clause (or the reason it is not).
 | `CRYCHIC:是我自己的问题#1` | [反击] after main move, before settle: step 1 away from the nearest player | **ign** | m28a_my_own_problem (DISCREPANCY: does not move) |
 | `CRYCHIC:是我自己的问题#2` | (2) does not fire if hit by an abnormal move effect | **ign** | m28b_my_own_problem_after_forced_move (DISCREPANCY: still fires) |
 | `CRYCHIC:如果能一直持续下去...#1` | [手] remove crystals from the band skill card, gain 2000+500*X | **ok** | if_only_it_lasted_hand_effect |
-| `CRYCHIC:如果能一直持续下去...#2` | [持续] hand >= 7 -> this card goes to discard | **ign** | if_only_it_lasted_discards_at_hand_7 (DISCREPANCY: the hand>=7 → discard check never fires; the card stays on the field) |
+| `CRYCHIC:如果能一直持续下去...#2` | [持续] hand >= 7 -> this card goes to discard | **shl** | if_only_it_lasted_discards_at_hand_7 (fires on the draw / discard / play events and at the turn boundaries; the test drives the hand-change seam only) |
 | `CRYCHIC:一起演奏音乐的命运共同体#1` | [手] until your next turn start: on any tile's collection, move to the next tile owned by the player after you in order (no settle) | **shl** | destiny_together_plays |
 | `CRYCHIC:一起演奏音乐的命运共同体#2` | if (1) did nothing: return this card to hand (band (3) does not fire) | **unc** | — |
 | `CRYCHIC:主唱太拼命了#1` | [反击] when you would pay 5000+ in one go: cancel that payment | **ok** | vocalist_too_hard_is_a_counter,interaction_vocalist_counter_vs_big_payment |
@@ -372,7 +372,7 @@ assert the clause (or the reason it is not).
 | `Mor:蝴蝶飞舞的星月夜#4` | owner passing CiRCLE: remove 1 crystal | **ok** | starry_circle_pass_removes_crystal_and_pays_1000 |
 | `Mor:蝴蝶飞舞的星月夜#5` | each crystal removed: owner gains 1000 | **ok** | starry_circle_pass_removes_crystal_and_pays_1000 |
 | `Mor:勇气展翅高飞之时#1` | roll 3d20 | **ok** | courage_sums_3d20_for_the_tile_number |
-| `Mor:勇气展翅高飞之时#2` | that tile's owner pays you (price + houses)/2 | **ok** | courage_owner_pays_half_of_price_plus_houses |
+| `Mor:勇气展翅高飞之时#2` | that tile's owner pays you land price + half the house total | **ok** | courage_owner_pays_land_plus_half_houses,courage_land_price_is_not_halved |
 | `Mor:勇气展翅高飞之时#3` | agent tile -> you gain 1000 | **ok** | courage_agent_tile_gives_1000 |
 | `Mor:勇气展翅高飞之时#4` | unowned tile -> pays nothing | **ok** | courage_unowned_tile_pays_nothing |
 | `Mor:（NNM）稍微努力了一下#1` | discard x character-marks from hand | **ign** | nnm_refused_without_character_marks / nnm_discard_marks_draw_x_or_gain_x_times_2000 (DISCREPANCY: dual On::Play) |
@@ -397,7 +397,7 @@ assert the clause (or the reason it is not).
 | `Mor:纯真振翅#2` | then immediately make a move roll | **ign** | wing_then_rolls_the_movement_dice (DISCREPANCY: never rolls) |
 | `Mor:秘密与青春的虹彩#1` | [反击] when you pay a junior or same-grade: halve the payment | **ok** | rainbow_halves_a_payment_to_a_same_grade |
 | `Mor:秘密与青春的虹彩#2` | [反击] when a senior or same-grade pays you: multiply by 1.5 | **ign** | rainbow_senior_pays_you_at_1_5x (DISCREPANCY: settles at 0) |
-| `Mor:（Rui）正论恶魔#1` | pay every player 100 (immune to modification) | **ok** | rui_pays_100_to_all_then_receives_300_from_all |
+| `Mor:（Rui）正论恶魔#1` | pay every player 100 (immune to modification) | **ok** | rui_pays_100_to_all_then_receives_300_from_all (DISCREPANCY: the fixed 100 rides the modifiable pay pipeline -- a 正论暴击 hit voids/doubles the leg) |
 | `Mor:（Rui）正论恶魔#2` | then every player pays you 300 (modifiable) | **ok** | rui_pays_100_to_all_then_receives_300_from_all |
 | `Mor:（Rui）正论恶魔#3` | if your skill fires during this card: set x to 5 | **ign** | rui_card_sets_x_to_5_when_the_skill_fires (DISCREPANCY: x stays 3) |
 | `Mor:（筑紫）迷茫的庭园#1` | gain 100 | **ok** | tsukushi_gains_100_and_teleports_to_the_tile_before_a_player |
@@ -592,7 +592,7 @@ assert the clause (or the reason it is not).
 | `PP:梦在前方，结彩当下#2` | [持续](1) each draw +1 crystal (cap 5); over-cap crystals each +1 to X (X starts 0) | **ok** | dream_ahead_crystal_per_draw_cap_5 |
 | `PP:梦在前方，结彩当下#3` | (2) owner cannot build; hand limit -1 | **ok** | dream_ahead_no_build,dream_ahead_reduces_hand_limit |
 | `PP:梦在前方，结彩当下#4` | (3) another settling on your tile pays you fans*X + MIN(X*30, 300) extra | **ok** | dream_ahead_extra_rent |
-| `PP:梦在前方，结彩当下#5` | (4) [共鸣][反击] at your turn end with an unowned purchasable within ±3: spend 3 crystals, buy any such tile | **unc** | — |
+| `PP:梦在前方，结彩当下#5` | (4) [共鸣][反击] at your turn end with an unowned purchasable within ±3: spend 3 crystals, buy any such tile | **ok** | dream_ahead_buys_a_tile_at_turn_end (turn-end action; the [反击] declaration window itself is still open, LOY-DREAM-01) |
 | `PP:TITLE IDOL#1` | +2 crystals on your PP band card | **ok** | title_idol_adds_1_to_crystal_cards |
 | `PP:TITLE IDOL#2` | +1 crystal on every card of yours that mentions crystals (2 with [共鸣]) | **ok** | title_idol_adds_1_to_crystal_cards,title_idol_echo_adds_2_to_crystal_cards |
 | `PP:可爱又强壮的花朵#1` | [指定] one of your tiles; place this on it, +2 crystals on the PP band card | **ok** | flower_places_on_chosen_tile |
@@ -694,7 +694,7 @@ assert the clause (or the reason it is not).
 | `PPP:（沙绫）总有一天要给这片天空命名#1` | place on 山吹面包房 | **ok** | saaya_card_lands_on_yamabuki |
 | `PPP:（沙绫）总有一天要给这片天空命名#2` | user passing it: at turn end +1 fire; then roll 3d20 and move this to that tile | **ok** | t19_saaya_names_the_sky |
 | `PPP:（里美）我的心就像巧克力螺#1` | enter move phase; main move = any tile within absolute distance 1-4, settle | **ok** | rimi_card_offers_distance_1_to_4 |
-| `PPP:（里美）我的心就像巧克力螺#2` | [不可阻挡] during that move | **ok** | rimi_card_offers_distance_1_to_4 |
+| `PPP:（里美）我的心就像巧克力螺#2` | [不可阻挡] during that move | **shl** | rimi_card_offers_distance_1_to_4 (the test reads neither `unstoppable` nor a stay) |
 | `skill:户山香澄:非凡之星#1` | another settling on 星之鼓动山丘: +1 fire (init 0, cap 1) | **ok** | kasumi_skill_gains_fire_on_hill_settle |
 | `skill:户山香澄:非凡之星#2` | management phase: spend 1 fire, enter move phase, main move = teleport to one of your tiles, may build | **ok** | kasumi_skill_teleports_to_own_tile |
 | `skill:市谷有咲:盆栽爱好者#1` | another drawing an event at 流星堂: +1 fire (init 0, cap 2) | **unc** | aoki_skill_spends_fire_for_crystal covers (3) only |
@@ -722,10 +722,10 @@ assert the clause (or the reason it is not).
 | `RAS:EXIST#1` | place on own field until your next turn start | **ok** | exist_redirects_single_target_card,exist_flips_into_owner_discard |
 | `RAS:EXIST#2` | single-target cards (incl. ones aimed at you) retarget to you | **ok** | exist_redirects_single_target_card,exist_does_not_steal_multi_target_card,c11_exist_redirects_single_target |
 | `RAS:EXIST#3` | at your next turn start: to your discard; if it did nothing, draw 1 | **ok** | exist_draws_one_when_it_caused_nothing,exist_no_extra_draw_when_it_redirected |
-| `RAS:狂乱Hey Kids!!#1` | [反击] when a settle happens on your tile | **ok** | hey_kids_window_on_own_tile_settle,hey_kids_no_window_when_another_settles_your_tile |
-| `RAS:狂乱Hey Kids!!#2` | replace the settle: move houses from this tile to your buildable tiles (one side has >=1; each target +1) | **ok** | hey_kids_transfers_one_house,hey_kids_two_houses_to_two_targets |
+| `RAS:狂乱Hey Kids!!#1` | [反击] when a settle happens on your tile | **ok** | hey_kids_window_when_another_settles_your_tile,hey_kids_no_window_on_my_own_settle |
+| `RAS:狂乱Hey Kids!!#2` | replace the settle: move houses from this tile to your buildable tiles (at least one side is exactly 1; each target +1) | **ok** | hey_kids_transfers_one_house,hey_kids_two_houses_to_two_targets (OPEN-hey-kids-split: the 2-house/2-target grammar is undecided) |
 | `RAS:狂乱Hey Kids!!#3` | house cost is conserved; the excess becomes cash | **ok** | hey_kids_money_when_target_house_is_dearer,hey_kids_money_when_source_house_is_dearer,hey_kids_money_two_houses_to_two_targets |
-| `RAS:狂乱Hey Kids!!#4` | then you lose (sum of transferred house costs - count*500) | **ok** | hey_kids_money_when_source_house_is_dearer |
+| `RAS:狂乱Hey Kids!!#4` | then you lose (sum of transferred house costs - count*500) | **ok** | hey_kids_money_when_source_house_is_dearer (OPEN-hey-kids-sum: 「各格」 may mean every owned tile, not only the touched ones; every test leaves no other houses) |
 | `RAS:Change the world#1` | place on one of your Live House tiles that has houses | **ok** | change_world_needs_a_livehouse_with_houses |
 | `RAS:Change the world#2` | this move roll becomes 3d20; passing a non-yours Live House: +1 crystal | **ok** | change_world_roll_is_3d20_and_collects_crystals |
 | `RAS:Change the world#3` | that tile's next charge += 50*(y+1)*n and you gain the same (y = crystals, n = houses) | **ok** | change_world_boosts_the_next_charge |
@@ -774,7 +774,7 @@ assert the clause (or the reason it is not).
 
 | clause | meaning | status | tests |
 |---|---|---|---|
-| `R:（ykn）louder#1` | each play: RiNG price multiplier +5 | **ok** | louder_is_consumed_and_exclusive_to_yukina,louder_is_refused_for_a_non_owner |
+| `R:（ykn）louder#1` | each play: RiNG price multiplier +5 | **shl** | louder_is_consumed_and_exclusive_to_yukina,louder_is_refused_for_a_non_owner (neither reads the multiplier; nothing would fail if the +5 went) |
 | `R:学生会的检查#1` | after the move: if one of your deed tiles is within ±3, before settle may play | **ign** | t12_student_council_check (DISCREPANCY: placement / forced stop) |
 | `R:学生会的检查#2` | add a 压 to the draw pile; no building this turn | **ign** | t12_student_council_check |
 | `R:学生会的检查#3` | may pay half a house cost to place this on that tile | **ign** | t12_student_council_check |
@@ -842,7 +842,7 @@ assert the clause (or the reason it is not).
 |---|---|---|---|
 | `Sumimi:兼顾偶像与乐队#1` | gate: no redeems this turn | **ok** | idol_and_band_gate_redeem_blocks |
 | `Sumimi:兼顾偶像与乐队#2` | if money > 3000: no effect | **ok** | idol_and_band_gate_at_3000_or_above |
-| `Sumimi:兼顾偶像与乐队#3` | reset money to 3000 | **ok** | idol_and_band_resets_money_to_3000,interaction_idol_and_band_with_black_birthday |
+| `Sumimi:兼顾偶像与乐队#3` | reset money to 3000 | **ok** | idol_and_band_resets_money_to_3000,interaction_idol_and_band_with_black_birthday (the reset is a set via `ctx::adjust_money`, bypassing PaySplit*; both tests run `Table::vanilla` with no live modifier) |
 | `Sumimi:Sumimi不会解散哦#1` | gate: no mortgage/redeem this turn and money has no repeated digit | **ok** | sumimi_wont_break_up_requires_different_digits |
 | `Sumimi:Sumimi不会解散哦#2` | teleport such that the money after settle has a repeated digit (main move) | **unc** | — |
 | `Sumimi:Sumimi不会解散哦#3` | if it still has no repeated digit: return and cancel everything | **unc** | — |

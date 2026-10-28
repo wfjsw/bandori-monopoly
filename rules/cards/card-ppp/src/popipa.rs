@@ -8,30 +8,35 @@
 //! draw 1.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec};
+use card_sdk::{para, sec, CardText};
 
 pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play("", None, popipa)]).meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Popipa"#)
         .raw_name(r#"Popipa"#)
         .tags(&[r#"手"#])
-        .text(CardText::of(&[
-            sec(r#"[手]："#, &[
-                para(r#"获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]"#),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(
+            r#"[手]："#,
+            &[para(
+                r#"获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]"#,
+            )],
+        )]))
         // sheet cell B2
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );
 
 fn popipa(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「然后此卡[移除]」
     ctx::set_dest(ctx::Dest::Banished);
+    // 规则书: 「获得1000资金」
     ctx::gain(player_id, 1000, &Msg::new(key!("popipa_why")))?;
+    // 规则书: 「并将一张“Pipopa”加入抽牌堆」
     ctx::add_to_dest(player_id, "PPP:[衍生]Pipopa", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("popipa_added")).player_id("who", player_id),
     );
+    // 规则书: 「然后抽一张牌」
     ctx::draw(player_id, 1)?;
     Ok(())
 }

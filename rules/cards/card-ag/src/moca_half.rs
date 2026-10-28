@@ -6,15 +6,14 @@
 //! > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。
 //!
 //! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
-//! 
+//!
 //! Reviewed 10/24/2026
 
-use bandori_std::ctx;
-use card_sdk::{CardText, it};
-use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
+use bandori_std::ctx::{self, trigger};
+use card_sdk::{it, CardText};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "AG:（摩卡）0.5倍速";
-
 
 /// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」
 ///
@@ -37,11 +36,12 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         // > (1)  将此卡放置在场上并获得3个奇迹水晶
         On::Play("", None, play),
 
-        // 你的回合结束时移除一个奇迹水晶
-        On::Action(Action::TurnEnd("card.placed", None, turn_end)),
+        // 规则书(1): 「你的回合结束时移除一个奇迹水晶」 -- the owner's turn end
+        // only: the field hook walk visits every seat's field, so gate on actor.
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
 
-        // 奇迹水晶为0时此卡放入弃牌堆。
-        // TODO: Check, this effect should be silent
+        // 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」 -- a printed discard, so the
+        // entry flashes like every sibling crystal-decay discard (the body logs).
         On::Action(Action::CounterChanged(
             CRYSTALS_CHANGED_PRE,
             None,
@@ -50,7 +50,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
 
         // > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）
         // TODO: Check 最终结算
-        On::Filter(Filter::DiceRollValue("actor == owner && move.main && card.placed", None, roll_half)),
+        On::Action(Action::DiceRollAfter("actor == owner && move.main && card.placed", None, roll_half)),
 
         // 且你的所有资金支付与消耗减半。
         // Note: Mul happens after Add
@@ -81,14 +81,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书(1): 「你的回合结束时移除一个奇迹水晶」 
+/// 规则书(1): 「你的回合结束时移除一个奇迹水晶」
 /// The 「奇迹水晶为0时此卡放入弃牌堆」 half is
 /// [`on_crystals_changed`], not this tick.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
     ctx::remove_crystal()?;
     Ok(())
 }
-
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
@@ -101,22 +100,20 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书(2): 「此卡在场时，你的移动掷骰的最终结算/2（向上取整）」 -- C#
 /// `CardMocaHalf.DiceRollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
-/// main-move roll. ABI v74: a pure `DiceRollValue` filter (placement order among
-/// roll reshapes is preserved).
+/// main-move roll. An `Action::DiceRollAfter` body rewriting the face
+/// (`trigger::set_move_roll`) -- `DiceRollAfter` is the event, `DiceRollValue`
+/// the pure reshape stage.
 ///
 /// TODO(规则书) composition with another roll reshape. 「最终结算」 reads as
 /// *after* additive modifiers (`docs/rulebook/spec/cards/ag.md`
-/// `C-AG-half-speed-03`), which would put this half **last**: against
-/// `PP:不要背负期待` 「投掷结果减少2」 that is 7 → 5 → ceil(5/2) = **3**. The
-/// engine instead folds roll reshapes in placement order, so with 0.5倍速
-/// placed first it is 7 → 4 → 2. `g02_half_speed_plus_expectations_floor_on_a_rent`
-/// pins the 2 (start 27, land 29); its comment's "roll 7 -> 5 -> 2 either way
-/// round" is loose -- 5 → 2 is a *floor* half, and the card says 向上取整. Both
-/// readings are defensible and they disagree by one step, so the composition
-/// order needs a ruling. Filed as OPEN-ROLLRESHAPE-01.
-fn roll_half(player_id: i32, v: RollValue) -> RollValue {
-
-    let roll = v.value.max(0);
+/// `C-AG-half-speed-03`): against `PP:不要背负期待` 「投掷结果减少2」 that is
+/// 7 → 5 → ceil(5/2) = **3**. The `DiceRollAfter` stage gives that order for
+/// `DiceRollValue` reshapes regardless of placement
+/// (`g02_half_speed_plus_expectations_floor_on_a_rent` pins 3); **other**
+/// `DiceRollAfter` bodies still fold in placement order, and the sheet does not
+/// order equal-stage effects. Filed as OPEN-ROLLRESHAPE-01.
+fn roll_half(player_id: i32) -> card_sdk::Asked {
+    let roll = trigger::value().max(0);
 
     // TODO: Replace to .div_ceil as soon as https://github.com/rust-lang/rust/issues/88581
     let halved = roll / 2 + roll % 2;
@@ -128,7 +125,9 @@ fn roll_half(player_id: i32, v: RollValue) -> RollValue {
             .i("to", halved as i64),
     );
 
-    RollValue { value: halved, ..v }
+    // 规则书(2): 「移动掷骰的最终结算/2（向上取整）」 -- rewrite the move's face.
+    trigger::set_move_roll(halved);
+    Ok(())
 }
 
 /// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PaySplitMul` pass (after
@@ -177,8 +176,8 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_half_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
-    roll_half(player_id, v)
+pub fn roll_half_kani(player_id: i32) -> card_sdk::Asked {
+    roll_half(player_id)
 }
 
 #[cfg(kani)]

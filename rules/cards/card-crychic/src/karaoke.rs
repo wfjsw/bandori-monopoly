@@ -9,8 +9,8 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const KARAOKE: CardDef = CardDef::new(
     "CRYCHIC:去唱卡拉ok吧",
@@ -21,7 +21,9 @@ pub const KARAOKE: CardDef = CardDef::new(
         .name(r#"去唱卡拉ok吧"#)
         .raw_name(r#"去唱卡拉ok吧"#)
         .tags(&[])
-        .text(CardText::para(r#"进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。"#))
+        .text(CardText::para(
+            r#"进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。"#,
+        ))
         // sheet cell M4
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );
@@ -45,8 +47,10 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("karaoke_note")).player_id("who", player_id),
     );
     let mut results: Vec<i32> = Vec::new();
-    // The first face is this turn's natural d20 (C# `m.Roll` before `Sing`).
-    results.push(ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?.max(0));
+    // 规则书: 「视为正常掷骰移动」 -- each face is the turn's movement roll (the
+    // plan's `base` + `dice` tables, C# `m.Roll` before `Sing`), not a plain
+    // 1d20; `count` / `sides` are ignored for a `Move` roll.
+    results.push(ctx::roll(player_id, 1, 20, RollPurpose::Move, roll_source::CARD)?.max(0));
     ctx::log(
         player_id,
         &Msg::new(key!("karaoke_face"))
@@ -63,7 +67,8 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
         if !again {
             break;
         }
-        let x = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?.max(0);
+        // 规则书: 「视为正常掷骰移动」 -- a reroll is the movement roll too.
+        let x = ctx::roll(player_id, 1, 20, RollPurpose::Move, roll_source::CARD)?.max(0);
         results.push(x);
         ctx::log(
             player_id,
@@ -73,11 +78,12 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
         );
     }
     // 规则书: 「并选择其中一个结果作为你本回合的移动掷骰数」 -- C# `H.AskPick` over the
-    // faces (default the highest).
+    // faces.
     let chosen = if results.len() == 1 {
         results[0]
     } else {
-        // C# defaults the pick to the highest face.
+        // The options are in roll order, so the host's fallback (option 0) is
+        // the first face rolled, not the highest.
         let options: Vec<Msg> = results
             .iter()
             .map(|&x| Msg::new(key!("karaoke_opt")).i("n", x as i64))
@@ -92,6 +98,10 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
     };
     // 规则书: 「视为正常掷骰移动」 -- `H._turnCtx.Plan.FixedRoll`; the main move then
     // rolls this face and walks normally.
+    // TODO(规则书)（视为正常掷骰移动）: the faces are the turn's movement dice (the
+    //   plan's `base` + `dice`) -- a dice effect that lands *after* this card is
+    //   still bypassed, because the pinned face wins in `card_move`. `set_base_dice`
+    //   clears it for its own roll; other dice writers do not.
     ctx::set_fixed_roll(chosen);
     ctx::log(
         player_id,

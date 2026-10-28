@@ -10,17 +10,17 @@
 //!
 //! > （2）[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。
 //!
-//! stay in play, take a card back from the discard, and shave payments while
-//! poorest.
-//! The discard pick runs in `Play`; the [持续]（1） shave lives in the
-//! `PaySplitChoose` hook.
+//! stay in play, take a card back from the discard, and shave the owner's
+//! payments -- X while poorest, 1500 on resonance.
+//! The discard pick runs in `Play`; the [持续]（1） shave is a `PaySplitAdd`
+//! amount filter and (2) a `PaySplitMulBefore` action.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::ctx::NameId;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 use skill_groups::fans;
 
@@ -32,7 +32,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         // rides `PaySplitAdd` (支付阶段 2) where it belongs and composes with
         // sibling add modifiers. No prompt, so no purity problem.
         On::Filter(Filter::PaySplitAdd("card.placed", None, shave_x_filter)),
-        // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500」 -- the
+        // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 -- the
         // 共鸣 cost makes this half interactive (`try_resonance` prompts), so it
         // cannot be a pure Filter. It rides `Action::PaySplitMulBefore` (v96),
         // the writable stage between the `PaySplitAdd` fold and the `PaySplitMul`
@@ -49,6 +49,14 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         // TODO(规则书): local `.max(0)` per clause vs a final floor after the
         //   whole add/sub stage is still unnamed by the book (the file's existing
         //   order-independence claim covers X-then-1500, not add-then-floor).
+        // TODO(规则书)（[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0））: a fixed
+        //   −1500 is a 支付阶段 2 「支付计算时」 modifier, but the 共鸣 prompt needs
+        //   an interactive stage-2 hook and there is none (no `PaySplitAddBefore`),
+        //   so it lands at `PaySplitMulBefore` (stage 3) after the whole stage-2
+        //   fold; a sibling stage-2 add therefore composes differently.
+        // TODO(规则书)（[共鸣][反击][消耗]或[支付]时）: `PaySplitMulBefore` runs per
+        //   settled leg, so a split payment prompts, spends one 共鸣 and shaves
+        //   1500 per leg -- the sheet does not say per command or per leg.
         On::Action(Action::PaySplitMulBefore("actor == owner && value > 0", None, pay_res).counter_reason(key!("aya_longing_when"))),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -70,6 +78,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
+// 规则书[持续]（1）: 「X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100」
 fn shave_x(player_id: i32) -> i32 {
     let fans = fans::up(player_id) + fans::down(player_id);
     if fans < 10 {
@@ -80,6 +89,9 @@ fn shave_x(player_id: i32) -> i32 {
 }
 
 /// C# `CardAyaLonging.Poorest` -- every alive player has at least as much money.
+// 规则书[持续]（1）: 「如果[拥有者]的资金数是所有存活玩家中最少」
+// TODO(规则书)（如果[拥有者]的资金数是所有存活玩家中最少）: the sheet does not say
+//   whether a money tie counts as 「最少」 (OPEN-ties) -- we count it (non-strict `>=`).
 fn poorest(player_id: i32) -> bool {
     let me = ctx::money_of(player_id);
     (0..ctx::player_count()).all(|p| p == player_id || ctx::player_out(p) || ctx::money_of(p) >= me)
@@ -130,6 +142,9 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
 /// new figure, the host folds it into the leg amount.
 fn shave_x_filter(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     // 「[拥有者][消耗]或[支付]时」 -- the owner is the payer/spender.
+    // TODO(规则书)（（最低0））: the reduction floors at 0 -- we skip entirely when the
+    //   running figure is already ≤0, so a figure an earlier counteraction drove
+    //   negative neither floors to 0 nor loses X here.
     if v.value <= 0 || trigger::player_id() != player_id || !poorest(player_id) {
         return PayAddValue {
             value: v.value,
@@ -152,6 +167,8 @@ fn pay_res(player_id: i32) -> card_sdk::Asked {
     if trigger::value() <= 0 {
         return Ok(());
     }
+    // TODO(规则书)（[共鸣][反击][消耗]或[支付]时）: 「[共鸣]」 is undefined by the book
+    //   (OPEN-共鸣) -- we require paying the 共鸣 cost before the −1500 can apply.
     if crate::resonance::try_resonance(player_id)? {
         trigger::set_pay_amount((trigger::value() - 1500).max(0));
     }

@@ -8,21 +8,21 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
         On::Play("", None, play),
-        // 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- the timing is
-        // a counter used *against you*. The engine's counter link carries
-        // `target` = the countered seat and `actor` = the counter's declarer
-        // (see `build_round`), so `target == owner && actor != owner` is exactly
-        // 「有玩家对你使用[反击]」. `Counteracted` is the named wire kind; the
-        // round on a counter also presents it as the counter's own `card` /
-        // `skillUsed` kind (a counter to a counter is answered there), so both
-        // selectors are declared.
+        // 规则书: 「（此卡可作为[反击]在有玩家对你使用[反击]后立即使用）」 --
+        // the timing is a counter used *against you*. The engine's counter link
+        // carries `target` = the countered seat and `actor` = the counter's
+        // declarer (see `build_round`), so `target == owner && actor != owner`
+        // is exactly 「有玩家对你使用[反击]」. `Counteracted` is the named wire
+        // kind; the counter-to-a-counter window also presents the link as the
+        // counter's own `card` / `cardUsed` kind, so those two counter-link
+        // selectors are declared as well.
         On::Counteract(
             &[ChainKind::Counteracted, ChainKind::Card, card_sdk::abi::ActionKind::CardUsed.as_trigger()],
             "target == owner && actor != owner",
@@ -54,13 +54,21 @@ fn run(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书): 「使当前回合内对你打出过[反击]的所有玩家…」 needs a
     //   per-turn counteraction history (who countered whom). The engine has
     //   none: `ctx::turn_key()` only names the turn, so the full list cannot
-    //   be built (BACKLOG ABI-03). Today this body moves only the immediate
-    //   counterer (`trigger::player_id()` of the link this counter answers),
-    //   which is less than the book. A fix needs: (1) an SDK query for the
-    //   per-turn counteraction history (declarer × countered seat), (2) cond
-    //   vocab to filter it, (3) an append at the counter-declaration loop
+    //   be built (BACKLOG ABI-03). Today the hand-play entry moves **nobody**
+    //   (there `trigger::player_id()` is the acting seat, so the guard below
+    //   returns) and the counteract entry moves only the immediate counterer
+    //   (`trigger::player_id()` of the link this counter answers) -- both less
+    //   than the book. A fix needs: (1) an SDK query for the per-turn
+    //   counteraction history (declarer × countered seat), (2) cond vocab to
+    //   filter it, (3) a per-entry target set (play vs counteract) that only
+    //   skips when empty, (4) an append at the counter-declaration loop
     //   (`wasm_rules.rs` ~5480, where `link.target` = the countered seat and
-    //   `actor`/`player_id` = the declarer), (4) an ABI bump.
+    //   `actor`/`player_id` = the declarer), (5) an ABI bump.
+    //
+    // TODO(规则书)（「若使用者在自身回合内选择了使用者自己进行强制移动」）: the self
+    //   case cannot occur today -- the owner is never in the walked set (the
+    //   counter path requires `actor != owner`; the hand-play path returns at
+    //   the guard). It becomes reachable once the counterer set exists (ABI-03).
     let counter_user = trigger::player_id();
     if counter_user < 0 || counter_user == player_id {
         return Ok(());
@@ -89,7 +97,12 @@ fn run(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk(p,
     // forward ? n : -n, resolve: true, ...)` (MatchHost.cs:5708) builds
     // `MoveCtx { Steps = n, Reverse = !forward, Resolve = true,
-    // Forced = true }`. The MoveCtx shape maps onto `ctx::plan::*`.
+    // Forced = true }`. Steps / Reverse / Resolve map onto `ctx::plan::*`;
+    // `ctx::plan` has no setter for `forced`, so that flag is dropped and the
+    // walk goes through `card_move`'s main-move path.
+    // TODO(ABI)（plan::set_forced / MoveCtx）: no guest setter for `MoveCtx.forced` --
+    //   a forced walk of the turn player is treated as the main move and is
+    //   refused once the main move is spent.
     ctx::plan::set_steps(n);
     ctx::plan::set_reverse(!forward);
     ctx::plan::set_resolve(true);

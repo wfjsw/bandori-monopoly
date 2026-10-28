@@ -7,8 +7,8 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const SPRECHCHOR: CardDef =
     CardDef::new("R:Sprechchor", &[On::Play("", Some(cant_play), sprechchor)])
@@ -23,6 +23,11 @@ pub const SPRECHCHOR: CardDef =
 /// 规则书: 「在Livehouse地块开始回合时」 -- the **turn-start** square, not the
 /// one a mid-turn walk has since reached (C# `H._turnSnap[i].pos`).
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「开始回合时」 / 「可打出此卡」 -- the turn-start window: the main move
+    // must still be available (`rules_status::move_blocked`, as `sweet_escape`).
+    if let Some(why) = rules_status::move_blocked(player_id) {
+        return Some(why);
+    }
     let t = ctx::turn_start_pos(player_id);
     if t >= 0 && ctx::is_live_house_for(player_id, t) {
         return None;
@@ -31,7 +36,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn sprechchor(player_id: i32) -> card_sdk::Asked {
-    // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
+    // 规则书: 「并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目」
+    // `ctx::roll` also honours a forced extreme (AG:（鸫）微小的『能做到』的事
+    // 「以理论最大值或最小值结算」).
     let n = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
     ctx::gain(player_id, 1000 + n * 120, &Msg::new(key!("sprechchor_why")))?;
     Ok(())

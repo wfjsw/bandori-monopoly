@@ -239,27 +239,88 @@ fn stun_payee_is_refused() {
 // Exile return as the main move (MyGO:无路矢 `exileMain`)
 // =====================================================================
 
-/// The return teleport is consumed as that turn's main move: the player
-/// cannot also roll.
+/// The return teleport is consumed as that turn's main move -- the player
+/// cannot also roll -- and, as a main-move landing, it settles: the owned
+/// landing tile offers its build. (C-Q21 still leaves the exact shape open;
+/// the ordinary main-move landing settle is what lands.)
 #[test]
 fn exile_return_counts_as_main_move() {
     let mut t = Table::vanilla(2);
     grant_layer(&mut t, 0, state_key::EXILE, 1, Tick::TurnStart);
     t.set_state(0, state_key::EXILE_TO, 5);
     t.set_state(0, state_key::EXILE_MAIN, 1);
+    // Own the return tile so the settle's own build offer is observable.
+    t.own(0, &[5]);
     // Get to P0's next turn so the exile tick runs the return.
     if t.turn() != 0 {
         let cur = t.turn();
         pass(&mut t, cur);
     }
     pass(&mut t, 0);
-    pass(&mut t, 1);
-    // P0's turn: exile ticked out, return teleport ran as the main move.
+    t.m.world_mut().st.skip_move = true;
+    t.end(1).unwrap();
+    // P0's turn start stopped on the settle's own build offer: the exile
+    // ticked out and the return teleport ran as the main move, landing on the
+    // owned deed with an ordinary landing settle.
     assert_eq!(t.pos(0), 5, "return [传送] landed on exileTo");
     assert!(
         t.m.world().turn.main_moved,
         "exileMain: the return teleport is the turn's [主要移动]"
     );
+    assert!(
+        t.dump_prompt().contains("ask.build"),
+        "the return landing settled and offered the build: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+}
+
+/// The return settle pays the landed deed's rent -- the whole point of
+/// 「视为当回合的主要移动」: the return is a landing like the roll it
+/// replaces, not a free hop.
+#[test]
+fn review_return_teleport_settles() {
+    let mut t = Table::vanilla(2);
+    t.own(1, &[5]);
+    t.set_houses(5, 1); // rent table at one house: 280
+    let before = t.money(0);
+    grant_layer(&mut t, 0, state_key::EXILE, 1, Tick::TurnStart);
+    t.set_state(0, state_key::EXILE_TO, 5);
+    if t.turn() != 0 {
+        let cur = t.turn();
+        pass(&mut t, cur);
+    }
+    pass(&mut t, 0);
+    pass(&mut t, 1);
+    assert_eq!(t.pos(0), 5, "returned onto the housed deed");
+    assert!(
+        t.money(0) < before,
+        "the return settle charged rent: {} -> {}",
+        before,
+        t.money(0)
+    );
+}
+
+/// The return to an unowned deed opens the settle's own buy offer.
+#[test]
+fn review_return_teleport_offers_buy() {
+    let mut t = Table::vanilla(2);
+    grant_layer(&mut t, 0, state_key::EXILE, 1, Tick::TurnStart);
+    t.set_state(0, state_key::EXILE_TO, 5);
+    if t.turn() != 0 {
+        let cur = t.turn();
+        pass(&mut t, cur);
+    }
+    pass(&mut t, 0);
+    t.m.world_mut().st.skip_move = true;
+    t.end(1).unwrap();
+    assert_eq!(t.pos(0), 5, "returned onto the unowned deed");
+    assert!(
+        t.dump_prompt().contains("ask.buy"),
+        "the return landing offered the buy: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
 }
 
 // =====================================================================

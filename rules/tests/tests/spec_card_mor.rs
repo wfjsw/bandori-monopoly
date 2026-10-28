@@ -34,6 +34,15 @@ const TSUKINOMORI: &str = "月之森女子学院";
 
 // ---------------------------------------------------------------- helpers
 
+/// Give `who` one hand mark for the skill whose id contains `needle` -- the
+/// `角色标记:<skill id>` counter a 稍微努力了一下 press spends.
+fn give_hand_mark(t: &mut Table, who: usize, needle: &str) {
+    let id = t.skill_id(who, needle);
+    let name = format!("角色标记:{id}");
+    t.m.world_mut()
+        .set_tok(who as i32, &name, 1, i32::MAX, i32::MAX);
+}
+
 /// Absorb every open prompt with its fallback (setup only -- a contract
 /// should answer its own prompts).
 fn decline_all(t: &mut Table) {
@@ -487,7 +496,7 @@ pub fn c_mor_tritone_gain(step: &Step<'_>) -> Result<(), String> {
     Ok(())
 }
 
-/// C-MOR-tritone-02 -- 3 owner turn-ends later: discard + pay back.
+/// C-MOR-tritone-02 -- 3 turn-ends later (any seat's): discard + pay back.
 pub fn c_mor_tritone_payback(step: &Step<'_>) -> Result<(), String> {
     Ok(())
 }
@@ -597,11 +606,24 @@ pub fn c_mor_rui_demon_x(step: &Step<'_>) -> Result<(), String> {
     // Quote: 「每当你的技能被触发后，立即将x设置为5」 -- only when a skill
     // of the user's fired during this settle. Without such a trigger the
     // clause is a no-op (the card itself must not invent the write).
-    let skill_fired = step
-        .events
-        .iter()
-        .any(|e| e.r#type == "card" && e.kind == "skill" && e.player_id == who as i32);
+    // A skill is 触发 both when pressed (`kind == "skill"`) and when one of its
+    // `On::Action` hooks fires on the owner's behalf (`kind == "hook"`, the
+    // event still naming the `skill:` card).
+    let skill_fired = step.events.iter().any(|e| {
+        e.r#type == "card"
+            && e.player_id == who as i32
+            && (e.kind == "skill" || e.card.starts_with("skill:"))
+    });
     if !skill_fired {
+        // 「每当你的技能被触发后」 -- with no trigger the clause writes nothing.
+        let before = step.pre.st.players[who].state_get("skill.yuriCrit.x");
+        let after = step.post.st.players[who].state_get("skill.yuriCrit.x");
+        if after != before {
+            return Err(format!(
+                "C-MOR-rui-demon-02: X {before} -> {after} with no skill fired; \
+                 the clause is a no-op without a trigger"
+            ));
+        }
         return Ok(());
     }
     let x = step.post.st.players[who].state_get("skill.yuriCrit.x");
@@ -1863,45 +1885,32 @@ fn tritone_gains_the_loss_and_counts_down() {
             ));
         }
 
-        // Countdown: owner turn-end ticks 1 crystal off. 「三回合后」 is
-        // three of the **owner's** turns. p0 already rolled this turn (the
-        // counteract answered its rent), so end it without re-rolling.
+        // Countdown: every turn end ticks 1 crystal off -- 「每回合结束时」
+        // is not limited to the owner's turns. p0 already rolled this turn
+        // (the counteract answered its rent), so end it without re-rolling.
         t.end(0)
             .map_err(|e| format!("end after the counteract: {e}"))?;
         decline_all(&mut t);
         if t.crystals(0, TRITONE) != Some(2) {
             return Err(format!(
-                "C-MOR-tritone-02: after owner turn-end 1 crystals {:?}, expected Some(2)",
+                "C-MOR-tritone-02: after turn-end 1 crystals {:?}, expected Some(2)",
                 t.crystals(0, TRITONE)
             ));
         }
-        // p1's turn end does not tick the owner's countdown.
+        // The opponent's turn end ticks it too: 2 -> 1.
         t.begin_turn(1);
         t.dice(&[1]);
         t.roll(1).unwrap();
         decline_all(&mut t);
         t.end(1).unwrap();
         decline_all(&mut t);
-        if t.crystals(0, TRITONE) != Some(2) {
-            return Err(format!(
-                "C-MOR-tritone-02: opponent's turn end ticked the countdown: {:?}",
-                t.crystals(0, TRITONE)
-            ));
-        }
-        // Owner turn-end #2: 2 -> 1.
-        t.begin_turn(0);
-        t.dice(&[1]);
-        t.roll(0).unwrap();
-        decline_all(&mut t);
-        t.end(0).unwrap();
-        decline_all(&mut t);
         if t.crystals(0, TRITONE) != Some(1) {
             return Err(format!(
-                "C-MOR-tritone-02: after owner turn-end 2 crystals {:?}, expected Some(1)",
+                "C-MOR-tritone-02: opponent's turn end did not tick the countdown: {:?}",
                 t.crystals(0, TRITONE)
             ));
         }
-        // Owner turn-end #3: 1 -> 0 -> discard + payback.
+        // Turn-end #3: 1 -> 0 -> discard + payback.
         t.begin_turn(0);
         t.dice(&[1]);
         t.roll(0).unwrap();
@@ -1989,9 +1998,12 @@ fn rui_demon_pays_100_then_receives_300() {
         t.strip_skills();
         t.clean();
         t.begin_turn(0);
-        // Keep the X key so C-MOR-rui-demon-02 can still observe the card's
-        // own write, but the crit skill must not rewrite the 300 legs.
+        // The X clause is 「每当你的技能被触发后」: bind only 瑠唯's crit skill
+        // back and load miss faces (20 > X), so a skill really fires on every
+        // leg without touching the money the C-MOR-rui-demon-01 legs assert.
+        t.place_raw(0, "skill:八潮瑠唯:正论暴击");
         t.set_state(0, "skill.yuriCrit.x", 0);
+        t.dice(&[20; 8]);
         let money: Vec<i32> = (0..n_seats)
             .map(|_| 10_000 + rng.range(0, 10) * 100)
             .collect();
@@ -2018,7 +2030,9 @@ fn rui_demon_pays_100_then_receives_300() {
                 return Err(format!("C-MOR-rui-demon-01: p{i} delta {d}, expected -200"));
             }
         }
-        // C-MOR-rui-demon-02: the skill's own money legs fire X → 5.
+        // C-MOR-rui-demon-02: the crit skill fired (and missed) on every leg,
+        // so the trailing X = 5 stands -- the 100 leg's 「不可被任何效果影响」
+        // is still unexercised by this scenario.
         if t.state(0, "skill.yuriCrit.x") != 5 {
             return Err(format!(
                 "C-MOR-rui-demon-02: X = {}, expected 5",
@@ -2480,7 +2494,7 @@ fn nnm_hand_play_spends_marks_and_draws() {
                 name: "角色标记:skill:户山香澄:鼓动".into(),
                 value: 1,
                 instance: None,
-            max: 0,
+                max: 0,
             });
         t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
         t.give(0, &[NNM]);
@@ -2520,6 +2534,8 @@ fn nnm_placed_press_spends_a_crystal() {
         t.place_raw(0, NNM);
         let x = rng.range(1, 3);
         t.set_crystals(0, NNM, x);
+        // The press spends a hand mark for the skill it invokes.
+        give_hand_mark(&mut t, 0, "这是很普通的事吧？");
         t.observe(CLAUSES);
         t.skill(0, NNM)
             .map_err(|e| format!("C-MOR-nnm-04: press refused with {x} crystals: {e}"))?;
@@ -2554,6 +2570,7 @@ fn nnm_last_crystal_discards_the_card() {
         t.begin_turn(0);
         t.place_raw(0, NNM);
         t.set_crystals(0, NNM, 1);
+        give_hand_mark(&mut t, 0, "这是很普通的事吧？");
         t.observe(CLAUSES);
         t.skill(0, NNM).unwrap();
         decline_all(&mut t);

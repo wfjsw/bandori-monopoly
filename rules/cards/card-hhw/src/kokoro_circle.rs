@@ -4,10 +4,13 @@
 //! > （kkr）前往笑容集结的地方！：
 //! >  支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款
 //!
+//! The sheet prints no one-copy limit (C# `WhyNot` refused a second copy):
+//! stacked copies each keep their own settle body and each charge the 6000.
+//!
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
@@ -15,7 +18,7 @@ const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 pub const KOKORO_CIRCLE: CardDef = CardDef::new(
     "HHW:（kkr）前往笑容集结的地方！",
     &[
-        On::Play("", Some(cant_play), play),
+        On::Play("", None, play),
         // 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
         // -- 行动阶段 15 (`SETTLE-STAGES.md` §4 M3): 「视为格子的收款」 is an
         // entry in the tile's settle effect list, not an after-hook. A field
@@ -32,34 +35,18 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
         // sheet cell F7
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"弦卷心"#)]));
 
-fn cant_play(_player_id: i32) -> Option<Msg> {
-    // C# `CardKokoroCircle.WhyNot`: refuses when a `CardKokoroCircle` is
-    // already placed on CiRCLE. NEGATION-AUDIT V2 (settled): the **money** half is gone (see
-    // V2): the 「支付10000资金」 is effect content.
-    // 规则书: 「并将此卡置于CiRCLE上」 -- C# `H._placed.Any(p => p is CardKokoroCircle)`
-    // (`ctx::placed_tile` answers "is this id in play on that player").
-    // (`ctx::self_tile` is the *playing* card's destination slot and is the
-    // wrong query -- it used to mask this gate behind the money check.)
-    let n = ctx::player_count();
-    for s in 0..n {
-        if ctx::placed_tile(s, ID).is_some() {
-            return Some(Msg::new(key!("kokoro_circle_already")));
-        }
-    }
-    None
-}
-
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「支付10000资金（视为买地花费）」 -- C# `PayCtx { amount = 10000, kind = "buy" }`.
+    // TODO(规则书)（视为买地花费）: the book treats the 10000 as a land purchase --
+    //   we pay a plain card payment (`PayKind::Card`), so `pay_factor` reducers
+    //   and 「买地」 riders do not see it; `ctx::pay_buy` would carry the kind but
+    //   drops the mandatory shortfall/bankrupt path.
     let paid = ctx::pay(player_id, 10000, &Msg::new(key!("kokoro_circle_why")))?;
     if paid < 10000 {
-        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
-        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
-        // side channel and is not being ported (a routine should *return* whether
-        // it took effect); but before that lands, what "not effective" changes has
-        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
-        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
-        // implies no)? And what counts a use that this would suppress?
+        // TODO(规则书)（支付10000资金（视为买地花费））: the book does not say what
+        // happens when the 10000 cannot be paid -- we keep the card spent and
+        // place nothing. (The foreign phrasing 「视为此卡未生效」 is the C#
+        // `PlayCtx.Effective = false` side channel; BACKLOG CH-07 owns it.)
         return Ok(());
     }
     // 规则书: 「并将此卡置于CiRCLE上」 -- C# `H.PlaceFromPlay(c, i, 0)`.
@@ -77,9 +64,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
 /// -- C# `CardKokoroCircle.SettleAfter`: a settle on the card's tile by anyone
-/// but the owner pays the owner 6,000 as if it were the tile's rent (`kind =
-/// "rent"`). `SETTLE-STAGES.md` §4 M3: an entry in the settle's effect list
-/// (行动阶段 15), so a body replace skips it.
+/// but the owner pays the owner 6,000 as the tile's collection (rent). The
+/// payment currently runs as a plain card payment, not `PayKind::Rent`, and
+/// carries no tile (see the TODOs at the transfer). `SETTLE-STAGES.md` §4 M3:
+/// an entry in the settle's effect list (行动阶段 15), so a body replace skips
+/// it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     if trigger::cancelled() {
         return Ok(());
@@ -105,13 +94,19 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if mover == player_id || mover < 0 {
         return Ok(());
     }
-    // TODO(规则书)[judgement]: C# also skips when `H.CircleNormal(m, num)` (the move tag
-    //   the clause under-specifies -- see the note above it
-    // `circleNormal` on a real CiRCLE settle -- the normal CiRCLE reward already
-    // ran). That move-tag read is not on the trigger payload, so the 6,000 is
-    // charged on every CiRCLE settle by another player until it lands.
+    // TODO(规则书)（若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款）:
+    //   the book prints no carve-out for a normal CiRCLE settle (the reward that
+    //   already ran), yet C# `H.CircleNormal(m, num)` skips the 6,000 there. That
+    //   move-tag read is not on the trigger payload (BACKLOG ABI-02), so the
+    //   6,000 is charged on every such settle by another player until it lands.
     // 规则书: 「向所有者支付6000资金，视为格子的收款」
-    ctx::transfer(
+    // TODO(ABI)（视为格子的收款）: the book makes this the tile's collection -- we
+    //   pay a plain card payment with no tile, so `pay_is_rent` is false (the
+    //   band skill and rent riders miss it), tile-keyed riders dead-end on
+    //   tile -1 and `paid_in_settle` stays cold. Needs a fixed-amount
+    //   `PayKind::Rent` payment carrying CiRCLE (`charge_rent` computes the
+    //   tile's own rent and CiRCLE is unowned).
+    let paid = ctx::transfer(
         mover,
         player_id,
         6000,
@@ -121,7 +116,8 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("kokoro_circle_settled"))
             .player_id("who", mover)
-            .tile("tile", target),
+            .tile("tile", target)
+            .n("amount", paid as i64),
     );
     Ok(())
 }

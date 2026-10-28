@@ -33,17 +33,22 @@ pub const HHW: CardDef = CardDef::new(
         On::Action(Action::PaySplitChooseBefore(
             "actor == owner && target >= 0 && target != owner && pay_is_rent",
             None,
-            on_pay_choose)),
+            on_pay_choose,
+        )),
         // （2） a recorded player's rent collection, with a crystal to spend.
+        // The collect is the trigger's `target`, not `actor` (the payer), so no
+        // `pre::MINE` -- the payer may be anyone, the body filters on `target`.
         On::Action(Action::PayAfter(
-            card_sdk::pre::MINE,
+            "card.placed",
             Some(after_pay_applies),
-            after_pay)),
+            after_pay,
+        )),
         // （3） a recorded amount to spend down.
         On::Action(Action::BuildBefore(
             card_sdk::pre::MINE,
             Some(has_saved),
-            before_build)),
+            before_build,
+        )),
     ],
 );
 
@@ -55,11 +60,15 @@ fn after_pay_applies(player_id: i32) -> bool {
     if who < 0 && who2 < 0 {
         return false;
     }
-    let from = ctx::trigger::player_id();
-    if from != who && from != who2 {
+    // The recorded player's tile **collects**: that is the pay trigger's
+    // `target` (the payer rides `player_id`).
+    let to = ctx::trigger::target();
+    if to != who && to != who2 {
         return false;
     }
-    ctx::trigger::pay_is_rent() && ctx::crystals() >= 1
+    // 规则书（`Sumimi:#L11`）: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的
+    // 一个[奇迹水晶]代替」 -- the cover may pay the removal too.
+    ctx::trigger::pay_is_rent() && crate::cover_crystals(player_id) >= 1
 }
 
 /// Residual guard for [`before_build`]: something recorded to spend.
@@ -95,7 +104,9 @@ fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
 /// （2）「被记录的玩家的格子产生收款时，移除此卡的一个奇迹水晶，记录该次收款的
 /// 价格（可累加）」.
 fn after_pay(player_id: i32) -> card_sdk::Asked {
-    ctx::add_crystals(-1, i32::MAX)?;
+    // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」
+    // -- 「此卡」 is the placed `Sumimi:#L11`, drained first.
+    crate::spend_crystals(player_id, 1)?;
     let v = ctx::trigger::value();
     state::set(player_id, SAVED, state::get(player_id, SAVED) + v);
     ctx::log(player_id, &Msg::new(key!("hhw_saved")).i("n", v as i64));

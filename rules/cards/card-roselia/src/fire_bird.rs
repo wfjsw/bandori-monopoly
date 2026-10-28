@@ -10,7 +10,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(
@@ -21,8 +21,16 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
         On::Play("", None, play),
+        // 规则书: 「自己场地上存在此卡时」 -- `card.placed` is this instance in play.
+        // TODO(规则书)（每回合结束时）: 书中没把「每回合」限定成拥有者的回合 --
+        //   这里每个回合结束都烧（C# `DecayCard` 只在拥有者的回合结束；同 tritone / J11）.
         On::Action(Action::TurnEnd("card.placed", None, turn_end)),
-        On::Filter(Filter::PaySplitMul("card.placed && pay_is_rent && target == owner", None, pay_mul)),
+        // 规则书: 「自己场地上存在此卡时」 -- `card.placed`.
+        // 规则书: 「自己的所有格子收费变成1.5倍」 -- anchored on the *tile's*
+        // owner, not on the payee: a `paySplitAdd` payee redirect runs first, so
+        // `target` may name someone else for the owner's own tile (and vice
+        // versa). `tile` rides the pay payload through every split stage.
+        On::Filter(Filter::PaySplitMul("card.placed && pay_is_rent && tile.id >= 0 && tile.owner == owner", None, pay_mul)),
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -39,16 +47,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「支付1600资金」 -- C# `PayCtx { amount = 1600, kind = "pay", must = false }`.
     let paid = ctx::pay(player_id, 1600, &Msg::new(key!("fire_bird_why")))?;
     if paid < 1600 {
-        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
-        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
-        // side channel and is not being ported (a routine should *return* whether
-        // it took effect); but before that lands, what "not effective" changes has
-        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
-        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
-        // implies no)? And what counts a use that this would suppress?
+        // TODO(规则书)（支付1600资金）: 书中只说付出 1600 并放置此卡，没有定义「付不满」
+        //   时的状态（C# 叫「视为此卡未生效」，CH-07 / C-Q5）-- 这里把付不满当无效返回；
+        //   另外 `pay` 返回的是实际搬走的钱，支付修正（如 0.5 倍）会让付足 1600 也被读成
+        //   不足（缺一个「支付成立 / 被打折」的信号）.
         return Ok(());
     }
     // 规则书: 「并为其添加X（自选）个奇迹水晶」 -- C# `H.AskNumber(i, ..., 1, 10, ...)`.
+    // TODO(规则书)（X（自选））: 书中对 X 没有上下限 -- 1..=10 取自 C#，X = 0 是否合法也未定
+    //   （OPEN-FIRE-X）.
     let x = ctx::ask_number(
         player_id,
         &Msg::new(key!("fire_bird_ask_title")),
@@ -76,11 +83,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「自己的所有格子收费变成1.5倍」. Rent paid to this card's owner is
+/// 规则书: 「自己的所有格子收费变成1.5倍」. Rent on this card's owner's tiles is
 /// charged at ×1.5. Runs through the Fx hook dispatch at `paySplitMul` (after
 /// `PaySplitAdd`, before `PaySplitChoose`), so this is a field effect, not a [反击].
-/// Pure guard for [`pay_mul`] -- the activation gate. `false`
-/// means the card is not activated at all.
 ///
 /// User ruling 2026-10-15 (OPEN-取整 family): a ×1.5 modifier transforms the
 /// running amount exactly and must NOT CeilTo in its own body; the engine
@@ -91,6 +96,8 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
     if value <= 0 {
         return value;
     }
+    // TODO(规则书)（自己的所有格子收费变成1.5倍）: 「变成1.5倍」与其他倍率（Ave Mujica
+    //   1.5 倍、HHW 双倍、摩卡 0.5 倍）是叠乘还是取代未定（OPEN-R1 / MONEY-01）-- 这里叠乘.
     let boosted = ((value as i64 * 3 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     ctx::log(
         player_id,
@@ -105,8 +112,6 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
 /// `DecayCard.TurnEnd` -> `CardFireBird.Burn` (C# `H.LoseR(Seat, 400, "Fire bird")`
 /// then `AddCrystals(-1)`; empty -> `H.Unplace(this, "discard")`). Runs through the
 /// Fx hook dispatch, so this is a field effect, not a [反击].
-/// Pure guard for [`turn_end`] -- the activation gate. `false`
-/// means the card is not activated at all.
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「每回合结束时失去400资金」 -- C# `H.LoseR(Seat, 400, "Fire bird")`.
     ctx::pay(
@@ -128,6 +133,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn crystals_changed_guard(player_id: i32) -> bool {
+    // 规则书: 「自己场地上存在此卡时」 -- re-checked on the live instance.
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)

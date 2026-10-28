@@ -194,8 +194,7 @@ reverse: the rest still resolves). **Needs your call** — no code change assume
 The mirror shape is already coded as a **payment gate on the remainder**:
 bodies that do `if paid < N { return }` (fire_bird:44, believe_you:43,
 kokoro_circle:48, starry_night:60, to_the_peak:152, council_check:90,
-one_of_us:173, dream_return:94) or `if paid > 0 { … }` (gacha10:30,
-crimson_soul:66) drop the rest of the effect when the payment is cancelled or
+one_of_us:173, dream_return:94) drop the rest of the effect when the payment is cancelled or
 reduced. A pure 「取消支付」 therefore cancels the whole remainder — which is one
 reading of 「resolves together」, but it also means a **modifier-reduced** payment
 (e.g. paySplitAdd −600 on fire_bird's 1600) kills the placement even though the
@@ -217,9 +216,9 @@ gate is **text-less**. Tag each `TODO(规则书)`.
 
 | File:line | Gate | Card text (abbrev.) | Body spend |
 |---|---|---|---|
-| `rules/cards/card-general/src/gacha10.rs:17-21` | `>= 1500` | 「[消耗]1500资金，抽1张卡」 | `ctx::pay(1500)` then draw if `paid > 0` |
+| `rules/cards/card-general/src/gacha10.rs:17-21` | `>= 1500` | 「[消耗]1500资金，抽1张卡」 | `ctx::pay(1500)` then an unconditional draw |
 | `rules/cards/card-roselia/src/fire_bird.rs:32-36` | `< 1600` | 「支付1600资金将此卡放置…」 | `ctx::pay(1600)`, abort remainder if short |
-| `rules/cards/card-ag/src/crimson_soul.rs:41-43` | `< 500` | 「选择[消耗]1到5次500资金」 | `ctx::pay(500 * n)`, crystals only if `paid > 0` |
+| `rules/cards/card-ag/src/crimson_soul.rs:41-43` | `< 500` | 「选择[消耗]1到5次500资金」 | `ctx::pay(500)` × n, crystals count n |
 | `rules/cards/card-hhw/src/believe_you.rs:31-32` | `< 800` | 「至少有另一张手牌时可发动，消耗800资金」 (hand-count is a real [限]; money is not) | `ctx::pay(800)`, abort if short |
 | `rules/cards/card-hhw/src/kokoro_circle.rs:31-32` | `< 10000` | 「支付10000资金（视为买地花费）」 | `ctx::pay(10000)`, abort if short |
 | `rules/cards/card-morfonica/src/starry_night.rs:36` | `< 1000` | 「支付X次1000的资金」 | `ctx::pay(1000 * x)`, abort if short |

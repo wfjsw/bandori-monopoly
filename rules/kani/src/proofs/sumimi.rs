@@ -27,6 +27,10 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 crate::host_subset!(idolband_dispatch {
     money => arm_money,
     gain | gain_typed | gain_fixed => arm_gain,
+    // 「将你的资金重设为3000」 is a raw set (C# `fixedAmount`) -- the body
+    // bypasses the paySplit* stages with `adjust_money`, which the model
+    // mirrors one-for-one (no pipeline either side).
+    adjust_money => arm_adjust_money,
     log | effect => arm_log,
     state_get => arm_state_get,
 });
@@ -48,10 +52,13 @@ crate::host_subset!(childhood_after_move_dispatch {
 /// `state_get` reads [不可阻挡] in the host `grant` guard (STA-01).
 crate::host_subset!(two_donuts_dispatch {
     player_pos => arm_player_pos,
-    ,
-    apply_abnormal => arm_apply_abnormal,
+    trig_player => arm_trig_player,
+    gate => arm_gate,
     state_get => arm_state_get,
     state_set => arm_state_set,
+    state_add => arm_state_add,
+    raise_after => arm_raise_after,
+    log_as => arm_log,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
@@ -477,7 +484,7 @@ pub fn childhood_02_mutant_is_detected() {
 // ===========================================================================
 // C-SUMIMI-twodonuts-01 -- 「（1）获得[除外]…」
 // `Sumimi:一人两个甜甜圈` play body.
-// (2)/(3) are PROTOCOL-LEVEL (multi-act pass window).
+// (2) is PROTOCOL-LEVEL (multi-act pass window).
 // Seat-symmetric (the user's own exile grant).
 // ===========================================================================
 
@@ -511,7 +518,7 @@ fn twodonuts_01_exile_iff_at(user: i32) {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     let hold = world::with_world(|ww| {
-        ww.key_get(user, intern::intern(card_sdk::abi::state_key::EXILE_HOLD))
+        ww.key_get(user, intern::intern(bandori_std::state_key::EXILE_HOLD))
     });
 
     crate::kassert!(
@@ -575,23 +582,57 @@ pub fn twodonuts_01_mutant_is_detected() {
 /// residual the swap reads (`persona_is`).
 fn two_in_one_world(user: i32, is_hina: bool) {
     debug_assert!(user == 0 || user == 1);
+    let name = if is_hina {
+        "三角初华（Sumimi）"
+    } else {
+        "纯田真奈"
+    };
+    two_in_one_persona_world(user, name);
+}
+
+/// [`two_in_one_world`] with an arbitrary persona name (`&str`), so a
+/// non-Sumimi seat can be modelled.
+fn two_in_one_persona_world(user: i32, persona: &str) {
     host::install_backend(two_in_one_dispatch);
     crate::harness::sparse_play_world(crate::harness::SparsePlay {
         used_seats: 2,
         n_players: 2,
         ..Default::default()
     });
-    let name = if is_hina {
-        "三角初华（Sumimi）"
-    } else {
-        "纯田真奈"
-    };
-    let cid = intern::intern(name).0;
+    let cid = intern::intern(persona).0;
     world::with_world_mut(|w| {
         w.trig_player = user;
         w.out[user as usize] = false;
         w.persona_id[user as usize] = cid;
     });
+}
+
+/// C-SUMIMI-twoinone-01 gate: 「自己的角色卡替换为sumimi的另一名角色」
+/// presupposes the user holds one of the two -- the `cant_play` gate must admit
+/// both Sumimi faces and refuse any third persona.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn twoinone_01_play_gate_iff() {
+    let user = 0i32;
+    let card = crate::card_id!("Sumimi:Sumimi是二人一体的");
+    two_in_one_persona_world(user, "三角初华（Sumimi）");
+    kani::cover!(play_gate_allows(card, user), "hina admits");
+    crate::kassert!(
+        play_gate_allows(card, user),
+        "C-SUMIMI-twoinone-01: hina may play"
+    );
+    two_in_one_persona_world(user, "纯田真奈");
+    crate::kassert!(
+        play_gate_allows(card, user),
+        "C-SUMIMI-twoinone-01: mana may play"
+    );
+    two_in_one_persona_world(user, "户山香澄");
+    kani::cover!(!play_gate_allows(card, user), "a third persona is refused");
+    crate::kassert!(
+        !play_gate_allows(card, user),
+        "C-SUMIMI-twoinone-01: a non-Sumimi persona may not play"
+    );
 }
 
 /// Shared iff at a **concrete** user seat and **concrete** swap direction.
@@ -603,7 +644,7 @@ fn twoinone_01b_fire_iff_at(user: i32, is_hina: bool) {
     two_in_one_world(user, is_hina);
 
     let to = spec::sumimi::twoinone_fire_target(is_hina);
-    let fire_key = intern::intern(card_sdk::abi::state_key::CHARGE).0;
+    let fire_key = intern::intern(bandori_std::state_key::CHARGE).0;
     let pre = world::snapshot();
 
     // DIRECT body call (ppcost).
@@ -657,7 +698,7 @@ pub fn twoinone_01b_mutant_is_detected() {
     let user = 0i32;
     let to = spec::sumimi::twoinone_fire_target(is_hina);
     let wrong = to + 1;
-    let fire_key = intern::intern(card_sdk::abi::state_key::CHARGE).0;
+    let fire_key = intern::intern(bandori_std::state_key::CHARGE).0;
     invoke::unwrap_done(card_sumimi::two_in_one::play_kani(user));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);

@@ -10,56 +10,51 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
-    &[On::Counteract(&[ChainKind::Settle], "", Some(can_counteract), counteract).counter_reason(key!("please_choose_when"))],
-).meta(&card_sdk::meta::CardMeta::new()
+    &[
+        On::Counteract(&[ChainKind::Settle], "", Some(can_counteract), counteract)
+            .counter_reason(key!("please_choose_when")),
+    ],
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"PLEASE CHOOSE"#)
         .raw_name(r#"PLEASE CHOOSE"#)
         .tags(&[r#"反击"#])
-        .text(CardText::of(&[
-            sec("", &[
+        .text(CardText::of(&[sec(
+            "",
+            &[
                 para(r#"[反击] 当有玩家在livehouse格子上结算时，使对方选择以下效果之一执行："#),
                 items(&[
                     it(r#"立即打出一张可将你指定为目标的牌并将你指定为目标（之一），"#),
                     it(r#"使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）"#),
                 ]),
-            ]),
-        ]))
+            ],
+        )]))
         // sheet cell H7
-        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
-
-/// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
-/// buyable Live House (color group 6, `kind` property/ring). `Live House` the
-/// agent is not buyable and so is not in this list.
-const LIVEHOUSE_BUYABLE: [&str; 8] = [
-    "RiNG 1",
-    "RiNG 2",
-    "DUB MUSIC EXPERIMENT",
-    "RiNG 3",
-    "武道馆",
-    "Space",
-    "Live House Galaxy",
-    "RiNG 4",
-];
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]),
+);
 
 /// 规则书[反击]: 「当有玩家在livehouse格子上结算时」
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「当有玩家在livehouse格子上结算时」 -- any settle, not ours.
-    if trigger::kind() != TriggerKind::Settle || trigger::player_id() == player_id {
+fn can_counteract(_player_id: i32) -> bool {
+    // 规则书[反击]: 「当有玩家在livehouse格子上结算时」 -- any settle, the
+    // holder's own included (「有玩家」 is any player).
+    if trigger::kind() != TriggerKind::Settle {
         return false;
     }
     let t = trigger::tile();
     if t < 0 {
         return false;
     }
-    // 规则书[反击]: 「在livehouse格子上结算」 -- C# `H.IsLiveHouse` + `IsBuyable`.
-    // `is_live_house_for` is the whole check: group 6 (or this player's
-    // `Fx.ExtraColor`) and buyable.
-    ctx::is_live_house_for(player_id, t)
+    // 规则书[反击]: 「在livehouse格子上结算」 -- C# `H.IsLiveHouse(t.Seat, t.Tile)`
+    // + `IsBuyable`: the class `livehouse` as the *settler* sees it (buyable,
+    // group 6, this player's `Fx.ExtraColor` or a colour/class override).
+    // `Live House` the agent is not buyable, so not a livehouse.
+    ctx::is_live_house_for(trigger::player_id(), t)
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -84,6 +79,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .card("card", "RAS:PLEASE CHOOSE"),
         &[opt1, opt2],
     )?;
+    // 规则书[反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
     if pick == 0 {
         // TODO(规则书)[judgement][反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
         //   the clause under-specifies -- see the note above it
@@ -99,21 +95,32 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[反击]（2）: 「使你立即传送至对方所在格子」 -- C# `H.ForceTeleport(i,
-    // to, resolve: false, ...)`; `ctx::teleport_to` is the resolve:false teleport.
+    // to, resolve: false, ...)`. `teleport_as` is that teleport as a move of its
+    // own: the landing raises `passTile` (「视为可触发乐队技能」; `resolve: false`
+    // then runs no settle). A bare `teleport_to` would be a position write here
+    // (the counteraction resolves inside the settler's move) and raise nothing.
     let to = ctx::player_pos(other);
     if to >= 0 {
-        ctx::teleport_to(player_id, to);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("please_choose_moved"))
-                .player_id("who", player_id)
-                .tile("tile", to),
-        );
+        // `player_pos` only reads -1 for a removed player: keep the write
+        // guarded, but still log below so the pick never resolves invisibly.
+        // `teleport_as` re-reads the shared plan's `resolve` after the pass
+        // window (Play::teleport_as_depth), and a nested call would inherit the
+        // settling outer move's `true`; the `TeleportAs` handler makes the
+        // request's own `resolve` authoritative across the call, so `false`
+        // here means the landing raises `passTile` and never settles.
+        ctx::teleport_as(player_id, to, false, false);
     }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("please_choose_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
+    );
     // TODO(规则书)[judgement][反击]（2）: 「（不触发结算但视为可触发乐队技能）」 -- the
     //   the clause under-specifies -- see the note above it
-    // no-settle half is `ctx::teleport_to`; the band-skill half needs the
-    // `BandBase.PassTile` fan-out (C# `H.EachOf(i, f => f.PassTile(m, to))`).
+    // The landing raise is `passTile` (what band skills hang on), but it also
+    // reaches field cards' `PassTile` hooks, which C# (`H.EachOf(i, f =>
+    // f.PassTile(m, to))`) did not fan.
     Ok(())
 }
 

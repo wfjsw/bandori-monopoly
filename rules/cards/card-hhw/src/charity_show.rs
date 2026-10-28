@@ -13,7 +13,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "HHW:爱心义演";
@@ -28,19 +28,23 @@ const KOKORO_ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 const PROP_TURN: &str = "charity.turn";
 /// Running count of the walk's `+2` steps this turn (instance prop).
 const PROP_EXTRA: &str = "charity.extra";
-/// Per-tile first-pass marker (instance prop `charity.seen.<tile>`).
+// The per-tile first-pass marker is a dynamic instance prop, `charity.seen.<tile>`,
+// built inline; it has no const of its own.
 
 pub const CHARITY_SHOW: CardDef = CardDef::new(
     "HHW:爱心义演",
     &[
         On::Play("", None, play),
-        // 规则书: 「本回合中向其他玩家支付时你的付款减半」 -- only payments to
+        // 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- only payments to
         // other players, only on the armed turn (`charity.turn`). The turn-key
         // latch is an instance prop (residual).
         On::Filter(Filter::PaySplitMul("card.placed && actor == owner && target >= 0 && target != owner && value > 0", Some(pay_applies), pay_mul)),
         // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
         // -- a dice (main) walk step onto a tile that counts as yours, first
         // time this turn. `mine` / the first-pass marker are residual.
+        // TODO(规则书)（你若进行掷骰移动）: the book wants a dice move -- we gate on
+        //   `move.main`, which also takes roll-less card walks and misses forced
+        //   dice moves; the `PassTile` payload carries no rolled flag.
         On::Action(Action::PassTile("card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0", Some(pass_applies), pass_tile)),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
         On::Action(Action::TurnEndAfter("card.placed && actor == owner", None, turn_end_after)),
@@ -85,9 +89,9 @@ fn mine(player_id: i32, t: i32) -> bool {
     }
     // 规则书: 「（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）」
     // -- C# `H._placed.Any(p => p is CardKokoroCircle && p.Seat == Player && p.Tile == t)`.
-    // `ctx::placed_tile` answers "is this id in play on that player, and on which
-    // tile". `place_card` does not bind a tile yet (`Some(-1)`), so accept that
-    // as "on CiRCLE" -- the only circle tile the rule names.
+    // `find_card` finds that player's Kokoro card instance and `tile_at` reads
+    // the tile it sits on; an unbound placement (tile `-1`) counts as on CiRCLE
+    // -- the only circle tile the rule names.
     if ctx::is_start(t) {
         return match ctx::find_card(player_id, KOKORO_ID).and_then(ctx::tile_at) {
             Some(pt) => pt == t || pt < 0,
@@ -134,6 +138,9 @@ fn pass_applies(player_id: i32) -> bool {
         return false;
     }
     let key = alloc::format!("charity.seen.{t}");
+    // TODO(规则书)（每初次经过一个属于你的格子）: the spec reads 「初次」 once per
+    //   move, but the marker stores the turn key -- a tile passed earlier in
+    //   the same turn never counts again.
     ctx::prop(&key) != ctx::turn_key()
 }
 
@@ -162,12 +169,11 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     extra += 2;
     ctx::set_prop(PROP_EXTRA, extra);
     ctx::plan::set_extra_steps(extra);
-    // TODO(规则书)[judgement]: the walk reads `m.extra_steps` off the in-flight
-    //   the clause under-specifies -- see the note above it
-    //   `Move` clone, while `set_extra_steps` writes
-    //   `TurnCtx::plan.extra_steps` -- the two are not yet synced
-    //   mid-walk, so the +2 may not extend an in-flight walk until the
-    //   engine mirrors plan writes onto the live move.
+    // TODO(规则书)（使你的总移动数+2）: the book adds 2 to the total walk -- we only
+    //   write `TurnCtx::plan.extra_steps`, which the in-flight walk never
+    //   re-reads, so the +2 is a no-op on the walk it is earned on (BACKLOG
+    //   CRYSTAL-07). The running prop also overwrites any value another
+    //   `set_extra_steps` writer (`uika_imprisoned`) put on the plan.
     Ok(())
 }
 

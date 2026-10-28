@@ -14,7 +14,7 @@
 
 use bandori_std::ctx::{self, plan, state};
 use bandori_std::state_key;
-use card_sdk::abi::{counter, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "skill:Poppin' Party:星之鼓动";
@@ -29,7 +29,9 @@ pub const POPPIN: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            at_turn_start)).silent(),
+            at_turn_start,
+        ))
+        .silent(),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
@@ -37,14 +39,16 @@ pub const POPPIN: CardDef = CardDef::new(
         On::Action(Action::Pass(
             "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
             None,
-            on_pass)),
+            on_pass,
+        )),
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
         On::Action(Action::SettleBefore(
             "",
             Some(before_settle_applies),
-            before_settle)),
+            before_settle,
+        )),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（1） chains two independent 「随后可使用…」 actions
         // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather
@@ -214,7 +218,7 @@ fn available(player_id: i32, tax: i32) -> [bool; 2] {
     }
     [
         ctx::tok(player_id, STICKER) >= 2 + tax,
-        state::get(player_id, USED) == 0 && ctx::crystals() >= 2,
+        state::get(player_id, USED) == 0 && crate::cover_crystals(player_id) >= 2,
     ]
 }
 
@@ -234,7 +238,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
         return None;
     }
     // Neither: name the closest reason.
-    if ctx::tok(player_id, STICKER) < 2 + tax && ctx::crystals() < 2 {
+    if ctx::tok(player_id, STICKER) < 2 + tax && crate::cover_crystals(player_id) < 2 {
         return Some(Msg::new(key!("poppin_no_sticker")));
     }
     if state::get(player_id, USED) != 0 {
@@ -295,20 +299,9 @@ fn cash(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, USED) != 0 {
         return Ok(());
     }
-    let mut n = 2;
-    // 「每当乐队技能需要移除[奇迹水晶]时，可移除「#L11」上的一个[奇迹水晶]代替」
-    if let Some(uid) = ctx::find_card(player_id, "Sumimi:#L11") {
-        while n > 0 && ctx::counter_at(uid, counter::CRYSTALS) > 0 {
-            ctx::add_counter_at(uid, counter::CRYSTALS, -1, i32::MAX);
-            n -= 1;
-        }
-    }
-    if n > 0 {
-        if ctx::crystals() < n {
-            return Ok(());
-        }
-        ctx::add_crystals(-n, i32::MAX)?;
-    }
+    // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」
+    // -- 「此卡」 is the placed `Sumimi:#L11`, drained first.
+    crate::spend_crystals(player_id, 2)?;
     state::set(player_id, USED, 1);
     if ctx::ask_yes(
         player_id,

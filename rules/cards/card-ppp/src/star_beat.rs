@@ -9,17 +9,21 @@
 //! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
 use card_sdk::abi::MoveKind;
-use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",
     &[
-        // 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房」 --
-        // the offer exists only with a layer banked and a buildable owned
-        // tile within 5. Layer is CEL (`slot`); the near-buildable scan is
-        // residual (owned ∩ dist ≤ 5 ∩ can_build_on).
-        On::Action(Action::SettleAfter("actor == owner && slot('star_beat.layers') > 0", Some(has_near_buildable), after_settle)),
+        // 规则书: 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房」
+        // -- the offer exists only with a layer banked and a tile passing
+        // `can_build_on` within 5 (affordability is re-checked inside
+        // `card_offer_build`), dispatched only while the card rides the field as
+        // its carrier (see `play`). The layer is CEL (`slot`); the near-buildable
+        // scan is residual (owned ∩ dist ≤ 5 ∩ can_build_on). The slot is per
+        // player, so only the first placed copy dispatches it (see
+        // `settle_offer_applies`).
+        On::Action(Action::SettleAfter("actor == owner && slot('star_beat.layers') > 0", Some(settle_offer_applies), after_settle)),
         On::Play("", Some(cant_play), play),
     ],
 )
@@ -39,7 +43,9 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         // sheet cell B8
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
-/// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
+/// 规则书: 「本回合的主要移动改为」 -- both branches replace the main move, so the
+/// card is only playable while it is still available. C# `CardStarBeat.WhyNot`
+/// = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
     rules_status::move_blocked(player_id)
 }
@@ -74,9 +80,18 @@ fn money_has_digit5(player_id: i32) -> bool {
 
 fn play(player_id: i32) -> card_sdk::Asked {
     ctx::inc_slot(player_id, "star_beat.layers", 1);
-    // 「[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的格子上进行
+    // 规则书: 「[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的格子上进行
     // 一次盖房，随后减少1层”」 -- the layer is a slot (the stand-in for C#
     // `H.ExtraOf<StarBeatFx>(i).Layers`); `after_settle` is the offer.
+    // TODO(规则书)（下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房）:
+    // C# keeps the state on an invisible player extra -- `SettleAfter` only
+    // dispatches over placed instances, so the card rides the field as its
+    // carrier and never leaves it.
+    ctx::place_self_to_field(
+        player_id,
+        "PPP:STAR BEAT!",
+        &Msg::new(key!("star_beat_title")),
+    );
     // 规则书: 「(45×“资金数包含5的玩家数量+1”) mod 60格」 / 「(2×“资金数包含5的玩家数量+1”)d10」
     let n = (0..ctx::player_count())
         .filter(|&p| !ctx::player_out(p) && money_has_digit5(p))
@@ -107,7 +122,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", player_id)
                 .i("n", 2),
         );
-        // 规则书1: 「本回合的主要移动改为[传送]到(45×…) mod 60格并结算」 -- C#
+        // 规则书1: 「本回合的主要移动改为[传送]到(45×“资金数包含5的玩家数量+1”) mod 60格
+        // 并结算」 -- C#
         // `H.CardMove(c, new MoveCtx { TeleportTo = tile })` (MatchHost.cs:8717;
         // teleport *with* settle -- `MoveCtx.Resolve` defaults to true). The plan
         // names the destination and settles, and `card_move` runs it as the main
@@ -125,7 +141,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
             ctx::card_move(player_id);
         }
     } else {
-        // 规则书2: 「本回合的主要移动改为移动(2×…)d10格并结算」 -- C#
+        // 规则书2: 「本回合的主要移动改为移动(2×“资金数包含5的玩家数量+1”)d10格并结算」
+        // -- C#
         // `H.CardMove(c, new MoveCtx { Base.Clear(); Base.Add((dice, 10, ...)) })`
         // (MatchHost.cs:8723-8730): the base dice table becomes `dice`d10
         // (`set_base_dice` replaces the default 1d20) and the walk runs and
@@ -147,13 +164,22 @@ fn near_buildable(player_id: i32) -> alloc::vec::Vec<i32> {
         .collect()
 }
 
-/// Residual guard for [`after_settle`]: at least one such tile exists.
-fn has_near_buildable(player_id: i32) -> bool {
-    !near_buildable(player_id).is_empty()
+/// Residual guard for [`after_settle`]: at least one such tile exists, and this
+/// copy carries the offer. The layer slot is per player, so a single placed
+/// copy dispatches it -- the first face-up one in placement order; two copies
+/// would otherwise offer twice per settle and burn two layers.
+fn settle_offer_applies(player_id: i32) -> bool {
+    let me = ctx::self_uid();
+    let carrier = ctx::field_instances(player_id)
+        .into_iter()
+        // A face-down card runs no hook, so it is no carrier either.
+        .find(|(uid, id)| *id == "PPP:STAR BEAT!" && !ctx::is_face_down_at(*uid))
+        .is_some_and(|(uid, _)| uid == me);
+    carrier && !near_buildable(player_id).is_empty()
 }
 
-/// 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」.
-/// Applicability is the entry's condition + `has_near_buildable`.
+/// 规则书: 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」.
+/// Applicability is the entry's condition + `settle_offer_applies`.
 fn after_settle(player_id: i32) -> card_sdk::Asked {
     let pool = near_buildable(player_id);
     if !ctx::ask_yes(
@@ -163,25 +189,10 @@ fn after_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    let opts: alloc::vec::Vec<Msg> = pool
-        .iter()
-        .map(|&t| Msg::new(key!("star_beat_tile")).tile("tile", t))
-        .collect();
-    let pick = ctx::ask_pick(
-        player_id,
-        &Msg::new(key!("star_beat_title")),
-        &Msg::new(key!("star_beat_which")),
-        &opts,
-    )?;
-    let Some(&t) = pool.get(pick) else {
-        return Ok(());
-    };
-    ctx::card_offer_build(player_id, &[t]);
+    // 规则书: 「可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」 --
+    // the offer runs its own tile pick over the pool.
+    ctx::card_offer_build(player_id, &pool);
     ctx::inc_slot(player_id, "star_beat.layers", -1);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("star_beat_built")).tile("tile", t),
-    );
     Ok(())
 }
 

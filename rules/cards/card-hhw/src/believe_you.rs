@@ -9,8 +9,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, CardPile};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 const ID: &str = "HHW:因为我一直相信着你";
 
@@ -29,13 +29,16 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // / a living rival. NEGATION-AUDIT V2 (settled): the **money** half is gone -- the
     // 「消耗800资金」 is effect content, not an activation cost.
     // 规则书: 「至少有另一张手牌时可发动」 -- a real [限] on hand count, kept.
-    let others_in_hand = ctx::cards_in(player_id, CardPile::Hand)
-        .into_iter()
-        .filter(|c| c != ID)
-        .count();
+    // The played copy is still in hand here (it leaves only after `cant_play`),
+    // so drop exactly that one copy -- not every copy, which would miscount a
+    // second copy of this same card as no other hand card.
+    let hand = ctx::cards_in(player_id, CardPile::Hand);
+    let others_in_hand = hand.len() - usize::from(hand.iter().any(|c| c == ID));
     if others_in_hand < 1 {
         return Some(Msg::new(key!("believe_you_no_hand")));
     }
+    // 规则书: 「选择一名玩家」 -- C# `CardBelieveYou.WhyNot` also needs a living
+    // rival to ask.
     if ctx::others(player_id).is_empty() {
         return Some(Msg::new(key!("x_no_rival")));
     }
@@ -45,6 +48,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「消耗800资金」 -- C# `PayCtx { amount = 800, kind = "lose", must = false }`.
     let paid = ctx::pay(player_id, 800, &Msg::new(key!("believe_you_pay")))?;
+    // TODO(规则书)（消耗800资金）: the book does not gate the rest on a full payment
+    // -- a short/cancelled 800 drops the whole effect (C-Q5 / CH-07 wasted flag).
     if paid < 800 {
         // C# `c.Effective = false` when the payment does not go through (the play
         // is wasted, `H.ToDiscard(..., wasted: true)`); the ABI has no
@@ -56,6 +61,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // and the picks below show each card's title).
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let deck = ctx::cards_in(player_id, CardPile::Deck);
+    // TODO(ABI)（公开你的卡组与手牌）: no reveal/publish-pile hostcall -- only the
+    //   counts reach the table; the card identities stay with the prompt's seat.
+    // TODO(规则书)（公开你的卡组与手牌）: the sizes are sampled before the rival
+    //   acts, so an empty deck can log 0 here and the picks below then draw from
+    //   a discard refill.
     ctx::log(
         player_id,
         &Msg::new(key!("believe_you_reveal"))
@@ -70,6 +80,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("believe_you_title")),
         &Msg::new(key!("believe_you_ask_who")),
+        // TODO(规则书)（选择一名玩家）: 「一名玩家」 does not say another player --
+        //   whether the user may choose themself is open (OPEN-HHW-BELIEVE-CHOOSER).
         &ctx::others(player_id),
     )?;
     let hand = ctx::cards_in(player_id, CardPile::Hand);
@@ -113,18 +125,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
             );
         }
     }
-    // 规则书: 「重洗你的抽牌堆」 -- C# `H.Shuffle(h.draw)`. There is no in-place
-    // shuffle hook, so each remaining draw-pile card is taken out and mixed back
-    // in (`Dest::DeckRandom`); reshuffles stay on `add_to_dest`.
-    let rest = ctx::cards_in(player_id, CardPile::Deck);
-    for id in rest {
-        ctx::take_card(player_id, id.as_str(), CardPile::Deck);
-        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckRandom);
+    // 规则书: 「重洗你的抽牌堆」 -- C# `H.Shuffle(h.draw)`. `shuffle_into_deck`
+    // (both flags off) shuffles the pile in place and raises `reshuffled` on
+    // commit; the old take/`DeckRandom` loop let an emptied deck refill from the
+    // discard and raised no hook at all on an empty pile.
+    ctx::shuffle_into_deck(player_id, false, false);
+    if ctx::deck_count(player_id) > 0 {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("believe_you_shuffled")).player_id("who", player_id),
+        );
     }
-    ctx::log(
-        player_id,
-        &Msg::new(key!("believe_you_shuffled")).player_id("who", player_id),
-    );
     Ok(())
 }
 

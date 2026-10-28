@@ -87,6 +87,8 @@ pub fn card_10draw_frame(step: &Step<'_>) -> Result<(), String> {
         format!("hand_n:P{who}"),
         format!("draw_n:P{who}"),
         format!("discard_pub:P{who}"),
+        // The (1回限定) latch the play records.
+        format!("state:P{who}:gacha10_used"),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
     frame(step.pre, step.post, &allowed)
@@ -162,6 +164,8 @@ fn ten_draw_contract() {
                 "hand_n:P0",
                 "draw_n:P0",
                 "discard_pub:P0",
+                // The (1回限定) latch the play records.
+                "state:P0:gacha10_used",
             ],
         )
     })

@@ -17,8 +17,6 @@ crate::host_subset!(skills_hhw_dispatch {
     money => arm_money,
     pay | pay_to | pay_total => arm_pay,
     gain_marker => arm_gain_marker,
-    charge => arm_fire,
-    ,
     spend_marker => arm_spend_marker,
     teleport_to => arm_teleport_to,
     player_count => arm_player_count,

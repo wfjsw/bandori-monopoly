@@ -158,10 +158,16 @@ fn g19_manas_join_window_lets_a_third_party_drop_one() {
         if t.prompt().is_none() {
             break;
         }
+        // 「可抽一张卡」 is optional and asks yes / no; its fallback is "no".
+        let draw_ask = t
+            .prompt()
+            .is_some_and(|p| p.title.key().ends_with("net_error_draw_title"));
         if t.counteract_offered("Sumimi:（真奈）歌唱大赛5连冠") {
             t.counteract(0, "Sumimi:（真奈）歌唱大赛5连冠").unwrap();
         } else if t.counteract_offered("通用:网络链接异常") {
             t.counteract(3, "通用:网络链接异常").unwrap();
+        } else if draw_ask {
+            t.answer_one(0).unwrap();
         } else {
             t.decline();
         }
@@ -292,10 +298,14 @@ fn g22_exist_redirects_a_stay_onto_shouko() {
         }
     }
     drain(&mut t);
+    // Both legs are single-player effects under EXIST: the user's own compulsory
+    // designation goes through the gate too, so it is retargeted as well and P2
+    // collects **both** stays (the sheet's 「其中必须包括[使用者]」 is a
+    // designation-time condition, not a landing-time one).
     assert_eq!(
         t.state(2, "stay"),
-        1,
-        "P2 gains the retargeted stay: {}",
+        2,
+        "P2 gains both retargeted stays: {}",
         t.state(2, "stay")
     );
     assert_eq!(t.state(1, "stay"), 0, "P1 is not designated");

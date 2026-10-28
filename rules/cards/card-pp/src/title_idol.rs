@@ -7,13 +7,13 @@
 //! > 1. 为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；
 //! > 2. 为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。
 //!
-//! crystals, then +1 (or +2 with [共鸣]) on every field card whose text mentions
-//! 「奇迹水晶」.
+//! crystals, then +1 (or +2 with [共鸣]) on every non-immune field card whose
+//! text mentions 「奇迹水晶」.
 
 use bandori_std::ctx;
 use card_sdk::abi::counter;
-use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const TITLE_IDOL: CardDef =
     CardDef::new("PP:TITLE IDOL", &[On::Play("", None, title_idol)])
@@ -37,8 +37,10 @@ pub const TITLE_IDOL: CardDef =
         );
 
 fn title_idol(player_id: i32) -> card_sdk::Asked {
-    // 规则书[手]1: 「为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]」
-    ctx::add_group_crystals(player_id, 2, i32::MAX);
+    // 规则书[手]1: 「为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]」 -- the band
+    // card's own print caps its total at 「最多10个」 (user ruling 2026-10-17), so the
+    // add is clamped by the room left rather than passing `i32::MAX`.
+    ctx::add_group_crystals(player_id, 2, 10);
     // 规则书[手]2: 「如果[共鸣]则改为添加2个」 -- paying the [共鸣] cost upgrades
     // the count from 1 to 2.
     let n = if crate::resonance::try_resonance(player_id)? {
@@ -47,13 +49,14 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
         1
     };
     // 规则书[手]2: 「为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]」 --
-    // every placed card whose text mentions 「奇迹水晶」 and which is neither
-    // face-down nor immune (C# `H.PlacedOf(i)` + `p.FaceDown` + `p.Immune`). The
-    // Pastel✽Palettes band card's text contains 「奇迹水晶」 (「团卡的效果也包含
-    // 奇迹水晶」), so it is in this loop too -- clause 1's +2 and clause 2's +n
-    // are two separate adds to the same pool.
+    // every placed card whose text mentions 「奇迹水晶」 and which is not immune
+    // (「不受任何效果影响」; C# `H.PlacedOf(i)` + `p.Immune`). The sheet states no
+    // state condition, so face-down cards are included -- the C# `p.FaceDown` skip
+    // is gone. The Pastel✽Palettes band card's text contains 「奇迹水晶」 (「团卡的
+    // 效果也包含奇迹水晶」), so it is in this loop too -- clause 1's +2 and clause
+    // 2's +n are two separate adds to the same pool.
     for (uid, c) in ctx::field_instances(player_id) {
-        if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
+        if ctx::is_immune_at(uid) {
             continue;
         }
         if !ctx::card_text_mentions(c.as_str(), "奇迹水晶") {

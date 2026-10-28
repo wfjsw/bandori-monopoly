@@ -8,7 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";
@@ -21,10 +21,15 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
     &[
         On::Play("", None, summer_camp),
         // The body-top applicability checks are the condition now: only our own
-        // seat, and only against another player's card (C#
-        // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
-        // the targeting is not card-caused, so `by >= 0` is "there is a card".
+        // seat, and only against another player's effect (C#
+        // `if (seat != Seat || by == Seat) return false;`). `by` is the causer's
+        // seat and is always bound at this gate (a card's or a skill's
+        // controller), so `by >= 0` is a defensive no-op; `by != owner` decides.
+        // 规则书: 「你只会被自己发动的效果指定」
         On::Filter(Filter::Untargetable("actor == owner && by >= 0 && by != owner", None, untargetable)),
+        // TODO(ABI) leave-field hook: the end path is the owner's turn start only
+        //   -- if the card leaves the field earlier, 「当此卡效果结束」 never runs:
+        //   no draw, and the negation count is never reset.
         On::Action(Action::TurnStart("actor == owner && card.placed", None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -36,8 +41,8 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn summer_camp(player_id: i32) -> card_sdk::Asked {
-    // C# `AiPlay => false` -- bots never play this card; `CardDef` has no AiPlay
-    // hook yet, so a bot prompt will still offer it.
+    // TODO(ABI) ai-play: C# `AiPlay => false` -- bots never play this card;
+    // `CardDef` has no AiPlay hook, so a bot prompt still offers it.
     // 规则书: 「打出此卡，直到下个自己的回合开始前」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("summer_camp_note")));
@@ -46,7 +51,7 @@ fn summer_camp(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("summer_camp_placed")).player_id("who", player_id),
     );
     // 规则书: 「你只会被自己发动的效果指定」 -- the Untargetable hook below refuses
-    //   any `by != player_id` and counts negations in `SLOT_BLOCKED`.
+    //   any `by != player_id` and counts each refusal in `SLOT_BLOCKED`.
     // The Fx.TurnStart hook below ends the effect on the owner's next turn.
     Ok(())
 }
@@ -55,7 +60,10 @@ fn summer_camp(player_id: i32) -> card_sdk::Asked {
 /// owner's own effects may target them. Counts negations for the draw gate.
 /// Applicability is the entry's condition (`actor == owner && by >= 0 &&
 /// by != owner` -- C# `if (seat != Seat || by == Seat) return false;`).
-fn untargetable(_player_id: i32, mut g: GateValue) -> GateValue {
+fn untargetable(player_id: i32, mut g: GateValue) -> GateValue {
+    // 规则书: 「你只会被自己发动的效果指定」 -- one negation per refusal; the draw
+    //   when the effect ends is gated on none having happened.
+    ctx::state::add(player_id, SLOT_BLOCKED, 1);
     g.allowed = Some(false); // deny
     g
 }

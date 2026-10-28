@@ -126,11 +126,12 @@ pub fn journey_01_log_ok_mutant(effects: &[Effect], player: i32, card: u8, tile:
 // Card: `MyGO:羽丘的不可思议女孩` On::Play (gated on own tile).
 // Thresholds inclusive (sheet 2026-10-06). `add_house` is free (no money).
 // The `<10` branch's 「放入弃牌堆」 is the play pipeline's default dest, not a
-// body effect — the body itself logs nothing on that branch.
+// body effect — the body only `ctx::log`s the rolled face there (narration is
+// not an Effect).
 // ===========================================================================
 
 /// Effects demanded for a face `r` on an owned, unmortgaged tile.
-/// r < 10: empty log (未生效; discard is the play pipeline).
+/// r < 10: no Effect (未生效; discard is the play pipeline; the body only logs).
 /// r >= 10: SetHouses (free +1). r >= 15: also Draw 1. r >= 20: also PlaceCard.
 pub fn haneoka_effects_ok(effects: &[Effect], player: i32, tile: i32, r: i32, card: u8) -> bool {
     if r < 10 {
@@ -282,41 +283,44 @@ pub fn hitoshizuku_pay_amount(kinds: i32) -> i32 {
     1000 * kinds
 }
 
-/// Spec: after the clear leg, every living player `j != user` with `kinds(j)>0`
-/// has a PayTo { from: j, to: user, n: 1000*kinds(j) }; the user's own extra
-/// gain is `GainMoney { player: user, n: 1000*kinds(user) }` when kinds(user)>0.
+/// Spec: after the clear leg, every living player `j` with `kinds(j)>0` --
+/// the user included (「所有玩家」; the self-leg nets 0) -- has a PayTo
+/// { from: j, to: user, n: 1000*kinds(j) }; the user's own extra gain is
+/// `GainMoney { player: user, n: 1000*kinds(user) }` when kinds(user)>0.
 /// The clear leg itself is a sequence of GiveStay / GiveStun / SetState.
 /// Bounded while (slice iterators are an SSA cliff).
 pub fn hitoshizuku_money_ok(effects: &[Effect], user: i32, kinds: &[i32], n_players: i32) -> bool {
     let mut pays = 0;
     let mut gains = 0;
     let mut i = 0usize;
-    let len = effects.len().min(24);
-    while i < len {
-        match &effects[i] {
-            Effect::PayTo { from, to, n } => {
-                if *to != user {
-                    return false;
+    // Fixed 24 (the log capacity): a syntactic unwind bound for CBMC.
+    while i < 24 {
+        if i < effects.len() {
+            match &effects[i] {
+                Effect::PayTo { from, to, n } => {
+                    if *to != user {
+                        return false;
+                    }
+                    let j = *from as usize;
+                    if j >= kinds.len() {
+                        return false;
+                    }
+                    if *n != hitoshizuku_pay_amount(kinds[j]) {
+                        return false;
+                    }
+                    pays += 1;
                 }
-                let j = *from as usize;
-                if j >= kinds.len() {
-                    return false;
+                Effect::GainMoney { player: p, n } => {
+                    if *p != user {
+                        return false;
+                    }
+                    if *n != 1000 * kinds[user as usize] {
+                        return false;
+                    }
+                    gains += 1;
                 }
-                if *n != hitoshizuku_pay_amount(kinds[j]) {
-                    return false;
-                }
-                pays += 1;
+                _ => {}
             }
-            Effect::GainMoney { player: p, n } => {
-                if *p != user {
-                    return false;
-                }
-                if *n != 1000 * kinds[user as usize] {
-                    return false;
-                }
-                gains += 1;
-            }
-            _ => {}
         }
         i += 1;
     }
@@ -324,7 +328,7 @@ pub fn hitoshizuku_money_ok(effects: &[Effect], user: i32, kinds: &[i32], n_play
     let mut j = 0usize;
     let np = n_players.max(0) as usize;
     while j < np && j < kinds.len() {
-        if j != user as usize && kinds[j] > 0 {
+        if kinds[j] > 0 {
             expected_pays += 1;
         }
         j += 1;
@@ -345,26 +349,22 @@ pub fn hitoshizuku_body_global_pay_ok(
     let each = 1000 * global_kinds;
     let mut pays = 0;
     let mut i = 0usize;
-    let len = effects.len().min(24);
-    while i < len {
-        if let Effect::PayTo { to, n, .. } = &effects[i] {
-            if *to != user || *n != each {
-                return false;
+    // Fixed 24 (the log capacity): a syntactic unwind bound for CBMC.
+    while i < 24 {
+        if i < effects.len() {
+            if let Effect::PayTo { to, n, .. } = &effects[i] {
+                if *to != user || *n != each {
+                    return false;
+                }
+                pays += 1;
             }
-            pays += 1;
         }
         i += 1;
     }
-    let mut expected = 0;
-    let mut j = 0usize;
-    let np = n_players.max(0) as usize;
-    while j < np {
-        if j != user as usize {
-            expected += 1;
-        }
-        j += 1;
-    }
-    pays == expected
+    // Every living seat pays on the mutant reading, the user included: the
+    // body's own leg is a real PayTo(user → user) and the affected-payer set
+    // is `cleared`, not "someone else".
+    pays == n_players.max(0)
 }
 
 // ===========================================================================

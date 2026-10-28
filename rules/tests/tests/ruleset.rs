@@ -80,29 +80,40 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
         player_id: 1,
         arg: Vec::new(),
     };
+    // The two 4d20 rolls are host answers (a roll is a `NeedHost` request in
+    // this harness): 15 -> tile 14, 48 -> tile 47.
+    let faces = [15, 48];
 
-    // Pass 1: no answers -> blocked on the tile prompt, nothing committed.
-    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &[], None).unwrap() else {
+    // Pass 1: the rolls answered, the pick not -> blocked on the choice.
+    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
         panic!("expected a prompt")
     };
-    assert_eq!(p.kind, PromptKind::Tile);
+    assert_eq!(p.kind, PromptKind::Choice);
     assert_eq!(p.player_id, 1);
-    assert_eq!(p.answer_slot, 0);
+    // Two roll answers are already on the log; the pick is the third slot.
+    assert_eq!(p.answer_slot, 2);
     assert_eq!(p.title.key(), "cards:card-hhw.hagumi_marks_ask_title");
-    assert!(!p.options.is_empty() && p.options.len() <= 2);
+    assert_eq!(p.options.len(), 2, "one option per roll: {:?}", p.options);
 
-    // The prompt is reproducible: same snapshot -> same options.
-    let Outcome::NeedInput(again, _) = r.run(&world, call.clone(), &[], None).unwrap() else {
+    // The prompt is reproducible: same rolls -> same options.
+    let Outcome::NeedInput(again, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
         panic!()
     };
     assert_eq!(p, again);
 
-    // Pass 2: answer with the last option -> commits a mark on exactly that tile.
-    let pick = p.options.len() as i32 - 1;
-    let PromptOption::Int(expected_tile) = p.options[pick as usize] else {
-        panic!("tile options are ints")
+    // Pass 2: answer with the last option -> commits a mark on that roll's tile.
+    let pick: i32 = 1;
+    // Every option is a labelled roll (`hagumi_marks_opt`), carrying its tile.
+    let PromptOption::Str(opt) = &p.options[pick as usize] else {
+        panic!("roll options are labelled")
     };
-    let Outcome::Done(after) = r.run(&world, call.clone(), &[pick], None).unwrap() else {
+    let Some(game_core::msg::Arg::Tile(expected_tile)) = opt.a.get("tile") else {
+        panic!("the option carries its tile: {opt:?}")
+    };
+    let expected_tile = *expected_tile;
+    assert_eq!(expected_tile, 47, "the 48 roll maps to tile 47");
+    let answers = [faces[0], faces[1], pick];
+    let Outcome::Done(after) = r.run(&world, call.clone(), &answers, None).unwrap() else {
         panic!("expected Done")
     };
     assert_eq!(
@@ -114,20 +125,12 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
         )]
     );
     assert_eq!(
-        after
-            .events
-            .iter()
-            .filter(|e| e.starts_with("dice"))
-            .count(),
-        2
-    );
-    assert_eq!(
         after.events.last().unwrap(),
         &format!("log player_id=1 cards:card-hhw.hagumi_marks_placed{{tile=tile:{expected_tile}}}")
     );
 
     // Determinism: replaying the full answer log gives an identical world.
-    let Outcome::Done(after2) = r.run(&world, call.clone(), &[pick], None).unwrap() else {
+    let Outcome::Done(after2) = r.run(&world, call.clone(), &answers, None).unwrap() else {
         panic!()
     };
     assert_eq!(after, after2);
@@ -165,21 +168,27 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
     };
     assert!(r.can_counteract(&world, card, 0).unwrap());
 
+    // The 1d4 is a host request (`roll_direct`): answer it with a 3.
     let Outcome::Done(after) = r
-        .run(&world, Call::Counteract {
-            card,
-            player_id: 0,
-            arg: Vec::new(),
-        }, &[], None)
+        .run(
+            &world,
+            Call::Counteract {
+                card,
+                player_id: 0,
+                arg: Vec::new(),
+            },
+            &[3],
+            None,
+        )
         .unwrap()
     else {
         panic!()
     };
     let roll = after.trigger.mv.and_then(|m| m.roll).unwrap();
-    assert!((13..=16).contains(&roll), "12 + 1d4, got {roll}");
+    assert_eq!(roll, 15, "12 + 1d4(3)");
     let boost = Msg::new("cards:card-ag.yolo_boost")
         .player_id("who", 0)
-        .i("n", (roll - 12) as i64)
+        .i("n", 3)
         .i("total", roll as i64);
     assert_eq!(
         after.events.last().unwrap(),
@@ -231,16 +240,20 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     };
 
     // The prompt raised inside the *nested* card aborts the whole outer run.
-    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &[], None).unwrap() else {
+    // The inner card's two 4d20 rolls are host answers and come first
+    // (15 -> tile 14, 48 -> tile 47); the pick is the third slot.
+    let faces = [15, 48];
+    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
         panic!("expected a prompt")
     };
     assert_eq!(
         (p.kind, p.player_id, p.answer_slot),
-        (PromptKind::Tile, 2, 0)
+        (PromptKind::Choice, 2, 2)
     );
 
     // Replay with the answer: outer and inner effects both complete, in order.
-    let Outcome::Done(after) = r.run(&world, call.clone(), &[0], None).unwrap() else {
+    let answers = [faces[0], faces[1], 0];
+    let Outcome::Done(after) = r.run(&world, call.clone(), &answers, None).unwrap() else {
         panic!("expected Done")
     };
     let kinds: Vec<&str> = after
@@ -248,18 +261,26 @@ fn cross_module_play_card_replays_the_inner_prompt() {
         .iter()
         .map(|e| e.split(' ').next().unwrap())
         .collect();
-    assert_eq!(kinds, ["log", "dice", "dice", "log", "log"]);
+    // The harness answers a roll from the log without running the engine's
+    // roll routine, so the faces leave no `dice` line here; the two logs bound
+    // the inner card's own line.
+    assert_eq!(kinds, ["log", "log", "log"]);
     assert!(
         after.events[0].ends_with("cards:fixture-test-cards.relay_start")
-            && after.events[4].ends_with("cards:fixture-test-cards.relay_end")
+            && after.events[1].ends_with("cards:card-hhw.hagumi_marks_placed{tile=tile:14}")
+            && after.events[2].ends_with("cards:fixture-test-cards.relay_end")
     );
-    let PromptOption::Int(t) = p.options[0] else {
+    let PromptOption::Str(opt) = &p.options[0] else {
         panic!()
     };
-    assert_eq!(after.marks[0].0, t);
+    let Some(game_core::msg::Arg::Tile(t)) = opt.a.get("tile") else {
+        panic!()
+    };
+    assert_eq!(after.marks[0].0, *t);
+    assert_eq!(*t, 14, "the 15 roll maps to tile 14");
 
     // Determinism across modules: replaying the same answers gives an identical world.
-    let Outcome::Done(after2) = r.run(&world, call.clone(), &[0], None).unwrap() else {
+    let Outcome::Done(after2) = r.run(&world, call.clone(), &answers, None).unwrap() else {
         panic!()
     };
     assert_eq!(after, after2);
@@ -290,10 +311,10 @@ fn fire_up_cost() {
         .unwrap();
     let world = TestWorld::new(1);
     let call = Call::Play {
-                card,
-                player_id: 0,
-                arg: Vec::new(),
-            };
+        card,
+        player_id: 0,
+        arg: Vec::new(),
+    };
     // One cold run to pay first-time costs, and to prove the entry really runs.
     // `R:[衍生] 压` gains money, which is now a pipeline entry that pauses for the
     // host (`NeedHost`); any of Done / NeedInput / NeedHost proves the entry ran.
@@ -333,10 +354,10 @@ fn fire_up_breakdown() {
     let card = r.card("R:[衍生] 压").unwrap();
     let world = TestWorld::new(1);
     let call = Call::Play {
-                card,
-                player_id: 0,
-                arg: Vec::new(),
-            };
+        card,
+        player_id: 0,
+        arg: Vec::new(),
+    };
     let _ = r.run(&world, call.clone(), &[], None);
     let n = 200;
 
@@ -371,10 +392,10 @@ fn fire_up_reboot() {
     let card = r2.card("R:[衍生] 压").unwrap();
     let world = TestWorld::new(1);
     let call = Call::Play {
-                card,
-                player_id: 0,
-                arg: Vec::new(),
-            };
+        card,
+        player_id: 0,
+        arg: Vec::new(),
+    };
     let _ = r2.run(&world, call.clone(), &[], None);
     let n = 500;
     let t = Instant::now();

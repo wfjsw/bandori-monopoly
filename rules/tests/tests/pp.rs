@@ -222,7 +222,7 @@ fn accident_places_shuffles_overlap_draws() {
 
 // ============================================================ PP:[衍生]重叠的声音
 
-/// 规则书: 「2.将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
+/// 规则书: 「2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
 /// 3.回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。」
 #[test]
 fn overlap_play_teleports_and_turn_end() {
@@ -236,6 +236,43 @@ fn overlap_play_teleports_and_turn_end() {
     t.end(0).unwrap();
     drain(&mut t);
     assert_eq!(t.state(0, "stay"), 1, "1 layer of 停留");
+    assert_eq!(fans(&t, 0), (1, 0), "1 positive P✽P fan");
+    assert!(
+        t.hand(0).contains(&"PP:[衍生]明天见".to_string()),
+        "明天见 in hand: {:?}",
+        t.hand(0)
+    );
+}
+
+/// 规则书[手]2: only the teleport is the turn's main move -- steps 1 and 3
+/// run even when the move is spent (无法移动).
+#[test]
+fn overlap_steps_land_when_the_move_is_spent() {
+    let mut t = Table::vanilla(2);
+    t.set_state(0, bandori_std::state_key::STAY, 1);
+    t.begin_turn(0);
+    t.place_raw(0, "PP:初次演出事故");
+    t.give(0, &["PP:[衍生]重叠的声音"]);
+    let pos = t.pos(0);
+    t.play(0, "PP:[衍生]重叠的声音")
+        .map_err(|e| format!("play rejected under 无法移动: {e}"))
+        .unwrap();
+    drain(&mut t);
+    // step 1: both cards are removed regardless of the refused teleport.
+    assert!(
+        !t.on_field(0, "PP:初次演出事故"),
+        "accident removed: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        !t.hand(0).contains(&"PP:[衍生]重叠的声音".to_string()),
+        "the card itself is banished: {:?}",
+        t.hand(0)
+    );
+    assert_eq!(t.pos(0), pos, "no teleport under 无法移动");
+    // step 3 still runs at the turn end.
+    t.end(0).unwrap();
+    drain(&mut t);
     assert_eq!(fans(&t, 0), (1, 0), "1 positive P✽P fan");
     assert!(
         t.hand(0).contains(&"PP:[衍生]明天见".to_string()),
@@ -886,6 +923,45 @@ fn jennifer_runs_its_steps_in_printed_order() {
     assert!(
         gone < ranger,
         "[移除] must precede the Ranger add: {keys:?}"
+    );
+}
+
+/// 规则书[持续]: 「依次进行以下操作」 has no exit condition -- step 1's 400 may
+/// bankrupt the user, and steps 2 and 3 still land on the out player.
+#[test]
+fn jennifer_steps_continue_after_the_user_is_bankrupted() {
+    // Three seats: with two, the user's bankruptcy ends the match and aborts
+    // the hook before steps 2/3.
+    let mut t = Table::vanilla(3);
+    t.give(0, &["PP:找回珍妮弗"]);
+    t.play(0, "PP:找回珍妮弗").unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("jennifer") {
+            let _ = t.answer(0, 0);
+        } else {
+            t.decline();
+        }
+    }
+    let owner = (1..3)
+        .find(|&w| t.on_field(w, "PP:找回珍妮弗"))
+        .expect("placed on another player");
+    t.set_money(0, 300); // the 400 shortfall bankrupts the user
+    t.begin_turn(owner);
+    walk_onto(&mut t, owner, 3, 6); // path 4,5,6 passes 偶像经纪公司 (5)
+    assert!(
+        t.p(0).bankrupt,
+        "the 400 bankrupts P0: {:?}",
+        t.recent_keys(10)
+    );
+    assert_eq!(t.money(owner), 10_300, "owner received the 300 paid");
+    assert_eq!(fans(&t, 0).0, 1, "step 2's positive fan still lands");
+    assert!(!t.on_field(owner, "PP:找回珍妮弗"), "card removed");
+    assert!(
+        t.hand(0)
+            .contains(&"PP:[衍生]魔法战队Pastel✽Ranger".to_string()),
+        "Ranger still goes to the out user's hand: {:?}",
+        t.hand(0)
     );
 }
 

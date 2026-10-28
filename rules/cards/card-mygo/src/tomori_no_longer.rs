@@ -16,13 +16,24 @@ use alloc::string::String;
 use bandori_std::ctx::{self, trigger, CardPile};
 use bandori_std::kind::Actions;
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     "MyGO:（灯）不再迷茫",
     &[
         On::Play("", None, tomori_no_longer),
+        // 规则书: 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]」
+        // -- declared **before** the sweep entry below so a refund body runs
+        // before the removal body. Guards evaluate on the pre-raise world (a
+        // body's writes never move it), so the sweep guard predicts the refund
+        // instead of reading the refilled count (see [`sweep_guard`]).
+        // `ActionKind::CounterChanged` name-filtered to `counter::CRYSTALS`
+        // (the name is not yet in the condition vocabulary).
+        // TODO(ABI) trigger uid: `trigger::card_is` is name-only, so with two
+        // copies on the field one copy's raise also runs the other copy's
+        // `refill`, which consumes the player-wide `SLOT_COVERING` slot.
+        On::Action(Action::CounterChanged(card_sdk::pre::MINE, Some(refill_guard), refill)),
         // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept whenever the
         // count empties, whichever write emptied it (the skill-cost swap, a
         // move, or a decay). `CounterChanged` is name-filtered to
@@ -38,12 +49,16 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // `ChargePaying` (the window `spend_charge` raises before the pots
         // move); `set_cancelled()` makes `raise` return false, i.e. cost
         // substituted and the skill body proceeds.
+        // TODO(规则书)（你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗）:
+        //   the book scopes the swap to character-skill costs -- `ChargePaying`
+        //   also opens for card-effect and event spends (`fire::spend` is the
+        //   shared verb) and for the band skill's turn-end drain, and the raise
+        //   carries no skill-vs-card source marker
+        //   (TODO(ABI): a source flag / hook point).
+        // 规则书: 「以代替此次技能的火罐消耗」 -- `fire::spend` opens this
+        //   window over the whole cost (temp pots included) before any pot
+        //   moves; one crystal replaces the entire fire cost.
         On::Action(Actions::ChargePaying("actor == owner && card.counter('crystals') >= 1", None, cover)),
-        // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
-        // 获得等同于减少量的[奇迹水晶]」. `ActionKind::CounterChanged`
-        // name-filtered to `counter::CRYSTALS` (the name is not yet in the
-        // condition vocabulary).
-        On::Action(Action::CounterChanged(card_sdk::pre::MINE, Some(refill_guard), refill)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不再迷茫"#)
@@ -95,12 +110,17 @@ fn cover(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Sheet I3 (2): refund any crystal decrease that is not the skill-cost
-/// substitution.
-/// Residual guard -- the name is also `counter_is('crystals')` in the pre
-/// (kept here as well).
+/// 规则书: 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]」
+/// -- refund any crystal decrease that is not the skill-cost substitution.
+///
+/// Pure guard for [`refill`] -- the activation gate. `false` means the card is
+/// not activated at all. The entry's pre only scopes the owner (`actor ==
+/// owner`); the counter name, this card's id and placedness live here -- the
+/// hook hears a counter change on *every* placed card of the owner's, so a
+/// decrease elsewhere (the band skill's own crystals, another card's) would
+/// otherwise be refunded onto this instance.
 fn refill_guard(_player_id: i32) -> bool {
-    trigger::name() == card_sdk::abi::counter::CRYSTALS
+    ctx::is_placed() && trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
 }
 
 fn refill(player_id: i32) -> card_sdk::Asked {
@@ -129,11 +149,18 @@ const ID: &str = "MyGO:（灯）不再迷茫";
 fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得两层仅能被自然流失效果移除的[停留]」 -- C#
     // `H.GiveStay(i, 2, i, CardName)`.
+    let before = rules_status::stay::get(player_id);
     rules_status::stay::add(player_id, 2);
     // 规则书（1）: 「仅能被自然流失效果移除的[停留]」 -- C# `H.IncV(i,
-    // "lockedStay", 2)` marks the two layers as locked (cleared only by natural
-    // decay).
-    ctx::inc_slot(player_id, "lockedStay", 2);
+    // "lockedStay", 2)` marks the layers as locked. Mark only the layers the
+    // grant actually wrote (an Abnormal counteraction cancels it whole), and
+    // give the mark the layers' own wear-off so it cannot outlive them and
+    // shield later, ordinary layers from 壱雫空's `min(lockedStay, stay)` clamp.
+    let landed = rules_status::stay::get(player_id) - before;
+    if landed > 0 {
+        ctx::inc_slot(player_id, "lockedStay", landed);
+        ctx::state::set_expires(player_id, "lockedStay", ctx::state::TURN_END);
+    }
     // 规则书（1）: 「将此卡放置于场上」 -- C# `H.PlaceFromPlay(c, -1, -1, list.Count + 1)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("tomori_no_longer_note")));
@@ -161,22 +188,37 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("tomori_no_longer_placed")).player_id("who", player_id),
     );
     // （2）「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」
-    // -- `fireSpent` is raised after the spend commits, so the substitution is a
-    // crystal taken here and the fire handed back.
-    // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept at the turn end rather
-    // than inside the spend, so it also catches a spend from another card.
+    // -- the substitution is the `ChargePaying` hook in [`cover`]: it opens
+    // before the pots move, and cancelling the window leaves them unspent.
+    // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept by the deferred
+    // `CounterChanged` hook rather than inside the spend, so it also catches a
+    // decrease from another card.
     Ok(())
 }
 
-/// Guard for [`sweep`] -- the count emptied (the write was a decrease and the
-/// card now holds 0). Name-filtered to `counter::CRYSTALS`.
+/// Guard for [`sweep`] -- the count emptied: the write was a decrease and no
+/// refund is owed for it. A guard is evaluated on the **pre-raise** world (a
+/// body's writes never move it), so the refund [`refill`] is about to add must
+/// be predicted, not read: the card is emptied only when the loss is the
+/// substitution (a parked [`SLOT_COVERING`]) or when even the refund would
+/// leave the count at 0. Name-filtered to `counter::CRYSTALS`.
 fn sweep_guard(player_id: i32) -> bool {
     trigger::name() == card_sdk::abi::counter::CRYSTALS
         && ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
         && trigger::value() <= 0
-        && ctx::crystals() == 0
+        && ctx::crystals() + pending_refund(player_id) == 0
+}
+
+/// The crystals [`refill`] will put back for the current decrease: the whole
+/// loss, unless [`SLOT_COVERING`] marks it as the skill-cost substitution.
+fn pending_refund(player_id: i32) -> i32 {
+    if ctx::slot(player_id, SLOT_COVERING) > 0 {
+        0
+    } else {
+        -trigger::value()
+    }
 }
 
 /// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- `[移除]` is

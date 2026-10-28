@@ -872,7 +872,13 @@ fn t18_rana_interesting_woman() {
     t.roll(1).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
-        // Prefer the force-stop branch so (4)/(5) are exercised.
+        // Prefer the force-stop branch so (4)/(5) are exercised. The trap is an
+        // `ask_yes` (yes = lose the parfait), so the stop is `ask.no`.
+        if t.prompt_refers("rana_funny_trap") {
+            let k = t.option("ask.no").expect("trap offers no");
+            t.answer(1, k).unwrap();
+            continue;
+        }
         let k = t
             .option("停")
             .or_else(|| t.option("芭菲"))

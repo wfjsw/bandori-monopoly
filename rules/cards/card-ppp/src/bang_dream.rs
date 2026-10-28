@@ -10,7 +10,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec};
+use card_sdk::{para, sec, CardText};
 
 pub const BANG_DREAM: CardDef = CardDef::new(
     "PPP:Bang Dream!",
@@ -31,7 +31,10 @@ pub const BANG_DREAM: CardDef = CardDef::new(
 );
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // C# `CardBangDream.WhyNot`: refuses with 「你还没有地」 when the player owns no tile.
+    // 规则书: 「[传送]至任意[使用者]拥有的格子」 -- C# `CardBangDream.WhyNot` refuses
+    // with 「你还没有地」 when the player owns no tile.
+    // TODO(规则书)（[传送]至任意[使用者]拥有的格子）: 规则书未写使用条件 -- 无地时整张卡
+    //   拒绝（C# WhyNot），水晶本可单独结算
     if ctx::owned_count(player_id) == 0 {
         return Some(Msg::new(key!("bang_dream_no_land")));
     }

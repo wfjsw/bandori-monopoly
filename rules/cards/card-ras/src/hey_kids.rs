@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const HEY_KIDS: CardDef = CardDef::new(
@@ -22,10 +22,11 @@ pub const HEY_KIDS: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::SettleBody],
         // 规则书[反击]: 「在属于你的格子上结算时」 -- on *another* player's
-        // settle on my unmortgaged, house-bearing tile. A mortgaged deed
-        // charges no rent (the settle offers a forced purchase instead), so it
-        // does not open this. 「将本格上的房屋转移到…」 -- the tile must have
-        // houses to transfer (C# `H.State.houses[t.Tile] > 0`).
+        // settle on my tile. A mortgaged deed charges no rent (the settle offers
+        // a forced purchase instead), so it does not open this.
+        // TODO(规则书)（在属于你的格子上结算时）: any settle on my tile is
+        // printed -- the `mortgaged == 0` and `houses > 0` gates are C#'s
+        // (「将本格上的房屋转移到…」 is a step, not a precondition).
         "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
         Some(can_counteract),
         counteract).counter_reason(key!("hey_kids_when"))],
@@ -147,7 +148,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("hey_kids_gain_diff")),
         )?;
     }
-    // 规则书[反击]: 「随后，你失去"转移后各格房屋造价总和－获得房屋数量×500"的资金」
+    // 规则书[反击]: 「随后，你失去“转移后各格房屋造价总和－获得房屋数量×500”的资金」
     // -- C# `H.LoseR(i, gained - picked.Count * 500, ...)` when positive.
     let fee = cost_in - moved * 500;
     if fee > 0 {
