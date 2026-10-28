@@ -12,7 +12,7 @@
 
 import type { Command, MatchView } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";
-import { plan, type AutopilotCtx } from "./autopilot.ts";
+import { plan, richPassRewardCard, type AutopilotCtx } from "./autopilot.ts";
 import {
   decideBudgetMs,
   decisionAt,
@@ -82,6 +82,18 @@ export async function driveSeat(
 
   // Fallback first, so a failed search still has a legal answer in hand.
   const fallback = firstPlan(v, hooks.ctx);
+
+  // A rich seat always takes the card [pass-reward], whatever the search
+  // would value -- answer it without paying for a search.
+  const rich = richPassRewardCard(v, v.state.prompt);
+  if (rich) {
+    const err = await act(member, rich);
+    if (!err) {
+      hooks.onDone?.(member, "heuristic", 0);
+      return "heuristic";
+    }
+    // Refused on a stale view: let the search try with the frame it has.
+  }
 
   const pool = hooks.pool ?? safePool();
   if (!pool) {

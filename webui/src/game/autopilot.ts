@@ -33,6 +33,15 @@ export const BUILD_RESERVE = 3500;
 export const REDEEM_RESERVE = 4000;
 /** `OfferForceBuy` -- force-buy only while it leaves this much. */
 export const FORCE_BUY_RESERVE = 4000;
+/**
+ * [pass-reward] card odds ramp (user ruling 2026-10-28). At or below
+ * [`PASS_REWARD_CARD_MIN_MONEY`] the seat takes the 2 000 money print; the
+ * card odds then rise superlinearly to 1 at [`PASS_REWARD_CARD_MONEY`], above
+ * which the seat always draws. The print's value falls as the stack grows, so
+ * the ramp is `t²` rather than linear.
+ */
+export const PASS_REWARD_CARD_MIN_MONEY = 8_000;
+export const PASS_REWARD_CARD_MONEY = 80_000;
 /** Odds `bot` plays a card rather than rolling in 运营. */
 export const PLAY_CARD_CHANCE = 0.7;
 /** Hand cards `bot` plays in one turn before rolling. */
@@ -430,6 +439,47 @@ function optionCard(m: { k?: string; a?: Record<string, unknown> } | undefined):
   return typeof v === "string" ? v : "";
 }
 
+/** Standard's [pass-reward] card odds for `money` -- 0 at or below
+ *  [`PASS_REWARD_CARD_MIN_MONEY`], 1 at or above [`PASS_REWARD_CARD_MONEY`],
+ *  and a superlinear (`t²`) ramp between them. */
+export function passRewardCardChance(money: number): number {
+  if (money <= PASS_REWARD_CARD_MIN_MONEY) return 0;
+  if (money >= PASS_REWARD_CARD_MONEY) return 1;
+  const t = (money - PASS_REWARD_CARD_MIN_MONEY) / (PASS_REWARD_CARD_MONEY - PASS_REWARD_CARD_MIN_MONEY);
+  return t * t;
+}
+
+/** The [pass-reward] card option index, or -1. Both wordings carry it
+ *  ("card" on a pass, "card_landed" on a stop on the start square). */
+function passRewardCardOption(p: MatchPrompt): number {
+  return p.options.findIndex((o) => {
+    const key = (o as { k?: string }).k ?? "";
+    return key === "ask.pass_reward.card" || key === "ask.pass_reward.card_landed";
+  });
+}
+
+/**
+ * Deterministic form: the card answer once the seat is over
+ * [`PASS_REWARD_CARD_MONEY`], else null. The advanced driver uses it so a
+ * search cannot vote money over the ruling.
+ */
+export function richPassRewardCard(view: MatchView, p: MatchPrompt): Command | null {
+  if (p.title?.k !== "ask.pass_reward.title") return null;
+  if ((view.state.players[view.playerId]?.money ?? 0) <= PASS_REWARD_CARD_MONEY) return null;
+  const i = passRewardCardOption(p);
+  return i < 0 ? null : { act: "answer", prompt: p.id, value: i };
+}
+
+/** Standard's form: draw the card on [`passRewardCardChance`] of prompts,
+ *  else null (money, via the caller's fallback). */
+function passRewardCardAnswer(view: MatchView, p: MatchPrompt, random: () => number): Command | null {
+  if (p.title?.k !== "ask.pass_reward.title") return null;
+  const chance = passRewardCardChance(view.state.players[view.playerId]?.money ?? 0);
+  if (chance < 1 && random() >= chance) return null;
+  const i = passRewardCardOption(p);
+  return i < 0 ? null : { act: "answer", prompt: p.id, value: i };
+}
+
 /** `bot` prompt answer: the engine's `aiAnswer`, else the policy table. */
 function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command | null {
   const me = view.playerId;
@@ -439,6 +489,11 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
   const money = view.state.players[me]?.money ?? 0;
   const ai = view.aiAnswer ?? null;
   const params = botParams(view, ctx);
+
+  // The [pass-reward] card roll comes before both the engine's answer and the
+  // fallback (which is the money option); the odds rise with the stack.
+  const rewardCard = passRewardCardAnswer(view, p, ctx.random);
+  if (rewardCard) return rewardCard;
 
   if (ai) {
     if (p.kind === "mortgage" || p.kind === "pick") return { act: "answer", prompt: p.id, cards: ai.picked };
