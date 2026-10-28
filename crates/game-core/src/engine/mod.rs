@@ -2739,7 +2739,7 @@ impl Match {
     // ---------------------------------------------------------------- vote
 
     /// Every seat still in the match votes -- humans by hand, bot seats (any
-    /// mentality) by the engine via [`Self::auto_player`] (user ruling
+    /// mentality) by the engine via [`Self::auto_vote`] (user ruling
     /// 2026-10-09). An `ai` seat used to be dropped here, which left an
     /// advanced bot (`ai` off, held for its driver) as a voter nobody answered
     /// -- and a solo vote never expires.
@@ -2781,6 +2781,11 @@ impl Match {
                 i as i32,
                 Msg::new("log.vote_start").player_id("who", i),
             );
+            // Bot seats agree the moment the vote opens. Waiting for the next
+            // tick left the table (and, in Solo, the whole match -- a solo
+            // vote never expires) hanging on a scheduler that may be stopped,
+            // and always burned a beat before the tally moved.
+            self.fill_auto_votes();
         } else {
             let k = self
                 .vote
@@ -2804,6 +2809,27 @@ impl Match {
         Ok(())
     }
 
+    /// Cast every outstanding **machine** vote ([`Self::auto_vote`] -- every
+    /// bot seat, any mentality, plus a human the machine has taken over). The
+    /// policy is the standard bot's: always **yes** (`autopilot.ts`
+    /// `vote: () => ({ act: "vote", value: 1 })`). Returns whether any answer
+    /// moved.
+    ///
+    /// Called when the vote opens ([`Self::vote`]) so the bots agree at once,
+    /// and again each tick for a seat that only *becomes* machine-driven
+    /// during the vote (a human deferred out of the match).
+    fn fill_auto_votes(&mut self) -> bool {
+        let mut moved = false;
+        for k in 0..self.vote.players.len() {
+            let s = self.vote.players[k] as usize;
+            if self.vote.answers[k] < 0 && (self.world.out(s) || self.auto_vote(s)) {
+                self.vote.answers[k] = 1;
+                moved = true;
+            }
+        }
+        moved
+    }
+
     fn tick_vote(&mut self, dt: f32) {
         if self.vote_cooldown > 0.0 {
             self.vote_cooldown -= dt;
@@ -2817,13 +2843,9 @@ impl Match {
         if self.mode != MatchMode::Solo {
             self.vote.time_left -= dt;
         }
-        for k in 0..self.vote.players.len() {
-            let s = self.vote.players[k] as usize;
-            if self.vote.answers[k] < 0 && (self.world.out(s) || self.auto_vote(s)) {
-                self.vote.answers[k] = 1;
-                self.changed = true;
-                self.seq += 1;
-            }
+        if self.fill_auto_votes() {
+            self.changed = true;
+            self.seq += 1;
         }
         if self.mode != MatchMode::Solo && self.vote.time_left <= 0.0 {
             self.end_vote(false, Msg::new("vote.timeout"));
