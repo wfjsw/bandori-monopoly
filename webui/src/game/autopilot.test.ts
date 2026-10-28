@@ -343,6 +343,28 @@ test("over the hand limit it discards first", () => {
   assert.equal(cmd?.act, "discard");
 });
 
+test("the engine's autoAction wins over the policy table", () => {
+  // One implementation: the server-side policy's command rides in the frame.
+  const cmd = suggest(view({ autoAction: { act: "redeem", value: 1 } }), ctx());
+  assert.deepEqual(cmd, { act: "redeem", value: 1 });
+});
+
+test("an autoAction answer for the live prompt wins over aiAnswer", () => {
+  const v = rewardView(10_000, undefined, 0);
+  v.state.prompt.id = 11;
+  v.autoAction = { act: "answer", prompt: 11, value: 1 };
+  assert.deepEqual(suggest(v, ctx()), { act: "answer", prompt: 11, value: 1 });
+});
+
+test("an autoAction discard is used over the policy's pick", () => {
+  const v = view({
+    hand: ["x", "y", "z", "w", "v", "u"],
+    state: state({ step: 2 }),
+    autoAction: { act: "discard", card: "w" },
+  });
+  assert.deepEqual(suggest(v, ctx({ random: rng(0) })), { act: "discard", card: "w" });
+});
+
 test("skip-move in 运营 ends the turn instead of rolling", () => {
   const cmd = suggest(view({ state: state({ step: 2, skipMove: true }) }), ctx());
   assert.deepEqual(cmd, { act: "end" });

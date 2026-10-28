@@ -41,17 +41,22 @@ policy, and a static evaluation at the horizon.
 * **No RNG coupling.** Search uses its own RNG and forked worlds only; it
   never touches the live `world.rng`, `live_rng`, `seq` or event counters.
   Recordings are unchanged because the answers are what get recorded.
-* **Fallback.** Timeout, crash or a missing service → the heuristic answer
-  (`aiAnswer` / `autopilot.ts`).
+* **Fallback.** Timeout, crash or a missing service → the engine's own
+  `autoAction` for the seat; when even that is absent, the page's fallback
+  table (`autopilot.ts`, a port of `ai.rs`).
 
 ### 1.1 Hidden-state audit (seat-view extras)
 
 The client-side **seat-view engine** (`crates/bot-core/src/extras.rs`
 `view_extras`) recomputes the per-viewer extras -- `playable`, `estCost`,
-`skills`, `aiAnswer` -- from one seat's `MatchView` (public `MatchState` +
-own hand + own sorted draw + open prompt). It builds a determinized fork
-(`bot-core/src/determinize.rs`) and runs the same gates the server's
-`Match::view_extra_parts` (`engine/mod.rs`) runs. The list below is every
+`skills`, `aiAnswer`, `autoAction` -- from one seat's `MatchView` (public
+`MatchState` + own hand + own sorted draw + open prompt). `autoAction` is the
+policy's whole next command (`Match::bot_action`), so browser 托管 sends the
+same implementation the server scheduler runs instead of re-deciding in
+TypeScript (`webui/src/game/autopilot.ts`'s table is only the extras-missing
+fallback). It builds a determinized fork (`bot-core/src/determinize.rs`) and
+runs the same gates the server's `Match::view_extra_parts` (`engine/mod.rs`)
+runs. The list below is every
 gate those extras depend on that could read state the viewer does **not**
 know. It is the expected-divergence table for the seat-view equivalence
 tests: anything not listed here must match bit-for-bit.
@@ -170,6 +175,30 @@ fill) kept buying. Pinned by `crates/game-core/tests/compute_ai_answer.rs`.
 
 No `ai_*` choice fn in the extras path reads another seat's hand, the deck
 order, or a hidden zone. Hidden-state risk is limited to the **RNG**.
+
+Both fields now come from **one** computation: the extras run
+`Match::bot_action` (below), which answers a live prompt through
+`compute_ai_answer`, and derive `aiAnswer` from that command (`answer` =
+`value`, `picked` = `cards`, `worth` = the value on an auction only). 托管
+sends the command itself, so a divergence between the hint and the choice can
+no longer happen -- the stand-in fill is only used when `bot_action` is absent
+(a vote is open, or the prompt is not waiting on the viewer).
+
+#### F2. `autoAction` -- `Match::bot_action`
+
+`Match::bot_action(member)` is the **single** policy implementation shared by
+the server scheduler (`Cx::ai_step` for turn surfaces, `ai_answer_for_entry`
+for prompts) and the page. Solo ships it on the frame (`web-glue`'s
+`view_extra`); online computes it on the seat-view fork. It decides **only**
+what the seat could send through `act` and never applies it, so a frame read
+costs no live RNG.
+
+Turn-surface rows follow the same hidden-state rules as the prompt rows above:
+`playable` / `estCost` / public money decide a play or redeem, skills come
+from the public field, and the two RNG draws (`play_card_chance`, chaos's card
+pick) may diverge from the server's own draw. The blast radius is the sent
+command, which the server applies verbatim -- a divergence is a different but
+legal play, never a desync.
 
 #### G. `why_not_act` -- the other branches (not extras, listed for completeness)
 
@@ -1480,6 +1509,10 @@ rollout prompt and turn. Now: `view_extra_typed` returns
 `ViewExtra { ai_answer, playable, est_cost }` (JSON form is a wrapper for
 the wire), and the rollout heuristic reads only `st` + `hand_len_first` +
 `aiAnswer` when a prompt is open.
+
+Later the policy itself became shared (`Match::bot_action`, §1.1 F2), so
+`heuristic_message_with` now delegates to it, and the search's own extras
+reads went to `view_extra_typed_light` (no `autoAction` pass per node).
 
 Measured with `bot_cpu` (same seed 1, same budget, `RUST_MIN_STACK=16MiB`):
 

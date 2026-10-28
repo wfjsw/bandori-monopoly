@@ -17,6 +17,7 @@
 //! as literals.
 
 use super::cx::{Cx, Flow};
+use crate::net::NetMessage;
 use crate::state::{stage, BotMentality};
 use crate::strategy::StrategyParams;
 
@@ -32,6 +33,12 @@ pub const FORCE_BUY_RESERVE: i32 = 4_000;
 pub const PLAY_CARD_CHANCE: f64 = 0.7;
 /// Hand cards a bot plays in one turn before it rolls.
 pub const MAX_PLAYS_PER_TURN: usize = 2;
+/// [pass-reward] card odds ramp (user ruling 2026-10-28). At or below [`PASS_REWARD_CARD_MIN_MONEY`] the
+/// seat takes the 2 000 money print; the card odds then rise superlinearly to
+/// 1 at [`PASS_REWARD_CARD_MONEY`], above which the seat always draws. The
+/// print's value falls as the stack grows, so the ramp is `t²`, not linear.
+pub const PASS_REWARD_CARD_MIN_MONEY: i32 = 8_000;
+pub const PASS_REWARD_CARD_MONEY: i32 = 80_000;
 /// Chaos's coin reserve: voluntary spending only while it leaves this much.
 /// The one knob the chaos policy spends to -- without it a chaos bot burns out
 /// in a few turns and stops being disruptive.
@@ -49,6 +56,21 @@ pub fn wants_buy(money: i32, price: i32) -> bool {
 /// Would building for `cost` leave [`BUILD_RESERVE`]?
 pub fn wants_build(money: i32, cost: i32) -> bool {
     money - cost >= BUILD_RESERVE
+}
+
+/// Standard's [pass-reward] card odds at `money` -- 0 at or below
+/// [`PASS_REWARD_CARD_MIN_MONEY`], 1 at or above [`PASS_REWARD_CARD_MONEY`],
+/// superlinear (`t²`) in between.
+pub fn pass_reward_card_chance(money: i32) -> f64 {
+    if money <= PASS_REWARD_CARD_MIN_MONEY {
+        return 0.0;
+    }
+    if money >= PASS_REWARD_CARD_MONEY {
+        return 1.0;
+    }
+    let t = f64::from(money - PASS_REWARD_CARD_MIN_MONEY)
+        / f64::from(PASS_REWARD_CARD_MONEY - PASS_REWARD_CARD_MIN_MONEY);
+    t * t
 }
 
 /// Would redeeming for `cost` leave [`REDEEM_RESERVE`]?
@@ -444,82 +466,135 @@ impl Cx<'_> {
         p.auction_worth(roll, base, money)
     }
 
-    /// One decision for the player whose turn it is.
+    /// The standard / chaos policy's next **turn-surface** command for seat
+    /// `i`, without applying it. This is the single decision implementation:
+    /// [`Self::ai_step`] applies it on the server, and
+    /// [`super::Match::bot_action`] serialises it for the seat-view extras
+    /// (client 托管 / search fallback). `None` when the surface is not this
+    /// seat's to act on.
     ///
-    /// The standard path below is the standard bot policy -- the chaos branch is
+    /// The standard path is the standard bot policy -- the chaos branch is
     /// taken *before* it and returns, so a standard seat never pays for it.
-    pub(crate) fn ai_step(&mut self, i: usize) -> Flow<()> {
-        let bot = self.w.st.players[i].ai;
+    pub(crate) fn bot_turn_action(&mut self, i: usize) -> Option<NetMessage> {
+        if self.w.st.phase != "play" || self.w.st.busy || self.w.st.turn != i as i32 {
+            return None;
+        }
         if self.w.st.step == stage::OPS {
-            if bot {
-                if self.is_chaos(i) {
-                    // Cards first (every legal opportunity, no cap), then every
-                    // usable skill, then redeem down to the reserve. Only then
-                    // does the turn move on.
+            if self.is_chaos(i) {
+                // Cards first (every legal opportunity, no cap), then every
+                // usable skill, then redeem down to the reserve. Only then
+                // does the turn move on.
+                if let Some(card) = self.ai_card_choice(i) {
+                    return Some(NetMessage {
+                        act: "play".into(),
+                        card,
+                        ..Default::default()
+                    });
+                }
+                if let Some(sk) = self.ai_skill_choice(i) {
+                    return Some(NetMessage {
+                        act: "skill".into(),
+                        card: sk,
+                        ..Default::default()
+                    });
+                }
+                if let Some(t) = self.ai_redeem_choice(i) {
+                    return Some(NetMessage {
+                        act: "redeem".into(),
+                        value: t as i32,
+                        ..Default::default()
+                    });
+                }
+            } else {
+                let p = self.strategy_of(i);
+                if let Some(t) = self.ai_redeem_choice(i) {
+                    return Some(NetMessage {
+                        act: "redeem".into(),
+                        value: t as i32,
+                        ..Default::default()
+                    });
+                }
+                if self.w.turn.played.len() < p.max_plays_per_turn.max(0) as usize
+                    && self.w.rng.chance(p.play_card_chance())
+                {
                     if let Some(card) = self.ai_card_choice(i) {
-                        self.play_from_hand(i, &card)?;
-                        self.wait(1.2);
-                        return Ok(());
+                        return Some(NetMessage {
+                            act: "play".into(),
+                            card,
+                            ..Default::default()
+                        });
                     }
-                    if let Some(sk) = self.ai_skill_choice(i) {
-                        self.w.turn.played.push(sk.clone());
-                        self.use_skill(i, &sk)?;
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                    if let Some(t) = self.ai_redeem_choice(i) {
-                        let _ = self.deed_redeem(i, t);
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                } else {
-                    let p = self.strategy_of(i);
-                    if let Some(t) = self.ai_redeem_choice(i) {
-                        let _ = self.deed_redeem(i, t);
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                    if self.w.turn.played.len() < p.max_plays_per_turn.max(0) as usize
-                        && self.w.rng.chance(p.play_card_chance())
-                    {
-                        if let Some(card) = self.ai_card_choice(i) {
-                            self.play_from_hand(i, &card)?;
-                            self.wait(1.2);
-                            return Ok(());
-                        }
-                    }
-                    // A skill press only when the seat's `SkillParams` ask for
-                    // one (the default entry is "never", the old policy). No
-                    // RNG is drawn otherwise, so the stream above is untouched.
-                    if let Some(sk) = self.ai_skill_choice(i) {
-                        self.w.turn.played.push(sk.clone());
-                        self.use_skill(i, &sk)?;
-                        self.wait(1.2);
-                        return Ok(());
-                    }
+                }
+                // A skill press only when the seat's `SkillParams` ask for one
+                // (the default entry is "never", the old policy). No RNG is
+                // drawn otherwise, so the stream above is untouched.
+                if let Some(sk) = self.ai_skill_choice(i) {
+                    return Some(NetMessage {
+                        act: "skill".into(),
+                        card: sk,
+                        ..Default::default()
+                    });
                 }
             }
             if self.w.st.skip_move {
-                return self.end_turn_cmd(i);
+                return Some(NetMessage::act("end"));
             }
-            let roller = if self.w.st.roller >= 0 {
-                self.w.st.roller as usize
-            } else {
-                i
-            };
-            return self.main_move(i, roller);
+            return Some(NetMessage::act("roll"));
+        }
+        if self.w.st.step != stage::END {
+            return None;
         }
         // Buy / build are settle-time offers only: the tile rule's
         // `ctx::offer_buy` / `ctx::offer_build` prompt already carried the
         // bot's `ai_wants_*` answer. END is discard / end-turn.
         if self.over_hand(i) {
             let hand_len = self.w.hidden[i].hand.len();
+            if hand_len == 0 {
+                return None;
+            }
             let k = self.w.rng.below(hand_len);
-            let card = self.w.hidden[i].hand[k].clone();
-            self.discard(i, &card)?;
-            self.wait(0.4);
-        } else {
-            self.end_turn_cmd(i)?;
+            return Some(NetMessage {
+                act: "discard".into(),
+                card: self.w.hidden[i].hand[k].clone(),
+                ..Default::default()
+            });
+        }
+        Some(NetMessage::act("end"))
+    }
+
+    /// One decision for the player whose turn it is: choose with
+    /// [`Self::bot_turn_action`] and apply it.
+    pub(crate) fn ai_step(&mut self, i: usize) -> Flow<()> {
+        let Some(msg) = self.bot_turn_action(i) else {
+            return Ok(());
+        };
+        match msg.act.as_str() {
+            "play" => {
+                self.play_from_hand(i, &msg.card)?;
+                self.wait(1.2);
+            }
+            "skill" => {
+                self.w.turn.played.push(msg.card.clone());
+                self.use_skill(i, &msg.card)?;
+                self.wait(1.2);
+            }
+            "redeem" => {
+                let _ = self.deed_redeem(i, msg.value.max(0) as usize);
+                self.wait(1.2);
+            }
+            "discard" => {
+                self.discard(i, &msg.card)?;
+                self.wait(0.4);
+            }
+            "roll" => {
+                let roller = if self.w.st.roller >= 0 {
+                    self.w.st.roller as usize
+                } else {
+                    i
+                };
+                return self.main_move(i, roller);
+            }
+            _ => return self.end_turn_cmd(i),
         }
         Ok(())
     }

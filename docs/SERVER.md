@@ -101,21 +101,20 @@ button press would. The server's engine is never asked to drive the seat -- no
 new act flips `players[i].ai`, and `member_left` is not reused -- so the server
 is unchanged and the player's seat is still theirs.
 
-Both policies share one driver; only the decision policy is pluggable
-(`policies: { bot, chaos }`).
+**There is one policy, and it is the engine's.** Every command comes from
+`Match::bot_action` -- the same implementation the server's AI scheduler runs
+for a bot seat -- shipped to the page as `MatchView.autoAction` (solo:
+`web-glue`'s `view_extra`; online: the seat-view worker `viewExtras`, which
+computes it on a determinized fork). The client does not re-decide: the
+takeover sends the command through the ordinary `act` path. The TS table in
+`autopilot.ts` only runs while `autoAction` is absent (an extras miss).
 
-**托管 (`bot`)** is a port of the bot AI in `crates/game-core/src/engine/ai.rs`
-over public data (thresholds kept in sync next to the TS copy): redeem the most
-valuable mortgaged deed that still leaves 4 000; play a card with 70% odds while
-fewer than two have been played this turn; otherwise roll; after landing, buy
-while it leaves 2 000 and build while it leaves 3 500; discard at random over
-the hand limit. Prompts prefer the engine's own precomputed AI answer, which the
-match frame carries per viewer in `aiAnswer` (`Match::view_extra`) -- only for
-the player being asked, never another seat, because an auction ceiling is
-hidden information -- and fall back to the prompt's `fallback` when the frame
-does not carry one (counteract therefore declines). Ban / pick choose a random
-free character; the deck phase submits the character's preset; a live vote is
-answered yes so the table is never left hanging.
+**托管 (`bot`)** therefore inherits the standard bot policy exactly --
+redeem, the 70% card odds, roll, the buy / build reserves, the discard, the
+settle offers' own tests, and the prompt answers (`aiAnswer` is derived from
+the same command). Ban / pick choose a random free character; the deck phase
+submits the character's preset; a live vote is answered yes so the table is
+never left hanging -- those three are not `bot_action` surfaces.
 
 **混沌 (`chaos`)** is legal but maximally disruptive -- it prefers whatever
 makes more things happen. Play every legal card (100%, no cap) and fire every
@@ -140,11 +139,10 @@ bounces moves on instead of looping. Online it always moves well inside the
 turn timer.
 
 Limitations: auto-play is client-only, so other players do not see the
-`board.afk` tag on the seat. Card play uses the view's `playable` list
-(`Match::view_extra`), not a live `rules.ai_play` call -- the two agree today
-because `CardRules::ai_play` defaults to `true`, but a card rule that overrides
-it would not be consulted by the takeover. Chaos's "no visible card cost" note
-above is the same gap.
+`board.afk` tag on the seat. The command is computed against the *frame* the
+page holds, so a pressed command can be a beat stale if another seat acted
+meanwhile; the driver keeps its ordered candidates and moves on when the
+server refuses one.
 
 ### Bot mentality (engine bots)
 

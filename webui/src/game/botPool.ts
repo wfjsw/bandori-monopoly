@@ -35,6 +35,9 @@ export interface ViewExtras {
   skills: SkillAction[];
   /** The standard bot's answer for the viewer's own live prompt, if any. */
   aiAnswer: { answer: number; picked: string[]; worth: number } | null;
+  /** The policy's whole next command (`Match::bot_action`) -- the engine's
+   *  one implementation, which 托管 sends instead of re-deciding. */
+  autoAction: Command | null;
 }
 
 // ---------------------------------------------------------------- merge

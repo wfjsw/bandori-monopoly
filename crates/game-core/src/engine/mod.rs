@@ -35,8 +35,9 @@ pub use tile_text::compose as compose_tile_texts;
 
 pub use ai::{
     bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_play_card, bot_wants_redeem,
-    wants_build, wants_buy, wants_redeem, BUILD_RESERVE, BUY_RESERVE, CHAOS_COUNTER_CHANCE,
-    CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN, PLAY_CARD_CHANCE, REDEEM_RESERVE,
+    pass_reward_card_chance, wants_build, wants_buy, wants_redeem, BUILD_RESERVE, BUY_RESERVE,
+    CHAOS_COUNTER_CHANCE, CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN,
+    PASS_REWARD_CARD_MIN_MONEY, PASS_REWARD_CARD_MONEY, PLAY_CARD_CHANCE, REDEEM_RESERVE,
 };
 pub use cx::{AnswerProvider, Answered, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, AI_UNSET};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
@@ -165,6 +166,9 @@ pub struct ViewExtra {
     /// The viewer's pressable skills (`skill:*` field instances with an
     /// `On::Play` entry), each gated through [`why_not_act`].
     pub skills: Vec<SkillAction>,
+    /// The policy's next command for the viewer ([`Match::bot_action`]) -- the
+    /// client 托管 driver sends it instead of re-deciding in TypeScript.
+    pub auto_action: Option<NetMessage>,
 }
 
 /// Cheap decision-surface probe: the fields the rollout loop needs, without
@@ -1278,13 +1282,22 @@ impl Match {
     /// rollout / action abstraction). Same fields, no JSON round trip.
     pub fn view_extra_typed(&self, member: i32) -> ViewExtra {
         let t0 = rtimer::now();
-        let v = self.view_extra_parts(member);
+        let mut v = self.view_extra_parts(member);
+        v.auto_action = self.bot_action(member);
         rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
         v
     }
 
+    /// [`Self::view_extra_typed`] **without** the policy command. The search
+    /// reads `playable` / `estCost` / `aiAnswer` per node and never sends
+    /// `autoAction` itself, so the extra decision pass is dead weight there.
+    pub fn view_extra_typed_light(&self, member: i32) -> ViewExtra {
+        self.view_extra_parts(member)
+    }
+
     fn view_extra_inner(&self, member: i32) -> serde_json::Value {
-        let p = self.view_extra_parts(member);
+        let mut p = self.view_extra_parts(member);
+        p.auto_action = self.bot_action(member);
         let ai_answer = p.ai_answer.map(|a| {
             serde_json::json!({
                 "answer": a.answer,
@@ -1297,6 +1310,7 @@ impl Match {
             "playable": p.playable,
             "estCost": p.est_cost,
             "skills": p.skills,
+            "autoAction": p.auto_action,
         })
     }
 
@@ -1366,6 +1380,7 @@ impl Match {
             playable,
             est_cost,
             skills,
+            auto_action: None,
         }
     }
 
@@ -1403,16 +1418,29 @@ impl Match {
     /// propensity) -- the fork owns a fresh stream. That is expected and
     /// listed in the hidden-state audit (`docs/BOT.md` §1). The rows above are
     /// deterministic and must match exactly.
-    pub fn compute_ai_answer(&mut self, member: i32) -> Option<RawAiAnswer> {
+    pub fn compute_ai_answer(&self, member: i32) -> Option<RawAiAnswer> {
         let i = self.player_index(member)?;
         let prompt = {
-            let p = self.pending.as_ref()?;
-            let l = &p.live;
-            let k = l.ask.view.player_index(i as i32)?;
-            if l.answers.get(k).copied().unwrap_or(-1) >= 0 {
+            // The live routine's `Ask` while one is pending; otherwise the
+            // state's own `st.prompt` -- any question left over after the
+            // routine returned stays open there for the client to answer
+            // (`busy` is false between halves of a turn), and a frame read at
+            // such an idle prompt must still be answered.
+            let (view, answers) = match self.pending.as_ref() {
+                Some(p) => (p.live.ask.view.clone(), p.live.answers.clone()),
+                None => (
+                    self.world.st.prompt.clone(),
+                    self.world.st.prompt.answers.clone(),
+                ),
+            };
+            if view.id == 0 {
                 return None;
             }
-            l.ask.view.clone()
+            let k = view.player_index(i as i32)?;
+            if answers.get(k).copied().unwrap_or(-1) >= 0 {
+                return None;
+            }
+            view
         };
         let fallback = prompt.fallback;
         let mut cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
@@ -1512,6 +1540,66 @@ impl Match {
                 })
             }
         }
+    }
+
+    /// The standard / chaos policy's **next command** for `member`, ready to
+    /// send through [`Self::act`] -- the single implementation shared by the
+    /// server's AI scheduler (`Cx::ai_step` for turn surfaces,
+    /// `compute_ai_answer` for prompts) and the seat-view extras
+    /// (`ViewExtras::auto_action`: client 托管 and the search fallback).
+    ///
+    /// `None` when the seat has nothing to decide: another seat's prompt or an
+    /// already-answered slot, not its turn, a live vote, or a phase the policy
+    /// does not drive (setup is engine-side -- `MatchPlayer::auto_setup`).
+    ///
+    /// Prompt answers come from [`Self::compute_ai_answer`], so an auction
+    /// ceiling, a mortgage selection and the settle offers' policy tests
+    /// travel with it. The RNG draws are the same ones the server would make
+    /// on this state, from this world's stream.
+    pub fn bot_action(&self, member: i32) -> Option<NetMessage> {
+        let i = self.player_index(member)?;
+        if self.world.st.phase != "play" {
+            return None;
+        }
+        // Votes are answered by the scheduler (`tick_vote`), not here; the
+        // client keeps the vote branch above this action in `plan`.
+        if self.world.st.vote.id > 0 {
+            return None;
+        }
+        if self.world.st.prompt.id > 0 {
+            // `compute_ai_answer` owns the waiting check (another seat's
+            // prompt, an answered slot) -- and reads the pending live `Ask`
+            // when a routine is running, the state's prompt when it is idle.
+            let prompt = match self.pending.as_ref() {
+                Some(p) => p.live.ask.view.clone(),
+                None => self.world.st.prompt.clone(),
+            };
+            let a = self.compute_ai_answer(member)?;
+            let mut m = NetMessage {
+                act: "answer".into(),
+                prompt: prompt.id,
+                ..Default::default()
+            };
+            match prompt.kind.as_str() {
+                "auction" => m.value = a.worth,
+                "mortgage" => m.cards = a.picked,
+                "pick" if !prompt.items.is_empty() => {
+                    // Card picks answer with the card list; `compute_ai_answer`
+                    // carries the selection in `picked` where the prompt has
+                    // one, else the fallback index names the item.
+                    m.cards = a.picked;
+                    if m.cards.is_empty() {
+                        if let Some(c) = prompt.items.get(a.answer.max(0) as usize) {
+                            m.cards.push(c.clone());
+                        }
+                    }
+                }
+                _ => m.value = a.answer,
+            }
+            return Some(m);
+        }
+        let mut cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
+        cx.bot_turn_action(i)
     }
 
     // ------------------------------------------------------- simulation fork

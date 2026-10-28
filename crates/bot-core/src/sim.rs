@@ -198,7 +198,7 @@ impl Simulator for MatchSim {
         }
         let st = fork.state();
         let hand = fork.hand_of(self.member);
-        let extra = fork.view_extra_typed(self.member);
+        let extra = fork.view_extra_typed_light(self.member);
         action::legal_actions_with_cost(
             &self.data,
             &st,
@@ -266,7 +266,7 @@ impl Simulator for MatchSim {
         }
         let st = fork.state();
         let hand = fork.hand_of(self.member);
-        let extra = fork.view_extra_typed(self.member);
+        let extra = fork.view_extra_typed_light(self.member);
         let ai_answer = extra.ai_answer.map(|a| AiAnswer {
             answer: a.answer,
             picked: a.picked,
@@ -512,28 +512,24 @@ pub fn heuristic_message_view(_data: &GameData, view: &SeatView) -> NetMessage {
     NetMessage::act("end")
 }
 
-/// [`heuristic_message_view`] over a forked [`Match`]'s own accessors.
+/// The engine's own policy over a forked [`Match`] (`Match::bot_action`) --
+/// the single implementation the server, the client 托管 and the rollouts
+/// share. A prompt for the seat is answered from the same `ai_*` choice
+/// functions the live scheduler would run; the turn surface is the policy
+/// itself (redeem / play / skill / roll / end / discard).
 ///
-/// Rollout hot path: builds only what the heuristic reads (the caller's
-/// already-fresh `st`, the hand size / first card, and `aiAnswer` when a prompt
-/// is open) -- no `SeatView`, no `view_extra` JSON, no `draw_of` sort.
+/// Rollout hot path: no `SeatView`, no `view_extra` JSON. `BOT_STRENGTH_AB_NO_GATES`
+/// keeps its old bare roll/end turn surface for A/B runs.
 pub fn heuristic_message_with(
     _data: &GameData,
-    fork: &Match,
+    fork: &mut Match,
     member: i32,
     st: &MatchState,
 ) -> NetMessage {
     let player_id = st.player_of(member);
     if st.prompt.id > 0 && st.prompt.waiting(player_id) {
-        let ai_answer = fork.view_extra_typed(member).ai_answer.map(|a| AiAnswer {
-            answer: a.answer,
-            picked: a.picked,
-            worth: a.worth,
-        });
-        if let Some(ans) = &ai_answer {
-            if let Some(action) = ai_answer_to_action(st, ans, player_id.max(0) as usize) {
-                return action::to_net_message(&action, st, player_id.max(0) as usize);
-            }
+        if let Some(msg) = fork.bot_action(member) {
+            return msg;
         }
         return NetMessage {
             act: "answer".into(),
@@ -542,36 +538,14 @@ pub fn heuristic_message_with(
             ..Default::default()
         };
     }
-    // Turn surface. Same order as `heuristic_message_view`; hand is only
-    // needed for the over-hand discard branch.
-    let me = player_id.max(0) as usize;
-    let (hand_len, first) = fork.hand_len_first(member);
-    if st.players.get(me).is_some_and(|p| p.over_hand(hand_len)) {
-        if let Some(c) = first {
-            return NetMessage {
-                act: "discard".into(),
-                card: c,
-                ..Default::default()
-            };
-        }
-    }
-    if st.step == stage::OPS {
-        if action::ab_on("BOT_STRENGTH_AB_NO_GATES") {
-            if st.skip_move {
-                return NetMessage::act("end");
-            }
-            return NetMessage::act("roll");
-        }
-        if st.can_end_here && !st.can_roll_here {
+    if action::ab_on("BOT_STRENGTH_AB_NO_GATES") {
+        if st.skip_move {
             return NetMessage::act("end");
         }
         return NetMessage::act("roll");
     }
-    if st.step == stage::END {
-        // Buy / build happen only at a settle Ask (prompt path above).
-        return NetMessage::act("end");
-    }
-    NetMessage::act("end")
+    fork.bot_action(member)
+        .unwrap_or_else(|| NetMessage::act("end"))
 }
 
 /// Drive a live (or forked) [`Match`] to the searching seat's next decision.

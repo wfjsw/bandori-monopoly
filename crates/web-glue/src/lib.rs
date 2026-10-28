@@ -771,6 +771,7 @@ fn frame(
         "estCost": extra.est_cost,
         "tileQuotes": m.tile_quotes(member),
         "skills": extra.skills,
+        "autoAction": extra.auto_action,
     })
 }
 

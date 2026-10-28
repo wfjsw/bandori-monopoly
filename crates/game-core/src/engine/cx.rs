@@ -1212,9 +1212,41 @@ impl<'a> Cx<'a> {
             // (`docs/BOT.md` §3.8 "counteraction"; default 600‰, user
             // ruling 2026-10-08). `CounterParams` 0 holds a card back.
             self.counteract_pick(seat, ask, fallback, n)
+        } else if ask.view.title.key() == "ask.pass_reward.title" {
+            // Standard: the card odds ramp with the seat's money (user
+            // ruling 2026-10-28). Both the server bot and 托管 come through
+            // here, so there is no second copy to keep in step.
+            self.pass_reward_pick(seat, ask, fallback)
         } else {
             fallback
         }
+    }
+
+    /// Standard's [pass-reward] answer: the card on
+    /// [`super::ai::pass_reward_card_chance`], else `fallback` (the money
+    /// print). Both option wordings carry the card ("card" on a pass,
+    /// "card_landed" on a stop on the start square). Only the intermediate
+    /// band draws the world RNG, so the stream moves exactly where the
+    /// outcome is undecided.
+    fn pass_reward_pick(&mut self, seat: usize, ask: &Ask, fallback: i32) -> i32 {
+        let money = self.w.st.players.get(seat).map_or(0, |p| p.money);
+        let chance = super::ai::pass_reward_card_chance(money);
+        if chance <= 0.0 {
+            return fallback;
+        }
+        if chance < 1.0 && self.w.rng.f64() >= chance {
+            return fallback;
+        }
+        ask.view
+            .options
+            .iter()
+            .position(|o| {
+                matches!(
+                    o.key(),
+                    "ask.pass_reward.card" | "ask.pass_reward.card_landed"
+                )
+            })
+            .map_or(fallback, |i| i as i32)
     }
 
     /// Standard's counteraction answer: the first offered card whose

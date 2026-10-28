@@ -1,19 +1,19 @@
-// 托管 / 混沌 -- browser-side auto-play. The client computes every choice from
-// what it can see (the match view, its own hand, its prompts) and sends it
-// through the ordinary `act` path, exactly as a button press would. The
-// server's engine is never asked to take the seat: no `players[i].ai` flip, no
+// 托管 / 混沌 -- browser-side auto-play. The client sends every choice through
+// the ordinary `act` path, exactly as a button press would. The server's
+// engine is never asked to take the seat: no `players[i].ai` flip, no
 // `member_left`.
 //
-// Two policies share one driver (`GameSession`'s `Autopilot`):
+// **One policy.** The engine's own `Match::bot_action` decides -- the same
+// implementation the server scheduler runs (`ai_step` / `ai_answer_for_entry`),
+// shipped on the frame as `MatchView.autoAction` (solo: `web-glue`'s
+// `view_extra`; online: the seat-view worker, `viewExtras`). The policy table
+// below is the **extras-missing fallback**: it runs only until autoAction has
+// arrived (or when a failed extras key leaves it absent).
 //
-//   * `bot`   -- a port of `crates/game-core/src/engine/ai.rs` over public
-//     data. The engine's own precomputed answer rides along in
-//     `MatchView.aiAnswer` for the viewer's own prompt (never another seat's --
-//     an auction ceiling is hidden information); when it is absent the
-//     prompt's `fallback` / the table below is used.
-//   * `chaos` -- legal but maximally disruptive: play every card, fire every
-//     skill, counter on CHAOS_COUNTER_CHANCE of offers, buy/build whenever it keeps a
-//     1 000 float (`CHAOS_RESERVE`). Prefers whatever makes more things happen.
+// Two mentalities, both decided engine-side:
+//
+//   * `bot`   -- the standard policy.
+//   * `chaos` -- legal but maximally disruptive.
 //
 // Both cover solo and online, never use hidden information (other hands, deck
 // order), and return an ordered candidate list so a refused command is marked
@@ -750,6 +750,12 @@ function usableSkills(view: MatchView): string[] {
   return (view.skills ?? []).filter((a) => a.enabled).map((a) => a.id);
 }
 
+/**
+ * The **extras-missing fallback** table. `plan` prefers `view.autoAction` (the
+ * engine's `Match::bot_action`) whenever it is present; these entries only run
+ * while that decision is not on the frame. They stay a port of `ai.rs` and
+ * must be kept in step with it, but they are no longer the primary policy.
+ */
 export const policies: Record<PolicyName, Policy> = {
   bot: {
     name: "bot",
@@ -906,8 +912,14 @@ export function plan(view: MatchView, ctx: AutopilotCtx, mode: PolicyName): Comm
   if (!mine || mine.bankrupt || mine.left) return [];
   const policy = policies[mode];
 
+  // The engine's own policy (`Match::bot_action`, any mentality) rides in
+  // `view.autoAction`. It is the one implementation the server shares; the
+  // policy table below only answers when extras have not arrived (or failed).
+  const engine = view.autoAction ?? null;
+
   // 1. A prompt waiting on me outranks everything.
-  const prompt = policy.prompt(view, ctx, S.prompt);
+  const prompt =
+    engine?.act === "answer" && engine.prompt === S.prompt.id ? engine : policy.prompt(view, ctx, S.prompt);
   if (prompt) return [prompt];
 
   // 2. A live vote must be answered (a browser seat is not `ai`, so it counts).
@@ -926,12 +938,16 @@ export function plan(view: MatchView, ctx: AutopilotCtx, mode: PolicyName): Comm
   if (S.busy) return [];
 
   // 5. Over the hand limit: discard first (legal on any turn).
-  if (overHand(mine, view.hand.length)) return policy.discard(view, ctx);
+  if (overHand(mine, view.hand.length)) {
+    if (engine?.act === "discard") return [engine];
+    return policy.discard(view, ctx);
+  }
 
   // 6. Turn input: only on my turn (rolling is the one exception -- `S.roller`
   //    may be someone else rolling for the turn player).
   if (S.turn !== me && S.roller !== me) return [];
-  return policy.turn(view, ctx);
+  // 7. The engine's turn command; the table only when extras are missing.
+  return engine ? [engine] : policy.turn(view, ctx);
 }
 
 /** The single best command (what the driver sends first). */
